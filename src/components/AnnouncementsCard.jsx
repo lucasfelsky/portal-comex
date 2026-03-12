@@ -9,8 +9,7 @@ export default function AnnouncementsCard() {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
-  const { userProfile } = useContext(AuthContext)
-  const role = userProfile?.role
+  const { role } = useContext(AuthContext)
 
   useEffect(() => {
     const ref = doc(db, 'announcements', 'global')
@@ -25,7 +24,7 @@ export default function AnnouncementsCard() {
     return () => unsub()
   }, [])
 
-  const canEdit = role === 'admin' || role === 'comex'
+  const canEdit = role === 'comex'
 
   const save = async () => {
     if (!canEdit) {
@@ -45,7 +44,7 @@ export default function AnnouncementsCard() {
       console.error('Erro ao salvar announcement:', err)
       // FirebaseError tem .code (ex: 'permission-denied')
       if (err?.code === 'permission-denied') {
-        alert('Erro: sem permissão. Apenas administradores/comex podem editar avisos.')
+        alert('Erro: sem permissão. Apenas usuários COMEX podem editar avisos.')
       } else {
         alert('Erro ao salvar aviso: ' + (err.message || err))
       }

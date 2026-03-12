@@ -67,8 +67,8 @@ export default function Home() {
   const saveAnnouncements = async () => {
     try {
       // quick front check
-      if (!(role === 'admin' || role === 'comex')) {
-        alert('Apenas administradores/comex podem editar avisos.')
+      if (role !== 'comex') {
+        alert('Apenas usuários COMEX podem editar avisos.')
         return
       }
 
@@ -92,7 +92,7 @@ export default function Home() {
     } catch (err) {
       console.error('saveAnnouncements error', err)
       if (err?.code === 'permission-denied' || /permission/i.test(String(err))) {
-        alert('Você não tem permissão para editar os avisos. Apenas administradores/comex podem editar.')
+        alert('Você não tem permissão para editar os avisos. Apenas usuários COMEX podem editar.')
       } else {
         alert('Erro ao salvar aviso: ' + (err?.message || String(err)))
       }
@@ -128,8 +128,8 @@ export default function Home() {
 
   const saveBarra = async () => {
     try {
-      if (!(role === 'admin' || role === 'comex')) {
-        alert('Apenas administradores/comex podem editar o status da barra.')
+      if (role !== 'comex') {
+        alert('Apenas usuários COMEX podem editar o status da barra.')
         return
       }
 
@@ -238,7 +238,7 @@ export default function Home() {
         ) : (
           <>
             <p className="text-gray-700 whitespace-pre-line">{annText || 'Nenhum aviso no momento.'}</p>
-            {(role === 'admin' || role === 'comex') && (
+            {role === 'comex' && (
               <button
                 className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg"
                 onClick={() => setEditingAnn(true)}
@@ -266,7 +266,7 @@ export default function Home() {
               </div>
               <div className="text-sm text-gray-600">{barra.note || ''}</div>
 
-              {(role === 'admin' || role === 'comex') && (
+              {role === 'comex' && (
                 <div className="ml-auto">
                   <button className="px-3 py-1 border rounded mr-2" onClick={() => setEditingBarra(true)}>Editar</button>
                 </div>
@@ -278,7 +278,7 @@ export default function Home() {
         )}
 
         {/* editor inline para admins/comex */}
-        {(role === 'admin' || role === 'comex') && editingBarra && (
+        {role === 'comex' && editingBarra && (
           <div className="mt-4 p-4 border rounded-lg bg-gray-50">
             <label className="block mb-2 text-sm font-semibold">Status</label>
             <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="p-2 border rounded w-full max-w-xs">

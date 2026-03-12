@@ -31,7 +31,7 @@ export default function Header() {
             <nav className="flex items-center gap-3">
               <NavLink to="/" className={navClass}>Página Inicial</NavLink>
               <NavLink to="/processes" className={navClass}>Processos</NavLink>
-              {(role === 'admin' || role === 'comex') && <NavLink to="/admin" className={navClass}>Admin</NavLink>}
+              {role === 'comex' && <NavLink to="/admin" className={navClass}>Admin</NavLink>}
             </nav>
           )}
         </div>

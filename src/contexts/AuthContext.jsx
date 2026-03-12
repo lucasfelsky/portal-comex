@@ -16,6 +16,11 @@ import {
 
 export const AuthContext = createContext()
 
+const normalizeRole = (rawRole) => {
+  if (rawRole === 'comex' || rawRole === 'admin') return 'comex'
+  return 'normal'
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
@@ -24,70 +29,66 @@ export function AuthProvider({ children }) {
   const [profileLoaded, setProfileLoaded] = useState(false)
 
   useEffect(() => {
-    // Observa mudanças de autenticação
+    let profileUnsub = null
+
     const unsub = onAuthStateChanged(auth, async (usr) => {
       setUser(usr)
       setProfileLoaded(false)
 
+      if (profileUnsub) {
+        profileUnsub()
+        profileUnsub = null
+      }
+
       if (!usr) {
-        // reset state
         setRole(null)
         setName(null)
         setLoading(false)
         return
       }
 
-      // garantir que o objeto user está atualizado (emailVerified, etc)
       try {
         await reload(usr)
       } catch {}
 
-      // Carregar dados do Firestore
-      await loadUserProfile(usr.uid)
-
+      profileUnsub = await loadUserProfile(usr.uid)
       setLoading(false)
     })
 
-    return unsub
+    return () => {
+      unsub()
+      if (profileUnsub) profileUnsub()
+    }
   }, [])
 
-  /**
-   * Carrega documento users/{uid} e configura listener real-time
-   */
   const loadUserProfile = async (uid) => {
     const ref = doc(db, 'users', uid)
 
-    // caso o documento não exista, cria automaticamente (usuário novo)
     let snap = await getDoc(ref)
     if (!snap.exists()) {
       await setDoc(ref, {
         uid,
         email: auth.currentUser?.email || null,
         name: auth.currentUser?.displayName || null,
-        role: 'user',
+        role: 'normal',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       })
       snap = await getDoc(ref)
     }
 
-    // carregar primeira vez
     const data = snap.data()
     setName(data.name || auth.currentUser?.displayName || auth.currentUser?.email)
-    setRole(data.role || 'user')
+    setRole(normalizeRole(data.role))
     setProfileLoaded(true)
 
-    // listener realtime (admin pode mudar role no painel e atualizar automaticamente no cliente)
     return onSnapshot(ref, (ds) => {
       const d = ds.data()
       setName(d?.name || null)
-      setRole(d?.role || null)
+      setRole(normalizeRole(d?.role))
     })
   }
 
-  /**
-   * Força reload manual do user auth + profile
-   */
   const refreshUser = async () => {
     if (auth.currentUser) {
       await reload(auth.currentUser)
@@ -95,9 +96,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  /**
-   * Logout global
-   */
   const logout = async () => {
     await signOut(auth)
   }
