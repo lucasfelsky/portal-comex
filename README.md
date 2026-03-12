@@ -1,37 +1,16 @@
-﻿# SQ COMEX UPDATES
-Site para Acompanhamento dos Embarques da SQ Química
+# SQ Comex Updates (Skeleton)
 
-## Deploy manual no Firebase
+Projeto reiniciado com um esqueleto mínimo em React + Vite para implementação incremental das funcionalidades.
 
-Na raiz do projeto:
+## Rodando localmente
 
 ```bash
 npm install
-npm install -g firebase-tools
-firebase login
+npm run dev
 ```
 
-Se ainda não estiver vinculado ao projeto correto:
+## Estrutura inicial
 
-```bash
-firebase use --add
-```
-
-Selecione o projeto `sq-comex-updates`.
-
-### Publicar regras do Firestore
-
-```bash
-firebase deploy --only firestore:rules
-```
-
-As regras publicadas são lidas do arquivo `firestore.rules` na raiz do projeto.
-
-### Build e deploy do Hosting
-
-O arquivo `firebase.json` já está configurado para servir a pasta `dist` com rewrite SPA para `index.html`.
-
-```bash
-npm run build
-firebase deploy --only hosting
-```
+- `src/main.jsx`: bootstrap da aplicação.
+- `src/App.jsx`: layout básico com áreas TODO.
+- `src/styles.css`: estilos mínimos.
