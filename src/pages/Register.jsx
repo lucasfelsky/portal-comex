@@ -1,36 +1,75 @@
-// src/pages/Register.jsx
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { auth, db } from '../firebase'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import useAuth from '../hooks/useAuth'
+import { auth, db } from '../firebase'
+
+const emailRegex = /^[^\s@]+@sqquimica\.com$/i
 
 export default function Register() {
+  const { user, loading, refreshUser } = useAuth() || {}
   const navigate = useNavigate()
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [checking, setChecking] = useState(false)
+
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email])
+
+  useEffect(() => {
+    if (!showVerifyModal) return
+
+    const interval = setInterval(async () => {
+      try {
+        await refreshUser?.()
+        if (auth.currentUser?.emailVerified) {
+          navigate('/', { replace: true })
+        }
+      } catch (err) {
+        console.error('check verify interval error', err)
+      }
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [showVerifyModal, refreshUser, navigate])
+
+  if (!loading && user?.emailVerified) return <Navigate to="/" replace />
+
   const handleRegister = async (e) => {
     e.preventDefault()
+
+    if (!name.trim()) {
+      alert('Informe o nome completo.')
+      return
+    }
+
+    if (!emailRegex.test(normalizedEmail)) {
+      alert('Somente e-mails @sqquimica.com podem se cadastrar.')
+      return
+    }
+
+    setSubmitting(true)
     try {
-      setSubmitting(true)
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
-      const u = cred.user
-      // create firestore user doc with default role 'normal'
-      await setDoc(doc(db, 'users', u.uid), {
-        uid: u.uid,
-        email: u.email,
-        name: name || u.displayName || null,
-        role: 'normal',
+      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+      const createdUser = credential.user
+
+      await setDoc(doc(db, 'users', createdUser.uid), {
+        uid: createdUser.uid,
+        email: createdUser.email,
+        name: name.trim(),
+        role: 'user',
+        emailVerified: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       })
-      // send verification email immediately
-      await sendEmailVerification(u)
-      alert('Conta criada. Um email de verificação foi enviado. Verifique sua caixa de entrada.')
-      navigate('/verify-email', { replace: true })
+
+      await sendEmailVerification(createdUser)
+      setShowVerifyModal(true)
     } catch (err) {
       console.error('[register] error', err)
       alert('Erro ao criar conta: ' + (err.message || err))
@@ -39,29 +78,83 @@ export default function Register() {
     }
   }
 
+  const resendEmail = async () => {
+    if (!auth.currentUser) return
+
+    try {
+      setChecking(true)
+      await sendEmailVerification(auth.currentUser)
+      alert('E-mail de verificação reenviado.')
+    } catch (err) {
+      alert('Erro ao reenviar e-mail: ' + (err.message || err))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const checkNow = async () => {
+    setChecking(true)
+    try {
+      await refreshUser?.()
+      if (auth.currentUser?.emailVerified) {
+        navigate('/', { replace: true })
+      } else {
+        alert('Ainda não verificado. Confira sua caixa de entrada.')
+      }
+    } finally {
+      setChecking(false)
+    }
+  }
+
   return (
-    <div className="min-h-[70vh] flex items-center justify-center">
-      <div className="w-full max-w-md bg-white/95 rounded-lg shadow p-8">
-        <h2 className="text-2xl font-bold text-center mb-4">Criar conta</h2>
+    <div className="login-root">
+      <div className="login-bg" />
+      <div className="login-center">
+        <div className="login-card">
+          <h2 className="text-2xl font-bold text-center mb-5">Criar conta</h2>
 
-        <form onSubmit={handleRegister}>
-          <label className="text-xs font-semibold">Nome completo</label>
-          <input className="w-full p-2 border rounded mt-1 mb-3" value={name} onChange={e => setName(e.target.value)} placeholder="Fulano da Silva" />
+          <form onSubmit={handleRegister} className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-700">Nome completo</label>
+              <input className="input-login mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
 
-          <label className="text-xs font-semibold">E-mail corporativo (@sqquimica.com)</label>
-          <input className="w-full p-2 border rounded mt-1 mb-3" value={email} onChange={e => setEmail(e.target.value)} placeholder="seunome@sqquimica.com" />
+            <div>
+              <label className="text-xs font-semibold text-slate-700">E-mail corporativo</label>
+              <input className="input-login mt-1" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seunome@sqquimica.com" />
+            </div>
 
-          <label className="text-xs font-semibold">Senha</label>
-          <input type="password" className="w-full p-2 border rounded mt-1 mb-4" value={password} onChange={e => setPassword(e.target.value)} placeholder="senha" />
+            <div>
+              <label className="text-xs font-semibold text-slate-700">Senha</label>
+              <input type="password" className="input-login mt-1" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" />
+            </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-slate-900 text-white py-2 rounded">
-            {submitting ? 'Enviando...' : 'Criar Conta'}
-          </button>
-        </form>
+            <button type="submit" disabled={submitting} className="btn-login w-full">
+              {submitting ? 'Criando conta...' : 'Criar conta'}
+            </button>
+          </form>
 
-        <div className="text-center mt-4">
-          <a href="/login" className="text-sm underline">Voltar ao login</a>
+          <div className="text-center mt-5 text-sm">
+            <Link to="/login" className="underline text-slate-700 hover:text-slate-900">Voltar ao login</Link>
+          </div>
         </div>
+
+        {showVerifyModal && (
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="relative z-40 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="text-lg font-semibold mb-2">Verifique seu e-mail</h3>
+              <p className="text-sm text-slate-600 mb-4">
+                Enviamos o e-mail de verificação para <strong>{normalizedEmail}</strong>. Assim que confirmar, você será redirecionado automaticamente.
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-primary" onClick={resendEmail} disabled={checking}>Reenviar e-mail</button>
+                <button className="px-4 py-2 border rounded-lg" onClick={checkNow} disabled={checking}>Já verifiquei</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

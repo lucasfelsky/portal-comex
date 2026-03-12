@@ -3,8 +3,9 @@ import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebas
 import { db } from '../firebase'
 
 const roleOptions = [
-  { value: 'normal', label: 'normal' },
-  { value: 'comex', label: 'comex' }
+  { value: 'user', label: 'user' },
+  { value: 'comex', label: 'comex' },
+  { value: 'admin', label: 'admin' }
 ]
 
 export default function AdminPanel() {
@@ -14,11 +15,10 @@ export default function AdminPanel() {
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'users'),
-      (snap) => {
-        setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      },
+      (snap) => setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => console.error(err)
     )
+
     return () => unsub()
   }, [])
 
@@ -31,7 +31,7 @@ export default function AdminPanel() {
       })
     } catch (err) {
       console.error('Erro ao atualizar role:', err)
-      alert('Erro ao atualizar tipo de usuário: ' + (err.message || err))
+      alert('Erro ao atualizar perfil: ' + (err.message || err))
     } finally {
       setSavingId(null)
     }
@@ -39,27 +39,25 @@ export default function AdminPanel() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Painel COMEX</h1>
-      <p className="text-sm text-gray-600 mb-6">
-        Usuários COMEX administram o sistema e podem adicionar, editar e remover embarques.
-      </p>
+      <h1 className="text-2xl font-bold mb-2">Painel Admin</h1>
+      <p className="text-sm text-gray-600 mb-6">Gerencie papéis dos usuários cadastrados no sistema.</p>
 
       <div className="card">
         <h3 className="text-lg font-semibold">Usuários cadastrados</h3>
         <div className="mt-3 space-y-2">
           {users.map((u) => (
-            <div key={u.uid || u.id} className="p-3 border rounded-lg flex items-center justify-between gap-3">
+            <div key={u.id} className="p-3 border rounded-lg flex items-center justify-between gap-3">
               <div>
                 <div className="font-medium">{u.name || u.email}</div>
                 <div className="text-sm text-muted">{u.email}</div>
               </div>
 
               <div className="flex items-center gap-2">
-                <label htmlFor={`role-${u.id}`} className="text-sm text-gray-600">Tipo:</label>
+                <label htmlFor={`role-${u.id}`} className="text-sm text-gray-600">Role:</label>
                 <select
                   id={`role-${u.id}`}
                   className="border rounded px-2 py-1"
-                  value={u.role || 'normal'}
+                  value={u.role || 'user'}
                   onChange={(e) => updateRole(u.id, e.target.value)}
                   disabled={savingId === u.id}
                 >
