@@ -32,7 +32,7 @@ export default function BarStatusCard() {
 
   const { role } = useContext(AuthContext)
 
-  const canEdit = role === 'admin' || role === 'comex'
+  const canEdit = role === 'comex'
 
   useEffect(() => {
     const ref = doc(db, 'barStatus', 'current')

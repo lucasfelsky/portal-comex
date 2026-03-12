@@ -18,12 +18,12 @@ export default function Register() {
       setSubmitting(true)
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
       const u = cred.user
-      // create firestore user doc with default role 'user'
+      // create firestore user doc with default role 'normal'
       await setDoc(doc(db, 'users', u.uid), {
         uid: u.uid,
         email: u.email,
         name: name || u.displayName || null,
-        role: 'user',
+        role: 'normal',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       })

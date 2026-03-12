@@ -43,7 +43,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/processes" element={<ProtectedRoute><Processes /></ProtectedRoute>} />
           <Route path="/processes/:id" element={<ProtectedRoute><ProcessDetail /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute requireRole="comex"><AdminPanel /></ProtectedRoute>} />
 
           {/* fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
