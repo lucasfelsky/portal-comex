@@ -1,5 +1,6 @@
 {
   "projects": {
+    "default": "sq-comex-updates",
     "sq-updates": "sq-comex-updates"
   },
   "targets": {},
