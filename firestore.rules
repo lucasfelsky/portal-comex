@@ -10,72 +10,62 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
 
-    function getMyRole() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+    function myRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
         : null;
     }
 
     function isAdmin() {
-      return getMyRole() == "admin";
+      return isVerified() && myRole() == 'admin';
     }
 
-    function isComex() {
-      let r = getMyRole();
-      return r == "comex" || r == "admin";
+    function isComexOrAdmin() {
+      return isVerified() && (myRole() == 'comex' || myRole() == 'admin');
     }
 
-    function isOwnerOfProcess(processId) {
-      return isAuthenticated()
+    function isProcessOwner(processId) {
+      return isVerified()
         && exists(/databases/$(database)/documents/processes/$(processId))
-        && request.auth.uid in get(/databases/$(database)/documents/processes/$(processId)).data.owners;
+        && get(/databases/$(database)/documents/processes/$(processId)).data.createdBy == request.auth.uid;
     }
 
-    match /users/{uid} {
-      allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow create: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow update: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
-      allow delete: if isAdmin();
-    }
-
-    match /barStatus/{docId} {
+    match /announcements/{docId} {
       allow read: if isVerified();
-      allow create, update, delete: if isVerified() && isComex();
+      allow create, update, delete: if isComexOrAdmin();
+    }
+
+    match /barra/{docId} {
+      allow read: if isVerified();
+      allow create, update, delete: if isComexOrAdmin();
     }
 
     match /processes/{processId} {
       allow read: if isVerified();
-      allow create: if isComex() && isVerified();
-      allow update: if isVerified() && (isComex() || isOwnerOfProcess(processId));
-      allow delete: if isVerified() && (isComex() || isOwnerOfProcess(processId));
+      allow create: if isComexOrAdmin();
+      allow update, delete: if isComexOrAdmin() || isProcessOwner(processId);
+    }
 
-      match /messages/{msgId} {
-        allow read: if isVerified();
-        allow create: if isVerified();
-        allow update, delete: if isVerified() && (isComex() || isOwnerOfProcess(processId));
-      }
+    match /users/{uid} {
+      allow read: if isVerified() && (request.auth.uid == uid || isAdmin() || isComexOrAdmin());
 
-      match /attachments/{attId} {
-        allow read: if isVerified();
-        allow create: if isVerified() && (isComex() || isOwnerOfProcess(processId));
-        allow delete: if isVerified() && (isComex() || isOwnerOfProcess(processId));
-      }
+      allow create: if isAuthenticated() && request.auth.uid == uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == 'user';
 
-      match /audits/{auditId} {
-        allow read: if isVerified();
-        allow create: if isVerified() && (isComex() || isAdmin());
-        allow delete: if isVerified() && isAdmin();
-      }
+      allow update: if isVerified() && (
+        (request.auth.uid == uid
+          && request.resource.data.role == resource.data.role)
+        || isAdmin() || isComexOrAdmin()
+      );
+
+      allow delete: if isAdmin();
     }
 
     match /audits/{auditId} {
-      allow read: if isVerified();
-      allow create: if isVerified() && (isComex() || isAdmin());
-      allow update, delete: if isVerified() && isAdmin();
-    }
-
-    match /invites/{inviteId} {
-      allow read, create, delete: if isAuthenticated() && isAdmin();
+      allow read: if isComexOrAdmin();
+      allow create: if isComexOrAdmin();
+      allow update, delete: if false;
     }
 
     match /{document=**} {

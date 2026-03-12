@@ -1,38 +1,30 @@
-// src/contexts/AuthContext.jsx
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { auth, db } from '../firebase'
-import {
-  onAuthStateChanged,
-  signOut,
-  reload
-} from 'firebase/auth'
-import {
-  doc,
-  getDoc,
-  onSnapshot,
-  setDoc,
-  serverTimestamp
-} from 'firebase/firestore'
+import { onAuthStateChanged, reload, signOut } from 'firebase/auth'
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 
 export const AuthContext = createContext()
 
+const VALID_ROLES = ['user', 'comex', 'admin']
+
 const normalizeRole = (rawRole) => {
-  if (rawRole === 'comex' || rawRole === 'admin') return 'comex'
-  return 'normal'
+  if (VALID_ROLES.includes(rawRole)) return rawRole
+  if (rawRole === 'normal') return 'user'
+  return 'user'
 }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
   const [name, setName] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loadingAuth, setLoadingAuth] = useState(true)
   const [profileLoaded, setProfileLoaded] = useState(false)
 
   useEffect(() => {
     let profileUnsub = null
 
-    const unsub = onAuthStateChanged(auth, async (usr) => {
-      setUser(usr)
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser)
       setProfileLoaded(false)
 
       if (profileUnsub) {
@@ -40,19 +32,21 @@ export function AuthProvider({ children }) {
         profileUnsub = null
       }
 
-      if (!usr) {
+      if (!currentUser) {
         setRole(null)
         setName(null)
-        setLoading(false)
+        setLoadingAuth(false)
         return
       }
 
       try {
-        await reload(usr)
-      } catch {}
+        await reload(currentUser)
+      } catch (err) {
+        console.error('reload auth user error', err)
+      }
 
-      profileUnsub = await loadUserProfile(usr.uid)
-      setLoading(false)
+      profileUnsub = await ensureAndSubscribeUserProfile(currentUser)
+      setLoadingAuth(false)
     })
 
     return () => {
@@ -61,59 +55,70 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const loadUserProfile = async (uid) => {
-    const ref = doc(db, 'users', uid)
+  const ensureAndSubscribeUserProfile = async (firebaseUser) => {
+    const ref = doc(db, 'users', firebaseUser.uid)
+    const snap = await getDoc(ref)
 
-    let snap = await getDoc(ref)
     if (!snap.exists()) {
       await setDoc(ref, {
-        uid,
-        email: auth.currentUser?.email || null,
-        name: auth.currentUser?.displayName || null,
-        role: 'normal',
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? null,
+        name: firebaseUser.displayName ?? null,
+        role: 'user',
+        emailVerified: firebaseUser.emailVerified === true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       })
-      snap = await getDoc(ref)
+    } else if (snap.data()?.emailVerified !== (firebaseUser.emailVerified === true)) {
+      await updateDoc(ref, {
+        emailVerified: firebaseUser.emailVerified === true,
+        updatedAt: serverTimestamp()
+      })
     }
 
-    const data = snap.data()
-    setName(data.name || auth.currentUser?.displayName || auth.currentUser?.email)
-    setRole(normalizeRole(data.role))
-    setProfileLoaded(true)
-
-    return onSnapshot(ref, (ds) => {
-      const d = ds.data()
-      setName(d?.name || null)
-      setRole(normalizeRole(d?.role))
+    return onSnapshot(ref, (profileSnap) => {
+      const data = profileSnap.data() || {}
+      setRole(normalizeRole(data.role))
+      setName(data.name || firebaseUser.displayName || firebaseUser.email || null)
+      setProfileLoaded(true)
     })
   }
 
   const refreshUser = async () => {
-    if (auth.currentUser) {
-      await reload(auth.currentUser)
-      await loadUserProfile(auth.currentUser.uid)
+    if (!auth.currentUser) return
+
+    await reload(auth.currentUser)
+    const verified = auth.currentUser.emailVerified === true
+
+    try {
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        emailVerified: verified,
+        updatedAt: serverTimestamp()
+      })
+    } catch (err) {
+      console.error('update emailVerified on refresh error', err)
     }
+
+    setUser({ ...auth.currentUser })
   }
 
   const logout = async () => {
     await signOut(auth)
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        role,
-        name,
-        loading: loading || !profileLoaded,
-        refreshUser,
-        logout
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      role,
+      name,
+      loading: loadingAuth || (user ? !profileLoaded : false),
+      refreshUser,
+      logout
+    }),
+    [user, role, name, loadingAuth, profileLoaded]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export const useAuthContext = () => useContext(AuthContext)

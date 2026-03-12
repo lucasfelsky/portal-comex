@@ -1,55 +1,72 @@
-import React, { useState, useContext } from 'react'
-import { auth } from '../firebase'
+import React, { useEffect, useState } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { sendEmailVerification } from 'firebase/auth'
-import { useNavigate } from 'react-router-dom'
-import { AuthContext } from '../contexts/AuthContext'
+import useAuth from '../hooks/useAuth'
+import { auth } from '../firebase'
 
 export default function VerifyEmail() {
-  const [sending, setSending] = useState(false)
-  const [checking, setChecking] = useState(false)
-  const { refreshUser } = useContext(AuthContext)
+  const { user, loading, refreshUser } = useAuth() || {}
   const navigate = useNavigate()
 
+  const [sending, setSending] = useState(false)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    if (!user || user.emailVerified) return
+
+    const interval = setInterval(async () => {
+      await refreshUser?.()
+      if (auth.currentUser?.emailVerified) {
+        navigate('/', { replace: true })
+      }
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [user, refreshUser, navigate])
+
+  if (!loading && !user) return <Navigate to="/login" replace />
+  if (!loading && user?.emailVerified) return <Navigate to="/" replace />
+
   const resend = async () => {
-    const u = auth.currentUser
-    if (!u) return alert('Nenhum usuário logado.')
+    if (!auth.currentUser) return
+
     try {
       setSending(true)
-      await sendEmailVerification(u)
+      await sendEmailVerification(auth.currentUser)
       alert('E-mail de verificação reenviado.')
     } catch (err) {
-      alert('Erro: ' + (err.message || err))
+      alert('Erro ao reenviar: ' + (err.message || err))
     } finally {
       setSending(false)
     }
   }
 
-  const checkVerifiedNow = async () => {
-    const u = auth.currentUser
-    if (!u) return alert('Nenhum usuário logado.')
+  const checkNow = async () => {
+    setChecking(true)
     try {
-      setChecking(true)
-      await refreshUser()
-      const reloaded = auth.currentUser
-      if (reloaded && reloaded.emailVerified) {
-        navigate('/processes')
+      await refreshUser?.()
+      if (auth.currentUser?.emailVerified) {
+        navigate('/', { replace: true })
       } else {
-        alert('Ainda não verificado. Verifique seu e-mail.')
+        alert('Seu e-mail ainda não foi verificado.')
       }
-    } catch (err) {
-      alert('Erro ao checar verificação: ' + (err.message || err))
     } finally {
       setChecking(false)
     }
   }
 
   return (
-    <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded shadow">
-      <h2 className="text-xl mb-3">Verifique seu e-mail</h2>
-      <p>Enviamos um e-mail de verificação para o endereço cadastrado. Clique no link do e-mail para ativar sua conta.</p>
-      <div className="mt-4 flex gap-2">
-        <button onClick={resend} disabled={sending} className="p-2 bg-blue-600 text-white rounded">Reenviar</button>
-        <button onClick={checkVerifiedNow} disabled={checking} className="p-2 bg-green-600 text-white rounded">Já verifiquei — checar</button>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-100">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-md p-6">
+        <h2 className="text-xl font-bold mb-2">Verifique seu e-mail</h2>
+        <p className="text-sm text-slate-600 mb-4">
+          Para acessar o sistema, confirme o e-mail enviado para <strong>{user?.email}</strong>.
+        </p>
+
+        <div className="flex gap-2">
+          <button onClick={resend} disabled={sending} className="btn-primary">Reenviar e-mail</button>
+          <button onClick={checkNow} disabled={checking} className="px-3 py-2 border rounded-lg">Já verifiquei</button>
+        </div>
       </div>
     </div>
   )

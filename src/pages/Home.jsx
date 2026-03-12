@@ -1,5 +1,6 @@
 // src/pages/Home.jsx
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { db } from '../firebase'
 import {
@@ -14,8 +15,8 @@ import {
 
 export default function Home() {
   const auth = useAuth() || {}
-  const role = auth.role || auth.userProfile?.role || null
-  const isVerifiedUser = auth.user?.emailVerified || auth.user?.emailVerified === true || auth.emailVerified // best-effort
+  const role = auth.role || null
+  const canManage = role === 'admin' || role === 'comex'
 
   // announcements
   const [annText, setAnnText] = useState('')
@@ -67,8 +68,8 @@ export default function Home() {
   const saveAnnouncements = async () => {
     try {
       // quick front check
-      if (role !== 'comex') {
-        alert('Apenas usuários COMEX podem editar avisos.')
+      if (!canManage) {
+        alert('Apenas usuários COMEX/Admin podem editar avisos.')
         return
       }
 
@@ -128,8 +129,8 @@ export default function Home() {
 
   const saveBarra = async () => {
     try {
-      if (role !== 'comex') {
-        alert('Apenas usuários COMEX podem editar o status da barra.')
+      if (!canManage) {
+        alert('Apenas usuários COMEX/Admin podem editar o status da barra.')
         return
       }
 
@@ -238,7 +239,7 @@ export default function Home() {
         ) : (
           <>
             <p className="text-gray-700 whitespace-pre-line">{annText || 'Nenhum aviso no momento.'}</p>
-            {role === 'comex' && (
+            {canManage && (
               <button
                 className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg"
                 onClick={() => setEditingAnn(true)}
@@ -266,7 +267,7 @@ export default function Home() {
               </div>
               <div className="text-sm text-gray-600">{barra.note || ''}</div>
 
-              {role === 'comex' && (
+              {canManage && (
                 <div className="ml-auto">
                   <button className="px-3 py-1 border rounded mr-2" onClick={() => setEditingBarra(true)}>Editar</button>
                 </div>
@@ -278,7 +279,7 @@ export default function Home() {
         )}
 
         {/* editor inline para admins/comex */}
-        {role === 'comex' && editingBarra && (
+        {canManage && editingBarra && (
           <div className="mt-4 p-4 border rounded-lg bg-gray-50">
             <label className="block mb-2 text-sm font-semibold">Status</label>
             <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="p-2 border rounded w-full max-w-xs">
@@ -319,11 +320,11 @@ export default function Home() {
           <p className="text-gray-600">Nenhum processo dentro do período.</p>
         ) : (
           processes.map(p => (
-            <div key={p.id} className="p-4 border rounded-lg mb-3">
+            <Link to={`/processes/${p.id}`} key={p.id} className="block p-4 border rounded-lg mb-3 hover:bg-slate-50">
               <p className="font-semibold">{p.processo || p.description || p.po || 'Processo'}</p>
               <p className="text-gray-600">ETA: {p.__etaDate ? p.__etaDate.toLocaleString() : (p.eta ? String(p.eta) : '—')}</p>
               {p.status && <div className="text-sm text-gray-700 mt-1">Status: {p.status}</div>}
-            </div>
+            </Link>
           ))
         )}
       </div>
