@@ -5,12 +5,12 @@ import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   // <-- SUBSTITUA por suas credenciais do Firebase Web App
-  apiKey: "AIzaSyAZz23jIx_p8RVioxd3LmsXHPhsOjr0t5w",
-  authDomain: "sq-comex-updates.firebaseapp.com",
-  projectId: "sq-comex-updates",
-  storageBucket: "sq-comex-updates.firebasestorage.app",
-  messagingSenderId: "777780048398",
-  appId: "1:777780048398:web:76b2d83ed8bc4afd04425f",
+  apiKey: "AIzaSyDH6ZMNKqlqv8H9-MYmUzcEQjK1724fotk",
+  authDomain: "sq-comex-updates-3d22f.firebaseapp.com",
+  projectId: "sq-comex-updates-3d22f",
+  storageBucket: "sq-comex-updates-3d22f.firebasestorage.app",
+  messagingSenderId: "705697815580",
+  appId: "1:705697815580:web:aeca500550136c88f693d9",
   measurementId: "G-Q57TX1SHPV"
 }
 
