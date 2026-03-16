@@ -100,17 +100,48 @@ function extractTagValue(xml, tagName) {
   return match ? decodeXml(match[1]) : ''
 }
 
+function extractAttributeValue(xml, pattern, attributeName) {
+  const match = xml.match(pattern)
+  if (!match) return ''
+
+  const attributeMatch = match[0].match(new RegExp(`${attributeName}=["']([^"']+)["']`, 'i'))
+  return attributeMatch ? decodeXml(attributeMatch[1]) : ''
+}
+
+function extractImageUrl(itemXml, rawDescription) {
+  const mediaContentUrl = extractAttributeValue(itemXml, /<media:content\b[^>]*>/i, 'url')
+  if (mediaContentUrl) return mediaContentUrl
+
+  const mediaThumbnailUrl = extractAttributeValue(itemXml, /<media:thumbnail\b[^>]*>/i, 'url')
+  if (mediaThumbnailUrl) return mediaThumbnailUrl
+
+  const enclosureUrl = extractAttributeValue(itemXml, /<enclosure\b[^>]*>/i, 'url')
+  if (enclosureUrl) return enclosureUrl
+
+  const imageMatch = String(rawDescription ?? '').match(/<img[^>]+src=["']([^"']+)["']/i)
+  return imageMatch ? decodeXml(imageMatch[1]) : ''
+}
+
+function sanitizeDescriptionText(value) {
+  return stripHtml(value)
+    .replace(/\s+-\s+[^-]+$/, '')
+    .trim()
+}
+
 function parseFeedItems(xmlText) {
   const items = [...xmlText.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
 
   return items.map((itemMatch) => {
     const itemXml = itemMatch[1]
+    const rawDescription = extractTagValue(itemXml, 'description')
+
     return {
       title: stripHtml(extractTagValue(itemXml, 'title')),
-      description: stripHtml(extractTagValue(itemXml, 'description')),
+      description: sanitizeDescriptionText(rawDescription),
       link: stripHtml(extractTagValue(itemXml, 'link')),
       guid: stripHtml(extractTagValue(itemXml, 'guid')),
       pubDate: stripHtml(extractTagValue(itemXml, 'pubDate')),
+      imageUrl: extractImageUrl(itemXml, rawDescription),
     }
   })
 }
@@ -165,9 +196,9 @@ async function fetchFeedItems(source) {
       return {
         id: buildAutomaticNewsId(source.id, item.guid || item.link || item.title),
         title: item.title,
-        content: item.description || 'Leia a integra na fonte oficial vinculada abaixo.',
-        summary: item.description,
-        coverImage: '',
+        content: item.description || `Leia a materia completa na fonte oficial de ${source.name}.`,
+        summary: item.description || `Atualizacao publicada por ${source.name}. Abra a fonte oficial para ver o texto completo.`,
+        coverImage: item.imageUrl,
         mediaItems: [],
         references: item.link ? [item.link] : [],
         sourceType: 'automatic',
