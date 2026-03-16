@@ -43,6 +43,16 @@ const externalNewsSources = [
     rssUrl: 'https://www.gov.br/mdic/pt-br/assuntos/comercio-exterior/estatisticas/informativos/RSS',
   },
   {
+    id: 'jornal-portuario',
+    name: 'Jornal Portuario',
+    rssUrl: 'https://jornalportuario.com.br/rss/noticias',
+  },
+  {
+    id: 'brasil-de-fato',
+    name: 'Brasil de Fato',
+    rssUrl: 'https://www.brasildefato.com.br/feed/',
+  },
+  {
     id: 'google-news-comercio-exterior',
     name: 'Google News: Comercio Exterior',
     rssUrl:
