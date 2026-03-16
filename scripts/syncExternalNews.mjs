@@ -47,6 +47,16 @@ const externalNewsSources = [
     name: 'Jornal Portuario',
     rssUrl: 'https://jornalportuario.com.br/rss/noticias',
   },
+  {
+    id: 'portal-do-mar',
+    name: 'Portal do Mar',
+    rssUrl: 'https://portaldomar.org/feed',
+  },
+  {
+    id: 'comex-do-brasil',
+    name: 'Comex do Brasil',
+    rssUrl: 'https://comexdobrasil.com/feed/',
+  },
 ]
 
 function ensureEnvironment() {
