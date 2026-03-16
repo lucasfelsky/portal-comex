@@ -85,7 +85,7 @@ function filterNewsWindow(newsItems) {
     return last24Hours
   }
 
-  return newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 72))
+  return newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 24 * 30))
 }
 
 function readFilesAsDataUrls(fileList) {

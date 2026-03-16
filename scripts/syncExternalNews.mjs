@@ -5,7 +5,7 @@ const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
 const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
 
 const PRIMARY_WINDOW_HOURS = 24
-const FALLBACK_WINDOW_HOURS = 72
+const FALLBACK_WINDOW_HOURS = 24 * 30
 
 const externalNewsSources = [
   {
@@ -236,7 +236,7 @@ async function main() {
     .flatMap((item) => item.value)
 
   if (loadedNews.length === 0) {
-    console.log('Nenhuma noticia externa encontrada nas ultimas 72 horas.')
+    console.log('Nenhuma noticia externa encontrada nos ultimos 30 dias.')
     return
   }
 
