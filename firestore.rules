@@ -1,13 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isAuthenticated() {
       return request.auth != null;
-    }
-
-    function isVerified() {
-      return isAuthenticated() && request.auth.token.email_verified == true;
     }
 
     function myRole() {
@@ -17,59 +12,104 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isVerified() && myRole() == 'admin';
+      return isAuthenticated() && myRole() == 'admin';
     }
 
-    function isComexOrAdmin() {
-      return isVerified() && (myRole() == 'comex' || myRole() == 'admin');
+    function isLogistics() {
+      return isAuthenticated() && myRole() == 'logistica';
     }
 
-    function isProcessOwner(processId) {
-      return isVerified()
-        && exists(/databases/$(database)/documents/processes/$(processId))
-        && get(/databases/$(database)/documents/processes/$(processId)).data.createdBy == request.auth.uid;
+    function isStaff() {
+      return isAdmin();
+    }
+
+    function isBackoffice() {
+      return isAdmin();
     }
 
     match /announcements/{docId} {
-      allow read: if isVerified();
-      allow create, update, delete: if isComexOrAdmin();
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isStaff();
+    }
+
+    match /news/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isStaff();
     }
 
     match /barra/{docId} {
-      allow read: if isVerified();
-      allow create, update, delete: if isComexOrAdmin();
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isStaff();
     }
 
     match /processes/{processId} {
-      allow read: if isVerified();
-      allow create: if isComexOrAdmin();
-      allow update, delete: if isComexOrAdmin() || isProcessOwner(processId);
+      allow read: if isAuthenticated();
+      allow create, delete: if isStaff();
+      allow update: if isStaff()
+        || (isLogistics()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['postReceiptNotes', 'updatedAt']));
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated()
+          && request.resource.data.processId == processId
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0
+          && request.resource.data.authorName is string;
+        allow update, delete: if false;
+      }
+    }
+
+    match /notificationRecipients/{uid} {
+      allow read: if isAuthenticated();
+      allow create, update: if (isAuthenticated() && request.auth.uid == uid)
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.recipientUserId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && request.resource.data.actorUserId == request.auth.uid
+        && request.resource.data.recipientUserId is string
+        && request.resource.data.title is string
+        && request.resource.data.body is string;
+      allow update: if isAuthenticated()
+        && resource.data.recipientUserId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']);
+      allow delete: if false;
     }
 
     match /users/{uid} {
-      allow read: if isVerified() && (request.auth.uid == uid || isAdmin() || isComexOrAdmin());
+      allow read: if (isAuthenticated() && request.auth.uid == uid)
+        || isStaff();
 
-      allow create: if isAuthenticated() && request.auth.uid == uid
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role == 'user';
+      allow create: if (isAuthenticated()
+          && request.auth.uid == uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.role == 'user'
+          && request.auth.token.email.matches('.*@sqquimica\\.com$'))
+        || isAdmin();
 
-      allow update: if isVerified() && (
-        (request.auth.uid == uid
-          && request.resource.data.role == resource.data.role)
-        || isAdmin() || isComexOrAdmin()
-      );
+      allow update: if (isAuthenticated()
+          && request.auth.uid == uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.statusTone == resource.data.statusTone)
+        || isAdmin();
 
       allow delete: if isAdmin();
     }
 
     match /audits/{auditId} {
-      allow read: if isComexOrAdmin();
-      allow create: if isComexOrAdmin();
+      allow read: if isStaff();
+      allow create: if isAdmin() || isBackoffice();
       allow update, delete: if false;
     }
 
     match /{document=**} {
-      allow read: if isVerified();
+      allow read: if isAuthenticated();
       allow write: if false;
     }
   }

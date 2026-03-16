@@ -1,33 +1,31 @@
-import React from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 
-export default function ProtectedRoute({ children, requireRole }) {
-  const { user, role, loading } = useAuth() || {}
+export default function ProtectedRoute({ children, requireRole = null }) {
+  const { isAuthenticated, isApproved, loading, profile } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
-      <div className="auth-loading-root">
-        <div className="auth-loading-backdrop" />
-        <div className="auth-loading-panel">
-          <div className="relative flex flex-col items-center gap-4">
-            <div className="relative w-14 h-14">
-              <div className="absolute inset-0 rounded-full border-4 border-gray-200" />
-              <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin-smooth" />
-            </div>
-            <span className="text-gray-100 text-sm tracking-wide">Carregando...</span>
-          </div>
+      <div className="auth-screen">
+        <div className="auth-card">
+          <strong>Carregando sessão</strong>
+          <p>Validando autenticação e perfil de acesso.</p>
         </div>
       </div>
     )
   }
 
-  if (!user) return <Navigate to="/login" replace />
-  if (!user.emailVerified) return <Navigate to="/verify-email" replace />
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
 
-  if (requireRole) {
-    const allowedRoles = Array.isArray(requireRole) ? requireRole : [requireRole]
-    if (!allowedRoles.includes(role)) return <Navigate to="/" replace />
+  if (!isApproved && profile?.role !== 'admin') {
+    return <Navigate to="/aguardando-aprovacao" replace />
+  }
+
+  if (requireRole && profile?.role !== requireRole) {
+    return <Navigate to="/" replace />
   }
 
   return children
