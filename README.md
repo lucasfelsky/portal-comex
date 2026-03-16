@@ -1,2 +1,0 @@
-# portal-comex
-Portal Comex
