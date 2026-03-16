@@ -48,11 +48,6 @@ const externalNewsSources = [
     rssUrl: 'https://jornalportuario.com.br/rss/noticias',
   },
   {
-    id: 'brasil-de-fato',
-    name: 'Brasil de Fato',
-    rssUrl: 'https://www.brasildefato.com.br/feed/',
-  },
-  {
     id: 'google-news-comercio-exterior',
     name: 'Google News: Comercio Exterior',
     rssUrl:
