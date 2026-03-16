@@ -128,6 +128,53 @@ function sanitizeDescriptionText(value) {
     .trim()
 }
 
+function extractMetaContent(htmlText, attributeName, attributeValue) {
+  const pattern = new RegExp(
+    `<meta[^>]+${attributeName}=["']${attributeValue}["'][^>]+content=["']([^"']+)["'][^>]*>|<meta[^>]+content=["']([^"']+)["'][^>]+${attributeName}=["']${attributeValue}["'][^>]*>`,
+    'i'
+  )
+  const match = htmlText.match(pattern)
+  return decodeXml(match?.[1] ?? match?.[2] ?? '')
+}
+
+async function fetchArticleMetadata(newsItem) {
+  if (!newsItem?.externalUrl) {
+    return newsItem
+  }
+
+  try {
+    const response = await fetch(newsItem.externalUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'Portal-COMEX-News-Bot/1.0',
+      },
+      redirect: 'follow',
+    })
+
+    if (!response.ok) {
+      return newsItem
+    }
+
+    const htmlText = await response.text()
+    const metaDescription =
+      extractMetaContent(htmlText, 'property', 'og:description') ||
+      extractMetaContent(htmlText, 'name', 'description') ||
+      extractMetaContent(htmlText, 'name', 'twitter:description')
+    const metaImage =
+      extractMetaContent(htmlText, 'property', 'og:image') ||
+      extractMetaContent(htmlText, 'name', 'twitter:image')
+
+    return {
+      ...newsItem,
+      content: newsItem.content || metaDescription,
+      summary: newsItem.summary || metaDescription,
+      coverImage: newsItem.coverImage || metaImage,
+    }
+  } catch {
+    return newsItem
+  }
+}
+
 function parseFeedItems(xmlText) {
   const items = [...xmlText.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
 
@@ -320,13 +367,14 @@ async function main() {
     return
   }
 
+  const enrichedNews = await Promise.all(loadedNews.map((item) => fetchArticleMetadata(item)))
   const accessToken = await getAccessToken()
-  await Promise.all(loadedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
+  await Promise.all(enrichedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
 
-  const recentNewsCount = loadedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
+  const recentNewsCount = enrichedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
 
   console.log(
-    `Sincronizacao concluida: ${loadedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
+    `Sincronizacao concluida: ${enrichedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
   )
 }
 

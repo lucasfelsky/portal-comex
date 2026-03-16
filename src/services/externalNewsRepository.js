@@ -3,21 +3,31 @@ import { firestore, isFirebaseConfigured } from '../lib/firebase'
 
 const STORAGE_KEY = 'sq-comex-external-news'
 
+function normalizeStringValue(value) {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (!normalizedValue || normalizedValue === 'null' || normalizedValue === 'undefined') {
+    return ''
+  }
+
+  return normalizedValue
+}
+
 function normalizeExternalNewsItem(rawNewsItem, fallbackId) {
   return {
     id: rawNewsItem.id ?? fallbackId,
-    title: String(rawNewsItem.title ?? '').trim(),
-    content: String(rawNewsItem.content ?? '').trim(),
-    summary: String(rawNewsItem.summary ?? rawNewsItem.content ?? '').trim(),
-    coverImage: String(rawNewsItem.coverImage ?? '').trim(),
+    title: normalizeStringValue(rawNewsItem.title),
+    content: normalizeStringValue(rawNewsItem.content),
+    summary: normalizeStringValue(rawNewsItem.summary ?? rawNewsItem.content),
+    coverImage: normalizeStringValue(rawNewsItem.coverImage),
     mediaItems: Array.isArray(rawNewsItem.mediaItems) ? rawNewsItem.mediaItems : [],
     references: Array.isArray(rawNewsItem.references) ? rawNewsItem.references.filter(Boolean) : [],
     createdAt: rawNewsItem.createdAt ?? new Date().toISOString(),
     updatedAt: rawNewsItem.updatedAt ?? rawNewsItem.createdAt ?? new Date().toISOString(),
     publishedAt: rawNewsItem.publishedAt ?? rawNewsItem.updatedAt ?? rawNewsItem.createdAt ?? new Date().toISOString(),
     sourceType: 'automatic',
-    sourceName: String(rawNewsItem.sourceName ?? 'Fonte oficial').trim(),
-    externalUrl: String(rawNewsItem.externalUrl ?? '').trim(),
+    sourceName: normalizeStringValue(rawNewsItem.sourceName) || 'Fonte oficial',
+    externalUrl: normalizeStringValue(rawNewsItem.externalUrl),
   }
 }
 
