@@ -28,6 +28,24 @@ const externalNewsSources = [
     name: 'MDIC Comercio Exterior',
     rssUrl: 'https://www.gov.br/mdic/pt-br/assuntos/comercio-exterior/estatisticas/informativos/RSS',
   },
+  {
+    id: 'google-news-comercio-exterior',
+    name: 'Google News: Comercio Exterior',
+    rssUrl:
+      'https://news.google.com/rss/search?q=%22comercio+exterior%22+OR+%22com%C3%A9rcio+exterior%22+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+  },
+  {
+    id: 'google-news-siscomex-duimp',
+    name: 'Google News: Siscomex e DUIMP',
+    rssUrl:
+      'https://news.google.com/rss/search?q=siscomex+OR+duimp+OR+importacao+OR+exportacao+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+  },
+  {
+    id: 'google-news-portos-logistica',
+    name: 'Google News: Portos e Logistica',
+    rssUrl:
+      'https://news.google.com/rss/search?q=portos+OR+container+OR+desembaraco+OR+logistica+internacional+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+  },
 ]
 
 function ensureEnvironment() {
@@ -87,6 +105,18 @@ function buildAutomaticNewsId(sourceId, rawId) {
   return `AUTO-${sourceId}-${baseId || crypto.randomUUID()}`
 }
 
+function buildDedupKey(newsItem) {
+  const normalizedUrl = String(newsItem.externalUrl ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (normalizedUrl) {
+    return normalizedUrl
+  }
+
+  return `${String(newsItem.title ?? '').trim().toLowerCase()}::${String(newsItem.publishedAt ?? '').trim()}`
+}
+
 function isWithinLastHours(value, hours) {
   if (!value) return false
 
@@ -110,7 +140,7 @@ async function fetchFeedItems(source) {
   const xmlText = await response.text()
 
   return parseFeedItems(xmlText)
-    .slice(0, 12)
+    .slice(0, 20)
     .map((item) => {
       const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()
 
@@ -234,6 +264,7 @@ async function main() {
   const loadedNews = settledFeeds
     .filter((item) => item.status === 'fulfilled')
     .flatMap((item) => item.value)
+    .filter((item, index, allItems) => index === allItems.findIndex((candidate) => buildDedupKey(candidate) === buildDedupKey(item)))
 
   if (loadedNews.length === 0) {
     console.log('Nenhuma noticia externa encontrada nos ultimos 30 dias.')
