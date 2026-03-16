@@ -2,7 +2,21 @@ import crypto from 'node:crypto'
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
-const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+
+function normalizePrivateKey(value) {
+  if (!value) return ''
+
+  const normalizedValue = String(value)
+    .trim()
+    .replace(/^"+|"+$/g, '')
+    .replace(/^'+|'+$/g, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+
+  return normalizedValue
+}
+
+const FIREBASE_PRIVATE_KEY = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY)
 
 const PRIMARY_WINDOW_HOURS = 24
 const FALLBACK_WINDOW_HOURS = 24 * 30
@@ -57,6 +71,10 @@ function ensureEnvironment() {
 
   if (missingVariables.length > 0) {
     throw new Error(`Variaveis ausentes: ${missingVariables.join(', ')}`)
+  }
+
+  if (!FIREBASE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || !FIREBASE_PRIVATE_KEY.includes('END PRIVATE KEY')) {
+    throw new Error('FIREBASE_PRIVATE_KEY invalida: a chave nao esta em formato PEM.')
   }
 }
 
