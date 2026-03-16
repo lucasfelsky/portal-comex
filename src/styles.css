@@ -1179,6 +1179,17 @@ select {
   padding: 18px;
 }
 
+.news-card__summary {
+  margin: 0;
+  color: rgba(24, 64, 84, 0.78);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .news-card__timestamp,
 .news-modal__meta {
   font-size: 0.8rem;

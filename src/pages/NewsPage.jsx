@@ -56,8 +56,23 @@ function buildActionErrorMessage(prefix, error) {
   return details ? `${prefix} (${details})` : prefix
 }
 
+function buildAutomaticNewsFallbackText(newsItem) {
+  const sourceName = newsItem?.sourceName ?? 'fonte oficial'
+  return `Resumo não disponível no feed. Abra a fonte oficial para ler a matéria completa publicada por ${sourceName}.`
+}
+
 function getNewsCoverImage(newsItem) {
   return newsItem?.coverImage || defaultNewsCoverImage
+}
+
+function getNewsSummary(newsItem) {
+  const summary = String(newsItem?.summary ?? newsItem?.content ?? '').trim()
+  return summary || buildAutomaticNewsFallbackText(newsItem)
+}
+
+function getNewsBodyText(newsItem) {
+  const content = String(newsItem?.content ?? '').trim()
+  return content || getNewsSummary(newsItem)
 }
 
 function sortNews(newsItems) {
@@ -409,12 +424,21 @@ export default function NewsPage() {
                 <article key={item.id} className="news-card">
                   <button type="button" className="news-card__button" onClick={() => handleOpenNews(item.id)}>
                     <div className="news-card__image-wrap">
-                      <img src={getNewsCoverImage(item)} alt={item.title} className="news-card__image" />
+                      <img
+                        src={getNewsCoverImage(item)}
+                        alt={item.title}
+                        className="news-card__image"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null
+                          event.currentTarget.src = defaultNewsCoverImage
+                        }}
+                      />
                     </div>
                     <div className="news-card__body">
                       <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
                       <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
                       <strong>{item.title}</strong>
+                      <p className="news-card__summary">{getNewsSummary(item)}</p>
                     </div>
                   </button>
 
@@ -450,11 +474,19 @@ export default function NewsPage() {
             </div>
 
             <div className="news-modal__content">
-              <img src={getNewsCoverImage(selectedNews)} alt={selectedNews.title} className="news-modal__cover" />
+              <img
+                src={getNewsCoverImage(selectedNews)}
+                alt={selectedNews.title}
+                className="news-modal__cover"
+                onError={(event) => {
+                  event.currentTarget.onerror = null
+                  event.currentTarget.src = defaultNewsCoverImage
+                }}
+              />
 
               <div className="news-modal__meta">{formatTimestamp(selectedNews.updatedAt)}</div>
 
-              <div className="news-modal__text">{selectedNews.content}</div>
+              <div className="news-modal__text">{getNewsBodyText(selectedNews)}</div>
 
               {selectedNews.mediaItems?.length > 0 ? (
                 <div className="news-modal__gallery">
