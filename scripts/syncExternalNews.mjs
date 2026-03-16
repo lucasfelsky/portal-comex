@@ -4,15 +4,18 @@ const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
 const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
 
+const PRIMARY_WINDOW_HOURS = 24
+const FALLBACK_WINDOW_HOURS = 72
+
 const externalNewsSources = [
   {
     id: 'siscomex-importacao',
-    name: 'Siscomex Importação',
+    name: 'Siscomex Importacao',
     rssUrl: 'https://www.gov.br/siscomex/pt-br/noticias/noticias-siscomex-importacao/noticias-siscomex-importacao/RSS',
   },
   {
     id: 'siscomex-exportacao',
-    name: 'Siscomex Exportação',
+    name: 'Siscomex Exportacao',
     rssUrl: 'https://www.gov.br/siscomex/pt-br/noticias/noticias-siscomex-exportacao/noticias-siscomex-exportacao/RSS',
   },
   {
@@ -22,7 +25,7 @@ const externalNewsSources = [
   },
   {
     id: 'mdic-informativos',
-    name: 'MDIC Comércio Exterior',
+    name: 'MDIC Comercio Exterior',
     rssUrl: 'https://www.gov.br/mdic/pt-br/assuntos/comercio-exterior/estatisticas/informativos/RSS',
   },
 ]
@@ -35,7 +38,7 @@ function ensureEnvironment() {
   ].filter(Boolean)
 
   if (missingVariables.length > 0) {
-    throw new Error(`Variáveis ausentes: ${missingVariables.join(', ')}`)
+    throw new Error(`Variaveis ausentes: ${missingVariables.join(', ')}`)
   }
 }
 
@@ -54,7 +57,7 @@ function decodeXml(value) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-  }
+}
 
 function extractTagValue(xml, tagName) {
   const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, 'i'))
@@ -84,13 +87,13 @@ function buildAutomaticNewsId(sourceId, rawId) {
   return `AUTO-${sourceId}-${baseId || crypto.randomUUID()}`
 }
 
-function isWithinLast24Hours(value) {
+function isWithinLastHours(value, hours) {
   if (!value) return false
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return false
 
-  return Date.now() - date.getTime() <= 24 * 60 * 60 * 1000
+  return Date.now() - date.getTime() <= hours * 60 * 60 * 1000
 }
 
 async function fetchFeedItems(source) {
@@ -105,14 +108,16 @@ async function fetchFeedItems(source) {
   }
 
   const xmlText = await response.text()
+
   return parseFeedItems(xmlText)
     .slice(0, 12)
     .map((item) => {
       const publishedAt = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()
+
       return {
         id: buildAutomaticNewsId(source.id, item.guid || item.link || item.title),
         title: item.title,
-        content: item.description || 'Leia a íntegra na fonte oficial vinculada abaixo.',
+        content: item.description || 'Leia a integra na fonte oficial vinculada abaixo.',
         summary: item.description,
         coverImage: '',
         mediaItems: [],
@@ -125,7 +130,7 @@ async function fetchFeedItems(source) {
         publishedAt,
       }
     })
-    .filter((item) => item.title && item.externalUrl && isWithinLast24Hours(item.publishedAt))
+    .filter((item) => item.title && item.externalUrl && isWithinLastHours(item.publishedAt, FALLBACK_WINDOW_HOURS))
 }
 
 function base64UrlEncode(value) {
@@ -166,7 +171,7 @@ async function getAccessToken() {
   })
 
   if (!response.ok) {
-    throw new Error('Falha ao obter token OAuth para gravar notícias externas.')
+    throw new Error('Falha ao obter token OAuth para gravar noticias externas.')
   }
 
   const payloadResponse = await response.json()
@@ -215,7 +220,7 @@ async function upsertExternalNewsItem(newsItem, accessToken) {
 
   if (!response.ok) {
     const errorPayload = await response.text()
-    throw new Error(`Falha ao gravar notícia externa ${newsItem.id}: ${errorPayload}`)
+    throw new Error(`Falha ao gravar noticia externa ${newsItem.id}: ${errorPayload}`)
   }
 }
 
@@ -231,14 +236,18 @@ async function main() {
     .flatMap((item) => item.value)
 
   if (loadedNews.length === 0) {
-    console.log('Nenhuma notícia externa recente encontrada nas últimas 24 horas.')
+    console.log('Nenhuma noticia externa encontrada nas ultimas 72 horas.')
     return
   }
 
   const accessToken = await getAccessToken()
   await Promise.all(loadedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
 
-  console.log(`Sincronização concluída: ${loadedNews.length} notícias externas processadas.`)
+  const recentNewsCount = loadedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
+
+  console.log(
+    `Sincronizacao concluida: ${loadedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
+  )
 }
 
 main().catch((error) => {

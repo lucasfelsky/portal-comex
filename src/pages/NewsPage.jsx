@@ -69,13 +69,23 @@ function sortNews(newsItems) {
   })
 }
 
-function isWithinLast24Hours(value) {
+function isWithinLastHours(value, hours) {
   if (!value) return false
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return false
 
-  return Date.now() - date.getTime() <= 24 * 60 * 60 * 1000
+  return Date.now() - date.getTime() <= hours * 60 * 60 * 1000
+}
+
+function filterNewsWindow(newsItems) {
+  const last24Hours = newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 24))
+
+  if (last24Hours.length > 0) {
+    return last24Hours
+  }
+
+  return newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 72))
 }
 
 function readFilesAsDataUrls(fileList) {
@@ -128,10 +138,12 @@ export default function NewsPage() {
         if (!isMounted) return
 
         setNewsItems(
-          sortNews([
-            ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
-            ...automaticNews,
-          ]).filter((item) => isWithinLast24Hours(item.updatedAt ?? item.createdAt))
+          filterNewsWindow(
+            sortNews([
+              ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
+              ...automaticNews,
+            ])
+          )
         )
       } catch (loadError) {
         if (isMounted) {
@@ -220,10 +232,12 @@ export default function NewsPage() {
       listExternalNews(),
     ])
     setNewsItems(
-      sortNews([
-        ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
-        ...automaticNews,
-      ]).filter((item) => isWithinLast24Hours(item.updatedAt ?? item.createdAt))
+      filterNewsWindow(
+        sortNews([
+          ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
+          ...automaticNews,
+        ])
+      )
     )
     setSelectedNewsId(preferredId)
     return manualNews
