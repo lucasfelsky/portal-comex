@@ -58,7 +58,18 @@ function buildActionErrorMessage(prefix, error) {
 
 function buildAutomaticNewsFallbackText(newsItem) {
   const sourceName = newsItem?.sourceName ?? 'fonte oficial'
-  return `Resumo não disponível no feed. Abra a fonte oficial para ler a matéria completa publicada por ${sourceName}.`
+  const publishedAt = newsItem?.publishedAt || newsItem?.updatedAt || newsItem?.createdAt
+  const date = publishedAt ? new Date(publishedAt) : null
+  const formattedDate =
+    date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(date)
+      : 'data recente'
+
+  return `Atualização automática publicada por ${sourceName} em ${formattedDate}. Abra a fonte oficial para consultar a matéria completa.`
 }
 
 function getNewsCoverImage(newsItem) {

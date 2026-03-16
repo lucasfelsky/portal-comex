@@ -128,6 +128,31 @@ function sanitizeDescriptionText(value) {
     .trim()
 }
 
+function isBlockedImageUrl(value) {
+  const normalizedValue = String(value ?? '').trim().toLowerCase()
+
+  return (
+    normalizedValue.includes('google.com/s2/favicons') ||
+    normalizedValue.includes('news.google.com') ||
+    normalizedValue.includes('gstatic.com') ||
+    normalizedValue.includes('favicon')
+  )
+}
+
+function buildEditorialFallback(newsItem) {
+  const publishedAt = newsItem?.publishedAt ? new Date(newsItem.publishedAt) : null
+  const formattedDate =
+    publishedAt && !Number.isNaN(publishedAt.getTime())
+      ? new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(publishedAt)
+      : 'data recente'
+
+  return `Atualização automática coletada de ${newsItem.sourceName} em ${formattedDate}. Abra a fonte oficial para consultar a matéria completa e os detalhes originais desta publicação.`
+}
+
 function extractMetaContent(htmlText, attributeName, attributeValue) {
   const pattern = new RegExp(
     `<meta[^>]+${attributeName}=["']${attributeValue}["'][^>]+content=["']([^"']+)["'][^>]*>|<meta[^>]+content=["']([^"']+)["'][^>]+${attributeName}=["']${attributeValue}["'][^>]*>`,
@@ -166,12 +191,17 @@ async function fetchArticleMetadata(newsItem) {
 
     return {
       ...newsItem,
-      content: newsItem.content || metaDescription,
-      summary: newsItem.summary || metaDescription,
-      coverImage: newsItem.coverImage || metaImage,
+      content: newsItem.content || metaDescription || buildEditorialFallback(newsItem),
+      summary: newsItem.summary || metaDescription || buildEditorialFallback(newsItem),
+      coverImage: !isBlockedImageUrl(newsItem.coverImage) ? newsItem.coverImage : metaImage,
     }
   } catch {
-    return newsItem
+    return {
+      ...newsItem,
+      content: newsItem.content || buildEditorialFallback(newsItem),
+      summary: newsItem.summary || buildEditorialFallback(newsItem),
+      coverImage: isBlockedImageUrl(newsItem.coverImage) ? '' : newsItem.coverImage,
+    }
   }
 }
 
@@ -243,9 +273,9 @@ async function fetchFeedItems(source) {
       return {
         id: buildAutomaticNewsId(source.id, item.guid || item.link || item.title),
         title: item.title,
-        content: item.description || `Leia a materia completa na fonte oficial de ${source.name}.`,
-        summary: item.description || `Atualizacao publicada por ${source.name}. Abra a fonte oficial para ver o texto completo.`,
-        coverImage: item.imageUrl,
+        content: item.description || '',
+        summary: item.description || '',
+        coverImage: isBlockedImageUrl(item.imageUrl) ? '' : item.imageUrl,
         mediaItems: [],
         references: item.link ? [item.link] : [],
         sourceType: 'automatic',
@@ -368,13 +398,19 @@ async function main() {
   }
 
   const enrichedNews = await Promise.all(loadedNews.map((item) => fetchArticleMetadata(item)))
+  const finalizedNews = enrichedNews.map((item) => ({
+    ...item,
+    content: item.content || buildEditorialFallback(item),
+    summary: item.summary || buildEditorialFallback(item),
+    coverImage: isBlockedImageUrl(item.coverImage) ? '' : item.coverImage,
+  }))
   const accessToken = await getAccessToken()
-  await Promise.all(enrichedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
+  await Promise.all(finalizedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
 
-  const recentNewsCount = enrichedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
+  const recentNewsCount = finalizedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
 
   console.log(
-    `Sincronizacao concluida: ${enrichedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
+    `Sincronizacao concluida: ${finalizedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
   )
 }
 
