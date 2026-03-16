@@ -47,24 +47,6 @@ const externalNewsSources = [
     name: 'Jornal Portuario',
     rssUrl: 'https://jornalportuario.com.br/rss/noticias',
   },
-  {
-    id: 'google-news-comercio-exterior',
-    name: 'Google News: Comercio Exterior',
-    rssUrl:
-      'https://news.google.com/rss/search?q=%22comercio+exterior%22+OR+%22com%C3%A9rcio+exterior%22+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
-  },
-  {
-    id: 'google-news-siscomex-duimp',
-    name: 'Google News: Siscomex e DUIMP',
-    rssUrl:
-      'https://news.google.com/rss/search?q=siscomex+OR+duimp+OR+importacao+OR+exportacao+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
-  },
-  {
-    id: 'google-news-portos-logistica',
-    name: 'Google News: Portos e Logistica',
-    rssUrl:
-      'https://news.google.com/rss/search?q=portos+OR+container+OR+desembaraco+OR+logistica+internacional+when:30d&hl=pt-BR&gl=BR&ceid=BR:pt-419',
-  },
 ]
 
 function ensureEnvironment() {
