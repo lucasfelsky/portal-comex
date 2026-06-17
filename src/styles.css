@@ -2060,6 +2060,26 @@ select {
   color: rgba(15, 23, 42, 0.7);
 }
 
+.weekly-arrivals-item--clickable {
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.weekly-arrivals-item--clickable:hover {
+  background: rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.weekly-arrivals-item--clickable:focus-visible {
+  outline: 2px solid var(--md-gold-strong);
+  outline-offset: 2px;
+}
+
+.weekly-arrivals-item__cta {
+  pointer-events: none;
+}
+
 .collection-status-edit__group {
   font-weight: 600;
   color: rgba(15, 23, 42, 0.7);

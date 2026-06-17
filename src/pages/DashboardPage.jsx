@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import {
   getChannelToneClass,
@@ -79,6 +80,7 @@ function getDestinationLabel(category) {
 
 export default function DashboardPage() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)
@@ -88,6 +90,11 @@ export default function DashboardPage() {
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(true)
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(true)
+
+  function handleSelectProcess(processId) {
+    if (!processId) return
+    navigate('/processos', { state: { selectedProcessId: processId } })
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -186,6 +193,7 @@ export default function DashboardPage() {
           processes={loadedProcesses}
           isAdmin={profile?.role === 'admin'}
           isLoading={isLoadingProcesses}
+          onSelectProcess={handleSelectProcess}
         />
       </div>
 

@@ -8,7 +8,6 @@ import {
   isProcessStatusFinalized,
 } from './processStatus'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
-import { getStatusTagClass, getQuickReadProcessStatus } from './processStatusView'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -78,6 +77,13 @@ export default function WeeklyArrivalsCard({
 }) {
   const items = isLoading ? [] : getWeeklyArrivalProcesses(processes)
 
+  function handleCardKeyDown(event, processId) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onSelectProcess?.(processId)
+    }
+  }
+
   return (
     <article className="list-card">
       <div className="card-heading">
@@ -103,7 +109,14 @@ export default function WeeklyArrivalsCard({
           </div>
         ) : (
           items.map(({ process, windows }) => (
-            <div key={process.id} className="process-item weekly-arrivals-item">
+            <div
+              key={process.id}
+              className="process-item weekly-arrivals-item weekly-arrivals-item--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectProcess?.(process.id)}
+              onKeyDown={(event) => handleCardKeyDown(event, process.id)}
+            >
               <div className="process-item__main">
                 <strong>{getProcessTitle(process, isAdmin)}</strong>
                 {getProcessSubtitle(process, isAdmin) ? (
@@ -111,9 +124,6 @@ export default function WeeklyArrivalsCard({
                 ) : null}
                 <div className="process-item__line">{process.category}</div>
                 <div className="process-item__chips">
-                  <span className={getStatusTagClass(process.processStatus)}>
-                    {getQuickReadProcessStatus(process)}
-                  </span>
                   <ProcessDerivedStatusBadge process={process} />
                 </div>
 
@@ -130,13 +140,9 @@ export default function WeeklyArrivalsCard({
                 </ul>
               </div>
               <div className="process-item__meta process-item__meta--top">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => onSelectProcess?.(process.id)}
-                >
-                  Abrir processo
-                </button>
+                <span className="ghost-button weekly-arrivals-item__cta" aria-hidden="true">
+                  Abrir processo →
+                </span>
               </div>
             </div>
           ))
