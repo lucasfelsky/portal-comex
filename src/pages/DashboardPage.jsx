@@ -8,7 +8,7 @@ import {
   getQuickReadProcessStatus,
   isCollectionScheduleRetainingStatus,
   isDtaTransitCompletedStatus,
-  isMapaInspectionScheduledStatus,
+  isMapaInspectionScheduledStatus as shouldShowMapaInspection,
   shouldHideProcessCardSchedule,
 } from '../features/processes/processStatusView'
 import {
