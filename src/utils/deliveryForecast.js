@@ -146,16 +146,21 @@ function getScheduledCollectionDeliveryDate(process) {
 
   const destination = normalizeText(process.destination)
   const scheduledDate = startOfDay(scheduledAt)
-  const needsNextBusinessDay = !isBusinessDay(scheduledDate)
+  const isWeekend = !isBusinessDay(scheduledDate)
+  const afterCutoff = destination.includes('navegantes')
+    ? isAfterCutoff(scheduledAt, 14)
+    : destination.includes('itapoa')
+      ? isAfterCutoff(scheduledAt, 12)
+      : true
 
   if (destination.includes('navegantes')) {
-    return needsNextBusinessDay || isAfterCutoff(scheduledAt, 15)
+    return isWeekend || afterCutoff
       ? toDateKey(getNextBusinessDay(scheduledDate))
       : toDateKey(scheduledDate)
   }
 
   if (destination.includes('itapoa')) {
-    return needsNextBusinessDay || isAfterCutoff(scheduledAt, 14)
+    return isWeekend || afterCutoff
       ? toDateKey(getNextBusinessDay(scheduledDate))
       : toDateKey(scheduledDate)
   }
@@ -173,17 +178,16 @@ export function getScheduledCollectionDeliveryShift(process) {
   const scheduledDate = startOfDay(scheduledAt)
   const isWeekend = !isBusinessDay(scheduledDate)
   const cutoffHour = destination.includes('navegantes')
-    ? 15
+    ? 14
     : destination.includes('itapoa')
-      ? 14
+      ? 12
       : null
 
   if (cutoffHour === null) return 'Vespertino'
+  if (isWeekend) return 'Matutino'
+  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Matutino'
 
-  if (isWeekend) return 'Vespertino'
-  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Vespertino'
-
-  return 'Matutino'
+  return 'Vespertino'
 }
 
 function getBusinessDaysToAdd(category) {
