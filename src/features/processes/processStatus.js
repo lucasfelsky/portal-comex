@@ -166,7 +166,7 @@ export function shouldHideProcessStatusBadge(process) {
 }
 
 export function getQuickReadProcessStatus(process) {
-  if (isCdUnloadingOrReceivedStatus(process?.collectionStatus)) {
+  if (shouldHideProcessStatusBadge(process)) {
     return getDisplayedCollectionStatus(process.collectionStatus)
   }
 
