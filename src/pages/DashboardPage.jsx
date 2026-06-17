@@ -6,7 +6,7 @@ import {
   getDisplayedCollectionStatus,
   getStatusTagClass,
   getQuickReadProcessStatus,
-  isCollectionScheduleRetainingStatus,
+  isCollectionScheduleRetainingStatus as keepsCollectionSchedule,
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus as shouldShowMapaInspection,
   shouldHideProcessCardSchedule,
@@ -76,6 +76,19 @@ function formatCargoUnit(quantity, singularLabel, pluralLabel) {
 
 function getDestinationLabel(category) {
   return category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
+}
+
+function getDuimpSummary(process) {
+  const status = String(process?.duimpStatus ?? '').trim()
+  const channel = String(process?.parameterizationChannel ?? '').trim()
+
+  if (!status) return '-'
+  if (channel) return `${status} · Canal ${channel}`
+  return status
+}
+
+function hasUpdatedEta(process) {
+  return Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
 }
 
 export default function DashboardPage() {
