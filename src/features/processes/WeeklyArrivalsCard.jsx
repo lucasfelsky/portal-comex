@@ -169,10 +169,10 @@ export default function WeeklyArrivalsCard({
                     return (
                       <li key={window.id} className="weekly-arrivals-windows__item">
                         <span className="detail-label">Container {window.containerNumber}</span>
-                        <p>
-                                        <strong className="weekly-arrivals-windows__date">{formatDateOnly(deliveryEstimate)}</strong>
+                        <p className="weekly-arrivals-windows__row">
+                          <strong className="weekly-arrivals-windows__date">{formatDateOnly(deliveryEstimate)}</strong>
                           {deliveryShift ? (
-                            <span className="weekly-arrivals-windows__shift"> · {deliveryShift}</span>
+                            <span className="weekly-arrivals-windows__shift">{deliveryShift}</span>
                           ) : null}
                         </p>
                         {window.notes ? (
