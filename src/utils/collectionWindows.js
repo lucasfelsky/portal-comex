@@ -17,9 +17,6 @@ function generateWindowId() {
 export function normalizeCollectionWindow(rawWindow, fallbackIndex = 0) {
   if (!rawWindow || typeof rawWindow !== 'object') return null
 
-  const scheduledAt = normalizeIsoDateTime(rawWindow.scheduledAt)
-  if (!scheduledAt) return null
-
   const rawContainerNumber = Number(rawWindow.containerNumber)
   const containerNumber = Number.isFinite(rawContainerNumber) && rawContainerNumber > 0
     ? Math.floor(rawContainerNumber)
@@ -30,25 +27,30 @@ export function normalizeCollectionWindow(rawWindow, fallbackIndex = 0) {
       ? rawWindow.id.trim()
       : generateWindowId()
 
-  return {
+  const normalized = {
     id,
     containerNumber,
-    scheduledAt,
+    scheduledAt: normalizeIsoDateTime(rawWindow.scheduledAt),
     notes: typeof rawWindow.notes === 'string' ? rawWindow.notes.trim() : '',
   }
+
+  if (!normalized.scheduledAt) {
+    normalized.scheduledAt = ''
+  }
+
+  return normalized
 }
 
 export function normalizeCollectionWindows(rawWindows, { legacyScheduledAt = '', containerQuantity = 0 } = {}) {
-  if (Array.isArray(rawWindows)) {
-    const normalized = rawWindows
-      .map((window, index) => normalizeCollectionWindow(window, index))
-      .filter(Boolean)
+  const arrayWindows = Array.isArray(rawWindows) ? rawWindows : []
+  const normalizedFromArray = arrayWindows
+    .map((window, index) => normalizeCollectionWindow(window, index))
+    .filter(Boolean)
 
-    if (normalized.length > 0) {
-      return normalized.sort(
-        (left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()
-      )
-    }
+  if (normalizedFromArray.length > 0) {
+    return normalizedFromArray.sort(
+      (left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()
+    )
   }
 
   const legacyValue = normalizeIsoDateTime(legacyScheduledAt)
@@ -91,8 +93,8 @@ export function createCollectionWindow({ containerNumber, scheduledAt, notes } =
     {
       id: generateWindowId(),
       containerNumber,
-      scheduledAt,
-      notes,
+      scheduledAt: scheduledAt ?? '',
+      notes: notes ?? '',
     },
     0
   )

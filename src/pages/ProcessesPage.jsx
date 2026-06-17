@@ -837,6 +837,9 @@ export default function ProcessesPage() {
       if (field === 'containerQuantity' || field === 'palletQuantity') {
         return { ...current, [field]: Math.max(0, Number(value) || 0) }
       }
+      if (field === 'collectionWindows') {
+        return sanitizeDraft(current, { [field]: value })
+      }
       if (
         [
           'berthed',
@@ -846,7 +849,6 @@ export default function ProcessesPage() {
           'parameterizationChannel',
           'collectionStatus',
           'collectionScheduledAt',
-          'collectionWindows',
           'mapaStatus',
           'mapaInspectionScheduledAt',
           'dtaStatus',

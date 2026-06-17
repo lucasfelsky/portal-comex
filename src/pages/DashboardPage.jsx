@@ -189,13 +189,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      <article className="list-card">
-        <div className="card-heading">
-          <div>
-            <h3>Processos favoritos</h3>
+      <div style={{ marginTop: '24px' }}>
+        <article className="list-card">
+          <div className="card-heading">
+            <div>
+              <h3>Processos favoritos</h3>
+            </div>
+            <span className="inline-badge">{favoriteProcesses.length} favoritos</span>
           </div>
-          <span className="inline-badge">{favoriteProcesses.length} favoritos</span>
-        </div>
 
         <div className="process-list process-list--scroll">
           {isLoadingFavorites ? (
@@ -369,7 +370,8 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-      </article>
+        </article>
+      </div>
     </section>
   )
 }
