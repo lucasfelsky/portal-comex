@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import useAuth from '../hooks/useAuth'
-import { getProcessStatusTone } from '../features/processes/processStatus'
+import {
+  getDisplayedCollectionStatus,
+  getProcessStatusTone,
+  getQuickReadProcessStatus,
+  isCollectionScheduleRetainingStatus,
+  isDtaTransitCompletedStatus,
+  isMapaInspectionScheduledStatus,
+  shouldHideProcessCardSchedule,
+} from '../features/processes/processStatus'
 import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
@@ -43,7 +51,7 @@ function formatDateTime(value) {
 }
 
 function getEstimatedDeliveryLabel(process) {
-  return formatDate(getEstimatedDeliveryDate(process.eta, process.category))
+  return formatDate(getEstimatedDeliveryDate(process))
 }
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
@@ -85,19 +93,12 @@ function getStatusTagClass(status) {
   return `status-tag status-tag--${getProcessStatusTone(status)}`
 }
 
-function normalizeDtaStatus(status) {
-  return String(status ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+function hasUpdatedEta(process) {
+  return Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
 }
 
 function keepsCollectionSchedule(status) {
-  return (
-    status === 'Coleta Agendada' ||
-    status === 'Veiculo no CD para descarga' ||
-    status === 'Carga recebida'
-  )
+  return isCollectionScheduleRetainingStatus(status)
 }
 
 function getDuimpSummary(process) {
@@ -108,7 +109,7 @@ function getDuimpSummary(process) {
 }
 
 function shouldShowMapaInspection(status) {
-  return status === 'Vistoria agendada, aguardando realizacao'
+  return isMapaInspectionScheduledStatus(status)
 }
 
 export default function DashboardPage() {
@@ -229,7 +230,8 @@ export default function DashboardPage() {
             favoriteProcesses.map((item) => {
               const showMaritimePostArrival = isMaritimeCategory(item.category) && item.berthed
               const showAirPostArrival = isAirCategory(item.category) && item.arrived
-              const hideEta = showMaritimePostArrival || showAirPostArrival
+              const hideSchedule = shouldHideProcessCardSchedule(item)
+              const hideEta = showMaritimePostArrival || showAirPostArrival || hideSchedule
 
               return (
                 <div key={item.id} className="process-item">
@@ -241,7 +243,7 @@ export default function DashboardPage() {
                     <div className="process-item__line">{item.category}</div>
                     <div className="process-item__line">{getDestinationLabel(item.category)}: {item.destination || '-'}</div>
                     <div className="process-item__chips">
-                      <span className={getStatusTagClass(item.processStatus)}>{item.processStatus}</span>
+                      <span className={getStatusTagClass(item.processStatus)}>{getQuickReadProcessStatus(item)}</span>
                       {shouldShowContainerQuantity(item.category) ? (
                         <span className="inline-badge">
                           {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
@@ -280,13 +282,13 @@ export default function DashboardPage() {
                         {item.collectionStatus && !keepsCollectionSchedule(item.collectionStatus) ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Coleta</span>
-                            <p>{item.collectionStatus}</p>
+                            <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
                         {item.collectionStatus && keepsCollectionSchedule(item.collectionStatus) && item.collectionStatus !== 'Coleta Agendada' ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Coleta</span>
-                            <p>{item.collectionStatus}</p>
+                            <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
                         {item.collectionStatus === 'Coleta Agendada' && item.collectionScheduledAt ? (
@@ -320,7 +322,7 @@ export default function DashboardPage() {
                             <p>{formatDateTime(item.dtaArrivalAtItajai)}</p>
                           </div>
                         ) : null}
-                        {normalizeDtaStatus(item.dtaStatus) === 'transito concluido' ? (
+                        {isDtaTransitCompletedStatus(item.dtaStatus) ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Presença de carga</span>
                             <p>{item.cargoPresenceInformed ? 'Informada' : 'Pendente'}</p>
@@ -337,13 +339,13 @@ export default function DashboardPage() {
                         {item.collectionStatus && !keepsCollectionSchedule(item.collectionStatus) ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Coleta</span>
-                            <p>{item.collectionStatus}</p>
+                            <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
                         {item.collectionStatus && keepsCollectionSchedule(item.collectionStatus) && item.collectionStatus !== 'Coleta Agendada' ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Coleta</span>
-                            <p>{item.collectionStatus}</p>
+                            <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
                         {item.collectionStatus === 'Coleta Agendada' && item.collectionScheduledAt ? (
@@ -358,11 +360,17 @@ export default function DashboardPage() {
                     ) : null}
                   </div>
 
-                  <div className="process-item__meta">
-                    {!hideEta ? <span>ETA: {formatDate(item.eta)}</span> : null}
-                    {!hideEta ? <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span> : null}
+                  <div className="process-item__meta process-item__meta--top">
+                    {!hideEta ? (
+                      <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
+                        {hasUpdatedEta(item) ? 'ETA atualizada' : 'ETA'}: {formatDate(item.eta)}
+                      </span>
+                    ) : null}
+                    {!hideSchedule ? (
+                      <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
+                    ) : null}
                     {!hideEta && item.etaOriginal && item.etaOriginal !== item.eta ? (
-                      <span>ETA original: {formatDate(item.etaOriginal)}</span>
+                      <span className="eta-meta-secondary">ETA original: {formatDate(item.etaOriginal)}</span>
                     ) : null}
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   query,
@@ -7,12 +8,13 @@ import {
   setDoc,
   updateDoc,
   where,
-} from 'firebase/firestore'
+} from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
-import { listNotificationRecipients } from './notificationRecipientsRepository'
+import { repairTextEncoding } from '../utils/textEncoding'
 
 const STORAGE_KEY = 'sq-comex-notifications'
 const NOTIFICATIONS_CHANGED_EVENT = 'sq-comex-notifications-changed'
+const READ_NOTIFICATION_RETENTION_MS = 24 * 60 * 60 * 1000
 
 function notifyNotificationsChanged(recipientUserIds = []) {
   if (typeof window === 'undefined') return
@@ -31,12 +33,12 @@ function normalizeNotification(rawNotification, fallbackId) {
     id: rawNotification?.id ?? fallbackId,
     recipientUserId: String(rawNotification?.recipientUserId ?? ''),
     actorUserId: String(rawNotification?.actorUserId ?? ''),
-    actorName: String(rawNotification?.actorName ?? ''),
+    actorName: repairTextEncoding(String(rawNotification?.actorName ?? '')),
     type: String(rawNotification?.type ?? 'process_message'),
     processId: String(rawNotification?.processId ?? ''),
     messageId: String(rawNotification?.messageId ?? ''),
-    title: String(rawNotification?.title ?? '').trim(),
-    body: String(rawNotification?.body ?? '').trim(),
+    title: repairTextEncoding(String(rawNotification?.title ?? '').trim()),
+    body: repairTextEncoding(String(rawNotification?.body ?? '').trim()),
     targetTab: String(rawNotification?.targetTab ?? 'messages'),
     isRead: Boolean(rawNotification?.isRead),
     createdAt: rawNotification?.createdAt ?? new Date().toISOString(),
@@ -68,12 +70,54 @@ function sortNotifications(notifications) {
   })
 }
 
+function isExpiredReadNotification(notification, now = Date.now()) {
+  if (!notification?.isRead || !notification?.readAt) return false
+
+  const readAtTime = new Date(notification.readAt).getTime()
+  if (Number.isNaN(readAtTime)) return false
+
+  return now - readAtTime > READ_NOTIFICATION_RETENTION_MS
+}
+
+function partitionExpiredNotifications(notifications, now = Date.now()) {
+  return notifications.reduce(
+    (result, notification) => {
+      if (isExpiredReadNotification(notification, now)) {
+        result.expired.push(notification)
+      } else {
+        result.active.push(notification)
+      }
+
+      return result
+    },
+    { active: [], expired: [] }
+  )
+}
+
 function buildProcessLabel(process) {
   const name = String(process?.name ?? '').trim()
   if (name) return name
 
   const processNumber = String(process?.processNumber ?? '').trim()
   return processNumber ? `PO ${processNumber}` : 'processo'
+}
+
+function canShowProcessNameForRole(process, role) {
+  const category = String(process?.category ?? '').trim()
+  const normalizedRole = String(role ?? '').trim()
+  const isRestrictedCategory = ['FCL', 'LCL', 'AEREO'].includes(category)
+
+  return normalizedRole === 'admin' || !isRestrictedCategory
+}
+
+function buildRecipientProcessLabel(process, role) {
+  if (canShowProcessNameForRole(process, role)) {
+    const processName = String(process?.name ?? '').trim()
+    if (processName) return processName
+  }
+
+  const processNumber = String(process?.processNumber ?? '').trim()
+  return processNumber ? `PO ${processNumber}` : buildProcessLabel(process)
 }
 
 function buildFavoriteNotificationBody(processLabel, actorName) {
@@ -86,6 +130,124 @@ function buildAdminNotificationBody(processLabel, actorName) {
 
 function buildReplyNotificationBody(processLabel, actorName) {
   return `${actorName} respondeu uma dúvida sua em ${processLabel}.`
+}
+
+function buildPostReceiptNotesNotificationBody(processLabel, actorName) {
+  return `${actorName} registrou observações pós-recebimento da carga em ${processLabel}.`
+}
+
+function buildFavoriteProcessUpdatedTitle(processLabel) {
+  return `Processo atualizado: ${processLabel}`
+}
+
+function buildFavoriteProcessUpdatedBody(processLabel, updateSummary) {
+  return `${processLabel}: ${updateSummary}`
+}
+
+function formatDateLabel(value) {
+  if (!value) return '-'
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function buildProcessUpdateSummary(previousProcess, nextProcess) {
+  const changes = []
+
+  if (String(previousProcess?.processStatus ?? '') !== String(nextProcess?.processStatus ?? '')) {
+    changes.push(`status alterado para ${nextProcess?.processStatus || '-'}`)
+  }
+
+  if (String(previousProcess?.eta ?? '') !== String(nextProcess?.eta ?? '')) {
+    changes.push(`ETA atualizada para ${formatDateLabel(nextProcess?.eta)}`)
+  }
+
+  if (String(previousProcess?.etd ?? '') !== String(nextProcess?.etd ?? '')) {
+    changes.push(`ETD atualizada para ${formatDateLabel(nextProcess?.etd)}`)
+  }
+
+  if (String(previousProcess?.destination ?? '') !== String(nextProcess?.destination ?? '')) {
+    changes.push(`destino atualizado para ${nextProcess?.destination || '-'}`)
+  }
+
+  if (String(previousProcess?.processNotes ?? '') !== String(nextProcess?.processNotes ?? '')) {
+    changes.push('observações do processo atualizadas')
+  }
+
+  if (String(previousProcess?.postReceiptNotes ?? '') !== String(nextProcess?.postReceiptNotes ?? '')) {
+    changes.push('observações pós-recebimento atualizadas')
+  }
+
+  if (
+    JSON.stringify(normalizePostReceiptImages(previousProcess?.postReceiptImages)) !==
+    JSON.stringify(normalizePostReceiptImages(nextProcess?.postReceiptImages))
+  ) {
+    changes.push('imagens pos-recebimento atualizadas')
+  }
+
+  if (JSON.stringify(previousProcess?.items ?? []) !== JSON.stringify(nextProcess?.items ?? [])) {
+    changes.push('itens vinculados atualizados')
+  }
+
+  if (changes.length === 0) {
+    return 'dados do processo atualizados.'
+  }
+
+  if (changes.length === 1) {
+    return `${changes[0]}.`
+  }
+
+  return `${changes.slice(0, 2).join(' e ')}.`
+}
+
+function sanitizeProcessForComparison(process) {
+  if (!process) return null
+
+  return {
+    name: String(process.name ?? '').trim(),
+    category: String(process.category ?? '').trim(),
+    processNumber: String(process.processNumber ?? '').trim(),
+    destination: String(process.destination ?? '').trim(),
+    etd: String(process.etd ?? '').trim(),
+    eta: String(process.eta ?? '').trim(),
+    etaOriginal: String(process.etaOriginal ?? '').trim(),
+    processStatus: String(process.processStatus ?? '').trim(),
+    containerQuantity: Number(process.containerQuantity ?? 0),
+    palletQuantity: Number(process.palletQuantity ?? 0),
+    processNotes: String(process.processNotes ?? '').trim(),
+    postReceiptNotes: String(process.postReceiptNotes ?? '').trim(),
+    postReceiptImages: normalizePostReceiptImages(process.postReceiptImages),
+    cargoReceivedAt: String(process.cargoReceivedAt ?? '').trim(),
+    berthed: Boolean(process.berthed),
+    arrived: Boolean(process.arrived),
+    cargoPresenceInformed: Boolean(process.cargoPresenceInformed),
+    duimpStatus: String(process.duimpStatus ?? '').trim(),
+    parameterizationChannel: String(process.parameterizationChannel ?? '').trim(),
+    collectionStatus: String(process.collectionStatus ?? '').trim(),
+    collectionScheduledAt: String(process.collectionScheduledAt ?? '').trim(),
+    mapaStatus: String(process.mapaStatus ?? '').trim(),
+    mapaInspectionScheduledAt: String(process.mapaInspectionScheduledAt ?? '').trim(),
+    dtaStatus: String(process.dtaStatus ?? '').trim(),
+    dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? '').trim(),
+    dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? '').trim(),
+    items: Array.isArray(process.items)
+      ? process.items.map((item) => ({
+          commercialName: String(item?.commercialName ?? '').trim(),
+          quantity: Number(item?.quantity ?? 0),
+        }))
+      : [],
+  }
+}
+
+function hasMeaningfulProcessChanges(previousProcess, nextProcess) {
+  return (
+    JSON.stringify(sanitizeProcessForComparison(previousProcess)) !==
+    JSON.stringify(sanitizeProcessForComparison(nextProcess))
+  )
 }
 
 function buildNotificationEntries(recipients, baseEntry) {
@@ -129,11 +291,15 @@ export async function listNotifications(recipientUserId) {
   if (!normalizedRecipientId) return []
 
   if (!isFirebaseConfigured || !firestore) {
-    return sortNotifications(
-      readLocalNotifications()
-        .map((item) => normalizeNotification(item))
-        .filter((item) => item.recipientUserId === normalizedRecipientId)
-    )
+    const currentNotifications = readLocalNotifications().map((item) => normalizeNotification(item))
+    const { active, expired } = partitionExpiredNotifications(currentNotifications)
+
+    if (expired.length > 0) {
+      writeLocalNotifications(sortNotifications(active))
+      notifyNotificationsChanged(expired.map((item) => item.recipientUserId))
+    }
+
+    return sortNotifications(active.filter((item) => item.recipientUserId === normalizedRecipientId))
   }
 
   const notificationsQuery = query(
@@ -141,27 +307,32 @@ export async function listNotifications(recipientUserId) {
     where('recipientUserId', '==', normalizedRecipientId)
   )
   const snapshot = await getDocs(notificationsQuery)
+  const normalizedNotifications = snapshot.docs.map((item) => {
+    const data = item.data()
 
-  return sortNotifications(
-    snapshot.docs.map((item) => {
-      const data = item.data()
+    return normalizeNotification(
+      {
+        ...data,
+        createdAt:
+          typeof data.createdAt?.toDate === 'function'
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAt,
+        readAt:
+          typeof data.readAt?.toDate === 'function'
+            ? data.readAt.toDate().toISOString()
+            : data.readAt,
+      },
+      item.id
+    )
+  })
+  const { active, expired } = partitionExpiredNotifications(normalizedNotifications)
 
-      return normalizeNotification(
-        {
-          ...data,
-          createdAt:
-            typeof data.createdAt?.toDate === 'function'
-              ? data.createdAt.toDate().toISOString()
-              : data.createdAt,
-          readAt:
-            typeof data.readAt?.toDate === 'function'
-              ? data.readAt.toDate().toISOString()
-              : data.readAt,
-        },
-        item.id
-      )
-    })
-  )
+  if (expired.length > 0) {
+    await Promise.all(expired.map((item) => deleteDoc(doc(firestore, 'notifications', item.id))))
+    notifyNotificationsChanged([normalizedRecipientId])
+  }
+
+  return sortNotifications(active)
 }
 
 export async function markNotificationAsRead(notificationId) {
@@ -231,85 +402,8 @@ export async function createNotifications(notifications) {
   return normalizedNotifications
 }
 
+// As funções de notificação usadas pelo front foram removidas: o backend
+// (functions/index.js) é a fonte de verdade e gera notificações a partir
+// dos gatilhos de processo, mensagens e observações de pós-recebimento.
+
 export { NOTIFICATIONS_CHANGED_EVENT }
-
-export async function createProcessMessageNotifications({
-  actor,
-  process,
-  message,
-  existingMessages = [],
-}) {
-  const actorUserId = String(actor?.uid ?? actor?.id ?? '').trim()
-
-  if (!actorUserId || !process?.id || !message?.id) return []
-
-  const recipients = await listNotificationRecipients()
-  const recipientById = new Map(recipients.map((item) => [item.uid, item]))
-  const activeRecipients = recipients.filter((item) => item.isActive)
-  const processLabel = buildProcessLabel(process)
-  const actorName = actor?.name ?? actor?.email ?? 'Usuário'
-  const notificationMap = new Map()
-
-  const pushNotification = (recipientUserId, type, title, body) => {
-    if (!recipientUserId || recipientUserId === actorUserId) return
-    if (!recipientById.has(recipientUserId)) return
-    if (notificationMap.has(recipientUserId)) return
-
-    notificationMap.set(recipientUserId, {
-      recipientUserId,
-      actorUserId,
-      actorName,
-      type,
-      processId: process.id,
-      messageId: message.id,
-      title,
-      body,
-    })
-  }
-
-  if (actor?.role === 'admin') {
-    const latestExternalMessage = [...existingMessages]
-      .reverse()
-      .find((item) => {
-        if (!item?.authorId || item.authorId === actorUserId) return false
-        return recipientById.get(item.authorId)?.role !== 'admin'
-      })
-
-    if (latestExternalMessage?.authorId) {
-      pushNotification(
-        latestExternalMessage.authorId,
-        'process_question_answered',
-        'Sua dúvida recebeu uma resposta',
-        buildReplyNotificationBody(processLabel, actorName)
-      )
-    }
-  } else {
-    activeRecipients
-      .filter((item) => item.role === 'admin')
-      .forEach((item) => {
-        pushNotification(
-          item.uid,
-          'process_question_created',
-          'Nova dúvida em processo',
-          buildAdminNotificationBody(processLabel, actorName)
-        )
-      })
-  }
-
-  activeRecipients
-    .filter((item) => item.role !== 'admin' && item.favoriteProcessIds.includes(process.id))
-    .forEach((item) => {
-      pushNotification(
-        item.uid,
-        'favorite_process_message',
-        'Atualização em processo favoritado',
-        buildFavoriteNotificationBody(processLabel, actorName)
-      )
-    })
-
-  return createNotifications(
-    Array.from(notificationMap.values()).flatMap((entry) =>
-      buildNotificationEntries([entry.recipientUserId], entry)
-    )
-  )
-}

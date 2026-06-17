@@ -1,21 +1,56 @@
-import { createContext, useEffect, useMemo, useState } from 'react'
+﻿import { createContext, useEffect, useMemo, useState } from 'react'
 import {
+  applyActionCode,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { auth, firestore, isFirebaseConfigured } from '../lib/firebase'
 import { getRolePermissions } from '../features/admin/rolePermissions'
-import { syncNotificationRecipient } from '../services/notificationRecipientsRepository'
-import { listUsers } from '../services/usersRepository'
+import {
+  sendCustomPasswordResetEmail as requestCustomPasswordResetEmail,
+  sendCustomVerificationEmail as requestCustomVerificationEmail,
+} from '../services/authRepository'
 
 export const AuthContext = createContext(null)
 
 function normalizeCorporateEmail(email) {
   return email.trim().toLowerCase()
+}
+
+function normalizeProfileStatus(status) {
+  const normalizedStatus = String(status ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (normalizedStatus === 'ativo') return 'Ativo'
+  if (normalizedStatus === 'bloqueado') return 'Bloqueado'
+  if (normalizedStatus === 'reprovado') return 'Reprovado'
+  return 'Pendente'
+}
+
+function getDefaultStatusTone(status) {
+  if (status === 'Ativo') return 'ok'
+  if (status === 'Bloqueado' || status === 'Reprovado') return 'neutral'
+  return 'warn'
+}
+
+function getDefaultLastAccess(status) {
+  if (status === 'Ativo') return 'Aguardando primeiro acesso'
+  if (status === 'Bloqueado') return 'Acesso bloqueado'
+  if (status === 'Reprovado') return 'Cadastro reprovado'
+  return 'Aguardando aprovação'
+}
+
+function getDefaultNotes(status) {
+  if (status === 'Ativo') return 'Acesso liberado.'
+  if (status === 'Bloqueado') return 'Acesso bloqueado pela administração.'
+  if (status === 'Reprovado') return 'Cadastro reprovado pela administração.'
+  return 'Cadastro corporativo aguardando aprovação administrativa.'
 }
 
 function isAllowedCorporateEmail(email) {
@@ -24,7 +59,7 @@ function isAllowedCorporateEmail(email) {
 
 function buildBaseProfile(user, existingProfile = null) {
   const role = existingProfile?.role ?? 'user'
-  const isApproved = existingProfile?.status === 'Ativo'
+  const status = normalizeProfileStatus(existingProfile?.status)
 
   return {
     uid: user.uid,
@@ -32,12 +67,12 @@ function buildBaseProfile(user, existingProfile = null) {
     email: normalizeCorporateEmail(user.email ?? existingProfile?.email ?? ''),
     role,
     area: existingProfile?.area ?? 'Geral',
-    status: isApproved ? 'Ativo' : existingProfile?.status ?? 'Pendente',
-    statusTone: isApproved ? 'ok' : existingProfile?.statusTone ?? 'warn',
-    lastAccess: existingProfile?.lastAccess ?? 'Aguardando aprovação',
+    status,
+    statusTone: getDefaultStatusTone(status),
+    lastAccess: existingProfile?.lastAccess ?? getDefaultLastAccess(status),
     scopes: getRolePermissions(role),
     favoriteProcessIds: existingProfile?.favoriteProcessIds ?? [],
-    notes: existingProfile?.notes ?? 'Cadastro corporativo aguardando análise administrativa.',
+    notes: existingProfile?.notes ?? getDefaultNotes(status),
   }
 }
 
@@ -60,7 +95,6 @@ async function ensureUserProfile(user) {
     }
 
     await setDoc(userRef, profile, { merge: true })
-    await syncNotificationRecipient(profile)
     return profile
   }
 
@@ -70,15 +104,13 @@ async function ensureUserProfile(user) {
     email: baseProfile.email,
     name: user.displayName ?? snapshot.data().name ?? snapshot.data().email ?? 'Usuário',
     lastAccess:
-      existingProfile?.status === 'Ativo' ? now : snapshot.data().lastAccess ?? baseProfile.lastAccess,
+      normalizeProfileStatus(snapshot.data().status) === 'Ativo'
+        ? now
+        : snapshot.data().lastAccess ?? baseProfile.lastAccess,
     updatedAt: serverTimestamp(),
   }
 
   await setDoc(userRef, mergedProfile, { merge: true })
-  await syncNotificationRecipient({
-    ...baseProfile,
-    ...mergedProfile,
-  })
 
   return {
     ...snapshot.data(),
@@ -139,31 +171,6 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
-  useEffect(() => {
-    if (!profile?.uid || profile.role !== 'admin') {
-      return undefined
-    }
-
-    let isMounted = true
-
-    async function backfillNotificationRecipients() {
-      try {
-        const users = await listUsers()
-        if (!isMounted) return
-
-        await Promise.all(users.map((user) => syncNotificationRecipient(user)))
-      } catch (error) {
-        console.error('Falha ao sincronizar destinatários de notificação.', error)
-      }
-    }
-
-    backfillNotificationRecipients()
-
-    return () => {
-      isMounted = false
-    }
-  }, [profile?.uid, profile?.role])
-
   async function login(email, password) {
     if (!auth) {
       throw new Error('Firebase Auth não configurado.')
@@ -201,6 +208,12 @@ export function AuthProvider({ children }) {
       ...credentials.user,
       displayName: name.trim() || credentials.user.displayName,
     })
+
+    // O envio do email não pode travar o cadastro. Se falhar aqui,
+    // o usuário ainda consegue reenviar na tela de verificação.
+    requestCustomVerificationEmail().catch((error) => {
+      console.error('Falha ao enviar email de verificação após cadastro.', error)
+    })
   }
 
   async function logout() {
@@ -209,6 +222,56 @@ export function AuthProvider({ children }) {
     }
 
     await signOut(auth)
+  }
+
+  async function requestPasswordReset(email) {
+    if (!auth) {
+      throw new Error('Firebase Auth não configurado.')
+    }
+
+    if (!isAllowedCorporateEmail(email)) {
+      throw new Error('Use um email corporativo @sqquimica.com.')
+    }
+
+    setAuthError('')
+    await requestCustomPasswordResetEmail(normalizeCorporateEmail(email))
+  }
+
+  async function resendVerificationEmail(payload) {
+    if (!auth) {
+      throw new Error('Firebase Auth não configurado.')
+    }
+
+    setAuthError('')
+    return requestCustomVerificationEmail(payload)
+  }
+
+  async function refreshAuthenticatedUser() {
+    if (!auth?.currentUser) {
+      return null
+    }
+
+    await reload(auth.currentUser)
+    const refreshedUser = auth.currentUser
+    const refreshedProfile = await ensureUserProfile(refreshedUser)
+    setUser({ ...refreshedUser })
+    setProfile(refreshedProfile)
+    return refreshedUser
+  }
+
+  async function confirmEmailVerification(oobCode) {
+    if (!auth) {
+      throw new Error('Firebase Auth não configurado.')
+    }
+
+    const normalizedCode = String(oobCode ?? '').trim()
+
+    if (!normalizedCode) {
+      throw new Error('Código de verificação não informado.')
+    }
+
+    await applyActionCode(auth, normalizedCode)
+    return refreshAuthenticatedUser()
   }
 
   async function toggleFavoriteProcess(processId) {
@@ -233,13 +296,6 @@ export function AuthProvider({ children }) {
         ).catch((error) => {
           console.error('Falha ao atualizar favoritos do usuário.', error)
         })
-
-        syncNotificationRecipient({
-          ...currentProfile,
-          favoriteProcessIds: nextFavorites,
-        }).catch((error) => {
-          console.error('Falha ao sincronizar preferências de notificação do usuário.', error)
-        })
       }
 
       return {
@@ -250,18 +306,29 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({
-      user,
-      profile,
-      loading,
-      authError,
-      isAuthenticated: Boolean(user),
-      isApproved: profile?.status === 'Ativo',
-      login,
-      register,
-      logout,
-      toggleFavoriteProcess,
-    }),
+    () => {
+      const isEmailVerified = user?.emailVerified === true
+      const hasAccess = normalizeProfileStatus(profile?.status) === 'Ativo'
+
+      return {
+        user,
+        profile,
+        loading,
+        authError,
+        isAuthenticated: Boolean(user),
+        isEmailVerified,
+        hasAccess,
+        isApproved: hasAccess,
+        login,
+        register,
+        logout,
+        requestPasswordReset,
+        resendVerificationEmail,
+        refreshAuthenticatedUser,
+        confirmEmailVerification,
+        toggleFavoriteProcess,
+      }
+    },
     [authError, loading, profile, user]
   )
 

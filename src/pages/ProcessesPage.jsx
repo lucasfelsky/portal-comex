@@ -10,21 +10,50 @@ import {
   listProcesses,
   mapaStatusOptions,
   processCategoryOptions,
+  saveProcessCollectionStatus,
   saveProcessPostReceiptNotes,
   saveProcess,
 } from '../services/processesRepository'
 import {
   createProcessMessage,
+  deleteProcessMessage,
   listProcessMessages,
 } from '../services/processMessagesRepository'
-import { createProcessMessageNotifications } from '../services/notificationsRepository'
 import {
+  getDisplayedCollectionStatus,
+  getDisplayedProcessStatus,
   getProcessStatusTone,
+  getQuickReadProcessStatus,
+  isCollectionScheduleRetainingStatus,
+  isDtaLoadingScheduledStatus,
+  isDtaTransitCompletedStatus,
+  isMapaInspectionScheduledStatus,
   isProcessStatusFinalized,
+  mapaAllowsCollectionStatus,
+  postCollectionStatusOptions,
   processStatusOptions,
+  shouldHideProcessCardSchedule,
 } from '../features/processes/processStatus'
-import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
-import { read, utils } from 'xlsx'
+import {
+  getAutomaticEstimatedDeliveryDate,
+  getEstimatedDeliveryDate,
+} from '../utils/deliveryForecast'
+import {
+  formatPostReceiptImageSize,
+  buildPendingPostReceiptImages,
+  MAX_POST_RECEIPT_IMAGES,
+  MAX_POST_RECEIPT_IMAGE_SIZE_BYTES,
+  normalizeDraftPostReceiptImages,
+  normalizePostReceiptImages,
+  revokePostReceiptImagePreview,
+  toPostReceiptImagePreviewUrl,
+} from '../utils/postReceiptImages'
+import {
+  deletePostReceiptImages,
+  getAddedPostReceiptImages,
+  getRemovedPostReceiptImages,
+  resolvePostReceiptImagesForSave,
+} from '../services/postReceiptImagesStorage'
 
 const emptyDraft = () => ({
   id: '',
@@ -39,7 +68,10 @@ const emptyDraft = () => ({
   containerQuantity: 0,
   palletQuantity: 0,
   processNotes: '',
+  warehouseDeliveryDateOverride: '',
   postReceiptNotes: '',
+  postReceiptImages: [],
+  cargoReceivedAt: '',
   items: [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
   berthed: false,
   arrived: false,
@@ -60,6 +92,7 @@ const isMaritimeCategory = (category) => ['FCL', 'LCL', 'CONSOLIDADO'].includes(
 const isAirCategory = (category) => category === 'AEREO'
 const shouldShowContainerQuantity = (category) => category !== 'AEREO' && category !== 'LCL'
 const isEtaReached = (eta) => eta && eta <= new Date().toISOString().slice(0, 10)
+const MAX_PROCESS_MESSAGES = 20
 
 function formatCargoUnit(quantity, singularLabel, pluralLabel) {
   return `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
@@ -95,7 +128,11 @@ function formatDateTime(value) {
 }
 
 function getEstimatedDeliveryLabel(process) {
-  return formatDate(getEstimatedDeliveryDate(process.eta, process.category))
+  return formatDate(getEstimatedDeliveryDate(process))
+}
+
+function getAutomaticEstimatedDeliveryLabel(process) {
+  return formatDate(getAutomaticEstimatedDeliveryDate(process))
 }
 
 function canShowProcessName(process, isAdmin) {
@@ -122,39 +159,55 @@ function getStatusTagClass(status) {
   return `status-tag status-tag--${getProcessStatusTone(status)}`
 }
 
-function keepsCollectionSchedule(status) {
-  return (
-    status === 'Coleta Agendada' ||
-    status === 'Veiculo no CD para descarga' ||
-    status === 'Carga recebida'
+function hasUpdatedEta(process) {
+  return Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
+}
+
+function getEtaDisplayClassName(process, baseClassName = '') {
+  return [baseClassName, hasUpdatedEta(process) ? 'eta-detail-highlight' : '']
+    .filter(Boolean)
+    .join(' ')
+}
+
+function hasPostReceiptContent(process) {
+  return Boolean(
+    String(process?.postReceiptNotes ?? '').trim() ||
+      normalizePostReceiptImages(process?.postReceiptImages).length > 0
   )
+}
+
+function keepsCollectionSchedule(status) {
+  return isCollectionScheduleRetainingStatus(status)
 }
 
 function shouldEditCollectionSchedule(status) {
   return status === 'Coleta Agendada'
 }
 
+function canUsePostCollectionStatuses(process) {
+  return Boolean(process?.collectionScheduledAt && keepsCollectionSchedule(process.collectionStatus))
+}
+
+function getCollectionStatusOptions(process) {
+  if (canUsePostCollectionStatuses(process)) return collectionStatusOptions
+
+  return collectionStatusOptions.filter((item) => !postCollectionStatusOptions.includes(item))
+}
+
 function shouldEditMapaInspection(status) {
-  return status === 'Vistoria agendada, aguardando realizacao'
+  return isMapaInspectionScheduledStatus(status)
 }
 
 function mapaAllowsCollection(status) {
-  return status === 'Liberado' || status === 'LPCO deferida, MAPA liberado'
-}
-
-function normalizeDtaStatus(status) {
-  return String(status ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+  return mapaAllowsCollectionStatus(status)
 }
 
 function isDtaLoadingScheduled(status) {
-  return normalizeDtaStatus(status) === 'carregamento programado'
+  return isDtaLoadingScheduledStatus(status)
 }
 
 function isDtaTransitCompleted(status) {
-  return normalizeDtaStatus(status) === 'transito concluido'
+  return isDtaTransitCompletedStatus(status)
 }
 
 function sanitizeProcessItems(items) {
@@ -172,6 +225,14 @@ function sanitizeProcessItems(items) {
     .filter((item) => item.commercialName || item.quantity > 0)
 }
 
+function normalizeItemName(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 function normalizeSpreadsheetHeader(value) {
   return String(value ?? '')
     .normalize('NFD')
@@ -182,45 +243,47 @@ function normalizeSpreadsheetHeader(value) {
 
 function extractItemsFromWorksheet(file) {
   return file.arrayBuffer().then((buffer) => {
-    const workbook = read(buffer, { type: 'array' })
-    const firstSheetName = workbook.SheetNames[0]
+    return import('xlsx').then(({ read, utils }) => {
+      const workbook = read(buffer, { type: 'array' })
+      const firstSheetName = workbook.SheetNames[0]
 
-    if (!firstSheetName) {
-      throw new Error('A planilha não possui abas válidas.')
-    }
+      if (!firstSheetName) {
+        throw new Error('A planilha não possui abas válidas.')
+      }
 
-    const sheet = workbook.Sheets[firstSheetName]
-    const rows = utils.sheet_to_json(sheet, { header: 1, defval: '' })
+      const sheet = workbook.Sheets[firstSheetName]
+      const rows = utils.sheet_to_json(sheet, { header: 1, defval: '' })
 
-    if (rows.length === 0) {
-      throw new Error('A planilha enviada está vazia.')
-    }
+      if (rows.length === 0) {
+        throw new Error('A planilha enviada está vazia.')
+      }
 
-    const headerRow = rows[0].map((value) => normalizeSpreadsheetHeader(value))
-    let commercialNameIndex = headerRow.findIndex(
-      (value) => value.includes('nome') || value.includes('descricao') || value.includes('produto')
-    )
-    let quantityIndex = headerRow.findIndex(
-      (value) => value.includes('quant') || value.includes('qtd')
-    )
+      const headerRow = rows[0].map((value) => normalizeSpreadsheetHeader(value))
+      let commercialNameIndex = headerRow.findIndex(
+        (value) => value.includes('nome') || value.includes('descricao') || value.includes('produto')
+      )
+      let quantityIndex = headerRow.findIndex(
+        (value) => value.includes('quant') || value.includes('qtd')
+      )
 
-    if (commercialNameIndex < 0) commercialNameIndex = 0
-    if (quantityIndex < 0) quantityIndex = 1
+      if (commercialNameIndex < 0) commercialNameIndex = 0
+      if (quantityIndex < 0) quantityIndex = 1
 
-    const importedItems = rows
-      .slice(1)
-      .map((row, index) => ({
-        id: `ITEM-IMPORT-${Date.now()}-${index}`,
-        commercialName: String(row[commercialNameIndex] ?? '').trim(),
-        quantity: Math.max(0, Number(row[quantityIndex]) || 0),
-      }))
-      .filter((item) => item.commercialName || item.quantity > 0)
+      const importedItems = rows
+        .slice(1)
+        .map((row, index) => ({
+          id: `ITEM-IMPORT-${Date.now()}-${index}`,
+          commercialName: String(row[commercialNameIndex] ?? '').trim(),
+          quantity: Math.max(0, Number(row[quantityIndex]) || 0),
+        }))
+        .filter((item) => item.commercialName || item.quantity > 0)
 
-    if (importedItems.length === 0) {
-      throw new Error('Nenhum item válido foi encontrado na planilha.')
-    }
+      if (importedItems.length === 0) {
+        throw new Error('Nenhum item válido foi encontrado na planilha.')
+      }
 
-    return importedItems
+      return importedItems
+    })
   })
 }
 
@@ -253,7 +316,7 @@ function sanitizeMapa(draft) {
   if (draft.category !== 'FCL' && draft.category !== 'LCL' && draft.category !== 'CONSOLIDADO') {
     return { ...draft, mapaStatus: '', mapaInspectionScheduledAt: '' }
   }
-  if (draft.mapaStatus !== 'Vistoria agendada, aguardando realizacao') {
+  if (draft.mapaStatus !== 'Vistoria agendada, aguardando realização') {
     return { ...draft, mapaInspectionScheduledAt: '' }
   }
   return draft
@@ -343,6 +406,13 @@ function ProcessMessagesPanel({
   onSubmit,
   isSending,
   currentUserName,
+  messageLimitReached,
+  remainingMessages,
+  canSendMessages,
+  showRemainingMessages,
+  canDeleteMessages,
+  deletingMessageId,
+  onDeleteMessage,
 }) {
   return (
     <div className="detail-card">
@@ -364,8 +434,20 @@ function ProcessMessagesPanel({
           messages.map((message) => (
             <article key={message.id} className="process-message-card">
               <div className="process-message-card__meta">
-                <strong>{message.authorName}</strong>
-                <span>{formatDateTime(message.createdAt)}</span>
+                <div className="process-message-card__meta-content">
+                  <strong>{message.authorName}</strong>
+                  <span>{formatDateTime(message.createdAt)}</span>
+                </div>
+                {canDeleteMessages ? (
+                  <button
+                    type="button"
+                    className="ghost-button process-message-card__delete"
+                    onClick={() => onDeleteMessage(message)}
+                    disabled={deletingMessageId === message.id}
+                  >
+                    {deletingMessageId === message.id ? 'Excluindo...' : 'Excluir'}
+                  </button>
+                ) : null}
               </div>
               <p>{message.content}</p>
             </article>
@@ -385,11 +467,28 @@ function ProcessMessagesPanel({
           value={messageDraft}
           onChange={(event) => onMessageDraftChange(event.target.value)}
           placeholder={`Escreva uma dúvida ou atualização como ${currentUserName}.`}
+          disabled={!canSendMessages}
         />
       </label>
 
+      {!canSendMessages ? (
+        <div className="detail-card detail-card--warning process-message-limit-card">
+          <span className="detail-label">Limite atingido</span>
+          <p>Este processo atingiu o limite de {MAX_PROCESS_MESSAGES} mensagens para este perfil.</p>
+        </div>
+      ) : showRemainingMessages ? (
+        <p className="process-message-limit-text">
+          Restam {remainingMessages} mensagens disponíveis nesta conversa para este perfil.
+        </p>
+      ) : null}
+
       <div className="action-row">
-        <button type="button" className="primary-button" onClick={onSubmit} disabled={isSending}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={onSubmit}
+          disabled={isSending || messageLimitReached}
+        >
           {isSending ? 'Enviando...' : 'Registrar mensagem'}
         </button>
       </div>
@@ -402,6 +501,8 @@ export default function ProcessesPage() {
   const { profile, toggleFavoriteProcess } = useAuth()
   const isAdmin = profile?.role === 'admin'
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
+  const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
+  const hasUnlimitedMessages = isAdmin
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
   const [processes, setProcesses] = useState([])
   const [selectedProcessId, setSelectedProcessId] = useState(null)
@@ -421,10 +522,23 @@ export default function ProcessesPage() {
   const [processMessages, setProcessMessages] = useState([])
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [deletingMessageId, setDeletingMessageId] = useState('')
   const [isImportingItems, setIsImportingItems] = useState(false)
+  const [isUploadingPostReceiptImages, setIsUploadingPostReceiptImages] = useState(false)
+  const [selectedPostReceiptImageIndex, setSelectedPostReceiptImageIndex] = useState(-1)
+  const [itemSearchTerm, setItemSearchTerm] = useState('')
   const [messageDraft, setMessageDraft] = useState('')
+  const [selectedItemName, setSelectedItemName] = useState('')
   const itemsSectionRef = useRef(null)
   const itemsFileInputRef = useRef(null)
+  const latestDraftPostReceiptImagesRef = useRef([])
+  const postReceiptGalleryTouchStartXRef = useRef(null)
+
+  function cleanupPostReceiptImagePreviews(images) {
+    normalizeDraftPostReceiptImages(images).forEach((image) => {
+      revokePostReceiptImagePreview(image)
+    })
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -453,10 +567,21 @@ export default function ProcessesPage() {
     }
   }, [])
 
+  useEffect(() => {
+    latestDraftPostReceiptImagesRef.current = draft.postReceiptImages
+  }, [draft.postReceiptImages])
+
+  useEffect(() => {
+    return () => {
+      cleanupPostReceiptImagePreviews(latestDraftPostReceiptImagesRef.current)
+    }
+  }, [])
+
   const filteredProcesses = useMemo(() => {
     return processes
       .filter((item) => {
         const query = searchTerm.trim().toLowerCase()
+        const normalizedQuery = normalizeItemName(searchTerm)
         const today = new Date().toISOString().slice(0, 10)
         const matchesCategory = categoryFilter === 'Todos' || item.category === categoryFilter
         const matchesEta =
@@ -496,6 +621,9 @@ export default function ProcessesPage() {
 
         if (!query) return true
         const visibleName = canShowProcessName(item, isAdmin) ? item.name : ''
+        const matchesItemName = (item.items ?? []).some((processItem) =>
+          normalizeItemName(processItem?.commercialName).includes(normalizedQuery)
+        )
         return [
           item.id,
           visibleName,
@@ -505,10 +633,11 @@ export default function ProcessesPage() {
           item.eta,
           item.etd,
           item.processStatus,
+          item.collectionStatus,
         ]
           .join(' ')
           .toLowerCase()
-          .includes(query)
+          .includes(query) || matchesItemName
       })
       .sort((left, right) => {
         if (!left.eta && !right.eta) return 0
@@ -520,9 +649,105 @@ export default function ProcessesPage() {
 
   const selectedProcess =
     processes.find((item) => item.id === selectedProcessId) ?? filteredProcesses[0] ?? null
+  const canEditSelectedCollectionStatus =
+    canEditCollectionStatus && canUsePostCollectionStatuses(selectedProcess)
+  const draftPostReceiptImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
+  const selectedProcessPostReceiptImages = normalizePostReceiptImages(selectedProcess?.postReceiptImages)
+  const selectedPostReceiptImage =
+    selectedPostReceiptImageIndex >= 0
+      ? selectedProcessPostReceiptImages[selectedPostReceiptImageIndex] ?? null
+      : null
+  const isPostReceiptGalleryOpen = Boolean(selectedPostReceiptImage)
+
+  useEffect(() => {
+    setSelectedPostReceiptImageIndex(-1)
+    postReceiptGalleryTouchStartXRef.current = null
+  }, [selectedProcess?.id, viewMode])
+
+  useEffect(() => {
+    if (!isPostReceiptGalleryOpen) return undefined
+
+    const previousBodyOverflow = document.body.style.overflow
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setSelectedPostReceiptImageIndex(-1)
+        return
+      }
+
+      if (selectedProcessPostReceiptImages.length <= 1) return
+
+      if (event.key === 'ArrowLeft') {
+        setSelectedPostReceiptImageIndex((currentIndex) => {
+          const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+          return (
+            (safeCurrentIndex - 1 + selectedProcessPostReceiptImages.length) %
+            selectedProcessPostReceiptImages.length
+          )
+        })
+      }
+
+      if (event.key === 'ArrowRight') {
+        setSelectedPostReceiptImageIndex((currentIndex) => {
+          const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+          return (safeCurrentIndex + 1) % selectedProcessPostReceiptImages.length
+        })
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isPostReceiptGalleryOpen, selectedProcessPostReceiptImages.length])
+
   const canShowMaritimeFlow =
     viewMode === 'edit' && isMaritimeCategory(draft.category) && isEtaReached(draft.eta)
   const canShowAirFlow = viewMode === 'edit' && isAirCategory(draft.category) && isEtaReached(draft.eta)
+  const relatedActiveProcesses = useMemo(() => {
+    if (!selectedItemName) return []
+
+    const comparableItemName = normalizeItemName(selectedItemName)
+
+    return processes
+      .filter((process) => !isProcessStatusFinalized(process.processStatus))
+      .map((process) => {
+        const matchedItems = (process.items ?? []).filter(
+          (item) => normalizeItemName(item.commercialName) === comparableItemName
+        )
+
+        if (matchedItems.length === 0) return null
+
+        return {
+          process,
+          quantity: matchedItems.reduce((total, item) => total + (Number(item.quantity) || 0), 0),
+        }
+      })
+      .filter(Boolean)
+  }, [processes, selectedItemName])
+
+  const visibleProcessItems = useMemo(() => {
+    if (!selectedProcess) return []
+
+    const normalizedQuery = normalizeItemName(itemSearchTerm)
+
+    return [...(selectedProcess.items ?? [])]
+      .sort((left, right) =>
+        String(left?.commercialName ?? '').localeCompare(String(right?.commercialName ?? ''), 'pt-BR', {
+          sensitivity: 'base',
+        })
+      )
+      .filter((item) => {
+        if (!normalizedQuery) return true
+        return normalizeItemName(item?.commercialName).includes(normalizedQuery)
+      })
+  }, [itemSearchTerm, selectedProcess])
+
+  const remainingMessages = Math.max(0, MAX_PROCESS_MESSAGES - processMessages.length)
+  const messageLimitReached = !hasUnlimitedMessages && processMessages.length >= MAX_PROCESS_MESSAGES
 
   useEffect(() => {
     const processIdFromNotification = location.state?.selectedProcessId
@@ -648,6 +873,7 @@ export default function ProcessesPage() {
 
   function handlePostReceiptEditMode() {
     if (!selectedProcess || !canEditPostReceiptNotes) return
+    cleanupPostReceiptImagePreviews(draft.postReceiptImages)
     setDraft({
       ...selectedProcess,
       items:
@@ -656,6 +882,162 @@ export default function ProcessesPage() {
           : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
     })
     setViewMode('post-receipt-edit')
+  }
+
+  function handleCollectionStatusEditMode() {
+    if (!selectedProcess || !canEditCollectionStatus || !canUsePostCollectionStatuses(selectedProcess)) {
+      return
+    }
+    setDraft({
+      ...selectedProcess,
+      collectionStatus: postCollectionStatusOptions.includes(selectedProcess.collectionStatus)
+        ? selectedProcess.collectionStatus
+        : '',
+      items:
+        selectedProcess.items?.length > 0
+          ? selectedProcess.items
+          : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
+    })
+    setViewMode('collection-status-edit')
+  }
+
+  function handleCloseCollectionStatusEditMode() {
+    setDraft(
+      selectedProcess
+        ? {
+            ...selectedProcess,
+            items:
+              selectedProcess.items?.length > 0
+                ? selectedProcess.items
+                : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
+          }
+        : emptyDraft()
+    )
+    setViewMode('detail')
+    setDetailTab('process')
+  }
+
+  function handleClosePostReceiptEditMode() {
+    cleanupPostReceiptImagePreviews(draft.postReceiptImages)
+    setDraft(
+      selectedProcess
+        ? {
+            ...selectedProcess,
+            items:
+              selectedProcess.items?.length > 0
+                ? selectedProcess.items
+                : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
+          }
+        : emptyDraft()
+    )
+    setViewMode('detail')
+    setDetailTab('process')
+  }
+
+  function handleOpenPostReceiptGallery(index) {
+    if (selectedProcessPostReceiptImages.length === 0) return
+
+    setSelectedPostReceiptImageIndex(
+      Math.min(Math.max(Number(index) || 0, 0), selectedProcessPostReceiptImages.length - 1)
+    )
+  }
+
+  function handleClosePostReceiptGallery() {
+    setSelectedPostReceiptImageIndex(-1)
+    postReceiptGalleryTouchStartXRef.current = null
+  }
+
+  function handleNavigatePostReceiptGallery(direction) {
+    if (selectedProcessPostReceiptImages.length <= 1) return
+
+    setSelectedPostReceiptImageIndex((currentIndex) => {
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+      return (
+        (safeCurrentIndex + Number(direction) + selectedProcessPostReceiptImages.length) %
+        selectedProcessPostReceiptImages.length
+      )
+    })
+  }
+
+  function handlePostReceiptGalleryTouchStart(event) {
+    postReceiptGalleryTouchStartXRef.current = event.touches?.[0]?.clientX ?? null
+  }
+
+  function handlePostReceiptGalleryTouchEnd(event) {
+    const touchStartX = postReceiptGalleryTouchStartXRef.current
+    const touchEndX = event.changedTouches?.[0]?.clientX ?? null
+
+    postReceiptGalleryTouchStartXRef.current = null
+
+    if (!Number.isFinite(touchStartX) || !Number.isFinite(touchEndX)) return
+
+    const deltaX = touchEndX - touchStartX
+
+    if (Math.abs(deltaX) < 48) return
+
+    handleNavigatePostReceiptGallery(deltaX > 0 ? -1 : 1)
+  }
+
+  function handlePostReceiptDetailClick(event) {
+    const clickedElement =
+      event.target instanceof Element
+        ? event.target.closest('.post-receipt-image-card--detail')
+        : null
+
+    if (!(clickedElement instanceof HTMLAnchorElement)) return
+
+    const clickedImageUrl = String(clickedElement.getAttribute('href') ?? '').trim()
+    const clickedImageIndex = selectedProcessPostReceiptImages.findIndex(
+      (image) => image.url === clickedImageUrl
+    )
+
+    if (clickedImageIndex < 0) return
+
+    event.preventDefault()
+    handleOpenPostReceiptGallery(clickedImageIndex)
+  }
+
+  async function handlePostReceiptImagesUpload(event) {
+    setIsUploadingPostReceiptImages(true)
+    setError('')
+
+    try {
+      const uploadedImages = buildPendingPostReceiptImages(event.target.files)
+      const currentImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
+
+      if (currentImages.length + uploadedImages.length > MAX_POST_RECEIPT_IMAGES) {
+        throw new Error(`Adicione no maximo ${MAX_POST_RECEIPT_IMAGES} imagens por observacao de CD.`)
+      }
+
+      setDraft((current) => ({
+        ...current,
+        postReceiptImages: [
+          ...normalizeDraftPostReceiptImages(current.postReceiptImages),
+          ...uploadedImages,
+        ],
+      }))
+    } catch (uploadError) {
+      setError(buildActionErrorMessage('Nao foi possivel carregar as imagens do CD.', uploadError))
+    } finally {
+      setIsUploadingPostReceiptImages(false)
+      event.target.value = ''
+    }
+  }
+
+  function handleRemovePostReceiptImage(imageId) {
+    setDraft((current) => {
+      const currentImages = normalizeDraftPostReceiptImages(current.postReceiptImages)
+      const removedImage = currentImages.find((image) => image.id === imageId)
+
+      if (removedImage) {
+        revokePostReceiptImagePreview(removedImage)
+      }
+
+      return {
+        ...current,
+        postReceiptImages: currentImages.filter((image) => image.id !== imageId),
+      }
+    })
   }
 
   async function refreshProcesses(nextSelectedId = selectedProcessId) {
@@ -680,6 +1062,15 @@ export default function ProcessesPage() {
       } else {
         payload.etaOriginal = selectedProcess?.etaOriginal || draft.etaOriginal || draft.eta
       }
+      const nextProcessStatus = payload.processStatus
+      const previousProcessStatus = selectedProcess?.processStatus ?? ''
+      if (nextProcessStatus === 'Carga recebida' && previousProcessStatus !== 'Carga recebida') {
+        payload.cargoReceivedAt = new Date().toISOString()
+      } else if (nextProcessStatus === 'Carga recebida') {
+        payload.cargoReceivedAt = selectedProcess?.cargoReceivedAt || draft.cargoReceivedAt || ''
+      } else {
+        payload.cargoReceivedAt = ''
+      }
       const saved = await saveProcess(payload, profile)
       await refreshProcesses(saved.id)
       setDraft(saved)
@@ -693,22 +1084,71 @@ export default function ProcessesPage() {
     }
   }
 
+  async function handleSaveCollectionStatus() {
+    if (!canEditCollectionStatus || !selectedProcess) return
+    setIsSaving(true)
+    setError('')
+    try {
+      await saveProcessCollectionStatus(selectedProcess.id, draft.collectionStatus, profile)
+      const refreshed = await refreshProcesses(selectedProcess.id)
+      const saved = refreshed.find((item) => item.id === selectedProcess.id)
+      if (saved) setDraft(saved)
+      setViewMode('detail')
+      setDetailTab('process')
+    } catch (saveError) {
+      setError(buildActionErrorMessage('Não foi possível salvar o status de coleta.', saveError))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function handleSavePostReceiptNotes() {
     if (!canEditPostReceiptNotes || !selectedProcess) return
     setIsSaving(true)
     setError('')
 
+    let previousImages = []
+    let normalizedImages = []
+    let saved = null
+
     try {
-      const saved = await saveProcessPostReceiptNotes(
+      const normalizedNotes = String(draft.postReceiptNotes ?? '').trim()
+      const currentDraftImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
+      const previousNotes = String(selectedProcess.postReceiptNotes ?? '').trim()
+      previousImages = normalizePostReceiptImages(selectedProcess.postReceiptImages)
+      normalizedImages = await resolvePostReceiptImagesForSave(
         selectedProcess.id,
-        String(draft.postReceiptNotes ?? '').trim(),
+        currentDraftImages,
+        profile?.uid ?? profile?.id ?? ''
+      )
+      saved = await saveProcessPostReceiptNotes(
+        selectedProcess.id,
+        normalizedNotes,
+        normalizedImages,
         profile
       )
+      await deletePostReceiptImages(getRemovedPostReceiptImages(previousImages, normalizedImages)).catch(
+        (deleteError) => {
+          console.error('Falha ao remover imagens antigas do recebimento no CD.', deleteError)
+        }
+      )
+      cleanupPostReceiptImagePreviews(currentDraftImages)
       await refreshProcesses(saved.id)
       setDraft(saved)
       setViewMode('detail')
       setDetailTab('process')
     } catch (saveError) {
+      if (normalizedImages.length > 0 && !saved) {
+        await deletePostReceiptImages(getAddedPostReceiptImages(previousImages, normalizedImages)).catch(
+          (cleanupError) => {
+            console.error(
+              'Falha ao limpar imagens novas do recebimento no CD apos erro no salvamento.',
+              cleanupError
+            )
+          }
+        )
+      }
+
       setError(
         buildActionErrorMessage(
           'Não foi possível salvar as observações pós-recebimento da carga.',
@@ -802,31 +1242,55 @@ export default function ProcessesPage() {
   }
 
   function handleOpenItemsTab() {
-    setDetailTab('items')
+    handleDetailTabChange('items')
     window.setTimeout(() => {
       itemsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 0)
   }
 
+  function handleDetailTabChange(nextTab) {
+    setDetailTab(nextTab)
+    if (nextTab !== 'related-item') {
+      setSelectedItemName('')
+    }
+    if (nextTab !== 'items') {
+      setItemSearchTerm('')
+    }
+  }
+
+  function handleOpenRelatedItemTab(itemName) {
+    setSelectedItemName(itemName)
+    setDetailTab('related-item')
+  }
+
+  function handleOpenProcessDetail(process) {
+    if (!process?.id) return
+
+    setSelectedProcessId(process.id)
+    setDraft(process)
+    setViewMode('detail')
+    setDetailTab('general')
+    setMessageDraft('')
+    setMessagesError('')
+  }
+
   async function handleSendMessage() {
     if (!selectedProcess?.id || !profile) return
+    if (messageLimitReached) {
+      setMessagesError(`Este processo atingiu o limite de ${MAX_PROCESS_MESSAGES} mensagens para este perfil.`)
+      return
+    }
 
     setIsSendingMessage(true)
     setMessagesError('')
     try {
-      const createdMessage = await createProcessMessage(
+      await createProcessMessage(
         selectedProcess.id,
         {
           content: messageDraft,
         },
         profile
       )
-      await createProcessMessageNotifications({
-        actor: profile,
-        process: selectedProcess,
-        message: createdMessage,
-        existingMessages: processMessages,
-      })
       const refreshedMessages = await listProcessMessages(selectedProcess.id)
       setProcessMessages(refreshedMessages)
       setMessageDraft('')
@@ -837,11 +1301,27 @@ export default function ProcessesPage() {
     }
   }
 
+  async function handleDeleteMessage(message) {
+    if (!isAdmin || !selectedProcess?.id || !message?.id) return
+
+    setDeletingMessageId(message.id)
+    setMessagesError('')
+    try {
+      await deleteProcessMessage(selectedProcess.id, message.id, profile)
+      const refreshedMessages = await listProcessMessages(selectedProcess.id)
+      setProcessMessages(refreshedMessages)
+    } catch (deleteError) {
+      setMessagesError(buildActionErrorMessage('Não foi possível excluir a mensagem.', deleteError))
+    } finally {
+      setDeletingMessageId('')
+    }
+  }
+
   return (
     <section className="surface">
       <div className="section-heading">
         <div>
-          <h2>Fila de processos</h2>
+          <h2>Fila de chegadas</h2>
         </div>
         {isAdmin ? (
           <button type="button" className="primary-button" onClick={handleCreateMode}>
@@ -854,10 +1334,10 @@ export default function ProcessesPage() {
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
 
       {viewMode === 'list' ? (
-        <article className="list-card" style={{ marginTop: '16px' }}>
+        <article className="list-card process-list-card" style={{ marginTop: '16px' }}>
         <div className="card-heading">
           <div>
-            <h3>Processos</h3>
+            <h3>Chegadas</h3>
           </div>
           <div className="admin-toolbar">
             <span className="inline-badge">{filteredProcesses.length} visíveis</span>
@@ -869,7 +1349,7 @@ export default function ProcessesPage() {
           </div>
         </div>
 
-        <div className="process-filters">
+        <div className="process-filters process-filters--panel">
           <label className="field">
             <span>Buscar processo</span>
             <input
@@ -877,7 +1357,7 @@ export default function ProcessesPage() {
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Nome, destino, categoria, PO, ETA, ETD, status ou ID"
+              placeholder="Nome, item, destino, categoria, PO, ETA, ETD, status ou ID"
             />
           </label>
           <label className="field field--compact">
@@ -934,11 +1414,14 @@ export default function ProcessesPage() {
         <div className="process-list process-list--scroll">
           {isLoading ? (
             <div className="empty-state">
-              <strong>Carregando processos</strong>
+              <strong>Carregando chegadas</strong>
               <p>Buscando os dados disponíveis no repositório configurado.</p>
             </div>
           ) : filteredProcesses.length > 0 ? (
-            filteredProcesses.map((item) => (
+            filteredProcesses.map((item) => {
+              const hideSchedule = shouldHideProcessCardSchedule(item)
+
+              return (
               <button
                 key={item.id}
                 type="button"
@@ -953,7 +1436,7 @@ export default function ProcessesPage() {
                     {getDestinationLabel(item.category)}: {item.destination || '-'}
                   </div>
                     <div className="process-item__chips">
-                      <span className={getStatusTagClass(item.processStatus)}>{item.processStatus}</span>
+                      <span className={getStatusTagClass(item.processStatus)}>{getQuickReadProcessStatus(item)}</span>
                       {shouldShowContainerQuantity(item.category) ? (
                         <span className="inline-badge">
                           {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
@@ -964,13 +1447,17 @@ export default function ProcessesPage() {
                       </span>
                     </div>
                 </div>
-                <div className="process-item__meta">
+                {!hideSchedule ? (
+                  <div className="process-item__meta">
                   <span>ETD: {formatDate(item.etd)}</span>
-                  <span>ETA: {formatDate(item.eta)}</span>
+                  <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
+                    ETA: {formatDate(item.eta)}
+                  </span>
                   <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
-                </div>
+                  </div>
+                ) : null}
               </button>
-            ))
+            )})
           ) : (
             <div className="empty-state">
               <strong>Nenhum processo encontrado</strong>
@@ -995,7 +1482,21 @@ export default function ProcessesPage() {
             </div>
           </div>
 
-          <div className="tab-row">
+          <div className="detail-tab-select">
+            <label className="field">
+              <span>Seção</span>
+              <select
+                className="text-input"
+                value={editTab}
+                onChange={(event) => setEditTab(event.target.value)}
+              >
+                <option value="general">Geral</option>
+                <option value="items">Itens</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="tab-row detail-tab-row">
             <button
               type="button"
               className={`tab-button${editTab === 'general' ? ' tab-button--active' : ''}`}
@@ -1012,7 +1513,7 @@ export default function ProcessesPage() {
             </button>
           </div>
 
-          <div className="detail-stack tab-panel-spacing">
+          <div className="detail-stack tab-panel-spacing" onClickCapture={handlePostReceiptDetailClick}>
             {editTab === 'general' ? (
               <>
             <label className="field">
@@ -1046,15 +1547,52 @@ export default function ProcessesPage() {
             </div>
 
             <div className="detail-card detail-card--split">
+              <div>
+                <span className="detail-label">Previsao automatica no armazem</span>
+                <p>{getAutomaticEstimatedDeliveryLabel(draft)}</p>
+              </div>
+              <div>
+                <span className="detail-label">Previsao aplicada</span>
+                <p>{getEstimatedDeliveryLabel(draft)}</p>
+              </div>
+            </div>
+
+            <label className="field">
+              <span>Previsao manual de entrega no armazem</span>
+              <input
+                className="text-input"
+                type="date"
+                value={draft.warehouseDeliveryDateOverride}
+                onChange={(event) =>
+                  handleDraftChange('warehouseDeliveryDateOverride', event.target.value)
+                }
+              />
+              <small className="field-hint">
+                Campo opcional. Se vazio, o sistema usa a previsao automatica.
+              </small>
+            </label>
+            {draft.warehouseDeliveryDateOverride ? (
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => handleDraftChange('warehouseDeliveryDateOverride', '')}
+                >
+                  Remover previsao manual
+                </button>
+              </div>
+            ) : null}
+
+            <div className="detail-card detail-card--split">
               <label className="field">
                 <span>Status do processo</span>
                 <select className="text-input" value={draft.processStatus} onChange={(event) => handleDraftChange('processStatus', event.target.value)}>
-                  {processStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                  {processStatusOptions.map((item) => <option key={item} value={item}>{getDisplayedProcessStatus(item, draft.category)}</option>)}
                 </select>
               </label>
               <div className="detail-card detail-card--soft">
                 <span className="detail-label">Leitura rápida</span>
-                <span className={getStatusTagClass(draft.processStatus)}>{draft.processStatus}</span>
+                <span className={getStatusTagClass(draft.processStatus)}>{getDisplayedProcessStatus(draft.processStatus, draft.category)}</span>
               </div>
             </div>
 
@@ -1093,9 +1631,9 @@ export default function ProcessesPage() {
                 </div>
                 {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{collectionStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
+                {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
                 {shouldEditCollectionSchedule(draft.collectionStatus) ? <><label className="field"><span>Janela agendada</span><input className="text-input" type="datetime-local" value={draft.collectionScheduledAt} onChange={(event) => handleDraftChange('collectionScheduledAt', event.target.value)} /></label>{draft.collectionScheduledAt ? <div className="collection-window-card"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(draft.collectionScheduledAt)}</p></div></div> : null}</> : null}
-                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{draft.collectionStatus}</p></div> : null}
+                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
               </div>
             ) : null}
 
@@ -1108,9 +1646,9 @@ export default function ProcessesPage() {
                 {isDtaTransitCompleted(draft.dtaStatus) ? <label className="checkbox-field"><input type="checkbox" checked={draft.cargoPresenceInformed} onChange={(event) => handleDraftChange('cargoPresenceInformed', event.target.checked)} /><span>Presença de carga informada?</span></label> : null}
                 {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.parameterizationChannel === 'Verde' ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{collectionStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
+                {draft.parameterizationChannel === 'Verde' ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
                 {shouldEditCollectionSchedule(draft.collectionStatus) ? <><label className="field"><span>Janela agendada</span><input className="text-input" type="datetime-local" value={draft.collectionScheduledAt} onChange={(event) => handleDraftChange('collectionScheduledAt', event.target.value)} /></label>{draft.collectionScheduledAt ? <div className="collection-window-card"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(draft.collectionScheduledAt)}</p></div></div> : null}</> : null}
-                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{draft.collectionStatus}</p></div> : null}
+                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
               </div>
             ) : null}
               </>
@@ -1164,7 +1702,64 @@ export default function ProcessesPage() {
             ) : null}
           </div>
 
-          <div className="action-row"><button type="button" className="primary-button" onClick={handleSaveProcess} disabled={isSaving}>{isSaving ? 'Salvando...' : viewMode === 'create' ? 'Criar processo' : 'Salvar alteracoes'}</button></div>
+          <div className="action-row"><button type="button" className="primary-button" onClick={handleSaveProcess} disabled={isSaving}>{isSaving ? 'Salvando...' : viewMode === 'create' ? 'Criar processo' : 'Salvar alterações'}</button></div>
+        </article>
+      ) : null}
+
+      {viewMode === 'collection-status-edit' && selectedProcess && canEditCollectionStatus ? (
+        <article className="list-card" style={{ marginTop: '16px' }}>
+          <div className="card-heading">
+            <div>
+              <h3>Status de coleta</h3>
+            </div>
+            <div className="admin-toolbar">
+              <span className={getStatusTagClass(selectedProcess.processStatus)}>
+                {getQuickReadProcessStatus(selectedProcess)}
+              </span>
+              <button type="button" className="ghost-button" onClick={handleCloseCollectionStatusEditMode}>
+                Voltar ao detalhe
+              </button>
+            </div>
+          </div>
+
+          <div className="detail-stack">
+            <div className="detail-card">
+              <span className="detail-label">Processo</span>
+              <p>{getProcessTitle(selectedProcess, isAdmin)}</p>
+            </div>
+            <div className="collection-window-card">
+              <div>
+                <span className="detail-label">Janela de coleta</span>
+                <p>{formatDateTime(selectedProcess.collectionScheduledAt)}</p>
+              </div>
+            </div>
+            <label className="field">
+              <span>Status</span>
+              <select
+                className="text-input"
+                value={draft.collectionStatus}
+                onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}
+              >
+                <option value="">Selecione o status</option>
+                {postCollectionStatusOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {getDisplayedCollectionStatus(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="action-row">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSaveCollectionStatus}
+              disabled={isSaving || !postCollectionStatusOptions.includes(draft.collectionStatus)}
+            >
+              {isSaving ? 'Salvando...' : 'Salvar status'}
+            </button>
+          </div>
         </article>
       ) : null}
 
@@ -1176,9 +1771,9 @@ export default function ProcessesPage() {
             </div>
             <div className="admin-toolbar">
               <span className={getStatusTagClass(selectedProcess.processStatus)}>
-                {selectedProcess.processStatus}
+                {getQuickReadProcessStatus(selectedProcess)}
               </span>
-              <button type="button" className="ghost-button" onClick={() => setViewMode('detail')}>
+              <button type="button" className="ghost-button" onClick={handleClosePostReceiptEditMode}>
                 Voltar ao detalhe
               </button>
             </div>
@@ -1198,6 +1793,47 @@ export default function ProcessesPage() {
                 placeholder="Registre observações da carga após o recebimento no CD."
               />
             </label>
+            <label className="field">
+              <span>Imagens do recebimento no CD</span>
+              <input
+                className="text-input"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handlePostReceiptImagesUpload}
+                disabled={
+                  isUploadingPostReceiptImages ||
+                  draftPostReceiptImages.length >= MAX_POST_RECEIPT_IMAGES
+                }
+              />
+              <small className="field-hint">
+                Anexo opcional. Até {MAX_POST_RECEIPT_IMAGES} imagens de{' '}
+                {formatPostReceiptImageSize(MAX_POST_RECEIPT_IMAGE_SIZE_BYTES)} cada.
+              </small>
+            </label>
+            {draftPostReceiptImages.length > 0 ? (
+              <div className="post-receipt-image-grid">
+                {draftPostReceiptImages.map((image) => (
+                  <div key={image.id} className="post-receipt-image-card">
+                    <img
+                      src={toPostReceiptImagePreviewUrl(image)}
+                      alt={image.name || 'Imagem do recebimento no CD'}
+                    />
+                    <div className="post-receipt-image-card__meta">
+                      <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
+                      <span>{formatPostReceiptImageSize(image.size)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => handleRemovePostReceiptImage(image.id)}
+                    >
+                      Remover imagem
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="action-row">
@@ -1205,7 +1841,7 @@ export default function ProcessesPage() {
               type="button"
               className="primary-button"
               onClick={handleSavePostReceiptNotes}
-              disabled={isSaving}
+              disabled={isSaving || isUploadingPostReceiptImages}
             >
               {isSaving ? 'Salvando...' : 'Salvar observações'}
             </button>
@@ -1225,30 +1861,162 @@ export default function ProcessesPage() {
                   Editar obs. CD
                 </button>
               ) : null}
-              {isAdmin ? <button type="button" className="primary-button" onClick={handleEditMode}>Editar processo</button> : null}
+              {canEditSelectedCollectionStatus ? (
+                <button type="button" className="ghost-button" onClick={handleCollectionStatusEditMode}>
+                  Editar status de coleta
+                </button>
+              ) : null}
+              {isAdmin && !canEditSelectedCollectionStatus ? <button type="button" className="primary-button" onClick={handleEditMode}>Editar processo</button> : null}
             </div>
           </div>
 
-          <div className="tab-row">
-            <button type="button" className={`tab-button${detailTab === 'general' ? ' tab-button--active' : ''}`} onClick={() => setDetailTab('general')}>Detalhes gerais</button>
-            <button type="button" className={`tab-button${detailTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => setDetailTab('process')}>Processo</button>
-            <button type="button" className={`tab-button${detailTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => setDetailTab('items')}>Itens</button>
-            <button type="button" className={`tab-button${detailTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => setDetailTab('messages')}>Mensagens</button>
+          {isAdmin && canEditSelectedCollectionStatus ? (
+            <div
+              className="action-row"
+              style={{ justifyContent: 'flex-end', marginTop: '-8px', marginBottom: '18px' }}
+            >
+              <button type="button" className="primary-button" onClick={handleEditMode}>
+                Editar processo
+              </button>
+            </div>
+          ) : null}
+
+          <div className="detail-tab-select">
+            <label className="field">
+              <span>Seção</span>
+              <select
+                className="text-input"
+                value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
+                onChange={(event) => handleDetailTabChange(event.target.value)}
+              >
+                <option value="general">Detalhes gerais</option>
+                <option value="process">Processo</option>
+                <option value="items">Itens</option>
+                <option value="messages">Mensagens</option>
+                {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
+              </select>
+            </label>
+          </div>
+
+          <div className="tab-row detail-tab-row">
+            <button type="button" className={`tab-button${detailTab === 'general' ? ' tab-button--active' : ''}`} onClick={() => handleDetailTabChange('general')}>Detalhes gerais</button>
+            <button type="button" className={`tab-button${detailTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => handleDetailTabChange('process')}>Processo</button>
+            <button type="button" className={`tab-button${detailTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => handleDetailTabChange('items')}>Itens</button>
+            <button type="button" className={`tab-button${detailTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => handleDetailTabChange('messages')}>Mensagens</button>
+            {detailTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => handleDetailTabChange('related-item')}>Item relacionado</button> : null}
           </div>
 
           <div className="detail-stack tab-panel-spacing">
-            {detailTab === 'general' ? <><div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, isAdmin)}</p></div><div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>{selectedProcess.processNumber && canShowProcessName(selectedProcess, isAdmin) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}<div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div><div className="detail-card detail-card--split"><div><span className="detail-label">ETD</span><p>{formatDate(selectedProcess.etd)}</p></div><div><span className="detail-label">ETA</span><p>{formatDate(selectedProcess.eta)}</p></div></div>{selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}<div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens vinculados</span><p>{selectedProcess.items?.length ?? 0} itens cadastrados para este processo.</p></div><button type="button" className="ghost-button" onClick={handleOpenItemsTab}>Ver itens do processo</button></div></div></> : null}
+            {detailTab === 'general' ? <><div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, isAdmin)}</p></div><div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>{selectedProcess.processNumber && canShowProcessName(selectedProcess, isAdmin) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}<div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div><div className="detail-card detail-card--split"><div><span className="detail-label">ETD</span><p>{formatDate(selectedProcess.etd)}</p></div><div className={getEtaDisplayClassName(selectedProcess)}><span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span><p>{formatDate(selectedProcess.eta)}</p></div></div>{selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}<div className="detail-card"><span className="detail-label">Previsao de entrega no armazem</span><p>{getEstimatedDeliveryLabel(selectedProcess)}</p><small className="field-hint">{selectedProcess.warehouseDeliveryDateOverride ? 'Data definida manualmente por um admin.' : 'Data calculada automaticamente pelo sistema.'}</small></div><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens vinculados</span><p>{selectedProcess.items?.length ?? 0} itens cadastrados para este processo.</p></div><button type="button" className="ghost-button" onClick={handleOpenItemsTab}>Ver itens do processo</button></div></div></> : null}
 
-            {detailTab === 'process' ? <><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Status do processo</span><p>Controle padronizado para evitar inconsistências de valor.</p></div><span className={getStatusTagClass(selectedProcess.processStatus)}>{selectedProcess.processStatus}</span></div></div><div className={`detail-card${shouldShowContainerQuantity(selectedProcess.category) ? ' detail-card--split' : ''}`}>{shouldShowContainerQuantity(selectedProcess.category) ? <div><span className="detail-label">Quantidade de containers</span><p>{formatCargoUnit(selectedProcess.containerQuantity, 'container', 'containers')}</p></div> : null}<div><span className="detail-label">Quantidade de pallets</span><p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p></div></div>{selectedProcess.processNotes ? <div className="detail-card"><span className="detail-label">Observações do processo</span><p>{selectedProcess.processNotes}</p></div> : null}{isProcessStatusFinalized(selectedProcess.processStatus) && selectedProcess.postReceiptNotes ? <div className="detail-card"><span className="detail-label">Observações pós-recebimento da carga</span><p>{selectedProcess.postReceiptNotes}</p></div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.mapaStatus ? <div className="detail-card"><span className="detail-label">MAPA</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.mapaStatus}</p>{shouldEditMapaInspection(selectedProcess.mapaStatus) && selectedProcess.mapaInspectionScheduledAt ? <p>Vistoria agendada: {formatDateTime(selectedProcess.mapaInspectionScheduledAt)}</p> : null}</div></div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? <div className="detail-card"><span className="detail-label">Andamento após chegada</span><p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p></div> : null}{isAirCategory(selectedProcess.category) && selectedProcess.arrived ? <div className="detail-card"><span className="detail-label">Pós-chegada</span><div className="detail-stack detail-stack--compact">{selectedProcess.dtaStatus ? <p>DTA: {selectedProcess.dtaStatus}</p> : null}{selectedProcess.dtaLoadingScheduledAt ? <p>Carregamento DTA: {formatDateTime(selectedProcess.dtaLoadingScheduledAt)}</p> : null}{selectedProcess.dtaArrivalAtItajai ? <p>Chegada prevista em Itajaí: {formatDateTime(selectedProcess.dtaArrivalAtItajai)}</p> : null}{isDtaTransitCompleted(selectedProcess.dtaStatus) ? <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}><span className="detail-label">DUIMP</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.duimpStatus}</p>{selectedProcess.parameterizationChannel ? <p>Canal da parametrização: {selectedProcess.parameterizationChannel}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus === 'Coleta Agendada' && selectedProcess.collectionScheduledAt ? <div className="collection-window-card collection-window-card--detail"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(selectedProcess.collectionScheduledAt)}</p></div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{selectedProcess.collectionStatus}</p></div> : null}</> : null}
+            {detailTab === 'process' ? <><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Status do processo</span><p>Controle padronizado para evitar inconsistências de valor.</p></div><span className={getStatusTagClass(selectedProcess.processStatus)}>{getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}</span></div></div><div className={`detail-card${shouldShowContainerQuantity(selectedProcess.category) ? ' detail-card--split' : ''}`}>{shouldShowContainerQuantity(selectedProcess.category) ? <div><span className="detail-label">Quantidade de containers</span><p>{formatCargoUnit(selectedProcess.containerQuantity, 'container', 'containers')}</p></div> : null}<div><span className="detail-label">Quantidade de pallets</span><p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p></div></div>{selectedProcess.processNotes ? <div className="detail-card"><span className="detail-label">Observações do processo</span><p>{selectedProcess.processNotes}</p></div> : null}{isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? <div className="detail-card"><span className="detail-label">Observações pós-recebimento da carga</span>{selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}{selectedProcessPostReceiptImages.length > 0 ? <div className="post-receipt-image-grid post-receipt-image-grid--detail">{selectedProcessPostReceiptImages.map((image, index) => <button key={image.id} type="button" className="post-receipt-image-card post-receipt-image-card--detail" onClick={() => handleOpenPostReceiptGallery(index)}><img src={image.url} alt={image.name || 'Imagem do recebimento no CD'} /><div className="post-receipt-image-card__meta"><strong>{image.name || 'Imagem do recebimento no CD'}</strong><span>{formatPostReceiptImageSize(image.size)}</span></div></button>)}</div> : null}</div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.mapaStatus ? <div className="detail-card"><span className="detail-label">MAPA</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.mapaStatus}</p>{shouldEditMapaInspection(selectedProcess.mapaStatus) && selectedProcess.mapaInspectionScheduledAt ? <p>Vistoria agendada: {formatDateTime(selectedProcess.mapaInspectionScheduledAt)}</p> : null}</div></div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? <div className="detail-card"><span className="detail-label">Andamento após chegada</span><p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p></div> : null}{isAirCategory(selectedProcess.category) && selectedProcess.arrived ? <div className="detail-card"><span className="detail-label">Pós-chegada</span><div className="detail-stack detail-stack--compact">{selectedProcess.dtaStatus ? <p>DTA: {selectedProcess.dtaStatus}</p> : null}{selectedProcess.dtaLoadingScheduledAt ? <p>Carregamento DTA: {formatDateTime(selectedProcess.dtaLoadingScheduledAt)}</p> : null}{selectedProcess.dtaArrivalAtItajai ? <p>Chegada prevista em Itajaí: {formatDateTime(selectedProcess.dtaArrivalAtItajai)}</p> : null}{isDtaTransitCompleted(selectedProcess.dtaStatus) ? <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}><span className="detail-label">DUIMP</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.duimpStatus}</p>{selectedProcess.parameterizationChannel ? <p>Canal da parametrização: {selectedProcess.parameterizationChannel}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus === 'Coleta Agendada' && selectedProcess.collectionScheduledAt ? <div className="collection-window-card collection-window-card--detail"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(selectedProcess.collectionScheduledAt)}</p></div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</p></div> : null}</> : null}
 
-            {detailTab === 'items' ? <div ref={itemsSectionRef} className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens do processo</span><p>Itens comerciais vinculados diretamente a este processo.</p></div><span className="inline-badge">{selectedProcess.items?.length ?? 0} itens</span></div><div className="process-items-list">{selectedProcess.items?.length > 0 ? selectedProcess.items.map((item) => <div key={item.id} className="metric-card metric-card--stacked"><div className="process-item-display"><span className="detail-label">Nome comercial:</span><strong>{item.commercialName}</strong></div><div className="process-item-display"><span className="detail-label">Quantidade:</span><strong>{item.quantity}</strong></div></div>) : <div className="empty-state"><strong>Nenhum item cadastrado</strong><p>Os itens vinculados ao processo aparecerão aqui.</p></div>}</div></div> : null}
+            {detailTab === 'items' ? <div ref={itemsSectionRef} className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens do processo</span><p>Itens comerciais vinculados diretamente a este processo.</p></div><span className="inline-badge">{visibleProcessItems.length} itens</span></div><label className="field"><span>Buscar item</span><input className="text-input" type="search" value={itemSearchTerm} onChange={(event) => setItemSearchTerm(event.target.value)} placeholder="Digite o nome comercial do item" /></label><div className="process-items-list process-items-list--scroll">{visibleProcessItems.length > 0 ? visibleProcessItems.map((item) => <button key={item.id} type="button" className="metric-card process-related-item-button process-related-item-button--compact" onClick={() => handleOpenRelatedItemTab(item.commercialName)}><div className="process-item-display"><span className="detail-label">Nome comercial:</span><strong>{item.commercialName}</strong></div><div className="process-item-display process-item-display--quantity"><span className="detail-label">Quantidade:</span><strong>{item.quantity}</strong></div></button>) : <div className="empty-state"><strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong><p>{selectedProcess.items?.length > 0 ? 'Ajuste a busca para localizar outro item deste processo.' : 'Os itens vinculados ao processo aparecerão aqui.'}</p></div>}</div></div> : null}
 
-            {detailTab === 'messages' ? <ProcessMessagesPanel messages={processMessages} isLoading={isLoadingMessages} messageDraft={messageDraft} onMessageDraftChange={setMessageDraft} onSubmit={handleSendMessage} isSending={isSendingMessage} currentUserName={profile?.name ?? profile?.email ?? 'usuario'} /> : null}
+            {detailTab === 'related-item' && selectedItemName ? <div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Chegadas ativas com este item</span><p>Item selecionado: {selectedItemName}</p></div><span className="inline-badge">{relatedActiveProcesses.length} chegadas</span></div><div className="process-items-list process-items-list--scroll">{relatedActiveProcesses.length > 0 ? relatedActiveProcesses.map(({ process, quantity }) => <button key={`${process.id}-${selectedItemName}`} type="button" className="metric-card process-related-item-button process-related-item-button--compact" onClick={() => handleOpenProcessDetail(process)}><div className="process-item-display"><span className="detail-label">Chegada:</span><strong>{getProcessTitle(process, isAdmin)}</strong></div><div className="process-item-display process-item-display--quantity"><span className="detail-label">Quantidade:</span><strong>{quantity}</strong></div></button>) : <div className="empty-state"><strong>Nenhuma chegada ativa encontrada</strong><p>Não há chegadas ativas com este item fora do CD no momento.</p></div>}</div></div> : null}
+
+            {detailTab === 'messages' ? <ProcessMessagesPanel messages={processMessages} isLoading={isLoadingMessages} messageDraft={messageDraft} onMessageDraftChange={setMessageDraft} onSubmit={handleSendMessage} isSending={isSendingMessage} currentUserName={profile?.name ?? profile?.email ?? 'usuário'} messageLimitReached={messageLimitReached} remainingMessages={remainingMessages} canSendMessages={!messageLimitReached || hasUnlimitedMessages} showRemainingMessages={isAdmin} canDeleteMessages={isAdmin} deletingMessageId={deletingMessageId} onDeleteMessage={handleDeleteMessage} /> : null}
 
             {isAdmin ? <div className="action-row"><button type="button" className="ghost-button" onClick={handleDeleteProcess} disabled={isSaving}>Excluir processo</button></div> : null}
           </div>
         </article>
       ) : null}
+
+      {isPostReceiptGalleryOpen ? (
+        <div className="post-receipt-gallery-backdrop" onClick={handleClosePostReceiptGallery}>
+          <div className="post-receipt-gallery" onClick={(event) => event.stopPropagation()}>
+            <div className="post-receipt-gallery__header">
+              <div>
+                <span className="detail-label">Imagens do recebimento no CD</span>
+                <h3>{selectedPostReceiptImage?.name || 'Imagem do recebimento no CD'}</h3>
+                <p>
+                  {selectedPostReceiptImageIndex + 1} de {selectedProcessPostReceiptImages.length}
+                </p>
+              </div>
+              <button type="button" className="ghost-button" onClick={handleClosePostReceiptGallery}>
+                Fechar
+              </button>
+            </div>
+
+            <div
+              className="post-receipt-gallery__stage"
+              onTouchStart={handlePostReceiptGalleryTouchStart}
+              onTouchEnd={handlePostReceiptGalleryTouchEnd}
+            >
+              {selectedProcessPostReceiptImages.length > 1 ? (
+                <button
+                  type="button"
+                  className="post-receipt-gallery__nav post-receipt-gallery__nav--prev"
+                  onClick={() => handleNavigatePostReceiptGallery(-1)}
+                  aria-label="Ver imagem anterior"
+                >
+                  <svg
+                    className="post-receipt-gallery__nav-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M14.5 5.5L8 12l6.5 6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+
+              <img
+                src={selectedPostReceiptImage.url}
+                alt={selectedPostReceiptImage.name || 'Imagem do recebimento no CD'}
+                className="post-receipt-gallery__image"
+                draggable="false"
+              />
+
+              {selectedProcessPostReceiptImages.length > 1 ? (
+                <button
+                  type="button"
+                  className="post-receipt-gallery__nav post-receipt-gallery__nav--next"
+                  onClick={() => handleNavigatePostReceiptGallery(1)}
+                  aria-label="Ver próxima imagem"
+                >
+                  <svg
+                    className="post-receipt-gallery__nav-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9.5 5.5L16 12l-6.5 6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+
+            <div className="post-receipt-gallery__footer">
+              <div className="post-receipt-gallery__meta">
+                <strong>{selectedPostReceiptImage?.name || 'Imagem do recebimento no CD'}</strong>
+                {selectedPostReceiptImage?.size ? (
+                  <span>{formatPostReceiptImageSize(selectedPostReceiptImage.size)}</span>
+                ) : null}
+              </div>
+
+              {selectedProcessPostReceiptImages.length > 1 ? (
+                <p className="post-receipt-gallery__hint">
+                  Use as setas ou deslize para o lado no celular.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
+

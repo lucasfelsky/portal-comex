@@ -5,112 +5,212 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function myRole() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+    function isSelf(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function hasCorporateEmail() {
+      return isAuthenticated()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@sqquimica\\.com$');
+    }
+
+    function hasActiveStatus(status) {
+      return status is string
+        && status.matches('^[\\s]*[Aa][Tt][Ii][Vv][Oo][\\s]*$');
+    }
+
+    function myProfileExists() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myProfile() {
+      return myProfileExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
         : null;
     }
 
+    function myRole() {
+      return myProfileExists() ? myProfile().role : null;
+    }
+
+    function myStatus() {
+      return myProfileExists() ? myProfile().status : null;
+    }
+
+    function myName() {
+      return myProfileExists() ? myProfile().name : null;
+    }
+
+    function isApprovedUser() {
+      return hasCorporateEmail() && hasActiveStatus(myStatus());
+    }
+
     function isAdmin() {
-      return isAuthenticated() && myRole() == 'admin';
+      return isApprovedUser() && myRole() == 'admin';
     }
 
     function isLogistics() {
-      return isAuthenticated() && myRole() == 'logistica';
+      return isApprovedUser() && myRole() == 'logistica';
     }
 
-    function isStaff() {
-      return isAdmin();
+    function isPostCollectionStatus(status) {
+      return status in [
+        'Carga em Conferência/Etiquetagem',
+        'Carga em processo de Entrada',
+        'Carga disponível em estoque',
+      ];
     }
 
-    function isBackoffice() {
-      return isAdmin();
+    function isScheduledCollectionStatus(status) {
+      return status in [
+        'Coleta Agendada',
+        'Veículo no CD para descarga',
+        'Carga em Conferência/Etiquetagem',
+        'Carga em processo de Entrada',
+        'Carga disponível em estoque',
+        'Carga recebida',
+      ];
+    }
+
+    function hasScheduledCollection() {
+      return resource.data.collectionScheduledAt is string
+        && resource.data.collectionScheduledAt.size() > 0
+        && isScheduledCollectionStatus(resource.data.collectionStatus);
+    }
+
+    function isLogisticsPostReceiptUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'postReceiptNotes',
+        'postReceiptImages',
+        'updatedAt',
+        'updatedById',
+        'updatedByName',
+      ]);
+    }
+
+    function isLogisticsCollectionStatusUpdate() {
+      return hasScheduledCollection()
+        && isPostCollectionStatus(request.resource.data.collectionStatus)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'collectionStatus',
+          'updatedAt',
+          'updatedById',
+          'updatedByName',
+        ]);
+    }
+
+    function isSelfRegistration() {
+      return request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == 'Pendente'
+        && request.resource.data.statusTone == 'warn';
+    }
+
+    function isAllowedSelfUserUpdate(uid) {
+      return isSelf(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.statusTone == resource.data.statusTone
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name',
+          'area',
+          'lastAccess',
+          'favoriteProcessIds',
+          'notes',
+          'updatedAt',
+        ]);
     }
 
     match /announcements/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isStaff();
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
     }
 
     match /news/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isStaff();
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /externalNews/{docId} {
+      allow read: if isApprovedUser();
+      allow write: if false;
     }
 
     match /barra/{docId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isStaff();
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
     }
 
     match /processes/{processId} {
-      allow read: if isAuthenticated();
-      allow create, delete: if isStaff();
-      allow update: if isStaff()
-        || (isLogistics()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['postReceiptNotes', 'updatedAt']));
+      allow read: if isApprovedUser();
+      allow create: if isAdmin()
+        && request.resource.data.updatedById == request.auth.uid
+        && request.resource.data.updatedByName == myName();
+      allow delete: if isAdmin();
+      allow update: if (
+          isAdmin()
+          && request.resource.data.updatedById == request.auth.uid
+          && request.resource.data.updatedByName == myName()
+        ) || (
+          isLogistics()
+          && request.resource.data.updatedById == request.auth.uid
+          && request.resource.data.updatedByName == myName()
+          && (isLogisticsPostReceiptUpdate() || isLogisticsCollectionStatusUpdate())
+        );
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated()
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser()
           && request.resource.data.processId == processId
           && request.resource.data.content is string
           && request.resource.data.content.size() > 0
-          && request.resource.data.authorName is string;
-        allow update, delete: if false;
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.authorEmail == request.auth.token.email
+          && request.resource.data.authorName == myName();
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
 
-    match /notificationRecipients/{uid} {
-      allow read: if isAuthenticated();
-      allow create, update: if (isAuthenticated() && request.auth.uid == uid)
-        || isAdmin();
-      allow delete: if isAdmin();
-    }
-
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && resource.data.recipientUserId == request.auth.uid;
-      allow create: if isAuthenticated()
-        && request.resource.data.actorUserId == request.auth.uid
-        && request.resource.data.recipientUserId is string
-        && request.resource.data.title is string
-        && request.resource.data.body is string;
-      allow update: if isAuthenticated()
+      allow read: if isApprovedUser() && resource.data.recipientUserId == request.auth.uid;
+      allow create: if false;
+      allow update: if isApprovedUser()
         && resource.data.recipientUserId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']);
-      allow delete: if false;
+      allow delete: if isApprovedUser()
+        && resource.data.recipientUserId == request.auth.uid
+        && resource.data.isRead == true;
     }
 
     match /users/{uid} {
-      allow read: if (isAuthenticated() && request.auth.uid == uid)
-        || isStaff();
+      allow read: if isSelf(uid) || isAdmin();
 
-      allow create: if (isAuthenticated()
-          && request.auth.uid == uid
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.role == 'user'
-          && request.auth.token.email.matches('.*@sqquimica\\.com$'))
+      allow create: if (isSelf(uid) && hasCorporateEmail() && isSelfRegistration())
         || isAdmin();
 
-      allow update: if (isAuthenticated()
-          && request.auth.uid == uid
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.status == resource.data.status
-          && request.resource.data.statusTone == resource.data.statusTone)
-        || isAdmin();
+      allow update: if isAllowedSelfUserUpdate(uid) || isAdmin();
 
       allow delete: if isAdmin();
     }
 
+    match /userCredentials/{uid} {
+      allow read, write: if false;
+    }
+
     match /audits/{auditId} {
-      allow read: if isStaff();
-      allow create: if isAdmin() || isBackoffice();
+      allow read: if isAdmin();
+      allow create: if isAdmin();
       allow update, delete: if false;
     }
 
     match /{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }

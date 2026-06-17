@@ -8,42 +8,47 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-} from 'firebase/firestore'
+} from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import {
   canonicalizeProcessStatus,
+  isPostCollectionStatus,
   processStatusOptions,
+  postCollectionStatusOptions,
 } from '../features/processes/processStatus'
 import { createAuditEvent } from './auditRepository'
+import { normalizePostReceiptImages } from '../utils/postReceiptImages'
 
 const STORAGE_KEY = 'sq-comex-processes'
+const RECEIVED_PROCESS_RETENTION_DAYS = 7
 
 export const processCategoryOptions = ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']
 export const duimpStatusOptions = [
-  'Aguardando registro',
-  'Registrada, aguardando parametrizacao',
+  'Aguardando registro da DUIMP',
+  'Aguardando parametrização da DUIMP',
   'Parametrizada',
 ]
 export const channelOptions = ['Verde', 'Amarelo', 'Vermelho', 'Cinza']
 export const collectionStatusOptions = [
-  'Aguardando liberacao no Terminal',
+  'Aguardando liberação no Terminal',
   'Aguardando agendamento',
   'Coleta Agendada',
-  'Veiculo no CD para descarga',
+  ...postCollectionStatusOptions,
+  'Veículo no CD para descarga',
   'Carga recebida',
 ]
 export const mapaStatusOptions = [
   'Aguardando MAPA',
   'Liberado',
   'Selecionado para Vistoria',
-  'Vistoria agendada, aguardando realizacao',
+  'Vistoria agendada, aguardando realização',
   'Vistoria realizada, aguardando deferimento da LPCO',
   'LPCO deferida, MAPA liberado',
 ]
 export const dtaStatusOptions = [
   'Aguardando registro',
-  'Registrada, aguardando concessao pela RFB',
-  'Concedida, aguardando programacao de carregamento',
+  'Registrada, aguardando concessão pela RFB',
+  'Concedida, aguardando programação de carregamento',
   'Carregamento Programado',
   'Chegada confirmada',
   'Trânsito concluído',
@@ -68,11 +73,62 @@ function normalizeQuantity(value) {
   return Math.max(0, Number.parseInt(value ?? 0, 10) || 0)
 }
 
-function normalizeProcessStatus(status) {
-  const canonicalStatus = canonicalizeProcessStatus(status)
+function normalizeIsoDateTime(value) {
+  const normalizedValue = String(value ?? '').trim()
+  if (!normalizedValue) return ''
+  const date = new Date(normalizedValue)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString()
+}
+
+function normalizeIsoDate(value) {
+  const normalizedValue = String(value ?? '').trim()
+  if (!normalizedValue) return ''
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    const date = new Date(`${normalizedValue}T00:00:00`)
+    return Number.isNaN(date.getTime()) ? '' : normalizedValue
+  }
+
+  const date = new Date(normalizedValue)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
+function normalizeComparableText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function normalizeProcessStatus(status, duimpStatus = '') {
+  const canonicalStatus = canonicalizeProcessStatus(status, duimpStatus)
   return processStatusOptions.includes(canonicalStatus)
     ? canonicalStatus
     : processStatusOptions[0]
+}
+
+function canonicalizeDuimpStatus(status) {
+  const normalizedStatus = normalizeComparableText(status)
+
+  if (!normalizedStatus) return ''
+  if (
+    normalizedStatus === 'aguardando registro' ||
+    normalizedStatus === 'aguardando registro da duimp'
+  ) {
+    return 'Aguardando registro da DUIMP'
+  }
+  if (
+    normalizedStatus === 'registrada, aguardando parametrizacao' ||
+    normalizedStatus === 'aguardando parametrizacao da duimp'
+  ) {
+    return 'Aguardando parametrização da DUIMP'
+  }
+  if (normalizedStatus === 'parametrizada') return 'Parametrizada'
+
+  return ''
 }
 
 const processSeed = [
@@ -102,7 +158,10 @@ const processSeed = [
     containerQuantity: 1,
     palletQuantity: 12,
     processNotes: '',
+    warehouseDeliveryDateOverride: '',
     postReceiptNotes: '',
+    postReceiptImages: [],
+    cargoReceivedAt: '',
     items: [
       { id: 'ITEM-001', commercialName: 'Resina Atlas', quantity: 1200 },
       { id: 'ITEM-002', commercialName: 'Aditivo Alfa', quantity: 300 },
@@ -134,7 +193,10 @@ const processSeed = [
     containerQuantity: 0,
     palletQuantity: 8,
     processNotes: '',
+    warehouseDeliveryDateOverride: '',
     postReceiptNotes: '',
+    postReceiptImages: [],
+    cargoReceivedAt: '',
     items: [{ id: 'ITEM-003', commercialName: 'Componente Boreal', quantity: 480 }],
   },
   {
@@ -163,7 +225,10 @@ const processSeed = [
     containerQuantity: 2,
     palletQuantity: 0,
     processNotes: '',
+    warehouseDeliveryDateOverride: '',
     postReceiptNotes: '',
+    postReceiptImages: [],
+    cargoReceivedAt: '',
     items: [{ id: 'ITEM-004', commercialName: 'Carga Consolidada Delta', quantity: 2 }],
   },
 ]
@@ -196,6 +261,7 @@ function keepsCollectionSchedule(status) {
   return (
     normalizedStatus === 'coleta agendada' ||
     normalizedStatus === 'veiculo no cd para descarga' ||
+    isPostCollectionStatus(status) ||
     normalizedStatus === 'carga recebida'
   )
 }
@@ -234,7 +300,7 @@ function normalizeDestination(value) {
 
 function sanitizeCustomsFlow(process) {
   const cargoPresenceInformed = Boolean(process.cargoPresenceInformed)
-  const duimpStatus = cargoPresenceInformed ? process.duimpStatus ?? '' : ''
+  const duimpStatus = cargoPresenceInformed ? canonicalizeDuimpStatus(process.duimpStatus) : ''
   const parameterizationChannel =
     duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
   const canReleaseCollection =
@@ -257,7 +323,7 @@ function sanitizeCustomsFlow(process) {
 function sanitizeMapaFlow(process) {
   const mapaStatus = isMaritimeCategory(process.category) ? process.mapaStatus ?? '' : ''
   const mapaInspectionScheduledAt =
-    mapaStatus === 'Vistoria agendada, aguardando realizacao'
+    mapaStatus === 'Vistoria agendada, aguardando realização'
       ? process.mapaInspectionScheduledAt ?? ''
       : ''
 
@@ -282,7 +348,7 @@ function sanitizeOperationalFields(process) {
         collectionScheduledAt: '',
         mapaStatus: process.mapaStatus ?? '',
         mapaInspectionScheduledAt:
-          process.mapaStatus === 'Vistoria agendada, aguardando realizacao'
+          process.mapaStatus === 'Vistoria agendada, aguardando realização'
             ? process.mapaInspectionScheduledAt ?? ''
             : '',
         dtaStatus: '',
@@ -398,11 +464,14 @@ function normalizeProcess(rawProcess, fallbackId) {
     etd: rawProcess.etd ?? '',
     eta,
     etaOriginal: rawProcess.etaOriginal ?? eta,
-    processStatus: normalizeProcessStatus(rawProcess.processStatus),
+    processStatus: normalizeProcessStatus(rawProcess.processStatus, operationalFields.duimpStatus),
     containerQuantity: normalizeQuantity(rawProcess.containerQuantity),
     palletQuantity: normalizeQuantity(rawProcess.palletQuantity),
     processNotes: String(rawProcess.processNotes ?? '').trim(),
+    warehouseDeliveryDateOverride: normalizeIsoDate(rawProcess.warehouseDeliveryDateOverride),
     postReceiptNotes: String(rawProcess.postReceiptNotes ?? '').trim(),
+    postReceiptImages: normalizePostReceiptImages(rawProcess.postReceiptImages),
+    cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
     items: normalizeProcessItems(rawProcess.items),
     ...operationalFields,
     updatedAt: rawProcess.updatedAt ?? new Date().toISOString(),
@@ -437,6 +506,20 @@ function sortProcesses(processes) {
   })
 }
 
+function isExpiredReceivedProcess(process) {
+  const receivedAt =
+    normalizeIsoDateTime(process?.cargoReceivedAt) ||
+    (normalizeProcessStatus(process?.processStatus) === 'Carga recebida'
+      ? normalizeIsoDateTime(process?.updatedAt)
+      : '')
+  if (!receivedAt) return false
+
+  const expiresAt =
+    new Date(receivedAt).getTime() + RECEIVED_PROCESS_RETENTION_DAYS * 24 * 60 * 60 * 1000
+
+  return Date.now() >= expiresAt
+}
+
 function toFirestorePayload(process) {
   return {
     name: String(process.name ?? ''),
@@ -446,11 +529,14 @@ function toFirestorePayload(process) {
     etd: String(process.etd ?? ''),
     eta: String(process.eta ?? ''),
     etaOriginal: String(process.etaOriginal || process.eta || ''),
-    processStatus: normalizeProcessStatus(process.processStatus),
+    processStatus: normalizeProcessStatus(process.processStatus, process.duimpStatus),
     containerQuantity: normalizeQuantity(process.containerQuantity),
     palletQuantity: normalizeQuantity(process.palletQuantity),
     processNotes: String(process.processNotes ?? '').trim(),
+    warehouseDeliveryDateOverride: normalizeIsoDate(process.warehouseDeliveryDateOverride),
     postReceiptNotes: String(process.postReceiptNotes ?? '').trim(),
+    postReceiptImages: normalizePostReceiptImages(process.postReceiptImages),
+    cargoReceivedAt: normalizeIsoDateTime(process.cargoReceivedAt),
     items: normalizeProcessItems(process.items),
     berthed: Boolean(process.berthed),
     arrived: Boolean(process.arrived),
@@ -464,32 +550,42 @@ function toFirestorePayload(process) {
     dtaStatus: canonicalizeDtaStatus(process.dtaStatus ?? ''),
     dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? ''),
     dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? ''),
+    updatedById: String(process.updatedById ?? '').trim(),
+    updatedByName: String(process.updatedByName ?? '').trim(),
     updatedAt: serverTimestamp(),
   }
 }
 
 export async function listProcesses() {
   if (!isFirebaseConfigured || !firestore) {
-    return sortProcesses(readLocalProcesses().map((item) => normalizeProcess(item)))
+    return sortProcesses(readLocalProcesses().map((item) => normalizeProcess(item))).filter(
+      (item) => !isExpiredReceivedProcess(item)
+    )
   }
 
   const processesQuery = query(collection(firestore, 'processes'), orderBy('updatedAt', 'desc'))
   const snapshot = await getDocs(processesQuery)
 
-  return snapshot.docs.map((item) => {
-    const data = item.data()
+  return snapshot.docs
+    .map((item) => {
+      const data = item.data()
 
-    return normalizeProcess(
-      {
-        ...data,
-        updatedAt:
-          typeof data.updatedAt?.toDate === 'function'
-            ? data.updatedAt.toDate().toISOString()
-            : data.updatedAt,
-      },
-      item.id
-    )
-  })
+      return normalizeProcess(
+        {
+          ...data,
+          updatedAt:
+            typeof data.updatedAt?.toDate === 'function'
+              ? data.updatedAt.toDate().toISOString()
+              : data.updatedAt,
+          cargoReceivedAt:
+            typeof data.cargoReceivedAt?.toDate === 'function'
+              ? data.cargoReceivedAt.toDate().toISOString()
+              : data.cargoReceivedAt,
+        },
+        item.id
+      )
+    })
+    .filter((item) => !isExpiredReceivedProcess(item))
 }
 
 export async function saveProcess(process, actor = null) {
@@ -501,8 +597,14 @@ export async function saveProcess(process, actor = null) {
     processNumber:
       normalizedProcess.category === 'CONSOLIDADO' ? '' : normalizedProcess.processNumber,
     etaOriginal: normalizedProcess.etaOriginal || normalizedProcess.eta,
-    processStatus: normalizeProcessStatus(normalizedProcess.processStatus),
+    processStatus: normalizeProcessStatus(
+      normalizedProcess.processStatus,
+      normalizedProcess.duimpStatus
+    ),
     dtaStatus: canonicalizeDtaStatus(normalizedProcess.dtaStatus),
+    cargoReceivedAt: normalizeIsoDateTime(normalizedProcess.cargoReceivedAt),
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,
   }
 
@@ -538,9 +640,82 @@ export async function saveProcess(process, actor = null) {
   return nextProcess
 }
 
-export async function saveProcessPostReceiptNotes(processId, postReceiptNotes, actor = null) {
+export async function saveProcessCollectionStatus(processId, collectionStatus, actor = null) {
+  const normalizedId = String(processId ?? '').trim()
+  const normalizedStatus = String(collectionStatus ?? '').trim()
+  const now = new Date().toISOString()
+
+  if (!normalizedId) {
+    throw new Error('Processo inválido para atualizar o status de coleta.')
+  }
+
+  if (!postCollectionStatusOptions.includes(normalizedStatus)) {
+    throw new Error('Status de coleta inválido para atualização logística.')
+  }
+
+  if (!isFirebaseConfigured || !firestore) {
+    const currentProcesses = readLocalProcesses().map((item) => normalizeProcess(item))
+    const existingIndex = currentProcesses.findIndex((item) => item.id === normalizedId)
+
+    if (existingIndex < 0) {
+      throw new Error('Processo não encontrado para atualizar o status de coleta.')
+    }
+
+    const currentProcess = currentProcesses[existingIndex]
+
+    if (!currentProcess.collectionScheduledAt || !keepsCollectionSchedule(currentProcess.collectionStatus)) {
+      throw new Error('O status de coleta só pode ser atualizado após a coleta agendada.')
+    }
+
+    const nextProcess = {
+      ...currentProcess,
+      collectionStatus: normalizedStatus,
+      updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+      updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
+      updatedAt: now,
+    }
+
+    currentProcesses[existingIndex] = nextProcess
+    writeLocalProcesses(sortProcesses(currentProcesses))
+    await recordProcessAudit({
+      action: 'Status de coleta atualizado',
+      actor: actor?.name ?? actor?.email ?? 'Sistema local',
+      target: nextProcess.id,
+    })
+    return nextProcess
+  }
+
+  await updateDoc(doc(firestore, 'processes', normalizedId), {
+    collectionStatus: normalizedStatus,
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
+    updatedAt: serverTimestamp(),
+  })
+
+  await recordProcessAudit({
+    action: 'Status de coleta atualizado',
+    actor: actor?.name ?? actor?.email ?? 'Sistema',
+    target: normalizedId,
+  })
+
+  return {
+    id: normalizedId,
+    collectionStatus: normalizedStatus,
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
+    updatedAt: now,
+  }
+}
+
+export async function saveProcessPostReceiptNotes(
+  processId,
+  postReceiptNotes,
+  postReceiptImages = [],
+  actor = null
+) {
   const normalizedId = String(processId ?? '').trim()
   const normalizedNotes = String(postReceiptNotes ?? '').trim()
+  const normalizedImages = normalizePostReceiptImages(postReceiptImages)
   const now = new Date().toISOString()
 
   if (!normalizedId) {
@@ -558,6 +733,9 @@ export async function saveProcessPostReceiptNotes(processId, postReceiptNotes, a
     const nextProcess = {
       ...currentProcesses[existingIndex],
       postReceiptNotes: normalizedNotes,
+      postReceiptImages: normalizedImages,
+      updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+      updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
       updatedAt: now,
     }
 
@@ -575,6 +753,9 @@ export async function saveProcessPostReceiptNotes(processId, postReceiptNotes, a
 
   await updateDoc(doc(firestore, 'processes', normalizedId), {
     postReceiptNotes: normalizedNotes,
+    postReceiptImages: normalizedImages,
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: serverTimestamp(),
   })
 
@@ -585,7 +766,14 @@ export async function saveProcessPostReceiptNotes(processId, postReceiptNotes, a
   })
 
   const refreshedProcess = (await listProcesses()).find((item) => item.id === normalizedId)
-  return refreshedProcess ?? { id: normalizedId, postReceiptNotes: normalizedNotes, updatedAt: now }
+  return refreshedProcess ?? {
+    id: normalizedId,
+    postReceiptNotes: normalizedNotes,
+    postReceiptImages: normalizedImages,
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
+    updatedAt: now,
+  }
 }
 
 export async function deleteProcess(processId, actor = null) {
