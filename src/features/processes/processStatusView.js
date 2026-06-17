@@ -8,6 +8,7 @@ export {
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus,
   shouldHideProcessCardSchedule,
+  shouldHideProcessStatusBadge,
 } from './processStatus'
 
 import {

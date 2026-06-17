@@ -34,6 +34,7 @@ import {
   postCollectionStatusOptions,
   processStatusOptions,
   shouldHideProcessCardSchedule,
+  shouldHideProcessStatusBadge,
   CD_EN_ROUTE_STATUS,
   isLogisticaEditableCollectionStatus,
 } from '../features/processes/processStatus'
@@ -1460,7 +1461,11 @@ export default function ProcessesPage() {
                     {getDestinationLabel(item.category)}: {item.destination || '-'}
                   </div>
                     <div className="process-item__chips">
-                      <span className={getStatusTagClass(item.processStatus)}>{getQuickReadProcessStatus(item)}</span>
+                      {shouldHideProcessStatusBadge(item) ? null : (
+                        <span className={getStatusTagClass(item.processStatus)}>
+                          {item.processStatus}
+                        </span>
+                      )}
                       {shouldShowContainerQuantity(item.category) ? (
                         <span className="inline-badge">
                           {formatCargoUnit(item.containerQuantity, 'container', 'containers')}

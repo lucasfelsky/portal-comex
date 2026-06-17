@@ -5,11 +5,11 @@ import {
   getChannelToneClass,
   getDisplayedCollectionStatus,
   getStatusTagClass,
-  getQuickReadProcessStatus,
   isCollectionScheduleRetainingStatus as keepsCollectionSchedule,
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus as shouldShowMapaInspection,
   shouldHideProcessCardSchedule,
+  shouldHideProcessStatusBadge,
 } from '../features/processes/processStatusView'
 import {
   getProcessTitle,
@@ -242,7 +242,11 @@ export default function DashboardPage() {
                     <div className="process-item__line">{item.category}</div>
                     <div className="process-item__line">{getDestinationLabel(item.category)}: {item.destination || '-'}</div>
                     <div className="process-item__chips">
-                      <span className={getStatusTagClass(item.processStatus)}>{getQuickReadProcessStatus(item)}</span>
+                      {shouldHideProcessStatusBadge(item) ? null : (
+                        <span className={getStatusTagClass(item.processStatus)}>
+                          {item.processStatus}
+                        </span>
+                      )}
                       <ProcessDerivedStatusBadge process={item} />
                       {shouldShowContainerQuantity(item.category) ? (
                         <span className="inline-badge">

@@ -161,6 +161,10 @@ export function shouldHideProcessCardSchedule(process) {
   )
 }
 
+export function shouldHideProcessStatusBadge(process) {
+  return Boolean(process?.collectionStatus?.trim?.())
+}
+
 export function getQuickReadProcessStatus(process) {
   if (isCdUnloadingOrReceivedStatus(process?.collectionStatus)) {
     return getDisplayedCollectionStatus(process.collectionStatus)
