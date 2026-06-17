@@ -7,6 +7,7 @@ import {
   isCdUnloadingOrReceivedStatus,
   isProcessStatusFinalized,
 } from './processStatus'
+import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
 
 function formatDateTime(value) {
@@ -20,6 +21,29 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+}
+
+function formatDateOnly(value) {
+  if (!value) return '-'
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function getWindowDeliveryEstimate(process, window) {
+  if (!process || !window?.scheduledAt) return ''
+
+  return getEstimatedDeliveryDate({
+    ...process,
+    collectionScheduledAt: window.scheduledAt,
+    collectionStatus: 'Coleta Agendada',
+  })
 }
 
 export function getWeekRange(now = new Date()) {
@@ -89,7 +113,7 @@ export default function WeeklyArrivalsCard({
       <div className="card-heading">
         <div>
           <h3>Chegadas da semana</h3>
-          <p>Coletas previstas entre hoje e o próximo domingo.</p>
+          <p>Previsão de entrega no armazém por container, com coletas entre hoje e o próximo domingo.</p>
         </div>
         <span className="inline-badge">
           {isLoading ? '...' : `${items.length} ${items.length === 1 ? 'processo' : 'processos'}`}
@@ -128,15 +152,22 @@ export default function WeeklyArrivalsCard({
                 </div>
 
                 <ul className="weekly-arrivals-windows">
-                  {windows.map((window) => (
-                    <li key={window.id} className="weekly-arrivals-windows__item">
-                      <span className="detail-label">Container {window.containerNumber}</span>
-                      <p>{formatDateTime(window.scheduledAt)}</p>
-                      {window.notes ? (
-                        <small className="weekly-arrivals-windows__notes">{window.notes}</small>
-                      ) : null}
-                    </li>
-                  ))}
+                  {windows.map((window) => {
+                    const deliveryEstimate = getWindowDeliveryEstimate(process, window)
+
+                    return (
+                      <li key={window.id} className="weekly-arrivals-windows__item">
+                        <span className="detail-label">Container {window.containerNumber}</span>
+                        <p>
+                          <span className="weekly-arrivals-windows__label">Previsão de entrega:</span>{' '}
+                          <strong>{formatDateOnly(deliveryEstimate)}</strong>
+                        </p>
+                        {window.notes ? (
+                          <small className="weekly-arrivals-windows__notes">{window.notes}</small>
+                        ) : null}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
               <div className="process-item__meta process-item__meta--top">
