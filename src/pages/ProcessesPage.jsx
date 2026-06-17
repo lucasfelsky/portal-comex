@@ -30,6 +30,7 @@ import {
   isMapaInspectionScheduledStatus,
   isProcessStatusFinalized,
   mapaAllowsCollectionStatus,
+  normalizeComparableText,
   postCollectionStatusOptions,
   processStatusOptions,
   shouldHideProcessCardSchedule,
