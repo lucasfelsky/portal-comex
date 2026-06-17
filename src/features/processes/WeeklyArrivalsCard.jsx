@@ -7,7 +7,7 @@ import {
   isCdUnloadingOrReceivedStatus,
   isProcessStatusFinalized,
 } from './processStatus'
-import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
+import { getEstimatedDeliveryDate, getScheduledCollectionDeliveryShift } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
 
 function formatDateTime(value) {
@@ -40,6 +40,16 @@ function getWindowDeliveryEstimate(process, window) {
   if (!process || !window?.scheduledAt) return ''
 
   return getEstimatedDeliveryDate({
+    ...process,
+    collectionScheduledAt: window.scheduledAt,
+    collectionStatus: 'Coleta Agendada',
+  })
+}
+
+function getWindowDeliveryShift(process, window) {
+  if (!process || !window?.scheduledAt) return ''
+
+  return getScheduledCollectionDeliveryShift({
     ...process,
     collectionScheduledAt: window.scheduledAt,
     collectionStatus: 'Coleta Agendada',
@@ -154,13 +164,16 @@ export default function WeeklyArrivalsCard({
                 <ul className="weekly-arrivals-windows">
                   {windows.map((window) => {
                     const deliveryEstimate = getWindowDeliveryEstimate(process, window)
+                    const deliveryShift = getWindowDeliveryShift(process, window)
 
                     return (
                       <li key={window.id} className="weekly-arrivals-windows__item">
                         <span className="detail-label">Container {window.containerNumber}</span>
                         <p>
-                          <span className="weekly-arrivals-windows__label">Previsão de entrega:</span>{' '}
                           <strong>{formatDateOnly(deliveryEstimate)}</strong>
+                          {deliveryShift ? (
+                            <span className="weekly-arrivals-windows__shift"> · {deliveryShift}</span>
+                          ) : null}
                         </p>
                         {window.notes ? (
                           <small className="weekly-arrivals-windows__notes">{window.notes}</small>

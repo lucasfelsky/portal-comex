@@ -2061,6 +2061,11 @@ select {
   font-size: 0.85em;
 }
 
+.weekly-arrivals-windows__shift {
+  color: rgba(15, 23, 42, 0.7);
+  font-weight: 500;
+}
+
 .weekly-arrivals-windows__notes {
   color: rgba(15, 23, 42, 0.7);
 }

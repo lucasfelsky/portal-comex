@@ -163,6 +163,29 @@ function getScheduledCollectionDeliveryDate(process) {
   return ''
 }
 
+export function getScheduledCollectionDeliveryShift(process) {
+  if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
+
+  const scheduledAt = parseDateTime(process.collectionScheduledAt)
+  if (!scheduledAt) return ''
+
+  const destination = normalizeText(process.destination)
+  const scheduledDate = startOfDay(scheduledAt)
+  const isWeekend = !isBusinessDay(scheduledDate)
+  const cutoffHour = destination.includes('navegantes')
+    ? 15
+    : destination.includes('itapoa')
+      ? 14
+      : null
+
+  if (cutoffHour === null) return 'Integral'
+
+  if (isWeekend) return 'Integral'
+  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Integral'
+
+  return 'Manhã'
+}
+
 function getBusinessDaysToAdd(category) {
   if (category === 'LCL') return 7
   if (category === 'AEREO') return 10
