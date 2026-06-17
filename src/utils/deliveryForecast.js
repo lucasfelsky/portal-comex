@@ -178,12 +178,12 @@ export function getScheduledCollectionDeliveryShift(process) {
       ? 14
       : null
 
-  if (cutoffHour === null) return 'Integral'
+  if (cutoffHour === null) return 'Vespertino'
 
-  if (isWeekend) return 'Integral'
-  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Integral'
+  if (isWeekend) return 'Vespertino'
+  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Vespertino'
 
-  return 'Manhã'
+  return 'Matutino'
 }
 
 function getBusinessDaysToAdd(category) {
