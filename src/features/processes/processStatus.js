@@ -19,6 +19,22 @@ export const postCollectionStatusOptions = [
   'Carga disponível em estoque',
 ]
 
+export const CD_EN_ROUTE_STATUS = 'Carga a caminho do CD'
+
+export function isCdEnRouteStatus(status) {
+  return normalizeComparableText(status) === normalizeComparableText(CD_EN_ROUTE_STATUS)
+}
+
+export function isLogisticaEditableCollectionStatus(status) {
+  const normalizedStatus = normalizeComparableText(status)
+  return (
+    normalizedStatus === 'carga a caminho do cd' ||
+    isPostCollectionStatus(status) ||
+    normalizedStatus === 'veiculo no cd para descarga' ||
+    normalizedStatus === 'carga recebida'
+  )
+}
+
 export function normalizeComparableText(value) {
   return String(value ?? '')
     .normalize('NFD')
@@ -95,6 +111,7 @@ export function getDisplayedCollectionStatus(status) {
     return 'Carga sendo descarregada'
   }
 
+  if (normalizedStatus === 'carga a caminho do cd') return CD_EN_ROUTE_STATUS
   if (normalizedStatus === 'carga recebida') return 'Carga recebida'
 
   return String(status ?? '').trim()
@@ -132,6 +149,7 @@ export function isCollectionScheduleRetainingStatus(status) {
     normalizedStatus === 'coleta agendada' ||
     normalizedStatus === 'veiculo no cd para descarga' ||
     isPostCollectionStatus(status) ||
+    normalizedStatus === 'carga a caminho do cd' ||
     normalizedStatus === 'carga recebida'
   )
 }
@@ -169,6 +187,7 @@ export function getProcessStatusTone(status) {
   ) {
     return 'warn'
   }
+  if (isCdEnRouteStatus(status)) return 'info'
   if (!canonicalStatus) return 'neutral'
   return 'neutral'
 }

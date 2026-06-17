@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react'
 import useAuth from '../hooks/useAuth'
 import {
+  getChannelToneClass,
   getDisplayedCollectionStatus,
-  getProcessStatusTone,
+  getStatusTagClass,
   getQuickReadProcessStatus,
   isCollectionScheduleRetainingStatus,
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus,
   shouldHideProcessCardSchedule,
-} from '../features/processes/processStatus'
+} from '../features/processes/processStatusView'
+import {
+  getProcessTitle,
+  getProcessSubtitle,
+} from '../features/processes/processLabels'
+import {
+  isMaritimeCategory,
+  isAirCategory,
+  shouldShowContainerQuantity,
+} from '../features/processes/processCategories'
+import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
+import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
+import { getCollectionWindows } from '../utils/collectionWindows'
 import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
@@ -55,9 +68,6 @@ function getEstimatedDeliveryLabel(process) {
 }
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
-const isMaritimeCategory = (category) => ['FCL', 'LCL', 'CONSOLIDADO'].includes(category)
-const isAirCategory = (category) => category === 'AEREO'
-const shouldShowContainerQuantity = (category) => category !== 'AEREO' && category !== 'LCL'
 
 function formatCargoUnit(quantity, singularLabel, pluralLabel) {
   return `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
@@ -67,59 +77,16 @@ function getDestinationLabel(category) {
   return category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
 }
 
-function canShowProcessName(process, isAdmin) {
-  return isAdmin || !isRestrictedCategory(process.category)
-}
-
-function getProcessTitle(process, isAdmin) {
-  return canShowProcessName(process, isAdmin) ? process.name : `PO: ${process.processNumber || '-'}`
-}
-
-function getProcessSubtitle(process, isAdmin) {
-  if (!canShowProcessName(process, isAdmin)) return ''
-  if (process.category === 'CONSOLIDADO') return ''
-  return process.processNumber ? `PO: ${process.processNumber}` : ''
-}
-
-function getChannelToneClass(channel) {
-  if (channel === 'Verde') return 'detail-card--success'
-  if (channel === 'Amarelo') return 'detail-card--warning'
-  if (channel === 'Vermelho') return 'detail-card--danger'
-  if (channel === 'Cinza') return 'detail-card--neutral'
-  return ''
-}
-
-function getStatusTagClass(status) {
-  return `status-tag status-tag--${getProcessStatusTone(status)}`
-}
-
-function hasUpdatedEta(process) {
-  return Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
-}
-
-function keepsCollectionSchedule(status) {
-  return isCollectionScheduleRetainingStatus(status)
-}
-
-function getDuimpSummary(process) {
-  if (!process.duimpStatus) return ''
-  return process.parameterizationChannel
-    ? `${process.duimpStatus} · Canal ${process.parameterizationChannel}`
-    : process.duimpStatus
-}
-
-function shouldShowMapaInspection(status) {
-  return isMapaInspectionScheduledStatus(status)
-}
-
 export default function DashboardPage() {
   const { profile } = useAuth()
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)
+  const [loadedProcesses, setLoadedProcesses] = useState([])
   const [favoriteProcesses, setFavoriteProcesses] = useState([])
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
+  const [isLoadingProcesses, setIsLoadingProcesses] = useState(true)
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(true)
 
   useEffect(() => {
@@ -137,11 +104,13 @@ export default function DashboardPage() {
 
         setAnnouncements(loadedAnnouncements.slice(0, 3))
         setBarStatus(loadedBarStatus)
+        setLoadedProcesses(loadedProcesses)
         setFavoriteProcesses(loadedProcesses.filter((item) => favoriteProcessIds.includes(item.id)))
       } finally {
         if (isMounted) {
           setIsLoadingAnnouncements(false)
           setIsLoadingBarStatus(false)
+          setIsLoadingProcesses(false)
           setIsLoadingFavorites(false)
         }
       }
@@ -244,6 +213,7 @@ export default function DashboardPage() {
                     <div className="process-item__line">{getDestinationLabel(item.category)}: {item.destination || '-'}</div>
                     <div className="process-item__chips">
                       <span className={getStatusTagClass(item.processStatus)}>{getQuickReadProcessStatus(item)}</span>
+                      <ProcessDerivedStatusBadge process={item} />
                       {shouldShowContainerQuantity(item.category) ? (
                         <span className="inline-badge">
                           {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
@@ -291,13 +261,17 @@ export default function DashboardPage() {
                             <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
-                        {item.collectionStatus === 'Coleta Agendada' && item.collectionScheduledAt ? (
-                          <div className="collection-window-card collection-window-card--inline">
-                            <div>
-                              <span className="detail-label">Janela de coleta</span>
-                              <p>{formatDateTime(item.collectionScheduledAt)}</p>
-                            </div>
-                          </div>
+                        {item.collectionStatus === 'Coleta Agendada' && getCollectionWindows(item).length > 0 ? (
+                          <ul className="dashboard-collection-windows">
+                            {getCollectionWindows(item).map((window) => (
+                              <li key={window.id} className="collection-window-card collection-window-card--inline">
+                                <div>
+                                  <span className="detail-label">Container {window.containerNumber}</span>
+                                  <p>{formatDateTime(window.scheduledAt)}</p>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         ) : null}
                       </div>
                     ) : null}
@@ -348,13 +322,17 @@ export default function DashboardPage() {
                             <p>{getDisplayedCollectionStatus(item.collectionStatus)}</p>
                           </div>
                         ) : null}
-                        {item.collectionStatus === 'Coleta Agendada' && item.collectionScheduledAt ? (
-                          <div className="collection-window-card collection-window-card--inline">
-                            <div>
-                              <span className="detail-label">Janela de coleta</span>
-                              <p>{formatDateTime(item.collectionScheduledAt)}</p>
-                            </div>
-                          </div>
+                        {item.collectionStatus === 'Coleta Agendada' && getCollectionWindows(item).length > 0 ? (
+                          <ul className="dashboard-collection-windows">
+                            {getCollectionWindows(item).map((window) => (
+                              <li key={window.id} className="collection-window-card collection-window-card--inline">
+                                <div>
+                                  <span className="detail-label">Container {window.containerNumber}</span>
+                                  <p>{formatDateTime(window.scheduledAt)}</p>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         ) : null}
                       </div>
                     ) : null}
@@ -384,6 +362,14 @@ export default function DashboardPage() {
           )}
         </div>
       </article>
+
+      <div style={{ marginTop: '24px' }}>
+        <WeeklyArrivalsCard
+          processes={loadedProcesses}
+          isAdmin={profile?.role === 'admin'}
+          isLoading={isLoadingProcesses}
+        />
+      </div>
     </section>
   )
 }

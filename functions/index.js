@@ -309,6 +309,14 @@ function sanitizeProcessForComparison(process) {
     parameterizationChannel: normalizeString(process.parameterizationChannel),
     collectionStatus: normalizeString(process.collectionStatus),
     collectionScheduledAt: normalizeString(process.collectionScheduledAt),
+    collectionWindows: Array.isArray(process.collectionWindows)
+      ? process.collectionWindows.map((window) => ({
+          id: normalizeString(window?.id),
+          containerNumber: Number(window?.containerNumber ?? 0),
+          scheduledAt: normalizeTimestamp(window?.scheduledAt),
+          notes: normalizeString(window?.notes),
+        }))
+      : [],
     mapaStatus: normalizeString(process.mapaStatus),
     mapaInspectionScheduledAt: normalizeString(process.mapaInspectionScheduledAt),
     dtaStatus: normalizeString(process.dtaStatus),

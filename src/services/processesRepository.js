@@ -12,12 +12,18 @@ import {
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import {
   canonicalizeProcessStatus,
+  CD_EN_ROUTE_STATUS,
   isPostCollectionStatus,
   processStatusOptions,
   postCollectionStatusOptions,
 } from '../features/processes/processStatus'
 import { createAuditEvent } from './auditRepository'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
+import {
+  getCollectionWindows,
+  normalizeCollectionWindows,
+  serializeCollectionWindowsForFirestore,
+} from '../utils/collectionWindows'
 
 const STORAGE_KEY = 'sq-comex-processes'
 const RECEIVED_PROCESS_RETENTION_DAYS = 7
@@ -34,6 +40,7 @@ export const collectionStatusOptions = [
   'Aguardando agendamento',
   'Coleta Agendada',
   ...postCollectionStatusOptions,
+  CD_EN_ROUTE_STATUS,
   'Veículo no CD para descarga',
   'Carga recebida',
 ]
@@ -262,6 +269,7 @@ function keepsCollectionSchedule(status) {
     normalizedStatus === 'coleta agendada' ||
     normalizedStatus === 'veiculo no cd para descarga' ||
     isPostCollectionStatus(status) ||
+    normalizedStatus === 'carga a caminho do cd' ||
     normalizedStatus === 'carga recebida'
   )
 }
@@ -305,9 +313,12 @@ function sanitizeCustomsFlow(process) {
     duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
   const canReleaseCollection =
     !isMaritimeCategory(process.category) || mapaAllowsCollection(process.mapaStatus)
-  const collectionStatus =
+  const normalizedCollectionStatus =
     parameterizationChannel === 'Verde' && canReleaseCollection ? process.collectionStatus ?? '' : ''
-  const collectionScheduledAt = keepsCollectionSchedule(collectionStatus)
+  const collectionWindows = parameterizationChannel === 'Verde' && canReleaseCollection
+    ? getCollectionWindows(process)
+    : []
+  const collectionScheduledAt = keepsCollectionSchedule(normalizedCollectionStatus)
     ? process.collectionScheduledAt ?? ''
     : ''
 
@@ -315,7 +326,8 @@ function sanitizeCustomsFlow(process) {
     cargoPresenceInformed,
     duimpStatus,
     parameterizationChannel,
-    collectionStatus,
+    collectionStatus: normalizedCollectionStatus,
+    collectionWindows,
     collectionScheduledAt,
   }
 }
@@ -345,6 +357,7 @@ function sanitizeOperationalFields(process) {
         duimpStatus: '',
         parameterizationChannel: '',
         collectionStatus: '',
+        collectionWindows: [],
         collectionScheduledAt: '',
         mapaStatus: process.mapaStatus ?? '',
         mapaInspectionScheduledAt:
@@ -392,6 +405,7 @@ function sanitizeOperationalFields(process) {
         duimpStatus: '',
         parameterizationChannel: '',
         collectionStatus: '',
+        collectionWindows: [],
         collectionScheduledAt: '',
         mapaStatus: '',
         mapaInspectionScheduledAt: '',
@@ -421,6 +435,7 @@ function sanitizeOperationalFields(process) {
       duimpStatus: '',
       parameterizationChannel: '',
       collectionStatus: '',
+      collectionWindows: [],
       collectionScheduledAt: '',
       mapaStatus: '',
       mapaInspectionScheduledAt: '',
@@ -448,6 +463,8 @@ function normalizeProcess(rawProcess, fallbackId) {
     parameterizationChannel: rawProcess.parameterizationChannel,
     collectionStatus: rawProcess.collectionStatus,
     collectionScheduledAt: rawProcess.collectionScheduledAt,
+    collectionWindows: rawProcess.collectionWindows,
+    containerQuantity: rawProcess.containerQuantity,
     mapaStatus: rawProcess.mapaStatus,
     mapaInspectionScheduledAt: rawProcess.mapaInspectionScheduledAt,
     dtaStatus: rawProcess.dtaStatus,
@@ -545,6 +562,12 @@ function toFirestorePayload(process) {
     parameterizationChannel: String(process.parameterizationChannel ?? ''),
     collectionStatus: String(process.collectionStatus ?? ''),
     collectionScheduledAt: String(process.collectionScheduledAt ?? ''),
+    collectionWindows: serializeCollectionWindowsForFirestore(
+      normalizeCollectionWindows(process.collectionWindows, {
+        legacyScheduledAt: process.collectionScheduledAt,
+        containerQuantity: process.containerQuantity,
+      })
+    ),
     mapaStatus: String(process.mapaStatus ?? ''),
     mapaInspectionScheduledAt: String(process.mapaInspectionScheduledAt ?? ''),
     dtaStatus: canonicalizeDtaStatus(process.dtaStatus ?? ''),

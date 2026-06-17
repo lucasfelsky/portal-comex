@@ -33,7 +33,25 @@ import {
   postCollectionStatusOptions,
   processStatusOptions,
   shouldHideProcessCardSchedule,
+  CD_EN_ROUTE_STATUS,
+  isLogisticaEditableCollectionStatus,
 } from '../features/processes/processStatus'
+import {
+  getChannelToneClass,
+  getStatusTagClass,
+} from '../features/processes/processStatusView'
+import {
+  getProcessTitle,
+  getProcessSubtitle,
+} from '../features/processes/processLabels'
+import {
+  isMaritimeCategory,
+  isAirCategory,
+  shouldShowContainerQuantity,
+} from '../features/processes/processCategories'
+import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
+import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
+import { getCollectionWindows } from '../utils/collectionWindows'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -79,6 +97,7 @@ const emptyDraft = () => ({
   duimpStatus: '',
   parameterizationChannel: '',
   collectionStatus: '',
+  collectionWindows: [],
   collectionScheduledAt: '',
   mapaStatus: '',
   mapaInspectionScheduledAt: '',
@@ -88,9 +107,6 @@ const emptyDraft = () => ({
 })
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
-const isMaritimeCategory = (category) => ['FCL', 'LCL', 'CONSOLIDADO'].includes(category)
-const isAirCategory = (category) => category === 'AEREO'
-const shouldShowContainerQuantity = (category) => category !== 'AEREO' && category !== 'LCL'
 const isEtaReached = (eta) => eta && eta <= new Date().toISOString().slice(0, 10)
 const MAX_PROCESS_MESSAGES = 20
 
@@ -139,26 +155,6 @@ function canShowProcessName(process, isAdmin) {
   return isAdmin || !isRestrictedCategory(process.category)
 }
 
-function getProcessTitle(process, isAdmin) {
-  return canShowProcessName(process, isAdmin) ? process.name : `PO: ${process.processNumber || '-'}`
-}
-
-function getProcessSubtitle(process, isAdmin) {
-  return canShowProcessName(process, isAdmin) && process.processNumber ? `PO: ${process.processNumber}` : ''
-}
-
-function getChannelToneClass(channel) {
-  if (channel === 'Verde') return 'detail-card--success'
-  if (channel === 'Amarelo') return 'detail-card--warning'
-  if (channel === 'Vermelho') return 'detail-card--danger'
-  if (channel === 'Cinza') return 'detail-card--neutral'
-  return ''
-}
-
-function getStatusTagClass(status) {
-  return `status-tag status-tag--${getProcessStatusTone(status)}`
-}
-
 function hasUpdatedEta(process) {
   return Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
 }
@@ -181,17 +177,21 @@ function keepsCollectionSchedule(status) {
 }
 
 function shouldEditCollectionSchedule(status) {
-  return status === 'Coleta Agendada'
+  return status === 'Coleta Agendada' || normalizeComparableText(status) === 'carga a caminho do cd'
 }
 
 function canUsePostCollectionStatuses(process) {
-  return Boolean(process?.collectionScheduledAt && keepsCollectionSchedule(process.collectionStatus))
+  return Boolean(getCollectionWindows(process).length && keepsCollectionSchedule(process.collectionStatus))
 }
 
 function getCollectionStatusOptions(process) {
   if (canUsePostCollectionStatuses(process)) return collectionStatusOptions
 
-  return collectionStatusOptions.filter((item) => !postCollectionStatusOptions.includes(item))
+  return collectionStatusOptions.filter(
+    (item) =>
+      !postCollectionStatusOptions.includes(item) &&
+      normalizeComparableText(item) !== 'carga a caminho do cd'
+  )
 }
 
 function shouldEditMapaInspection(status) {
@@ -223,6 +223,10 @@ function sanitizeProcessItems(items) {
       quantity: Math.max(0, Number(item?.quantity) || 0),
     }))
     .filter((item) => item.commercialName || item.quantity > 0)
+}
+
+function isCdEnRouteStatusForFilter(value) {
+  return normalizeComparableText(value) === 'carga a caminho do cd'
 }
 
 function normalizeItemName(value) {
@@ -294,20 +298,27 @@ function sanitizeCustoms(draft) {
       duimpStatus: '',
       parameterizationChannel: '',
       collectionStatus: '',
+      collectionWindows: [],
       collectionScheduledAt: '',
     }
   }
   if (draft.duimpStatus !== 'Parametrizada') {
-    return { ...draft, parameterizationChannel: '', collectionStatus: '', collectionScheduledAt: '' }
+    return {
+      ...draft,
+      parameterizationChannel: '',
+      collectionStatus: '',
+      collectionWindows: [],
+      collectionScheduledAt: '',
+    }
   }
   if (isMaritimeCategory(draft.category) && !mapaAllowsCollection(draft.mapaStatus)) {
-    return { ...draft, collectionStatus: '', collectionScheduledAt: '' }
+    return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
   if (draft.parameterizationChannel !== 'Verde') {
-    return { ...draft, collectionStatus: '', collectionScheduledAt: '' }
+    return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
   if (!keepsCollectionSchedule(draft.collectionStatus)) {
-    return { ...draft, collectionScheduledAt: '' }
+    return { ...draft, collectionWindows: [], collectionScheduledAt: '' }
   }
   return draft
 }
@@ -352,6 +363,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         duimpStatus: '',
         parameterizationChannel: '',
         collectionStatus: '',
+        collectionWindows: [],
         collectionScheduledAt: '',
       }
     }
@@ -370,6 +382,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         duimpStatus: '',
         parameterizationChannel: '',
         collectionStatus: '',
+        collectionWindows: [],
         collectionScheduledAt: '',
       }
     }
@@ -394,6 +407,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     duimpStatus: '',
     parameterizationChannel: '',
     collectionStatus: '',
+    collectionWindows: [],
     collectionScheduledAt: '',
   }
 }
@@ -826,6 +840,7 @@ export default function ProcessesPage() {
           'parameterizationChannel',
           'collectionStatus',
           'collectionScheduledAt',
+          'collectionWindows',
           'mapaStatus',
           'mapaInspectionScheduledAt',
           'dtaStatus',
@@ -1632,7 +1647,14 @@ export default function ProcessesPage() {
                 {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
-                {shouldEditCollectionSchedule(draft.collectionStatus) ? <><label className="field"><span>Janela agendada</span><input className="text-input" type="datetime-local" value={draft.collectionScheduledAt} onChange={(event) => handleDraftChange('collectionScheduledAt', event.target.value)} /></label>{draft.collectionScheduledAt ? <div className="collection-window-card"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(draft.collectionScheduledAt)}</p></div></div> : null}</> : null}
+                {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
+                  <CollectionWindowsEditor
+                    value={draft.collectionWindows}
+                    maxContainers={Math.max(draft.containerQuantity || 1, 1)}
+                    onChange={(nextWindows) => handleDraftChange('collectionWindows', nextWindows)}
+                    disabled={isSaving}
+                  />
+                ) : null}
                 {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
               </div>
             ) : null}
@@ -1647,7 +1669,14 @@ export default function ProcessesPage() {
                 {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
                 {draft.parameterizationChannel === 'Verde' ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
-                {shouldEditCollectionSchedule(draft.collectionStatus) ? <><label className="field"><span>Janela agendada</span><input className="text-input" type="datetime-local" value={draft.collectionScheduledAt} onChange={(event) => handleDraftChange('collectionScheduledAt', event.target.value)} /></label>{draft.collectionScheduledAt ? <div className="collection-window-card"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(draft.collectionScheduledAt)}</p></div></div> : null}</> : null}
+                {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
+                  <CollectionWindowsEditor
+                    value={draft.collectionWindows}
+                    maxContainers={Math.max(draft.containerQuantity || 1, 1)}
+                    onChange={(nextWindows) => handleDraftChange('collectionWindows', nextWindows)}
+                    disabled={isSaving}
+                  />
+                ) : null}
                 {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
               </div>
             ) : null}
@@ -1727,12 +1756,12 @@ export default function ProcessesPage() {
               <span className="detail-label">Processo</span>
               <p>{getProcessTitle(selectedProcess, isAdmin)}</p>
             </div>
-            <div className="collection-window-card">
-              <div>
-                <span className="detail-label">Janela de coleta</span>
-                <p>{formatDateTime(selectedProcess.collectionScheduledAt)}</p>
-              </div>
-            </div>
+            <CollectionWindowsEditor
+              value={selectedProcess.collectionWindows}
+              maxContainers={Math.max(selectedProcess.containerQuantity || 1, 1)}
+              onChange={() => {}}
+              disabled
+            />
             <label className="field">
               <span>Status</span>
               <select
@@ -1741,11 +1770,16 @@ export default function ProcessesPage() {
                 onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}
               >
                 <option value="">Selecione o status</option>
-                {postCollectionStatusOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {getDisplayedCollectionStatus(item)}
-                  </option>
-                ))}
+                <optgroup label="Em rota">
+                  <option value={CD_EN_ROUTE_STATUS}>{getDisplayedCollectionStatus(CD_EN_ROUTE_STATUS)}</option>
+                </optgroup>
+                <optgroup label="Pós-recebimento">
+                  {[...postCollectionStatusOptions, 'Veículo no CD para descarga', 'Carga recebida'].map((item) => (
+                    <option key={item} value={item}>
+                      {getDisplayedCollectionStatus(item)}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </label>
           </div>
@@ -1755,7 +1789,7 @@ export default function ProcessesPage() {
               type="button"
               className="primary-button"
               onClick={handleSaveCollectionStatus}
-              disabled={isSaving || !postCollectionStatusOptions.includes(draft.collectionStatus)}
+              disabled={isSaving || !isLogisticaEditableCollectionStatus(draft.collectionStatus)}
             >
               {isSaving ? 'Salvando...' : 'Salvar status'}
             </button>
@@ -1909,7 +1943,7 @@ export default function ProcessesPage() {
           <div className="detail-stack tab-panel-spacing">
             {detailTab === 'general' ? <><div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, isAdmin)}</p></div><div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>{selectedProcess.processNumber && canShowProcessName(selectedProcess, isAdmin) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}<div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div><div className="detail-card detail-card--split"><div><span className="detail-label">ETD</span><p>{formatDate(selectedProcess.etd)}</p></div><div className={getEtaDisplayClassName(selectedProcess)}><span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span><p>{formatDate(selectedProcess.eta)}</p></div></div>{selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}<div className="detail-card"><span className="detail-label">Previsao de entrega no armazem</span><p>{getEstimatedDeliveryLabel(selectedProcess)}</p><small className="field-hint">{selectedProcess.warehouseDeliveryDateOverride ? 'Data definida manualmente por um admin.' : 'Data calculada automaticamente pelo sistema.'}</small></div><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens vinculados</span><p>{selectedProcess.items?.length ?? 0} itens cadastrados para este processo.</p></div><button type="button" className="ghost-button" onClick={handleOpenItemsTab}>Ver itens do processo</button></div></div></> : null}
 
-            {detailTab === 'process' ? <><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Status do processo</span><p>Controle padronizado para evitar inconsistências de valor.</p></div><span className={getStatusTagClass(selectedProcess.processStatus)}>{getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}</span></div></div><div className={`detail-card${shouldShowContainerQuantity(selectedProcess.category) ? ' detail-card--split' : ''}`}>{shouldShowContainerQuantity(selectedProcess.category) ? <div><span className="detail-label">Quantidade de containers</span><p>{formatCargoUnit(selectedProcess.containerQuantity, 'container', 'containers')}</p></div> : null}<div><span className="detail-label">Quantidade de pallets</span><p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p></div></div>{selectedProcess.processNotes ? <div className="detail-card"><span className="detail-label">Observações do processo</span><p>{selectedProcess.processNotes}</p></div> : null}{isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? <div className="detail-card"><span className="detail-label">Observações pós-recebimento da carga</span>{selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}{selectedProcessPostReceiptImages.length > 0 ? <div className="post-receipt-image-grid post-receipt-image-grid--detail">{selectedProcessPostReceiptImages.map((image, index) => <button key={image.id} type="button" className="post-receipt-image-card post-receipt-image-card--detail" onClick={() => handleOpenPostReceiptGallery(index)}><img src={image.url} alt={image.name || 'Imagem do recebimento no CD'} /><div className="post-receipt-image-card__meta"><strong>{image.name || 'Imagem do recebimento no CD'}</strong><span>{formatPostReceiptImageSize(image.size)}</span></div></button>)}</div> : null}</div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.mapaStatus ? <div className="detail-card"><span className="detail-label">MAPA</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.mapaStatus}</p>{shouldEditMapaInspection(selectedProcess.mapaStatus) && selectedProcess.mapaInspectionScheduledAt ? <p>Vistoria agendada: {formatDateTime(selectedProcess.mapaInspectionScheduledAt)}</p> : null}</div></div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? <div className="detail-card"><span className="detail-label">Andamento após chegada</span><p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p></div> : null}{isAirCategory(selectedProcess.category) && selectedProcess.arrived ? <div className="detail-card"><span className="detail-label">Pós-chegada</span><div className="detail-stack detail-stack--compact">{selectedProcess.dtaStatus ? <p>DTA: {selectedProcess.dtaStatus}</p> : null}{selectedProcess.dtaLoadingScheduledAt ? <p>Carregamento DTA: {formatDateTime(selectedProcess.dtaLoadingScheduledAt)}</p> : null}{selectedProcess.dtaArrivalAtItajai ? <p>Chegada prevista em Itajaí: {formatDateTime(selectedProcess.dtaArrivalAtItajai)}</p> : null}{isDtaTransitCompleted(selectedProcess.dtaStatus) ? <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}><span className="detail-label">DUIMP</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.duimpStatus}</p>{selectedProcess.parameterizationChannel ? <p>Canal da parametrização: {selectedProcess.parameterizationChannel}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus === 'Coleta Agendada' && selectedProcess.collectionScheduledAt ? <div className="collection-window-card collection-window-card--detail"><div><span className="detail-label">Janela de coleta</span><p>{formatDateTime(selectedProcess.collectionScheduledAt)}</p></div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</p></div> : null}</> : null}
+            {detailTab === 'process' ? <><div className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Status do processo</span><p>Controle padronizado para evitar inconsistências de valor.</p></div><span className={getStatusTagClass(selectedProcess.processStatus)}>{getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}</span></div></div><div className={`detail-card${shouldShowContainerQuantity(selectedProcess.category) ? ' detail-card--split' : ''}`}>{shouldShowContainerQuantity(selectedProcess.category) ? <div><span className="detail-label">Quantidade de containers</span><p>{formatCargoUnit(selectedProcess.containerQuantity, 'container', 'containers')}</p></div> : null}<div><span className="detail-label">Quantidade de pallets</span><p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p></div></div>{selectedProcess.processNotes ? <div className="detail-card"><span className="detail-label">Observações do processo</span><p>{selectedProcess.processNotes}</p></div> : null}{isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? <div className="detail-card"><span className="detail-label">Observações pós-recebimento da carga</span>{selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}{selectedProcessPostReceiptImages.length > 0 ? <div className="post-receipt-image-grid post-receipt-image-grid--detail">{selectedProcessPostReceiptImages.map((image, index) => <button key={image.id} type="button" className="post-receipt-image-card post-receipt-image-card--detail" onClick={() => handleOpenPostReceiptGallery(index)}><img src={image.url} alt={image.name || 'Imagem do recebimento no CD'} /><div className="post-receipt-image-card__meta"><strong>{image.name || 'Imagem do recebimento no CD'}</strong><span>{formatPostReceiptImageSize(image.size)}</span></div></button>)}</div> : null}</div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.mapaStatus ? <div className="detail-card"><span className="detail-label">MAPA</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.mapaStatus}</p>{shouldEditMapaInspection(selectedProcess.mapaStatus) && selectedProcess.mapaInspectionScheduledAt ? <p>Vistoria agendada: {formatDateTime(selectedProcess.mapaInspectionScheduledAt)}</p> : null}</div></div> : null}{isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? <div className="detail-card"><span className="detail-label">Andamento após chegada</span><p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p></div> : null}{isAirCategory(selectedProcess.category) && selectedProcess.arrived ? <div className="detail-card"><span className="detail-label">Pós-chegada</span><div className="detail-stack detail-stack--compact">{selectedProcess.dtaStatus ? <p>DTA: {selectedProcess.dtaStatus}</p> : null}{selectedProcess.dtaLoadingScheduledAt ? <p>Carregamento DTA: {formatDateTime(selectedProcess.dtaLoadingScheduledAt)}</p> : null}{selectedProcess.dtaArrivalAtItajai ? <p>Chegada prevista em Itajaí: {formatDateTime(selectedProcess.dtaArrivalAtItajai)}</p> : null}{isDtaTransitCompleted(selectedProcess.dtaStatus) ? <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}><span className="detail-label">DUIMP</span><div className="detail-stack detail-stack--compact"><p>Status: {selectedProcess.duimpStatus}</p>{selectedProcess.parameterizationChannel ? <p>Canal da parametrização: {selectedProcess.parameterizationChannel}</p> : null}</div></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && (selectedProcess.collectionStatus === 'Coleta Agendada' || selectedProcess.collectionStatus === CD_EN_ROUTE_STATUS) && getCollectionWindows(selectedProcess).length > 0 ? <div className="detail-card"><span className="detail-label">Janelas de coleta por container</span><ul className="process-detail-collection-windows">{getCollectionWindows(selectedProcess).map((window) => <li key={window.id} className="collection-window-card collection-window-card--detail"><div><span className="detail-label">Container {window.containerNumber}</span><p>{formatDateTime(window.scheduledAt)}</p>{window.notes ? <small className="field-hint">{window.notes}</small> : null}</div></li>)}</ul></div> : null}{(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</p></div> : null}</> : null}
 
             {detailTab === 'items' ? <div ref={itemsSectionRef} className="detail-card"><div className="card-heading process-detail-card-heading"><div><span className="detail-label">Itens do processo</span><p>Itens comerciais vinculados diretamente a este processo.</p></div><span className="inline-badge">{visibleProcessItems.length} itens</span></div><label className="field"><span>Buscar item</span><input className="text-input" type="search" value={itemSearchTerm} onChange={(event) => setItemSearchTerm(event.target.value)} placeholder="Digite o nome comercial do item" /></label><div className="process-items-list process-items-list--scroll">{visibleProcessItems.length > 0 ? visibleProcessItems.map((item) => <button key={item.id} type="button" className="metric-card process-related-item-button process-related-item-button--compact" onClick={() => handleOpenRelatedItemTab(item.commercialName)}><div className="process-item-display"><span className="detail-label">Nome comercial:</span><strong>{item.commercialName}</strong></div><div className="process-item-display process-item-display--quantity"><span className="detail-label">Quantidade:</span><strong>{item.quantity}</strong></div></button>) : <div className="empty-state"><strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong><p>{selectedProcess.items?.length > 0 ? 'Ajuste a busca para localizar outro item deste processo.' : 'Os itens vinculados ao processo aparecerão aqui.'}</p></div>}</div></div> : null}
 
