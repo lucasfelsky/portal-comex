@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import sqLogo from '../../assets/logo.png'
 import useAuth from '../hooks/useAuth'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -10,50 +9,50 @@ import {
 } from '../services/notificationsRepository'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 
+const NOTIFICATION_PANEL_ANIMATION_MS = 220
+
 const navigation = [
   { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo' },
   { to: '/news', label: 'Notícias', description: 'Postagens e atualizações' },
-  { to: '/processos', label: 'Processos', description: 'Fila e acompanhamento' },
+  { to: '/processos', label: 'Chegadas', description: 'Fila de chegadas' },
   { to: '/admin', label: 'Admin', description: 'Governança e ajustes', roles: ['admin'] },
 ]
 
 const pageMeta = {
-  '/': {
-    title: 'Dashboard operacional',
-  },
-  '/news': {
-    title: 'Notícias',
-  },
-  '/processos': {
-    title: 'Central de processos',
-  },
-  '/admin': {
-    title: 'Painel administrativo',
-  },
+  '/': { title: 'Dashboard operacional' },
+  '/news': { title: 'Notícias' },
+  '/processos': { title: 'Central de chegadas' },
+  '/admin': { title: 'Painel administrativo' },
 }
 
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile, logout } = useAuth()
+  const { profile, logout, isEmailVerified } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false)
+  const [isNotificationPanelMounted, setIsNotificationPanelMounted] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState('all')
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
+  const notificationPanelCloseTimeoutRef = useRef(null)
+
   const meta = pageMeta[location.pathname] ?? pageMeta['/']
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
   )
+
   const unreadNotifications = useMemo(
     () => notifications.filter((item) => !item.isRead),
     [notifications]
   )
+
   const filteredNotifications = useMemo(() => {
     if (notificationFilter === 'all') return notifications
     return notifications.filter((item) => item.type === notificationFilter)
   }, [notificationFilter, notifications])
+
   const groupedNotifications = useMemo(() => {
     const groups = new Map()
 
@@ -142,11 +141,16 @@ export default function AppLayout() {
 
   useEffect(() => {
     setIsMobileMenuOpen(false)
+    handleCloseNotificationPanel(true)
   }, [location.pathname])
 
   useEffect(() => {
-    setIsNotificationPanelOpen(false)
-  }, [location.pathname])
+    return () => {
+      if (notificationPanelCloseTimeoutRef.current) {
+        window.clearTimeout(notificationPanelCloseTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -181,7 +185,7 @@ export default function AppLayout() {
         return
       }
 
-      setIsNotificationPanelOpen(false)
+      handleCloseNotificationPanel()
     }
 
     document.addEventListener('mousedown', handlePointerDown)
@@ -192,6 +196,46 @@ export default function AppLayout() {
       document.removeEventListener('touchstart', handlePointerDown)
     }
   }, [isNotificationPanelOpen])
+
+  function handleOpenNotificationPanel() {
+    if (notificationPanelCloseTimeoutRef.current) {
+      window.clearTimeout(notificationPanelCloseTimeoutRef.current)
+      notificationPanelCloseTimeoutRef.current = null
+    }
+
+    setIsNotificationPanelMounted(true)
+    window.requestAnimationFrame(() => {
+      setIsNotificationPanelOpen(true)
+    })
+  }
+
+  function handleCloseNotificationPanel(skipAnimation = false) {
+    if (notificationPanelCloseTimeoutRef.current) {
+      window.clearTimeout(notificationPanelCloseTimeoutRef.current)
+      notificationPanelCloseTimeoutRef.current = null
+    }
+
+    setIsNotificationPanelOpen(false)
+
+    if (skipAnimation) {
+      setIsNotificationPanelMounted(false)
+      return
+    }
+
+    notificationPanelCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsNotificationPanelMounted(false)
+      notificationPanelCloseTimeoutRef.current = null
+    }, NOTIFICATION_PANEL_ANIMATION_MS)
+  }
+
+  function handleToggleNotificationPanel() {
+    if (isNotificationPanelOpen || isNotificationPanelMounted) {
+      handleCloseNotificationPanel()
+      return
+    }
+
+    handleOpenNotificationPanel()
+  }
 
   async function handleOpenNotification(notification) {
     try {
@@ -208,7 +252,7 @@ export default function AppLayout() {
             : item
         )
       )
-      setIsNotificationPanelOpen(false)
+      handleCloseNotificationPanel()
       navigate('/processos', {
         state: {
           selectedProcessId: notification.processId,
@@ -292,6 +336,142 @@ export default function AppLayout() {
     }).format(date)
   }
 
+  function renderNotificationsPanel() {
+    if (!isNotificationPanelMounted) return null
+
+    return (
+      <>
+        <button
+          type="button"
+          className={`notifications-backdrop${isNotificationPanelOpen ? '' : ' notifications-backdrop--closing'}`}
+          aria-label="Fechar notificações"
+          onClick={() => handleCloseNotificationPanel()}
+        />
+        <div
+          className={`notifications__panel${isNotificationPanelOpen ? '' : ' notifications__panel--closing'}`}
+          onMouseDown={(event) => event.stopPropagation()}
+          onTouchStart={(event) => event.stopPropagation()}
+        >
+          <div className="card-heading">
+            <div>
+              <strong>Central de notificações</strong>
+              <p>{unreadNotifications.length} pendentes</p>
+            </div>
+            <button
+              type="button"
+              className="ghost-button notifications__mark-all"
+              onClick={handleMarkAllNotificationsAsRead}
+              disabled={unreadNotifications.length === 0}
+            >
+              Marcar todas como Lidas
+            </button>
+          </div>
+
+          <div className="tab-row notifications__filters">
+            <button
+              type="button"
+              className={`tab-button${notificationFilter === 'all' ? ' tab-button--active' : ''}`}
+              onClick={() => setNotificationFilter('all')}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              className={`tab-button${notificationFilter === 'process_question_created' ? ' tab-button--active' : ''}`}
+              onClick={() => setNotificationFilter('process_question_created')}
+            >
+              Dúvidas
+            </button>
+            <button
+              type="button"
+              className={`tab-button${notificationFilter === 'process_question_answered' ? ' tab-button--active' : ''}`}
+              onClick={() => setNotificationFilter('process_question_answered')}
+            >
+              Respostas
+            </button>
+            <button
+              type="button"
+              className={`tab-button${notificationFilter === 'favorite_process_message' ? ' tab-button--active' : ''}`}
+              onClick={() => setNotificationFilter('favorite_process_message')}
+            >
+              Favoritos
+            </button>
+            <button
+              type="button"
+              className={`tab-button${notificationFilter === 'post_receipt_notes_updated' ? ' tab-button--active' : ''}`}
+              onClick={() => setNotificationFilter('post_receipt_notes_updated')}
+            >
+              Pós-recebimento
+            </button>
+          </div>
+
+          <div className="notifications__list">
+            {groupedNotifications.length > 0 ? (
+              groupedNotifications.slice(0, 8).map((group) => (
+                <div
+                  key={`${group.processId || group.latestCreatedAt}-${group.type}`}
+                  className={`notifications__group${group.unreadCount > 0 ? ' notifications__group--unread' : ''}`}
+                >
+                  <div className="notifications__group-header">
+                    <div>
+                      <strong>{group.title}</strong>
+                      <p>
+                        {group.items.length} notificações
+                        {group.unreadCount > 0 ? ` • ${group.unreadCount} não lidas` : ''}
+                      </p>
+                    </div>
+                    <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
+                  </div>
+
+                  <div className="notifications__group-items">
+                    {group.items.slice(0, 3).map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        className={`notifications__item${notification.isRead ? '' : ' notifications__item--unread'}`}
+                        onClick={() => handleOpenNotification(notification)}
+                      >
+                        <strong>{notification.title}</strong>
+                        <p>{notification.body}</p>
+                        <span>
+                          {formatRelativeNotificationTime(notification.createdAt)} • {formatNotificationDate(notification.createdAt)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">
+                <strong>Nenhuma notificação</strong>
+                <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  function renderNotificationsControl(triggerClassName = 'ghost-button notifications__trigger') {
+    return (
+      <div className="notifications" ref={notificationPanelRef}>
+        <button
+          type="button"
+          className={`${triggerClassName}${isNotificationPanelOpen ? ' notifications__trigger--active' : ''}`}
+          aria-label="Notificações"
+          onClick={handleToggleNotificationPanel}
+        >
+          <span className="notifications__label">Notificações</span>
+          {unreadNotifications.length > 0 ? (
+            <span className="notifications__count">{unreadNotifications.length}</span>
+          ) : null}
+        </button>
+        {renderNotificationsPanel()}
+      </div>
+    )
+  }
+
   return (
     <div className="shell">
       {isMobileMenuOpen ? (
@@ -306,18 +486,18 @@ export default function AppLayout() {
       <div className="shell__frame">
         <aside className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`}>
           <div className="brand">
-            <span className="brand__eyebrow">SQ Quimica</span>
+            <span className="brand__eyebrow">SQ Química</span>
             <h1>Portal COMEX</h1>
             <div className="brand__ptax">
-              <strong>PTAX do dia</strong>
+              <strong>PTAX DO DIA</strong>
               <div className="brand__ptax-rates">
-                <p>USD venda: {formatCurrencyRate(ptaxRates?.usd?.sell)}</p>
-                <p>EUR venda: {formatCurrencyRate(ptaxRates?.eur?.sell)}</p>
+                <p>USD {formatCurrencyRate(ptaxRates?.usd?.sell)}</p>
+                <p>EUR {formatCurrencyRate(ptaxRates?.eur?.sell)}</p>
               </div>
               {ptaxRates?.updatedAt ? (
-                <span>Atualizado em {formatPtaxTimestamp(ptaxRates.updatedAt)}</span>
+                <span>{formatPtaxTimestamp(ptaxRates.updatedAt)}</span>
               ) : (
-                <span>Buscando última cotação disponível</span>
+                <span>Atualizando cotação</span>
               )}
             </div>
           </div>
@@ -335,15 +515,18 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </nav>
-
-          <div className="sidebar__brandmark" aria-label="SQ Química">
-            <img src={sqLogo} alt="Logo da SQ Química" className="sidebar__brandmark-image" />
-          </div>
         </aside>
 
         <div className="main-content">
+          <div className="mobile-brand-header" aria-label="Portal COMEX">
+            <span className="mobile-brand-header__eyebrow">SQ Química</span>
+            <div className="mobile-brand-header__row">
+              <strong className="mobile-brand-header__title">Portal COMEX</strong>
+            </div>
+          </div>
+
           <header className="topbar">
-            <div>
+            <div className="topbar__heading">
               <button
                 type="button"
                 className="topbar__menu-button"
@@ -358,129 +541,70 @@ export default function AppLayout() {
                   <span />
                 </span>
               </button>
-              <h2 className="topbar__title">
-                {meta.title}
-              </h2>
+              <h2 className="topbar__title">{meta.title}</h2>
             </div>
             <div className="topbar__actions">
-              <div className="notifications" ref={notificationPanelRef}>
-                <button
-                  type="button"
-                  className={`ghost-button notifications__trigger${isNotificationPanelOpen ? ' notifications__trigger--active' : ''}`}
-                  onClick={() => setIsNotificationPanelOpen((current) => !current)}
-                >
-                  Notificações
-                  {unreadNotifications.length > 0 ? (
-                    <span className="notifications__count">{unreadNotifications.length}</span>
-                  ) : null}
-                </button>
-
-                {isNotificationPanelOpen ? (
-                  <div className="notifications__panel">
-                    <div className="card-heading">
-                      <div>
-                        <strong>Central de notificações</strong>
-                        <p>{unreadNotifications.length} pendentes</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="ghost-button notifications__mark-all"
-                        onClick={handleMarkAllNotificationsAsRead}
-                        disabled={unreadNotifications.length === 0}
-                      >
-                        Marcar todas como Lidas
-                      </button>
-                    </div>
-
-                    <div className="tab-row notifications__filters">
-                      <button
-                        type="button"
-                        className={`tab-button${notificationFilter === 'all' ? ' tab-button--active' : ''}`}
-                        onClick={() => setNotificationFilter('all')}
-                      >
-                        Todas
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab-button${notificationFilter === 'process_question_created' ? ' tab-button--active' : ''}`}
-                        onClick={() => setNotificationFilter('process_question_created')}
-                      >
-                        Dúvidas
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab-button${notificationFilter === 'process_question_answered' ? ' tab-button--active' : ''}`}
-                        onClick={() => setNotificationFilter('process_question_answered')}
-                      >
-                        Respostas
-                      </button>
-                      <button
-                        type="button"
-                        className={`tab-button${notificationFilter === 'favorite_process_message' ? ' tab-button--active' : ''}`}
-                        onClick={() => setNotificationFilter('favorite_process_message')}
-                      >
-                        Favoritos
-                      </button>
-                    </div>
-
-                    <div className="notifications__list">
-                      {groupedNotifications.length > 0 ? (
-                        groupedNotifications.slice(0, 8).map((group) => (
-                          <div
-                            key={`${group.processId || group.latestCreatedAt}-${group.type}`}
-                            className={`notifications__group${group.unreadCount > 0 ? ' notifications__group--unread' : ''}`}
-                          >
-                            <div className="notifications__group-header">
-                              <div>
-                                <strong>{group.title}</strong>
-                                <p>
-                                  {group.items.length} notificações
-                                  {group.unreadCount > 0 ? ` • ${group.unreadCount} não lidas` : ''}
-                                </p>
-                              </div>
-                              <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
-                            </div>
-
-                            <div className="notifications__group-items">
-                              {group.items.slice(0, 3).map((notification) => (
-                                <button
-                                  key={notification.id}
-                                  type="button"
-                                  className={`notifications__item${notification.isRead ? '' : ' notifications__item--unread'}`}
-                                  onClick={() => handleOpenNotification(notification)}
-                                >
-                                  <strong>{notification.title}</strong>
-                                  <p>{notification.body}</p>
-                                  <span>
-                                    {formatRelativeNotificationTime(notification.createdAt)} • {formatNotificationDate(notification.createdAt)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="empty-state">
-                          <strong>Nenhuma notificação</strong>
-                          <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
+              {renderNotificationsControl()}
               <div className="topbar__profile">
                 <strong>{profile?.name ?? 'Usuário'}</strong>
                 <span>{profile?.email ?? 'Sem email'}</span>
               </div>
-              <button type="button" className="ghost-button" onClick={logout}>
+              <button type="button" className="ghost-button topbar__logout" onClick={logout}>
                 Sair
               </button>
             </div>
           </header>
 
+          {!isEmailVerified ? (
+            <div style={{ padding: '0 24px 16px' }}>
+              <div className="detail-card detail-card--warning">
+                <span className="detail-label">Confirmacao pendente</span>
+                <p>
+                  Seu email corporativo ainda nao foi confirmado. O acesso foi mantido para nao
+                  interromper a operacao, mas a conta precisa ser regularizada.
+                </p>
+                <div className="action-row">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => navigate('/verificar-email')}
+                  >
+                    Abrir confirmacao
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <Outlet />
+
+          <div className="mobile-page-logout">
+            <button type="button" className="ghost-button mobile-page-logout__button" onClick={logout}>
+              Sair
+            </button>
+          </div>
+
+          <div className="mobile-notifications-fab">
+            {renderNotificationsControl('ghost-button notifications__trigger mobile-notifications-fab__trigger')}
+          </div>
+
+          <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
+            <button
+              type="button"
+              className="mobile-bottom-nav__item mobile-bottom-nav__item--icon"
+              aria-label={isMobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="primary-navigation"
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+            >
+              <span className="topbar__menu-icon" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span className="mobile-bottom-nav__label">Menu</span>
+            </button>
+          </nav>
         </div>
       </div>
     </div>

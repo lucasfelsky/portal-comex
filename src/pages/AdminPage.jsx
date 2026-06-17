@@ -12,6 +12,12 @@ import {
   getBarStatus,
   saveBarStatus,
 } from '../services/barStatusRepository'
+import {
+  createManagedAuthUser,
+  deleteManagedUser,
+  updateManagedUserPassword,
+} from '../services/managedUsersRepository'
+import { sendCustomVerificationEmail } from '../services/authRepository'
 import { createUser, deleteUser, listUsers, saveUser } from '../services/usersRepository'
 
 const statusOptions = ['Todos', 'Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
@@ -37,6 +43,7 @@ function createEmptyDraft() {
     id: '',
     name: '',
     email: '',
+    password: '',
     role: 'user',
     area: '',
     status: 'Pendente',
@@ -49,6 +56,7 @@ function createEmptyDraft() {
 function createDraftFromUser(user) {
   return {
     ...user,
+    password: '',
     scopes: user.scopes?.length ? user.scopes : getRolePermissions(user.role),
   }
 }
@@ -97,6 +105,7 @@ export default function AdminPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [isSavingUser, setIsSavingUser] = useState(false)
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
   const [announcements, setAnnouncements] = useState([])
   const [announcementDraft, setAnnouncementDraft] = useState(createEmptyAnnouncementDraft())
@@ -110,6 +119,7 @@ export default function AdminPage() {
   const [barStatusMeta, setBarStatusMeta] = useState(null)
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isSavingBarStatus, setIsSavingBarStatus] = useState(false)
+  const isLoadingCredential = false
 
   useEffect(() => {
     let isMounted = true
@@ -240,6 +250,10 @@ export default function AdminPage() {
   const selectedAnnouncement =
     announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? null
   const selectedStatusTone = draft.statusTone ?? statusMeta(draft.status).statusTone
+  const isExistingUserWithoutStoredPassword = false
+  const passwordInputPlaceholder = isCreating
+    ? 'Defina a senha inicial do usuario'
+    : 'Digite uma nova senha para redefinir'
 
   useEffect(() => {
     if (!selectedUser || isCreating) {
@@ -248,6 +262,65 @@ export default function AdminPage() {
 
     setDraft(createDraftFromUser(selectedUser))
   }, [selectedUser, isCreating])
+
+  useEffect(() => {
+    setIsPasswordVisible(false)
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      password: isCreating ? currentDraft.password : '',
+    }))
+    return undefined
+
+    let isMounted = true
+
+    async function loadCredential() {
+      if (isCreating || !selectedUser?.id) {
+        setIsLoadingCredential(false)
+        setIsPasswordVisible(false)
+        setOriginalPassword('')
+        setDraft((currentDraft) => ({
+          ...currentDraft,
+          password: isCreating ? currentDraft.password : '',
+        }))
+        return
+      }
+
+      setIsLoadingCredential(true)
+      setIsPasswordVisible(false)
+
+      try {
+        const credential = { password: '' }
+
+        if (!isMounted) {
+          return
+        }
+
+        setOriginalPassword(credential.password)
+        setDraft((currentDraft) =>
+          currentDraft.id === selectedUser.id
+            ? {
+                ...currentDraft,
+                password: credential.password,
+              }
+            : currentDraft
+        )
+      } catch (loadError) {
+        if (isMounted) {
+          setError(buildActionErrorMessage('Não foi possível carregar a senha do usuário.', loadError))
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCredential(false)
+        }
+      }
+    }
+
+    loadCredential()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isCreating, selectedUser])
 
   useEffect(() => {
     if (!selectedAnnouncement) {
@@ -265,12 +338,14 @@ export default function AdminPage() {
   function handleSelectUser(userId) {
     setSelectedUserId(userId)
     setIsCreating(false)
+    setIsPasswordVisible(false)
   }
 
   function handleCreateMode() {
     setIsCreating(true)
     setSelectedUserId(null)
     setDraft(createEmptyDraft())
+    setIsPasswordVisible(false)
   }
 
   function handleDraftChange(field, value) {
@@ -309,15 +384,135 @@ export default function AdminPage() {
     setError('')
 
     try {
+      const normalizedPassword = String(draft.password ?? '').trim()
+
+      if (isCreating && normalizedPassword.length < 6) {
+        throw new Error('Informe uma senha com pelo menos 6 caracteres para criar o usuario.')
+      }
+
+      if (!isCreating && normalizedPassword && normalizedPassword.length < 6) {
+        throw new Error('A nova senha deve ter pelo menos 6 caracteres.')
+      }
+
       const payload = {
         ...draft,
         scopes: getRolePermissions(draft.role),
       }
 
-      const savedUser = isCreating ? await createUser(payload, profile) : await saveUser(payload, profile)
+      delete payload.password
+
+      let savedUser = null
+
+      if (isCreating) {
+        if (isFirebaseConfigured) {
+          const managedAuthUser = await createManagedAuthUser({
+            email: payload.email,
+            password: normalizedPassword,
+            name: payload.name,
+            role: payload.role,
+            area: payload.area,
+            status: payload.status,
+          })
+
+          savedUser = {
+            ...payload,
+            id: managedAuthUser.uid,
+            email: managedAuthUser.email,
+          }
+        } else {
+          savedUser = await createUser(payload, profile)
+        }
+
+        if (isFirebaseConfigured) {
+          await sendCustomVerificationEmail({ uid: savedUser.id }).catch((verificationError) => {
+            console.error('Falha ao enviar email de verificacao do novo usuario.', verificationError)
+          })
+        }
+      } else {
+        savedUser = await saveUser(payload, profile)
+
+        if (isFirebaseConfigured && normalizedPassword) {
+          await updateManagedUserPassword({
+            uid: savedUser.id,
+            password: normalizedPassword,
+          })
+        }
+      }
+
       await refreshUsers(savedUser.id)
       setIsCreating(false)
-      setDraft(createDraftFromUser(savedUser))
+      setDraft({
+        ...createDraftFromUser(savedUser),
+        password: '',
+      })
+      setIsPasswordVisible(false)
+      return
+
+      if (false) {
+      const normalizedPassword = String(draft.password ?? '').trim()
+
+      if (isCreating && normalizedPassword.length < 6) {
+        throw new Error('Informe uma senha com pelo menos 6 caracteres para criar o usuário.')
+      }
+
+      if (!isCreating && normalizedPassword !== originalPassword && normalizedPassword.length < 6) {
+        throw new Error('A nova senha deve ter pelo menos 6 caracteres.')
+      }
+
+      const payload = {
+        ...draft,
+        scopes: getRolePermissions(draft.role),
+      }
+
+      delete payload.password
+
+      let savedUser = null
+
+      if (isCreating) {
+        let managedAuthUser = null
+
+        if (isFirebaseConfigured) {
+          managedAuthUser = await createManagedAuthUser({
+            email: payload.email,
+            password: normalizedPassword,
+            name: payload.name,
+          })
+        }
+
+        savedUser = await createUser(
+          {
+            ...payload,
+            id: managedAuthUser?.uid || payload.id,
+            email: managedAuthUser?.email || payload.email,
+          },
+          profile
+        )
+
+        void savedUser
+
+        if (isFirebaseConfigured) {
+          await sendCustomVerificationEmail({ uid: savedUser.id })
+        }
+      } else {
+        savedUser = await saveUser(payload, profile)
+
+        if (normalizedPassword && normalizedPassword !== originalPassword) {
+          await updateManagedUserPassword({
+            uid: savedUser.id,
+            password: normalizedPassword,
+          })
+          void savedUser
+        }
+      }
+      await refreshUsers(savedUser.id)
+      setIsCreating(false)
+      setDraft({
+        ...createDraftFromUser(savedUser),
+        password: normalizedPassword,
+      })
+      setOriginalPassword(normalizedPassword)
+      setIsPasswordVisible(false)
+      }
     } catch (saveError) {
       setError(buildActionErrorMessage('Não foi possível salvar o usuário.', saveError))
     } finally {
@@ -365,6 +560,19 @@ export default function AdminPage() {
     setError('')
 
     try {
+      if (isFirebaseConfigured) {
+        await deleteManagedUser(user.id)
+      } else {
+        await deleteUser(user.id, profile)
+      }
+
+      const refreshedUsers = await refreshUsers(null)
+      const nextSelectedUser = refreshedUsers[0] ?? null
+      setIsCreating(false)
+      setDraft(nextSelectedUser ? createDraftFromUser(nextSelectedUser) : createEmptyDraft())
+      return
+
+      if (false) {
       const refreshedUsers = await (async () => {
         await deleteUser(user.id, profile)
         return refreshUsers(null)
@@ -373,6 +581,7 @@ export default function AdminPage() {
       const nextSelectedUser = refreshedUsers[0] ?? null
       setIsCreating(false)
       setDraft(nextSelectedUser ? createDraftFromUser(nextSelectedUser) : createEmptyDraft())
+      }
     } catch (saveError) {
       setError(buildActionErrorMessage('Não foi possível excluir o usuário.', saveError))
     } finally {
@@ -812,8 +1021,60 @@ export default function AdminPage() {
               value={draft.email}
               onChange={(event) => handleDraftChange('email', event.target.value)}
               placeholder="email@empresa.com"
+              disabled={!isCreating && isFirebaseConfigured}
             />
           </label>
+
+          {!isCreating && isFirebaseConfigured ? (
+            <div className="detail-card detail-card--warning">
+              <span className="detail-label">Email protegido</span>
+              <p>Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o Firebase Auth.</p>
+            </div>
+          ) : null}
+
+          <label className="field">
+            <span>Senha</span>
+            <input
+              className="text-input"
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={draft.password}
+              onChange={(event) => handleDraftChange('password', event.target.value)}
+              onFocus={() => setIsPasswordVisible(true)}
+              onClick={() => setIsPasswordVisible(true)}
+              placeholder={passwordInputPlaceholder /*
+                isCreating
+                  ? 'Defina a senha inicial do usuário'
+                  : isLoadingCredential
+                    ? 'Carregando senha...'
+                    : isExistingUserWithoutStoredPassword
+                      ? 'Nenhuma senha visível disponível. Digite uma nova senha.'
+                      : 'Clique no campo para revelar ou editar'
+              */}
+              disabled={false}
+              autoComplete="new-password"
+            />
+          </label>
+
+          {!isCreating && isFirebaseConfigured ? (
+            <div className="detail-card detail-card--warning">
+              <span className="detail-label">Senha não disponível</span>
+              <p>
+                Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário,
+                digite uma nova senha e salve.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="action-row">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setIsPasswordVisible((current) => !current)}
+              disabled={!draft.password}
+            >
+              {isPasswordVisible ? 'Ocultar senha' : 'Mostrar senha'}
+            </button>
+          </div>
 
           <div className="detail-card detail-card--split">
             <label className="field">

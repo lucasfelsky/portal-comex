@@ -1,0 +1,56 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasCorporateEmail() {
+      return isAuthenticated()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@sqquimica\\.com$');
+    }
+
+    function hasActiveStatus(status) {
+      return status is string
+        && status.matches('^[\\s]*[Aa][Tt][Ii][Vv][Oo][\\s]*$');
+    }
+
+    function myProfileExists() {
+      return isAuthenticated()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function myProfile() {
+      return myProfileExists()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    function myRole() {
+      return myProfileExists() ? myProfile().role : null;
+    }
+
+    function myStatus() {
+      return myProfileExists() ? myProfile().status : null;
+    }
+
+    function isApprovedUser() {
+      return hasCorporateEmail() && hasActiveStatus(myStatus());
+    }
+
+    function canManagePostReceiptImages() {
+      return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
+    }
+
+    match /processes/{processId}/post-receipt/{fileName} {
+      allow read: if isApprovedUser();
+      allow write: if canManagePostReceiptImages();
+    }
+
+    match /news/{newsId}/{folderName}/{fileName} {
+      allow read: if isApprovedUser();
+      allow write: if isApprovedUser() && myRole() == 'admin';
+    }
+  }
+}

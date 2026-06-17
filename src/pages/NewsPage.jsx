@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import useAuth from '../hooks/useAuth'
-import { listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
+import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
 import { listExternalNews } from '../services/externalNewsRepository'
+import {
+  deleteNewsMediaItems,
+  resolveNewsCoverImageForSave,
+  resolveNewsMediaItemsForSave,
+} from '../services/newsMediaStorage'
 import defaultNewsCoverImage from '../../assets/sqquimica.png'
+import {
+  buildPendingNewsMediaItems,
+  formatNewsMediaSize,
+  getNewsMediaDisplayName,
+  getAddedNewsMediaItems,
+  getRemovedNewsMediaItems,
+  isImageNewsMediaItem,
+  normalizeDraftNewsMediaItems,
+  normalizeNewsMediaItems,
+  revokeNewsMediaPreview,
+  toNewsMediaPreviewUrl,
+} from '../utils/newsMedia'
 
 function createEmptyDraft() {
   return {
@@ -10,7 +27,10 @@ function createEmptyDraft() {
     title: '',
     content: '',
     coverImage: '',
+    coverImageItem: null,
+    initialCoverImageItem: null,
     mediaItems: [],
+    initialMediaItems: [],
     referencesText: '',
   }
 }
@@ -21,7 +41,10 @@ function createDraftFromNewsItem(newsItem) {
     title: newsItem.title,
     content: newsItem.content,
     coverImage: newsItem.coverImage,
+    coverImageItem: newsItem.coverImageItem ?? null,
+    initialCoverImageItem: newsItem.coverImageItem ?? null,
     mediaItems: newsItem.mediaItems ?? [],
+    initialMediaItems: newsItem.mediaItems ?? [],
     referencesText: (newsItem.references ?? []).join('\n'),
   }
 }
@@ -52,8 +75,19 @@ function formatTimestamp(value) {
 }
 
 function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
+  const details = [error?.code, error?.message].filter(Boolean).join(' | ')
   return details ? `${prefix} (${details})` : prefix
+}
+
+function getNewsMediaMetaText(mediaItem) {
+  const details = [isImageNewsMediaItem(mediaItem) ? 'Imagem' : mediaItem?.mimeType || 'Arquivo']
+  const formattedSize = formatNewsMediaSize(mediaItem?.size)
+
+  if (formattedSize) {
+    details.push(formattedSize)
+  }
+
+  return details.join(' | ')
 }
 
 function buildAutomaticNewsFallbackText(newsItem) {
@@ -105,35 +139,41 @@ function isWithinLastHours(value, hours) {
 }
 
 function filterNewsWindow(newsItems) {
-  const last24Hours = newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 24))
+  // Regra da vitrine de noticias:
+  // 1. Prioriza o que saiu nas ultimas 48 horas.
+  // 2. Se nao houver nada nessa janela, mostra o fallback dos ultimos 30 dias.
+  const last48Hours = newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 48))
 
-  if (last24Hours.length > 0) {
-    return last24Hours
+  if (last48Hours.length > 0) {
+    return last48Hours
   }
 
   return newsItems.filter((item) => isWithinLastHours(item.updatedAt ?? item.createdAt, 24 * 30))
 }
 
-function readFilesAsDataUrls(fileList) {
-  const files = Array.from(fileList ?? [])
-
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader()
-
-          reader.onload = () =>
-            resolve({
-              id: `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2, 8)}`,
-              url: String(reader.result ?? ''),
-              caption: file.name,
-            })
-          reader.onerror = () => reject(reader.error)
-          reader.readAsDataURL(file)
-        })
-    )
+function mergeNews(manualNews, automaticNews) {
+  return filterNewsWindow(
+    sortNews([
+      ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
+      ...automaticNews,
+    ])
   )
+}
+
+function upsertManualNews(newsItems, newsItem) {
+  const nextManualNewsItem = {
+    ...newsItem,
+    sourceType: 'manual',
+    sourceName: 'Portal COMEX',
+  }
+
+  return filterNewsWindow(
+    sortNews([nextManualNewsItem, ...newsItems.filter((item) => item.id !== nextManualNewsItem.id)])
+  )
+}
+
+function logNewsStorageCleanupError(error) {
+  console.error('Falha ao limpar arquivos da noticia no Storage.', error)
 }
 
 export default function NewsPage() {
@@ -156,21 +196,10 @@ export default function NewsPage() {
       setError('')
 
       try {
-        const [manualNews, automaticNews] = await Promise.all([
-          listNews(),
-          listExternalNews(),
-        ])
+        const [manualNews, automaticNews] = await Promise.all([listNews(), listExternalNews()])
 
         if (!isMounted) return
-
-        setNewsItems(
-          filterNewsWindow(
-            sortNews([
-              ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
-              ...automaticNews,
-            ])
-          )
-        )
+        setNewsItems(mergeNews(manualNews, automaticNews))
       } catch (loadError) {
         if (isMounted) {
           setError(buildActionErrorMessage('Não foi possível carregar as notícias.', loadError))
@@ -190,10 +219,25 @@ export default function NewsPage() {
   }, [])
 
   const selectedNews = newsItems.find((item) => item.id === selectedNewsId) ?? null
-
   const draftReferences = useMemo(
     () => normalizeReferencesText(draft.referencesText),
     [draft.referencesText]
+  )
+  const draftMediaItems = useMemo(
+    () => normalizeDraftNewsMediaItems(draft.mediaItems),
+    [draft.mediaItems]
+  )
+  const selectedNewsMediaItems = useMemo(
+    () => normalizeNewsMediaItems(selectedNews?.mediaItems),
+    [selectedNews]
+  )
+  const selectedNewsImageItems = useMemo(
+    () => selectedNewsMediaItems.filter((item) => isImageNewsMediaItem(item)),
+    [selectedNewsMediaItems]
+  )
+  const selectedNewsFileItems = useMemo(
+    () => selectedNewsMediaItems.filter((item) => !isImageNewsMediaItem(item)),
+    [selectedNewsMediaItems]
   )
 
   function handleCreateMode() {
@@ -215,30 +259,35 @@ export default function NewsPage() {
   }
 
   async function handleCoverUpload(event) {
-    const [coverImage] = await readFilesAsDataUrls(event.target.files)
+    try {
+      const [coverImage] = buildPendingNewsMediaItems(event.target.files, { imagesOnly: true })
 
-    if (!coverImage) return
+      if (!coverImage) return
 
-    setDraft((current) => ({
-      ...current,
-      coverImage: coverImage.url,
-    }))
-
-    event.target.value = ''
+      setDraft((current) => ({
+        ...current,
+        coverImage: toNewsMediaPreviewUrl(coverImage),
+        coverImageItem: coverImage,
+      }))
+    } catch (uploadError) {
+      setError(buildActionErrorMessage('Nao foi possivel carregar a capa.', uploadError))
+    } finally {
+      event.target.value = ''
+    }
   }
 
   async function handleMediaUpload(event) {
     setIsProcessingMedia(true)
 
     try {
-      const uploadedMedia = await readFilesAsDataUrls(event.target.files)
+      const uploadedMedia = buildPendingNewsMediaItems(event.target.files)
 
       setDraft((current) => ({
         ...current,
         mediaItems: [...current.mediaItems, ...uploadedMedia],
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Não foi possível carregar as imagens.', uploadError))
+      setError(buildActionErrorMessage('Nao foi possivel carregar os anexos.', uploadError))
     } finally {
       setIsProcessingMedia(false)
       event.target.value = ''
@@ -246,25 +295,23 @@ export default function NewsPage() {
   }
 
   function handleRemoveMediaItem(mediaId) {
-    setDraft((current) => ({
-      ...current,
-      mediaItems: current.mediaItems.filter((item) => item.id !== mediaId),
-    }))
+    setDraft((current) => {
+      const removedMediaItem = current.mediaItems.find((item) => item.id === mediaId)
+
+      if (removedMediaItem) {
+        revokeNewsMediaPreview(removedMediaItem)
+      }
+
+      return {
+        ...current,
+        mediaItems: current.mediaItems.filter((item) => item.id !== mediaId),
+      }
+    })
   }
 
   async function refreshNews(preferredId = null) {
-    const [manualNews, automaticNews] = await Promise.all([
-      listNews(),
-      listExternalNews(),
-    ])
-    setNewsItems(
-      filterNewsWindow(
-        sortNews([
-          ...manualNews.map((item) => ({ ...item, sourceType: 'manual', sourceName: 'Portal COMEX' })),
-          ...automaticNews,
-        ])
-      )
-    )
+    const [manualNews, automaticNews] = await Promise.all([listNews(), listExternalNews()])
+    setNewsItems(mergeNews(manualNews, automaticNews))
     setSelectedNewsId(preferredId)
     return manualNews
   }
@@ -272,21 +319,68 @@ export default function NewsPage() {
   async function handleSaveNews() {
     setIsSaving(true)
     setError('')
+    const newsId = draft.id || createNewsItemId()
+    const actorId = profile?.uid ?? profile?.id ?? ''
+    let resolvedCoverImageItem = null
+    let resolvedMediaItems = []
 
     try {
+      resolvedCoverImageItem = await resolveNewsCoverImageForSave(
+        newsId,
+        draft.coverImage ? draft.coverImageItem : null,
+        actorId
+      )
+      resolvedMediaItems = await resolveNewsMediaItemsForSave(newsId, draftMediaItems, actorId)
+
       const payload = {
-        id: draft.id,
+        id: newsId,
         title: draft.title,
         content: draft.content,
-        coverImage: draft.coverImage,
-        mediaItems: draft.mediaItems,
+        coverImage: resolvedCoverImageItem?.url ?? '',
+        coverImageStoragePath: resolvedCoverImageItem?.storagePath ?? '',
+        coverImageName: resolvedCoverImageItem?.name ?? '',
+        coverImageMimeType: resolvedCoverImageItem?.mimeType ?? '',
+        coverImageSize: resolvedCoverImageItem?.size ?? null,
+        coverImageUploadedAt: resolvedCoverImageItem?.uploadedAt ?? '',
+        mediaItems: resolvedMediaItems,
         references: draftReferences,
       }
       const saved = await saveNewsItem(payload, profile)
-      await refreshNews(saved.id)
-      setDraft(createDraftFromNewsItem(saved))
+      const savedNewsItem = {
+        ...saved,
+        coverImageItem: resolvedCoverImageItem,
+        mediaItems: resolvedMediaItems,
+      }
+      const removedCoverItems = getRemovedNewsMediaItems(
+        draft.initialCoverImageItem ? [draft.initialCoverImageItem] : [],
+        resolvedCoverImageItem ? [resolvedCoverImageItem] : []
+      )
+      const removedMediaItems = getRemovedNewsMediaItems(draft.initialMediaItems, resolvedMediaItems)
+
+      if (removedCoverItems.length > 0 || removedMediaItems.length > 0) {
+        deleteNewsMediaItems([...removedCoverItems, ...removedMediaItems]).catch(logNewsStorageCleanupError)
+      }
+
+      try {
+        await refreshNews(saved.id)
+      } catch (refreshError) {
+        setNewsItems((current) => upsertManualNews(current, savedNewsItem))
+        setSelectedNewsId(saved.id)
+        setError(buildActionErrorMessage('Noticia salva, mas nao foi possivel atualizar a lista.', refreshError))
+      }
+
+      setDraft(createDraftFromNewsItem(savedNewsItem))
       setViewMode('list')
     } catch (saveError) {
+      const rollbackCoverItems = getAddedNewsMediaItems(
+        draft.initialCoverImageItem ? [draft.initialCoverImageItem] : [],
+        resolvedCoverImageItem ? [resolvedCoverImageItem] : []
+      )
+      const rollbackMediaItems = getAddedNewsMediaItems(draft.initialMediaItems, resolvedMediaItems)
+
+      if (rollbackCoverItems.length > 0 || rollbackMediaItems.length > 0) {
+        await deleteNewsMediaItems([...rollbackCoverItems, ...rollbackMediaItems]).catch(logNewsStorageCleanupError)
+      }
       setError(buildActionErrorMessage('Não foi possível salvar a notícia.', saveError))
     } finally {
       setIsSaving(false)
@@ -300,7 +394,19 @@ export default function NewsPage() {
     setError('')
 
     try {
-      await removeNewsItem(draft.id, profile)
+      await removeNewsItem(
+        {
+          id: draft.id,
+          coverImage: draft.initialCoverImageItem?.url ?? draft.coverImage,
+          coverImageStoragePath: draft.initialCoverImageItem?.storagePath ?? '',
+          coverImageName: draft.initialCoverImageItem?.name ?? '',
+          coverImageMimeType: draft.initialCoverImageItem?.mimeType ?? '',
+          coverImageSize: draft.initialCoverImageItem?.size ?? null,
+          coverImageUploadedAt: draft.initialCoverImageItem?.uploadedAt ?? '',
+          mediaItems: draft.initialMediaItems,
+        },
+        profile
+      )
       await refreshNews(null)
       setDraft(createEmptyDraft())
       setSelectedNewsId(null)
@@ -363,8 +469,9 @@ export default function NewsPage() {
                 <input className="text-input" type="file" accept="image/*" onChange={handleCoverUpload} />
               </label>
               <label className="field">
-                <span>Outras imagens</span>
-                <input className="text-input" type="file" accept="image/*" multiple onChange={handleMediaUpload} />
+                <span>Anexos</span>
+                <input className="text-input" type="file" multiple onChange={handleMediaUpload} />
+                <small className="field-hint">Imagens, PDFs, planilhas e outros arquivos.</small>
               </label>
             </div>
 
@@ -377,11 +484,22 @@ export default function NewsPage() {
               </div>
             ) : null}
 
-            {draft.mediaItems.length > 0 ? (
+            {draftMediaItems.length > 0 ? (
               <div className="news-media-grid">
-                {draft.mediaItems.map((item) => (
+                {draftMediaItems.map((item) => (
                   <div key={item.id} className="news-media-thumb">
-                    <img src={item.url} alt={item.caption || 'Mídia da notícia'} />
+                    {isImageNewsMediaItem(item) ? (
+                      <img src={item.url} alt={item.caption || 'Midia da noticia'} />
+                    ) : (
+                      <div className="news-media-file">
+                        <span className="news-media-file__badge">ANEXO</span>
+                        <strong>{item.mimeType || 'Arquivo anexado'}</strong>
+                      </div>
+                    )}
+                    <div className="news-media-thumb__meta">
+                      <strong>{getNewsMediaDisplayName(item)}</strong>
+                      <span>{getNewsMediaMetaText(item)}</span>
+                    </div>
                     <button type="button" className="ghost-button" onClick={() => handleRemoveMediaItem(item.id)}>
                       Remover
                     </button>
@@ -422,7 +540,7 @@ export default function NewsPage() {
             </div>
           </div>
 
-          {error && !isAdmin ? <div className="error-banner">{error}</div> : null}
+          {error ? <div className="error-banner">{error}</div> : null}
 
           <div className="news-grid">
             {isLoading ? (
@@ -499,11 +617,25 @@ export default function NewsPage() {
 
               <div className="news-modal__text">{getNewsBodyText(selectedNews)}</div>
 
-              {selectedNews.mediaItems?.length > 0 ? (
+              {selectedNewsImageItems.length > 0 ? (
                 <div className="news-modal__gallery">
-                  {selectedNews.mediaItems.map((item) => (
+                  {selectedNewsImageItems.map((item) => (
                     <img key={item.id} src={item.url} alt={item.caption || selectedNews.title} className="news-modal__gallery-image" />
                   ))}
+                </div>
+              ) : null}
+
+              {selectedNewsFileItems.length > 0 ? (
+                <div className="detail-card">
+                  <span className="detail-label">Arquivos anexos</span>
+                  <div className="news-attachments">
+                    {selectedNewsFileItems.map((item) => (
+                      <a key={item.id} href={item.url} download={getNewsMediaDisplayName(item)} className="news-attachment">
+                        <strong>{getNewsMediaDisplayName(item)}</strong>
+                        <span>{getNewsMediaMetaText(item)}</span>
+                      </a>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

@@ -8,7 +8,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
-} from 'firebase/firestore'
+} from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import { createAuditEvent } from './auditRepository'
 

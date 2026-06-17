@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import { createAuditEvent } from './auditRepository'
 

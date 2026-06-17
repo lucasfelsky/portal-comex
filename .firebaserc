@@ -1,8 +1,8 @@
 {
   "projects": {
-    "default": "sq-comex-updates",
-    "sq-updates": "sq-comex-updates",
-    "dev": "sq-comex-updates"
+    "default": "sq-comex-updates-3d22f",
+    "sq-updates": "sq-comex-updates-3d22f",
+    "dev": "sq-comex-updates-3d22f"
   },
   "targets": {},
   "etags": {}

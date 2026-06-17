@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { getFunctions } from 'firebase/functions'
+import { getFirestore } from 'firebase/firestore/lite'
+import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,11 +17,16 @@ const isConfigured = Object.values(firebaseConfig).every(Boolean)
 
 let firestore = null
 let auth = null
+let app = null
+let functions = null
+let storage = null
 
 if (isConfigured) {
-  const app = initializeApp(firebaseConfig)
+  app = initializeApp(firebaseConfig)
   firestore = getFirestore(app)
   auth = getAuth(app)
+  functions = getFunctions(app)
+  storage = getStorage(app)
 }
 
-export { auth, firestore, isConfigured as isFirebaseConfigured }
+export { app, auth, firestore, functions, storage, firebaseConfig, isConfigured as isFirebaseConfigured }

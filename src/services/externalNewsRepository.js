@@ -1,5 +1,6 @@
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
+import { normalizeNewsMediaItems } from '../utils/newsMedia'
 
 const STORAGE_KEY = 'sq-comex-external-news'
 
@@ -20,7 +21,7 @@ function normalizeExternalNewsItem(rawNewsItem, fallbackId) {
     content: normalizeStringValue(rawNewsItem.content),
     summary: normalizeStringValue(rawNewsItem.summary ?? rawNewsItem.content),
     coverImage: normalizeStringValue(rawNewsItem.coverImage),
-    mediaItems: Array.isArray(rawNewsItem.mediaItems) ? rawNewsItem.mediaItems : [],
+    mediaItems: normalizeNewsMediaItems(rawNewsItem.mediaItems),
     references: Array.isArray(rawNewsItem.references) ? rawNewsItem.references.filter(Boolean) : [],
     createdAt: rawNewsItem.createdAt ?? new Date().toISOString(),
     updatedAt: rawNewsItem.updatedAt ?? rawNewsItem.createdAt ?? new Date().toISOString(),

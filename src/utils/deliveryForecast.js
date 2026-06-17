@@ -2,6 +2,8 @@ function pad(value) {
   return String(value).padStart(2, '0')
 }
 
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo'
+
 function toDateKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
@@ -10,6 +12,41 @@ function parseDate(value) {
   if (!value) return null
   const date = new Date(`${value}T00:00:00`)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function parseDateTime(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getCurrentDateInTimeZone(timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(new Date())
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+
+  if (!year || !month || !day) return startOfDay(new Date())
+
+  return new Date(year, month - 1, day)
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
 function getEasterDate(year) {
@@ -63,20 +100,32 @@ function isBusinessDay(date) {
   return !getNationalHolidayKeys(date.getFullYear()).has(toDateKey(date))
 }
 
-function getBusinessDaysToAdd(category) {
-  if (category === 'LCL') return 7
-  if (category === 'AEREO') return 10
-  if (category === 'FCL' || category === 'CONSOLIDADO') return 5
-  return 0
+function isCollectionScheduled(status) {
+  return normalizeText(status) === 'coleta agendada'
 }
 
-export function getEstimatedDeliveryDate(eta, category) {
-  const baseDate = parseDate(eta)
-  const businessDays = getBusinessDaysToAdd(category)
+function isAfterCutoff(date, cutoffHour) {
+  const scheduledMinutes =
+    date.getHours() * 60 +
+    date.getMinutes() +
+    date.getSeconds() / 60 +
+    date.getMilliseconds() / 60000
 
-  if (!baseDate || !businessDays) return ''
+  return scheduledMinutes > cutoffHour * 60
+}
 
-  let currentDate = new Date(baseDate)
+function getNextBusinessDay(date) {
+  let currentDate = startOfDay(date)
+
+  do {
+    currentDate = addDays(currentDate, 1)
+  } while (!isBusinessDay(currentDate))
+
+  return currentDate
+}
+
+function addBusinessDays(date, businessDays) {
+  let currentDate = startOfDay(date)
   let addedDays = 0
 
   while (addedDays < businessDays) {
@@ -86,5 +135,113 @@ export function getEstimatedDeliveryDate(eta, category) {
     }
   }
 
-  return toDateKey(currentDate)
+  return currentDate
+}
+
+function getScheduledCollectionDeliveryDate(process) {
+  if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
+
+  const scheduledAt = parseDateTime(process.collectionScheduledAt)
+  if (!scheduledAt) return ''
+
+  const destination = normalizeText(process.destination)
+  const scheduledDate = startOfDay(scheduledAt)
+  const needsNextBusinessDay = !isBusinessDay(scheduledDate)
+
+  if (destination.includes('navegantes')) {
+    return needsNextBusinessDay || isAfterCutoff(scheduledAt, 15)
+      ? toDateKey(getNextBusinessDay(scheduledDate))
+      : toDateKey(scheduledDate)
+  }
+
+  if (destination.includes('itapoa')) {
+    return needsNextBusinessDay || isAfterCutoff(scheduledAt, 14)
+      ? toDateKey(getNextBusinessDay(scheduledDate))
+      : toDateKey(scheduledDate)
+  }
+
+  return ''
+}
+
+function getBusinessDaysToAdd(category) {
+  if (category === 'LCL') return 7
+  if (category === 'AEREO') return 10
+  if (category === 'FCL' || category === 'CONSOLIDADO') return 5
+  return 0
+}
+
+function normalizeDeliveryDateOverride(value) {
+  const normalizedValue = String(value ?? '').trim()
+  const date = parseDate(normalizedValue)
+  return date ? toDateKey(date) : ''
+}
+
+function ensureDeliveryNotBeforeEta(deliveryDate, eta) {
+  const parsedDeliveryDate = parseDate(deliveryDate)
+  if (!parsedDeliveryDate) return ''
+
+  const parsedEta = parseDate(eta)
+  if (!parsedEta || parsedDeliveryDate >= parsedEta) return toDateKey(parsedDeliveryDate)
+
+  return toDateKey(parsedEta)
+}
+
+function getRollingCustomsForecastBaseDate(process) {
+  const currentDate = getCurrentDateInTimeZone(SAO_PAULO_TIME_ZONE)
+  const etaDate = parseDate(process?.eta)
+
+  if (etaDate && etaDate > currentDate) return etaDate
+
+  return currentDate
+}
+
+function shouldUseRollingCustomsForecast(process) {
+  if (!process || typeof process !== 'object') return false
+  if (process.category !== 'FCL' && process.category !== 'CONSOLIDADO') return false
+  if (!process.berthed) return false
+
+  const duimpStatus = normalizeText(process.duimpStatus)
+  return (
+    !duimpStatus ||
+    duimpStatus === 'aguardando registro' ||
+    duimpStatus === 'aguardando registro da duimp'
+  )
+}
+
+export function getAutomaticEstimatedDeliveryDate(processOrEta, category) {
+  if (typeof processOrEta === 'object' && processOrEta !== null) {
+    const scheduledCollectionDate = getScheduledCollectionDeliveryDate(processOrEta)
+    if (scheduledCollectionDate) {
+      return ensureDeliveryNotBeforeEta(scheduledCollectionDate, processOrEta.eta)
+    }
+
+    if (shouldUseRollingCustomsForecast(processOrEta)) {
+      const rollingForecastDate = toDateKey(
+        addBusinessDays(getRollingCustomsForecastBaseDate(processOrEta), 3)
+      )
+      return ensureDeliveryNotBeforeEta(rollingForecastDate, processOrEta.eta)
+    }
+
+    return ensureDeliveryNotBeforeEta(
+      getAutomaticEstimatedDeliveryDate(processOrEta.eta, processOrEta.category),
+      processOrEta.eta
+    )
+  }
+
+  const eta = processOrEta
+  const baseDate = parseDate(eta)
+  const businessDays = getBusinessDaysToAdd(category)
+
+  if (!baseDate || !businessDays) return ''
+
+  return toDateKey(addBusinessDays(baseDate, businessDays))
+}
+
+export function getEstimatedDeliveryDate(processOrEta, category) {
+  if (typeof processOrEta === 'object' && processOrEta !== null) {
+    const manualDate = normalizeDeliveryDateOverride(processOrEta.warehouseDeliveryDateOverride)
+    if (manualDate) return manualDate
+  }
+
+  return getAutomaticEstimatedDeliveryDate(processOrEta, category)
 }

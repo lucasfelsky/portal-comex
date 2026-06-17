@@ -1,11 +1,11 @@
 export const roleOptions = [
   { value: 'admin', label: 'Admin' },
   { value: 'user', label: 'User' },
-  { value: 'logistica', label: 'Logistica' },
+  { value: 'logistica', label: 'Logística' },
 ]
 
 export const rolePermissionsMap = {
-  admin: ['Usuarios', 'Permissoes', 'Comunicados', 'Auditoria', 'Processos'],
+  admin: ['Usuários', 'Permissões', 'Comunicados', 'Auditoria', 'Processos'],
   user: ['Dashboard', 'Processos'],
   logistica: ['Dashboard', 'Processos'],
 }

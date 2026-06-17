@@ -7,14 +7,10 @@ import {
   query,
   serverTimestamp,
   setDoc,
-} from 'firebase/firestore'
+} from 'firebase/firestore/lite'
 import { isFirebaseConfigured, firestore } from '../lib/firebase'
 import { adminUsersSeed } from '../data/mockData'
 import { getRolePermissions } from '../features/admin/rolePermissions'
-import {
-  deleteNotificationRecipient,
-  syncNotificationRecipient,
-} from './notificationRecipientsRepository'
 import { createAuditEvent } from './auditRepository'
 
 const STORAGE_KEY = 'sq-comex-users'
@@ -23,7 +19,7 @@ async function recordUserAudit(event) {
   try {
     await createAuditEvent(event)
   } catch (error) {
-    console.error('Falha ao registrar auditoria de usuario.', error)
+    console.error('Falha ao registrar auditoria de usuário.', error)
   }
 }
 
@@ -113,9 +109,8 @@ export async function saveUser(user, actor = null) {
     }
 
     writeLocalUsers(currentUsers)
-    await syncNotificationRecipient(normalizedUser)
     await recordUserAudit({
-      action: existingIndex >= 0 ? 'Usuario atualizado' : 'Usuario criado',
+      action: existingIndex >= 0 ? 'Usuário atualizado' : 'Usuário criado',
       actor: actor?.name ?? actor?.email ?? 'Sistema local',
       target: normalizedUser.id,
     })
@@ -127,10 +122,9 @@ export async function saveUser(user, actor = null) {
     toFirestorePayload(normalizedUser),
     { merge: true }
   )
-  await syncNotificationRecipient(normalizedUser)
 
   await recordUserAudit({
-    action: 'Usuario atualizado',
+    action: 'Usuário atualizado',
     actor: actor?.name ?? actor?.email ?? 'Sistema',
     target: normalizedUser.id,
   })
@@ -153,9 +147,8 @@ export async function createUser(user, actor = null) {
     const currentUsers = readLocalUsers()
     currentUsers.unshift(normalizedUser)
     writeLocalUsers(currentUsers)
-    await syncNotificationRecipient(normalizedUser)
     await recordUserAudit({
-      action: 'Usuario criado',
+      action: 'Usuário criado',
       actor: actor?.name ?? actor?.email ?? 'Sistema local',
       target: normalizedUser.id,
     })
@@ -165,9 +158,8 @@ export async function createUser(user, actor = null) {
   await setDoc(doc(firestore, 'users', normalizedUser.id), toFirestorePayload(normalizedUser), {
     merge: true,
   })
-  await syncNotificationRecipient(normalizedUser)
   await recordUserAudit({
-    action: 'Usuario criado',
+    action: 'Usuário criado',
     actor: actor?.name ?? actor?.email ?? 'Sistema',
     target: normalizedUser.id,
   })
@@ -178,9 +170,8 @@ export async function deleteUser(userId, actor = null) {
   if (!isFirebaseConfigured || !firestore) {
     const nextUsers = readLocalUsers().filter((item) => normalizeUser(item).id !== userId)
     writeLocalUsers(nextUsers)
-    await deleteNotificationRecipient(userId)
     await recordUserAudit({
-      action: 'Usuario removido',
+      action: 'Usuário removido',
       actor: actor?.name ?? actor?.email ?? 'Sistema local',
       target: userId,
     })
@@ -188,9 +179,8 @@ export async function deleteUser(userId, actor = null) {
   }
 
   await deleteDoc(doc(firestore, 'users', userId))
-  await deleteNotificationRecipient(userId)
   await recordUserAudit({
-    action: 'Usuario removido',
+    action: 'Usuário removido',
     actor: actor?.name ?? actor?.email ?? 'Sistema',
     target: userId,
   })

@@ -1,23 +1,37 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 
 export default function LoginPage() {
-  const { isAuthenticated, isApproved, login, register, authError, loading } = useAuth()
+  const {
+    isAuthenticated,
+    hasAccess,
+    isEmailVerified,
+    login,
+    register,
+    requestPasswordReset,
+    authError,
+    loading,
+  } = useAuth()
   const location = useLocation()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [showResetForm, setShowResetForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
 
   const redirectTo = location.state?.from?.pathname ?? '/'
 
-  if (isAuthenticated && isApproved) {
+  if (isAuthenticated && hasAccess) {
     return <Navigate to={redirectTo} replace />
   }
 
-  if (isAuthenticated && !isApproved) {
+  if (isAuthenticated && !isEmailVerified) {
+    return <Navigate to="/verificar-email" replace />
+  }
+
+  if (isAuthenticated && !hasAccess) {
     return <Navigate to="/aguardando-aprovacao" replace />
   }
 
@@ -30,12 +44,37 @@ export default function LoginPage() {
     try {
       if (mode === 'register') {
         await register(form)
-        setFeedback('Cadastro criado. Aguarde a aprovação de um administrador.')
+        setFeedback('Cadastro criado. Confirme seu email corporativo e depois aguarde a aprovacao do admin.')
       } else {
         await login(form.email, form.password)
       }
     } catch (submitError) {
-      setError(submitError?.message || 'Falha na autenticação.')
+      console.error('Falha no fluxo de autenticação.', submitError)
+      const details = submitError?.code ?? submitError?.message
+      setError(details ? `Falha na autenticação. (${details})` : 'Falha na autenticação.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handlePasswordReset(event) {
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
+    setFeedback('')
+
+    try {
+      await requestPasswordReset(form.email)
+      setFeedback('Enviamos as instruções de redefinição para o seu e-mail corporativo.')
+      setShowResetForm(false)
+    } catch (submitError) {
+      console.error('Falha ao enviar redefinição de senha.', submitError)
+      const details = submitError?.code ?? submitError?.message
+      setError(
+        details
+          ? `Não foi possível enviar o e-mail de redefinição. (${details})`
+          : 'Não foi possível enviar o e-mail de redefinição.'
+      )
     } finally {
       setSubmitting(false)
     }
@@ -64,7 +103,7 @@ export default function LoginPage() {
         <h1>{mode === 'register' ? 'Criar acesso corporativo' : 'Acesso ao painel'}</h1>
         <p>
           {mode === 'register'
-            ? 'Cadastro permitido apenas para e-mails @sqquimica.com. O acesso será liberado após aprovação do admin.'
+            ? 'Cadastro permitido apenas para e-mails @sqquimica.com. O acesso exige email verificado e aprovacao do admin.'
             : 'Use sua conta corporativa @sqquimica.com para acessar o sistema.'}
         </p>
 
@@ -110,6 +149,37 @@ export default function LoginPage() {
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
           />
         </label>
+
+        {mode === 'login' ? (
+          <div className="auth-actions">
+            <button
+              type="button"
+              className="auth-link-button"
+              onClick={() => {
+                setShowResetForm((current) => !current)
+                setError('')
+                setFeedback('')
+              }}
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+        ) : null}
+
+        {mode === 'login' && showResetForm ? (
+          <div className="auth-reset-panel">
+            <strong>Redefinir senha</strong>
+            <p>Use o e-mail corporativo da sua conta para receber o link de redefinição.</p>
+            <button
+              type="button"
+              className="ghost-button auth-reset-panel__button"
+              disabled={submitting || loading || !form.email.trim()}
+              onClick={handlePasswordReset}
+            >
+              {submitting || loading ? 'Enviando...' : 'Enviar link de redefinição'}
+            </button>
+          </div>
+        ) : null}
 
         <button
           type="submit"

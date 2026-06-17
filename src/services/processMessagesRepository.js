@@ -1,17 +1,20 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
-} from 'firebase/firestore'
+} from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import { createAuditEvent } from './auditRepository'
+import { repairTextEncoding } from '../utils/textEncoding'
 
-// As conversas ficam no Firestore porque FCM e um canal de entrega de notificacoes,
-// nao um armazenamento de historico. A estrutura em subcolecao por processo
-// mantem o historico escalavel e deixa a integracao com push aberta para uma
+// As conversas ficam no Firestore porque FCM é um canal de entrega de notificações,
+// não um armazenamento de histórico. A estrutura em subcoleção por processo
+// mantém o histórico escalável e deixa a integração com push aberta para uma
 // etapa futura, caso o projeto adicione service worker e backend/admin SDK.
 function getStorageKey(processId) {
   return `sq-comex-process-messages:${processId}`
@@ -22,9 +25,9 @@ function normalizeMessage(rawMessage, fallbackId) {
     id: rawMessage?.id ?? fallbackId,
     processId: String(rawMessage?.processId ?? ''),
     authorId: String(rawMessage?.authorId ?? ''),
-    authorName: String(rawMessage?.authorName ?? 'Usuario'),
+    authorName: repairTextEncoding(String(rawMessage?.authorName ?? 'Usuário')),
     authorEmail: String(rawMessage?.authorEmail ?? ''),
-    content: String(rawMessage?.content ?? '').trim(),
+    content: repairTextEncoding(String(rawMessage?.content ?? '').trim()),
     createdAt: rawMessage?.createdAt ?? new Date().toISOString(),
   }
 }
@@ -60,9 +63,7 @@ function shouldFallbackToLocal(error) {
     details.includes('client') ||
     details.includes('network') ||
     details.includes('fetch') ||
-    details.includes('unavailable') ||
-    details.includes('permission-denied') ||
-    details.includes('permission denied')
+    details.includes('unavailable')
   )
 }
 
@@ -75,6 +76,18 @@ async function recordProcessMessageAudit(payload) {
     })
   } catch (error) {
     console.error('Falha ao registrar auditoria da mensagem do processo.', error)
+  }
+}
+
+async function recordProcessMessageDeletionAudit(payload, actor = null) {
+  try {
+    await createAuditEvent({
+      action: 'Mensagem removida do processo',
+      actor: actor?.name ?? actor?.email ?? 'Sistema',
+      target: payload.processId,
+    })
+  } catch (error) {
+    console.error('Falha ao registrar auditoria da exclusão da mensagem do processo.', error)
   }
 }
 
@@ -123,7 +136,9 @@ export async function createProcessMessage(processId, message, actor = null) {
       ...message,
       processId,
       authorId: actor?.uid ?? actor?.id ?? message?.authorId ?? '',
-      authorName: actor?.name ?? actor?.email ?? message?.authorName ?? 'Usuario',
+      authorName: repairTextEncoding(
+        actor?.name ?? actor?.email ?? message?.authorName ?? 'Usuário'
+      ),
       authorEmail: actor?.email ?? message?.authorEmail ?? '',
       createdAt: new Date().toISOString(),
     },
@@ -131,7 +146,7 @@ export async function createProcessMessage(processId, message, actor = null) {
   )
 
   if (!payload.content) {
-    throw new Error('A mensagem nao pode ficar vazia.')
+    throw new Error('A mensagem não pode ficar vazia.')
   }
 
   if (!isFirebaseConfigured || !firestore) {
@@ -162,4 +177,42 @@ export async function createProcessMessage(processId, message, actor = null) {
   await recordProcessMessageAudit(payload)
 
   return payload
+}
+
+export async function deleteProcessMessage(processId, messageId, actor = null) {
+  const normalizedProcessId = String(processId ?? '').trim()
+  const normalizedMessageId = String(messageId ?? '').trim()
+
+  if (!normalizedProcessId || !normalizedMessageId) {
+    throw new Error('Mensagem inválida para exclusão.')
+  }
+
+  const currentMessages = readLocalMessages(normalizedProcessId)
+  const deletedMessage =
+    currentMessages.find((item) => item.id === normalizedMessageId) ??
+    normalizeMessage({ id: normalizedMessageId, processId: normalizedProcessId }, normalizedMessageId)
+
+  if (!isFirebaseConfigured || !firestore) {
+    writeLocalMessages(
+      normalizedProcessId,
+      currentMessages.filter((item) => item.id !== normalizedMessageId)
+    )
+    await recordProcessMessageDeletionAudit(deletedMessage, actor)
+    return
+  }
+
+  try {
+    await deleteDoc(doc(firestore, 'processes', normalizedProcessId, 'messages', normalizedMessageId))
+  } catch (error) {
+    if (!shouldFallbackToLocal(error)) {
+      throw error
+    }
+
+    writeLocalMessages(
+      normalizedProcessId,
+      currentMessages.filter((item) => item.id !== normalizedMessageId)
+    )
+  }
+
+  await recordProcessMessageDeletionAudit(deletedMessage, actor)
 }

@@ -1,8 +1,8 @@
-import { Navigate, useLocation } from 'react-router-dom'
+﻿import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 
 export default function ProtectedRoute({ children, requireRole = null }) {
-  const { isAuthenticated, isApproved, loading, profile } = useAuth()
+  const { isAuthenticated, hasAccess, isEmailVerified, loading, profile } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -20,7 +20,11 @@ export default function ProtectedRoute({ children, requireRole = null }) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (!isApproved && profile?.role !== 'admin') {
+  if (!hasAccess) {
+    if (!isEmailVerified) {
+      return <Navigate to="/verificar-email" replace />
+    }
+
     return <Navigate to="/aguardando-aprovacao" replace />
   }
 

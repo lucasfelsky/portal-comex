@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 
 const STORAGE_KEY = 'sq-comex-audits'
