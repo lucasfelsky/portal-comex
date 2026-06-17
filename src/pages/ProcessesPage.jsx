@@ -291,7 +291,7 @@ function extractItemsFromWorksheet(file) {
   })
 }
 
-function sanitizeCustoms(draft) {
+function sanitizeCustoms(draft, incomingWindows = null) {
   if (!draft.cargoPresenceInformed) {
     return {
       ...draft,
@@ -320,6 +320,9 @@ function sanitizeCustoms(draft) {
   if (!keepsCollectionSchedule(draft.collectionStatus)) {
     return { ...draft, collectionWindows: [], collectionScheduledAt: '' }
   }
+  if (incomingWindows !== null) {
+    return { ...draft, collectionWindows: incomingWindows }
+  }
   return draft
 }
 
@@ -346,6 +349,9 @@ function sanitizeDraft(currentDraft, overrides = {}) {
       ? [...(overrides.items ?? currentDraft.items)]
       : [],
   }
+  const incomingWindows = Array.isArray(overrides.collectionWindows)
+    ? overrides.collectionWindows
+    : null
   const draft = sanitizeMapa(mergedDraft)
 
   if (isMaritimeCategory(draft.category)) {
@@ -367,7 +373,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         collectionScheduledAt: '',
       }
     }
-    return sanitizeCustoms(next)
+    return sanitizeCustoms(next, incomingWindows)
   }
 
   if (isAirCategory(draft.category)) {
@@ -391,7 +397,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
       next.dtaArrivalAtItajai = ''
     }
     if (!isDtaTransitCompleted(next.dtaStatus)) next.cargoPresenceInformed = false
-    return sanitizeCustoms(next)
+    return sanitizeCustoms(next, incomingWindows)
   }
 
   return {

@@ -181,6 +181,14 @@ export default function DashboardPage() {
         </article>
       </div>
 
+      <div style={{ marginTop: '24px' }}>
+        <WeeklyArrivalsCard
+          processes={loadedProcesses}
+          isAdmin={profile?.role === 'admin'}
+          isLoading={isLoadingProcesses}
+        />
+      </div>
+
       <article className="list-card">
         <div className="card-heading">
           <div>
@@ -362,14 +370,6 @@ export default function DashboardPage() {
           )}
         </div>
       </article>
-
-      <div style={{ marginTop: '24px' }}>
-        <WeeklyArrivalsCard
-          processes={loadedProcesses}
-          isAdmin={profile?.role === 'admin'}
-          isLoading={isLoadingProcesses}
-        />
-      </div>
     </section>
   )
 }
