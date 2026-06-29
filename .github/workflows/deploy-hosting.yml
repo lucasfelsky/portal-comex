@@ -29,7 +29,19 @@ jobs:
       - name: Deploy to Firebase Hosting (production)
         if: ${{ env.FIREBASE_TOKEN != '' }}
         run: |
-          npx firebase-tools@latest deploy --only hosting --config firebase.portal-comex.json --project sq-comex-updates-3d22f
+          set +e
+          npx firebase-tools@latest deploy --only hosting --config firebase.portal-comex.json --project sq-comex-updates-3d22f > deploy.log 2>&1
+          code=$?
+          cat deploy.log
+          if [ "$code" -ne 0 ]; then
+            # HTTP 400 "is the current active version" = versao buildada identica a
+            # ativa em producao (nada a publicar). Tratar como sucesso.
+            if grep -q "is the current active version" deploy.log; then
+              echo "::notice::Versao de hosting identica a ativa em producao — nada a publicar."
+              exit 0
+            fi
+            exit "$code"
+          fi
 
       - name: Aviso se FIREBASE_TOKEN ausente
         if: ${{ env.FIREBASE_TOKEN == '' }}
