@@ -377,6 +377,37 @@ async function upsertExternalNewsItem(newsItem, accessToken) {
   }
 }
 
+async function recordDlqEntry(entry, accessToken) {
+  // Dead-letter queue: grava falhas de parsing/timeout/gravacao em
+  // externalNewsDlq/{id} para auditoria e reprocessamento futuro.
+  // Falhas aqui são melhor-esforço: nunca derrubam o sync principal.
+  const dlqId = `DLQ-${entry.sourceId}-${entry.stage}-${Date.now()}-${crypto.randomUUID()}`
+  const requestUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNewsDlq/${encodeURIComponent(dlqId)}`
+  const payload = {
+    sourceId: entry.sourceId,
+    sourceName: entry.sourceName,
+    stage: entry.stage, // 'fetch-feed' | 'upsert-item' | 'enrich-item'
+    error: String(entry.error ?? '').slice(0, 4000),
+    newsItemId: entry.newsItemId ?? null,
+    externalUrl: entry.externalUrl ?? null,
+    failedAt: new Date().toISOString(),
+  }
+
+  try {
+    await fetch(requestUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(toFirestoreDocument(payload)),
+    })
+  } catch (dlqError) {
+    // Não tem como gravar a DLQ — registrar em stderr e seguir.
+    console.error(`Falha ao gravar DLQ para ${entry.sourceId}/${entry.stage}:`, dlqError)
+  }
+}
+
 async function main() {
   ensureEnvironment()
 
@@ -384,10 +415,32 @@ async function main() {
     externalNewsSources.map((source) => fetchFeedItems(source))
   )
 
+  // Coleta falhas de fetch de feed (antes silenciadas pelo allSettled + filter).
+  const feedFailures = []
+  settledFeeds.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      feedFailures.push({
+        sourceId: externalNewsSources[index].id,
+        sourceName: externalNewsSources[index].name,
+        stage: 'fetch-feed',
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      })
+    }
+  })
+
   const loadedNews = settledFeeds
     .filter((item) => item.status === 'fulfilled')
     .flatMap((item) => item.value)
     .filter((item, index, allItems) => index === allItems.findIndex((candidate) => buildDedupKey(candidate) === buildDedupKey(item)))
+
+  const accessToken = await getAccessToken()
+
+  // Grava DLQ das falhas de feed (mesmo quando loadedNews é vazio, para visibility).
+  await Promise.allSettled(feedFailures.map((entry) => recordDlqEntry(entry, accessToken)))
+
+  if (feedFailures.length > 0) {
+    console.log(`Falhas de feed registradas na DLQ: ${feedFailures.length} (${feedFailures.map((f) => f.sourceId).join(', ')}).`)
+  }
 
   if (loadedNews.length === 0) {
     console.log('Nenhuma noticia externa encontrada nos ultimos 30 dias.')
@@ -401,14 +454,39 @@ async function main() {
     summary: item.summary || buildEditorialFallback(item),
     coverImage: isBlockedImageUrl(item.coverImage) ? '' : item.coverImage,
   }))
-  const accessToken = await getAccessToken()
-  await Promise.all(finalizedNews.map((item) => upsertExternalNewsItem(item, accessToken)))
 
+  // Upsert com allSettled: uma falha de gravacao não derruba as demais.
+  const settledUpserts = await Promise.allSettled(
+    finalizedNews.map((item) => upsertExternalNewsItem(item, accessToken))
+  )
+  const upsertFailures = []
+  settledUpserts.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      const newsItem = finalizedNews[index]
+      upsertFailures.push({
+        sourceId: newsItem.sourceName,
+        sourceName: newsItem.sourceName,
+        stage: 'upsert-item',
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        newsItemId: newsItem.id,
+        externalUrl: newsItem.externalUrl,
+      })
+    }
+  })
+  await Promise.allSettled(upsertFailures.map((entry) => recordDlqEntry(entry, accessToken)))
+
+  const upsertedCount = settledUpserts.filter((item) => item.status === 'fulfilled').length
   const recentNewsCount = finalizedNews.filter((item) => isWithinLastHours(item.publishedAt, PRIMARY_WINDOW_HOURS)).length
 
   console.log(
-    `Sincronizacao concluida: ${finalizedNews.length} noticias externas processadas (${recentNewsCount} nas ultimas 24 horas).`
+    `Sincronizacao concluida: ${upsertedCount}/${finalizedNews.length} noticias gravadas (${recentNewsCount} nas ultimas 24 horas).`
   )
+  if (upsertFailures.length > 0) {
+    console.log(`Falhas de gravacao registradas na DLQ: ${upsertFailures.length}.`)
+  }
+  if (feedFailures.length > 0 || upsertFailures.length > 0) {
+    process.exitCode = 1
+  }
 }
 
 main().catch((error) => {
