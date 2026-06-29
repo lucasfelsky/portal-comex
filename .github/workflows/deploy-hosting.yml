@@ -14,7 +14,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install deps
         run: npm ci
@@ -23,9 +23,13 @@ jobs:
         run: npm run build
 
       - name: Deploy to Firebase Hosting (production)
+        if: ${{ secrets.FIREBASE_TOKEN != '' }}
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          # se quiser definir project id via secret:
-          # FIREBASE_PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
-          npx firebase-tools@latest deploy --only hosting --project sq-comex-updates
+          npx firebase-tools@latest deploy --only hosting --config firebase.portal-comex.json --project sq-comex-updates-3d22f
+
+      - name: Aviso se FIREBASE_TOKEN ausente
+        if: ${{ secrets.FIREBASE_TOKEN == '' }}
+        run: |
+          echo "::warning::FIREBASE_TOKEN nao configurado — deploy de hosting pulado. Gere um token com 'firebase login:ci' (local) e adicione como secret FIREBASE_TOKEN no GitHub (Settings > Secrets and variables > Actions)."
