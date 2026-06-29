@@ -484,8 +484,20 @@ async function main() {
   if (upsertFailures.length > 0) {
     console.log(`Falhas de gravacao registradas na DLQ: ${upsertFailures.length}.`)
   }
-  if (feedFailures.length > 0 || upsertFailures.length > 0) {
-    process.exitCode = 1
+  // Sync de RSS e best-effort: falhas parciais (feed fora/timeout ou gravacao
+  // individual) NAO derrubam o job — ficam registradas na DLQ (externalNewsDlq)
+  // para auditoria. Usar ::warning:: do GitHub Actions destaca na UI sem deixar
+  // o run vermelho a cada hora que um feed oscilar. Erros fatais (env/OAuth)
+  // continuam caindo no main().catch com exit 1.
+  if (feedFailures.length > 0) {
+    console.log(
+      `::warning::${feedFailures.length} feed(s) falharam e foram registrados na DLQ (externalNewsDlq): ${feedFailures.map((entry) => entry.sourceId).join(', ')}.`,
+    )
+  }
+  if (upsertFailures.length > 0) {
+    console.log(
+      `::warning::${upsertFailures.length} gravacao(oes) falharam e foram registradas na DLQ (externalNewsDlq).`,
+    )
   }
 }
 
