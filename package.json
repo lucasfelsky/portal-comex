@@ -1,29 +1,33 @@
 {
-    "name": "sq-comex-updates",
-    "version": "0.1.0",
-    "private": true,
-    "scripts": {
-        "dev": "vite",
+  "name": "sq-comex-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portal COMEX (sq-comex-updates) - SPA React + Firebase Auth. Build vai para dist/ e deploy usa firebase.portal-comex.json para o site sq-comex-updates-3d22f no Firebase Hosting.",
+  "scripts": {
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "echo \"no lint configured\"",
-    "deploy": "firebase deploy --only hosting",
-    "deploy:full": "firebase deploy --only hosting,firestore:rules,functions"
+    "emulators": "firebase emulators:start --only auth,firestore,storage,functions",
+    "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
+    "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,functions --config firebase.portal-comex.json",
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --config firebase.portal-comex.json",
+    "deploy:intelliquote": "powershell -NoProfile -Command \"Copy-Item -Path ../Intelliquote/programa/web/dist/* -Destination ./dist-intelliquote -Recurse -Force; firebase deploy --only hosting --config firebase.intelliquote.json\""
   },
-    "dependencies": {
-        "firebase": "^10.10.0",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "react-router-dom": "^6.14.1",
-        "xlsx": "^0.18.5"
-    },
-    "devDependencies": {
-        "@tailwindcss/postcss": "^4.1.18",
-        "@vitejs/plugin-react": "^5.1.2",
-        "autoprefixer": "^10.4.22",
-        "postcss": "^8.5.6",
-        "tailwindcss": "^4.1.18",
-        "vite": "^5.4.21"
-    },
-    "type": "module"
+  "dependencies": {
+    "firebase": "^10.10.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "vite": "^5.4.21"
+  },
+  "type": "module"
 }

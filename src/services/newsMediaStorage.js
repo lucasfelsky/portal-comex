@@ -5,6 +5,7 @@ import {
   normalizeDraftNewsMediaItems,
   normalizeNewsMediaItems,
 } from '../utils/newsMedia'
+import { validateFileUpload, validateImageUpload } from '../utils/storageUploadValidation'
 
 function normalizeStringValue(value) {
   return String(value ?? '').trim()
@@ -59,6 +60,12 @@ async function uploadPendingNewsMediaItem(newsId, mediaItem, actorId, folderName
   if (!file) {
     const normalizedMediaItem = normalizeNewsMediaItems([mediaItem])[0]
     return normalizedMediaItem ?? null
+  }
+
+  if (folderName === 'cover') {
+    validateImageUpload(file)
+  } else {
+    validateFileUpload(file)
   }
 
   if (isFirebaseConfigured && storage) {

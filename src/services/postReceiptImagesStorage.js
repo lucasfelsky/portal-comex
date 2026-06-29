@@ -5,6 +5,7 @@ import {
   normalizeDraftPostReceiptImages,
   normalizePostReceiptImages,
 } from '../utils/postReceiptImages'
+import { validateImageUpload } from '../utils/storageUploadValidation'
 
 function normalizeStringValue(value) {
   return String(value ?? '').trim()
@@ -86,6 +87,7 @@ export async function resolvePostReceiptImagesForSave(processId, images, actorId
       const file = image.file
 
       if (!file) continue
+      validateImageUpload(file)
 
       if (isFirebaseConfigured && storage) {
         const safeProcessId = sanitizePathSegment(processId, 'processo')

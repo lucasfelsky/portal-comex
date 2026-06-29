@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer'
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
+import { logger } from 'firebase-functions/logger'
 
 initializeApp()
 
@@ -665,7 +666,7 @@ async function recordAuditEvent(event) {
       createdAt: FieldValue.serverTimestamp(),
     })
   } catch (error) {
-    console.error('Falha ao registrar auditoria.', error)
+    logger.error('Falha ao registrar auditoria.', error)
   }
 }
 
@@ -998,11 +999,11 @@ export const getDailyPtaxRates = onCall(async (request) => {
   const eurRate = eurResult.status === 'fulfilled' ? eurResult.value : null
 
   if (usdResult.status === 'rejected') {
-    console.error('Falha ao consultar PTAX para USD.', usdResult.reason)
+    logger.error('Falha ao consultar PTAX para USD.', usdResult.reason)
   }
 
   if (eurResult.status === 'rejected') {
-    console.error('Falha ao consultar PTAX para EUR.', eurResult.reason)
+    logger.error('Falha ao consultar PTAX para EUR.', eurResult.reason)
   }
 
   if (!usdRate && !eurRate) {
@@ -1247,7 +1248,7 @@ export const sendProcessNotificationEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      console.log('SMTP nao configurado. Email de notificacao nao enviado.', {
+      logger.info('SMTP nao configurado. Email de notificacao nao enviado.', {
         notificationId: event.params.notificationId,
         recipientUserId,
       })
@@ -1277,7 +1278,7 @@ export const sendNewsPublishedEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      console.log('SMTP nao configurado. Email de noticia nao enviado.', {
+      logger.info('SMTP nao configurado. Email de noticia nao enviado.', {
         newsId: event.params.newsId,
       })
       return
@@ -1315,7 +1316,7 @@ export const sendNewsPublishedEmail = onDocumentCreated(
       .filter((entry) => entry.result.status === 'rejected')
 
     if (failedRecipients.length > 0) {
-      console.error('Falha ao enviar algumas notificacoes de noticia.', {
+      logger.error('Falha ao enviar algumas notificacoes de noticia.', {
         newsId: event.params.newsId,
         failedRecipients: failedRecipients.map((entry) => ({
           email: entry.recipient.email,
@@ -1343,7 +1344,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      console.log('SMTP nao configurado. Email de aprovacao pendente nao enviado.', {
+      logger.info('SMTP nao configurado. Email de aprovacao pendente nao enviado.', {
         userId: event.params.userId,
       })
       return
@@ -1352,7 +1353,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
     const adminRecipients = await listActiveAdminUsers()
 
     if (adminRecipients.length === 0) {
-      console.log('Nenhum admin ativo encontrado para o aviso de aprovacao pendente.', {
+      logger.info('Nenhum admin ativo encontrado para o aviso de aprovacao pendente.', {
         userId: event.params.userId,
       })
       return
@@ -1380,7 +1381,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
       .filter((entry) => entry.result.status === 'rejected')
 
     if (failedRecipients.length > 0) {
-      console.error('Falha ao enviar alguns emails de aprovacao pendente.', {
+      logger.error('Falha ao enviar alguns emails de aprovacao pendente.', {
         userId: event.params.userId,
         failedRecipients: failedRecipients.map((entry) => ({
           email: normalizeEmail(entry.recipient.email),
