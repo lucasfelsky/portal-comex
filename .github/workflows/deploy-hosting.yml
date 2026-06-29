@@ -8,6 +8,10 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      # O contexto "secrets" nao pode ser usado em "if" de step diretamente.
+      # Por isso injetamos no env do job e checamos via env.FIREBASE_TOKEN.
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,13 +27,11 @@ jobs:
         run: npm run build
 
       - name: Deploy to Firebase Hosting (production)
-        if: ${{ secrets.FIREBASE_TOKEN != '' }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        if: ${{ env.FIREBASE_TOKEN != '' }}
         run: |
           npx firebase-tools@latest deploy --only hosting --config firebase.portal-comex.json --project sq-comex-updates-3d22f
 
       - name: Aviso se FIREBASE_TOKEN ausente
-        if: ${{ secrets.FIREBASE_TOKEN == '' }}
+        if: ${{ env.FIREBASE_TOKEN == '' }}
         run: |
           echo "::warning::FIREBASE_TOKEN nao configurado — deploy de hosting pulado. Gere um token com 'firebase login:ci' (local) e adicione como secret FIREBASE_TOKEN no GitHub (Settings > Secrets and variables > Actions)."
