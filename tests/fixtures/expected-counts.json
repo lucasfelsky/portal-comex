@@ -83,11 +83,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 13,
+    "totalFiles": 14,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 4
+      "ui": 5
     }
   }
 }
