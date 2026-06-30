@@ -1,0 +1,73 @@
+name: CI
+
+# Workflow de integracao continua do Portal COMEX.
+# - Vitest unit (42 casos)
+# - Vite build
+# - Firebase rules dry-run
+#
+# Secrets necessarios (configurar em Settings > Secrets and variables > Actions):
+#   FIREBASE_TOKEN  - token `firebase login:ci` (apenas para o dry-run).
+#                     Quando a etapa de deploy for adicionada em outra sprint,
+#                     reutilizamos este mesmo secret.
+#
+# Obs.: Portal COMEX NAO tem testes E2E (Playwright) ainda. A extensao
+# de UI tests (jsdom + @testing-library) e a cobertura do Portal do
+# Fornecedor estao no backlog (4.3 do Roadmap).
+
+on:
+  push:
+    branches: [main, develop, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-build:
+    name: Unit + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit tests (Vitest)
+        run: npm test
+
+      - name: Build (Vite)
+        run: npm run build
+
+  rules-validation:
+    name: Firestore rules (dry-run)
+    runs-on: ubuntu-latest
+    needs: unit-and-build
+    env:
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install
+        run: npm ci
+
+      - name: Validate firestore.rules
+        # firebase-tools ja vem em devDependencies (Sprint 4.1).
+        # O dry-run valida a sintaxe do rules sem precisar de emulador Java 21+
+        # (necessario para o emulador Firestore de verdade).
+        run: node node_modules/firebase-tools/lib/bin/firebase.js --config firebase.portal-comex.json --project sq-comex-updates-3d22f deploy --only firestore:rules --dry-run --non-interactive
