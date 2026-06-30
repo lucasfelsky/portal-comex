@@ -1,0 +1,25 @@
+{
+  "hosting": {
+    "site": "intelliquote",
+    "public": "dist-intelliquote",
+    "ignore": [
+      "firebase.json",
+      "firebase.*.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "intelliquote-api",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

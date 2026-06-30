@@ -1,8 +1,11 @@
 node_modules
 dist
+dist-intelliquote
+hosting-intelliquote
 .firebase/
 .env
 .env.local
 .vscode
 .DS_Store
 firebase-debug.log*
+*.bak
