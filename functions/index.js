@@ -127,6 +127,22 @@ function getUserDisplayName(user, fallback = 'Usuario') {
   )
 }
 
+/**
+ * Define as custom claims `role` e `status` em um usuario.
+ * Deve ser chamado em todo ponto que altera role/status para que as rules
+ * passem a ler de `request.auth.token` em vez de fazer `firestore.get(users/{uid})`.
+ * Falha nao quebra a operacao principal (log apenas) — o backfill cobre gaps.
+ */
+async function setRoleStatusClaims(uid, role, status) {
+  const safeRole = ALLOWED_ROLES.has(role) ? role : 'user'
+  const safeStatus = ALLOWED_STATUSES.has(status) ? status : 'Pendente'
+  try {
+    await getAuth().setCustomUserClaims(uid, { role: safeRole, status: safeStatus })
+  } catch (error) {
+    logger.error('Falha ao setar custom claims', { uid, role: safeRole, status: safeStatus, error: error?.message })
+  }
+}
+
 function sanitizeUserPayload(rawUser, overrides = {}) {
   const roleCandidate = normalizeString(overrides.role ?? rawUser?.role ?? 'user')
   const statusCandidate = normalizeString(overrides.status ?? rawUser?.status ?? 'Pendente')
@@ -803,6 +819,8 @@ export const adminCreateUser = onCall(async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
   })
 
+  await setRoleStatusClaims(createdUser.uid, requestedRole, requestedStatus)
+
   await recordAuditEvent({
     action: 'Usuario criado',
     actor: getUserDisplayName(actorProfile, actorProfile.email),
@@ -850,6 +868,75 @@ export const adminDeleteUser = onCall(async (request) => {
   })
 
   return { success: true }
+})
+
+/**
+ * Atualiza role e/ou status de um usuario, persistindo em ambos:
+ *   - Firestore `users/{uid}` (exibicao, relatorios, historico)
+ *   - Firebase Auth custom claims `role`/`status` (autorizacao via rules)
+ *
+ * O front NAO escreve mais direto em `users/{uid}.role`/`.status` — usa este callable.
+ * Substitui o write direto que existia no AdminUsersPanel.
+ */
+export const adminUpdateUserClaims = onCall(async (request) => {
+  const actorProfile = await assertActiveAdmin(request.auth)
+  const uid = normalizeString(request.data?.uid)
+  if (!uid) {
+    throw new HttpsError('invalid-argument', 'UID do usuario e obrigatorio.')
+  }
+
+  const requestedRole = request.data?.role === undefined ? null : normalizeString(request.data.role)
+  const requestedStatus = request.data?.status === undefined ? null : normalizeString(request.data.status)
+
+  if (requestedRole !== null && !ALLOWED_ROLES.has(requestedRole)) {
+    throw new HttpsError('invalid-argument', 'Perfil de usuario invalido.')
+  }
+  if (requestedStatus !== null && !ALLOWED_STATUSES.has(requestedStatus)) {
+    throw new HttpsError('invalid-argument', 'Status de usuario invalido.')
+  }
+  if (requestedRole === null && requestedStatus === null) {
+    throw new HttpsError('invalid-argument', 'Informe role e/ou status para atualizar.')
+  }
+
+  // Nao permite admin se autobloquear / se rebaixar.
+  if (uid === request.auth.uid && requestedStatus !== null && requestedStatus !== 'Ativo') {
+    throw new HttpsError('failed-precondition', 'Nao e permitido bloquear o proprio usuario logado.')
+  }
+
+  const userRef = getFirestore().collection('users').doc(uid)
+  const snapshot = await userRef.get()
+  if (!snapshot.exists) {
+    throw new HttpsError('not-found', 'Usuario nao encontrado.')
+  }
+  const current = snapshot.data() ?? {}
+
+  const nextRole = requestedRole ?? current.role ?? 'user'
+  const nextStatus = requestedStatus ?? current.status ?? 'Pendente'
+
+  const safeRole = ALLOWED_ROLES.has(nextRole) ? nextRole : 'user'
+  const safeStatus = ALLOWED_STATUSES.has(nextStatus) ? nextStatus : 'Pendente'
+
+  await userRef.set(
+    {
+      role: safeRole,
+      status: safeStatus,
+      statusTone: getStatusTone(safeStatus),
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedById: request.auth.uid,
+      updatedByName: actorProfile.name ?? actorProfile.email,
+    },
+    { merge: true }
+  )
+
+  await setRoleStatusClaims(uid, safeRole, safeStatus)
+
+  await recordAuditEvent({
+    action: 'Claims do usuario atualizadas',
+    actor: getUserDisplayName(actorProfile, actorProfile.email),
+    target: uid,
+  })
+
+  return { uid, role: safeRole, status: safeStatus }
 })
 
 export const adminUpsertUserPassword = onCall(async (request) => {

@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { auth, firestore, isFirebaseConfigured } from '../lib/firebase'
+import { getUserClaims } from '../lib/claims'
 import { getRolePermissions } from '../features/admin/rolePermissions'
 import {
   sendCustomPasswordResetEmail as requestCustomPasswordResetEmail,
@@ -57,9 +58,12 @@ function isAllowedCorporateEmail(email) {
   return normalizeCorporateEmail(email).endsWith('@sqquimica.com')
 }
 
-function buildBaseProfile(user, existingProfile = null) {
-  const role = existingProfile?.role ?? 'user'
-  const status = normalizeProfileStatus(existingProfile?.status)
+function buildBaseProfile(user, claims, existingProfile = null) {
+  // Sprint 5.1 / L18: claims sao a UNICA fonte de role/status. Sem fallback
+  // para `existingProfile` — o Firestore e' read-only de role/status desde
+  // 5.1. Se claims nao existirem, defaults seguros sao aplicados.
+  const role = claims?.role ?? 'user'
+  const status = normalizeProfileStatus(claims?.status)
 
   return {
     uid: user.uid,
@@ -76,11 +80,15 @@ function buildBaseProfile(user, existingProfile = null) {
   }
 }
 
-async function ensureUserProfile(user) {
+async function ensureUserProfile(user, { forceRefresh = false } = {}) {
   const userRef = doc(firestore, 'users', user.uid)
   const snapshot = firestore ? await getDoc(userRef) : null
   const existingProfile = snapshot?.exists() ? snapshot.data() : null
-  const baseProfile = buildBaseProfile(user, existingProfile)
+  // Claims sao SEMPRE a fonte primaria (L18). forceRefresh apos um
+  // adminUpdateUserClaims garante que o novo role/status seja visto
+  // sem precisar de logout/login.
+  const claims = await getUserClaims(user, { forceRefresh })
+  const baseProfile = buildBaseProfile(user, claims, existingProfile)
   const now = new Date().toISOString()
 
   if (!firestore) {
@@ -104,12 +112,16 @@ async function ensureUserProfile(user) {
     email: baseProfile.email,
     name: user.displayName ?? snapshot.data().name ?? snapshot.data().email ?? 'Usuário',
     lastAccess:
-      normalizeProfileStatus(snapshot.data().status) === 'Ativo'
+      normalizeProfileStatus(claims.status) === 'Ativo'
         ? now
         : snapshot.data().lastAccess ?? baseProfile.lastAccess,
     updatedAt: serverTimestamp(),
   }
 
+  // NAO persistimos role/status aqui — fonte da verdade sao as custom
+  // claims (L18). Apenas espelhamos metadata (name, email, lastAccess).
+  // O callable `adminUpdateUserClaims` e' a unica porta de entrada para
+  // alteracao de role/status; ver [[Limitações conhecidas]] L18.
   await setDoc(userRef, mergedProfile, { merge: true })
 
   return {
@@ -246,14 +258,16 @@ export function AuthProvider({ children }) {
     return requestCustomVerificationEmail(payload)
   }
 
-  async function refreshAuthenticatedUser() {
+  async function refreshAuthenticatedUser({ forceClaimsRefresh = false } = {}) {
     if (!auth?.currentUser) {
       return null
     }
 
     await reload(auth.currentUser)
     const refreshedUser = auth.currentUser
-    const refreshedProfile = await ensureUserProfile(refreshedUser)
+    const refreshedProfile = await ensureUserProfile(refreshedUser, {
+      forceRefresh: forceClaimsRefresh,
+    })
     setUser({ ...refreshedUser })
     setProfile(refreshedProfile)
     return refreshedUser

@@ -12,6 +12,8 @@ import { isFirebaseConfigured, firestore } from '../lib/firebase'
 import { adminUsersSeed } from '../data/mockData'
 import { getRolePermissions } from '../features/admin/rolePermissions'
 import { createAuditEvent } from './auditRepository'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '../lib/firebase'
 
 const STORAGE_KEY = 'sq-comex-users'
 
@@ -68,14 +70,15 @@ function writeLocalUsers(users) {
 }
 
 function toFirestorePayload(user) {
+  // Sprint 5.1 / L18: NAO inclui role/status/statusTone aqui — a fonte
+  // da verdade sao as custom claims (atualizadas pelo callable). Incluir
+  // faria o write falhar na rule `isAdminUserFieldsUpdate` (que so permite
+  // 6 campos no update de admin).
   return {
     uid: user.id,
     name: user.name,
     email: user.email,
-    role: user.role,
     area: user.area,
-    status: user.status,
-    statusTone: user.statusTone,
     lastAccess: user.lastAccess,
     scopes: user.scopes,
     favoriteProcessIds: user.favoriteProcessIds ?? [],
@@ -115,6 +118,24 @@ export async function saveUser(user, actor = null) {
       target: normalizedUser.id,
     })
     return normalizedUser
+  }
+
+  // S3: em producao, role/status vao via callable para garantir que as custom
+  // claims batam com o que foi persistido. O `setDoc` abaixo grava o espelho
+  // em `users/{uid}` para exibicao. Em modo dev/local, mantemos o setDoc
+  // direto (callable exige emulador).
+  if (functions) {
+    try {
+      const updateClaims = httpsCallable(functions, 'adminUpdateUserClaims')
+      await updateClaims({
+        uid: normalizedUser.id,
+        role: normalizedUser.role,
+        status: normalizedUser.status,
+      })
+    } catch (error) {
+      console.error('Falha ao sincronizar custom claims do usuario.', error)
+      // Nao bloqueia o save — a role ainda vai como espelho em `users/{uid}`.
+    }
   }
 
   await setDoc(

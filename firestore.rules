@@ -20,6 +20,28 @@ service cloud.firestore {
         && status.matches('^[\\s]*[Aa][Tt][Ii][Vv][Oo][\\s]*$');
     }
 
+    // S3 / Sprint 5.1: claims do Firebase Auth sao a UNICA fonte de role/status.
+    // Fallback para `firestore.get(users/{uid})` foi removido em 2026-06-30
+    // (apos confirmar via Cloud Logging que todas as requests autenticadas
+    // vinham com claims). Ver [[Limitações conhecidas]] L18.
+    function myRoleClaims() {
+      return isAuthenticated() && 'role' in request.auth.token
+        ? request.auth.token.role
+        : null;
+    }
+
+    function myStatusClaims() {
+      return isAuthenticated() && 'status' in request.auth.token
+        ? request.auth.token.status
+        : null;
+    }
+
+    function myNameClaims() {
+      return isAuthenticated() && 'name' in request.auth.token
+        ? request.auth.token.name
+        : null;
+    }
+
     function myProfileExists() {
       return isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid));
@@ -31,16 +53,23 @@ service cloud.firestore {
         : null;
     }
 
+    // L18: role/status vem EXCLUSIVAMENTE de claims. Sem fallback para
+    // `users/{uid}` — se o usuario nao tiver claims, e' tratado como
+    // sem role/sem status (e portanto bloqueado em `isApprovedUser`).
     function myRole() {
-      return myProfileExists() ? myProfile().role : null;
+      return myRoleClaims();
     }
 
     function myStatus() {
-      return myProfileExists() ? myProfile().status : null;
+      return myStatusClaims();
     }
 
+    // myName ainda tem fallback: o nome pode estar desatualizado em claims
+    // ate o proximo login, e eh usado apenas para exibicao em `updatedByName`.
     function myName() {
-      return myProfileExists() ? myProfile().name : null;
+      return myNameClaims() != null
+        ? myNameClaims()
+        : (myProfileExists() ? myProfile().name : null);
     }
 
     function isApprovedUser() {
@@ -193,13 +222,34 @@ service cloud.firestore {
         && resource.data.isRead == true;
     }
 
+    function isAdminUserFieldsUpdate() {
+      // Admin pode alterar SOMENTE estes campos em `users/{uid}`. Mudou a
+      // partir de Sprint 5.1 (L18): antes, admin podia escrever qualquer
+      // campo; agora, o callable `adminUpdateUserClaims` e' a unica porta
+      // de entrada para role/status — escrita direta via Console/firestore
+      // com outros campos (ex.: `name`, `email`, `area`) e' rejeitada.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'role',
+        'status',
+        'statusTone',
+        'updatedAt',
+        'updatedById',
+        'updatedByName',
+      ]);
+    }
+
     match /users/{uid} {
       allow read: if isSelf(uid) || isAdmin();
 
       allow create: if (isSelf(uid) && hasCorporateEmail() && isSelfRegistration())
         || isAdmin();
 
-      allow update: if isAllowedSelfUserUpdate(uid) || isAdmin();
+      // Self: update apenas de metadados (name, area, lastAccess, favorites, notes).
+      // Admin: update apenas de role/status via callable (updatedById/Name obrigatorios).
+      allow update: if isAllowedSelfUserUpdate(uid)
+        || (isAdmin() && isAdminUserFieldsUpdate()
+            && request.resource.data.updatedById == request.auth.uid
+            && request.resource.data.updatedByName == myName());
 
       allow delete: if isAdmin();
     }
