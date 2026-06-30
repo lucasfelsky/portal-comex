@@ -89,15 +89,8 @@ export default function App() {
             <Route path="usuarios" element={<AdminUsersPanel />} />
             <Route path="comunicados" element={<AdminAnnouncementsPanel />} />
             <Route path="barra" element={<AdminBarStatusPanel />} />
+            <Route path="previsoes" element={<AdminForecastPage />} />
           </Route>
-          <Route
-            path="/admin/previsoes"
-            element={
-              <ProtectedRoute requireRole="admin">
-                <AdminForecastPage />
-              </ProtectedRoute>
-            }
-          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

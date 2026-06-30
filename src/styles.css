@@ -3241,46 +3241,6 @@ select {
   box-shadow: 0 10px 20px rgba(24, 64, 84, 0.16);
 }
 
-.nav-select {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.78rem;
-  color: var(--md-subtle);
-}
-
-.nav-select__label {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 700;
-}
-
-.nav-select select {
-  appearance: none;
-  border: 1px solid var(--md-outline);
-  border-radius: 12px;
-  padding: 8px 32px 8px 12px;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #f4f7f5 100%);
-  color: var(--md-text);
-  font-weight: 600;
-  font-size: 0.92rem;
-  background-image:
-    linear-gradient(180deg, #ffffff 0%, #f4f7f5 100%),
-    linear-gradient(45deg, transparent 50%, var(--md-subtle) 50%),
-    linear-gradient(135deg, var(--md-subtle) 50%, transparent 50%);
-  background-position:
-    0 0,
-    calc(100% - 18px) 50%,
-    calc(100% - 12px) 50%;
-  background-size:
-    100% 100%,
-    6px 6px,
-    6px 6px;
-  background-repeat: no-repeat;
-  cursor: pointer;
-}
-
 .admin-toolbar--right {
   justify-content: flex-end;
   align-self: start;

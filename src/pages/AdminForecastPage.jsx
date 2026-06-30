@@ -263,11 +263,9 @@ export default function AdminForecastPage() {
 
   if (loading) {
     return (
-      <div className="admin-panel-stack">
-        <div className="empty-state">
-          <strong>Carregando regras</strong>
-          <p>Buscando a configuração atual persistida em `forecastSettings/current`.</p>
-        </div>
+      <div className="empty-state">
+        <strong>Carregando regras</strong>
+        <p>Buscando a configuração atual persistida em `forecastSettings/current`.</p>
       </div>
     )
   }
@@ -275,7 +273,9 @@ export default function AdminForecastPage() {
   return (
     <div className="admin-panel-stack">
       <div className="admin-toolbar admin-toolbar--right">
-        <span className="inline-badge">{isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}</span>
+        <span className="inline-badge">
+          {isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}
+        </span>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
