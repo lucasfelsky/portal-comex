@@ -7,12 +7,11 @@ name: CI
 #
 # Secrets necessarios (configurar em Settings > Secrets and variables > Actions):
 #   FIREBASE_TOKEN  - token `firebase login:ci` (apenas para o dry-run).
-#                     Quando a etapa de deploy for adicionada em outra sprint,
-#                     reutilizamos este mesmo secret.
+#                     Para deploy automatico, ver `deploy-hosting.yml` que
+#                     suporta GCP_SA_KEY (preferencial) ou FIREBASE_TOKEN (legacy).
 #
 # Obs.: Portal COMEX NAO tem testes E2E (Playwright) ainda. A extensao
-# de UI tests (jsdom + @testing-library) e a cobertura do Portal do
-# Fornecedor estao no backlog (4.3 do Roadmap).
+# de UI tests (jsdom + @testing-library) esta em tests/ui/.
 
 on:
   push:

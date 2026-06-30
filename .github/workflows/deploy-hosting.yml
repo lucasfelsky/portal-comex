@@ -1,26 +1,71 @@
-name: Deploy to Firebase Hosting (production)
+# Deploy do Portal COMEX para Firebase Hosting.
+#
+# Refatorado em 2026-06-30 (Sprint 5.3, L19): gate em tag `v*` (ex: v1.2.0)
+# e migracao para GCP_SA_KEY (service account persistente).
+# FIREBASE_TOKEN fica como fallback legacy.
+#
+# Gatilhos:
+#   - push de tag `v*` (recomendado; deploy de release versionado)
+#   - workflow_dispatch (manual) com campo `environment` (production | staging)
+#   - push em `main` (deploy automatico de staging, se WORKFLOW_AUTO_DEPLOY_STAGING=true)
+#
+# Secrets necessarios (Settings > Secrets and variables > Actions):
+#   - GCP_SA_KEY (preferencial): service account JSON com permissao
+#     Firebase Hosting Admin + Cloud Functions Admin (para deploy:full).
+#     Gerar com `gcloud iam service-accounts keys create` e adicionar.
+#   - FIREBASE_TOKEN (legacy, deprecated): token `firebase login:ci` expira
+#     em ~1h. Mantido como fallback para nao quebrar setups antigos.
+#   - VITE_FIREBASE_*: 6 secrets do Firebase para o build (build-time).
+#
+# O workflow auto-detecta qual credencial usar:
+#   1. GCP_SA_KEY (preferencial)
+#   2. FIREBASE_TOKEN (legacy)
+#   3. Pula com warning se nenhum dos dois estiver setado.
+
+name: Deploy to Firebase Hosting
 
 on:
   push:
+    tags:
+      - 'v*'
     branches:
-      - main    # branch que publica em produção
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (production | staging)"
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-hosting
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write  # necessario se migrarmos para WIF no futuro
 
 jobs:
   build-and-deploy:
+    name: Build + Deploy to Firebase Hosting
     runs-on: ubuntu-latest
-    env:
-      # O contexto "secrets" nao pode ser usado em "if" de step diretamente.
-      # Por isso injetamos no env do job e checamos via env.FIREBASE_TOKEN.
-      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+    timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
 
-      - name: Install deps
+      - name: Install
         run: npm ci
 
       - name: Validar config do Firebase para o build
@@ -56,16 +101,46 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: npm run build
 
-      - name: Deploy to Firebase Hosting (production)
-        if: ${{ env.FIREBASE_TOKEN != '' }}
+      - name: Detectar credencial disponivel
+        id: creds
+        run: |
+          if [ -n "$GCP_SA_KEY" ]; then
+            echo "auth_method=GCP_SA_KEY" >> "$GITHUB_OUTPUT"
+            echo "Auth method: GCP_SA_KEY (preferencial)"
+          elif [ -n "$FIREBASE_TOKEN" ]; then
+            echo "auth_method=FIREBASE_TOKEN" >> "$GITHUB_OUTPUT"
+            echo "Auth method: FIREBASE_TOKEN (legacy, deprecated)"
+          else
+            echo "auth_method=NONE" >> "$GITHUB_OUTPUT"
+            echo "::warning::Nenhum auth method disponivel (GCP_SA_KEY ou FIREBASE_TOKEN). Deploy sera pulado."
+          fi
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Auth com GCP_SA_KEY (service account)
+        if: ${{ steps.creds.outputs.auth_method == 'GCP_SA_KEY' }}
+        run: |
+          echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
+          gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+          rm -f /tmp/sa-key.json
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Firebase Hosting
+        if: ${{ steps.creds.outputs.auth_method != 'NONE' }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           set +e
-          npx firebase-tools@latest deploy --only hosting --config firebase.portal-comex.json --project sq-comex-updates-3d22f > deploy.log 2>&1
+          npx firebase-tools@latest deploy --only hosting \
+            --config firebase.portal-comex.json \
+            --project sq-comex-updates-3d22f > deploy.log 2>&1
           code=$?
           cat deploy.log
           if [ "$code" -ne 0 ]; then
-            # HTTP 400 "is the current active version" = versao buildada identica a
-            # ativa em producao (nada a publicar). Tratar como sucesso.
+            # HTTP 400 "is the current active version" = versao buildada identica
+            # a ativa em producao (nada a publicar). Tratar como sucesso.
             if grep -q "is the current active version" deploy.log; then
               echo "::notice::Versao de hosting identica a ativa em producao — nada a publicar."
               exit 0
@@ -73,7 +148,7 @@ jobs:
             exit "$code"
           fi
 
-      - name: Aviso se FIREBASE_TOKEN ausente
-        if: ${{ env.FIREBASE_TOKEN == '' }}
+      - name: Aviso se nenhuma credencial disponivel
+        if: ${{ steps.creds.outputs.auth_method == 'NONE' }}
         run: |
-          echo "::warning::FIREBASE_TOKEN nao configurado — deploy de hosting pulado. Gere um token com 'firebase login:ci' (local) e adicione como secret FIREBASE_TOKEN no GitHub (Settings > Secrets and variables > Actions)."
+          echo "::warning::Nenhum auth method configurado. Adicione GCP_SA_KEY (preferencial) ou FIREBASE_TOKEN (legacy) em Settings > Secrets and variables > Actions."
