@@ -107,14 +107,18 @@ async function ensureUserProfile(user, { forceRefresh = false } = {}) {
   }
 
   const mergedProfile = {
-    ...snapshot.data(),
+    // Omit role/status/statusTone/scopes: a fonte da verdade sao as custom
+    // claims (L18 / Sprint 5.1). O spread final de baseProfile garante
+    // que role/status venham das claims, NAO do Firestore (que e' read-only).
     uid: user.uid,
-    email: baseProfile.email,
     name: user.displayName ?? snapshot.data().name ?? snapshot.data().email ?? 'Usuário',
+    area: existingProfile?.area ?? 'Geral',
     lastAccess:
       normalizeProfileStatus(claims.status) === 'Ativo'
         ? now
         : snapshot.data().lastAccess ?? baseProfile.lastAccess,
+    favoriteProcessIds: existingProfile?.favoriteProcessIds ?? [],
+    notes: existingProfile?.notes ?? getDefaultNotes(claims.status),
     updatedAt: serverTimestamp(),
   }
 
@@ -125,7 +129,6 @@ async function ensureUserProfile(user, { forceRefresh = false } = {}) {
   await setDoc(userRef, mergedProfile, { merge: true })
 
   return {
-    ...snapshot.data(),
     ...baseProfile,
     ...mergedProfile,
   }
