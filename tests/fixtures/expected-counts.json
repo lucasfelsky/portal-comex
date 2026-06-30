@@ -1,0 +1,93 @@
+{
+  "_comment": "Counts esperados para o Portal COMEX. O script scripts/audit-vault-counts.cjs compara esses valores com o filesystem. Atualize este arquivo (e a vault) sempre que um desses numeros mudar. Valores computados por npx vitest run --reporter verbose em 2026-06-30.",
+  "src": {
+    "directories": 9,
+    "_directories_list": [
+      "components",
+      "contexts",
+      "data",
+      "features",
+      "hooks",
+      "lib",
+      "pages",
+      "services",
+      "utils"
+    ]
+  },
+  "srcComponents": {
+    "topLevel": 2,
+    "_topLevel_list": [
+      "AppLayout.jsx",
+      "ProtectedRoute.jsx"
+    ]
+  },
+  "srcFeatures": {
+    "directories": 3,
+    "_directories_list": [
+      "admin",
+      "intelliquote",
+      "processes"
+    ]
+  },
+  "srcPages": {
+    "count": 8
+  },
+  "srcServices": {
+    "count": 15,
+    "_list": [
+      "announcementsRepository.js",
+      "auditRepository.js",
+      "authRepository.js",
+      "barStatusRepository.js",
+      "exchangeRatesRepository.js",
+      "externalNewsRepository.js",
+      "forecastSettingsRepository.js",
+      "managedUsersRepository.js",
+      "newsMediaStorage.js",
+      "newsRepository.js",
+      "notificationsRepository.js",
+      "postReceiptImagesStorage.js",
+      "processesRepository.js",
+      "processMessagesRepository.js",
+      "usersRepository.js"
+    ]
+  },
+  "srcUtils": {
+    "count": 6,
+    "_list": [
+      "collectionWindows.js",
+      "deliveryForecast.js",
+      "newsMedia.js",
+      "postReceiptImages.js",
+      "storageUploadValidation.js",
+      "textEncoding.js"
+    ]
+  },
+  "firestore": {
+    "topLevelCollections": 10,
+    "subcollections": 1,
+    "_topLevel_list": [
+      "announcements",
+      "audits",
+      "barra",
+      "externalNews",
+      "forecastSettings",
+      "news",
+      "notifications",
+      "userCredentials",
+      "users",
+      "processes"
+    ],
+    "_subcollections_list": [
+      "processes/messages"
+    ]
+  },
+  "tests": {
+    "totalFiles": 12,
+    "_breakdown": {
+      "firebase": 2,
+      "functions": 7,
+      "ui": 3
+    }
+  }
+}

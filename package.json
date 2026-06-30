@@ -10,6 +10,8 @@
     "lint": "echo \"no lint configured\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "audit:vault": "node scripts/audit-vault-counts.cjs",
+    "pretest": "node scripts/audit-vault-counts.cjs",
     "emulators": "firebase emulators:start --only auth,firestore,storage,functions",
     "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
     "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,functions --config firebase.portal-comex.json",
