@@ -263,34 +263,19 @@ export default function AdminForecastPage() {
 
   if (loading) {
     return (
-      <section className="surface">
-        <div className="section-heading">
-          <div>
-            <h2>Regras de previsão</h2>
-            <p>Carregando configurações do Firestore...</p>
-          </div>
-        </div>
+      <div className="admin-panel-stack">
         <div className="empty-state">
           <strong>Carregando regras</strong>
           <p>Buscando a configuração atual persistida em `forecastSettings/current`.</p>
         </div>
-      </section>
+      </div>
     )
   }
 
   return (
-    <section className="surface">
-      <div className="section-heading">
-        <div>
-          <h2>Regras de previsão</h2>
-          <p>
-            Configure cutoffs, dias úteis por categoria e o rolling customs forecast. As mudanças valem em
-            tempo real para todos os usuários.
-          </p>
-        </div>
-        <div className="admin-toolbar">
-          <span className="inline-badge">{isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}</span>
-        </div>
+    <div className="admin-panel-stack">
+      <div className="admin-toolbar admin-toolbar--right">
+        <span className="inline-badge">{isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}</span>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
@@ -544,6 +529,6 @@ export default function AdminForecastPage() {
         padrão embutido em <code>DEFAULT_FORECAST_SETTINGS</code> (Navegantes 14h, Itapoá 12h, FCL/CONSOLIDADO
         5, LCL 7, AEREO 10, rolling 3 dias).
       </p>
-    </section>
+    </div>
   )
 }

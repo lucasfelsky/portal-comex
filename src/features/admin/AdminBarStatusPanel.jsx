@@ -72,7 +72,7 @@ export default function AdminBarStatusPanel() {
   }
 
   return (
-    <div className="admin-panel-stack">
+    <>
       {error ? <div className="error-banner">{error}</div> : null}
 
       <article className="list-card">
@@ -126,6 +126,6 @@ export default function AdminBarStatusPanel() {
           </div>
         )}
       </article>
-    </div>
+    </>
   )
 }

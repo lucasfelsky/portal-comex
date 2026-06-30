@@ -154,7 +154,7 @@ export default function AdminAnnouncementsPanel() {
   }
 
   return (
-    <div className="admin-panel-stack">
+    <>
       {error ? <div className="error-banner">{error}</div> : null}
 
       <article className="list-card">
@@ -270,6 +270,6 @@ export default function AdminAnnouncementsPanel() {
           </div>
         </div>
       </article>
-    </div>
+    </>
   )
 }
