@@ -1,24 +1,14 @@
 import { useEffect, useState } from 'react'
-import { getRoleLabel, getRolePermissions, roleOptions } from '../features/admin/rolePermissions'
-import useAuth from '../hooks/useAuth'
-import { isFirebaseConfigured } from '../lib/firebase'
-import {
-  listAnnouncements,
-  removeAnnouncement,
-  saveAnnouncement,
-} from '../services/announcementsRepository'
-import {
-  BAR_STATUS_OPTIONS,
-  getBarStatus,
-  saveBarStatus,
-} from '../services/barStatusRepository'
+import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 import {
   createManagedAuthUser,
   deleteManagedUser,
   updateManagedUserPassword,
-} from '../services/managedUsersRepository'
-import { sendCustomVerificationEmail } from '../services/authRepository'
-import { createUser, deleteUser, listUsers, saveUser } from '../services/usersRepository'
+} from '../../services/managedUsersRepository'
+import { sendCustomVerificationEmail } from '../../services/authRepository'
+import { createUser, deleteUser, listUsers, saveUser } from '../../services/usersRepository'
+import useAuth from '../../hooks/useAuth'
+import { isFirebaseConfigured } from '../../lib/firebase'
 
 const statusOptions = ['Todos', 'Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
 
@@ -30,11 +20,9 @@ function statusMeta(status) {
   if (status === 'Ativo') {
     return { status: 'Ativo', statusTone: 'ok' }
   }
-
   if (status === 'Bloqueado' || status === 'Reprovado') {
     return { status, statusTone: 'neutral' }
   }
-
   return { status: 'Pendente', statusTone: 'warn' }
 }
 
@@ -61,41 +49,12 @@ function createDraftFromUser(user) {
   }
 }
 
-function createEmptyAnnouncementDraft() {
-  return {
-    id: '',
-    title: '',
-    content: '',
-    channel: 'Banner interno',
-  }
-}
-
-function formatTimestamp(value) {
-  if (!value) {
-    return 'Agora'
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value)
-  }
-
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
 function buildActionErrorMessage(prefix, error) {
   const details = error?.code ?? error?.message
-
   return details ? `${prefix} (${details})` : prefix
 }
 
-export default function AdminPage() {
+export default function AdminUsersPanel() {
   const { profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('Todos')
@@ -107,19 +66,6 @@ export default function AdminPage() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
-  const [announcements, setAnnouncements] = useState([])
-  const [announcementDraft, setAnnouncementDraft] = useState(createEmptyAnnouncementDraft())
-  const [selectedAnnouncementId, setSelectedAnnouncementId] = useState(null)
-  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
-  const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false)
-  const [barStatusDraft, setBarStatusDraft] = useState({
-    status: BAR_STATUS_OPTIONS[0].value,
-    notes: '',
-  })
-  const [barStatusMeta, setBarStatusMeta] = useState(null)
-  const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
-  const [isSavingBarStatus, setIsSavingBarStatus] = useState(false)
-  const isLoadingCredential = false
 
   useEffect(() => {
     let isMounted = true
@@ -131,9 +77,7 @@ export default function AdminPage() {
       try {
         const loadedUsers = await listUsers()
 
-        if (!isMounted) {
-          return
-        }
+        if (!isMounted) return
 
         setUsers(loadedUsers)
         setSelectedUserId((currentId) => currentId ?? loadedUsers[0]?.id ?? null)
@@ -158,85 +102,11 @@ export default function AdminPage() {
     }
   }, [])
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadAnnouncements() {
-      setIsLoadingAnnouncements(true)
-
-      try {
-        const loadedAnnouncements = await listAnnouncements()
-
-        if (!isMounted) {
-          return
-        }
-
-        setAnnouncements(loadedAnnouncements)
-        setSelectedAnnouncementId((currentId) => currentId ?? loadedAnnouncements[0]?.id ?? null)
-        setAnnouncementDraft((currentDraft) =>
-          currentDraft.id ? currentDraft : loadedAnnouncements[0] ?? createEmptyAnnouncementDraft()
-        )
-      } catch (loadError) {
-        if (isMounted) {
-          setError(buildActionErrorMessage('Não foi possível carregar os comunicados.', loadError))
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingAnnouncements(false)
-        }
-      }
-    }
-
-    loadAnnouncements()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadBarStatus() {
-      setIsLoadingBarStatus(true)
-
-      try {
-        const loadedBarStatus = await getBarStatus()
-
-        if (!isMounted) {
-          return
-        }
-
-        setBarStatusMeta(loadedBarStatus)
-        setBarStatusDraft({
-          status: loadedBarStatus.status,
-          notes: loadedBarStatus.notes,
-        })
-      } catch (loadError) {
-        if (isMounted) {
-          setError(buildActionErrorMessage('Não foi possível carregar o status da barra.', loadError))
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingBarStatus(false)
-        }
-      }
-    }
-
-    loadBarStatus()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
   const filteredUsers = users.filter((user) => {
     const matchesStatus = statusFilter === 'Todos' || user.status === statusFilter
     const query = searchTerm.trim().toLowerCase()
 
-    if (!query) {
-      return matchesStatus
-    }
+    if (!query) return matchesStatus
 
     const searchableText = [user.name, user.email, user.role, user.area, user.id]
       .join(' ')
@@ -247,19 +117,13 @@ export default function AdminPage() {
 
   const pendingUsers = users.filter((user) => user.status === 'Pendente')
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? filteredUsers[0] ?? null
-  const selectedAnnouncement =
-    announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? null
   const selectedStatusTone = draft.statusTone ?? statusMeta(draft.status).statusTone
-  const isExistingUserWithoutStoredPassword = false
   const passwordInputPlaceholder = isCreating
     ? 'Defina a senha inicial do usuario'
     : 'Digite uma nova senha para redefinir'
 
   useEffect(() => {
-    if (!selectedUser || isCreating) {
-      return
-    }
-
+    if (!selectedUser || isCreating) return
     setDraft(createDraftFromUser(selectedUser))
   }, [selectedUser, isCreating])
 
@@ -269,71 +133,7 @@ export default function AdminPage() {
       ...currentDraft,
       password: isCreating ? currentDraft.password : '',
     }))
-    return undefined
-
-    let isMounted = true
-
-    async function loadCredential() {
-      if (isCreating || !selectedUser?.id) {
-        setIsLoadingCredential(false)
-        setIsPasswordVisible(false)
-        setOriginalPassword('')
-        setDraft((currentDraft) => ({
-          ...currentDraft,
-          password: isCreating ? currentDraft.password : '',
-        }))
-        return
-      }
-
-      setIsLoadingCredential(true)
-      setIsPasswordVisible(false)
-
-      try {
-        const credential = { password: '' }
-
-        if (!isMounted) {
-          return
-        }
-
-        setOriginalPassword(credential.password)
-        setDraft((currentDraft) =>
-          currentDraft.id === selectedUser.id
-            ? {
-                ...currentDraft,
-                password: credential.password,
-              }
-            : currentDraft
-        )
-      } catch (loadError) {
-        if (isMounted) {
-          setError(buildActionErrorMessage('Não foi possível carregar a senha do usuário.', loadError))
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingCredential(false)
-        }
-      }
-    }
-
-    loadCredential()
-
-    return () => {
-      isMounted = false
-    }
   }, [isCreating, selectedUser])
-
-  useEffect(() => {
-    if (!selectedAnnouncement) {
-      return
-    }
-
-    setAnnouncementDraft({
-      id: selectedAnnouncement.id,
-      title: selectedAnnouncement.title,
-      content: selectedAnnouncement.content,
-      channel: selectedAnnouncement.channel,
-    })
-  }, [selectedAnnouncement])
 
   function handleSelectUser(userId) {
     setSelectedUserId(userId)
@@ -357,18 +157,10 @@ export default function AdminPage() {
           scopes: getRolePermissions(value),
         }
       }
-
       if (field === 'status') {
-        return {
-          ...currentDraft,
-          ...statusMeta(value),
-        }
+        return { ...currentDraft, ...statusMeta(value) }
       }
-
-      return {
-        ...currentDraft,
-        [field]: value,
-      }
+      return { ...currentDraft, [field]: value }
     })
   }
 
@@ -398,7 +190,6 @@ export default function AdminPage() {
         ...draft,
         scopes: getRolePermissions(draft.role),
       }
-
       delete payload.password
 
       let savedUser = null
@@ -413,12 +204,7 @@ export default function AdminPage() {
             area: payload.area,
             status: payload.status,
           })
-
-          savedUser = {
-            ...payload,
-            id: managedAuthUser.uid,
-            email: managedAuthUser.email,
-          }
+          savedUser = { ...payload, id: managedAuthUser.uid, email: managedAuthUser.email }
         } else {
           savedUser = await createUser(payload, profile)
         }
@@ -430,89 +216,15 @@ export default function AdminPage() {
         }
       } else {
         savedUser = await saveUser(payload, profile)
-
         if (isFirebaseConfigured && normalizedPassword) {
-          await updateManagedUserPassword({
-            uid: savedUser.id,
-            password: normalizedPassword,
-          })
+          await updateManagedUserPassword({ uid: savedUser.id, password: normalizedPassword })
         }
       }
 
       await refreshUsers(savedUser.id)
       setIsCreating(false)
-      setDraft({
-        ...createDraftFromUser(savedUser),
-        password: '',
-      })
+      setDraft({ ...createDraftFromUser(savedUser), password: '' })
       setIsPasswordVisible(false)
-      return
-
-      if (false) {
-      const normalizedPassword = String(draft.password ?? '').trim()
-
-      if (isCreating && normalizedPassword.length < 6) {
-        throw new Error('Informe uma senha com pelo menos 6 caracteres para criar o usuário.')
-      }
-
-      if (!isCreating && normalizedPassword !== originalPassword && normalizedPassword.length < 6) {
-        throw new Error('A nova senha deve ter pelo menos 6 caracteres.')
-      }
-
-      const payload = {
-        ...draft,
-        scopes: getRolePermissions(draft.role),
-      }
-
-      delete payload.password
-
-      let savedUser = null
-
-      if (isCreating) {
-        let managedAuthUser = null
-
-        if (isFirebaseConfigured) {
-          managedAuthUser = await createManagedAuthUser({
-            email: payload.email,
-            password: normalizedPassword,
-            name: payload.name,
-          })
-        }
-
-        savedUser = await createUser(
-          {
-            ...payload,
-            id: managedAuthUser?.uid || payload.id,
-            email: managedAuthUser?.email || payload.email,
-          },
-          profile
-        )
-
-        void savedUser
-
-        if (isFirebaseConfigured) {
-          await sendCustomVerificationEmail({ uid: savedUser.id })
-        }
-      } else {
-        savedUser = await saveUser(payload, profile)
-
-        if (normalizedPassword && normalizedPassword !== originalPassword) {
-          await updateManagedUserPassword({
-            uid: savedUser.id,
-            password: normalizedPassword,
-          })
-          void savedUser
-        }
-      }
-      await refreshUsers(savedUser.id)
-      setIsCreating(false)
-      setDraft({
-        ...createDraftFromUser(savedUser),
-        password: normalizedPassword,
-      })
-      setOriginalPassword(normalizedPassword)
-      setIsPasswordVisible(false)
-      }
     } catch (saveError) {
       setError(buildActionErrorMessage('Não foi possível salvar o usuário.', saveError))
     } finally {
@@ -570,18 +282,6 @@ export default function AdminPage() {
       const nextSelectedUser = refreshedUsers[0] ?? null
       setIsCreating(false)
       setDraft(nextSelectedUser ? createDraftFromUser(nextSelectedUser) : createEmptyDraft())
-      return
-
-      if (false) {
-      const refreshedUsers = await (async () => {
-        await deleteUser(user.id, profile)
-        return refreshUsers(null)
-      })()
-
-      const nextSelectedUser = refreshedUsers[0] ?? null
-      setIsCreating(false)
-      setDraft(nextSelectedUser ? createDraftFromUser(nextSelectedUser) : createEmptyDraft())
-      }
     } catch (saveError) {
       setError(buildActionErrorMessage('Não foi possível excluir o usuário.', saveError))
     } finally {
@@ -589,273 +289,11 @@ export default function AdminPage() {
     }
   }
 
-  async function refreshAnnouncements(nextSelectedId = selectedAnnouncementId) {
-    const refreshedAnnouncements = await listAnnouncements()
-    setAnnouncements(refreshedAnnouncements)
-    setSelectedAnnouncementId(nextSelectedId ?? refreshedAnnouncements[0]?.id ?? null)
-    return refreshedAnnouncements
-  }
-
-  function handleAnnouncementDraftChange(field, value) {
-    setAnnouncementDraft((currentDraft) => ({
-      ...currentDraft,
-      [field]: value,
-    }))
-  }
-
-  function handleSelectAnnouncement(announcementId) {
-    setSelectedAnnouncementId(announcementId)
-  }
-
-  function handleCreateAnnouncementMode() {
-    setSelectedAnnouncementId(null)
-    setAnnouncementDraft(createEmptyAnnouncementDraft())
-  }
-
-  async function handleSaveAnnouncement() {
-    setIsSavingAnnouncement(true)
-    setError('')
-
-    try {
-      const savedAnnouncement = await saveAnnouncement(announcementDraft, profile)
-      await refreshAnnouncements(savedAnnouncement.id)
-    } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível salvar o comunicado.', saveError))
-    } finally {
-      setIsSavingAnnouncement(false)
-    }
-  }
-
-  async function handleRemoveAnnouncement(announcementId) {
-    setIsSavingAnnouncement(true)
-    setError('')
-
-    try {
-      await removeAnnouncement(announcementId, profile)
-      const refreshedAnnouncements = await refreshAnnouncements(
-        selectedAnnouncementId === announcementId ? null : selectedAnnouncementId
-      )
-
-      if (selectedAnnouncementId === announcementId) {
-        const nextAnnouncement = refreshedAnnouncements[0] ?? null
-        setAnnouncementDraft(
-          nextAnnouncement
-            ? {
-                id: nextAnnouncement.id,
-                title: nextAnnouncement.title,
-                content: nextAnnouncement.content,
-                channel: nextAnnouncement.channel,
-              }
-            : createEmptyAnnouncementDraft()
-        )
-      }
-    } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível remover o comunicado.', saveError))
-    } finally {
-      setIsSavingAnnouncement(false)
-    }
-  }
-
-  async function handleSaveBarStatus() {
-    setIsSavingBarStatus(true)
-    setError('')
-
-    try {
-      const savedBarStatus = await saveBarStatus(barStatusDraft, profile)
-      setBarStatusMeta(savedBarStatus)
-      setBarStatusDraft({
-        status: savedBarStatus.status,
-        notes: savedBarStatus.notes,
-      })
-    } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível salvar o status da barra.', saveError))
-    } finally {
-      setIsSavingBarStatus(false)
-    }
-  }
-
   return (
-    <section className="surface">
-      <div className="section-heading">
-        <div>
-          <h2>Centro administrativo</h2>
-        </div>
-        <div className="admin-toolbar">
-          <span className="inline-badge">
-            {isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}
-          </span>
-        </div>
-      </div>
-
+    <div className="admin-panel-stack">
       {error ? <div className="error-banner">{error}</div> : null}
 
-      <div className="admin-feature-stack">
-        <article className="list-card">
-          <div className="card-heading">
-            <div>
-              <h3>Comunicados internos</h3>
-            </div>
-            <button type="button" className="primary-button" onClick={handleCreateAnnouncementMode}>
-              Novo comunicado
-            </button>
-          </div>
-
-          <div className="announcement-grid">
-            <div className="announcement-list">
-              {isLoadingAnnouncements ? (
-                <div className="empty-state">
-                  <strong>Carregando comunicados</strong>
-                  <p>Buscando os avisos cadastrados no repositório ativo.</p>
-                </div>
-              ) : announcements.length > 0 ? (
-                announcements.map((announcement) => (
-                  <button
-                    key={announcement.id}
-                    type="button"
-                    className={`announcement-card announcement-card--button${
-                      selectedAnnouncementId === announcement.id ? ' announcement-card--selected' : ''
-                    }`}
-                    onClick={() => handleSelectAnnouncement(announcement.id)}
-                  >
-                    <div className="announcement-card__meta">
-                      <span>{formatTimestamp(announcement.updatedAt)}</span>
-                      <span>{announcement.channel}</span>
-                    </div>
-                    <strong>{announcement.title}</strong>
-                    <p>{announcement.content}</p>
-                  </button>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <strong>Nenhum comunicado publicado</strong>
-                  <p>Crie o primeiro aviso interno para começar a abastecer o painel.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="detail-stack">
-              <label className="field">
-                <span>Título</span>
-                <input
-                  className="text-input"
-                  type="text"
-                  value={announcementDraft.title}
-                  onChange={(event) => handleAnnouncementDraftChange('title', event.target.value)}
-                  placeholder="Ex.: Atualização operacional do portal"
-                />
-              </label>
-
-              <label className="field">
-                <span>Canal</span>
-                <input
-                  className="text-input"
-                  type="text"
-                  value={announcementDraft.channel}
-                  onChange={(event) => handleAnnouncementDraftChange('channel', event.target.value)}
-                  placeholder="Ex.: Banner interno"
-                />
-              </label>
-
-              <label className="field">
-                <span>Mensagem</span>
-                <textarea
-                  className="text-input text-area"
-                  value={announcementDraft.content}
-                  onChange={(event) => handleAnnouncementDraftChange('content', event.target.value)}
-                  placeholder="Escreva o comunicado que será exibido aos usuários"
-                />
-              </label>
-
-              <div className="detail-card">
-                <span className="detail-label">Resumo</span>
-                <p>
-                  {announcementDraft.title
-                    ? `${announcementDraft.title}${announcementDraft.channel ? ` · ${announcementDraft.channel}` : ''}`
-                    : 'Preencha o título e a mensagem para publicar o comunicado.'}
-                </p>
-              </div>
-
-              <div className="action-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={handleSaveAnnouncement}
-                  disabled={isSavingAnnouncement}
-                >
-                  {isSavingAnnouncement
-                    ? 'Salvando...'
-                    : announcementDraft.id
-                      ? 'Salvar comunicado'
-                      : 'Publicar comunicado'}
-                </button>
-                {announcementDraft.id ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => handleRemoveAnnouncement(announcementDraft.id)}
-                    disabled={isSavingAnnouncement}
-                  >
-                    Remover
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article className="list-card">
-          <div className="card-heading">
-            <div>
-              <h3>Barra Itajaí/Navegantes</h3>
-            </div>
-            {barStatusMeta ? (
-              <span className={`status-tag status-tag--${barStatusMeta.tone}`}>{barStatusMeta.label}</span>
-            ) : null}
-          </div>
-
-          {isLoadingBarStatus ? (
-            <div className="empty-state">
-              <strong>Carregando status da barra</strong>
-              <p>Buscando a última condição operacional registrada.</p>
-            </div>
-          ) : (
-            <div className="detail-stack">
-              <label className="field">
-                <span>Status atual</span>
-                <select
-                  className="text-input"
-                  value={barStatusDraft.status}
-                  onChange={(event) =>
-                    setBarStatusDraft((currentDraft) => ({
-                      ...currentDraft,
-                      status: event.target.value,
-                    }))
-                  }
-                >
-                  {BAR_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="action-row">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={handleSaveBarStatus}
-                  disabled={isSavingBarStatus}
-                >
-                  {isSavingBarStatus ? 'Salvando...' : 'Salvar status da barra'}
-                </button>
-              </div>
-            </div>
-          )}
-        </article>
-      </div>
-
-      <div className="dual-grid" style={{ marginTop: '16px' }}>
+      <div className="dual-grid">
         <article className="list-card">
           <div className="card-heading">
             <div>
@@ -988,7 +426,7 @@ export default function AdminPage() {
         </article>
       </div>
 
-      <article className="list-card" style={{ marginTop: '16px' }}>
+      <article className="list-card">
         <div className="card-heading">
           <div>
             <h3>{isCreating ? 'Novo usuário' : 'Detalhe do usuário'}</h3>
@@ -1028,7 +466,9 @@ export default function AdminPage() {
           {!isCreating && isFirebaseConfigured ? (
             <div className="detail-card detail-card--warning">
               <span className="detail-label">Email protegido</span>
-              <p>Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o Firebase Auth.</p>
+              <p>
+                Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o Firebase Auth.
+              </p>
             </div>
           ) : null}
 
@@ -1041,16 +481,7 @@ export default function AdminPage() {
               onChange={(event) => handleDraftChange('password', event.target.value)}
               onFocus={() => setIsPasswordVisible(true)}
               onClick={() => setIsPasswordVisible(true)}
-              placeholder={passwordInputPlaceholder /*
-                isCreating
-                  ? 'Defina a senha inicial do usuário'
-                  : isLoadingCredential
-                    ? 'Carregando senha...'
-                    : isExistingUserWithoutStoredPassword
-                      ? 'Nenhuma senha visível disponível. Digite uma nova senha.'
-                      : 'Clique no campo para revelar ou editar'
-              */}
-              disabled={false}
+              placeholder={passwordInputPlaceholder}
               autoComplete="new-password"
             />
           </label>
@@ -1059,8 +490,8 @@ export default function AdminPage() {
             <div className="detail-card detail-card--warning">
               <span className="detail-label">Senha não disponível</span>
               <p>
-                Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário,
-                digite uma nova senha e salve.
+                Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário, digite uma
+                nova senha e salve.
               </p>
             </div>
           ) : null}
@@ -1169,6 +600,6 @@ export default function AdminPage() {
           ) : null}
         </div>
       </article>
-    </section>
+    </div>
   )
 }

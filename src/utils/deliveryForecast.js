@@ -4,6 +4,33 @@ function pad(value) {
 
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo'
 
+const DEFAULT_CATEGORY_BUSINESS_DAYS = {
+  FCL: 5,
+  LCL: 7,
+  AEREO: 10,
+  CONSOLIDADO: 5,
+}
+
+const DEFAULT_ROLLING_CUSTOMS = Object.freeze({
+  enabled: true,
+  businessDaysAfterBerth: 3,
+  appliesTo: Object.freeze(['FCL', 'CONSOLIDADO']),
+  duimpStatuses: Object.freeze(['aguardando registro', 'aguardando registro da duimp']),
+})
+
+const DEFAULT_DESTINATIONS = Object.freeze([
+  Object.freeze({ match: 'navegantes', label: 'Navegantes', cutoffHour: 14, cutoffMinute: 0 }),
+  Object.freeze({ match: 'itapoa', label: 'Itapoá', cutoffHour: 12, cutoffMinute: 0 }),
+])
+
+export const DEFAULT_FORECAST_SETTINGS = Object.freeze({
+  destinations: DEFAULT_DESTINATIONS,
+  categoryBusinessDays: DEFAULT_CATEGORY_BUSINESS_DAYS,
+  rollingCustoms: DEFAULT_ROLLING_CUSTOMS,
+  updatedAt: null,
+  updatedBy: null,
+})
+
 function toDateKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
@@ -138,63 +165,70 @@ function addBusinessDays(date, businessDays) {
   return currentDate
 }
 
-function getScheduledCollectionDeliveryDate(process) {
-  if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
-
-  const scheduledAt = parseDateTime(process.collectionScheduledAt)
-  if (!scheduledAt) return ''
-
-  const destination = normalizeText(process.destination)
-  const scheduledDate = startOfDay(scheduledAt)
-  const isWeekend = !isBusinessDay(scheduledDate)
-  const afterCutoff = destination.includes('navegantes')
-    ? isAfterCutoff(scheduledAt, 14)
-    : destination.includes('itapoa')
-      ? isAfterCutoff(scheduledAt, 12)
-      : true
-
-  if (destination.includes('navegantes')) {
-    return isWeekend || afterCutoff
-      ? toDateKey(getNextBusinessDay(scheduledDate))
-      : toDateKey(scheduledDate)
-  }
-
-  if (destination.includes('itapoa')) {
-    return isWeekend || afterCutoff
-      ? toDateKey(getNextBusinessDay(scheduledDate))
-      : toDateKey(scheduledDate)
-  }
-
-  return ''
+function resolveSettings(settings) {
+  if (settings && typeof settings === 'object') return settings
+  return DEFAULT_FORECAST_SETTINGS
 }
 
-export function getScheduledCollectionDeliveryShift(process) {
+function resolveDestinations(settings) {
+  const candidates = settings?.destinations
+  if (Array.isArray(candidates) && candidates.length > 0) return candidates
+  return DEFAULT_DESTINATIONS
+}
+
+function findDestinationRule(settings, destination) {
+  if (!destination) return null
+  const normalizedDestination = normalizeText(destination)
+  if (!normalizedDestination) return null
+  return resolveDestinations(settings).find((entry) =>
+    normalizedDestination.includes(normalizeText(entry?.match))
+  ) ?? null
+}
+
+export function getScheduledCollectionDeliveryDate(process, settings) {
   if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
 
   const scheduledAt = parseDateTime(process.collectionScheduledAt)
   if (!scheduledAt) return ''
 
-  const destination = normalizeText(process.destination)
+  const resolvedSettings = resolveSettings(settings)
+  const rule = findDestinationRule(resolvedSettings, process.destination)
+  if (!rule) return ''
+
   const scheduledDate = startOfDay(scheduledAt)
   const isWeekend = !isBusinessDay(scheduledDate)
-  const cutoffHour = destination.includes('navegantes')
-    ? 14
-    : destination.includes('itapoa')
-      ? 12
-      : null
+  const afterCutoff = isAfterCutoff(scheduledAt, rule.cutoffHour)
 
-  if (cutoffHour === null) return 'Vespertino'
+  if (isWeekend || afterCutoff) {
+    return toDateKey(getNextBusinessDay(scheduledDate))
+  }
+
+  return toDateKey(scheduledDate)
+}
+
+export function getScheduledCollectionDeliveryShift(process, settings) {
+  if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
+
+  const scheduledAt = parseDateTime(process.collectionScheduledAt)
+  if (!scheduledAt) return ''
+
+  const resolvedSettings = resolveSettings(settings)
+  const rule = findDestinationRule(resolvedSettings, process.destination)
+  if (!rule) return 'Vespertino'
+
+  const scheduledDate = startOfDay(scheduledAt)
+  const isWeekend = !isBusinessDay(scheduledDate)
   if (isWeekend) return 'Matutino'
-  if (isAfterCutoff(scheduledAt, cutoffHour)) return 'Matutino'
+  if (isAfterCutoff(scheduledAt, rule.cutoffHour)) return 'Matutino'
 
   return 'Vespertino'
 }
 
-function getBusinessDaysToAdd(category) {
-  if (category === 'LCL') return 7
-  if (category === 'AEREO') return 10
-  if (category === 'FCL' || category === 'CONSOLIDADO') return 5
-  return 0
+function getBusinessDaysToAdd(category, settings) {
+  const resolvedSettings = resolveSettings(settings)
+  const map = resolvedSettings?.categoryBusinessDays ?? DEFAULT_CATEGORY_BUSINESS_DAYS
+  const value = map?.[category]
+  return Number.isFinite(Number(value)) ? Number(value) : 0
 }
 
 function normalizeDeliveryDateOverride(value) {
@@ -222,53 +256,63 @@ function getRollingCustomsForecastBaseDate(process) {
   return currentDate
 }
 
-function shouldUseRollingCustomsForecast(process) {
+function shouldUseRollingCustomsForecast(process, settings) {
   if (!process || typeof process !== 'object') return false
-  if (process.category !== 'FCL' && process.category !== 'CONSOLIDADO') return false
+
+  const resolvedSettings = resolveSettings(settings)
+  const rolling = resolvedSettings?.rollingCustoms ?? DEFAULT_ROLLING_CUSTOMS
+  if (!rolling?.enabled) return false
+
+  const appliesTo = Array.isArray(rolling.appliesTo) ? rolling.appliesTo : []
+  if (!appliesTo.includes(process.category)) return false
   if (!process.berthed) return false
 
   const duimpStatus = normalizeText(process.duimpStatus)
-  return (
-    !duimpStatus ||
-    duimpStatus === 'aguardando registro' ||
-    duimpStatus === 'aguardando registro da duimp'
-  )
+  const allowedStatuses = Array.isArray(rolling.duimpStatuses)
+    ? rolling.duimpStatuses.map((status) => normalizeText(status))
+    : []
+
+  if (allowedStatuses.length === 0) return !duimpStatus
+  if (!duimpStatus) return true
+  return allowedStatuses.includes(duimpStatus)
 }
 
-export function getAutomaticEstimatedDeliveryDate(processOrEta, category) {
+export function getAutomaticEstimatedDeliveryDate(processOrEta, category, settings) {
   if (typeof processOrEta === 'object' && processOrEta !== null) {
-    const scheduledCollectionDate = getScheduledCollectionDeliveryDate(processOrEta)
+    const scheduledCollectionDate = getScheduledCollectionDeliveryDate(processOrEta, settings)
     if (scheduledCollectionDate) {
       return ensureDeliveryNotBeforeEta(scheduledCollectionDate, processOrEta.eta)
     }
 
-    if (shouldUseRollingCustomsForecast(processOrEta)) {
+    if (shouldUseRollingCustomsForecast(processOrEta, settings)) {
+      const resolvedSettings = resolveSettings(settings)
+      const rolling = resolvedSettings?.rollingCustoms ?? DEFAULT_ROLLING_CUSTOMS
       const rollingForecastDate = toDateKey(
-        addBusinessDays(getRollingCustomsForecastBaseDate(processOrEta), 3)
+        addBusinessDays(getRollingCustomsForecastBaseDate(processOrEta), rolling.businessDaysAfterBerth)
       )
       return ensureDeliveryNotBeforeEta(rollingForecastDate, processOrEta.eta)
     }
 
     return ensureDeliveryNotBeforeEta(
-      getAutomaticEstimatedDeliveryDate(processOrEta.eta, processOrEta.category),
+      getAutomaticEstimatedDeliveryDate(processOrEta.eta, processOrEta.category, settings),
       processOrEta.eta
     )
   }
 
   const eta = processOrEta
   const baseDate = parseDate(eta)
-  const businessDays = getBusinessDaysToAdd(category)
+  const businessDays = getBusinessDaysToAdd(category, settings)
 
   if (!baseDate || !businessDays) return ''
 
   return toDateKey(addBusinessDays(baseDate, businessDays))
 }
 
-export function getEstimatedDeliveryDate(processOrEta, category) {
+export function getEstimatedDeliveryDate(processOrEta, category, settings) {
   if (typeof processOrEta === 'object' && processOrEta !== null) {
     const manualDate = normalizeDeliveryDateOverride(processOrEta.warehouseDeliveryDateOverride)
     if (manualDate) return manualDate
   }
 
-  return getAutomaticEstimatedDeliveryDate(processOrEta, category)
+  return getAutomaticEstimatedDeliveryDate(processOrEta, category, settings)
 }

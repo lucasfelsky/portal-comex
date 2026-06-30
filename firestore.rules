@@ -131,6 +131,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /forecastSettings/{docId} {
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /news/{docId} {
       allow read: if isApprovedUser();
       allow create, update, delete: if isAdmin();

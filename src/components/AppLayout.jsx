@@ -23,6 +23,10 @@ const pageMeta = {
   '/news': { title: 'Notícias' },
   '/processos': { title: 'Central de chegadas' },
   '/admin': { title: 'Painel administrativo' },
+  '/admin/usuarios': { title: 'Usuários · Admin' },
+  '/admin/comunicados': { title: 'Comunicados · Admin' },
+  '/admin/barra': { title: 'Barra do porto · Admin' },
+  '/admin/previsoes': { title: 'Regras de previsão · Admin' },
 }
 
 export default function AppLayout() {
@@ -38,7 +42,7 @@ export default function AppLayout() {
   const notificationPanelRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
 
-  const meta = pageMeta[location.pathname] ?? pageMeta['/']
+  const meta = pageMeta[location.pathname] ?? pageMeta[location.pathname.startsWith('/admin') ? '/admin' : '/']
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
   )

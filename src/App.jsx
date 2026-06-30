@@ -34,7 +34,11 @@ function lazyWithRetry(importPage, pageKey) {
   })
 }
 
-const AdminPage = lazyWithRetry(() => import('./pages/AdminPage'), 'admin-page')
+const AdminPage = lazyWithRetry(() => import('./pages/AdminLayout'), 'admin-page')
+const AdminForecastPage = lazyWithRetry(() => import('./pages/AdminForecastPage'), 'admin-forecast-page')
+const AdminUsersPanel = lazyWithRetry(() => import('./features/admin/AdminUsersPanel'), 'admin-users-panel')
+const AdminAnnouncementsPanel = lazyWithRetry(() => import('./features/admin/AdminAnnouncementsPanel'), 'admin-announcements-panel')
+const AdminBarStatusPanel = lazyWithRetry(() => import('./features/admin/AdminBarStatusPanel'), 'admin-bar-panel')
 const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'), 'dashboard-page')
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'), 'login-page')
 const NewsPage = lazyWithRetry(() => import('./pages/NewsPage'), 'news-page')
@@ -78,6 +82,19 @@ export default function App() {
             element={
               <ProtectedRoute requireRole="admin">
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/admin/usuarios" replace />} />
+            <Route path="usuarios" element={<AdminUsersPanel />} />
+            <Route path="comunicados" element={<AdminAnnouncementsPanel />} />
+            <Route path="barra" element={<AdminBarStatusPanel />} />
+          </Route>
+          <Route
+            path="/admin/previsoes"
+            element={
+              <ProtectedRoute requireRole="admin">
+                <AdminForecastPage />
               </ProtectedRoute>
             }
           />
