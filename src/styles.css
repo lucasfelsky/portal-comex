@@ -500,7 +500,7 @@ body {
   align-items: center;
   gap: 16px;
   height: 80px;
-  padding: 0 24px 0 304px; /* 280 sidebar + 24 gap */
+  padding: 0 24px 0 284px; /* 280 sidebar + 4 gap (Sprint 15.4: reduzido de 24) */
   border-radius: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
