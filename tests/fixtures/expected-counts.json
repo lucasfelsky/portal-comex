@@ -15,9 +15,10 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 4,
+    "topLevel": 5,
     "_topLevel_list": [
       "AppLayout.jsx",
+      "Icon.jsx",
       "Modal.jsx",
       "ProtectedRoute.jsx",
       "Toast.jsx"
@@ -85,11 +86,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 26,
+    "totalFiles": 27,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 17
+      "ui": 18
     }
   }
 }

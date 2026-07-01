@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import Icon from './Icon'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -14,11 +15,22 @@ const NOTIFICATION_PANEL_ANIMATION_MS = 220
 const INTELLIQUOTE_WEB_URL =
   import.meta.env.VITE_INTELLIQUOTE_WEB_URL ?? 'https://intelliquote.portal-comex.com'
 
+// Iniciais para o avatar da topbar (Sprint 11 / polish).
+// Pega ate 2 letras do primeiro + ultimo nome. Fallback '?'.
+function getInitials(value) {
+  const cleaned = String(value ?? '').trim()
+  if (!cleaned) return '?'
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 const navigation = [
-  { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo' },
-  { to: '/news', label: 'Notícias', description: 'Postagens e atualizações' },
-  { to: '/processos', label: 'Chegadas', description: 'Fila de chegadas' },
-  { to: '/admin', label: 'Admin', description: 'Governança e ajustes', roles: ['admin'] },
+  { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo', icon: 'dashboard' },
+  { to: '/news', label: 'Notícias', description: 'Postagens e atualizações', icon: 'news' },
+  { to: '/processos', label: 'Chegadas', description: 'Fila de chegadas', icon: 'arrivals' },
+  { to: '/admin', label: 'Admin', description: 'Governança e ajustes', icon: 'admin', roles: ['admin'] },
 ]
 
 const pageMeta = {
@@ -505,8 +517,15 @@ export default function AppLayout() {
                 end={item.to === '/'}
                 className={({ isActive }) => `nav__link${isActive ? ' nav__link--active' : ''}`}
               >
-                <strong>{item.label}</strong>
-                <p>{item.description}</p>
+                {item.icon ? (
+                  <span className="nav__link-icon" aria-hidden="true">
+                    <Icon name={item.icon} size={18} />
+                  </span>
+                ) : null}
+                <span className="nav__link-text">
+                  <strong>{item.label}</strong>
+                  <p>{item.description}</p>
+                </span>
               </NavLink>
             ))}
           </nav>
@@ -534,7 +553,7 @@ export default function AppLayout() {
             <span className="sidebar-intelliquote-link__eyebrow">Suite SQ</span>
             <strong className="sidebar-intelliquote-link__title">IntelliQuote</strong>
             <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
-              ↗
+              <Icon name="external" size={16} />
             </span>
           </a>
         </aside>
@@ -567,13 +586,23 @@ export default function AppLayout() {
             </div>
             <div className="topbar__actions">
               {renderNotificationsControl()}
-              <div className="topbar__profile">
-                <strong>{profile?.name ?? 'Usuário'}</strong>
-                <span>{profile?.email ?? 'Sem email'}</span>
+              <div className="topbar__user">
+                <div className="topbar__avatar" aria-hidden="true">
+                  {getInitials(profile?.name ?? profile?.email ?? '?')}
+                </div>
+                <div className="topbar__user-info">
+                  <strong>{profile?.name ?? 'Usuário'}</strong>
+                  <span>{profile?.email ?? 'Sem email'}</span>
+                </div>
+                {profile?.role ? (
+                  <span className={`topbar__role-badge topbar__role-badge--${profile.role}`}>
+                    {profile.role}
+                  </span>
+                ) : null}
+                <button type="button" className="ghost-button topbar__logout" onClick={logout}>
+                  Sair
+                </button>
               </div>
-              <button type="button" className="ghost-button topbar__logout" onClick={logout}>
-                Sair
-              </button>
             </div>
           </header>
 
