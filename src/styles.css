@@ -77,6 +77,29 @@ p  { margin: 0 0 8px; line-height: 1.5; color: var(--ink-soft); }
 
 a { color: var(--primary-700); text-decoration: none; transition: color 140ms ease; }
 a:hover { color: var(--primary); text-decoration: underline; }
+
+/* Links dentro de UI (nav, botoes, cards) nao devem sublinhar no
+   hover — o "componente" ja' da feedback visual proprio (background,
+   lift, etc). Apenas links textuais (em paragrafos, etc) ganham
+   underline como sinal de clique. */
+.nav a:hover,
+.nav__link:hover,
+.sidebar a:hover,
+.topbar a:hover,
+.card a:hover,
+.list-card a:hover,
+.detail-card a:hover,
+.sticky-bar__brandmark a:hover,
+button a:hover,
+.action-row a:hover,
+.news-references a:hover,
+.news-attachments a:hover,
+.modal a:hover,
+.toast a:hover,
+.cta a:hover,
+.cta-link:hover {
+  text-decoration: none;
+}
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
 
