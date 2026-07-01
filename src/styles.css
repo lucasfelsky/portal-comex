@@ -811,6 +811,37 @@ select {
   border: 1px solid var(--border);
 }
 
+/* Skeleton loaders (Sprint 12 / polish).
+   Animacao shimmer: gradiente diagonal que desliza sobre a surface-alt.
+   Inspirado em Skeleton do Material/Ant Design. */
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--surface-alt) 0%,
+    rgba(220, 233, 229, 0.55) 40%,
+    var(--surface-alt) 80%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-group {
+  /* wrapper simples; gap vem via prop style */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 /* Toast container (Sprint 8). Empilha ate 5 toasts no canto inferior
    direito. Variantes semanticas alinhadas com tokens IntelliQuote. */
 .toast-container {
@@ -1216,6 +1247,17 @@ select {
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.stat-card:hover,
+.list-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: var(--border-strong);
 }
 
 .card-heading {
@@ -2657,6 +2699,64 @@ select {
   border-radius: var(--radius);
   border: 1px dashed var(--border-strong);
   background: var(--surface-alt);
+}
+
+/* Empty state rich (Sprint 12 / polish).
+   Variante com ilustracao SVG + titulo + mensagem + acao.
+   Ilustracao e' uma SVG inline colorida com tokens do design system
+   (nao usa assets externos). */
+.empty-state--rich {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 40px 24px;
+  background: var(--surface);
+  border-style: solid;
+  border-color: var(--border);
+}
+
+.empty-state__illustration {
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 140px;
+}
+
+.empty-state__illustration svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.empty-state__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.empty-state__message {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-width: 360px;
+  margin: 0;
+}
+
+.empty-state__action {
+  margin-top: 8px;
 }
 
 .empty-state p {

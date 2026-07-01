@@ -58,6 +58,79 @@ const ICONS = {
       <path d="M19 14v5.5H4.5V5H10" />
     </>
   ),
+  logout: (
+    <>
+      <path d="M9 5H5.5A1.5 1.5 0 0 0 4 6.5v11A1.5 1.5 0 0 0 5.5 19H9" />
+      <path d="M16 16l4-4-4-4" />
+      <path d="M20 12H10" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+      <path d="M14 6l4 4" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4.5 7h15" />
+      <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />
+      <path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </>
+  ),
+  plus: (
+    <>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m20 20-3.5-3.5" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  chevron: <path d="m9 6 6 6-6 6" />,
+  dollar: (
+    <>
+      <path d="M12 3v18" />
+      <path d="M16 7.5C16 6 14.5 5 12 5s-4 1-4 2.5S9.5 10 12 10s4 1 4 2.5S14.5 15 12 15s-4-1-4-2.5" />
+    </>
+  ),
+  trend: (
+    <>
+      <path d="m4 16 5-5 4 4 7-8" />
+      <path d="M20 7h-4" />
+      <path d="M20 7v4" />
+    </>
+  ),
+  sparkle: (
+    <>
+      <path d="M12 4v3" />
+      <path d="M12 17v3" />
+      <path d="M4 12h3" />
+      <path d="M17 12h3" />
+      <path d="m6.3 6.3 2.1 2.1" />
+      <path d="m15.6 15.6 2.1 2.1" />
+      <path d="m6.3 17.7 2.1-2.1" />
+      <path d="m15.6 8.4 2.1-2.1" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M3 13.5 5.5 5.5A1.5 1.5 0 0 1 7 4.5h10a1.5 1.5 0 0 1 1.5 1L21 13.5" />
+      <path d="M3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5h-5l-1 2h-4l-1-2H3Z" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

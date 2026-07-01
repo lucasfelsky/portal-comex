@@ -600,7 +600,8 @@ export default function AppLayout() {
                   </span>
                 ) : null}
                 <button type="button" className="ghost-button topbar__logout" onClick={logout}>
-                  Sair
+                  <Icon name="logout" size={16} />
+                  <span>Sair</span>
                 </button>
               </div>
             </div>

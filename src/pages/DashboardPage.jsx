@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import Skeleton from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 import {
   getChannelToneClass,
   getDisplayedCollectionStatus,
@@ -176,10 +178,10 @@ export default function DashboardPage() {
 
           <div className="announcement-list">
             {isLoadingAnnouncements ? (
-              <div className="empty-state">
-                <strong>Carregando comunicados</strong>
-                <p>Buscando os avisos mais recentes para o painel inicial.</p>
-              </div>
+              <Skeleton.Group count={3} gap={12}>
+                <Skeleton variant="title" />
+                <Skeleton variant="subtitle" />
+              </Skeleton.Group>
             ) : announcements.length > 0 ? (
               announcements.map((announcement) => (
                 <div key={announcement.id} className="announcement-card">
@@ -192,10 +194,12 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="empty-state">
-                <strong>Nenhum comunicado publicado</strong>
-                <p>Os avisos internos criados no admin serão exibidos aqui.</p>
-              </div>
+              <EmptyState
+                illustration="news"
+                icon="news"
+                title="Nenhum comunicado publicado"
+                message="Os avisos internos criados no admin serao exibidos aqui."
+              />
             )}
           </div>
         </article>
@@ -221,10 +225,10 @@ export default function DashboardPage() {
 
         <div className="process-list process-list--scroll">
           {isLoadingFavorites ? (
-            <div className="empty-state">
-              <strong>Carregando favoritos</strong>
-              <p>Buscando os processos marcados no seu perfil.</p>
-            </div>
+            <Skeleton.Group count={3} gap={12}>
+              <Skeleton variant="title" />
+              <Skeleton variant="subtitle" />
+            </Skeleton.Group>
           ) : favoriteProcesses.length > 0 ? (
             favoriteProcesses.map((item) => {
               const showMaritimePostArrival = isMaritimeCategory(item.category) && item.berthed
@@ -389,10 +393,12 @@ export default function DashboardPage() {
               )
             })
           ) : (
-            <div className="empty-state">
-              <strong>Nenhum processo favoritado</strong>
-              <p>Marque processos na aba Processos para acompanhá-los aqui no dashboard.</p>
-            </div>
+            <EmptyState
+              illustration="inbox"
+              icon="inbox"
+              title="Nenhum processo favoritado"
+              message="Marque processos na aba Processos para acompanha-los aqui no dashboard."
+            />
           )}
         </div>
         </article>
