@@ -26,6 +26,7 @@ vi.mock('../../src/hooks/useAuth', () => ({
 }))
 
 import LoginPage from '../../src/pages/LoginPage'
+import { ToastProvider } from '../../src/components/Toast'
 
 function defaultAuth() {
   return {
@@ -43,13 +44,15 @@ function defaultAuth() {
 function renderPage({ initialEntries = ['/login'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<div data-testid="home">home</div>} />
-        <Route path="/verificar-email" element={<div data-testid="verify">verify</div>} />
-        <Route path="/aguardando-aprovacao" element={<div data-testid="pending">pending</div>} />
-        <Route path="/destino-original" element={<div data-testid="destino">destino</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<div data-testid="home">home</div>} />
+          <Route path="/verificar-email" element={<div data-testid="verify">verify</div>} />
+          <Route path="/aguardando-aprovacao" element={<div data-testid="pending">pending</div>} />
+          <Route path="/destino-original" element={<div data-testid="destino">destino</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>
   )
 }
@@ -150,7 +153,8 @@ describe('LoginPage', () => {
     await user.type(screen.getByPlaceholderText('Sua senha'), 'senha123')
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
     await waitFor(() => {
-      expect(screen.getByText(/Cadastro criado/i)).toBeInTheDocument()
+      // Toast + success-banner tem o mesmo texto
+      expect(screen.getAllByText(/Cadastro criado/i).length).toBeGreaterThan(0)
     })
   })
 
@@ -245,6 +249,38 @@ describe('LoginPage', () => {
     await user.click(document.querySelector('button.primary-button'))
     await waitFor(() => {
       expect(screen.getByText(/auth\/wrong-password/)).toBeInTheDocument()
+    })
+  })
+
+  it('register com sucesso dispara toast.success', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    auth.register = vi.fn().mockResolvedValue(undefined)
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    // Toggle para register
+    await user.click(screen.getByRole('button', { name: /Cadastrar/i }))
+    await user.type(screen.getByPlaceholderText('Nome completo'), 'Lucas')
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'l@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'p')
+    await user.click(document.querySelector('button.primary-button'))
+    await waitFor(() => {
+      // Toast + success-banner tem o mesmo texto; so checamos que >= 1 aparece
+      expect(screen.getAllByText(/Cadastro criado\. Confirme seu email\./i).length).toBeGreaterThan(0)
+    })
+  })
+
+  it('reset de senha com sucesso dispara toast.success', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    auth.requestPasswordReset = vi.fn().mockResolvedValue(undefined)
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    await user.click(screen.getByRole('button', { name: /Esqueci minha senha/i }))
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'l@sqquimica.com')
+    await user.click(screen.getByRole('button', { name: /Enviar/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/Instrucoes de redefinicao enviadas/i)).toBeInTheDocument()
     })
   })
 })

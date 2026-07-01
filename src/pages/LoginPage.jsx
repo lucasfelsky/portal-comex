@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import { useToast } from '../components/Toast'
 
 export default function LoginPage() {
   const {
@@ -14,6 +15,7 @@ export default function LoginPage() {
     loading,
   } = useAuth()
   const location = useLocation()
+  const toast = useToast()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [showResetForm, setShowResetForm] = useState(false)
@@ -45,6 +47,7 @@ export default function LoginPage() {
       if (mode === 'register') {
         await register(form)
         setFeedback('Cadastro criado. Confirme seu email corporativo e depois aguarde a aprovacao do admin.')
+        toast.success('Cadastro criado. Confirme seu email.')
       } else {
         await login(form.email, form.password)
       }
@@ -67,6 +70,7 @@ export default function LoginPage() {
       await requestPasswordReset(form.email)
       setFeedback('Enviamos as instruções de redefinição para o seu e-mail corporativo.')
       setShowResetForm(false)
+      toast.success('Instrucoes de redefinicao enviadas para o seu email.')
     } catch (submitError) {
       console.error('Falha ao enviar redefinição de senha.', submitError)
       const details = submitError?.code ?? submitError?.message
