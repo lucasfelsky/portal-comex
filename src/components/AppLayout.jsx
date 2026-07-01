@@ -6,6 +6,7 @@ import Breadcrumb from './Breadcrumb'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
 import TabButton from './TabButton'
+import Tooltip from './Tooltip'
 import { useProcessSearch } from '../hooks/useProcessSearch'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -642,10 +643,12 @@ export default function AppLayout() {
                     {profile.role}
                   </span>
                 ) : null}
-                <button type="button" className="ghost-button topbar__logout" onClick={logout}>
-                  <Icon name="logout" size={16} />
-                  <span>Sair</span>
-                </button>
+                <Tooltip label="Encerrar sessao" side="bottom">
+                  <button type="button" className="ghost-button topbar__logout" onClick={logout}>
+                    <Icon name="logout" size={16} />
+                    <span>Sair</span>
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </header>

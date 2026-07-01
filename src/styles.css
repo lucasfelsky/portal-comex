@@ -908,11 +908,11 @@ body {
   background: linear-gradient(
     90deg,
     var(--surface-alt) 0%,
-    rgba(220, 233, 229, 0.55) 40%,
-    var(--surface-alt) 80%
+    var(--bg-tint-1) 50%,
+    var(--surface-alt) 100%
   );
   background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  animation: skeleton-shimmer 1.4s linear infinite;
   vertical-align: middle;
 }
 
@@ -4608,6 +4608,98 @@ body {
 /* Sprint 16.1: Page transitions.
    Wrapper <PageFade> no <Outlet>: opacity 0 -> 1 em 180ms, com leve
    translateY(6px) pra dar sensacao de entrada. Respeita prefers-reduced-motion. */
+
+/* Sprint 19.0: Tooltip. */
+.tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltip[data-tooltip]:hover::after,
+.tooltip[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  z-index: 60;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.tooltip--bottom::after {
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.tooltip--bottom[data-tooltip]:hover::after,
+.tooltip--bottom[data-tooltip]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.tooltip--left::after {
+  bottom: auto;
+  left: auto;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%) translateX(4px);
+}
+
+.tooltip--left[data-tooltip]:hover::after,
+.tooltip--left[data-tooltip]:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+.tooltip--right::after {
+  bottom: auto;
+  left: calc(100% + 8px);
+  right: auto;
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.tooltip--right[data-tooltip]:hover::after,
+.tooltip--right[data-tooltip]:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip::after,
+  .tooltip[data-tooltip]:hover::after,
+  .tooltip[data-tooltip]:focus-visible::after {
+    transition: none;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Sprint 19.0: hover sutil em rows de tabela. */
+.admin-table tbody tr {
+  transition: background-color 140ms ease;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--surface-alt);
+}
 
 @keyframes page-fade-in {
   from {

@@ -15,7 +15,7 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 14,
+    "topLevel": 15,
     "_topLevel_list": [
       "AppLayout.jsx",
       "Breadcrumb.jsx",
@@ -30,7 +30,8 @@
       "Skeleton.jsx",
       "StatCard.jsx",
       "TabButton.jsx",
-      "Toast.jsx"
+      "Toast.jsx",
+      "Tooltip.jsx"
     ]
   },
   "srcFeatures": {
@@ -95,11 +96,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 38,
+    "totalFiles": 39,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 29
+      "ui": 30
     }
   }
 }
