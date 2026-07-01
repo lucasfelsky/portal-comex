@@ -9,3 +9,9 @@ hosting-intelliquote
 .DS_Store
 firebase-debug.log*
 *.bak
+
+# Service account keys (NUNCA commitar).
+# Usado por scripts/set-admin-claims.cjs e por Cloud Functions deploy.
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+*.gcp-sa-key.json
