@@ -881,9 +881,15 @@ select {
   text-decoration: none;
 }
 
+/* Item atual (ultimo) herda o destaque do h2 da topbar (1.5rem/700).
+   Links intermediarios ficam no tamanho menor (0.8125rem) pra
+   hierarquia visual clara. */
 .breadcrumb__current {
   color: var(--ink);
   font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   padding: 4px 6px;
 }
 
