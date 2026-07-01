@@ -1698,6 +1698,7 @@ body {
   align-items: center;
   gap: 8px;
   align-self: center;
+  padding-right: 20px; /* Sprint 15.7: afasta da lateral direita */
 }
 
 .dashboard-bar-inline__label {
