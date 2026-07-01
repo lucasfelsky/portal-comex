@@ -134,16 +134,29 @@ select {
   font: inherit;
 }
 
+/* Sprint 15: App shell sticky.
+   Sidebar fixa (left), topbar sticky (top), conteudo rola.
+   Em mobile, sidebar vira drawer (regras em @media abaixo). */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden; /* conteudo rola dentro de .main-content, nao na pagina */
+}
+
 .shell {
-  min-height: 100vh;
+  height: 100vh;
   padding: 0;
+  overflow: hidden;
 }
 
 .shell__frame {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 20px;
-  min-height: 100vh;
+  display: block; /* sidebar e main-content sao fixed, nao precisa grid */
+  position: relative;
+  height: 100%;
 }
 
 .sidebar,
@@ -157,13 +170,30 @@ select {
 }
 
 .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 24px;
-  border-radius: var(--radius);
+  gap: 24px;
+  padding: 20px 20px 24px;
+  border-right: 1px solid var(--border);
   background: var(--surface);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
+
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 .brand__eyebrow {
   display: inline-block;
@@ -440,27 +470,45 @@ select {
 }
 
 .main-content {
+  margin-left: 280px;
+  min-height: 100vh;
   display: grid;
   gap: 20px;
   width: 100%;
   max-width: 1280px;
-  margin: 0 auto;
-  padding: 20px 24px 48px;
+  padding: 0 24px 48px;
+  /* conteudo rola; topbar fica sticky dentro */
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100vh;
+  scrollbar-width: thin;
 }
 
+.main-content::-webkit-scrollbar { width: 8px; }
+.main-content::-webkit-scrollbar-track { background: transparent; }
+.main-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.main-content::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  height: 92px;
+  height: 80px;
   padding: 0 24px;
-  border-radius: var(--radius);
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
   transition:
     min-height 180ms ease,
     padding 180ms ease,
-    border-radius 180ms ease,
     box-shadow 180ms ease,
     background 180ms ease;
 }
@@ -3284,40 +3332,17 @@ select {
 }
 
 @media (max-width: 1040px) {
-  .shell__frame,
-  .stats-grid,
-  .dual-grid,
-  .triple-grid,
-  .admin-filters,
-  .process-filters,
-  .announcement-grid,
-  .bar-status-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    gap: 20px;
-  }
-
-  .shell__frame {
-    gap: 16px;
-  }
-
-  .sidebar {
-    padding: 20px;
-  }
-
-  .nav {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .sidebar__brandmark {
-    margin-top: 0;
-  }
-
-  .dashboard-bar-card--header {
-    width: 100%;
+  /* Mobile: desfaz o app shell sticky. Sidebar vira drawer
+     (position: fixed com transform), conteudo rola na pagina. */
+  html,
+  body { height: auto; }
+  body { overflow: auto; }
+  .shell { height: auto; overflow: visible; }
+  .shell__frame { display: block; height: auto; }
+  .main-content {
     margin-left: 0;
+    height: auto;
+    overflow: visible;
   }
 
   .news-list-card,
@@ -3333,10 +3358,6 @@ select {
 @media (max-width: 720px) {
   .shell {
     padding: 10px 10px calc(18px + env(safe-area-inset-bottom));
-  }
-
-  .shell {
-    position: relative;
   }
 
   body {
@@ -3974,21 +3995,23 @@ select {
 
   .sidebar {
     position: fixed;
-    top: calc(12px + env(safe-area-inset-top));
-    left: 24px;
-    right: 24px;
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 50;
     width: auto;
     height: auto;
-    max-height: calc(100vh - 108px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: 100vh;
     overflow: hidden;
-    border-radius: 26px;
+    border-radius: 0;
+    border: 0;
+    border-right: 1px solid var(--border);
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(242, 249, 248, 0.44)),
       rgba(255, 255, 255, 0.34);
-    border-color: rgba(255, 255, 255, 0.28);
-    transform: translateY(28px);
+    backdrop-filter: blur(6px);
+    transform: translateX(-100%);
     opacity: 0;
     pointer-events: none;
     transition:
@@ -3999,7 +4022,7 @@ select {
   }
 
   .sidebar--mobile-open {
-    transform: translateY(0);
+    transform: translateX(0);
     opacity: 1;
     pointer-events: auto;
   }
