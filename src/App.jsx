@@ -48,6 +48,7 @@ const PendingApprovalPage = lazyWithRetry(
 )
 const ProcessesPage = lazyWithRetry(() => import('./pages/ProcessesPage'), 'processes-page')
 const VerifyEmailPage = lazyWithRetry(() => import('./pages/VerifyEmailPage'), 'verify-email-page')
+const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'), 'not-found-page')
 
 function PageLoader() {
   return (
@@ -91,7 +92,7 @@ export default function App() {
             <Route path="barra" element={<AdminBarStatusPanel />} />
             <Route path="previsoes" element={<AdminForecastPage />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </Suspense>
