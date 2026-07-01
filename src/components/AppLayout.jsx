@@ -85,9 +85,9 @@ export default function AppLayout() {
             { id: 'go-admin-announcements', label: 'Comunicados', group: 'Admin', to: '/admin/comunicados', icon: 'news' },
             { id: 'go-admin-bar', label: 'Barra do porto', group: 'Admin', to: '/admin/barra', icon: 'inbox' },
             { id: 'go-admin-forecast', label: 'Regras de previsao', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
+            { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),
-      { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
       { id: 'action-logout', label: 'Sair', group: 'Conta', icon: 'logout', action: logout },
     ],
     [profile?.role]
@@ -566,19 +566,21 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          <a
-            className="sidebar-intelliquote-link"
-            href={INTELLIQUOTE_WEB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Abrir IntelliQuote em nova aba"
-          >
-            <span className="sidebar-intelliquote-link__eyebrow">Suite SQ</span>
-            <strong className="sidebar-intelliquote-link__title">IntelliQuote</strong>
-            <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
-              <Icon name="external" size={16} />
-            </span>
-          </a>
+          {profile?.role === 'admin' ? (
+            <a
+              className="sidebar-intelliquote-link"
+              href={INTELLIQUOTE_WEB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Abrir IntelliQuote em nova aba"
+            >
+              <span className="sidebar-intelliquote-link__eyebrow">Suite SQ</span>
+              <strong className="sidebar-intelliquote-link__title">IntelliQuote</strong>
+              <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
+                <Icon name="external" size={16} />
+              </span>
+            </a>
+          ) : null}
         </aside>
 
         <div className="main-content">
