@@ -9,28 +9,48 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#7c93f6',
-          500: '#5065f0',
-          600: '#3e4fd1'
+          50: '#e3f5f0',
+          100: '#c8ebe1',
+          200: '#9ddcc6',
+          300: '#65c8a7',
+          400: '#2cb389',
+          500: '#00ae91',
+          600: '#009579',
+          700: '#008f76',
+          800: '#006655',
+          900: '#003f33'
         },
-        success: '#16a34a',
-        danger:  '#ef4444',
-        warn:    '#f59e0b'
+        ink: {
+          DEFAULT: '#1f1c18',
+          soft: '#4a5560'
+        },
+        surface: {
+          DEFAULT: '#ffffff',
+          alt: '#eef4f1'
+        },
+        border: {
+          DEFAULT: '#dce9e5',
+          strong: '#b7cdc5'
+        },
+        success: '#00ae91',
+        danger:  '#c85d2c',
+        warn:    '#b48a2d',
+        info:    '#1e6fb6'
       },
       borderRadius: {
+        sm: '8px',
+        DEFAULT: '14px',
         xl: '14px',
         '2xl': '18px'
       },
       boxShadow: {
-        soft: '0 6px 18px rgba(16,24,40,0.06)',
-        ui:   '0 8px 30px rgba(12,24,48,0.08)'
+        soft: '0 2px 8px rgba(0, 40, 40, 0.06)',
+        ui:   '0 8px 28px rgba(0, 40, 40, 0.08)'
       },
       fontFamily: {
-        ui: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial']
+        ui: ['Manrope', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial'],
+        heading: ['"Space Grotesk"', 'Manrope', 'system-ui', 'sans-serif'],
+        mono: ['"Roboto Mono"', 'ui-monospace', 'monospace']
       }
     }
   },
