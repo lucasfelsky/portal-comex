@@ -1690,6 +1690,24 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Barra do Rio inline no dashboard (Sprint 15.4).
+   Renderizada no section-heading, alinhada a direita do titulo
+   'Visao geral'. Sem card, sem border — so' label + status. */
+.dashboard-bar-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+}
+
+.dashboard-bar-inline__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .dashboard-bar-card {
   align-self: start;
 }

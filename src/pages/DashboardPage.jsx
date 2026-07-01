@@ -151,28 +151,25 @@ export default function DashboardPage() {
         <div>
           <h2>Visão geral</h2>
         </div>
-      </div>
-
-      <article className="list-card">
-        <div className="card-heading">
-          <h3>Barra do Rio Itajaí-Açu</h3>
+        <div className="dashboard-bar-inline" aria-label="Condicao da Barra do Rio Itajai-Acu">
+          <span className="dashboard-bar-inline__label">Barra do Rio</span>
           {isLoadingBarStatus ? (
             <span className="dashboard-bar-card__text">Carregando</span>
           ) : barStatus ? (
-            <span className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}>
+            <span
+              className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}
+            >
               {barStatus.label}
             </span>
           ) : (
             <span className="dashboard-bar-card__text">Indisponível</span>
           )}
         </div>
-      </article>
+      </div>
 
       <article className="list-card">
         <div className="card-heading">
-          <div>
-            <h3>Comunicados recentes</h3>
-          </div>
+          <h3>Comunicados recentes</h3>
         </div>
 
         <div className="announcement-list">
