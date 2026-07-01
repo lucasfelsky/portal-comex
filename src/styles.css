@@ -4596,3 +4596,63 @@ body {
   }
 }
 
+/* Sprint 17.1: PageToolbar.
+   Wrapper flex com heading a esquerda + actions a direita. Substitui
+   o padrao de section-heading solto + botoes adjacentes em paineis. */
+
+.page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 8px;
+}
+
+.page-toolbar__heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.page-toolbar__eyebrow {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.page-toolbar__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.page-toolbar__description {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.page-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .page-toolbar {
+    align-items: flex-start;
+  }
+  .page-toolbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
