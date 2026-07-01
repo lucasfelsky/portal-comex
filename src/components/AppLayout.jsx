@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Breadcrumb from './Breadcrumb'
+import CommandPalette, { useCommandPalette } from './CommandPalette'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -69,6 +70,28 @@ export default function AppLayout() {
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
+
+  // Command palette (Ctrl+K / Cmd+K)
+  const commandPalette = useCommandPalette()
+  const commandItems = useMemo(
+    () => [
+      { id: 'go-dashboard', label: 'Dashboard', group: 'Paginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
+      { id: 'go-news', label: 'Noticias', group: 'Paginas', to: '/news', icon: 'news' },
+      { id: 'go-processes', label: 'Chegadas', group: 'Paginas', to: '/processos', icon: 'arrivals' },
+      ...(profile?.role === 'admin'
+        ? [
+            { id: 'go-admin', label: 'Painel administrativo', group: 'Admin', to: '/admin', icon: 'admin' },
+            { id: 'go-admin-users', label: 'Usuarios', group: 'Admin', to: '/admin/usuarios', icon: 'admin' },
+            { id: 'go-admin-announcements', label: 'Comunicados', group: 'Admin', to: '/admin/comunicados', icon: 'news' },
+            { id: 'go-admin-bar', label: 'Barra do porto', group: 'Admin', to: '/admin/barra', icon: 'inbox' },
+            { id: 'go-admin-forecast', label: 'Regras de previsao', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
+          ]
+        : []),
+      { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
+      { id: 'action-logout', label: 'Sair', group: 'Conta', icon: 'logout', action: logout },
+    ],
+    [profile?.role]
+  )
 
   const meta = pageMeta[location.pathname] ?? pageMeta[location.pathname.startsWith('/admin') ? '/admin' : '/']
   const visibleNavigation = navigation.filter(
@@ -605,6 +628,16 @@ export default function AppLayout() {
               </div>
             </div>
             <div className="topbar__actions">
+              <button
+                type="button"
+                className="topbar__search-trigger"
+                onClick={() => commandPalette.setOpen(true)}
+                aria-label="Abrir busca global (Ctrl+K)"
+              >
+                <Icon name="search" size={16} />
+                <span>Buscar</span>
+                <kbd className="topbar__search-kbd">Ctrl K</kbd>
+              </button>
               {renderNotificationsControl()}
               <div className="topbar__user">
                 <div className="topbar__avatar" aria-hidden="true">
@@ -679,6 +712,12 @@ export default function AppLayout() {
           </nav>
         </div>
       </div>
+
+      <CommandPalette
+        open={commandPalette.open}
+        onClose={() => commandPalette.setOpen(false)}
+        commands={commandItems}
+      />
     </div>
   )
 }

@@ -15,15 +15,18 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 8,
+    "topLevel": 11,
     "_topLevel_list": [
       "AppLayout.jsx",
       "Breadcrumb.jsx",
+      "CommandPalette.jsx",
       "EmptyState.jsx",
+      "FilterChip.jsx",
       "Icon.jsx",
       "Modal.jsx",
       "ProtectedRoute.jsx",
       "Skeleton.jsx",
+      "StatCard.jsx",
       "Toast.jsx"
     ]
   },
@@ -89,11 +92,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 30,
+    "totalFiles": 33,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 21
+      "ui": 24
     }
   }
 }

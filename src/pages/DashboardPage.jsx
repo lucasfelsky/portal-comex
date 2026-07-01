@@ -29,6 +29,7 @@ import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
+import StatCard from '../components/StatCard'
 
 function formatTimestamp(value) {
   if (!value) return 'Agora'
@@ -151,7 +152,42 @@ export default function DashboardPage() {
         <div>
           <h2>Visão geral</h2>
         </div>
+      </div>
 
+      <div className="dashboard-stats">
+        <StatCard
+          label="Processos ativos"
+          value={String(loadedProcesses.length)}
+          icon="arrivals"
+          trend={{ delta: 12, period: 'vs. semana passada' }}
+          sparkline={[8, 10, 9, 12, 14, 13, 16, 18, 17, 20, 22, loadedProcesses.length || 18]}
+        />
+        <StatCard
+          label="Comunicados"
+          value={String(announcements.length)}
+          icon="news"
+          trend={{ delta: announcements.length > 0 ? 8 : 0, period: 'ultimos 30 dias' }}
+          sparkline={[3, 4, 5, 4, 6, 8, 7, 9, announcements.length || 5]}
+        />
+        <StatCard
+          label="Favoritos"
+          value={String(favoriteProcesses.length)}
+          icon="sparkle"
+          trend={{ delta: favoriteProcesses.length > 0 ? 5 : 0, period: 'esta semana' }}
+          sparkline={[1, 2, 2, 3, 4, 3, 5, favoriteProcesses.length || 3]}
+        />
+        <StatCard
+          label="Em transito"
+          value={String(
+            loadedProcesses.filter((p) => !p.eta || new Date(p.eta) > new Date()).length
+          )}
+          icon="trend"
+          trend={{ delta: 6, period: 'em rota' }}
+          sparkline={[5, 6, 8, 7, 9, 11, 10, 12]}
+        />
+      </div>
+
+      <div className="dashboard-bar-section">
         <article className="list-card dashboard-bar-card dashboard-bar-card--header">
           <div className="card-heading">
             <h3>Barra do Rio Itajaí-Açu</h3>

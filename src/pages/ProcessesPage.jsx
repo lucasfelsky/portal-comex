@@ -53,6 +53,7 @@ import {
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
+import FilterChip from '../components/FilterChip'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
   getAutomaticEstimatedDeliveryDate,
@@ -539,6 +540,14 @@ export default function ProcessesPage() {
   const [etaStartDate, setEtaStartDate] = useState('')
   const [etaEndDate, setEtaEndDate] = useState('')
   const [operationFilter, setOperationFilter] = useState('Todos')
+
+  // Filtros ativos: usado pra renderizar pills de filtros com X
+  const hasActiveFilters =
+    Boolean(searchTerm) ||
+    categoryFilter !== 'Todos' ||
+    Boolean(etaStartDate) ||
+    Boolean(etaEndDate) ||
+    operationFilter !== 'Todos'
   const [error, setError] = useState('')
   const [messagesError, setMessagesError] = useState('')
   const [processMessages, setProcessMessages] = useState([])
@@ -1435,6 +1444,55 @@ export default function ProcessesPage() {
             </select>
           </label>
         </div>
+
+        {hasActiveFilters ? (
+          <div className="filter-chips-row" role="list" aria-label="Filtros ativos">
+            <span className="filter-chips-row__label">Filtros:</span>
+            {searchTerm ? (
+              <FilterChip
+                label={`Busca: "${searchTerm}"`}
+                onRemove={() => setSearchTerm('')}
+                variant="primary"
+              />
+            ) : null}
+            {categoryFilter !== 'Todos' ? (
+              <FilterChip
+                label={`Categoria: ${categoryFilter}`}
+                onRemove={() => setCategoryFilter('Todos')}
+              />
+            ) : null}
+            {etaStartDate || etaEndDate ? (
+              <FilterChip
+                label={`ETA: ${etaStartDate || 'inicio'} ate ${etaEndDate || 'fim'}`}
+                onRemove={() => {
+                  setEtaStartDate('')
+                  setEtaEndDate('')
+                }}
+                variant="info"
+              />
+            ) : null}
+            {operationFilter !== 'Todos' ? (
+              <FilterChip
+                label={`Etapa: ${operationFilter}`}
+                onRemove={() => setOperationFilter('Todos')}
+                variant="warning"
+              />
+            ) : null}
+            <button
+              type="button"
+              className="filter-chips-row__clear"
+              onClick={() => {
+                setSearchTerm('')
+                setCategoryFilter('Todos')
+                setEtaStartDate('')
+                setEtaEndDate('')
+                setOperationFilter('Todos')
+              }}
+            >
+              Limpar todos
+            </button>
+          </div>
+        ) : null}
 
         <div className="process-list process-list--scroll">
           {isLoading ? (
