@@ -1,9 +1,13 @@
 name: CI
 
 # Workflow de integracao continua do Portal COMEX.
-# - Vitest unit (42 casos)
+# - Vitest unit (165 casos em 16 arquivos, com pretest que roda audit de drift L16)
 # - Vite build
 # - Firebase rules dry-run
+# - Upload de dist/ como artifact (10 dias) para debug de releases
+#
+# Cache: setup-node@4 com cache='npm' ja' cuida do cache de ~/.npm
+# baseado em package-lock.json. Nao precisa de action/cache separado.
 #
 # Secrets necessarios (configurar em Settings > Secrets and variables > Actions):
 #   FIREBASE_TOKEN  - token `firebase login:ci` (apenas para o dry-run).
@@ -45,6 +49,15 @@ jobs:
 
       - name: Build (Vite)
         run: npm run build
+
+      - name: Upload dist/ artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-comex-dist
+          path: dist/
+          retention-days: 10
+          if-no-files-found: error
 
   rules-validation:
     name: Firestore rules (dry-run)
