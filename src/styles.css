@@ -3382,6 +3382,39 @@ body {
   }
 }
 
+/* Sprint 16.3: Mobile topbar polish.
+   Topbar fica 64px (de 80), esconde ptax/user-info/role-badge pra
+   dar lugar pro hamburger + bell + avatar. */
+
+@media (max-width: 720px) {
+  .topbar {
+    height: 64px;
+    padding: 0 16px;
+  }
+
+  .topbar__actions {
+    gap: 8px;
+  }
+
+  .topbar__ptax,
+  .topbar__user-info,
+  .topbar__role-badge,
+  .topbar__logout {
+    display: none;
+  }
+
+  .topbar__avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.78rem;
+  }
+
+  .main-content {
+    padding-top: 64px;
+  }
+}
+
+
 @media (max-width: 720px) {
   .shell {
     padding: 10px 10px calc(18px + env(safe-area-inset-bottom));
