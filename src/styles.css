@@ -889,24 +889,28 @@ select {
   gap: 4px;
   padding: 10px 12px;
   border-radius: 16px;
-  background: rgba(233, 240, 231, 0.92);
+  background: var(--surface-alt);
   border: 1px solid rgba(24, 64, 84, 0.12);
 }
 
 .dashboard-process-inline__row--duimp.detail-card--success {
-  background: rgba(58, 130, 89, 0.14);
+  background: var(--success-50);
+  border-color: var(--success-700);
 }
 
 .dashboard-process-inline__row--duimp.detail-card--warning {
-  background: rgba(24, 64, 84, 0.14);
+  background: var(--warning-50);
+  border-color: var(--warning-700);
 }
 
 .dashboard-process-inline__row--duimp.detail-card--danger {
-  background: rgba(24, 64, 84, 0.12);
+  background: var(--danger-50);
+  border-color: var(--danger-700);
 }
 
 .dashboard-process-inline__row--duimp.detail-card--neutral {
-  background: rgba(24, 64, 84, 0.08);
+  background: var(--neutral-50);
+  border-color: var(--neutral-700);
 }
 
 .process-item--button {
@@ -995,7 +999,7 @@ select {
 }
 
 .detail-card--soft {
-  background: rgba(233, 240, 231, 0.82);
+  background: var(--surface-alt);
 }
 
 .process-items-editor,
@@ -1331,28 +1335,28 @@ select {
 }
 
 .status-tag--ok {
-  background: rgba(0, 174, 145, 0.14);
-  color: var(--md-success);
+  background: var(--success-50);
+  color: var(--success-700);
 }
 
 .status-tag--warn {
-  background: rgba(183, 121, 31, 0.14);
-  color: var(--md-warning);
+  background: var(--warning-50);
+  color: var(--warning-700);
 }
 
 .status-tag--info {
-  background: rgba(0, 174, 145, 0.14);
-  color: var(--md-primary);
+  background: var(--info-50);
+  color: var(--info-700);
 }
 
 .status-tag--neutral {
-  background: rgba(24, 64, 84, 0.07);
-  color: rgba(24, 64, 84, 0.68);
+  background: var(--neutral-50);
+  color: var(--neutral-700);
 }
 
 .status-tag--danger {
-  background: rgba(197, 48, 48, 0.12);
-  color: var(--md-danger);
+  background: var(--danger-50);
+  color: var(--danger-700);
 }
 
 .admin-toolbar {
@@ -1381,7 +1385,7 @@ select {
   border: 0;
   border-radius: 999px;
   padding: 10px 16px;
-  background: rgba(233, 240, 231, 0.9);
+  background: var(--surface-alt);
   color: var(--md-text);
   font-weight: 700;
   cursor: pointer;
@@ -1594,7 +1598,7 @@ select {
 .process-filters--panel {
   padding: 14px;
   border-radius: 22px;
-  background: rgba(240, 247, 246, 0.82);
+  background: var(--surface-alt);
   border: 1px solid rgba(24, 64, 84, 0.08);
   overflow: hidden;
 }
@@ -2120,28 +2124,28 @@ select {
 }
 
 .process-derived-status-badge.status-tag--ok {
-  background: rgba(16, 185, 129, 0.18);
-  color: #047857;
+  background: var(--success-50);
+  color: var(--success-700);
 }
 
 .process-derived-status-badge.status-tag--info {
-  background: rgba(59, 130, 246, 0.18);
-  color: #1d4ed8;
+  background: var(--info-50);
+  color: var(--info-700);
 }
 
 .process-derived-status-badge.status-tag--warn {
-  background: rgba(234, 179, 8, 0.22);
-  color: #92400e;
+  background: var(--warning-50);
+  color: var(--warning-700);
 }
 
 .process-derived-status-badge.status-tag--danger {
-  background: rgba(239, 68, 68, 0.18);
-  color: #b91c1c;
+  background: var(--danger-50);
+  color: var(--danger-700);
 }
 
 .process-derived-status-badge.status-tag--neutral {
-  background: rgba(100, 116, 139, 0.2);
-  color: #334155;
+  background: var(--neutral-50);
+  color: var(--neutral-700);
 }
 
 .dashboard-collection-windows,
@@ -2662,7 +2666,7 @@ select {
     gap: 10px;
     padding: 12px;
     border-radius: 18px;
-    background: rgba(240, 247, 246, 0.92);
+    background: var(--surface-alt);
     border: 1px solid rgba(24, 64, 84, 0.08);
   }
 
@@ -2756,7 +2760,7 @@ select {
     gap: 2px;
     padding: 8px 10px;
     border-radius: 14px;
-    background: rgba(240, 247, 246, 0.82);
+    background: var(--surface-alt);
     border: 1px solid rgba(24, 64, 84, 0.06);
     font-size: 0.76rem;
     line-height: 1.35;
@@ -3330,7 +3334,7 @@ select {
 .admin-tabs {
   padding: 6px;
   border-radius: 999px;
-  background: rgba(233, 240, 231, 0.6);
+  background: var(--surface-alt);
   border: 1px solid var(--md-outline);
   align-self: start;
   width: fit-content;
@@ -3367,7 +3371,7 @@ select {
   margin-top: 8px;
   padding: 18px;
   border-radius: 20px;
-  background: rgba(233, 240, 231, 0.6);
+  background: var(--surface-alt);
   border: 1px solid var(--md-outline);
 }
 
