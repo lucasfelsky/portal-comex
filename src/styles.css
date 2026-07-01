@@ -734,50 +734,37 @@ select {
 
 /* Topbar: user area com avatar, info, role badge, logout
    (Sprint 11 / polish, inspirado no IntelliQuote .topbar__user). */
-/* Topbar search trigger (Sprint 14). Botao de atalho pro command
-   palette. Visual discreto: input-like com icone + label + kbd hint. */
-.topbar__search-trigger {
+/* Topbar PTAX (Sprint 14.1). Compacto, do lado do notifications.
+   Mostra USD + EUR em pares (label + valor) sem timestamp. */
+.topbar__ptax {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px 7px 12px;
+  gap: 14px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-alt);
-  color: var(--ink-soft);
-  font-size: 0.8125rem;
-  font-family: inherit;
-  cursor: pointer;
-  min-width: 180px;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-}
-
-.topbar__search-trigger:hover {
   background: var(--surface);
-  border-color: var(--border-strong);
-  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
-.topbar__search-trigger > span {
-  flex: 1;
-  text-align: left;
-}
-
-.topbar__search-kbd {
+.topbar__ptax-pair {
   display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--surface);
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.1;
+}
+
+.topbar__ptax-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--ink-soft);
-  font-family: ui-monospace, monospace;
-  font-size: 0.7rem;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  line-height: 1;
+}
+
+.topbar__ptax-value {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .topbar__user {
@@ -1009,14 +996,7 @@ select {
   text-decoration: none;
 }
 
-/* Dashboard stats grid (Sprint 14). 4 stat cards responsivos. */
-.dashboard-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
+/* Dashboard bar section spacing (Sprint 14). */
 .dashboard-bar-section {
   margin-bottom: 24px;
 }

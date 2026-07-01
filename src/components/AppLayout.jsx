@@ -566,19 +566,6 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          <div className="brand__ptax">
-            <strong>PTAX DO DIA</strong>
-            <div className="brand__ptax-rates">
-              <p>USD {formatCurrencyRate(ptaxRates?.usd?.sell)}</p>
-              <p>EUR {formatCurrencyRate(ptaxRates?.eur?.sell)}</p>
-            </div>
-            {ptaxRates?.updatedAt ? (
-              <span>{formatPtaxTimestamp(ptaxRates.updatedAt)}</span>
-            ) : (
-              <span>Atualizando cotação</span>
-            )}
-          </div>
-
           <a
             className="sidebar-intelliquote-link"
             href={INTELLIQUOTE_WEB_URL}
@@ -628,16 +615,18 @@ export default function AppLayout() {
               </div>
             </div>
             <div className="topbar__actions">
-              <button
-                type="button"
-                className="topbar__search-trigger"
-                onClick={() => commandPalette.setOpen(true)}
-                aria-label="Abrir busca global (Ctrl+K)"
-              >
-                <Icon name="search" size={16} />
-                <span>Buscar</span>
-                <kbd className="topbar__search-kbd">Ctrl K</kbd>
-              </button>
+              {ptaxRates ? (
+                <div className="topbar__ptax" aria-label="Cotacao PTAX do dia">
+                  <span className="topbar__ptax-pair">
+                    <span className="topbar__ptax-label">USD</span>
+                    <span className="topbar__ptax-value">{formatCurrencyRate(ptaxRates?.usd?.sell)}</span>
+                  </span>
+                  <span className="topbar__ptax-pair">
+                    <span className="topbar__ptax-label">EUR</span>
+                    <span className="topbar__ptax-value">{formatCurrencyRate(ptaxRates?.eur?.sell)}</span>
+                  </span>
+                </div>
+              ) : null}
               {renderNotificationsControl()}
               <div className="topbar__user">
                 <div className="topbar__avatar" aria-hidden="true">
