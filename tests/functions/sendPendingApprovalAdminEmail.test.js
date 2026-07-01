@@ -159,6 +159,33 @@ describe('sendPendingApprovalAdminEmail', () => {
     expect(args.html).toBeDefined()
   })
 
+  // Regressao sprint 8: HTML usa tokens BRAND_COLORS.
+  it('html do email usa tokens BRAND_COLORS (sem #184054 / #f4faf9)', async () => {
+    activateSmtp()
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        {
+          id: 'new-1',
+          data: { name: 'Joao', email: 'joao@sqquimica.com', role: 'user', status: 'Pendente' },
+        },
+      ],
+    })
+    await handler(
+      makeEvent({
+        name: 'Joao',
+        email: 'joao@sqquimica.com',
+        role: 'user',
+        status: 'Pendente',
+      })
+    )
+    const args = mockSendMail.mock.calls[0][0]
+    expect(args.html).not.toContain('#184054')
+    expect(args.html).not.toContain('#f4faf9')
+    expect(args.html).toContain('#00ae91')
+    expect(args.html).toContain('#1f1c18')
+  })
+
   it('user vazio -> ignora', async () => {
     activateSmtp()
     setupFirestoreChain({ users: [{ id: 'admin-1', data: ADMIN_USER }] })

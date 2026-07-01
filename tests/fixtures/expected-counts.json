@@ -15,10 +15,11 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 2,
+    "topLevel": 3,
     "_topLevel_list": [
       "AppLayout.jsx",
-      "ProtectedRoute.jsx"
+      "ProtectedRoute.jsx",
+      "Toast.jsx"
     ]
   },
   "srcFeatures": {

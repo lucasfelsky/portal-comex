@@ -161,4 +161,21 @@ describe('sendNewsPublishedEmail', () => {
     expect(args.text).toContain('Ola, Maria Souza')
     expect(args.html).toBeDefined()
   })
+
+  // Regressao sprint 8: HTML do email usa tokens do design system
+  // (BRAND_COLORS) ao inves das cores legacy hardcoded.
+  it('html do email usa tokens BRAND_COLORS (sem #184054 / #f4faf9)', async () => {
+    activateSmtp()
+    setupFirestoreChain({
+      users: [{ id: 'u1', data: { name: 'Maria', email: 'maria@sqquimica.com', status: 'Ativo' } }],
+    })
+    await handler(makeEvent(NEWS))
+    const args = mockSendMail.mock.calls[0][0]
+    // Cores legacy NAO podem mais aparecer
+    expect(args.html).not.toContain('#184054')
+    expect(args.html).not.toContain('#f4faf9')
+    // Cores do design system DEVEM aparecer
+    expect(args.html).toContain('#00ae91') // primary
+    expect(args.html).toContain('#1f1c18') // ink
+  })
 })

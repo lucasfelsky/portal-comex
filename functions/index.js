@@ -27,6 +27,25 @@ const ROLE_PERMISSIONS_MAP = {
   logistica: ['Dashboard', 'Processos'],
 }
 
+// Cores da marca (sprint 8 / sprint 6.7). Espelham os tokens do
+// `src/styles.css` do Portal COMEX e do `globals.css` do IntelliQuote.
+// Como Cloud Functions nao tem acesso ao `:root` do CSS, essas cores
+// sao injetadas inline nos templates de email. Manter sincronizado
+// com o design system (Portal COMEX `:root` + IntelliQuote globals.css).
+const BRAND_COLORS = {
+  ink: '#1f1c18',
+  inkSoft: '#4a5560',
+  primary: '#00ae91',
+  primary700: '#008f76',
+  primary50: '#e3f5f0',
+  surface: '#ffffff',
+  surfaceAlt: '#eef4f1',
+  border: '#dce9e5',
+  borderStrong: '#b7cdc5',
+  bgTint1: '#eef7f6',
+  bgTint2: '#e6f1f2',
+}
+
 const SMTP_HOST = defineSecret('SMTP_HOST')
 const SMTP_PORT = defineSecret('SMTP_PORT')
 const SMTP_USER = defineSecret('SMTP_USER')
@@ -438,17 +457,17 @@ function buildNewsPublishedEmailMessage(newsItem, recipient) {
       .filter(Boolean)
       .join('\n'),
     html: `
-      <div style="font-family: Arial, sans-serif; color: #184054; line-height: 1.5;">
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Uma nova noticia foi publicada no <strong>Portal COMEX</strong>.</p>
-        <div style="padding: 16px 18px; border-radius: 14px; background: #f4faf9; border: 1px solid rgba(24, 64, 84, 0.12);">
+        <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
           <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${safeTitle}</p>
           <p style="margin: 0;">${safeContent || 'Acesse o portal para visualizar a noticia completa.'}</p>
         </div>
         <p style="margin-top: 18px;">
           <a
             href="${APP_URL}/news"
-            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: #184054; color: #ffffff; text-decoration: none; font-weight: 700;"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
             Ver noticia no portal
           </a>
@@ -491,14 +510,14 @@ function buildVerificationEmailMessage({ recipientName, verificationLink }) {
       'Se voce nao solicitou esse cadastro, ignore esta mensagem.',
     ].join('\n'),
     html: `
-      <div style="font-family: Arial, sans-serif; color: #184054; line-height: 1.5;">
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Seu cadastro no <strong>Portal COMEX</strong> foi criado.</p>
         <p>Para liberar o acesso, confirme o seu email corporativo no botao abaixo:</p>
         <p>
           <a
             href="${verificationLink}"
-            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: #184054; color: #ffffff; text-decoration: none; font-weight: 700;"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
             Confirmar email
           </a>
@@ -526,14 +545,14 @@ function buildPasswordResetEmailMessage({ recipientName, resetLink }) {
       'Se voce nao fez essa solicitacao, ignore esta mensagem.',
     ].join('\n'),
     html: `
-      <div style="font-family: Arial, sans-serif; color: #184054; line-height: 1.5;">
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Recebemos uma solicitacao para redefinir a sua senha do <strong>Portal COMEX</strong>.</p>
         <p>Use o botao abaixo para cadastrar uma nova senha:</p>
         <p>
           <a
             href="${resetLink}"
-            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: #184054; color: #ffffff; text-decoration: none; font-weight: 700;"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
             Redefinir senha
           </a>
@@ -569,10 +588,10 @@ function buildPendingApprovalAdminEmailMessage({ pendingUser, adminRecipient }) 
       `${APP_URL}/admin`,
     ].join('\n'),
     html: `
-      <div style="font-family: Arial, sans-serif; color: #184054; line-height: 1.5;">
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Um novo usuario se cadastrou no <strong>Portal COMEX</strong> e aguarda aprovacao administrativa.</p>
-        <div style="padding: 16px 18px; border-radius: 14px; background: #f4faf9; border: 1px solid rgba(24, 64, 84, 0.12);">
+        <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
           <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${escapeHtml(pendingUserName)}</p>
           <p style="margin: 0 0 6px;"><strong>Email:</strong> ${escapeHtml(pendingUserEmail || 'Nao informado')}</p>
           <p style="margin: 0 0 6px;"><strong>Area:</strong> ${escapeHtml(pendingUserArea)}</p>
@@ -581,7 +600,7 @@ function buildPendingApprovalAdminEmailMessage({ pendingUser, adminRecipient }) 
         <p style="margin-top: 18px;">
           <a
             href="${APP_URL}/admin"
-            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: #184054; color: #ffffff; text-decoration: none; font-weight: 700;"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
             Revisar cadastro pendente
           </a>
