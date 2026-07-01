@@ -165,7 +165,14 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const loadedProfile = await ensureUserProfile(nextUser)
+        // forceRefresh=true garante leitura fresca das custom claims.
+        // Sem isso, o cache do Firebase Web SDK (TTL ~1h) pode devolver
+        // um status/role desatualizado apos um adminUpdateUserClaims,
+        // fazendo o usuario ver "Acesso pendente" mesmo ja' tendo sido
+        // promovido a admin. Aplica em bootstrap (login novo) e restore
+        // de sessao (reload de pagina). Custo: 1 chamada extra a
+        // getIdTokenResult por mount do AuthProvider.
+        const loadedProfile = await ensureUserProfile(nextUser, { forceRefresh: true })
         setUser(nextUser)
         setProfile(loadedProfile)
       } catch (error) {
