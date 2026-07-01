@@ -94,15 +94,14 @@ select {
 
 .shell {
   min-height: 100vh;
-  padding: 20px;
+  padding: 0;
 }
 
 .shell__frame {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 20px;
-  width: min(1280px, 100%);
-  margin: 0 auto;
+  min-height: 100vh;
 }
 
 .sidebar,
@@ -283,6 +282,55 @@ select {
   box-shadow: var(--shadow);
 }
 
+/* Link pra IntelliQuote no rodape da sidebar.
+   Card escuro (mesma vibe do brandmark) com eyebrow + title + arrow.
+   Abre em nova aba. */
+.sidebar-intelliquote-link {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: #ffffff;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
+  box-shadow: var(--shadow);
+}
+
+.sidebar-intelliquote-link:hover {
+  background: #2a2520;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(0, 40, 40, 0.16);
+  text-decoration: none;
+}
+
+.sidebar-intelliquote-link__eyebrow {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar-intelliquote-link__title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sidebar-intelliquote-link__arrow {
+  margin-left: auto;
+  font-size: 1.1rem;
+  opacity: 0.85;
+}
+
 .sidebar__brandmark-image {
   display: block;
   width: 100%;
@@ -310,6 +358,10 @@ select {
 .main-content {
   display: grid;
   gap: 20px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
 }
 
 .topbar {

@@ -11,6 +11,9 @@ import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
 
+const INTELLIQUOTE_WEB_URL =
+  import.meta.env.VITE_INTELLIQUOTE_WEB_URL ?? 'https://intelliquote.portal-comex.com'
+
 const navigation = [
   { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo' },
   { to: '/news', label: 'Notícias', description: 'Postagens e atualizações' },
@@ -519,6 +522,20 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </nav>
+
+          <a
+            className="sidebar-intelliquote-link"
+            href={INTELLIQUOTE_WEB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir IntelliQuote em nova aba"
+          >
+            <span className="sidebar-intelliquote-link__eyebrow">Suite SQ</span>
+            <strong className="sidebar-intelliquote-link__title">IntelliQuote</strong>
+            <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
+              ↗
+            </span>
+          </a>
         </aside>
 
         <div className="main-content">
