@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import useAuth from '../hooks/useAuth'
 import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
 import { listExternalNews } from '../services/externalNewsRepository'
+import Modal from '../components/Modal'
 import {
   deleteNewsMediaItems,
   resolveNewsCoverImageForSave,
@@ -590,79 +591,74 @@ export default function NewsPage() {
         </article>
       ) : null}
 
-      {selectedNews ? (
-        <div className="news-modal-backdrop" onClick={handleCloseModal}>
-          <div className="news-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="card-heading">
-              <div>
-                <h3>{selectedNews.title}</h3>
+      <Modal
+        open={Boolean(selectedNews)}
+        onClose={handleCloseModal}
+        title={selectedNews?.title}
+        wide
+        ariaLabel="Detalhes da noticia"
+      >
+        {selectedNews ? (
+          <div className="news-modal__content">
+            <img
+              src={getNewsCoverImage(selectedNews)}
+              alt={selectedNews.title}
+              className="news-modal__cover"
+              onError={(event) => {
+                event.currentTarget.onerror = null
+                event.currentTarget.src = defaultNewsCoverImage
+              }}
+            />
+
+            <div className="news-modal__meta">{formatTimestamp(selectedNews.updatedAt)}</div>
+
+            <div className="news-modal__text">{getNewsBodyText(selectedNews)}</div>
+
+            {selectedNewsImageItems.length > 0 ? (
+              <div className="news-modal__gallery">
+                {selectedNewsImageItems.map((item) => (
+                  <img key={item.id} src={item.url} alt={item.caption || selectedNews.title} className="news-modal__gallery-image" />
+                ))}
               </div>
-              <button type="button" className="ghost-button" onClick={handleCloseModal}>
-                Fechar
-              </button>
-            </div>
+            ) : null}
 
-            <div className="news-modal__content">
-              <img
-                src={getNewsCoverImage(selectedNews)}
-                alt={selectedNews.title}
-                className="news-modal__cover"
-                onError={(event) => {
-                  event.currentTarget.onerror = null
-                  event.currentTarget.src = defaultNewsCoverImage
-                }}
-              />
-
-              <div className="news-modal__meta">{formatTimestamp(selectedNews.updatedAt)}</div>
-
-              <div className="news-modal__text">{getNewsBodyText(selectedNews)}</div>
-
-              {selectedNewsImageItems.length > 0 ? (
-                <div className="news-modal__gallery">
-                  {selectedNewsImageItems.map((item) => (
-                    <img key={item.id} src={item.url} alt={item.caption || selectedNews.title} className="news-modal__gallery-image" />
+            {selectedNewsFileItems.length > 0 ? (
+              <div className="detail-card">
+                <span className="detail-label">Arquivos anexos</span>
+                <div className="news-attachments">
+                  {selectedNewsFileItems.map((item) => (
+                    <a key={item.id} href={item.url} download={getNewsMediaDisplayName(item)} className="news-attachment">
+                      <strong>{getNewsMediaDisplayName(item)}</strong>
+                      <span>{getNewsMediaMetaText(item)}</span>
+                    </a>
                   ))}
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {selectedNewsFileItems.length > 0 ? (
-                <div className="detail-card">
-                  <span className="detail-label">Arquivos anexos</span>
-                  <div className="news-attachments">
-                    {selectedNewsFileItems.map((item) => (
-                      <a key={item.id} href={item.url} download={getNewsMediaDisplayName(item)} className="news-attachment">
-                        <strong>{getNewsMediaDisplayName(item)}</strong>
-                        <span>{getNewsMediaMetaText(item)}</span>
-                      </a>
-                    ))}
-                  </div>
+            {selectedNews.references?.length > 0 ? (
+              <div className="detail-card">
+                <span className="detail-label">Referências</span>
+                <div className="news-references">
+                  {selectedNews.references.map((reference) => (
+                    <a key={reference} href={reference} target="_blank" rel="noreferrer">
+                      {reference}
+                    </a>
+                  ))}
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {selectedNews.references?.length > 0 ? (
-                <div className="detail-card">
-                  <span className="detail-label">Referências</span>
-                  <div className="news-references">
-                    {selectedNews.references.map((reference) => (
-                      <a key={reference} href={reference} target="_blank" rel="noreferrer">
-                        {reference}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedNews.sourceType === 'automatic' && selectedNews.externalUrl ? (
-                <div className="action-row">
-                  <a href={selectedNews.externalUrl} target="_blank" rel="noreferrer" className="primary-button">
-                    Abrir fonte oficial
-                  </a>
-                </div>
-              ) : null}
-            </div>
+            {selectedNews.sourceType === 'automatic' && selectedNews.externalUrl ? (
+              <div className="action-row">
+                <a href={selectedNews.externalUrl} target="_blank" rel="noreferrer" className="primary-button">
+                  Abrir fonte oficial
+                </a>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </Modal>
     </section>
   )
 }

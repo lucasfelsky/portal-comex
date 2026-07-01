@@ -43,28 +43,6 @@
   --text-faint: rgba(31, 28, 24, 0.42);
   --text-mute-strong: rgba(31, 28, 24, 0.68);
 
-  /* Aliases legados (--md-*) mantidos para retrocompatibilidade.
-     Novos componentes devem usar os tokens sem prefixo acima. */
-  --md-text: var(--ink);
-  --md-subtle: var(--ink-soft);
-  --md-outline: var(--border);
-  --md-surface: var(--surface);
-  --md-surface-soft: var(--surface-alt);
-  --md-shadow: var(--shadow);
-  --md-shadow-soft: var(--shadow-sm);
-  --md-primary: var(--primary);
-  --md-primary-strong: var(--ink); /* antes era #184054 (azul escuro) */
-  --md-secondary: var(--ink);
-  --md-gold: var(--primary);
-  --md-gold-soft: var(--primary-50);
-  --md-gold-strong: var(--ink);
-  --md-success: var(--primary);
-  --md-warning: var(--warning);
-  --md-danger: var(--danger);
-  --md-accent: var(--info);
-  --md-neutral: var(--border);
-  --md-surface-tint: var(--primary-50);
-
   color: var(--ink);
   background:
     radial-gradient(circle at top left, rgba(0, 174, 145, 0.10), transparent 24%),
@@ -85,7 +63,7 @@ body,
 
 body {
   margin: 0;
-  color: var(--md-text);
+  color: var(--ink);
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -178,14 +156,14 @@ select {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--md-primary-strong);
+  color: var(--ink);
 }
 
 .brand__ptax p {
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.3;
-  color: var(--md-text);
+  color: var(--ink);
 }
 
 .brand__ptax-rates {
@@ -195,7 +173,7 @@ select {
 
 .brand__ptax span {
   font-size: 0.68rem;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 @media (min-width: 1041px) {
@@ -213,7 +191,7 @@ select {
 .metric-card span {
   margin: 0;
   line-height: 1.5;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .nav {
@@ -601,7 +579,7 @@ select {
 .notifications__group-header p,
 .notifications__group-header span {
   margin: 0;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .notifications__group-header span {
@@ -641,7 +619,7 @@ select {
 .notifications__item p,
 .notifications__item span {
   margin: 0;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .notifications__item span {
@@ -1042,15 +1020,15 @@ select {
 }
 
 .dashboard-bar-card__text--ok {
-  color: var(--md-success);
+  color: var(--primary);
 }
 
 .dashboard-bar-card__text--warn {
-  color: var(--md-warning);
+  color: var(--warning);
 }
 
 .dashboard-bar-card__text--info {
-  color: var(--md-primary);
+  color: var(--primary);
 }
 
 .dashboard-bar-card__text--neutral {
@@ -1058,7 +1036,7 @@ select {
 }
 
 .dashboard-bar-card__text--danger {
-  color: var(--md-danger);
+  color: var(--danger);
 }
 
 .triple-grid {
@@ -1202,12 +1180,12 @@ select {
   border-radius: 14px;
   border: 1px solid rgba(0, 174, 145, 0.22);
   background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06));
-  color: var(--md-primary-strong);
+  color: var(--ink);
   font-weight: 700;
 }
 
 .eta-meta-secondary {
-  color: var(--md-primary-strong);
+  color: var(--ink);
 }
 
 .process-item__main {
@@ -1224,7 +1202,7 @@ select {
 .process-item__line {
   display: block;
   line-height: 1.5;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .process-item__chips {
@@ -1333,7 +1311,7 @@ select {
 .process-message-limit-text {
   margin: 0;
   font-size: 0.92rem;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .process-message-card__meta {
@@ -1434,7 +1412,7 @@ select {
   display: grid;
   gap: 18px;
   padding: 24px;
-  border: 1px solid var(--md-outline);
+  border: 1px solid var(--border);
   border-radius: 32px;
   background: linear-gradient(180deg, rgba(252, 253, 249, 0.98), rgba(242, 246, 239, 0.97));
   box-shadow: var(--shadow-xl);
@@ -1492,7 +1470,7 @@ select {
   border: 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
-  color: var(--md-text);
+  color: var(--ink);
   font-size: 1.8rem;
   line-height: 1;
   cursor: pointer;
@@ -1628,7 +1606,7 @@ select {
   border-radius: 999px;
   padding: 10px 16px;
   background: var(--surface-alt);
-  color: var(--md-text);
+  color: var(--ink);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1719,8 +1697,8 @@ select {
 .inline-badge {
   padding: 8px 12px;
   border-radius: 999px;
-  background: var(--md-gold-soft);
-  color: var(--md-gold-strong);
+  background: var(--primary-50);
+  color: var(--ink);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -1952,7 +1930,7 @@ select {
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(0, 174, 145, 0.12);
-  color: var(--md-primary-strong);
+  color: var(--ink);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -2053,7 +2031,7 @@ select {
   width: min(920px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: 1px solid var(--md-outline);
+  border: 1px solid var(--border);
   border-radius: 32px;
   background: linear-gradient(180deg, rgba(252, 253, 249, 0.98), rgba(242, 246, 239, 0.97));
   box-shadow: var(--shadow-xl);
@@ -2076,7 +2054,7 @@ select {
 .news-modal__text {
   white-space: pre-wrap;
   line-height: 1.7;
-  color: var(--md-text);
+  color: var(--ink);
 }
 
 .news-modal__gallery {
@@ -2097,7 +2075,7 @@ select {
   border: 1px solid var(--border);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.68);
-  color: var(--md-text);
+  color: var(--ink);
   text-decoration: none;
   transition:
     transform 0.2s ease,
@@ -2125,7 +2103,7 @@ select {
 }
 
 .news-references a {
-  color: var(--md-primary-strong);
+  color: var(--ink);
   word-break: break-word;
 }
 
@@ -2229,7 +2207,7 @@ select {
 }
 
 .eta-detail-highlight p {
-  color: var(--md-primary-strong);
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -2284,7 +2262,7 @@ select {
 
 .checkbox-field span {
   margin: 0;
-  color: var(--md-text);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -2297,7 +2275,7 @@ select {
   border-radius: 20px;
   background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.08));
   border: 1px solid var(--border);
-  box-shadow: var(--md-shadow-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .collection-window-card--detail {
@@ -2451,7 +2429,7 @@ select {
 }
 
 .weekly-arrivals-item--clickable:focus-visible {
-  outline: 2px solid var(--md-gold-strong);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -2474,8 +2452,8 @@ select {
   display: inline-flex;
   padding: 8px 12px;
   border-radius: 999px;
-  background: var(--md-gold-soft);
-  color: var(--md-gold-strong);
+  background: var(--primary-50);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -2512,7 +2490,7 @@ select {
 
 .announcement-card p {
   margin: 10px 0 0;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
   line-height: 1.6;
 }
 
@@ -2552,7 +2530,7 @@ select {
 
 .invite-card__meta {
   flex-wrap: wrap;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
   font-size: 0.92rem;
 }
 
@@ -2659,7 +2637,7 @@ select {
     line-height: 1.02;
     letter-spacing: -0.03em;
     font-weight: 800;
-    color: var(--md-primary-strong);
+    color: var(--ink);
     text-align: center;
   }
 
@@ -2786,7 +2764,7 @@ select {
     border-radius: 28px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 249, 0.96)),
-      var(--md-surface);
+      var(--surface);
   }
 
   .topbar {
@@ -2858,7 +2836,7 @@ select {
     border-radius: 18px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 249, 248, 0.96)),
-      var(--md-surface);
+      var(--surface);
     box-shadow: var(--shadow-sm);
     backdrop-filter: blur(12px);
   }
@@ -2869,7 +2847,7 @@ select {
     gap: 3px;
     padding: 10px 12px;
     border-radius: 18px;
-    color: var(--md-subtle);
+    color: var(--ink-soft);
     font-size: 0.72rem;
     font-weight: 700;
     text-align: center;
@@ -3006,7 +2984,7 @@ select {
     border: 1px solid var(--border);
     font-size: 0.76rem;
     line-height: 1.35;
-    color: var(--md-text);
+    color: var(--ink);
   }
 
   .detail-stack {
@@ -3577,7 +3555,7 @@ select {
   padding: 6px;
   border-radius: 999px;
   background: var(--surface-alt);
-  border: 1px solid var(--md-outline);
+  border: 1px solid var(--border);
   align-self: start;
   width: fit-content;
   max-width: 100%;
@@ -3585,7 +3563,7 @@ select {
 
 .admin-tabs .tab-button {
   background: transparent;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .admin-tabs .tab-button--active {
@@ -3614,7 +3592,7 @@ select {
   padding: 18px;
   border-radius: 20px;
   background: var(--surface-alt);
-  border: 1px solid var(--md-outline);
+  border: 1px solid var(--border);
 }
 
 .admin-feature-footer__meta {
@@ -3626,7 +3604,7 @@ select {
 .admin-feature-footer__meta p {
   margin: 0;
   font-weight: 600;
-  color: var(--md-primary-strong);
+  color: var(--ink);
 }
 
 .admin-table-wrapper {
@@ -3643,7 +3621,7 @@ select {
 .admin-table td {
   text-align: left;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--md-outline);
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 
@@ -3651,7 +3629,7 @@ select {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
   background: rgba(243, 247, 239, 0.6);
 }
 
@@ -3709,11 +3687,11 @@ select {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: var(--md-subtle);
+  color: var(--ink-soft);
 }
 
 .toggle input {
-  accent-color: var(--md-primary);
+  accent-color: var(--primary);
   width: 18px;
   height: 18px;
 }

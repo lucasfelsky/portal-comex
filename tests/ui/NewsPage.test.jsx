@@ -206,9 +206,9 @@ describe('NewsPage', () => {
     await user.click(manualCardBtn)
     // Modal aberto
     await waitFor(() => {
-      // heading do modal tem o titulo
-      const modalTitles = document.querySelectorAll('.news-modal h3')
-      expect(Array.from(modalTitles).some((h) => h.textContent === 'Manutencao programada sabado')).toBe(true)
+      // dialog tem o titulo (Sprint 9: migrado para <Modal>)
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('Manutencao programada sabado')
     })
   })
 
@@ -253,10 +253,10 @@ describe('NewsPage', () => {
       b.textContent.includes('Manutencao programada sabado')
     )
     await user.click(manualCardBtn)
-    expect(document.querySelector('.news-modal')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Fechar' }))
     await waitFor(() => {
-      expect(document.querySelector('.news-modal')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 
@@ -271,10 +271,10 @@ describe('NewsPage', () => {
       b.textContent.includes('Manutencao programada sabado')
     )
     await user.click(manualCardBtn)
-    expect(document.querySelector('.news-modal-backdrop')).toBeInTheDocument()
-    await user.click(document.querySelector('.news-modal-backdrop'))
+    expect(document.querySelector('.modal-backdrop')).toBeInTheDocument()
+    await user.click(document.querySelector('.modal-backdrop'))
     await waitFor(() => {
-      expect(document.querySelector('.news-modal-backdrop')).not.toBeInTheDocument()
+      expect(document.querySelector('.modal-backdrop')).not.toBeInTheDocument()
     })
   })
 
