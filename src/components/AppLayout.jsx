@@ -40,19 +40,19 @@ const pageMeta = {
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
   '/admin': { title: 'Painel administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
-    title: 'Usuários · Admin',
+    title: 'Usuários',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Usuários' }],
   },
   '/admin/comunicados': {
-    title: 'Comunicados · Admin',
+    title: 'Comunicados',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Comunicados' }],
   },
   '/admin/barra': {
-    title: 'Barra do porto · Admin',
+    title: 'Barra do porto',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Barra do porto' }],
   },
   '/admin/previsoes': {
-    title: 'Regras de previsão · Admin',
+    title: 'Regras de previsão',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Regras de previsão' }],
   },
 }
