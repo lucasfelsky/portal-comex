@@ -495,18 +495,6 @@ export default function AppLayout() {
           <div className="brand">
             <span className="brand__eyebrow">SQ Química</span>
             <h1>Portal COMEX</h1>
-            <div className="brand__ptax">
-              <strong>PTAX DO DIA</strong>
-              <div className="brand__ptax-rates">
-                <p>USD {formatCurrencyRate(ptaxRates?.usd?.sell)}</p>
-                <p>EUR {formatCurrencyRate(ptaxRates?.eur?.sell)}</p>
-              </div>
-              {ptaxRates?.updatedAt ? (
-                <span>{formatPtaxTimestamp(ptaxRates.updatedAt)}</span>
-              ) : (
-                <span>Atualizando cotação</span>
-              )}
-            </div>
           </div>
 
           <nav id="primary-navigation" className="nav" aria-label="Principal">
@@ -522,6 +510,19 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </nav>
+
+          <div className="brand__ptax">
+            <strong>PTAX DO DIA</strong>
+            <div className="brand__ptax-rates">
+              <p>USD {formatCurrencyRate(ptaxRates?.usd?.sell)}</p>
+              <p>EUR {formatCurrencyRate(ptaxRates?.eur?.sell)}</p>
+            </div>
+            {ptaxRates?.updatedAt ? (
+              <span>{formatPtaxTimestamp(ptaxRates.updatedAt)}</span>
+            ) : (
+              <span>Atualizando cotação</span>
+            )}
+          </div>
 
           <a
             className="sidebar-intelliquote-link"
