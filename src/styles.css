@@ -476,7 +476,7 @@ body {
   gap: 20px;
   width: 100%;
   max-width: 1280px;
-  padding: 0 24px 48px;
+  padding: 80px 24px 48px; /* 80 top = altura da topbar fixed */
   /* conteudo rola; topbar fica sticky dentro */
   overflow-y: auto;
   overflow-x: hidden;
@@ -493,15 +493,17 @@ body {
 .main-content::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 25;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   height: 80px;
-  padding: 0 24px;
+  padding: 0 24px 0 304px; /* 280 sidebar + 24 gap */
   border-radius: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -3343,6 +3345,7 @@ body {
     margin-left: 0;
     height: auto;
     overflow: visible;
+    padding-top: 12px;
   }
 
   .news-list-card,
