@@ -2335,11 +2335,36 @@ body {
   color: var(--ink);
   font-weight: 700;
   cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.tab-button:hover:not(.tab-button--active) {
+  background: var(--bg-tint-1);
+  color: var(--primary-700);
 }
 
 .tab-button--active {
   background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 174, 145, 0.28);
+  transform: scale(1.02);
+}
+
+.tab-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-button,
+  .tab-button--active {
+    transition: none;
+    transform: none;
+  }
 }
 
 .primary-button,

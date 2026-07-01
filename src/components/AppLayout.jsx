@@ -5,6 +5,7 @@ import Icon from './Icon'
 import Breadcrumb from './Breadcrumb'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
+import TabButton from './TabButton'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -424,41 +425,36 @@ export default function AppLayout() {
           </div>
 
           <div className="tab-row notifications__filters">
-            <button
-              type="button"
-              className={`tab-button${notificationFilter === 'all' ? ' tab-button--active' : ''}`}
+            <TabButton
+              active={notificationFilter === 'all'}
               onClick={() => setNotificationFilter('all')}
             >
               Todas
-            </button>
-            <button
-              type="button"
-              className={`tab-button${notificationFilter === 'process_question_created' ? ' tab-button--active' : ''}`}
+            </TabButton>
+            <TabButton
+              active={notificationFilter === 'process_question_created'}
               onClick={() => setNotificationFilter('process_question_created')}
             >
               Dúvidas
-            </button>
-            <button
-              type="button"
-              className={`tab-button${notificationFilter === 'process_question_answered' ? ' tab-button--active' : ''}`}
+            </TabButton>
+            <TabButton
+              active={notificationFilter === 'process_question_answered'}
               onClick={() => setNotificationFilter('process_question_answered')}
             >
               Respostas
-            </button>
-            <button
-              type="button"
-              className={`tab-button${notificationFilter === 'favorite_process_message' ? ' tab-button--active' : ''}`}
+            </TabButton>
+            <TabButton
+              active={notificationFilter === 'favorite_process_message'}
               onClick={() => setNotificationFilter('favorite_process_message')}
             >
               Favoritos
-            </button>
-            <button
-              type="button"
-              className={`tab-button${notificationFilter === 'post_receipt_notes_updated' ? ' tab-button--active' : ''}`}
+            </TabButton>
+            <TabButton
+              active={notificationFilter === 'post_receipt_notes_updated'}
               onClick={() => setNotificationFilter('post_receipt_notes_updated')}
             >
               Pós-recebimento
-            </button>
+            </TabButton>
           </div>
 
           <div className="notifications__list">
