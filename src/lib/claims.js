@@ -34,11 +34,27 @@ export async function getUserClaims(user, { forceRefresh = false } = {}) {
   try {
     const idTokenResult = await user.getIdTokenResult(forceRefresh)
     const claims = idTokenResult?.claims ?? {}
+    if (typeof console !== 'undefined' && process.env.NODE_ENV !== 'production') {
+      // Loga claims lidas para diagnostico de bug 'Acesso pendente' indevido.
+      console.debug('[claims] getIdTokenResult', {
+        forceRefresh,
+        role: claims.role,
+        status: claims.status,
+        uid: user.uid,
+        email: user.email,
+      })
+    }
     return {
       role: normalizeRole(claims.role),
       status: normalizeStatus(claims.status),
     }
-  } catch {
+  } catch (error) {
+    if (typeof console !== 'undefined') {
+      console.warn(
+        '[claims] Falha ao ler custom claims (aplicando defaults Pendente/user):',
+        error?.message ?? error
+      )
+    }
     return { role: DEFAULT_ROLE, status: DEFAULT_STATUS }
   }
 }

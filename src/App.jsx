@@ -49,6 +49,7 @@ const PendingApprovalPage = lazyWithRetry(
 const ProcessesPage = lazyWithRetry(() => import('./pages/ProcessesPage'), 'processes-page')
 const VerifyEmailPage = lazyWithRetry(() => import('./pages/VerifyEmailPage'), 'verify-email-page')
 const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'), 'not-found-page')
+const DebugClaimsPage = lazyWithRetry(() => import('./pages/DebugClaimsPage'), 'debug-claims-page')
 
 function PageLoader() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verificar-email" element={<VerifyEmailPage />} />
         <Route path="/aguardando-aprovacao" element={<PendingApprovalPage />} />
+        <Route path="/debug/claims" element={<DebugClaimsPage />} />
         <Route
           element={
             <ProtectedRoute>
