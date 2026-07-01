@@ -599,7 +599,9 @@ export default function AppLayout() {
                 {meta.breadcrumb && meta.breadcrumb.length > 0 ? (
                   <Breadcrumb items={meta.breadcrumb} />
                 ) : null}
-                <h2 className="topbar__title">{meta.title}</h2>
+                {meta.breadcrumb && meta.breadcrumb.length > 0 ? null : (
+                  <h2 className="topbar__title">{meta.title}</h2>
+                )}
               </div>
             </div>
             <div className="topbar__actions">
