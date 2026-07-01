@@ -4505,3 +4505,36 @@ body {
   }
 }
 
+/* Sprint 16.1: Page transitions.
+   Wrapper <PageFade> no <Outlet>: opacity 0 -> 1 em 180ms, com leve
+   translateY(6px) pra dar sensacao de entrada. Respeita prefers-reduced-motion. */
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-fade {
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+.page-fade--visible {
+  animation: page-fade-in 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade,
+  .page-fade--visible {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+

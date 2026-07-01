@@ -4,6 +4,7 @@ import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Breadcrumb from './Breadcrumb'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
+import PageFade from './PageFade'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -672,7 +673,9 @@ export default function AppLayout() {
             </div>
           ) : null}
 
-          <Outlet />
+          <PageFade>
+            <Outlet />
+          </PageFade>
 
           <div className="mobile-page-logout">
             <button type="button" className="ghost-button mobile-page-logout__button" onClick={logout}>
