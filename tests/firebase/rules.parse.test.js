@@ -60,7 +60,15 @@ async function runRulesDryRun() {
 }
 
 describe('firestore.rules parse', () => {
-  it('compila sem erros de sintaxe (firebase deploy --dry-run)', async () => {
+  // Pula quando nao houver credencial Firebase no ambiente. O dry-run
+  // precisa autenticar antes de validar as rules, entao este teste
+  // so roda em CI (job rules-validation) ou local com FIREBASE_TOKEN /
+  // FIREBASE_BIN configurado. O `unit-and-build` job (que roda `npm test`)
+  // nao tem credenciais, entao pulamos para nao quebrar a suite.
+  const hasFirebaseCredential = Boolean(process.env.FIREBASE_TOKEN) || Boolean(process.env.FIREBASE_BIN)
+  const itMaybe = hasFirebaseCredential ? it : it.skip
+
+  itMaybe('compila sem erros de sintaxe (firebase deploy --dry-run)', async () => {
     const { stdout, stderr, code, bin, args } = await runRulesDryRun()
     const combined = `${stdout}\n${stderr}`
     if (code !== 0) {
