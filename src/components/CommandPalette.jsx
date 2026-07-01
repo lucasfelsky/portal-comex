@@ -1,12 +1,15 @@
-// Command palette (Sprint 14).
+// Command palette (Sprint 14, busca real Sprint 18.0).
 // Busca global acionada por Ctrl+K (Cmd+K no Mac). Filtra em tempo
-// real sobre items fornecidos via prop `commands`.
+// real sobre items fornecidos via prop `commands` e, opcionalmente,
+// dispara um `searcher` assincrono quando o usuario digita.
 //
 // API:
 //   <CommandPalette
 //     open={boolean}
 //     onClose={() => void}
 //     commands={[{ id, label, group?, to?, action?, keywords? }]}
+//     searcher={async (query) => [{ id, label, group?, to?, action? }]}
+//     placeholder="..."
 //   />
 //
 // Comportamento:
@@ -15,7 +18,8 @@
 //   - Click no backdrop fecha
 //   - ↑/↓ navegacao entre resultados
 //   - Enter executa o resultado selecionado (to= ou action=)
-//   - Filtragem case-insensitive em label + keywords
+//   - Filtragem case-insensitive em label + keywords (commands estaticos)
+//   - Se `searcher` for passado, chama com debounce 200ms e junta resultados
 //
 // Estrutura: <Modal> wrapper com <input> + lista de resultados.
 
@@ -24,18 +28,31 @@ import { useNavigate } from 'react-router-dom'
 import Modal from './Modal'
 import Icon from './Icon'
 
-export default function CommandPalette({ open, onClose, commands = [] }) {
+const SEARCH_DEBOUNCE_MS = 200
+
+export default function CommandPalette({
+  open,
+  onClose,
+  commands = [],
+  searcher,
+  placeholder = 'Buscar paginas, acoes...',
+}) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const [asyncResults, setAsyncResults] = useState([])
+  const [asyncLoading, setAsyncLoading] = useState(false)
   const inputRef = useRef(null)
   const listRef = useRef(null)
   const navigate = useNavigate()
+  const debounceRef = useRef(null)
 
   // Reseta estado quando a palette abre
   useEffect(() => {
     if (open) {
       setQuery('')
       setActiveIndex(0)
+      setAsyncResults([])
+      setAsyncLoading(false)
     }
   }, [open])
 
@@ -47,8 +64,42 @@ export default function CommandPalette({ open, onClose, commands = [] }) {
     }
   }, [open])
 
-  // Filtragem
-  const filtered = useMemo(() => {
+  // Debounce do searcher externo
+  useEffect(() => {
+    if (!searcher) {
+      setAsyncResults([])
+      return undefined
+    }
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current)
+    }
+    const trimmed = query.trim()
+    if (!trimmed) {
+      setAsyncResults([])
+      setAsyncLoading(false)
+      return undefined
+    }
+    setAsyncLoading(true)
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const results = await searcher(trimmed)
+        setAsyncResults(Array.isArray(results) ? results : [])
+      } catch (error) {
+        console.error('CommandPalette searcher falhou.', error)
+        setAsyncResults([])
+      } finally {
+        setAsyncLoading(false)
+      }
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current)
+      }
+    }
+  }, [query, searcher])
+
+  // Filtragem dos comandos estaticos
+  const filteredCommands = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return commands
     return commands.filter((cmd) => {
@@ -62,6 +113,13 @@ export default function CommandPalette({ open, onClose, commands = [] }) {
       return haystack.includes(q)
     })
   }, [commands, query])
+
+  // Junta comandos estaticos + resultados async, com flag de origem
+  const filtered = useMemo(() => {
+    if (!searcher) return filteredCommands
+    const taggedAsync = asyncResults.map((item) => ({ ...item, _async: true }))
+    return [...filteredCommands, ...taggedAsync]
+  }, [filteredCommands, asyncResults, searcher])
 
   // Mantem activeIndex dentro dos limites quando query muda
   useEffect(() => {
@@ -98,7 +156,7 @@ export default function CommandPalette({ open, onClose, commands = [] }) {
     const out = []
     let current = null
     filtered.forEach((cmd) => {
-      const g = cmd.group ?? ''
+      const g = (cmd._async ? 'Resultados' : cmd.group) ?? ''
       if (!current || current.group !== g) {
         current = { group: g, items: [] }
         out.push(current)
@@ -119,7 +177,7 @@ export default function CommandPalette({ open, onClose, commands = [] }) {
             ref={inputRef}
             type="text"
             className="command-palette__input"
-            placeholder="Buscar paginas, acoes..."
+            placeholder={placeholder}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -140,7 +198,9 @@ export default function CommandPalette({ open, onClose, commands = [] }) {
         >
           {filtered.length === 0 ? (
             <li className="command-palette__empty">
-              Nenhum resultado para &ldquo;{query}&rdquo;
+              {asyncLoading
+                ? 'Buscando...'
+                : `Nenhum resultado para \u201c${query}\u201d`}
             </li>
           ) : (
             grouped.map((group) => (

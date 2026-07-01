@@ -820,3 +820,34 @@ export async function deleteProcess(processId, actor = null) {
     target: processId,
   })
 }
+
+// Busca processos (Sprint 18.0): filtra localmente em name/destination/processNumber/items.
+// Limita a 8 resultados pra nao pesar o command palette.
+export async function searchProcesses(rawQuery) {
+  const q = String(rawQuery ?? '').trim().toLowerCase()
+  if (q.length < 2) return []
+
+  const all = await listProcesses()
+  const matches = all.filter((process) => {
+    const haystack = [
+      process.name ?? '',
+      process.destination ?? '',
+      process.processNumber ?? '',
+      process.category ?? '',
+      process.channel ?? '',
+      process.responsibleName ?? '',
+      ...(Array.isArray(process.items)
+        ? process.items.flatMap((item) => [
+            item.commercialName ?? '',
+            item.poNumber ?? '',
+            item.supplierName ?? '',
+          ])
+        : []),
+    ]
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(q)
+  })
+
+  return matches.slice(0, 8)
+}

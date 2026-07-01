@@ -6,6 +6,7 @@ import Breadcrumb from './Breadcrumb'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
 import TabButton from './TabButton'
+import { useProcessSearch } from '../hooks/useProcessSearch'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -75,6 +76,7 @@ export default function AppLayout() {
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
+  const processSearcher = useProcessSearch()
   const commandItems = useMemo(
     () => [
       { id: 'go-dashboard', label: 'Dashboard', group: 'Paginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
@@ -707,6 +709,8 @@ export default function AppLayout() {
         open={commandPalette.open}
         onClose={() => commandPalette.setOpen(false)}
         commands={commandItems}
+        searcher={processSearcher}
+        placeholder="Buscar paginas, acoes ou processos..."
       />
     </div>
   )

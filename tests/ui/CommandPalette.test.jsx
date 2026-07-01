@@ -182,3 +182,80 @@ describe('useCommandPalette', () => {
     expect(preventDefault).toHaveBeenCalled()
   })
 })
+
+// --- Sprint 18.0: searcher async ---
+
+describe('CommandPalette searcher', () => {
+  it('chama searcher com debounce e renderiza resultados async', async () => {
+    const searcher = vi.fn(async (q) => [
+      { id: `r1-${q}`, label: `Resultado ${q}`, group: 'Resultados' },
+    ])
+
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} searcher={searcher} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/buscar/i), {
+      target: { value: 'Atlas' },
+    })
+
+    // searcher NAO e chamado imediatamente (debounce 200ms)
+    expect(searcher).not.toHaveBeenCalled()
+
+    await new Promise((resolve) => setTimeout(resolve, 220))
+    expect(searcher).toHaveBeenCalledWith('Atlas')
+
+    const resultNode = await screen.findByText('Resultado Atlas')
+    expect(resultNode).toBeInTheDocument()
+  })
+
+  it('mostra "Buscando..." enquanto loading e placeholder custom', async () => {
+    const searcher = vi.fn(() => new Promise(() => {})) // nunca resolve
+
+    renderWithRouter(
+      <CommandPalette
+        open={true}
+        commands={COMMANDS}
+        searcher={searcher}
+        placeholder="Custom placeholder"
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Custom placeholder'), {
+      target: { value: 'foo' },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 220))
+    expect(screen.getByText(/Buscando\.\.\./i)).toBeInTheDocument()
+  })
+
+  it('agrupa resultados async com label "Resultados"', async () => {
+    const searcher = vi.fn(async (q) => [
+      { id: `r-${q}`, label: `Proc ${q}`, group: 'Resultados' },
+    ])
+
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} searcher={searcher} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/buscar/i), {
+      target: { value: 'X' },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 220))
+
+    expect(await screen.findByText(/^Resultados$/)).toBeInTheDocument()
+  })
+
+  it('searcher com erro mostra empty state', async () => {
+    const searcher = vi.fn(async () => {
+      throw new Error('boom')
+    })
+
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} searcher={searcher} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/buscar/i), {
+      target: { value: 'falha' },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 240))
+
+    expect(screen.getByText(/Nenhum resultado para/i)).toBeInTheDocument()
+  })
+})
