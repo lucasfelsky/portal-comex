@@ -13,10 +13,22 @@
   --primary-700: #008f76;
   --primary-50: #e3f5f0;
   --danger: #c85d2c;
+  --danger-700: #a84d22;
+  --danger-50: #fbeee6;
   --warning: #b48a2d;
+  --warning-700: #8a6b22;
+  --warning-50: #faf2dc;
   --info: #1e6fb6;
+  --info-700: #155793;
+  --info-50: #e3eef9;
+  --success-700: #006b56;
+  --success-50: #e3f5f0;
+  --neutral-700: #4a5560;
+  --neutral-50: #eef4f1;
   --border: #dce9e5;
   --border-strong: #b7cdc5;
+  --bg-tint-1: #eef7f6;
+  --bg-tint-2: #e6f1f2;
   --radius: 14px;
   --radius-sm: 8px;
   --shadow: 0 8px 28px rgba(0, 40, 40, 0.08);
@@ -203,8 +215,9 @@ select {
 
 .nav__link {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   padding: 14px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
@@ -216,6 +229,19 @@ select {
     transform 140ms ease,
     border-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.nav__link strong {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.nav__link p {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink-soft);
 }
 
 .nav__link:hover {
@@ -230,6 +256,13 @@ select {
   color: #ffffff;
   border-color: var(--primary-700);
   box-shadow: 0 8px 20px rgba(0, 174, 145, 0.28);
+}
+
+/* No estado ativo, esconde o subtexto — o label sozinho ja' comunica
+   a rota selecionada. Sem isso o texto secundario fica esquisito em
+   branco ao lado do label. */
+.nav__link--active p {
+  display: none;
 }
 
 .nav__link--active:hover {
@@ -1355,7 +1388,7 @@ select {
 }
 
 .tab-button--active {
-  background: linear-gradient(180deg, #184054 0%, #133848 100%);
+  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
   color: #ffffff;
 }
 
@@ -2434,7 +2467,7 @@ select {
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active {
-    background: linear-gradient(180deg, #184054 0%, #133848 100%);
+    background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active::before {
@@ -3026,9 +3059,10 @@ select {
   }
 
   .sidebar .nav__link p {
-    font-size: 0.88rem;
+    font-size: 0.74rem;
     line-height: 1.3;
     text-align: center;
+    align-self: center;
   }
 
   .sidebar .brand__ptax-rates {
@@ -3309,7 +3343,7 @@ select {
 }
 
 .admin-tabs .tab-button--active {
-  background: linear-gradient(180deg, #184054 0%, #133848 100%);
+  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
   color: #ffffff;
   box-shadow: 0 10px 20px rgba(24, 64, 84, 0.16);
 }
@@ -3403,7 +3437,7 @@ select {
 }
 
 .scope-chip--active {
-  background: linear-gradient(180deg, #184054 0%, #133848 100%);
+  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
   color: #ffffff;
 }
 
