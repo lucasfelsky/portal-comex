@@ -44,10 +44,7 @@
   --text-mute-strong: rgba(31, 28, 24, 0.68);
 
   color: var(--ink);
-  background:
-    radial-gradient(circle at top left, rgba(0, 174, 145, 0.10), transparent 24%),
-    radial-gradient(circle at top right, rgba(31, 28, 24, 0.06), transparent 22%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-tint-1) 52%, var(--bg-tint-2) 100%);
+  background: var(--bg);
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -895,11 +892,12 @@ body {
   border-color: var(--info);
 }
 
+/* Section/container de pagina. Sem background, border ou border-radius:
+   e' so' um wrapper com padding + gap. Os cards internos destacam. */
 .surface {
   padding: 24px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  display: grid;
+  gap: 20px;
 }
 
 /* Skeleton loaders (Sprint 12 / polish).
@@ -1758,19 +1756,14 @@ body {
   padding: 20px;
   border-radius: var(--radius);
   background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
   transition:
     transform 180ms ease,
-    box-shadow 180ms ease,
     border-color 180ms ease;
 }
 
 .stat-card:hover,
 .list-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow);
-  border-color: var(--border-strong);
 }
 
 .card-heading {
@@ -1806,9 +1799,7 @@ body {
 .metric-card {
   padding: 16px 18px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
 
 .process-item,
@@ -2484,9 +2475,7 @@ body {
 .invite-card {
   padding: 16px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
 
 .admin-user-row,
@@ -2692,10 +2681,8 @@ body {
 
 .news-card {
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
 
 .news-card__button {
@@ -2928,9 +2915,7 @@ body {
   gap: 8px;
   padding: 16px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
 }
 
 .eta-detail-highlight {
