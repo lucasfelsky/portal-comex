@@ -1,7 +1,7 @@
 name: CI
 
 # Workflow de integracao continua do Portal COMEX.
-# - Vitest unit (165 casos em 16 arquivos, com pretest que roda audit de drift L16)
+# - Vitest unit (suite atual; pretest roda audit de drift L16)
 # - Vite build
 # - Firebase rules dry-run
 # - Upload de dist/ como artifact (10 dias) para debug de releases
@@ -10,7 +10,11 @@ name: CI
 # baseado em package-lock.json. Nao precisa de action/cache separado.
 #
 # Secrets necessarios (configurar em Settings > Secrets and variables > Actions):
-#   FIREBASE_TOKEN  - token `firebase login:ci` (apenas para o dry-run).
+#   VITE_FIREBASE_* (6 vars) - injetadas no `npm run build` para o bundle sair
+#                              com Firebase Auth ativo. Validacao fail-fast
+#                              antes do build (mesmo padrao de deploy-hosting).
+#   FIREBASE_TOKEN  - token `firebase login:ci` (apenas para o dry-run das
+#                     rules no job rules-validation).
 #                     Para deploy automatico, ver `deploy-hosting.yml` que
 #                     suporta GCP_SA_KEY (preferencial) ou FIREBASE_TOKEN (legacy).
 #
@@ -47,7 +51,41 @@ jobs:
       - name: Unit tests (Vitest)
         run: npm test
 
+      - name: Validar config do Firebase para o build
+        # O `vite build` (via firebase-env-guard em vite.config.js) aborta
+        # sem as 6 VITE_FIREBASE_*. Validamos aqui para fail-fast com
+        # mensagem clara em vez do erro generico do guard.
+        # Mesmo padrao usado em deploy-hosting.yml (L71-92).
+        run: |
+          missing=0
+          for v in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_STORAGE_BUCKET VITE_FIREBASE_MESSAGING_SENDER_ID VITE_FIREBASE_APP_ID; do
+            val=$(printenv "$v" || true)
+            if [ -z "$val" ]; then
+              echo "::error::Secret/variavel ausente: $v"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Config do Firebase incompleta. Adicione os secrets VITE_FIREBASE_* no GitHub (Settings > Secrets and variables > Actions) para que o bundle seja publicado com Firebase Auth ativo."
+            exit 1
+          fi
+          echo "Config do Firebase OK para o build."
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
       - name: Build (Vite)
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: npm run build
 
       - name: Upload dist/ artifact
