@@ -153,77 +153,70 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="dashboard-bar-section">
-        <article className="list-card dashboard-bar-card dashboard-bar-card--header">
-          <div className="card-heading">
-            <h3>Barra do Rio Itajaí-Açu</h3>
-            {isLoadingBarStatus ? (
-              <span className="dashboard-bar-card__text">Carregando</span>
-            ) : barStatus ? (
-              <span className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}>
-                {barStatus.label}
-              </span>
-            ) : (
-              <span className="dashboard-bar-card__text">Indisponível</span>
-            )}
-          </div>
-        </article>
-      </div>
+      <article className="list-card">
+        <div className="card-heading">
+          <h3>Barra do Rio Itajaí-Açu</h3>
+          {isLoadingBarStatus ? (
+            <span className="dashboard-bar-card__text">Carregando</span>
+          ) : barStatus ? (
+            <span className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}>
+              {barStatus.label}
+            </span>
+          ) : (
+            <span className="dashboard-bar-card__text">Indisponível</span>
+          )}
+        </div>
+      </article>
 
-      <div style={{ marginBottom: '24px' }}>
-        <article className="list-card">
-          <div className="card-heading">
-            <div>
-              <h3>Comunicados recentes</h3>
-            </div>
+      <article className="list-card">
+        <div className="card-heading">
+          <div>
+            <h3>Comunicados recentes</h3>
           </div>
+        </div>
 
-          <div className="announcement-list">
-            {isLoadingAnnouncements ? (
-              <Skeleton.Group count={3} gap={12}>
-                <Skeleton variant="title" />
-                <Skeleton variant="subtitle" />
-              </Skeleton.Group>
-            ) : announcements.length > 0 ? (
-              announcements.map((announcement) => (
-                <div key={announcement.id} className="announcement-card">
-                  <div className="announcement-card__meta">
-                    <span>{formatTimestamp(announcement.updatedAt)}</span>
-                    <span>{announcement.channel}</span>
-                  </div>
-                  <strong>{announcement.title}</strong>
-                  <p>{announcement.content}</p>
+        <div className="announcement-list">
+          {isLoadingAnnouncements ? (
+            <Skeleton.Group count={3} gap={12}>
+              <Skeleton variant="title" />
+              <Skeleton variant="subtitle" />
+            </Skeleton.Group>
+          ) : announcements.length > 0 ? (
+            announcements.map((announcement) => (
+              <div key={announcement.id} className="announcement-card">
+                <div className="announcement-card__meta">
+                  <span>{formatTimestamp(announcement.updatedAt)}</span>
+                  <span>{announcement.channel}</span>
                 </div>
-              ))
-            ) : (
-              <EmptyState
-                illustration="news"
-                icon="news"
-                title="Nenhum comunicado publicado"
-                message="Os avisos internos criados no admin serao exibidos aqui."
-              />
-            )}
-          </div>
-        </article>
-      </div>
+                <strong>{announcement.title}</strong>
+                <p>{announcement.content}</p>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              illustration="news"
+              icon="news"
+              title="Nenhum comunicado publicado"
+              message="Os avisos internos criados no admin serao exibidos aqui."
+            />
+          )}
+        </div>
+      </article>
 
-      <div style={{ marginTop: '24px' }}>
-        <WeeklyArrivalsCard
-          processes={loadedProcesses}
-          isAdmin={profile?.role === 'admin'}
-          isLoading={isLoadingProcesses}
-          onSelectProcess={handleSelectProcess}
-        />
-      </div>
+      <WeeklyArrivalsCard
+        processes={loadedProcesses}
+        isAdmin={profile?.role === 'admin'}
+        isLoading={isLoadingProcesses}
+        onSelectProcess={handleSelectProcess}
+      />
 
-      <div style={{ marginTop: '24px' }}>
-        <article className="list-card">
-          <div className="card-heading">
-            <div>
-              <h3>Processos favoritos</h3>
-            </div>
-            <span className="inline-badge">{favoriteProcesses.length} favoritos</span>
+      <article className="list-card">
+        <div className="card-heading">
+          <div>
+            <h3>Processos favoritos</h3>
           </div>
+          <span className="inline-badge">{favoriteProcesses.length} favoritos</span>
+        </div>
 
         <div className="process-list process-list--scroll">
           {isLoadingFavorites ? (
@@ -403,8 +396,7 @@ export default function DashboardPage() {
             />
           )}
         </div>
-        </article>
-      </div>
+      </article>
     </section>
   )
 }

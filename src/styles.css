@@ -1044,11 +1044,6 @@ body {
   text-decoration: none;
 }
 
-/* Dashboard bar section spacing (Sprint 14). */
-.dashboard-bar-section {
-  margin-bottom: 24px;
-}
-
 /* StatCard rich (Sprint 14). Variante com label + icon + trend +
    sparkline + valor grande + periodo. Cores do trend baseadas em
    tokens semanticos (success / danger). */
@@ -2450,9 +2445,9 @@ body {
 }
 
 .process-list--scroll {
-  max-height: 430px;
-  overflow-y: auto;
-  padding: 4px 6px 6px 0;
+  /* O conteudo rola no .main-content (Sprint 15), entao nao precisa
+     de max-height aqui. Mantem a classe so' pra semantica. */
+  padding: 4px 0;
 }
 
 .announcement-grid {
