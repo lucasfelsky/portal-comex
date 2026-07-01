@@ -482,11 +482,19 @@ select {
   font-weight: 700;
 }
 
+.topbar__title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .topbar__title {
   margin: 0;
-  font-size: 1.95rem;
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   min-width: 0;
   overflow-wrap: anywhere;
   transition: font-size 180ms ease, padding 180ms ease, opacity 180ms ease;
@@ -834,6 +842,58 @@ select {
 
 .skeleton-group {
   /* wrapper simples; gap vem via prop style */
+}
+
+/* Breadcrumb (Sprint 13).
+   Hierarquia visual: label / link (hover primary) / chevron separator /
+   current page (bold). Estilo compacto pra caber na topbar. */
+.breadcrumb__list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+.breadcrumb__link {
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.breadcrumb__link:hover {
+  color: var(--primary-700);
+  background: var(--primary-50);
+  text-decoration: none;
+}
+
+.breadcrumb__current {
+  color: var(--ink);
+  font-weight: 700;
+  padding: 4px 6px;
+}
+
+.breadcrumb__separator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  opacity: 0.5;
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

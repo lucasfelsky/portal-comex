@@ -15,9 +15,10 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 7,
+    "topLevel": 8,
     "_topLevel_list": [
       "AppLayout.jsx",
+      "Breadcrumb.jsx",
       "EmptyState.jsx",
       "Icon.jsx",
       "Modal.jsx",
@@ -88,11 +89,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 29,
+    "totalFiles": 30,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 20
+      "ui": 21
     }
   }
 }

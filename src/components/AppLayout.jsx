@@ -2,6 +2,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
+import Breadcrumb from './Breadcrumb'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -34,14 +35,26 @@ const navigation = [
 ]
 
 const pageMeta = {
-  '/': { title: 'Dashboard operacional' },
-  '/news': { title: 'Notícias' },
-  '/processos': { title: 'Central de chegadas' },
-  '/admin': { title: 'Painel administrativo' },
-  '/admin/usuarios': { title: 'Usuários · Admin' },
-  '/admin/comunicados': { title: 'Comunicados · Admin' },
-  '/admin/barra': { title: 'Barra do porto · Admin' },
-  '/admin/previsoes': { title: 'Regras de previsão · Admin' },
+  '/': { title: 'Dashboard operacional', breadcrumb: [] },
+  '/news': { title: 'Notícias', breadcrumb: [] },
+  '/processos': { title: 'Central de chegadas', breadcrumb: [] },
+  '/admin': { title: 'Painel administrativo', breadcrumb: [{ label: 'Admin' }] },
+  '/admin/usuarios': {
+    title: 'Usuários · Admin',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Usuários' }],
+  },
+  '/admin/comunicados': {
+    title: 'Comunicados · Admin',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Comunicados' }],
+  },
+  '/admin/barra': {
+    title: 'Barra do porto · Admin',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Barra do porto' }],
+  },
+  '/admin/previsoes': {
+    title: 'Regras de previsão · Admin',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Regras de previsão' }],
+  },
 }
 
 export default function AppLayout() {
@@ -582,7 +595,12 @@ export default function AppLayout() {
                   <span />
                 </span>
               </button>
-              <h2 className="topbar__title">{meta.title}</h2>
+              <div className="topbar__title-wrap">
+                {meta.breadcrumb && meta.breadcrumb.length > 0 ? (
+                  <Breadcrumb items={meta.breadcrumb} />
+                ) : null}
+                <h2 className="topbar__title">{meta.title}</h2>
+              </div>
             </div>
             <div className="topbar__actions">
               {renderNotificationsControl()}
