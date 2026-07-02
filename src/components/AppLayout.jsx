@@ -9,7 +9,7 @@ import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
-import { useProcessSearch } from '../hooks/useProcessSearch'
+import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -79,7 +79,8 @@ export default function AppLayout() {
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
-  const processSearcher = useProcessSearch()
+  const globalSearch = useGlobalSearch()
+  const processSearcherForPalette = globalSearch.searcher
   const dnd = useDoNotDisturb()
   const fcm = useFcm(profile?.uid)
   const commandItems = useMemo(
@@ -800,7 +801,7 @@ export default function AppLayout() {
         open={commandPalette.open}
         onClose={() => commandPalette.setOpen(false)}
         commands={commandItems}
-        searcher={processSearcher}
+        searcher={processSearcherForPalette}
         placeholder="Buscar paginas, acoes ou processos..."
       />
     </div>
