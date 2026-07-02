@@ -152,12 +152,97 @@ describe('Modal', () => {
     expect(document.body.style.overflow).not.toBe('hidden')
   })
 
-  it('foco inicial vai para o dialog quando abre', () => {
+  it('foco inicial vai para o PRIMEIRO focusable do modal (close button do header)', async () => {
     render(
       <Modal open={true} onClose={() => {}} title="Focus test">
         <button type="button">Confirmar</button>
       </Modal>
     )
-    expect(document.activeElement).toBe(screen.getByRole('dialog'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // Modal tem um botao close (x) no header, eh o primeiro focusable
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar' }))
+  })
+})
+
+// --- Sprint 28: Focus trap + initial focus em focusable ---
+
+describe('Modal focus trap (Sprint 28)', () => {
+  let originalOverflow
+
+  beforeEach(() => {
+    originalOverflow = document.body.style.overflow
+  })
+
+  afterEach(() => {
+    document.body.style.overflow = originalOverflow
+  })
+
+  it('foco inicial vai para o PRIMEIRO focusable quando ha botoes', async () => {
+    function Wrapper() {
+      const [open, setOpen] = React.useState(false)
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>Open modal</button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Trap">
+            <button type="button" data-testid="first">First</button>
+            <button type="button" data-testid="last">Last</button>
+          </Modal>
+        </div>
+      )
+    }
+    render(<Wrapper />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open modal' }))
+    // setTimeout(30) no Modal
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // O Modal tem um botao close (x) no header como primeiro focusable
+    const closeButton = screen.getByRole('button', { name: 'Fechar' })
+    expect(document.activeElement).toBe(closeButton)
+  })
+
+  it('Tab no ultimo focusable volta para o primeiro', async () => {
+    function Wrapper() {
+      return (
+        <Modal open={true} onClose={() => {}} title="Trap">
+          <button type="button" data-testid="first">First</button>
+          <button type="button" data-testid="last">Last</button>
+        </Modal>
+      )
+    }
+    render(<Wrapper />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // Foco inicial no close (header); vamos para o last via foco direto
+    const last = screen.getByTestId('last')
+    last.focus()
+    expect(document.activeElement).toBe(last)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    // Volta pro primeiro focusable do modal: o close button do header
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fechar' }))
+  })
+
+  it('Shift+Tab no primeiro focusable vai para o ultimo', async () => {
+    function Wrapper() {
+      return (
+        <Modal open={true} onClose={() => {}} title="Trap">
+          <button type="button" data-testid="first">First</button>
+          <button type="button" data-testid="last">Last</button>
+        </Modal>
+      )
+    }
+    render(<Wrapper />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    // Foco inicial no close; Shift+Tab leva ao ultimo
+    const closeButton = screen.getByRole('button', { name: 'Fechar' })
+    closeButton.focus()
+    expect(document.activeElement).toBe(closeButton)
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(screen.getByTestId('last'))
   })
 })
