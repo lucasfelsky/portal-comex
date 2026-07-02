@@ -23,7 +23,7 @@
 //
 // Estrutura: <Modal> wrapper com <input> + lista de resultados.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from './Modal'
 import Icon from './Icon'
@@ -63,6 +63,19 @@ export default function CommandPalette({
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
+
+  // Mantem o input focado enquanto o palette esta aberto.
+  // Re-renders (mouseEnter em item, debounce do searcher, etc) podem
+  // tirar o foco do input. Esse effect roda sincronamente apos o DOM
+  // atualizar e devolve o foco pro input, sem flicker.
+  useLayoutEffect(() => {
+    if (!open) return
+    const input = inputRef.current
+    if (!input) return
+    if (document.activeElement === input) return
+    if (input.contains(document.activeElement)) return
+    input.focus({ preventScroll: true })
+  })
 
   // Debounce do searcher externo
   useEffect(() => {
@@ -219,16 +232,14 @@ export default function CommandPalette({
                         role="option"
                         aria-selected={isActive}
                         className={`command-palette__item${isActive ? ' command-palette__item--active' : ''}`}
+                        // Items nao sao focaveis: tabIndex -1 evita que
+                        // o navegador mova o foco pra eles ao re-renderizar
+                        tabIndex={-1}
                         onMouseDown={(event) => {
                           // Evita que o item roube o foco do input ao clicar
                           event.preventDefault()
                         }}
-                        onMouseEnter={() => {
-                          setActiveIndex(globalIndex)
-                          // Re-foca o input pra digitacao nao ser interrompida
-                          // quando o cursor passa por cima de um item.
-                          inputRef.current?.focus({ preventScroll: true })
-                        }}
+                        onMouseEnter={() => setActiveIndex(globalIndex)}
                         onClick={() => runCommand(cmd)}
                       >
                         {cmd.icon ? (
