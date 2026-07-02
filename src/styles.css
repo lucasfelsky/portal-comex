@@ -682,9 +682,9 @@ body {
   z-index: 72;
   display: grid;
   gap: 14px;
-  width: min(460px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -712,12 +712,53 @@ body {
 }
 
 .notifications__filters {
-  gap: 8px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
 }
 
 .notifications__filters .tab-button {
-  padding: 8px 12px;
+  padding: 8px 4px;
   font-size: 0.82rem;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  position: relative;
+  margin-right: 14px;
+  font-weight: 600;
+}
+
+.notifications__filters .tab-button:last-child {
+  margin-right: 0;
+}
+
+.notifications__filters .tab-button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms ease;
+}
+
+.notifications__filters .tab-button:hover:not(.tab-button--active) {
+  background: transparent;
+  color: var(--ink);
+}
+
+.notifications__filters .tab-button--active {
+  background: transparent;
+  color: var(--primary-700);
+  transform: none;
+  box-shadow: none;
+}
+
+.notifications__filters .tab-button--active::after {
+  transform: scaleX(1);
 }
 
 .notifications__list {
@@ -4666,20 +4707,37 @@ body {
 
 .notifications__heading-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   align-items: center;
 }
 
 .notifications__dnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 0.78rem;
-  padding: 6px 10px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+}
+
+.notifications__dnd:hover:not(.notifications__dnd--active) {
+  background: var(--surface-alt);
+  color: var(--ink);
 }
 
 .notifications__dnd--active {
   background: var(--warning-50);
   color: var(--warning-700);
-  border-color: var(--warning);
+  border: 1px solid var(--warning);
+}
+
+.notifications__mark-all {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
 }
 
 .notifications__section {

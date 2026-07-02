@@ -425,6 +425,14 @@ export default function AppLayout() {
             <div className="notifications__heading-actions">
               <button
                 type="button"
+                className="ghost-button notifications__mark-all"
+                onClick={handleMarkAllNotificationsAsRead}
+                disabled={unreadNotifications.length === 0}
+              >
+                Marcar todas como Lidas
+              </button>
+              <button
+                type="button"
                 className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
                 onClick={() => {
                   if (dnd.isActive) {
@@ -437,15 +445,8 @@ export default function AppLayout() {
                 aria-label={dnd.isActive ? 'Desativar modo nao perturbe' : 'Ativar modo nao perturbe por 1 hora'}
                 title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
               >
+                <Icon name="bell" size={14} />
                 {dnd.isActive ? `Silenciado (${formatRemaining(dnd.remainingMs)})` : 'Nao perturbe'}
-              </button>
-              <button
-                type="button"
-                className="ghost-button notifications__mark-all"
-                onClick={handleMarkAllNotificationsAsRead}
-                disabled={unreadNotifications.length === 0}
-              >
-                Marcar todas como Lidas
               </button>
             </div>
           </div>
