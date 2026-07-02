@@ -1,6 +1,6 @@
 // useGlobalSearch: hook que retorna uma funcao `searcher` para o
-// CommandPalette (Sprint 23). Combina processos + news, com historico
-// de buscas recentes persistido em localStorage.
+// CommandPalette (Sprint 23). Hoje busca apenas processos, com
+// historico de buscas recentes persistido em localStorage.
 //
 // API:
 //   const { searcher, recentSearches, clearRecent } = useGlobalSearch()
@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchProcesses } from '../services/processesRepository'
-import { searchNews } from '../services/newsRepository'
 
 const HISTORY_KEY = 'sq-comex:cmd-history'
 const MAX_HISTORY = 5
@@ -61,19 +60,16 @@ export function useGlobalSearch() {
     if (typeof window === 'undefined') return undefined
     return () => {}
   }, [])
-
   const searcher = useCallback(
     async (query) => {
       const trimmed = String(query ?? '').trim()
       if (trimmed.length < 2) return []
 
       pushRecent(trimmed)
-      const [processResults, newsResults] = await Promise.all([
-        searchProcesses(trimmed).catch(() => []),
-        searchNews(trimmed).catch(() => []),
-      ])
 
-      const processItems = processResults.slice(0, 6).map((process) => {
+      const processResults = await searchProcesses(trimmed).catch(() => [])
+
+      return processResults.slice(0, 8).map((process) => {
         const destination = process.destination ? ` · ${process.destination}` : ''
         const description = `${process.processNumber ?? 'sem PO'}${destination}`
         return {
@@ -88,20 +84,6 @@ export function useGlobalSearch() {
           },
         }
       })
-
-      const newsItems = newsResults.map((news) => ({
-        id: `news-${news.id}`,
-        label: news.title ?? 'Sem titulo',
-        description: news.summary ?? '',
-        group: 'Noticias',
-        icon: 'news',
-        to: '/news',
-        action: () => {
-          navigate('/news', { state: { selectedNewsId: news.id } })
-        },
-      }))
-
-      return [...processItems, ...newsItems]
     },
     [navigate, pushRecent]
   )

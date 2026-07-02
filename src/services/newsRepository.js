@@ -257,25 +257,3 @@ export async function removeNewsItem(newsItemOrId, actor = null) {
     target: newsItemId,
   })
 }
-
-// Busca noticias (Sprint 23): filtra localmente em title/body/tags.
-// Limita a 6 resultados pra nao pesar o command palette.
-export async function searchNews(rawQuery) {
-  const q = String(rawQuery ?? '').trim().toLowerCase()
-  if (q.length < 2) return []
-
-  const all = await listNews()
-  const matches = all.filter((item) => {
-    const haystack = [
-      item.title ?? '',
-      item.body ?? '',
-      item.summary ?? '',
-      ...(Array.isArray(item.tags) ? item.tags : []),
-    ]
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(q)
-  })
-
-  return matches.slice(0, 6)
-}

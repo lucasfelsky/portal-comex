@@ -1,9 +1,8 @@
 // Tests do hook useGlobalSearch (Sprint 23).
 // Cobre:
 //   - searcher retorna array vazio pra query curta
-//   - searcher combina processos + news
+//   - searcher mapeia processos para items
 //   - Processos sao agrupados como 'Resultados'
-//   - News sao agrupadas como 'Noticias'
 //   - recentSearches persistem em localStorage
 //   - clearRecent limpa o historico
 //   - max 5 items no historico
@@ -11,20 +10,15 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import React from 'react'
 
 const mockSearchProcesses = vi.fn()
-const mockSearchNews = vi.fn()
 
 vi.mock('../../src/services/processesRepository', () => ({
   searchProcesses: (q) => mockSearchProcesses(q),
-}))
-
-vi.mock('../../src/services/newsRepository', () => ({
-  searchNews: (q) => mockSearchNews(q),
 }))
 
 import { useGlobalSearch } from '../../src/hooks/useGlobalSearch.js'
@@ -66,7 +60,6 @@ const STORAGE_KEY = 'sq-comex:cmd-history'
 
 beforeEach(() => {
   mockSearchProcesses.mockReset()
-  mockSearchNews.mockReset()
   window.localStorage.clear()
   lastResult = undefined
 })
@@ -90,12 +83,10 @@ describe('useGlobalSearch', () => {
     expect(lastResult).toEqual([])
   })
 
-  it('combina processos + news, processos no grupo Resultados', async () => {
+  it('mapeia processos para items com grupo Resultados', async () => {
     mockSearchProcesses.mockResolvedValue([
       { id: 'p1', name: 'Importacao Atlas', processNumber: 'PO-1', destination: 'Itajai' },
-    ])
-    mockSearchNews.mockResolvedValue([
-      { id: 'n1', title: 'Atlas em alta', summary: 'Sobre Atlas' },
+      { id: 'p2', name: 'Exportacao Mar', processNumber: 'PO-2', destination: 'Santos' },
     ])
 
     const user = userEvent.setup()
@@ -110,12 +101,12 @@ describe('useGlobalSearch', () => {
       expect(lastResult).toHaveLength(2)
     })
     expect(lastResult[0].group).toBe('Resultados')
-    expect(lastResult[1].group).toBe('Noticias')
+    expect(lastResult[0].label).toBe('Importacao Atlas')
+    expect(lastResult[1].group).toBe('Resultados')
   })
 
   it('adiciona query ao recentSearches', async () => {
     mockSearchProcesses.mockResolvedValue([])
-    mockSearchNews.mockResolvedValue([])
 
     const user = userEvent.setup()
     render(
@@ -146,7 +137,6 @@ describe('useGlobalSearch', () => {
 
   it('max 5 items no historico (FIFO)', async () => {
     mockSearchProcesses.mockResolvedValue([])
-    mockSearchNews.mockResolvedValue([])
 
     const Multi = () => {
       const { searcher, recentSearches } = useGlobalSearch()
@@ -185,7 +175,6 @@ describe('useGlobalSearch', () => {
     mockSearchProcesses.mockResolvedValue([
       { id: 'p1', name: 'X', processNumber: 'PO', destination: 'Y' },
     ])
-    mockSearchNews.mockResolvedValue([])
 
     const user = userEvent.setup()
     render(
@@ -206,9 +195,8 @@ describe('useGlobalSearch', () => {
     expect(() => item.action()).not.toThrow()
   })
 
-  it('searcher com erro em uma fonte: ainda retorna da outra', async () => {
+  it('searcher com erro: retorna array vazio (graceful)', async () => {
     mockSearchProcesses.mockRejectedValue(new Error('boom'))
-    mockSearchNews.mockResolvedValue([{ id: 'n1', title: 'Foo', summary: '' }])
 
     const user = userEvent.setup()
     render(
@@ -219,8 +207,7 @@ describe('useGlobalSearch', () => {
     await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
 
     await waitFor(() => {
-      expect(lastResult).toHaveLength(1)
+      expect(lastResult).toEqual([])
     })
-    expect(lastResult[0].group).toBe('Noticias')
   })
 })
