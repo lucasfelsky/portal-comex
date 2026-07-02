@@ -4713,14 +4713,21 @@ body {
 }
 
 .notifications__dnd {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 5px 9px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: var(--radius-sm);
   color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 
 .notifications__dnd:hover:not(.notifications__dnd--active) {
@@ -4729,9 +4736,23 @@ body {
 }
 
 .notifications__dnd--active {
-  background: var(--warning-50);
   color: var(--warning-700);
-  border: 1px solid var(--warning);
+  background: var(--warning-50);
+  border-color: var(--warning);
+}
+
+/* Risco diagonal estilo "nao perturbe" */
+.notifications__dnd--active::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 2px;
+  background: var(--warning-700);
+  transform: rotate(-32deg);
+  border-radius: 2px;
+  pointer-events: none;
 }
 
 .notifications__mark-all {

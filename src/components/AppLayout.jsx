@@ -442,11 +442,14 @@ export default function AppLayout() {
                   }
                 }}
                 aria-pressed={dnd.isActive}
-                aria-label={dnd.isActive ? 'Desativar modo nao perturbe' : 'Ativar modo nao perturbe por 1 hora'}
+                aria-label={
+                  dnd.isActive
+                    ? `Desativar modo nao perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                    : 'Ativar modo nao perturbe por 1 hora'
+                }
                 title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
               >
-                <Icon name="bell" size={14} />
-                {dnd.isActive ? `Silenciado (${formatRemaining(dnd.remainingMs)})` : 'Nao perturbe'}
+                <Icon name="bell" size={16} />
               </button>
             </div>
           </div>
