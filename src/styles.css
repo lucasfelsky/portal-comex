@@ -4609,6 +4609,38 @@ body {
    Wrapper <PageFade> no <Outlet>: opacity 0 -> 1 em 180ms, com leve
    translateY(6px) pra dar sensacao de entrada. Respeita prefers-reduced-motion. */
 
+/* Sprint 21: Stagger fade-in.
+   <Stagger> aplica animation-delay incremental nos filhos pra criar
+   efeito de entrada em cascata. Respeita prefers-reduced-motion. */
+
+.stagger {
+  display: contents;
+}
+
+.stagger__item {
+  animation: stagger-fade-in 360ms ease-out both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger__item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Sprint 20: Notificacoes refinadas.
    DND toggle no header + secoes Recentes/Anteriores no body. */
 

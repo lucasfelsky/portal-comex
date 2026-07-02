@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Skeleton from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
+import Stagger from '../components/Stagger'
 import {
   getChannelToneClass,
   getDisplayedCollectionStatus,
@@ -167,7 +168,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <article className="list-card">
+      <Stagger>
+        <article className="list-card">
         <div className="card-heading">
           <h3>Comunicados recentes</h3>
         </div>
@@ -207,8 +209,7 @@ export default function DashboardPage() {
         onSelectProcess={handleSelectProcess}
       />
 
-      <article className="list-card">
-        <div className="card-heading">
+      <article className="list-card">        <div className="card-heading">
           <div>
             <h3>Processos favoritos</h3>
           </div>
@@ -394,6 +395,7 @@ export default function DashboardPage() {
           )}
         </div>
       </article>
+      </Stagger>
     </section>
   )
 }
