@@ -12,9 +12,9 @@
   --primary: #00ae91;
   --primary-700: #008f76;
   --primary-50: #e3f5f0;
-  --danger: #c85d2c;
-  --danger-700: #a84d22;
-  --danger-50: #fbeee6;
+  --danger: #dc2626;
+  --danger-700: #b91c1c;
+  --danger-50: #fee2e2;
   --warning: #b48a2d;
   --warning-700: #8a6b22;
   --warning-50: #faf2dc;
@@ -1007,6 +1007,41 @@ body {
 .danger-button .spinner,
 .secondary-button .spinner {
   margin-right: 4px;
+}
+
+/* Sprint 31: BackButton. */
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px 5px 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-right: 4px;
+}
+
+.back-button:hover {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.back-button__icon {
+  transition: transform 140ms ease;
+}
+
+.back-button:hover .back-button__icon {
+  transform: translateX(-2px);
+}
+
+@media (max-width: 720px) {
+  .back-button__label {
+    display: none;
+  }
+  .back-button {
+    padding: 5px 7px;
+  }
 }
 
 .skeleton-group {

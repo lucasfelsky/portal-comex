@@ -100,6 +100,8 @@ const ICONS = {
     </>
   ),
   chevron: <path d="m9 6 6 6-6 6" />,
+  'chevron-left': <path d="m15 6-6 6 6 6" />,
+  'chevron-right': <path d="m9 6 6 6-6 6" />,
   dollar: (
     <>
       <path d="M12 3v18" />
