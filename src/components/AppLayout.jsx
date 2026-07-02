@@ -8,6 +8,7 @@ import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
+import { useFcm } from '../hooks/useFcm'
 import { useProcessSearch } from '../hooks/useProcessSearch'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -80,6 +81,7 @@ export default function AppLayout() {
   const commandPalette = useCommandPalette()
   const processSearcher = useProcessSearch()
   const dnd = useDoNotDisturb()
+  const fcm = useFcm(profile?.uid)
   const commandItems = useMemo(
     () => [
       { id: 'go-dashboard', label: 'Dashboard', group: 'Paginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
@@ -431,6 +433,29 @@ export default function AppLayout() {
               >
                 Marcar todas como Lidas
               </button>
+              {fcm.supported ? (
+                <button
+                  type="button"
+                  className={`ghost-button notifications__fcm${fcm.status === 'granted' ? ' notifications__fcm--active' : ''}`}
+                  onClick={() => {
+                    if (fcm.status === 'granted') fcm.disable()
+                    else fcm.enable()
+                  }}
+                  aria-pressed={fcm.status === 'granted'}
+                  aria-label={
+                    fcm.status === 'granted'
+                      ? 'Desativar notificacoes do navegador'
+                      : 'Ativar notificacoes do navegador'
+                  }
+                  title={
+                    fcm.status === 'granted'
+                      ? 'Notificacoes do navegador ativadas'
+                      : 'Ativar notificacoes do navegador'
+                  }
+                >
+                  {fcm.status === 'granted' ? <Icon name="check" size={16} /> : <Icon name="bell" size={16} />}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}

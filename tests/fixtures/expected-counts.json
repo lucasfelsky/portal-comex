@@ -47,7 +47,7 @@
     "count": 10
   },
   "srcServices": {
-    "count": 15,
+    "count": 16,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -55,6 +55,7 @@
       "barStatusRepository.js",
       "exchangeRatesRepository.js",
       "externalNewsRepository.js",
+      "fcmService.js",
       "forecastSettingsRepository.js",
       "managedUsersRepository.js",
       "newsMediaStorage.js",
@@ -97,11 +98,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 41,
+    "totalFiles": 42,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 32
+      "ui": 33
     }
   }
 }

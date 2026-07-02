@@ -4761,6 +4761,35 @@ body {
   padding: 5px 10px;
 }
 
+.notifications__fcm {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.notifications__fcm:hover:not(.notifications__fcm--active) {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.notifications__fcm--active {
+  color: var(--primary-700);
+  background: var(--primary-50);
+  border-color: var(--primary);
+}
+
 .notifications__section {
   display: grid;
   gap: 10px;
