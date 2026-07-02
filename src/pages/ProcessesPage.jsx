@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import Skeleton from '../components/Skeleton'
 import {
   channelOptions,
   collectionStatusOptions,
@@ -1502,9 +1503,19 @@ export default function ProcessesPage() {
 
         <div className="process-list process-list--scroll">
           {isLoading ? (
-            <div className="empty-state">
-              <strong>Carregando chegadas</strong>
-              <p>Buscando os dados disponíveis no repositório configurado.</p>
+            <div className="process-list-skeletons">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="process-item process-item--skeleton">
+                  <div className="process-item__main">
+                    <Skeleton variant="title" width="60%" />
+                    <Skeleton variant="text" width="40%" />
+                  </div>
+                  <div className="process-item__meta">
+                    <Skeleton variant="text" width="80px" height="22px" radius="999px" />
+                    <Skeleton variant="text" width="100px" height="22px" radius="999px" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredProcesses.length > 0 ? (
             filteredProcesses.map((item) => {

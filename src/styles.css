@@ -1952,6 +1952,22 @@ body {
     0 14px 28px rgba(31, 28, 24, 0.10);
 }
 
+/* Skeleton de processo: copia a estrutura de .process-item com
+   opacidade reduzida pra dar sensacao de placeholder coerente. */
+.process-item--skeleton {
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.process-item--skeleton .skeleton {
+  margin: 0;
+}
+
+.process-list-skeletons {
+  display: grid;
+  gap: 12px;
+}
+
 .process-item__meta {
   display: grid;
   justify-items: end;

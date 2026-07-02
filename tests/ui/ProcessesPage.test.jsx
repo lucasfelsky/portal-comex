@@ -165,11 +165,16 @@ afterEach(() => {
 })
 
 describe('ProcessesPage (listagem)', () => {
-  it('loading inicial: mostra "Carregando processos"', () => {
+  it('loading inicial: mostra 4 skeletons com estrutura de processo', () => {
     let resolveList
     mockListProcesses.mockReturnValue(new Promise((r) => { resolveList = r }))
-    const { container } = renderPage()
-    expect(container.textContent).toMatch(/Carregando/)
+    renderPage()
+    // 4 cards skeleton (Skeleton.Group count=4)
+    const skeletonCards = document.querySelectorAll('.process-item--skeleton')
+    expect(skeletonCards).toHaveLength(4)
+    // Cada card tem 2 skeletons de texto (title + line) e 2 pill skeletons
+    const firstCard = skeletonCards[0]
+    expect(firstCard.querySelectorAll('.skeleton')).toHaveLength(4)
     resolveList([])
   })
 
