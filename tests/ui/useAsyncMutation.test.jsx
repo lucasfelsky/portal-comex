@@ -37,7 +37,16 @@ function ProbeWithSpy({ fn, options }) {
   return (
     <div>
       <span data-testid="running">{String(isRunning)}</span>
-      <button type="button" onClick={() => run(fn, options)}>Run</button>
+      <button
+        type="button"
+        onClick={() => {
+          // Caller DEVE capturar o erro (e' o contrato do hook).
+          // Se nao capturar, vira unhandledRejection no Node.
+          run(fn, options).catch(() => {})
+        }}
+      >
+        Run
+      </button>
     </div>
   )
 }

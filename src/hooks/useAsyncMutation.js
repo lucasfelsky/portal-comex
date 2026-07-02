@@ -8,6 +8,9 @@
 //     errorMessage: 'Falha ao salvar processo',
 //   })
 //
+// IMPORTANTE: SEMPRE faca `await` dentro de um try/catch. O rethrow
+// e necessario para que o caller possa tratar o erro (ex: limpar
+// estado), mas dispara unhandledRejection no Node se ignorado.
 // Por padrao NAO dispara toast.success (a pagina que decide se quer
 // feedback positivo via setState local). Mas se successMessage for
 // fornecido, dispara.
@@ -46,7 +49,14 @@ export function useAsyncMutation() {
         const detail = describeError(error)
         toast.error(detail && detail !== 'Erro desconhecido' ? `${base} (${detail})` : base)
         onError?.(error)
-        throw error
+        // Cria uma promise rejected controlada, anexa um .catch
+        // vazio pra marcar como "handled" (evita unhandledRejection
+        // em ambientes como o CI do GitHub Actions), e re-throw via
+        // `await` no proximo microtask. Quem usa try/catch no await
+        // continua recebendo o erro normalmente.
+        const handled = Promise.reject(error)
+        handled.catch(() => {})
+        return handled
       } finally {
         setIsRunning(false)
       }

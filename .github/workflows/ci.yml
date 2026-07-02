@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit-and-build:
-    name: Unit tests + build
+  test:
+    name: Tests + build
     runs-on: ubuntu-latest
     env:
       # VITE_* sao embutidos no build pelo Vite. Placeholders funcionam
@@ -33,16 +33,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Testes
-        # rules.parse.test.js tenta rodar o firebase CLI se FIREBASE_BIN
-        # estiver setado. Como nao temos credenciais, ele cai no skip e
-        # a suite roda 100% (exceto 1 skip, que e' o esperado).
+      - name: Suite de testes
+        # Vitest retorna exit 0 mesmo com 1 skip, entao este step
+        # sempre passa. O audit (`tests/scripts/audit-vault-counts`)
+        # detecta drift de counts quando o fixture precisa atualizar.
         run: npm test
-      - name: Build
+      - name: Build de producao
         run: npm run build
 
   rules-structure:
-    name: Firestore rules (structure check)
+    name: Firestore rules (structure)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +51,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Estrutura das regras
-        # Valida que firestore.rules tem os blocos esperados (rules_version,
-        # service, funcoes auxiliares, colecoes, guardas). Quando o
-        # ambiente ganhar Java 21+, este job pode ser substituido por
-        # @firebase/rules-unit-testing rodando contra o emulator.
+      - name: Validacao estrutural
+        # Valida que firestore.rules tem os blocos esperados
+        # (rules_version, service, funcoes, colecoes, guardas).
+        # Quando o ambiente ganhar Java 21+, este job pode ser
+        # substituido por @firebase/rules-unit-testing rodando
+        # contra o emulator.
         run: npx vitest run tests/firebase/rules.structure.test.js
+
 
