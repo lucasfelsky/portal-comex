@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import Skeleton from '../components/Skeleton'
+import Spinner from '../components/Spinner'
 import {
   channelOptions,
   collectionStatusOptions,
@@ -1820,7 +1821,7 @@ export default function ProcessesPage() {
             ) : null}
           </div>
 
-          <div className="action-row"><button type="button" className="primary-button" onClick={handleSaveProcess} disabled={isSaving}>{isSaving ? 'Salvando...' : viewMode === 'create' ? 'Criar processo' : 'Salvar alterações'}</button></div>
+          <div className="action-row"><button type="button" className="primary-button" onClick={handleSaveProcess} disabled={isSaving}>{isSaving ? <><Spinner size={14} label="Salvando" /> Salvando...</> : viewMode === 'create' ? 'Criar processo' : 'Salvar alterações'}</button></div>
         </article>
       ) : null}
 

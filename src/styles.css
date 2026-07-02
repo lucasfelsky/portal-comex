@@ -982,6 +982,33 @@ body {
   100% { background-position: -200% 0; }
 }
 
+/* Sprint 30: Spinner. */
+.spinner {
+  display: inline-block;
+  color: currentColor;
+}
+
+.spinner__svg {
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner__svg {
+    animation-duration: 2s;
+  }
+}
+
+.primary-button .spinner,
+.ghost-button .spinner,
+.danger-button .spinner,
+.secondary-button .spinner {
+  margin-right: 4px;
+}
+
 .skeleton-group {
   /* wrapper simples; gap vem via prop style */
 }

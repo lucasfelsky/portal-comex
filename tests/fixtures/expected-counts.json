@@ -15,7 +15,7 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 17,
+    "topLevel": 18,
     "_topLevel_list": [
       "AppLayout.jsx",
       "Breadcrumb.jsx",
@@ -29,6 +29,7 @@
       "PageToolbar.jsx",
       "ProtectedRoute.jsx",
       "Skeleton.jsx",
+      "Spinner.jsx",
       "Stagger.jsx",
       "StatCard.jsx",
       "TabButton.jsx",
@@ -99,11 +100,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 46,
+    "totalFiles": 47,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 37
+      "ui": 38
     }
   }
 }
