@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import { useToast } from '../components/Toast'
 import {
   channelOptions,
   collectionStatusOptions,
@@ -522,6 +523,7 @@ function ProcessMessagesPanel({
 export default function ProcessesPage() {
   const location = useLocation()
   const { profile, toggleFavoriteProcess } = useAuth()
+  const toast = useToast()
   const isAdmin = profile?.role === 'admin'
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
@@ -1112,7 +1114,9 @@ export default function ProcessesPage() {
       setDetailTab('general')
       setEditTab('general')
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível salvar o processo.', saveError))
+      const message = buildActionErrorMessage('Não foi possível salvar o processo.', saveError)
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
@@ -1130,7 +1134,9 @@ export default function ProcessesPage() {
       setViewMode('detail')
       setDetailTab('process')
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível salvar o status de coleta.', saveError))
+      const message = buildActionErrorMessage('Não foi possível salvar o status de coleta.', saveError)
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
@@ -1183,12 +1189,12 @@ export default function ProcessesPage() {
         )
       }
 
-      setError(
-        buildActionErrorMessage(
-          'Não foi possível salvar as observações pós-recebimento da carga.',
-          saveError
-        )
+      const message = buildActionErrorMessage(
+        'Não foi possível salvar as observações pós-recebimento da carga.',
+        saveError
       )
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
