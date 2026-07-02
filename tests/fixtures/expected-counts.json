@@ -15,12 +15,13 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 19,
+    "topLevel": 20,
     "_topLevel_list": [
       "AppLayout.jsx",
       "BackButton.jsx",
       "Breadcrumb.jsx",
       "CommandPalette.jsx",
+      "ConfirmDialog.jsx",
       "EmptyState.jsx",
       "FilterChip.jsx",
       "Icon.jsx",
@@ -101,11 +102,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 49,
+    "totalFiles": 50,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 40
+      "ui": 41
     }
   }
 }

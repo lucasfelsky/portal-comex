@@ -1011,6 +1011,25 @@ body {
 
 /* Sprint 31: BackButton. */
 
+.confirm-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.confirm-dialog__message {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .back-button {
   display: inline-flex;
   align-items: center;

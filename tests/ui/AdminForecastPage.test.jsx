@@ -11,8 +11,8 @@
 //   - Salvar: chama saveForecastSettings com draft + profile; feedback de sucesso
 //   - Salvar com erro: error-banner
 //   - Salvar desabilitado quando hasErrors=true
-//   - Reset: chama resetForecastSettings quando window.confirm true
-//   - Reset: cancela quando window.confirm false
+//   - Reset: chama resetForecastSettings quando confirma no dialog
+//   - Reset: cancela quando clica Cancelar no dialog
 //   - Rolling enabled: chip e inputs habilitados; desabilitados quando disabled
 //   - Adicionar DUIMP status via input+Adicionar; remove via botao x
 //   - Adicionar DUIMP status duplicado (case-insensitive) nao adiciona
@@ -221,21 +221,28 @@ describe('AdminForecastPage', () => {
     expect(mockSaveForecastSettings).not.toHaveBeenCalled()
   })
 
-  it('reset: chama resetForecastSettings quando window.confirm true', async () => {
+  it('reset: chama resetForecastSettings quando confirma no dialog', async () => {
     const user = userEvent.setup()
     renderPage()
+    // 1. Abre o dialog
     await user.click(screen.getByRole('button', { name: /Restaurar padr/i }))
+    // 2. Dialog aparece
+    expect(screen.getByText(/Esta acao restaura todas as regras/i)).toBeInTheDocument()
+    // 3. Confirma
+    const confirmBtn = screen.getByRole('button', { name: 'Restaurar' })
+    await user.click(confirmBtn)
     await waitFor(() => {
       expect(mockResetForecastSettings).toHaveBeenCalledWith(PROFILE)
     })
     expect(screen.getByText(/Regras restauradas para o padrão/i)).toBeInTheDocument()
   })
 
-  it('reset: cancela quando window.confirm false', async () => {
+  it('reset: cancela quando clica Cancelar no dialog', async () => {
     const user = userEvent.setup()
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
     renderPage()
     await user.click(screen.getByRole('button', { name: /Restaurar padr/i }))
+    expect(screen.getByText(/Esta acao restaura todas as regras/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(mockResetForecastSettings).not.toHaveBeenCalled()
   })
 

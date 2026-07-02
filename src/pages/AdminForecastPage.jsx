@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useForecastSettings } from '../hooks/useForecastSettings'
+import ConfirmDialog from '../components/ConfirmDialog'
 import {
   CATEGORY_OPTIONS,
   DEFAULT_FORECAST_SETTINGS,
@@ -123,6 +124,7 @@ export default function AdminForecastPage() {
   const [newDuimpStatus, setNewDuimpStatus] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
 
@@ -241,9 +243,6 @@ export default function AdminForecastPage() {
   }
 
   async function handleReset() {
-    if (!window.confirm('Restaurar as regras padrão? Esta ação será registrada na auditoria.')) {
-      return
-    }
     setIsResetting(true)
     setError('')
     setFeedback('')
@@ -258,6 +257,7 @@ export default function AdminForecastPage() {
       )
     } finally {
       setIsResetting(false)
+      setIsResetDialogOpen(false)
     }
   }
 
@@ -508,7 +508,7 @@ export default function AdminForecastPage() {
           <button
             type="button"
             className="ghost-button"
-            onClick={handleReset}
+            onClick={() => setIsResetDialogOpen(true)}
             disabled={isResetting || isSaving}
           >
             {isResetting ? 'Restaurando...' : 'Restaurar padrões'}
@@ -529,6 +529,19 @@ export default function AdminForecastPage() {
         padrão embutido em <code>DEFAULT_FORECAST_SETTINGS</code> (Navegantes 14h, Itapoá 12h, FCL/CONSOLIDADO
         5, LCL 7, AEREO 10, rolling 3 dias).
       </p>
-    </div>
+
+    <ConfirmDialog
+      open={isResetDialogOpen}
+      title="Restaurar regras padrao"
+      message="Esta acao restaura todas as regras de previsao para o padrao do sistema e sera registrada na auditoria."
+      confirmLabel="Restaurar"
+      tone="danger"
+      busy={isResetting}
+      onConfirm={handleReset}
+      onCancel={() => {
+        if (!isResetting) setIsResetDialogOpen(false)
+      }}
+    />
+  </div>
   )
 }
