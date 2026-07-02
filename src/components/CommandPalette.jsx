@@ -219,7 +219,16 @@ export default function CommandPalette({
                         role="option"
                         aria-selected={isActive}
                         className={`command-palette__item${isActive ? ' command-palette__item--active' : ''}`}
-                        onMouseEnter={() => setActiveIndex(globalIndex)}
+                        onMouseDown={(event) => {
+                          // Evita que o item roube o foco do input ao clicar
+                          event.preventDefault()
+                        }}
+                        onMouseEnter={() => {
+                          setActiveIndex(globalIndex)
+                          // Re-foca o input pra digitacao nao ser interrompida
+                          // quando o cursor passa por cima de um item.
+                          inputRef.current?.focus({ preventScroll: true })
+                        }}
                         onClick={() => runCommand(cmd)}
                       >
                         {cmd.icon ? (
