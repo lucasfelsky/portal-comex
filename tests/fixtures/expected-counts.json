@@ -15,7 +15,7 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 16,
+    "topLevel": 17,
     "_topLevel_list": [
       "AppLayout.jsx",
       "Breadcrumb.jsx",
@@ -24,6 +24,7 @@
       "FilterChip.jsx",
       "Icon.jsx",
       "Modal.jsx",
+      "NotificationsList.jsx",
       "PageFade.jsx",
       "PageToolbar.jsx",
       "ProtectedRoute.jsx",
@@ -98,11 +99,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 45,
+    "totalFiles": 46,
     "_breakdown": {
       "firebase": 2,
       "functions": 7,
-      "ui": 36
+      "ui": 37
     }
   }
 }

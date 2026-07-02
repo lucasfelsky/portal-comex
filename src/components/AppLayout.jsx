@@ -7,6 +7,7 @@ import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
+import NotificationsList from './NotificationsList'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
@@ -514,83 +515,12 @@ export default function AppLayout() {
           </div>
 
           <div className="notifications__list">
-            {groupedNotifications.length > 0 ? (
-              (() => {
-                const recent = groupedNotifications.filter((g) => g.unreadCount > 0).slice(0, 8)
-                const older = groupedNotifications
-                  .filter((g) => g.unreadCount === 0)
-                  .slice(0, 4)
-                return (
-                  <>
-                    {recent.length > 0 ? (
-                      <div className="notifications__section">
-                        <div className="notifications__section-label">Recentes</div>
-                        {recent.map((group) => (
-                          <div
-                            key={`recent-${group.processId || group.latestCreatedAt}-${group.type}`}
-                            className="notifications__group notifications__group--unread"
-                          >
-                            <div className="notifications__group-header">
-                              <div>
-                                <strong>{group.title}</strong>
-                                <p>
-                                  {group.items.length} notificações
-                                  {group.unreadCount > 0
-                                    ? ` • ${group.unreadCount} não lidas`
-                                    : ''}
-                                </p>
-                              </div>
-                              <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
-                            </div>
-                            <div className="notifications__group-items">
-                              {group.items.slice(0, 3).map((notification) => (
-                                <button
-                                  key={notification.id}
-                                  type="button"
-                                  className="notifications__item notifications__item--unread"
-                                  onClick={() => handleOpenNotification(notification)}
-                                >
-                                  <strong>{notification.title}</strong>
-                                  <p>{notification.body}</p>
-                                  <span>
-                                    {formatRelativeNotificationTime(notification.createdAt)} •{' '}
-                                    {formatNotificationDate(notification.createdAt)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {older.length > 0 ? (
-                      <div className="notifications__section">
-                        <div className="notifications__section-label">Anteriores</div>
-                        {older.map((group) => (
-                          <div
-                            key={`older-${group.processId || group.latestCreatedAt}-${group.type}`}
-                            className="notifications__group"
-                          >
-                            <div className="notifications__group-header">
-                              <div>
-                                <strong>{group.title}</strong>
-                                <p>{group.items.length} notificações</p>
-                              </div>
-                              <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </>
-                )
-              })()
-            ) : (
-              <div className="empty-state">
-                <strong>Nenhuma notificação</strong>
-                <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
-              </div>
-            )}
+            <NotificationsList
+              grouped={groupedNotifications}
+              onOpenNotification={handleOpenNotification}
+              formatRelative={formatRelativeNotificationTime}
+              formatDate={formatNotificationDate}
+            />
           </div>
         </div>
       </>

@@ -4810,6 +4810,29 @@ body {
   padding: 0 4px;
 }
 
+.notifications__show-more {
+  justify-self: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  color: var(--primary-700);
+  background: var(--primary-50);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+  margin: 6px auto 0;
+  display: block;
+}
+
+.notifications__show-more:hover {
+  background: var(--primary);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
 
 /* Sprint 19.0: Tooltip. */
 .tooltip {
