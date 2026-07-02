@@ -6,10 +6,26 @@ on:
   pull_request:
     branches: [main]
 
+# Cancela runs em PRs subsequentes (mesmo branch) se um novo commit
+# chegou - economiza minutos do CI.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit-and-build:
     name: Unit tests + build
     runs-on: ubuntu-latest
+    env:
+      # VITE_* sao embutidos no build pelo Vite. Placeholders funcionam
+      # em dev; secrets reais ficam no GitHub para producao.
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'AIzaSyDevPlaceholder' }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'dev-placeholder.firebaseapp.com' }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || 'dev-placeholder' }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || 'dev-placeholder.appspot.com' }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || '000000000000' }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || '1:000000000000:web:devplaceholder' }}
+      VITE_INTELLIQUOTE_WEB_URL: ${{ secrets.VITE_INTELLIQUOTE_WEB_URL || 'https://intelliquote.portal-comex.com' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,45 +33,28 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Testes
+        # rules.parse.test.js tenta rodar o firebase CLI se FIREBASE_BIN
+        # estiver setado. Como nao temos credenciais, ele cai no skip e
+        # a suite roda 100% (exceto 1 skip, que e' o esperado).
+        run: npm test
       - name: Build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_INTELLIQUOTE_WEB_URL: ${{ secrets.VITE_INTELLIQUOTE_WEB_URL }}
         run: npm run build
 
-  rules-unit-testing:
-    name: Firestore rules (rules-unit-testing)
+  rules-structure:
+    name: Firestore rules (structure check)
     runs-on: ubuntu-latest
-    # O runner ubuntu-latest do GitHub Actions vem com Java 17.
-    # Para usar @firebase/rules-unit-testing (requer Java 21+), instalamos
-    # explicitamente via setup-java.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
       - run: npm ci
-      - name: Firestore rules unit tests
-        env:
-          FIRESTORE_EMULATOR_HOST: localhost:8080
-          GCLOUD_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
-        run: |
-          # TODO: assim que @firebase/rules-unit-testing estiver integrado
-          # como dependencia opcional e os testes em tests/firebase/rules-emulator.test.js
-          # existirem, basta rodar:
-          #   npx vitest run tests/firebase/rules-emulator.test.js
-          #
-          # Por enquanto so valida que a secao de regras compila
-          npx vitest run tests/firebase/rules.structure.test.js
+      - name: Estrutura das regras
+        # Valida que firestore.rules tem os blocos esperados (rules_version,
+        # service, funcoes auxiliares, colecoes, guardas). Quando o
+        # ambiente ganhar Java 21+, este job pode ser substituido por
+        # @firebase/rules-unit-testing rodando contra o emulator.
+        run: npx vitest run tests/firebase/rules.structure.test.js
+
