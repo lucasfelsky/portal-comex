@@ -4609,6 +4609,48 @@ body {
    Wrapper <PageFade> no <Outlet>: opacity 0 -> 1 em 180ms, com leve
    translateY(6px) pra dar sensacao de entrada. Respeita prefers-reduced-motion. */
 
+/* Sprint 20: Notificacoes refinadas.
+   DND toggle no header + secoes Recentes/Anteriores no body. */
+
+.notifications__heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.notifications__dnd {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.notifications__dnd--active {
+  background: var(--warning-50);
+  color: var(--warning-700);
+  border-color: var(--warning);
+}
+
+.notifications__section {
+  display: grid;
+  gap: 10px;
+}
+
+.notifications__section + .notifications__section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.notifications__section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+
 /* Sprint 19.0: Tooltip. */
 .tooltip {
   position: relative;

@@ -7,6 +7,7 @@ import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
+import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useProcessSearch } from '../hooks/useProcessSearch'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -78,6 +79,7 @@ export default function AppLayout() {
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
   const processSearcher = useProcessSearch()
+  const dnd = useDoNotDisturb()
   const commandItems = useMemo(
     () => [
       { id: 'go-dashboard', label: 'Dashboard', group: 'Paginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
@@ -415,16 +417,37 @@ export default function AppLayout() {
           <div className="card-heading">
             <div>
               <strong>Central de notificações</strong>
-              <p>{unreadNotifications.length} pendentes</p>
+              <p>
+                {unreadNotifications.length} pendentes
+                {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
+              </p>
             </div>
-            <button
-              type="button"
-              className="ghost-button notifications__mark-all"
-              onClick={handleMarkAllNotificationsAsRead}
-              disabled={unreadNotifications.length === 0}
-            >
-              Marcar todas como Lidas
-            </button>
+            <div className="notifications__heading-actions">
+              <button
+                type="button"
+                className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
+                onClick={() => {
+                  if (dnd.isActive) {
+                    dnd.disable()
+                  } else {
+                    dnd.enableFor(60 * 60 * 1000) // 1h
+                  }
+                }}
+                aria-pressed={dnd.isActive}
+                aria-label={dnd.isActive ? 'Desativar modo nao perturbe' : 'Ativar modo nao perturbe por 1 hora'}
+                title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+              >
+                {dnd.isActive ? `Silenciado (${formatRemaining(dnd.remainingMs)})` : 'Nao perturbe'}
+              </button>
+              <button
+                type="button"
+                className="ghost-button notifications__mark-all"
+                onClick={handleMarkAllNotificationsAsRead}
+                disabled={unreadNotifications.length === 0}
+              >
+                Marcar todas como Lidas
+              </button>
+            </div>
           </div>
 
           <div className="tab-row notifications__filters">
@@ -462,40 +485,76 @@ export default function AppLayout() {
 
           <div className="notifications__list">
             {groupedNotifications.length > 0 ? (
-              groupedNotifications.slice(0, 8).map((group) => (
-                <div
-                  key={`${group.processId || group.latestCreatedAt}-${group.type}`}
-                  className={`notifications__group${group.unreadCount > 0 ? ' notifications__group--unread' : ''}`}
-                >
-                  <div className="notifications__group-header">
-                    <div>
-                      <strong>{group.title}</strong>
-                      <p>
-                        {group.items.length} notificações
-                        {group.unreadCount > 0 ? ` • ${group.unreadCount} não lidas` : ''}
-                      </p>
-                    </div>
-                    <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
-                  </div>
-
-                  <div className="notifications__group-items">
-                    {group.items.slice(0, 3).map((notification) => (
-                      <button
-                        key={notification.id}
-                        type="button"
-                        className={`notifications__item${notification.isRead ? '' : ' notifications__item--unread'}`}
-                        onClick={() => handleOpenNotification(notification)}
-                      >
-                        <strong>{notification.title}</strong>
-                        <p>{notification.body}</p>
-                        <span>
-                          {formatRelativeNotificationTime(notification.createdAt)} • {formatNotificationDate(notification.createdAt)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))
+              (() => {
+                const recent = groupedNotifications.filter((g) => g.unreadCount > 0).slice(0, 8)
+                const older = groupedNotifications
+                  .filter((g) => g.unreadCount === 0)
+                  .slice(0, 4)
+                return (
+                  <>
+                    {recent.length > 0 ? (
+                      <div className="notifications__section">
+                        <div className="notifications__section-label">Recentes</div>
+                        {recent.map((group) => (
+                          <div
+                            key={`recent-${group.processId || group.latestCreatedAt}-${group.type}`}
+                            className="notifications__group notifications__group--unread"
+                          >
+                            <div className="notifications__group-header">
+                              <div>
+                                <strong>{group.title}</strong>
+                                <p>
+                                  {group.items.length} notificações
+                                  {group.unreadCount > 0
+                                    ? ` • ${group.unreadCount} não lidas`
+                                    : ''}
+                                </p>
+                              </div>
+                              <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
+                            </div>
+                            <div className="notifications__group-items">
+                              {group.items.slice(0, 3).map((notification) => (
+                                <button
+                                  key={notification.id}
+                                  type="button"
+                                  className="notifications__item notifications__item--unread"
+                                  onClick={() => handleOpenNotification(notification)}
+                                >
+                                  <strong>{notification.title}</strong>
+                                  <p>{notification.body}</p>
+                                  <span>
+                                    {formatRelativeNotificationTime(notification.createdAt)} •{' '}
+                                    {formatNotificationDate(notification.createdAt)}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {older.length > 0 ? (
+                      <div className="notifications__section">
+                        <div className="notifications__section-label">Anteriores</div>
+                        {older.map((group) => (
+                          <div
+                            key={`older-${group.processId || group.latestCreatedAt}-${group.type}`}
+                            className="notifications__group"
+                          >
+                            <div className="notifications__group-header">
+                              <div>
+                                <strong>{group.title}</strong>
+                                <p>{group.items.length} notificações</p>
+                              </div>
+                              <span>{formatRelativeNotificationTime(group.latestCreatedAt)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                )
+              })()
             ) : (
               <div className="empty-state">
                 <strong>Nenhuma notificação</strong>
