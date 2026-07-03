@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSuppliers } from '../hooks/useSuppliers'
 import SupplierForm from '../components/SupplierForm'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 
 const STATUS_LABELS = {
   active: 'Ativo',
@@ -14,6 +15,8 @@ export default function FornecedoresPage() {
   const [editing, setEditing] = useState(null)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!feedback) return
@@ -49,13 +52,21 @@ export default function FornecedoresPage() {
     }
   }
 
-  async function handleDelete(supplier) {
-    if (!window.confirm(`Apagar ${supplier.name}?`)) return
+  function handleDelete(supplier) {
+    setDeleteTarget(supplier)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      await remove(supplier.id)
+      await remove(deleteTarget.id)
       setFeedback('Fornecedor removido.')
+      setDeleteTarget(null)
     } catch (err) {
       setFeedback({ message: err.message, error: true })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -164,6 +175,19 @@ export default function FornecedoresPage() {
           </table>
         )}
       </section>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Apagar fornecedor"
+        message={deleteTarget ? `Apagar ${deleteTarget.name}?` : ''}
+        confirmLabel="Apagar"
+        tone="danger"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null)
+        }}
+      />
     </div>
   )
 }

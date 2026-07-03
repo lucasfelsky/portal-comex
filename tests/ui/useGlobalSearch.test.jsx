@@ -24,8 +24,8 @@ vi.mock('../../src/services/processesRepository', () => ({
 import { useGlobalSearch } from '../../src/hooks/useGlobalSearch.js'
 
 let lastResult
-function Probe() {
-  const { searcher, recentSearches, clearRecent } = useGlobalSearch()
+function Probe({ isAdmin } = {}) {
+  const { searcher, recentSearches, clearRecent } = useGlobalSearch(isAdmin)
   return (
     <div>
       <button
@@ -103,6 +103,44 @@ describe('useGlobalSearch', () => {
     expect(lastResult[0].group).toBe('Resultados')
     expect(lastResult[0].label).toBe('Importacao Atlas')
     expect(lastResult[1].group).toBe('Resultados')
+  })
+
+  it('oculta o nome do processo em categoria restrita (FCL) para nao-admin', async () => {
+    mockSearchProcesses.mockResolvedValue([
+      { id: 'p1', name: 'Importacao Atlas', processNumber: 'PO-1', category: 'FCL', destination: 'Itajai' },
+    ])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Probe isAdmin={false} />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+
+    await waitFor(() => {
+      expect(lastResult).toHaveLength(1)
+    })
+    expect(lastResult[0].label).toBe('PO: PO-1')
+  })
+
+  it('mostra o nome do processo em categoria restrita (FCL) para admin', async () => {
+    mockSearchProcesses.mockResolvedValue([
+      { id: 'p1', name: 'Importacao Atlas', processNumber: 'PO-1', category: 'FCL', destination: 'Itajai' },
+    ])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Probe isAdmin />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+
+    await waitFor(() => {
+      expect(lastResult).toHaveLength(1)
+    })
+    expect(lastResult[0].label).toBe('Importacao Atlas')
   })
 
   it('adiciona query ao recentSearches', async () => {

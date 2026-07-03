@@ -8,11 +8,9 @@ import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
-import BackButton from './BackButton'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
-import { useHasNavigationHistory } from '../hooks/useHasNavigationHistory'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -82,9 +80,8 @@ export default function AppLayout() {
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
-  const globalSearch = useGlobalSearch()
+  const globalSearch = useGlobalSearch(profile?.role === 'admin')
   const processSearcherForPalette = globalSearch.searcher
-  const hasNavigationHistory = useHasNavigationHistory()
   const dnd = useDoNotDisturb()
   const fcm = useFcm(profile?.uid)
   const commandItems = useMemo(
@@ -615,10 +612,6 @@ export default function AppLayout() {
 
           <header className="topbar">
             <div className="topbar__heading">
-              <BackButton
-                show={hasNavigationHistory}
-                onClick={() => navigate(-1)}
-              />
               <button
                 type="button"
                 className="topbar__menu-button"

@@ -1104,6 +1104,10 @@ export default function ProcessesPage() {
       const previousProcessStatus = selectedProcess?.processStatus ?? ''
       if (nextProcessStatus === 'Carga recebida' && previousProcessStatus !== 'Carga recebida') {
         payload.cargoReceivedAt = new Date().toISOString()
+        // Ao confirmar o recebimento pela primeira vez, avanca o status de
+        // coleta direto pra "Carga disponivel em estoque", pulando os
+        // estagios intermediarios (Conferencia/Etiquetagem, Entrada).
+        payload.collectionStatus = 'Carga disponível em estoque'
       } else if (nextProcessStatus === 'Carga recebida') {
         payload.cargoReceivedAt = selectedProcess?.cargoReceivedAt || draft.cargoReceivedAt || ''
       } else {

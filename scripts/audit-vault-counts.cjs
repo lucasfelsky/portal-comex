@@ -79,7 +79,11 @@ function audit() {
   {
     const expected = fixture.srcComponents.topLevel
     const expectedList = fixture.srcComponents._topLevel_list?.sort()
-    const actual = listFiles(path.join(ROOT, 'src', 'components'), '.jsx').sort()
+    // Stories (.stories.jsx) documentam os componentes mas nao sao
+    // componentes em si -- excluidas desta contagem.
+    const actual = listFiles(path.join(ROOT, 'src', 'components'), '.jsx')
+      .filter((f) => !f.endsWith('.stories.jsx'))
+      .sort()
     checks++
     if (actual.length !== expected) {
       mismatches.push(

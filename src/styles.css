@@ -1009,8 +1009,6 @@ body {
   margin-right: 4px;
 }
 
-/* Sprint 31: BackButton. */
-
 .confirm-dialog {
   display: grid;
   gap: 16px;
@@ -1028,39 +1026,6 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px 5px 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin-right: 4px;
-}
-
-.back-button:hover {
-  background: var(--surface-alt);
-  color: var(--ink);
-}
-
-.back-button__icon {
-  transition: transform 140ms ease;
-}
-
-.back-button:hover .back-button__icon {
-  transform: translateX(-2px);
-}
-
-@media (max-width: 720px) {
-  .back-button__label {
-    display: none;
-  }
-  .back-button {
-    padding: 5px 7px;
-  }
 }
 
 .skeleton-group {

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchProcesses } from '../services/processesRepository'
+import { getProcessTitle } from '../features/processes/processLabels'
 
 const HISTORY_KEY = 'sq-comex:cmd-history'
 const MAX_HISTORY = 5
@@ -36,7 +37,7 @@ function writeHistory(items) {
   }
 }
 
-export function useGlobalSearch() {
+export function useGlobalSearch(isAdmin) {
   const navigate = useNavigate()
   const [recentSearches, setRecentSearches] = useState(readHistory)
 
@@ -74,7 +75,7 @@ export function useGlobalSearch() {
         const description = `${process.processNumber ?? 'sem PO'}${destination}`
         return {
           id: `process-${process.id}`,
-          label: process.name ?? 'Processo sem nome',
+          label: getProcessTitle(process, isAdmin) ?? 'Processo sem nome',
           description,
           group: 'Resultados',
           icon: 'arrivals',
@@ -85,7 +86,7 @@ export function useGlobalSearch() {
         }
       })
     },
-    [navigate, pushRecent]
+    [navigate, pushRecent, isAdmin]
   )
 
   return { searcher, recentSearches, clearRecent }
