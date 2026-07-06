@@ -2667,6 +2667,14 @@ body {
   transition: transform 120ms ease, background-color 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
+/* O UID do Firebase (span sem classe, ultimo filho da div) e' uma string
+   sem espacos/hifens -- sem isso, no lugar de quebrar quando o card fica
+   estreito (colunas do .dual-grid em telas menores), ele forcava a linha
+   inteira a estourar. */
+.admin-user-row > div span {
+  overflow-wrap: anywhere;
+}
+
 .admin-user-row--button:hover {
   transform: translateY(-2px);
   background: var(--primary-50);
@@ -3559,9 +3567,16 @@ body {
 
 /* Sprint 16.3: Mobile topbar polish.
    Topbar fica 64px (de 80), esconde ptax/user-info/role-badge pra
-   dar lugar pro hamburger + bell + avatar. */
+   dar lugar pro hamburger + bell + avatar.
 
-@media (max-width: 720px) {
+   Correcao 2026-07-06: breakpoint alinhado com o da sidebar
+   (max-width: 1040px, onde ela vira drawer) em vez de 720px -- entre
+   721-1040px a sidebar ja nao ocupa espaco nenhum (fixed/off-canvas),
+   mas o topbar continuava reservando padding-left:304px pra ela (ver
+   regra base .topbar) e mostrando ptax/user-info/role-badge/logout
+   completos, o que nao cabia e estourava a pagina (overflow
+   horizontal nessa faixa "tablet"). */
+@media (max-width: 1040px) {
   .topbar {
     height: 64px;
     padding: 0 16px;
@@ -4661,7 +4676,16 @@ body {
 
   .stats-grid,
   .dual-grid,
-  .triple-grid,
+  .triple-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* .announcement-grid/.bar-status-grid tem minimos fixos em px por coluna
+   (320+420 / 420+280, ver regras acima) -- precisam de mais espaco que
+   720px pra caber sem estourar (760px/720px de minimo real + gap), entao
+   colapsam num breakpoint mais largo do que o resto dos grids acima. */
+@media (max-width: 820px) {
   .announcement-grid,
   .bar-status-grid {
     grid-template-columns: minmax(0, 1fr);
