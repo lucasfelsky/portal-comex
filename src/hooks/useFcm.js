@@ -79,7 +79,7 @@ export function useFcm(uid) {
 
       // Listener de foreground
       if (unsubscribeRef.current) unsubscribeRef.current()
-      unsubscribeRef.current = onFcmMessage((payload) => {
+      unsubscribeRef.current = await onFcmMessage((payload) => {
         // Dispara evento customizado pro AppLayout recarregar notifications
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('fcm:message', { detail: payload }))

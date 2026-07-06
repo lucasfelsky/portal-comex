@@ -45,6 +45,12 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined
+            // firebase/messaging fica num chunk separado porque so e' importado
+            // dinamicamente (fcmService.js) -- se cair no bucket "firebase"
+            // junto com auth/firestore, o import dinamico perde o efeito: o
+            // arquivo inteiro (que ja carrega eager por causa do Auth) ficaria
+            // maior, em vez do FCM baixar sob demanda pos-login.
+            if (id.includes('firebase/messaging')) return 'firebase-messaging'
             if (id.includes('firebase')) return 'firebase'
             if (id.includes('xlsx')) return 'spreadsheet'
             return undefined
