@@ -171,7 +171,12 @@ export default function DashboardPage() {
       <Stagger>
         <article className="list-card">
         <div className="card-heading">
-          <h3>Comunicados recentes</h3>
+          <div>
+            <h3>Comunicados recentes</h3>
+          </div>
+          <span className="inline-badge">
+            {isLoadingAnnouncements ? '...' : `${announcements.length} ${announcements.length === 1 ? 'comunicado' : 'comunicados'}`}
+          </span>
         </div>
 
         <div className="announcement-list">
