@@ -532,8 +532,8 @@ export default function AdminForecastPage() {
 
     <ConfirmDialog
       open={isResetDialogOpen}
-      title="Restaurar regras padrao"
-      message="Esta acao restaura todas as regras de previsao para o padrao do sistema e sera registrada na auditoria."
+      title="Restaurar regras padrão"
+      message="Esta ação restaura todas as regras de previsão para o padrão do sistema e será registrada na auditoria."
       confirmLabel="Restaurar"
       tone="danger"
       busy={isResetting}

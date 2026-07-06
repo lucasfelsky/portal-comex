@@ -75,7 +75,7 @@ export default function FornecedoresPage() {
       <header className="page-header">
         <h1>Fornecedores</h1>
         <p className="page-subtitle">
-          Cadastro de fornecedores, contatos principais e incoterms aceites.
+          Cadastro de fornecedores, contatos principais e incoterms aceitos.
         </p>
       </header>
 
@@ -84,10 +84,11 @@ export default function FornecedoresPage() {
       ) : null}
       {error ? <div className="feedback error">Erro: {error}</div> : null}
 
-      <div className="toolbar">
+      <div className="admin-toolbar">
         <input
+          className="text-input"
           type="search"
-          placeholder="Buscar por nome, e-mail ou pais..."
+          placeholder="Buscar por nome, e-mail ou país..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -112,14 +113,14 @@ export default function FornecedoresPage() {
 
       <section className="card">
         {loading && suppliers.length === 0 ? (
-          <p>A carregar fornecedores...</p>
+          <p>Carregando fornecedores...</p>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
                 <th>Nome / Contato principal</th>
                 <th>E-mail</th>
-                <th>Pais</th>
+                <th>País</th>
                 <th>Status</th>
                 <th>Incoterms</th>
                 <th></th>

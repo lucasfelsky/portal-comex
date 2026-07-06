@@ -73,7 +73,7 @@ function ToastViewport({ toasts, onDismiss }) {
   if (toasts.length === 0) return null
 
   return (
-    <div className="toast-container" role="region" aria-label="Notificacoes">
+    <div className="toast-container" role="region" aria-label="Notificações">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}

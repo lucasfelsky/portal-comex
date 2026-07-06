@@ -227,7 +227,7 @@ describe('AdminForecastPage', () => {
     // 1. Abre o dialog
     await user.click(screen.getByRole('button', { name: /Restaurar padr/i }))
     // 2. Dialog aparece
-    expect(screen.getByText(/Esta acao restaura todas as regras/i)).toBeInTheDocument()
+    expect(screen.getByText(/Esta ação restaura todas as regras/i)).toBeInTheDocument()
     // 3. Confirma
     const confirmBtn = screen.getByRole('button', { name: 'Restaurar' })
     await user.click(confirmBtn)
@@ -241,7 +241,7 @@ describe('AdminForecastPage', () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: /Restaurar padr/i }))
-    expect(screen.getByText(/Esta acao restaura todas as regras/i)).toBeInTheDocument()
+    expect(screen.getByText(/Esta ação restaura todas as regras/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(mockResetForecastSettings).not.toHaveBeenCalled()
   })

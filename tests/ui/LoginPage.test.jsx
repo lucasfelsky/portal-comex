@@ -280,7 +280,7 @@ describe('LoginPage', () => {
     await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'l@sqquimica.com')
     await user.click(screen.getByRole('button', { name: /Enviar/i }))
     await waitFor(() => {
-      expect(screen.getByText(/Instrucoes de redefinicao enviadas/i)).toBeInTheDocument()
+      expect(screen.getByText(/Instruções de redefinição enviadas/i)).toBeInTheDocument()
     })
   })
 })

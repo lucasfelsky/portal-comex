@@ -5,7 +5,7 @@ import { getUserClaims } from '../lib/claims'
 import useAuth from '../hooks/useAuth'
 
 // Pagina de diagnostico temporaria (Sprint 6.7 / hotfix de claims).
-// Mostra exatamente o que o front esta' lendo das custom claims para
+// Mostra exatamente o que o front esta lendo das custom claims para
 // ajudar a distinguir "bug do front" de "claims do Firebase erradas".
 // Acessivel em /debug/claims sem ProtectedRoute.
 export default function DebugClaimsPage() {
@@ -27,7 +27,7 @@ export default function DebugClaimsPage() {
             status: 'no-auth',
             role: null,
             raw: null,
-            error: 'Firebase nao configurado ou sem usuario logado',
+            error: 'Firebase não configurado ou sem usuário logado',
           })
         }
         return
@@ -74,15 +74,15 @@ export default function DebugClaimsPage() {
   return (
     <div className="auth-screen">
       <div className="auth-card auth-card--form" style={{ width: 'min(100%, 720px)' }}>
-        <span className="brand__eyebrow">Diagnostico de claims</span>
-        <h1>O que o front esta vendo das suas claims</h1>
+        <span className="brand__eyebrow">Diagnóstico de claims</span>
+        <h1>O que o front está vendo das suas claims</h1>
         <p>
-          Esta pagina mostra o estado bruto lido pelo Firebase Web SDK e o perfil derivado
+          Esta página mostra o estado bruto lido pelo Firebase Web SDK e o perfil derivado
           pelo AuthContext. Use para distinguir bug do front de claims erradas no Firebase.
         </p>
 
         <div className="auth-reset-panel">
-          <strong>AuthContext (profile em memoria)</strong>
+          <strong>AuthContext (profile em memória)</strong>
           <p>status: <code>{profile?.status ?? '(vazio)'}</code></p>
           <p>role: <code>{profile?.role ?? '(vazio)'}</code></p>
           <p>email: <code>{profile?.email ?? '(vazio)'}</code></p>
@@ -112,11 +112,11 @@ export default function DebugClaimsPage() {
         </div>
 
         <div className="error-banner" style={{ background: 'var(--surface-alt)', color: 'var(--ink-soft)' }}>
-          <strong>Diagnostico rapido:</strong>
+          <strong>Diagnóstico rápido:</strong>
           <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
             <li>Se <code>status</code> nas claims = <code>Ativo</code> mas o AuthContext mostra <code>Pendente</code>: bug no AuthContext.</li>
             <li>Se <code>status</code> nas claims = <code>Pendente</code> (ou ausente): o admin precisa rodar <code>adminUpdateUserClaims</code> novamente.</li>
-            <li>Se <code>role</code> = <code>user</code> mas voce e' admin: claims nao foram propagadas pelo callable.</li>
+            <li>Se <code>role</code> = <code>user</code> mas você é admin: claims não foram propagadas pelo callable.</li>
           </ul>
         </div>
 

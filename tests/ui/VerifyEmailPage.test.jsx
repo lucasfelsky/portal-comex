@@ -1,6 +1,6 @@
 // Tests do VerifyEmailPage.
 // Cobre:
-//   - loading=true: mostra "Validando confirmacao"
+//   - loading=true: mostra "Validando confirmação"
 //   - isAuthenticated && hasAccess && isEmailVerified: redireciona para /
 //   - Sem oobCode e isAuthenticated: mostra botoes Reenviar / Ja confirmei / Sair
 //   - Com oobCode: chama confirmEmailVerification no mount
@@ -65,10 +65,10 @@ afterEach(() => {
 })
 
 describe('VerifyEmailPage', () => {
-  it('loading=true: mostra "Validando confirmacao"', () => {
+  it('loading=true: mostra "Validando confirmação"', () => {
     mockUseAuth.mockReturnValue({ ...defaultAuth(), loading: true })
     renderPage()
-    expect(screen.getByText(/Validando confirmacao/i)).toBeInTheDocument()
+    expect(screen.getByText(/Validando confirmação/i)).toBeInTheDocument()
   })
 
   it('isAuthenticated && hasAccess && isEmailVerified: redireciona para /', () => {
@@ -88,20 +88,20 @@ describe('VerifyEmailPage', () => {
       isEmailVerified: false,
     })
     renderPage()
-    expect(screen.getByText(/acesso ja esta liberado/i)).toBeInTheDocument()
-    expect(screen.getByText(/conclua a confirmacao do email corporativo/i)).toBeInTheDocument()
+    expect(screen.getByText(/acesso já está liberado/i)).toBeInTheDocument()
+    expect(screen.getByText(/conclua a confirmação do email corporativo/i)).toBeInTheDocument()
   })
 
   it('isAuthenticated + sem hasAccess: texto "Confirme o endereco"', () => {
     renderPage()
-    expect(screen.getByText(/Confirme o endereco joao@sqquimica.com/i)).toBeInTheDocument()
+    expect(screen.getByText(/Confirme o endereço joao@sqquimica.com/i)).toBeInTheDocument()
   })
 
   it('sem isAuthenticated: mostra link "Voltar ao login" (sem botoes de acao)', () => {
     mockUseAuth.mockReturnValue({ ...defaultAuth(), isAuthenticated: false })
     renderPage()
     expect(screen.getByText(/Voltar ao login/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Ja confirmei/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Já confirmei/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Reenviar/i })).not.toBeInTheDocument()
   })
 
@@ -156,11 +156,11 @@ describe('VerifyEmailPage', () => {
     mockUseAuth.mockReturnValue(auth)
     const user = userEvent.setup()
     renderPage()
-    await user.click(screen.getByRole('button', { name: /Ja confirmei/i }))
+    await user.click(screen.getByRole('button', { name: /Já confirmei/i }))
     await waitFor(() => {
       expect(auth.refreshAuthenticatedUser).toHaveBeenCalled()
     })
-    expect(screen.getByText(/Sua conta ja esta regularizada/i)).toBeInTheDocument()
+    expect(screen.getByText(/Sua conta já está regularizada/i)).toBeInTheDocument()
   })
 
   it('handleRefreshStatus com emailVerified=true + hasAccess=false: feedback "aguarde aprovacao"', async () => {
@@ -169,9 +169,9 @@ describe('VerifyEmailPage', () => {
     mockUseAuth.mockReturnValue(auth)
     const user = userEvent.setup()
     renderPage()
-    await user.click(screen.getByRole('button', { name: /Ja confirmei/i }))
+    await user.click(screen.getByRole('button', { name: /Já confirmei/i }))
     await waitFor(() => {
-      expect(screen.getByText(/aguarde a aprovacao de um administrador/i)).toBeInTheDocument()
+      expect(screen.getByText(/aguarde a aprovação de um administrador/i)).toBeInTheDocument()
     })
   })
 
@@ -181,9 +181,9 @@ describe('VerifyEmailPage', () => {
     mockUseAuth.mockReturnValue(auth)
     const user = userEvent.setup()
     renderPage()
-    await user.click(screen.getByRole('button', { name: /Ja confirmei/i }))
+    await user.click(screen.getByRole('button', { name: /Já confirmei/i }))
     await waitFor(() => {
-      expect(screen.getByText(/Ainda nao localizamos a confirmacao/i)).toBeInTheDocument()
+      expect(screen.getByText(/Ainda não localizamos a confirmação/i)).toBeInTheDocument()
     })
   })
 
@@ -193,7 +193,7 @@ describe('VerifyEmailPage', () => {
     mockUseAuth.mockReturnValue(auth)
     const user = userEvent.setup()
     renderPage()
-    await user.click(screen.getByRole('button', { name: /Ja confirmei/i }))
+    await user.click(screen.getByRole('button', { name: /Já confirmei/i }))
     await waitFor(() => {
       expect(screen.getByText(/auth\/network-error/)).toBeInTheDocument()
     })
@@ -206,7 +206,7 @@ describe('VerifyEmailPage', () => {
     mockUseAuth.mockReturnValue(auth)
     const user = userEvent.setup()
     renderPage()
-    await user.click(screen.getByRole('button', { name: /Ja confirmei/i }))
+    await user.click(screen.getByRole('button', { name: /Já confirmei/i }))
     expect(screen.getByRole('button', { name: 'Atualizando...' })).toBeDisabled()
     resolveRefresh({ emailVerified: true })
   })

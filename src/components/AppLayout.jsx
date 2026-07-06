@@ -637,7 +637,7 @@ export default function AppLayout() {
             </div>
             <div className="topbar__actions">
               {ptaxRates ? (
-                <div className="topbar__ptax" aria-label="Cotacao PTAX do dia">
+                <div className="topbar__ptax" aria-label="Cotação PTAX do dia">
                   <span className="topbar__ptax-pair">
                     <span className="topbar__ptax-label">USD</span>
                     <span className="topbar__ptax-value">{formatCurrencyRate(ptaxRates?.usd?.sell)}</span>
@@ -662,7 +662,7 @@ export default function AppLayout() {
                     {profile.role}
                   </span>
                 ) : null}
-                <Tooltip label="Encerrar sessao" side="bottom">
+                <Tooltip label="Encerrar sessão" side="bottom">
                   <button type="button" className="ghost-button topbar__logout" onClick={logout}>
                     <Icon name="logout" size={16} />
                     <span>Sair</span>
@@ -675,7 +675,7 @@ export default function AppLayout() {
           {!isEmailVerified ? (
             <div style={{ padding: '0 24px 16px' }}>
               <div className="detail-card detail-card--warning">
-                <span className="detail-label">Confirmacao pendente</span>
+                <span className="detail-label">Confirmação pendente</span>
                 <p>
                   Seu email corporativo ainda nao foi confirmado. O acesso foi mantido para nao
                   interromper a operacao, mas a conta precisa ser regularizada.
@@ -732,7 +732,7 @@ export default function AppLayout() {
         onClose={() => commandPalette.setOpen(false)}
         commands={commandItems}
         searcher={processSearcherForPalette}
-        placeholder="Buscar paginas, acoes ou processos..."
+        placeholder="Buscar páginas, ações ou processos..."
       />
     </div>
   )

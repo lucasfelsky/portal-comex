@@ -83,17 +83,17 @@ export default function PendingApprovalPage() {
             {isRejected
               ? 'Seu cadastro foi reprovado. Procure um administrador caso precise revisar o acesso.'
               : isBlocked
-                ? 'Seu acesso foi bloqueado por um administrador. Procure a administracao para regularizar o acesso.'
+                ? 'Seu acesso foi bloqueado por um administrador. Procure a administração para regularizar o acesso.'
                 : isEmailVerified
-                  ? 'Seu email ja foi verificado. Agora aguarde a liberacao manual de um administrador.'
-                  : 'Confirme primeiro o email corporativo e, depois disso, aguarde a liberacao manual de um administrador.'}
+                  ? 'Seu email já foi verificado. Agora aguarde a liberação manual de um administrador.'
+                  : 'Confirme primeiro o email corporativo e, depois disso, aguarde a liberação manual de um administrador.'}
           </p>
         </div>
         <div className="success-banner">Status atual: {currentStatus}</div>
 
         {diagnostic && (
           <div className="auth-reset-panel" style={{ fontSize: '0.85rem' }}>
-            <strong>Diagnostico (claims lidas agora)</strong>
+            <strong>Diagnóstico (claims lidas agora)</strong>
             {diagnostic.ok ? (
               <>
                 <p>uid: <code>{diagnostic.uid}</code></p>
@@ -101,8 +101,8 @@ export default function PendingApprovalPage() {
                 <p>role: <code>{diagnostic.role ?? '(vazio)'}</code></p>
                 <p>status: <code>{diagnostic.status ?? '(vazio)'}</code></p>
                 <p style={{ marginTop: 8, color: 'var(--ink-soft)' }}>
-                  Se <code>status</code> = <code>Ativo</code> aqui mas a pagina diz Pendente,
-                  o bug esta' no AuthContext. Se <code>status</code> = <code>Pendente</code> (ou vazio)
+                  Se <code>status</code> = <code>Ativo</code> aqui mas a página diz Pendente,
+                  o bug está no AuthContext. Se <code>status</code> = <code>Pendente</code> (ou vazio)
                   aqui, o admin precisa re-rodar <code>adminUpdateUserClaims</code>.
                 </p>
               </>
@@ -119,7 +119,7 @@ export default function PendingApprovalPage() {
             onClick={handleForceReload}
             disabled={reloading}
           >
-            {reloading ? 'Recarregando...' : 'Forcar reload das claims'}
+            {reloading ? 'Recarregando...' : 'Forçar reload das claims'}
           </button>
           <button type="button" className="ghost-button auth-button" onClick={logout}>
             Sair

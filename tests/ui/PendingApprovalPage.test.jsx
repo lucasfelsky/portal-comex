@@ -94,7 +94,7 @@ describe('PendingApprovalPage', () => {
     })
     renderPage()
     expect(screen.getByText('Acesso pendente')).toBeInTheDocument()
-    expect(screen.getByText(/Seu email ja foi verificado/i)).toBeInTheDocument()
+    expect(screen.getByText(/Seu email já foi verificado/i)).toBeInTheDocument()
   })
 
   it('status=Reprovado: heading "Acesso reprovado" + texto de reprovacao', () => {

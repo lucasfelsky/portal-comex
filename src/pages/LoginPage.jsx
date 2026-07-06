@@ -46,7 +46,7 @@ export default function LoginPage() {
     try {
       if (mode === 'register') {
         await register(form)
-        setFeedback('Cadastro criado. Confirme seu email corporativo e depois aguarde a aprovacao do admin.')
+        setFeedback('Cadastro criado. Confirme seu email corporativo e depois aguarde a aprovação do admin.')
         toast.success('Cadastro criado. Confirme seu email.')
       } else {
         await login(form.email, form.password)
@@ -70,7 +70,7 @@ export default function LoginPage() {
       await requestPasswordReset(form.email)
       setFeedback('Enviamos as instruções de redefinição para o seu e-mail corporativo.')
       setShowResetForm(false)
-      toast.success('Instrucoes de redefinicao enviadas para o seu email.')
+      toast.success('Instruções de redefinição enviadas para o seu email.')
     } catch (submitError) {
       console.error('Falha ao enviar redefinição de senha.', submitError)
       const details = submitError?.code ?? submitError?.message
@@ -107,7 +107,7 @@ export default function LoginPage() {
         <h1>{mode === 'register' ? 'Criar acesso corporativo' : 'Acesso ao painel'}</h1>
         <p>
           {mode === 'register'
-            ? 'Cadastro permitido apenas para e-mails @sqquimica.com. O acesso exige email verificado e aprovacao do admin.'
+            ? 'Cadastro permitido apenas para e-mails @sqquimica.com. O acesso exige email verificado e aprovação do admin.'
             : 'Use sua conta corporativa @sqquimica.com para acessar o sistema.'}
         </p>
 

@@ -5,8 +5,8 @@ import useAuth from '../hooks/useAuth'
 function buildErrorMessage(error) {
   const details = error?.code ?? error?.message
   return details
-    ? `Nao foi possivel confirmar o email. (${details})`
-    : 'Nao foi possivel confirmar o email.'
+    ? `Não foi possível confirmar o email. (${details})`
+    : 'Não foi possível confirmar o email.'
 }
 
 export default function VerifyEmailPage() {
@@ -46,7 +46,7 @@ export default function VerifyEmailPage() {
           return
         }
 
-        setFeedback('Email confirmado com sucesso. Agora aguarde a aprovacao de um administrador.')
+        setFeedback('Email confirmado com sucesso. Agora aguarde a aprovação de um administrador.')
       } catch (confirmationError) {
         if (isMounted) {
           setError(buildErrorMessage(confirmationError))
@@ -69,7 +69,7 @@ export default function VerifyEmailPage() {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <strong>Validando confirmacao</strong>
+          <strong>Validando confirmação</strong>
           <p>Carregando o status atual do seu acesso.</p>
         </div>
       </div>
@@ -87,12 +87,12 @@ export default function VerifyEmailPage() {
 
     try {
       await resendVerificationEmail()
-      setFeedback('Enviamos um novo email de confirmacao para a sua caixa corporativa.')
+      setFeedback('Enviamos um novo email de confirmação para a sua caixa corporativa.')
     } catch (resendError) {
       setError(
         resendError?.code ?? resendError?.message
-          ? `Nao foi possivel reenviar o email. (${resendError?.code ?? resendError?.message})`
-          : 'Nao foi possivel reenviar o email.'
+          ? `Não foi possível reenviar o email. (${resendError?.code ?? resendError?.message})`
+          : 'Não foi possível reenviar o email.'
       )
     } finally {
       setSubmitting(false)
@@ -110,19 +110,19 @@ export default function VerifyEmailPage() {
       if (refreshedUser?.emailVerified) {
         setFeedback(
           hasAccess
-            ? 'Verificacao confirmada. Sua conta ja esta regularizada.'
-            : 'Verificacao confirmada. Agora aguarde a aprovacao de um administrador.'
+            ? 'Verificação confirmada. Sua conta já está regularizada.'
+            : 'Verificação confirmada. Agora aguarde a aprovação de um administrador.'
         )
       } else {
         setFeedback(
-          'Ainda nao localizamos a confirmacao. Se voce ja clicou no link, aguarde alguns segundos e tente novamente.'
+          'Ainda não localizamos a confirmação. Se você já clicou no link, aguarde alguns segundos e tente novamente.'
         )
       }
     } catch (refreshError) {
       setError(
         refreshError?.code ?? refreshError?.message
-          ? `Nao foi possivel atualizar o status. (${refreshError?.code ?? refreshError?.message})`
-          : 'Nao foi possivel atualizar o status.'
+          ? `Não foi possível atualizar o status. (${refreshError?.code ?? refreshError?.message})`
+          : 'Não foi possível atualizar o status.'
       )
     } finally {
       setSubmitting(false)
@@ -133,13 +133,13 @@ export default function VerifyEmailPage() {
     <div className="auth-screen">
       <div className="auth-card auth-card--form">
         <span className="brand__eyebrow">SQ Comex Updates</span>
-        <h1>Confirmacao de email</h1>
+        <h1>Confirmação de email</h1>
         <p>
           {isAuthenticated && hasAccess
-            ? `Seu acesso ja esta liberado, mas ainda falta confirmar o endereco ${user?.email ?? 'corporativo'}.`
+            ? `Seu acesso já está liberado, mas ainda falta confirmar o endereço ${user?.email ?? 'corporativo'}.`
             : isAuthenticated
-            ? `Confirme o endereco ${user?.email ?? 'corporativo'} para validar seu cadastro.`
-            : 'Abra este link com o mesmo navegador da sua conta ou volte para a tela de login apos a confirmacao.'}
+            ? `Confirme o endereço ${user?.email ?? 'corporativo'} para validar seu cadastro.`
+            : 'Abra este link com o mesmo navegador da sua conta ou volte para a tela de login após a confirmação.'}
         </p>
 
         {feedback ? <div className="success-banner">{feedback}</div> : null}
@@ -149,10 +149,10 @@ export default function VerifyEmailPage() {
           <strong>Status</strong>
           <p>
             {isAuthenticated && hasAccess
-              ? 'O acesso ao sistema foi mantido para nao interromper a operacao. Mesmo assim, conclua a confirmacao do email corporativo.'
+              ? 'O acesso ao sistema foi mantido para não interromper a operação. Mesmo assim, conclua a confirmação do email corporativo.'
               : isAuthenticated
-              ? 'A confirmacao do email e obrigatoria. Depois disso, o acesso ao sistema ainda depende da aprovacao manual do admin.'
-              : 'Se o link ja foi aplicado, entre novamente para continuar.'}
+              ? 'A confirmação do email é obrigatória. Depois disso, o acesso ao sistema ainda depende da aprovação manual do admin.'
+              : 'Se o link já foi aplicado, entre novamente para continuar.'}
           </p>
         </div>
 
@@ -164,7 +164,7 @@ export default function VerifyEmailPage() {
               onClick={handleRefreshStatus}
               disabled={submitting}
             >
-              {submitting ? 'Atualizando...' : 'Ja confirmei meu email'}
+              {submitting ? 'Atualizando...' : 'Já confirmei meu email'}
             </button>
             <button
               type="button"
@@ -172,7 +172,7 @@ export default function VerifyEmailPage() {
               onClick={handleResendEmail}
               disabled={submitting}
             >
-              Reenviar email de confirmacao
+              Reenviar email de confirmação
             </button>
             <button
               type="button"

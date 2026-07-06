@@ -68,51 +68,55 @@ export default function SupplierForm({ initialValue, onSubmit, onCancel, busy })
     <form className="card" onSubmit={handleSubmit}>
       <h3>{initialValue ? 'Editar fornecedor' : 'Novo fornecedor'}</h3>
       <div className="form-grid">
-        <label>
-          Nome
+        <label className="field">
+          <span>Nome</span>
           <input
+            className="text-input"
             type="text"
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
             required
           />
         </label>
-        <label>
-          E-mail
+        <label className="field">
+          <span>E-mail</span>
           <input
+            className="text-input"
             type="email"
             value={form.email}
             onChange={(e) => update('email', e.target.value)}
             required
           />
         </label>
-        <label>
-          Website
+        <label className="field">
+          <span>Website</span>
           <input
+            className="text-input"
             type="url"
             value={form.website}
             onChange={(e) => update('website', e.target.value)}
             placeholder="https://"
           />
         </label>
-        <label>
-          País
+        <label className="field">
+          <span>País</span>
           <input
+            className="text-input"
             type="text"
             value={form.country}
             onChange={(e) => update('country', e.target.value)}
           />
         </label>
-        <label>
-          Status
-          <select value={form.status} onChange={(e) => update('status', e.target.value)}>
+        <label className="field">
+          <span>Status</span>
+          <select className="text-input" value={form.status} onChange={(e) => update('status', e.target.value)}>
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </label>
-        <label className="full">
-          Incoterms aceites
+        <label className="field full">
+          <span>Incoterms aceitos</span>
           <div className="incoterm-chips">
             {INCOTERMS.map((code) => (
               <button
@@ -126,9 +130,10 @@ export default function SupplierForm({ initialValue, onSubmit, onCancel, busy })
             ))}
           </div>
         </label>
-        <label className="full">
-          Observações
+        <label className="field full">
+          <span>Observações</span>
           <textarea
+            className="text-input text-input--textarea"
             rows={2}
             value={form.notes}
             onChange={(e) => update('notes', e.target.value)}
@@ -142,7 +147,7 @@ export default function SupplierForm({ initialValue, onSubmit, onCancel, busy })
           </button>
         ) : null}
         <button type="submit" className="primary-button" disabled={busy}>
-          {busy ? 'A guardar...' : initialValue ? 'Atualizar' : 'Guardar'}
+          {busy ? 'Salvando...' : initialValue ? 'Atualizar' : 'Salvar'}
         </button>
       </div>
     </form>

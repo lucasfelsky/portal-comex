@@ -9,7 +9,7 @@ export const Basic = {
   args: {
     eyebrow: 'Compras',
     title: 'Fornecedores',
-    description: 'Cadastro de fornecedores, contatos principais e incoterms aceites.',
+    description: 'Cadastro de fornecedores, contatos principais e incoterms aceitos.',
   },
 }
 
@@ -17,7 +17,7 @@ export const WithActions = {
   args: {
     eyebrow: 'Compras',
     title: 'Fornecedores',
-    description: 'Cadastro de fornecedores, contatos principais e incoterms aceites.',
+    description: 'Cadastro de fornecedores, contatos principais e incoterms aceitos.',
     actions: <button type="button" className="primary-button">Novo fornecedor</button>,
   },
 }

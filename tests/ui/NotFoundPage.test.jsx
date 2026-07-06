@@ -44,14 +44,14 @@ afterEach(() => {
 describe('NotFoundPage', () => {
   it('render: heading + codigo 404 + caminho', () => {
     renderPage({ initialEntries: ['/rota-inexistente'] })
-    expect(screen.getByText(/Pagina nao encontrada/i)).toBeInTheDocument()
+    expect(screen.getByText(/Página não encontrada/i)).toBeInTheDocument()
     expect(screen.getByText('404')).toBeInTheDocument()
     expect(screen.getByText('/rota-inexistente')).toBeInTheDocument()
   })
 
   it('subtitle dinamico: "Pagina nao encontrada" para path normal', () => {
     renderPage({ initialEntries: ['/alguma-rota'] })
-    expect(screen.getByText(/O endereco "\/alguma-rota" nao corresponde/i)).toBeInTheDocument()
+    expect(screen.getByText(/O endereço "\/alguma-rota" não corresponde/i)).toBeInTheDocument()
   })
 
   it('botao "Voltar para o painel" (primary, link para /)', () => {
@@ -72,7 +72,7 @@ describe('NotFoundPage', () => {
 
   it('muted hint de reporting presente', () => {
     renderPage()
-    expect(screen.getByText(/Se voce chegou aqui por um link/i)).toBeInTheDocument()
+    expect(screen.getByText(/Se você chegou aqui por um link/i)).toBeInTheDocument()
   })
 
   it('renderiza dentro do design system (auth-gate + auth-card)', () => {
