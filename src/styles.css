@@ -491,6 +491,7 @@ body {
   margin-left: 280px;
   min-height: 100vh;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   width: calc(100% - 280px);
   padding: 80px 24px 48px; /* 80 top = altura da topbar fixed */
@@ -958,6 +959,7 @@ body {
 .surface {
   padding: 24px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 
@@ -1774,6 +1776,7 @@ body {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 28px;
+  min-width: 0;
 }
 
 .stats-grid,
@@ -1785,6 +1788,7 @@ body {
 
 .admin-feature-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -3537,6 +3541,7 @@ body {
   .shell__frame { display: block; height: auto; }
   .main-content {
     margin-left: 0;
+    width: auto;
     height: auto;
     overflow: visible;
     padding-top: 12px;
@@ -4651,6 +4656,14 @@ body {
 @media (max-width: 720px) {
   .admin-grid--thirds,
   .admin-grid--quarters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats-grid,
+  .dual-grid,
+  .triple-grid,
+  .announcement-grid,
+  .bar-status-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
