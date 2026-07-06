@@ -1904,6 +1904,10 @@ body {
   margin-bottom: 18px;
 }
 
+.card-heading--tight {
+  margin-bottom: 10px;
+}
+
 .stat-card__value {
   display: block;
   margin: 14px 0 6px;

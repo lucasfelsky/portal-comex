@@ -170,7 +170,7 @@ export default function DashboardPage() {
 
       <Stagger>
         <article className="list-card">
-        <div className="card-heading">
+        <div className="card-heading card-heading--tight">
           <div>
             <h3>Comunicados recentes</h3>
           </div>
