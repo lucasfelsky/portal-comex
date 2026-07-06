@@ -1882,10 +1882,15 @@ body {
     border-color 180ms ease;
 }
 
-.stat-card:hover,
-.list-card:hover {
+.stat-card:hover {
   transform: translateY(-2px);
 }
+
+/* .list-card e' sempre um container estatico (card-heading + lista/tabela/form
+   por dentro) -- nenhum uso no app tem onClick no proprio <article>, so nos
+   itens/botoes de dentro. O hover-lift ficava no .list-card por engano
+   (compartilhava regra com .stat-card) e fazia o painel inteiro "flutuar" ao
+   passar o mouse em qualquer parte dele, inclusive nas abas/botoes la dentro. */
 
 .card-heading {
   display: flex;
