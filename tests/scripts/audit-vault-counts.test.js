@@ -51,7 +51,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/9 checks/)
     expect(result.stdout).toMatch(/src\/ directories = 9/)
     expect(result.stdout).toMatch(/src\/components\/ top-level = 19/)
-    expect(result.stdout).toMatch(/src\/features\/ directories = 3/)
+    expect(result.stdout).toMatch(/src\/features\/ directories = 2/)
     expect(result.stdout).toMatch(/src\/pages\/ count = 10/)
     expect(result.stdout).toMatch(/src\/services\/ count = 16/)
     expect(result.stdout).toMatch(/src\/utils\/ count = 6/)

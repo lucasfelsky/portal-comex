@@ -39,10 +39,9 @@
     ]
   },
   "srcFeatures": {
-    "directories": 3,
+    "directories": 2,
     "_directories_list": [
       "admin",
-      "intelliquote",
       "processes"
     ]
   },
