@@ -1,5 +1,4 @@
-import { httpsCallable } from 'firebase/functions'
-import { functions, isFirebaseConfigured } from '../lib/firebase'
+import { getCallable } from '../lib/firebase'
 
 const CALLABLE_TIMEOUT_MS = 15000
 
@@ -15,11 +14,11 @@ function withCallableTimeout(promise, timeoutMessage) {
 }
 
 export async function sendCustomVerificationEmail(payload = {}) {
-  if (!isFirebaseConfigured || !functions) {
+  const callable = await getCallable('sendCustomVerificationEmail')
+  if (!callable) {
     return { success: true, alreadyVerified: false }
   }
 
-  const callable = httpsCallable(functions, 'sendCustomVerificationEmail')
   const result = await withCallableTimeout(
     callable(payload),
     'Tempo limite excedido ao enviar o email de verificação.'
@@ -28,11 +27,11 @@ export async function sendCustomVerificationEmail(payload = {}) {
 }
 
 export async function sendCustomPasswordResetEmail(email) {
-  if (!isFirebaseConfigured || !functions) {
+  const callable = await getCallable('sendCustomPasswordResetEmail')
+  if (!callable) {
     throw new Error('Firebase Functions não configurado para redefinição de senha.')
   }
 
-  const callable = httpsCallable(functions, 'sendCustomPasswordResetEmail')
   const result = await withCallableTimeout(
     callable({ email }),
     'Tempo limite excedido ao enviar o email de redefinição de senha.'

@@ -8,12 +8,10 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore/lite'
-import { isFirebaseConfigured, firestore } from '../lib/firebase'
+import { isFirebaseConfigured, firestore, getCallable } from '../lib/firebase'
 import { adminUsersSeed } from '../data/mockData'
 import { getRolePermissions } from '../features/admin/rolePermissions'
 import { createAuditEvent } from './auditRepository'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '../lib/firebase'
 
 const STORAGE_KEY = 'sq-comex-users'
 
@@ -124,9 +122,9 @@ export async function saveUser(user, actor = null) {
   // claims batam com o que foi persistido. O `setDoc` abaixo grava o espelho
   // em `users/{uid}` para exibicao. Em modo dev/local, mantemos o setDoc
   // direto (callable exige emulador).
-  if (functions) {
+  const updateClaims = await getCallable('adminUpdateUserClaims')
+  if (updateClaims) {
     try {
-      const updateClaims = httpsCallable(functions, 'adminUpdateUserClaims')
       await updateClaims({
         uid: normalizedUser.id,
         role: normalizedUser.role,

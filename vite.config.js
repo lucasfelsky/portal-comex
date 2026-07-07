@@ -51,6 +51,10 @@ export default defineConfig(({ mode }) => {
             // arquivo inteiro (que ja carrega eager por causa do Auth) ficaria
             // maior, em vez do FCM baixar sob demanda pos-login.
             if (id.includes('firebase/messaging')) return 'firebase-messaging'
+            // firebase/functions tambem so' e' importado dinamicamente
+            // (lib/firebase.js getCallable) -- chunk proprio, carregado sob
+            // demanda quando a primeira callable roda (pos-login).
+            if (id.includes('firebase/functions')) return 'firebase-functions'
             if (id.includes('firebase')) return 'firebase'
             if (id.includes('xlsx')) return 'spreadsheet'
             return undefined

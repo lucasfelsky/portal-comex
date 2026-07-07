@@ -1,5 +1,4 @@
-import { httpsCallable } from 'firebase/functions'
-import { functions, isFirebaseConfigured } from '../lib/firebase'
+import { getCallable } from '../lib/firebase'
 
 const PTAX_CACHE_KEY = 'sq-comex-ptax-rates'
 
@@ -25,12 +24,12 @@ function writeCachedPtaxRates(rates) {
 }
 
 export async function getDailyPtaxRates() {
-  if (!isFirebaseConfigured || !functions) {
+  const callable = await getCallable('getDailyPtaxRates')
+  if (!callable) {
     throw new Error('Firebase Functions não está configurado para consultar a PTAX.')
   }
 
   try {
-    const callable = httpsCallable(functions, 'getDailyPtaxRates')
     const response = await callable()
     writeCachedPtaxRates(response.data)
     return response.data

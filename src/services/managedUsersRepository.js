@@ -1,5 +1,4 @@
-import { httpsCallable } from 'firebase/functions'
-import { functions, isFirebaseConfigured } from '../lib/firebase'
+import { getCallable } from '../lib/firebase'
 
 const CALLABLE_TIMEOUT_MS = 15000
 
@@ -15,11 +14,11 @@ function withCallableTimeout(promise, timeoutMessage) {
 }
 
 async function callManagedUserFunction(functionName, payload, timeoutMessage) {
-  if (!isFirebaseConfigured || !functions) {
+  const callable = await getCallable(functionName)
+  if (!callable) {
     throw new Error('Firebase Functions nao configurado para gestao de usuarios.')
   }
 
-  const callable = httpsCallable(functions, functionName)
   const result = await withCallableTimeout(callable(payload), timeoutMessage)
   return result.data
 }

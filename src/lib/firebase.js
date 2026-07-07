@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFunctions } from 'firebase/functions'
 import { getFirestore } from 'firebase/firestore/lite'
 import { getStorage } from 'firebase/storage'
 
@@ -18,15 +17,28 @@ const isConfigured = Object.values(firebaseConfig).every(Boolean)
 let firestore = null
 let auth = null
 let app = null
-let functions = null
 let storage = null
 
 if (isConfigured) {
   app = initializeApp(firebaseConfig)
   firestore = getFirestore(app)
   auth = getAuth(app)
-  functions = getFunctions(app)
   storage = getStorage(app)
 }
 
-export { app, auth, firestore, functions, storage, firebaseConfig, isConfigured as isFirebaseConfigured }
+// firebase/functions e' carregado sob demanda (dynamic import) -- so' baixa o
+// chunk quando uma callable e' realmente chamada (pos-login), em vez de inflar
+// o chunk "firebase" que ja carrega eager por causa do Auth/Firestore. Retorna
+// null quando o Firebase nao esta configurado (dev/local sem backend), no mesmo
+// espirito do antigo guard `if (!functions)`.
+let functionsSingleton = null
+export async function getCallable(name) {
+  if (!isConfigured || !app) return null
+  const { getFunctions, httpsCallable } = await import('firebase/functions')
+  if (!functionsSingleton) {
+    functionsSingleton = getFunctions(app)
+  }
+  return httpsCallable(functionsSingleton, name)
+}
+
+export { app, auth, firestore, storage, firebaseConfig, isConfigured as isFirebaseConfigured }
