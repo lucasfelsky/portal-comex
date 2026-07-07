@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "audit:vault": "node scripts/audit-vault-counts.cjs",
     "pretest": "node scripts/audit-vault-counts.cjs",
-    "emulators": "firebase emulators:start --only auth,firestore,storage,functions",
+    "emulators": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:start --only auth,firestore,storage,functions",
     "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
     "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,functions --config firebase.portal-comex.json",
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --config firebase.portal-comex.json",
