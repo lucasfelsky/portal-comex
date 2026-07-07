@@ -71,6 +71,17 @@ describeEmulator('firestore.rules (emulador)', () => {
       })
       .firestore()
 
+  const logistics = (uid = 'log-1', overrides = {}) =>
+    testEnv
+      .authenticatedContext(uid, {
+        email: 'log@sqquimica.com',
+        role: 'logistica',
+        status: 'Ativo',
+        name: 'Logistica',
+        ...overrides,
+      })
+      .firestore()
+
   const anon = () => testEnv.unauthenticatedContext().firestore()
 
   const seed = (fn) => testEnv.withSecurityRulesDisabled((ctx) => fn(ctx.firestore()))
@@ -253,6 +264,25 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(updateDoc(doc(db, 'users/user-1'), { role: 'admin' }))
       await assertFails(updateDoc(doc(db, 'users/user-1'), { status: 'Ativo', role: 'admin' }))
     })
+
+    it('admin cria user doc de outro', async () => {
+      await assertSucceeds(
+        setDoc(doc(admin('admin-1'), 'users/novo'), {
+          uid: 'novo',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+          email: 'novo@sqquimica.com',
+          name: 'Novo',
+        })
+      )
+    })
+
+    it('admin apaga user; o proprio usuario NAO se apaga', async () => {
+      await seed((db) => setDoc(doc(db, 'users/alvo'), { uid: 'alvo', role: 'user' }))
+      await assertFails(deleteDoc(doc(approvedUser('alvo'), 'users/alvo')))
+      await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'users/alvo')))
+    })
   })
 
   describe('processes — create/update por role', () => {
@@ -288,6 +318,110 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    it('admin atualiza processo (updatedById/Name corretos)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1'), { name: 'Orig', updatedById: 'x', updatedByName: 'y' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p1'), { name: 'Editado', updatedById: 'admin-1', updatedByName: 'Admin' })
+      )
+    })
+
+    it('admin apaga processo; logistica e usuario comum NAO', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1'), { name: 'Orig' }))
+      await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'processes/p1')))
+      await seed((db) => setDoc(doc(db, 'processes/p1'), { name: 'Orig' }))
+      await assertFails(deleteDoc(doc(logistics('log-1'), 'processes/p1')))
+      await assertFails(deleteDoc(doc(approvedUser('user-1'), 'processes/p1')))
+    })
+  })
+
+  describe('processes — atualizacao por logistica (ramos especificos)', () => {
+    // post-receipt: logistica so' mexe em postReceiptNotes/postReceiptImages (+ updatedAt/By).
+    it('logistica faz update de pos-recebimento valido', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/pr1'), { name: 'P', postReceiptNotes: '', updatedById: 'x', updatedByName: 'y' })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/pr1'), {
+          postReceiptNotes: 'Recebido ok',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO altera campo fora da whitelist de pos-recebimento', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/pr2'), { name: 'P', postReceiptNotes: '', updatedById: 'x', updatedByName: 'y' })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/pr2'), {
+          name: 'Renomeado', // fora da whitelist
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO faz update com updatedByName != myName()', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/pr3'), { name: 'P', postReceiptNotes: '', updatedById: 'x', updatedByName: 'y' })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/pr3'), {
+          postReceiptNotes: 'x',
+          updatedById: 'log-1',
+          updatedByName: 'Outro Nome',
+        })
+      )
+    })
+
+    // collection-status: exige coleta agendada (collectionScheduledAt + status agendado)
+    // e transicao para um status pos-coleta, mexendo so' em collectionStatus (+ updatedAt/By).
+    it('logistica avanca collectionStatus quando ha coleta agendada', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cs1'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/cs1'), {
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO avanca collectionStatus sem coleta agendada', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cs2'), {
+          name: 'P',
+          collectionStatus: 'Coleta Agendada', // sem collectionScheduledAt
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/cs2'), {
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
   })
 
   describe('messages (subcollection)', () => {
@@ -316,6 +450,32 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    it('usuario aprovado le mensagem', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/messages/m1'), { content: 'oi', authorId: 'x' }))
+      await assertSucceeds(getDoc(doc(approvedUser('user-1'), 'processes/p1/messages/m1')))
+    })
+
+    it('mensagem e imutavel (update: false ate pra admin)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/messages/m1'), { content: 'oi', authorId: 'x' }))
+      await assertFails(updateDoc(doc(admin(), 'processes/p1/messages/m1'), { content: 'editado' }))
+    })
+
+    it('admin apaga mensagem; usuario comum NAO', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/messages/m1'), { content: 'oi', authorId: 'x' }))
+      await assertFails(deleteDoc(doc(approvedUser('user-1'), 'processes/p1/messages/m1')))
+      await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'processes/p1/messages/m1')))
+    })
+  })
+
+  describe('colecoes admin-only (forecastSettings / news / barra)', () => {
+    for (const col of ['forecastSettings', 'news', 'barra']) {
+      it(`${col}: usuario aprovado le, mas nao escreve; admin escreve`, async () => {
+        await assertSucceeds(getDoc(doc(approvedUser(), `${col}/x`)))
+        await assertFails(setDoc(doc(approvedUser(), `${col}/x`), { a: 1 }))
+        await assertSucceeds(setDoc(doc(admin(), `${col}/x`), { a: 1 }))
+      })
+    }
   })
 
   describe('catch-all', () => {
