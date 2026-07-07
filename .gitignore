@@ -8,6 +8,10 @@ hosting-intelliquote
 .vscode
 .DS_Store
 firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
 *.bak
 
 # Service account keys (NUNCA commitar).

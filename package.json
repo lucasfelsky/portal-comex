@@ -13,6 +13,7 @@
     "audit:vault": "node scripts/audit-vault-counts.cjs",
     "pretest": "node scripts/audit-vault-counts.cjs",
     "emulators": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:start --only auth,firestore,storage,functions",
+    "test:rules": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore --project demo-sqcomex \"npx vitest run tests/firebase/rules.emulator.test.js\"",
     "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
     "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,functions --config firebase.portal-comex.json",
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --config firebase.portal-comex.json",
