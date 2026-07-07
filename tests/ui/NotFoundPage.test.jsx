@@ -75,9 +75,9 @@ describe('NotFoundPage', () => {
     expect(screen.getByText(/Se você chegou aqui por um link/i)).toBeInTheDocument()
   })
 
-  it('renderiza dentro do design system (auth-gate + auth-card)', () => {
+  it('renderiza dentro do design system (auth-screen + auth-card)', () => {
     const { container } = renderPage()
-    expect(container.querySelector('.auth-gate')).toBeInTheDocument()
+    expect(container.querySelector('.auth-screen')).toBeInTheDocument()
     expect(container.querySelector('.auth-card')).toBeInTheDocument()
   })
 })

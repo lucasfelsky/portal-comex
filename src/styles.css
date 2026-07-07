@@ -1762,12 +1762,30 @@ body {
   width: 100%;
 }
 
+/* UIDs do Firebase, caminhos de rota e tokens sao strings longas sem
+   espacos -- sem quebra, estouram a largura do card em telas estreitas
+   (paineis de diagnostico em PendingApproval/DebugClaims, detalhe de
+   erro no NotFound). */
+.auth-reset-panel code {
+  overflow-wrap: anywhere;
+}
+
 .auth-button {
   justify-content: center;
 }
 
 .auth-button--link {
   display: flex;
+}
+
+/* Linha de 2+ botoes de acao. No desktop ficam lado a lado; no mobile
+   (<=720px) os botoes viram width:100% (regra la embaixo) e o flex-wrap
+   os empilha em coluna full-width em vez de espremer lado a lado.
+   Usado em NotFound e PendingApproval. */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .section-heading {
@@ -3945,7 +3963,7 @@ body {
   }
 
   .process-filters--panel .text-input {
-    min-height: 38px;
+    min-height: 40px;
     padding: 7px 10px;
     border-radius: 12px;
     font-size: 0.88rem;
@@ -4347,7 +4365,8 @@ body {
   .topbar,
   .stat-card,
   .list-card,
-  .news-modal {
+  .news-modal,
+  .modal {
     border-radius: 20px;
   }
 
@@ -4356,6 +4375,23 @@ body {
   .stat-card,
   .list-card {
     padding: 14px;
+  }
+
+  /* O modal generico (Modal.jsx/ConfirmDialog.jsx) nao recebia tratamento
+     mobile como os demais cartoes -- ganhava padding 24px + radius 14px
+     fixos. Alinha com o resto e da mais largura util ao conteudo. */
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal {
+    padding: 16px;
+  }
+
+  /* .command-palette tem min-width: 480px fixo -- estoura a largura do
+     modal (e da pagina) em telas de celular. Deixa fluir. */
+  .command-palette {
+    min-width: 0;
   }
 
   .brand__eyebrow,
@@ -4448,7 +4484,7 @@ body {
   }
 
   .process-filters--panel .text-input {
-    min-height: 36px;
+    min-height: 40px;
     padding: 6px 9px;
     border-radius: 12px;
     font-size: 0.84rem;

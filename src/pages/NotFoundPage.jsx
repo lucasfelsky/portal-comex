@@ -18,24 +18,20 @@ export default function NotFoundPage() {
   const subtitle = getErrorSubtitle(location.pathname)
 
   return (
-    <section className="auth-gate">
-      <div className="auth-card" data-testid="not-found-card">
-        <span className="eyebrow">Portal COMEX</span>
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
-
-        <div className="meta-grid" aria-label="Detalhes do erro">
-          <div>
-            <dt>Código</dt>
-            <dd>404</dd>
-          </div>
-          <div>
-            <dt>Caminho</dt>
-            <dd className="truncate">{location.pathname || '/'}</dd>
-          </div>
+    <section className="auth-screen">
+      <div className="auth-card auth-card--form" data-testid="not-found-card">
+        <span className="brand__eyebrow">Portal COMEX</span>
+        <div>
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
         </div>
 
-        <div className="auth-card__actions">
+        <div className="auth-reset-panel" aria-label="Detalhes do erro">
+          <p>Código: <code>404</code></p>
+          <p>Caminho: <code>{location.pathname || '/'}</code></p>
+        </div>
+
+        <div className="button-row">
           <Link to="/" className="primary-button" data-testid="not-found-home">
             Voltar para o painel
           </Link>
@@ -44,7 +40,7 @@ export default function NotFoundPage() {
           </Link>
         </div>
 
-        <p className="muted" style={{ marginTop: 16, marginBottom: 0 }}>
+        <p className="field-hint" style={{ margin: 0 }}>
           Se você chegou aqui por um link, avise o administrador. Se foi digitando,
           confira o endereço.
         </p>

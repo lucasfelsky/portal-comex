@@ -112,7 +112,7 @@ export default function PendingApprovalPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="button-row">
           <button
             type="button"
             className="ghost-button auth-button"
