@@ -522,7 +522,7 @@ describeEmulator('firestore.rules (emulador)', () => {
           setDoc(doc(db, 'processes/cs-back'), {
             name: 'P',
             collectionScheduledAt: '2026-07-08T10:00',
-            collectionStatus: 'Carga em Conferência/Etiquetagem', // ja' em pos-coleta
+            collectionStatus: 'Carga em Conferência/Etiquetagem', // ja em pos-coleta
             updatedById: 'x',
             updatedByName: 'y',
           })
