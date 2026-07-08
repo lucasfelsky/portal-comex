@@ -92,21 +92,19 @@ service cloud.firestore {
       ];
     }
 
-    function isScheduledCollectionStatus(status) {
-      return status in [
-        'Coleta Agendada',
-        'Veículo no CD para descarga',
-        'Carga em Conferência/Etiquetagem',
-        'Carga em processo de Entrada',
-        'Carga disponível em estoque',
-        'Carga recebida',
-      ];
-    }
-
+    // Correcao 2026-07-06: antes esta funcao tambem exigia que o
+    // `collectionStatus` ATUAL estivesse numa allowlist hardcoded
+    // (isScheduledCollectionStatus). Essa lista divergiu do vocabulario real
+    // do app (ex.: 'Carga sendo descarregada no CD', 'Carga a caminho do CD'
+    // nao estavam nela) e travava a logistica com permission-denied ao salvar
+    // o status pos-coleta. O que garante que o processo esta no fluxo de coleta
+    // e' ter uma coleta agendada (collectionScheduledAt); o alvo ja e' limitado
+    // a status pos-coleta por isPostCollectionStatus() em quem chama. Sem a
+    // allowlist de status atual (drift-prone) a regra deixa de quebrar quando o
+    // app adiciona/renomeia status do fluxo do CD.
     function hasScheduledCollection() {
       return resource.data.collectionScheduledAt is string
-        && resource.data.collectionScheduledAt.size() > 0
-        && isScheduledCollectionStatus(resource.data.collectionStatus);
+        && resource.data.collectionScheduledAt.size() > 0;
     }
 
     function isLogisticsPostReceiptUpdate() {

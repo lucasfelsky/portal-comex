@@ -422,6 +422,59 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    // Regressao (bug de prod 2026-07-06): processo em status de fluxo do CD que
+    // o antigo isScheduledCollectionStatus (lista hardcoded) NAO conhecia
+    // ('Carga sendo descarregada no CD', 'Carga a caminho do CD') fazia o
+    // hasScheduledCollection() falhar -> logistica travada com permission-denied
+    // ao salvar o status pos-coleta. A regra passou a exigir so' que exista uma
+    // coleta agendada (collectionScheduledAt), sem allowlist de status atual.
+    for (const currentStatus of [
+      'Carga sendo descarregada no CD',
+      'Carga a caminho do CD',
+      'Veículo no CD para descarga',
+    ]) {
+      it(`logistica avanca a partir de "${currentStatus}" (tinha coleta agendada)`, async () => {
+        await seed((db) =>
+          setDoc(doc(db, 'processes/cs-flow'), {
+            name: 'P',
+            collectionScheduledAt: '2026-06-30T23:59',
+            collectionStatus: currentStatus,
+            updatedById: 'x',
+            updatedByName: 'y',
+          })
+        )
+        const db = logistics('log-1')
+        await assertSucceeds(
+          updateDoc(doc(db, 'processes/cs-flow'), {
+            collectionStatus: 'Carga disponível em estoque',
+            updatedAt: 'now',
+            updatedById: 'log-1',
+            updatedByName: 'Logistica',
+          })
+        )
+      })
+    }
+
+    it('logistica NAO avanca pra status que nao e pos-coleta', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cs3'), {
+          name: 'P',
+          collectionScheduledAt: '2026-06-30T23:59',
+          collectionStatus: 'Veículo no CD para descarga',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/cs3'), {
+          collectionStatus: 'Coleta Agendada', // nao e' pos-coleta
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
   })
 
   describe('messages (subcollection)', () => {
