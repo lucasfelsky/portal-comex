@@ -147,6 +147,11 @@ service cloud.firestore {
       // setDoc merge:true com o payload completo). Union nao' necessario
       // porque o create NAO pode ter chaves que o update nao tem (mesmo
       // payload no app).
+      // PR #3 do backlog (2026-07-08): alem do hasOnly dos 32 campos,
+      // valida o SHAPE e o TAMANHO de `postReceiptImages` se o campo
+      // estiver presente (ate 10 elementos). Mesmo padrao de
+      // isLogisticsPostReceiptUpdate: se nao estiver no doc final,
+      // dispensa a checagem; se estiver, exige list + size <= 10.
       return (resource == null
         ? request.resource.data.keys()
         : request.resource.data.diff(resource.data).affectedKeys()
@@ -160,7 +165,13 @@ service cloud.firestore {
         'mapaStatus', 'mapaInspectionScheduledAt', 'dtaStatus',
         'dtaLoadingScheduledAt', 'dtaArrivalAtItajai', 'updatedById',
         'updatedByName', 'updatedAt',
-      ]);
+      ]) && (
+        !('postReceiptImages' in request.resource.data)
+        || (
+          request.resource.data.postReceiptImages is list
+          && request.resource.data.postReceiptImages.size() <= 10
+        )
+      );
     }
 
     // announcements: campos gravados pelo
@@ -189,13 +200,32 @@ service cloud.firestore {
     }
 
     function isLogisticsPostReceiptUpdate() {
+      // PR #3 do backlog (auditoria preventiva de drift, 2026-07-08):
+      // alem do hasOnly nos 5 campos, valida o SHAPE e o TAMANHO do
+      // `postReceiptImages` no ESTADO FINAL do doc: precisa ser list
+      // com no maximo 10 elementos (MAX_POST_RECEIPT_IMAGES = 10 em
+      // src/utils/postReceiptImages.js). Antes, a regra de negocio
+      // "max 10 imagens" era so do app, sem blindagem na rule. Agora
+      // a rule t rejeita (cobre update que so mexa em `postReceiptNotes`
+      // mantendo `postReceiptImages` valido, e update que adicione
+      // imagens ate o teto).
+      // Edge case: se `postReceiptImages` nao estiver no doc final
+      // (legado, sem o campo), aceitamos (regra NAO se aplica). Se
+      // estiver presente, exige is list + size <= 10. Isso evita que
+      // docs legados sem o campo sejam bloqueados por essa regra.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'postReceiptNotes',
         'postReceiptImages',
         'updatedAt',
         'updatedById',
         'updatedByName',
-      ]);
+      ]) && (
+        !('postReceiptImages' in request.resource.data)
+        || (
+          request.resource.data.postReceiptImages is list
+          && request.resource.data.postReceiptImages.size() <= 10
+        )
+      );
     }
 
     function isLogisticsCollectionStatusUpdate() {
