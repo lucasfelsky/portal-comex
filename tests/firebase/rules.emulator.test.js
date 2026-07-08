@@ -475,6 +475,69 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    // Regressao (2o bug de prod, 2026-07-08): a allowlist de DESTINO
+    // (isPostCollectionStatus) so aceitava 3 status ('Carga em
+    // Conferencia/Etiquetagem', 'Carga em processo de Entrada', 'Carga
+    // disponivel em estoque'). Quando a logistica tentava avancar para
+    // qualquer um dos status intermediarios do fluxo do CD ('Carga a caminho
+    // do CD', 'Veiculo no CD para descarga', 'Carga sendo descarregada no
+    // CD'), a rule negava com permission-denied. A regra agora aceita
+    // qualquer status de destino desde que NAO seja pre-coleta (i.e. NAO
+    // pode voltar para 'Coleta Agendada' ou anterior) — o mesmo padrao de
+    // invariante estrutural aplicado em hasScheduledCollection().
+    for (const targetStatus of [
+      'Carga a caminho do CD',
+      'Veículo no CD para descarga',
+      'Carga sendo descarregada no CD',
+    ]) {
+      it(`logistica avanca para status intermediario "${targetStatus}" (com coleta agendada)`, async () => {
+        await seed((db) =>
+          setDoc(doc(db, 'processes/cs-target'), {
+            name: 'P',
+            collectionScheduledAt: '2026-07-08T10:00',
+            collectionStatus: 'Coleta Agendada',
+            updatedById: 'x',
+            updatedByName: 'y',
+          })
+        )
+        const db = logistics('log-1')
+        await assertSucceeds(
+          updateDoc(doc(db, 'processes/cs-target'), {
+            collectionStatus: targetStatus,
+            updatedAt: 'now',
+            updatedById: 'log-1',
+            updatedByName: 'Logistica',
+          })
+        )
+      })
+    }
+
+    for (const preCollectionStatus of [
+      'Aguardando agendamento de coleta',
+      'Coleta Agendada',
+    ]) {
+      it(`logistica NAO volta para status pre-coleta "${preCollectionStatus}"`, async () => {
+        await seed((db) =>
+          setDoc(doc(db, 'processes/cs-back'), {
+            name: 'P',
+            collectionScheduledAt: '2026-07-08T10:00',
+            collectionStatus: 'Carga em Conferência/Etiquetagem', // ja em pos-coleta
+            updatedById: 'x',
+            updatedByName: 'y',
+          })
+        )
+        const db = logistics('log-1')
+        await assertFails(
+          updateDoc(doc(db, 'processes/cs-back'), {
+            collectionStatus: preCollectionStatus, // tentando voltar atras
+            updatedAt: 'now',
+            updatedById: 'log-1',
+            updatedByName: 'Logistica',
+          })
+        )
+      })
+    }
   })
 
   describe('messages (subcollection)', () => {
