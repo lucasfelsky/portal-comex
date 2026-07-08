@@ -401,18 +401,143 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    // PR #3 do backlog (auditoria preventiva de drift, 2026-07-08):
+    // valida SHAPE e TAMANHO de postReceiptImages em admin.
+    it('admin NAO cria processo com postReceiptImages acima do limite (11)', async () => {
+      const images = Array.from({ length: 11 }, (_, idx) => ({
+        id: `img-${idx}`,
+        url: `https://example.com/img-${idx}.jpg`,
+        name: `foto-${idx}.jpg`,
+        mimeType: 'image/jpeg',
+      }))
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p7'), {
+          name: 'P',
+          postReceiptNotes: '',
+          postReceiptImages: images,
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com postReceiptImages como string', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p8'), {
+          name: 'P',
+          postReceiptNotes: '',
+          postReceiptImages: 'nao-eh-list',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
   })
 
   describe('processes — atualizacao por logistica (ramos especificos)', () => {
     // post-receipt: logistica so' mexe em postReceiptNotes/postReceiptImages (+ updatedAt/By).
     it('logistica faz update de pos-recebimento valido', async () => {
       await seed((db) =>
-        setDoc(doc(db, 'processes/pr1'), { name: 'P', postReceiptNotes: '', updatedById: 'x', updatedByName: 'y' })
+        setDoc(doc(db, 'processes/pr1'), {
+          name: 'P',
+          postReceiptNotes: '',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
       )
       const db = logistics('log-1')
       await assertSucceeds(
         updateDoc(doc(db, 'processes/pr1'), {
           postReceiptNotes: 'Recebido ok',
+          postReceiptImages: [],
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // PR #3 do backlog (auditoria preventiva de drift, 2026-07-08):
+    // valida SHAPE (is list) e TAMANHO (size() <= 10) de
+    // postReceiptImages. Antes a regra de negocio "max N imagens"
+    // era so do app; agora a rule t rejeita.
+    for (let i = 0; i < 10; i++) {
+      it(`logistica aceita postReceiptImages com ${i + 1} imagem(s) (limite 10)`, async () => {
+        await seed((db) =>
+          setDoc(doc(db, 'processes/pr4'), {
+            name: 'P',
+            postReceiptNotes: '',
+            postReceiptImages: [],
+            updatedById: 'x',
+            updatedByName: 'y',
+          })
+        )
+        const images = Array.from({ length: i + 1 }, (_, idx) => ({
+          id: `img-${idx}`,
+          url: `https://example.com/img-${idx}.jpg`,
+          name: `foto-${idx}.jpg`,
+          mimeType: 'image/jpeg',
+        }))
+        const db = logistics('log-1')
+        await assertSucceeds(
+          updateDoc(doc(db, 'processes/pr4'), {
+            postReceiptNotes: 'Recebido',
+            postReceiptImages: images,
+            updatedAt: 'now',
+            updatedById: 'log-1',
+            updatedByName: 'Logistica',
+          })
+        )
+      })
+    }
+
+    it('logistica NAO aceita postReceiptImages com 11 imagens (acima do limite)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/pr5'), {
+          name: 'P',
+          postReceiptNotes: '',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const images = Array.from({ length: 11 }, (_, idx) => ({
+        id: `img-${idx}`,
+        url: `https://example.com/img-${idx}.jpg`,
+        name: `foto-${idx}.jpg`,
+        mimeType: 'image/jpeg',
+      }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/pr5'), {
+          postReceiptNotes: 'Recebido',
+          postReceiptImages: images,
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO aceita postReceiptImages como string (shape invalido)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/pr6'), {
+          name: 'P',
+          postReceiptNotes: '',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/pr6'), {
+          postReceiptNotes: 'Recebido',
+          postReceiptImages: 'nao-eh-list',
           updatedAt: 'now',
           updatedById: 'log-1',
           updatedByName: 'Logistica',

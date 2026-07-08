@@ -1,4 +1,9 @@
-export const MAX_POST_RECEIPT_IMAGES = 6
+// PR #3 do backlog (auditoria preventiva de drift, 2026-07-08): limite
+// subiu de 6 pra 10. Validado em `firestore.rules` (`isLogisticsPostReceiptUpdate`
+// + `isAdminProcessFields`): `request.resource.data.postReceiptImages is list
+// && size() <= 10`. A regra de negocio "max 10 imagens" agora esta blindada
+// na rule, nao so no app.
+export const MAX_POST_RECEIPT_IMAGES = 10
 export const MAX_POST_RECEIPT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 function normalizeStringValue(value) {
