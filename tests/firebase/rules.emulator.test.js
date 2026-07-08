@@ -478,6 +478,153 @@ describeEmulator('firestore.rules (emulador)', () => {
     }
   })
 
+  describe('isAdmin — defense-in-depth (claim de role admin nao basta)', () => {
+    it('claim role=admin com email nao-corporativo NAO eh admin', async () => {
+      const db = admin('fake-admin', { email: 'admin@gmail.com' })
+      await assertFails(setDoc(doc(db, 'announcements/a1'), { title: 'x' }))
+      await assertFails(getDoc(doc(db, 'audits/x')))
+    })
+
+    it('claim role=admin com status Pendente NAO eh admin', async () => {
+      const db = admin('fake-admin', { status: 'Pendente' })
+      await assertFails(setDoc(doc(db, 'announcements/a1'), { title: 'x' }))
+    })
+  })
+
+  describe('hasActiveStatus — regex de status', () => {
+    it('aceita ATIVO em maiuscula (case-insensitive)', async () => {
+      const db = approvedUser('u-caps', { status: 'ATIVO' })
+      await assertSucceeds(getDoc(doc(db, 'announcements/a1')))
+    })
+
+    it('rejeita status parecido mas diferente (Ativado)', async () => {
+      const db = approvedUser('u-ativado', { status: 'Ativado' })
+      await assertFails(getDoc(doc(db, 'announcements/a1')))
+    })
+  })
+
+  describe('isSelfRegistration — condicao a condicao', () => {
+    const ctxFor = (uid, email) =>
+      testEnv.authenticatedContext(uid, { email }).firestore()
+
+    const base = (uid, email, overrides = {}) => ({
+      uid,
+      role: 'user',
+      email,
+      status: 'Pendente',
+      statusTone: 'warn',
+      ...overrides,
+    })
+
+    it('nega quando o email do doc != email do token', async () => {
+      const db = ctxFor('s1', 's1@sqquimica.com')
+      await assertFails(setDoc(doc(db, 'users/s1'), base('s1', 'outro@sqquimica.com')))
+    })
+
+    it('nega quando status != Pendente', async () => {
+      const db = ctxFor('s2', 's2@sqquimica.com')
+      await assertFails(setDoc(doc(db, 'users/s2'), base('s2', 's2@sqquimica.com', { status: 'Ativo' })))
+    })
+
+    it('nega quando statusTone != warn', async () => {
+      const db = ctxFor('s3', 's3@sqquimica.com')
+      await assertFails(setDoc(doc(db, 'users/s3'), base('s3', 's3@sqquimica.com', { statusTone: 'ok' })))
+    })
+
+    it('nega auto-cadastro com email nao-corporativo', async () => {
+      const db = ctxFor('s4', 's4@gmail.com')
+      await assertFails(setDoc(doc(db, 'users/s4'), base('s4', 's4@gmail.com')))
+    })
+  })
+
+  describe('isAllowedSelfUserUpdate — whitelist de campos', () => {
+    beforeEach(async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/user-1'), {
+          uid: 'user-1',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+          email: 'user@sqquimica.com',
+          name: 'Nome',
+          area: 'COMEX',
+          favoriteProcessIds: [],
+        })
+      )
+    })
+
+    it('permite atualizar area e favoriteProcessIds', async () => {
+      const db = approvedUser('user-1')
+      await assertSucceeds(updateDoc(doc(db, 'users/user-1'), { area: 'Logistica' }))
+      await assertSucceeds(updateDoc(doc(db, 'users/user-1'), { favoriteProcessIds: ['p1', 'p2'] }))
+    })
+
+    it('nega mudar o proprio email', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(updateDoc(doc(db, 'users/user-1'), { email: 'novo@sqquimica.com' }))
+    })
+
+    it('nega escrever campo fora da whitelist', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(updateDoc(doc(db, 'users/user-1'), { hacked: true }))
+    })
+
+    it('nega atualizar user doc de outra pessoa', async () => {
+      await seed((db) => setDoc(doc(db, 'users/outro'), { uid: 'outro', role: 'user', name: 'X' }))
+      const db = approvedUser('user-1')
+      await assertFails(updateDoc(doc(db, 'users/outro'), { name: 'Invadido' }))
+    })
+  })
+
+  describe('notifications — nao-dono', () => {
+    it('nao atualiza notificacao de outro usuario', async () => {
+      await seed((db) => setDoc(doc(db, 'notifications/x'), { recipientUserId: 'outro', isRead: false }))
+      const db = approvedUser('user-1')
+      await assertFails(updateDoc(doc(db, 'notifications/x'), { isRead: true }))
+    })
+  })
+
+  describe('messages — validacao de campos', () => {
+    it('nega mensagem com content vazio', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p1/messages/mc'), {
+          processId: 'p1',
+          content: '',
+          authorId: 'user-1',
+          authorEmail: 'user@sqquimica.com',
+          authorName: 'Usuario Teste',
+        })
+      )
+    })
+
+    it('nega mensagem com processId divergente do path', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p1/messages/mp'), {
+          processId: 'OUTRO',
+          content: 'oi',
+          authorId: 'user-1',
+          authorEmail: 'user@sqquimica.com',
+          authorName: 'Usuario Teste',
+        })
+      )
+    })
+
+    it('nega mensagem com authorEmail divergente do token', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p1/messages/me'), {
+          processId: 'p1',
+          content: 'oi',
+          authorId: 'user-1',
+          authorEmail: 'falso@sqquimica.com',
+          authorName: 'Usuario Teste',
+        })
+      )
+    })
+  })
+
   describe('catch-all', () => {
     it('colecao desconhecida eh negada ate pra admin', async () => {
       await assertFails(getDoc(doc(admin(), 'colecaoAleatoria/x')))
