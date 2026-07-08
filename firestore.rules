@@ -84,24 +84,24 @@ service cloud.firestore {
       return isApprovedUser() && myRole() == 'logistica';
     }
 
-    function isPostCollectionStatus(status) {
+    function isPreCollectionStatus(status) {
+      // Status pre-coleta: o processo ainda nao foi coletado. A logistica
+      // NAO pode "voltar atras" para esses valores via collectionStatus.
+      // Mantemos a lista finita (vs uma allowlist de status pos-coleta,
+      // que divergiu do vocabulario real do app e causou o 1o bug de prod
+      // em 2026-07-06 e o 2o em 2026-07-08 — ver Limitações conhecidas).
       return status in [
-        'Carga em Conferência/Etiquetagem',
-        'Carga em processo de Entrada',
-        'Carga disponível em estoque',
+        'Aguardando agendamento de coleta',
+        'Coleta Agendada',
       ];
     }
 
-    // Correcao 2026-07-06: antes esta funcao tambem exigia que o
-    // `collectionStatus` ATUAL estivesse numa allowlist hardcoded
-    // (isScheduledCollectionStatus). Essa lista divergiu do vocabulario real
-    // do app (ex.: 'Carga sendo descarregada no CD', 'Carga a caminho do CD'
-    // nao estavam nela) e travava a logistica com permission-denied ao salvar
-    // o status pos-coleta. O que garante que o processo esta no fluxo de coleta
-    // e' ter uma coleta agendada (collectionScheduledAt); o alvo ja e' limitado
-    // a status pos-coleta por isPostCollectionStatus() em quem chama. Sem a
-    // allowlist de status atual (drift-prone) a regra deixa de quebrar quando o
-    // app adiciona/renomeia status do fluxo do CD.
+    // Correcao 2026-07-06: o `collectionStatus` ATUAL nao e' mais checado contra
+    // uma allowlist hardcoded (isScheduledCollectionStatus). A unica exigencia
+    // para um update da logistica e' que exista coleta agendada
+    // (collectionScheduledAt) — o que garante que o processo esta no fluxo de
+    // coleta. Antes, a allowlist do status atual divergia do vocabulario real
+    // do app e travava a logistica com permission-denied. Ver Retomada 2026-07-06.
     function hasScheduledCollection() {
       return resource.data.collectionScheduledAt is string
         && resource.data.collectionScheduledAt.size() > 0;
@@ -119,7 +119,7 @@ service cloud.firestore {
 
     function isLogisticsCollectionStatusUpdate() {
       return hasScheduledCollection()
-        && isPostCollectionStatus(request.resource.data.collectionStatus)
+        && !isPreCollectionStatus(request.resource.data.collectionStatus)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'collectionStatus',
           'updatedAt',
