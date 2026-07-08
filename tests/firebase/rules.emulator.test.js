@@ -538,6 +538,110 @@ describeEmulator('firestore.rules (emulador)', () => {
         )
       })
     }
+
+    // Regressao (3o bug de prod, 2026-07-08): o app migrou de
+    // `collectionScheduledAt` (string unica) para `collectionWindows` (array
+    // de janelas multi-container, com `scheduledAt` por janela). A rule
+    // `hasScheduledCollection()` so checava o campo legado, entao qualquer
+    // processo no schema multi-container caia no permission-denied mesmo com
+    // coleta marcada. O app faz fallback novo→legado em
+    // `src/utils/collectionWindows.js#getCollectionWindows`, mas a rule
+    // precisa aceitar os dois schemas.
+    it('logistica avanca com collectionWindows (schema novo, multi-container)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cw-ok'), {
+          name: 'P',
+          // so' collectionWindows (sem collectionScheduledAt legado).
+          collectionWindows: [
+            {
+              id: 'WIN-1',
+              containerNumber: 1,
+              scheduledAt: '2026-07-08T10:00:00.000Z',
+              notes: '',
+            },
+          ],
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/cw-ok'), {
+          collectionStatus: 'Carga disponível em estoque',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica avanca para status intermediario com collectionWindows', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cw-target'), {
+          name: 'P',
+          collectionWindows: [
+            { id: 'WIN-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' },
+          ],
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/cw-target'), {
+          collectionStatus: 'Veículo no CD para descarga',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO avanca com collectionWindows vazio', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cw-empty'), {
+          name: 'P',
+          collectionWindows: [],
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/cw-empty'), {
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO avanca com collectionWindows sem scheduledAt na janela[0]', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/cw-no-sched'), {
+          name: 'P',
+          collectionWindows: [
+            { id: 'WIN-1', containerNumber: 1, scheduledAt: '', notes: '' },
+          ],
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/cw-no-sched'), {
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
   })
 
   describe('messages (subcollection)', () => {

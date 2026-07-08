@@ -102,9 +102,24 @@ service cloud.firestore {
     // (collectionScheduledAt) — o que garante que o processo esta no fluxo de
     // coleta. Antes, a allowlist do status atual divergia do vocabulario real
     // do app e travava a logistica com permission-denied. Ver Retomada 2026-07-06.
+    //
+    // Correcao 2026-07-08 (3o bug de prod, mesmo incidente do 2o): o app
+    // migrou de `collectionScheduledAt` (string unica) para `collectionWindows`
+    // (array de janelas multi-container, com scheduledAt por janela). Sem
+    // checar o modelo novo, qualquer processo que use o schema multi-container
+    // cai no permission-denied mesmo com coleta marcada. Ver
+    // src/utils/collectionWindows.js#getCollectionWindows (fallback novo->legado
+    // no app, mas a rule precisa aceitar os dois). Ver Retomada 2026-07-08.
     function hasScheduledCollection() {
-      return resource.data.collectionScheduledAt is string
-        && resource.data.collectionScheduledAt.size() > 0;
+      // Schema legado: string `collectionScheduledAt` nao-vazia.
+      return (resource.data.collectionScheduledAt is string
+        && resource.data.collectionScheduledAt.size() > 0)
+        // Schema novo (multi-container): array `collectionWindows` com pelo
+        // menos 1 janela que tenha `scheduledAt` nao-vazio.
+        || (resource.data.collectionWindows is list
+        && resource.data.collectionWindows.size() > 0
+        && resource.data.collectionWindows[0].scheduledAt is string
+        && resource.data.collectionWindows[0].scheduledAt.size() > 0);
     }
 
     function isLogisticsPostReceiptUpdate() {
