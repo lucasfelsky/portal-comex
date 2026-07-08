@@ -122,6 +122,72 @@ service cloud.firestore {
         && resource.data.collectionWindows[0].scheduledAt.size() > 0);
     }
 
+    // PR #2 do backlog (auditoria preventiva de drift, 2026-07-08): harden
+    // admin create/update em 3 colecoes com `hasOnly([campos])`. Antes,
+    // admin podia escrever QUALQUER campo via update direto (mesmo padrao
+    // permissivo de `create`). Agora, cada colecao tem allowlist propria
+    // espelhando os campos reais gravados pelo `toFirestorePayload()` /
+    // `setDoc(...)` do app. Origin: L21 (allowlist de status divergente)
+    // + L22 (schema legado vs novo) + auditoria preventiva 2026-07-08
+    // (L16: vault desatualizada). Ver Retomada 2026-07-08 § "Auditoria
+    // preventiva de drift" § "PR #2 do backlog".
+
+    // processes: 32 campos gravados pelo `toFirestorePayload()`
+    // (src/services/processesRepository.js:540-580). setDoc usado com
+    // `merge: true` para create E update, entao ambos compartilham a
+    // mesma allowlist. `createdById/Name/createdAt` e
+    // `customsFlow/mapaFlow/operationalFields` da Colecoes.md NAO sao
+    // gravados pelo app (sao campos-fantasma da vault).
+    function isAdminProcessFields() {
+      // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
+      // No `update`, `resource.data` existe. Tratamos os 2 casos:
+      // - create: checa `request.resource.data.keys()` (todas as chaves do payload).
+      // - update: checa `diff().affectedKeys()` (soh o que mudou).
+      // As 2 expressoes produzem o mesmo `set` de chaves (porque o app usa
+      // setDoc merge:true com o payload completo). Union nao' necessario
+      // porque o create NAO pode ter chaves que o update nao tem (mesmo
+      // payload no app).
+      return (resource == null
+        ? request.resource.data.keys()
+        : request.resource.data.diff(resource.data).affectedKeys()
+      ).hasOnly([
+        'name', 'category', 'processNumber', 'destination', 'etd', 'eta',
+        'etaOriginal', 'processStatus', 'containerQuantity', 'palletQuantity',
+        'processNotes', 'warehouseDeliveryDateOverride', 'postReceiptNotes',
+        'postReceiptImages', 'cargoReceivedAt', 'items', 'berthed', 'arrived',
+        'cargoPresenceInformed', 'duimpStatus', 'parameterizationChannel',
+        'collectionStatus', 'collectionScheduledAt', 'collectionWindows',
+        'mapaStatus', 'mapaInspectionScheduledAt', 'dtaStatus',
+        'dtaLoadingScheduledAt', 'dtaArrivalAtItajai', 'updatedById',
+        'updatedByName', 'updatedAt',
+      ]);
+    }
+
+    // announcements: campos gravados pelo
+    // `announcementsRepository.js:113-126` (payload do `updateDoc`/`addDoc`).
+    // `body` da Colecoes.md e' `content` no codigo, e `audience` da vault
+    // nao e' gravado (campo-fantasma).
+    function isAdminAnnouncementUpdate() {
+      return (resource == null
+        ? request.resource.data.keys()
+        : request.resource.data.diff(resource.data).affectedKeys()
+      ).hasOnly([
+        'title', 'content', 'channel', 'updatedAt', 'createdAt',
+      ]);
+    }
+
+    // barra/current: campos gravados pelo
+    // `barStatusRepository.js:97-104`. `description?` da Colecoes.md e'
+    // `notes` no codigo.
+    function isAdminBarUpdate() {
+      return (resource == null
+        ? request.resource.data.keys()
+        : request.resource.data.diff(resource.data).affectedKeys()
+      ).hasOnly([
+        'status', 'notes', 'updatedAt',
+      ]);
+    }
+
     function isLogisticsPostReceiptUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'postReceiptNotes',
@@ -170,7 +236,8 @@ service cloud.firestore {
 
     match /announcements/{docId} {
       allow read: if isApprovedUser();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() && isAdminAnnouncementUpdate();
+      allow delete: if isAdmin();
     }
 
     match /forecastSettings/{docId} {
@@ -190,17 +257,20 @@ service cloud.firestore {
 
     match /barra/{docId} {
       allow read: if isApprovedUser();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() && isAdminBarUpdate();
+      allow delete: if isAdmin();
     }
 
     match /processes/{processId} {
       allow read: if isApprovedUser();
       allow create: if isAdmin()
+        && isAdminProcessFields()
         && request.resource.data.updatedById == request.auth.uid
         && request.resource.data.updatedByName == myName();
       allow delete: if isAdmin();
       allow update: if (
           isAdmin()
+          && isAdminProcessFields()
           && request.resource.data.updatedById == request.auth.uid
           && request.resource.data.updatedByName == myName()
         ) || (

@@ -334,6 +334,73 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(deleteDoc(doc(logistics('log-1'), 'processes/p1')))
       await assertFails(deleteDoc(doc(approvedUser('user-1'), 'processes/p1')))
     })
+
+    // PR #2 do backlog (auditoria preventiva de drift): harden admin
+    // create/update em processes com hasOnly dos 32 campos reais.
+    it('admin NAO cria processo com campo fora da allowlist', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p4'), {
+          name: 'P',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          forbiddenField: 'qualquer',
+        })
+      )
+    })
+
+    it('admin NAO atualiza processo com campo fora da allowlist', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p5'), { name: 'Orig' }))
+      const db = admin('admin-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p5'), {
+          name: 'Editado',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          forbiddenField: 'qualquer',
+        })
+      )
+    })
+
+    it('admin cria processo com todos os 32 campos validos', async () => {
+      const db = admin('admin-1')
+      await assertSucceeds(
+        setDoc(doc(db, 'processes/p6'), {
+          name: 'P completo',
+          category: 'FCL',
+          processNumber: 'PO-9999',
+          destination: 'Itajai',
+          etd: '2026-08-01',
+          eta: '2026-08-20',
+          etaOriginal: '2026-08-20',
+          processStatus: 'Embarcado',
+          containerQuantity: 1,
+          palletQuantity: 10,
+          processNotes: 'notas',
+          warehouseDeliveryDateOverride: '',
+          postReceiptNotes: '',
+          postReceiptImages: [],
+          cargoReceivedAt: '',
+          items: [],
+          berthed: false,
+          arrived: false,
+          cargoPresenceInformed: false,
+          duimpStatus: '',
+          parameterizationChannel: '',
+          collectionStatus: '',
+          collectionScheduledAt: '',
+          collectionWindows: [],
+          mapaStatus: '',
+          mapaInspectionScheduledAt: '',
+          dtaStatus: '',
+          dtaLoadingScheduledAt: '',
+          dtaArrivalAtItajai: '',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          updatedAt: new Date(),
+        })
+      )
+    })
   })
 
   describe('processes — atualizacao por logistica (ramos especificos)', () => {
@@ -689,13 +756,107 @@ describeEmulator('firestore.rules (emulador)', () => {
   })
 
   describe('colecoes admin-only (forecastSettings / news / barra)', () => {
-    for (const col of ['forecastSettings', 'news', 'barra']) {
+    // PR #2 do backlog (auditoria preventiva de drift): harden admin
+    // com hasOnly. Cada colecao agora tem allowlist propria.
+    // news e forecastSettings NAO foram hardenizadas neste PR (escopo
+    // do PR era processes/announcements/barra). Mantemos o spec generico
+    // para essas 2.
+    for (const col of ['forecastSettings', 'news']) {
       it(`${col}: usuario aprovado le, mas nao escreve; admin escreve`, async () => {
         await assertSucceeds(getDoc(doc(approvedUser(), `${col}/x`)))
         await assertFails(setDoc(doc(approvedUser(), `${col}/x`), { a: 1 }))
         await assertSucceeds(setDoc(doc(admin(), `${col}/x`), { a: 1 }))
       })
     }
+
+    // barra: hasOnly([status, notes, updatedAt]).
+    it('barra: admin escreve com campos validos', async () => {
+      await assertSucceeds(
+        setDoc(doc(admin(), 'barra/current'), {
+          status: 'PRATICAVEL',
+          notes: '',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('barra: admin NAO escreve com campo fora da allowlist', async () => {
+      await assertFails(
+        setDoc(doc(admin(), 'barra/x'), {
+          status: 'PRATICAVEL',
+          notes: '',
+          updatedAt: new Date(),
+          forbiddenField: 'qualquer',
+        })
+      )
+    })
+
+    it('barra: usuario aprovado NAO escreve', async () => {
+      await assertFails(
+        setDoc(doc(approvedUser(), 'barra/x'), {
+          status: 'PRATICAVEL',
+          notes: '',
+          updatedAt: new Date(),
+        })
+      )
+    })
+  })
+
+  describe('announcements — admin hasOnly', () => {
+    // PR #2 do backlog: hasOnly([title, content, channel, updatedAt])
+    // para update; create adiciona createdAt.
+    it('admin cria announcement com campos validos', async () => {
+      const db = admin('admin-1')
+      await assertSucceeds(
+        setDoc(doc(db, 'announcements/a1'), {
+          title: 'T',
+          content: 'C',
+          channel: 'geral',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('admin atualiza announcement com campos validos', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'announcements/a2'), { title: 'Orig', content: 'C' })
+      )
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'announcements/a2'), {
+          title: 'Edit',
+          content: 'C2',
+          channel: 'geral',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('admin NAO escreve announcement com campo fora da allowlist', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'announcements/a3'), {
+          title: 'T',
+          content: 'C',
+          channel: 'geral',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          forbiddenField: 'qualquer',
+        })
+      )
+    })
+
+    it('usuario aprovado NAO escreve announcement', async () => {
+      await assertFails(
+        setDoc(doc(approvedUser(), 'announcements/a4'), {
+          title: 'T',
+          content: 'C',
+          channel: 'geral',
+          updatedAt: new Date(),
+        })
+      )
+    })
   })
 
   describe('isAdmin — defense-in-depth (claim de role admin nao basta)', () => {
