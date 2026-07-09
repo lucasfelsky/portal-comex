@@ -390,11 +390,16 @@ describe('DashboardPage', () => {
       renderPage()
       // p-with-window (PO 10001) tem coleta agendada em 10/07
       // (titulo + subtitulo retornam o mesmo valor mockado, entao
-      // usamos getAllByText depois de findByText pra garantir
-      // renderizacao)
+      // usamos findAllByText pra garantir renderizacao).
+      // PR #17 (2026-07-09): findAllByText em vez de getAllByText.
+      // No CI ubuntu-latest, o cold start + jsdom pode fazer
+      // a renderizacao completa do ScheduledItem demorar mais
+      // que o `findByText` do heading mas antes do `getAllByText`
+      // do PO 10001 (que e' sincrono). findAllByText retenta
+      // internamente ate o asyncUtilTimeout (3000ms).
       const titulo = await screen.findByText(/Coleta agendada/i)
       expect(titulo).toBeInTheDocument()
-      expect(screen.getAllByText('PO 10001').length).toBeGreaterThan(0)
+      expect((await screen.findAllByText('PO 10001')).length).toBeGreaterThan(0)
     })
 
     it('mostra secao "Previsão de entrega no armazem" com processo sem janela mas com previsao na semana', async () => {
@@ -405,7 +410,7 @@ describe('DashboardPage', () => {
       const titulo = await screen.findByText(/Previsão de entrega no armazem/i)
       expect(titulo).toBeInTheDocument()
       // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
-      expect(screen.getAllByText('PO 20002').length).toBeGreaterThan(0)
+      expect((await screen.findAllByText('PO 20002')).length).toBeGreaterThan(0)
     })
 
     it('NAO mostra processo com collectionStatus = "Carga disponivel em estoque"', async () => {
