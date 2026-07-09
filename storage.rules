@@ -5,52 +5,147 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // PR #4 do backlog (2026-07-09): espelha o que firestore.rules ja'
+    // faz — le role/status do custom claim injetado no token pelo
+    // Admin SDK (Sprint 5.1, resolvida em 2026-06-30). Antes lia do
+    // doc users/{uid} via firestore.get, o que (a) adiciona 1 read
+    // por request de storage, (b) tem janela de inconsistencia entre
+    // claim e doc, (c) nao bate com o que firestore.rules faz.
+    //
+    // NOTA: em CEL, acessar `request.auth.token.X` quando X nao
+    // existe NAO lanca erro se a propriedade for acessada
+    // diretamente — o acesso retorna `undefined`, e comparar
+    // `undefined is string` da `false`. Mas a combinacao
+    // `(expr is string) ? expr : null` ainda avalia `expr` duas
+    // vezes. Pra evitar avaliacao dupla e comportamento
+    // imprevisivel, usamos `exists()` e `!exists()`.
+    function myRole() {
+      return isAuthenticated()
+        && 'role' in request.auth.token
+        && request.auth.token.role is string
+        ? request.auth.token.role
+        : null;
+    }
+
+    function myStatus() {
+      return isAuthenticated()
+        && 'status' in request.auth.token
+        && request.auth.token.status is string
+        ? request.auth.token.status
+        : null;
+    }
+
     function hasCorporateEmail() {
       return isAuthenticated()
         && request.auth.token.email is string
         && request.auth.token.email.matches('.*@sqquimica\\.com$');
     }
 
-    function hasActiveStatus(status) {
-      return status is string
-        && status.matches('^[\\s]*[Aa][Tt][Ii][Vv][Oo][\\s]*$');
-    }
-
-    function myProfileExists() {
-      return isAuthenticated()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
-    }
-
-    function myProfile() {
-      return myProfileExists()
-        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data
-        : null;
-    }
-
-    function myRole() {
-      return myProfileExists() ? myProfile().role : null;
-    }
-
-    function myStatus() {
-      return myProfileExists() ? myProfile().status : null;
+    function hasActiveStatus() {
+      // DRY com a L18: regex case-insensitive aceita "Ativo" /
+      // "ativo" / com espacos nas pontas. Antes era so'
+      // `myStatus() == 'Ativo'`, que falhava se o status fosse
+      // gravado com casing diferente.
+      return myStatus() is string
+        && myStatus().matches('^[\\s]*[Aa][Tt][Ii][Vv][Oo][\\s]*$');
     }
 
     function isApprovedUser() {
-      return hasCorporateEmail() && hasActiveStatus(myStatus());
+      return isAuthenticated() && hasCorporateEmail() && hasActiveStatus();
     }
 
     function canManagePostReceiptImages() {
       return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
     }
 
+    // PR #4 do backlog (2026-07-09): limites hardcoded que espelham
+    // `src/utils/storageUploadValidation.js` (`MAX_IMAGE_BYTES = 5 MB`,
+    // `MAX_FILE_BYTES = 5 MB`). Manter em sincronia quando o helper do
+    // app mudar. A CONSTANTE_FIREBASE no console pode ser maior (e.g.
+    // 10 MB); a rule e' o que vale pra request.
+    function isWithinImageSizeLimit() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function isWithinFileSizeLimit() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Whitelist de mime types (espelha `IMAGE_MIME_WHITELIST` /
+    // `FILE_MIME_WHITELIST` do storageUploadValidation.js). Para
+    // imagens, JPEG/PNG/WebP/GIF. Para arquivos, tudos os de
+    // imagem + PDF + XLS/XLSX/CSV + DOC/DOCX.
+    function isAllowedImageContentType() {
+      return request.resource.contentType is string
+        && (request.resource.contentType == 'image/jpeg'
+          || request.resource.contentType == 'image/png'
+          || request.resource.contentType == 'image/webp'
+          || request.resource.contentType == 'image/gif');
+    }
+
+    function isAllowedFileContentType() {
+      return isAllowedImageContentType()
+        || (request.resource.contentType is string
+          && (request.resource.contentType == 'application/pdf'
+            || request.resource.contentType == 'text/csv'
+            || request.resource.contentType == 'application/vnd.ms-excel'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            || request.resource.contentType == 'application/msword'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
+    }
+
+    // PR #4 do backlog (2026-07-09): anti path-traversal. O app
+    // sanitiza o `fileName` (replace /[^\w.-]+/g, '-') mas o
+    // `{fileName}` na rule aceita qualquer string incluindo '/'
+    // (caracteres nao sanitizados pelo sistema de path do Cloud
+    // Storage, mas o split do path pode ser abusado). Aqui
+    // validamos que o segmento de filename NAO contem '/' e
+    // corresponde ao formato esperado `{ts}-{actorId}-{name}`.
+    // Toleramos flex: o sufixo eh flexivel, mas o filename em si
+    // nao pode ter '/'.
+    function isSafeFileName(name) {
+      return name is string
+        && name.size() > 0
+        && name.size() < 200
+        && !name.matches('.*/.*')
+        && name.matches('^[\\w.-]+$');
+    }
+
+    // PR #4 do backlog (2026-07-09): metadata vazia por default.
+    // Se a app quiser passar custom metadata no futuro, deve
+    // ser adicionado explicitamente aqui.
+    function hasEmptyMetadata() {
+      return request.resource.metadata == null
+        || request.resource.metadata.size() == 0
+        || (request.resource.metadata.keys().hasOnly([]));
+    }
+
     match /processes/{processId}/post-receipt/{fileName} {
       allow read: if isApprovedUser();
-      allow write: if canManagePostReceiptImages();
+      // PR #4: write agora exige mime whitelist + size limit +
+      // metadata limpa + filename safe. Sem isso, admin e logistica
+      // podiam upar qualquer binario ate 5 GB.
+      allow write: if canManagePostReceiptImages()
+        && isAllowedImageContentType()
+        && isWithinImageSizeLimit()
+        && isSafeFileName(fileName)
+        && hasEmptyMetadata();
     }
 
     match /news/{newsId}/{folderName}/{fileName} {
       allow read: if isApprovedUser();
-      allow write: if isApprovedUser() && myRole() == 'admin';
+      // PR #4: news/cover so' permite imagem; news/attachments
+      // permite imagem + PDF + XLS + DOC. Folder e' checado
+      // explicitamente pra evitar traversal e typos.
+      allow write: if isApprovedUser()
+        && myRole() == 'admin'
+        && isSafeFileName(fileName)
+        && isSafeFileName(folderName)
+        && isWithinFileSizeLimit()
+        && hasEmptyMetadata()
+        && (folderName == 'cover'
+          ? isAllowedImageContentType()
+          : (folderName == 'attachments' && isAllowedFileContentType()));
     }
   }
 }
