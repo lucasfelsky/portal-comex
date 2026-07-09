@@ -104,8 +104,19 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     }
   }
 
-  const todayIso = now.toISOString().slice(0, 10)
-  if (isOverdue(process, todayIso)) {
+  // PR #15 (2026-07-09): usa data local (nao' UTC) pra evitar bug
+  // de timezone. `now.toISOString()` sempre usa UTC, e em BRT
+  // (UTC-3) pode estar num dia diferente do local. Processos com
+  // `eta` cadastrado em horario local podem ser mal classificados.
+  // O caller passa `todayIso` mas o default agora usa componentes
+  // locais (mais seguro).
+  const todayIsoLocal = (() => {
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })()
+  if (isOverdue(process, todayIsoLocal)) {
     return {
       phase: DERIVED_STATUS_PHASES.ATRASADO,
       label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.ATRASADO],
