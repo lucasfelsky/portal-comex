@@ -25,13 +25,13 @@ afterAll(() => {
 })
 
 describe('getUnscheduledItemLabel', () => {
-  it('em rota direto: retorna "Carga em transito para o CD"', () => {
+  it('em rota direto: retorna "Carga em trânsito para o CD"', () => {
     expect(
       getUnscheduledItemLabel({ collectionStatus: 'Carga a caminho do CD' })
-    ).toBe('Carga em transito para o CD')
+    ).toBe('Carga em trânsito para o CD')
     expect(
       getUnscheduledItemLabel({ collectionStatus: 'Veiculo no CD para descarga' })
-    ).toBe('Carga em transito para o CD')
+    ).toBe('Carga em trânsito para o CD')
   })
 
   it('em processamento no CD: retorna "Carga em processamento no CD"', () => {
@@ -49,19 +49,19 @@ describe('getUnscheduledItemLabel', () => {
     ).toBe('Carga em processamento no CD')
   })
 
-  it('pre-coleta sem janela: retorna "Coleta ainda nao agendada"', () => {
+  it('pre-coleta sem janela: retorna "Coleta ainda não agendada"', () => {
     expect(
       getUnscheduledItemLabel({ collectionStatus: 'Aguardando agendamento de coleta' })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
-  it('coleta agendada com janela no futuro: retorna "Coleta ainda nao agendada"', () => {
+  it('coleta agendada com janela no futuro: retorna "Coleta ainda não agendada"', () => {
     expect(
       getUnscheduledItemLabel({
         collectionStatus: 'Coleta Agendada',
         collectionWindows: [{ scheduledAt: afterFixedNow }],
       })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
   // PR #11: caso reportado pelo Lucas em 2026-07-09.
@@ -78,13 +78,13 @@ describe('getUnscheduledItemLabel', () => {
         processStatus: 'Coleta Agendada',
         collectionWindows: [{ scheduledAt: beforeFixedNow }],
       })
-    ).toBe('Carga em transito para o CD')
+    ).toBe('Carga em trânsito para o CD')
   })
 
   it('PR #11: process sem collectionWindows -> usa apenas collectionStatus', () => {
     expect(
       getUnscheduledItemLabel({ collectionStatus: 'Coleta Agendada' })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
   it('PR #11: collectionWindows com scheduledAt invalido -> ignora', () => {
@@ -96,7 +96,7 @@ describe('getUnscheduledItemLabel', () => {
           { scheduledAt: undefined },
         ],
       })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
   it('PR #11: collectionWindows vazio -> usa apenas collectionStatus', () => {
@@ -105,7 +105,7 @@ describe('getUnscheduledItemLabel', () => {
         collectionStatus: 'Coleta Agendada',
         collectionWindows: [],
       })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
   it('PR #11: collectionWindows nao-array -> ignora', () => {
@@ -114,7 +114,7 @@ describe('getUnscheduledItemLabel', () => {
         collectionStatus: 'Coleta Agendada',
         collectionWindows: 'foo',
       })
-    ).toBe('Coleta ainda nao agendada')
+    ).toBe('Coleta ainda não agendada')
   })
 
   it('PR #11: collectionWindows com multipla janela, uma passada -> "Carga em transito"', () => {
@@ -126,7 +126,7 @@ describe('getUnscheduledItemLabel', () => {
           { scheduledAt: afterFixedNow },  // futura
         ],
       })
-    ).toBe('Carga em transito para o CD')
+    ).toBe('Carga em trânsito para o CD')
   })
 
   it('collectionStatus vazio: retorna "" (fallback defensivo)', () => {

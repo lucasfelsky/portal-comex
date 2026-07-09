@@ -211,7 +211,7 @@ export function getUnscheduledItemLabel(process) {
       return Number.isFinite(time) && time < Date.now()
     })
   if (isEnRoute || hasOverdueWindow) {
-    return 'Carga em transito para o CD'
+    return 'Carga em trânsito para o CD'
   }
 
   // Sinais de "em processamento no CD" — em conferencia,
@@ -230,7 +230,7 @@ export function getUnscheduledItemLabel(process) {
     normalized === 'aguardando agendamento de coleta' ||
     normalized === 'coleta agendada'
   ) {
-    return 'Coleta ainda nao agendada'
+    return 'Coleta ainda não agendada'
   }
 
   return ''
