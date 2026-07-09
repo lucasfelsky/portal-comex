@@ -129,7 +129,7 @@ export default function LoginPage() {
         ) : null}
 
         <label className="field">
-          <span>Email corporativo</span>
+          <span>E-mail corporativo</span>
           <input
             className="text-input"
             type="email"
