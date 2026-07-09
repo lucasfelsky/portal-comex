@@ -121,6 +121,26 @@ export function isProcessStatusFinalized(status) {
   return canonicalizeProcessStatus(status) === 'Carga recebida'
 }
 
+// PR #5 (2026-07-09): "finalizado de verdade" pro dashboard de chegadas
+// da semana. Diferente de `isProcessStatusFinalized` (que checa
+// `processStatus`), este checa `collectionStatus === 'Carga disponível
+// em estoque'` — o ponto sem retorno. Usado por `WeeklyArrivalsCard`
+// pra manter o processo visivel mesmo apos o `processStatus` virar
+// 'Carga recebida' (desde que ainda nao esteja em estoque). Nao'
+// confundir com `isCdUnloadingOrReceivedStatus` (que t inclui "em
+// estoque" mas e' usado em outros lugares onde a semantica e'
+// diferente).
+export function isProcessInStock(process) {
+  return normalizeComparableText(process?.collectionStatus) === 'carga disponivel em estoque'
+}
+
+// `isProcessTrulyFinalized(process)` e' o sinal consolidado: o
+// processo ja' entrou em estoque e pode sair do dashboard. Ate' la,
+// mantemos visivel.
+export function isProcessTrulyFinalized(process) {
+  return isProcessInStock(process)
+}
+
 export function isCdUnloadingOrReceivedStatus(status) {
   const normalizedStatus = normalizeComparableText(status)
 
