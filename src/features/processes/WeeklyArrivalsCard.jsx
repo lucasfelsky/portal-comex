@@ -168,7 +168,7 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
   if (typeof window !== 'undefined') {
     const derived = getProcessDerivedStatus(process)
     // eslint-disable-next-line no-console
-    console.log('[DEBUG PR #10] UnscheduledItem', {
+    console.log('[DEBUG PR #10]', JSON.stringify({
       processId: process.id,
       name: process.name,
       collectionStatus: process.collectionStatus,
@@ -179,7 +179,7 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
       labelReturned: statusLabel,
       derivedLabel: derived.label,
       derivedPhase: derived.phase,
-    })
+    }))
   }
   return (
     <div
