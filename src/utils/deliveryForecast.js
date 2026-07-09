@@ -185,10 +185,26 @@ function findDestinationRule(settings, destination) {
   ) ?? null
 }
 
+// PR #12 (2026-07-09): alem de `collectionScheduledAt` (legado),
+// olha tambem `collectionWindows[].scheduledAt` (schema novo,
+// usado em processos migrados). Se o campo legado esta' vazio
+// mas `collectionWindows` tem a janela, usa a janela. Mantem
+// retrocompat com processos que ainda tem o campo legado.
+function readCollectionScheduledAt(process) {
+  if (process?.collectionScheduledAt) {
+    return process.collectionScheduledAt
+  }
+  if (Array.isArray(process?.collectionWindows) && process.collectionWindows.length > 0) {
+    const first = process.collectionWindows[0]
+    if (first?.scheduledAt) return first.scheduledAt
+  }
+  return null
+}
+
 export function getScheduledCollectionDeliveryDate(process, settings) {
   if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
 
-  const scheduledAt = parseDateTime(process.collectionScheduledAt)
+  const scheduledAt = parseDateTime(readCollectionScheduledAt(process))
   if (!scheduledAt) return ''
 
   const resolvedSettings = resolveSettings(settings)
@@ -209,7 +225,7 @@ export function getScheduledCollectionDeliveryDate(process, settings) {
 export function getScheduledCollectionDeliveryShift(process, settings) {
   if (!process || !isCollectionScheduled(process.collectionStatus)) return ''
 
-  const scheduledAt = parseDateTime(process.collectionScheduledAt)
+  const scheduledAt = parseDateTime(readCollectionScheduledAt(process))
   if (!scheduledAt) return ''
 
   const resolvedSettings = resolveSettings(settings)

@@ -134,6 +134,9 @@ vi.mock('../../src/utils/deliveryForecast', () => ({
     if (process?.id === 'p-in-stock') return ''
     if (process?.id === 'p-far-future') return '2026-08-15'
     if (process?.id === 'p-in-transit') return '2026-07-10' // sexta desta semana
+    // PR #12 (2026-07-09): mock cobre o spec novo da badge
+    // "NAO renderiza badge duplicada".
+    if (process?.id === 'p-no-badge') return '2026-07-10'
     return ''
   },
   // Necessario porque WeeklyArrivalsCard importa o shift pra cada
@@ -358,6 +361,31 @@ describe('DashboardPage', () => {
   // Actions roda em ubuntu-latest e pode levar > 500ms no cold
   // start de jsdom + resolucao do mock de listProcesses.
   describe('Chegadas da semana (WeeklyArrivalsCard)', () => {
+    // PR #12 (2026-07-09): badge "Carga a caminho do CD" foi
+    // removida do UnscheduledItem (info duplicada com notes).
+    // O notes (statusLabel) ja' diz "Carga em transito para o CD"
+    // quando aplicavel, entao a badge era redundante.
+    it('NAO renderiza badge "Carga a caminho do CD" (info duplicada com notes)', async () => {
+      mockListProcesses.mockResolvedValue([
+        {
+          id: 'p-no-badge',
+          name: 'CON CN TEST-12',
+          processNumber: 'TEST-12',
+          category: 'FCL',
+          destination: 'Itapoa',
+          collectionStatus: 'Carga a caminho do CD',
+          eta: '2026-07-10',
+          collectionWindows: [],
+        },
+      ])
+
+      renderPage()
+      // O notes aparece
+      expect(await screen.findByText('Carga em transito para o CD')).toBeInTheDocument()
+      // A badge NAO aparece (era duplicada)
+      expect(screen.queryByText('CARGA A CAMINHO DO CD')).not.toBeInTheDocument()
+    })
+
     it('mostra secao "Coleta agendada" com processo que tem janela na semana', async () => {
       renderPage()
       // p-with-window (PO 10001) tem coleta agendada em 10/07
