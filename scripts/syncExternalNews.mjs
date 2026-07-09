@@ -18,10 +18,18 @@ function normalizePrivateKey(value) {
 
 const FIREBASE_PRIVATE_KEY = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY)
 
+// Modo emulador (testes E2E): com FIRESTORE_EMULATOR_HOST setado, o sync grava
+// no emulador Firestore (REST local + Bearer "owner", sem OAuth/service
+// account). Producao (GitHub Actions) nao seta essa env e segue intocada.
+const FIRESTORE_EMULATOR_HOST = String(process.env.FIRESTORE_EMULATOR_HOST ?? '').trim()
+const FIRESTORE_REST_BASE = FIRESTORE_EMULATOR_HOST
+  ? `http://${FIRESTORE_EMULATOR_HOST}/v1`
+  : 'https://firestore.googleapis.com/v1'
+
 const PRIMARY_WINDOW_HOURS = 24
 const FALLBACK_WINDOW_HOURS = 24 * 30
 
-const externalNewsSources = [
+const defaultExternalNewsSources = [
   {
     id: 'siscomex-importacao',
     name: 'Siscomex Importacao',
@@ -59,7 +67,29 @@ const externalNewsSources = [
   },
 ]
 
+// Override das fontes pra testes (JSON de [{id, name, rssUrl}]). So faz
+// sentido junto com o emulador; em producao a lista hardcoded e' a canonica.
+function resolveExternalNewsSources() {
+  const raw = String(process.env.EXTERNAL_NEWS_SOURCES_JSON ?? '').trim()
+  if (!raw) return defaultExternalNewsSources
+
+  const parsed = JSON.parse(raw)
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('EXTERNAL_NEWS_SOURCES_JSON deve ser um array nao-vazio de {id, name, rssUrl}.')
+  }
+  return parsed
+}
+
+const externalNewsSources = resolveExternalNewsSources()
+
 function ensureEnvironment() {
+  if (FIRESTORE_EMULATOR_HOST) {
+    if (!FIREBASE_PROJECT_ID) {
+      throw new Error('Variaveis ausentes: FIREBASE_PROJECT_ID (obrigatoria mesmo no emulador).')
+    }
+    return
+  }
+
   const missingVariables = [
     !FIREBASE_PROJECT_ID && 'FIREBASE_PROJECT_ID',
     !FIREBASE_CLIENT_EMAIL && 'FIREBASE_CLIENT_EMAIL',
@@ -295,6 +325,11 @@ function base64UrlEncode(value) {
 }
 
 async function getAccessToken() {
+  // Emulador aceita qualquer Bearer; "owner" e' a convencao com acesso total.
+  if (FIRESTORE_EMULATOR_HOST) {
+    return 'owner'
+  }
+
   const nowInSeconds = Math.floor(Date.now() / 1000)
   const header = { alg: 'RS256', typ: 'JWT' }
   const payload = {
@@ -360,7 +395,7 @@ function toFirestoreDocument(newsItem) {
 }
 
 async function upsertExternalNewsItem(newsItem, accessToken) {
-  const requestUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNews/${encodeURIComponent(newsItem.id)}`
+  const requestUrl = `${FIRESTORE_REST_BASE}/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNews/${encodeURIComponent(newsItem.id)}`
 
   const response = await fetch(requestUrl, {
     method: 'PATCH',
@@ -382,7 +417,7 @@ async function recordDlqEntry(entry, accessToken) {
   // externalNewsDlq/{id} para auditoria e reprocessamento futuro.
   // Falhas aqui são melhor-esforço: nunca derrubam o sync principal.
   const dlqId = `DLQ-${entry.sourceId}-${entry.stage}-${Date.now()}-${crypto.randomUUID()}`
-  const requestUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNewsDlq/${encodeURIComponent(dlqId)}`
+  const requestUrl = `${FIRESTORE_REST_BASE}/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNewsDlq/${encodeURIComponent(dlqId)}`
   const payload = {
     sourceId: entry.sourceId,
     sourceName: entry.sourceName,
