@@ -133,6 +133,7 @@ vi.mock('../../src/utils/deliveryForecast', () => ({
     if (process?.id === 'p-unscheduled') return '2026-07-12' // domingo desta semana
     if (process?.id === 'p-in-stock') return ''
     if (process?.id === 'p-far-future') return '2026-08-15'
+    if (process?.id === 'p-in-transit') return '2026-07-10' // sexta desta semana
     return ''
   },
   // Necessario porque WeeklyArrivalsCard importa o shift pra cada
@@ -348,8 +349,9 @@ describe('DashboardPage', () => {
     })
   })
 
-  // PR #5 (2026-07-09): card de chegadas da semana com 2 secoes
-  // (Agendada + Nao Agendada) e filtro de visibilidade por estoque.
+  // PR #5 (2026-07-09) + PR #6 (2026-07-09): card de chegadas da
+  // semana com 2 secoes (Agendada + Previsão de entrega no armazem)
+  // e filtro de visibilidade por estoque.
   describe('Chegadas da semana (WeeklyArrivalsCard)', () => {
     it('mostra secao "Coleta agendada" com processo que tem janela na semana', async () => {
       renderPage()
@@ -362,10 +364,13 @@ describe('DashboardPage', () => {
       expect(screen.getAllByText('PO 10001').length).toBeGreaterThan(0)
     })
 
-    it('mostra secao "Coleta nao agendada" com processo sem janela mas com previsao na semana', async () => {
+    it('mostra secao "Previsao de entrega no armazem" com processo sem janela mas com previsao na semana', async () => {
       renderPage()
       await waitFor(() => {
-        expect(screen.getByText(/Coleta nao agendada/i)).toBeInTheDocument()
+        // PR #6: secao foi renomeada de "Coleta nao agendada" pra
+        // "Previsao de entrega no armazem" (mais neutro, cobre
+        // tambem processos em transito / em processamento no CD).
+        expect(screen.getByText(/Previsao de entrega no armazem/i)).toBeInTheDocument()
       })
       // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
       expect(screen.getAllByText('PO 20002').length).toBeGreaterThan(0)
@@ -396,6 +401,46 @@ describe('DashboardPage', () => {
         // 1 agendada (p-with-window) + 1 nao agendada (p-unscheduled) = 2
         expect(screen.getByText(/2 processos/i)).toBeInTheDocument()
       })
+    })
+
+    // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
+    // Antes era fixa "Coleta ainda nao agendada" e nao fazia
+    // sentido quando o processo ja' estava em transito / no CD.
+    it('mostra "Coleta ainda nao agendada" pra processo pre-coleta', async () => {
+      renderPage()
+      await waitFor(() => {
+        // p-unscheduled tem collectionStatus = 'Aguardando agendamento
+        // de coleta' (pre-coleta)
+        expect(screen.getByText('Coleta ainda nao agendada')).toBeInTheDocument()
+      })
+    })
+
+    it('mostra "Carga em transito para o CD" pra processo em transito', async () => {
+      mockListProcesses.mockResolvedValueOnce([
+        ...PROCESSES,
+        {
+          id: 'p-in-transit',
+          name: 'PO 50005',
+          processNumber: 'PO 50005',
+          category: 'FCL',
+          processStatus: 'Embarcado',
+          // em transito pro CD (sem janela nesta semana, mas ETA cai)
+          collectionStatus: 'Carga a caminho do CD',
+          destination: 'Navegantes',
+          eta: '2026-07-10',
+        },
+      ])
+      renderPage()
+      await waitFor(() => {
+        // p-in-transit aparece com label "Carga em transito para o CD"
+        // (NAO "Coleta ainda nao agendada" como antes)
+        expect(screen.getByText('Carga em transito para o CD')).toBeInTheDocument()
+      })
+      // E NAO mostra a label antiga errada
+      const all = screen.queryAllByText('Coleta ainda nao agendada')
+      // So' aparece pra p-unscheduled (que e' pre-coleta); p-in-transit
+      // tem label "Carga em transito para o CD"
+      expect(all.length).toBe(1)
     })
   })
 })
