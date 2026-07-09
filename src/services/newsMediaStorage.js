@@ -32,7 +32,7 @@ function readFileAsDataUrl(file) {
 
     reader.onload = () => resolve(String(reader.result ?? ''))
     reader.onerror = () => {
-      reject(new Error(`Nao foi possivel ler o arquivo "${normalizeStringValue(file?.name) || 'arquivo'}".`))
+      reject(new Error(`Não foi possível ler o arquivo "${normalizeStringValue(file?.name) || 'arquivo'}".`))
     }
 
     reader.readAsDataURL(file)

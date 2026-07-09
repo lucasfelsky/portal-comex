@@ -158,7 +158,7 @@ describe('sendNewsPublishedEmail', () => {
     await handler(makeEvent(NEWS))
     const args = mockSendMail.mock.calls[0][0]
     expect(args.subject).toContain('SISCOMEX')
-    expect(args.text).toContain('Ola, Maria Souza')
+    expect(args.text).toContain('Olá, Maria Souza')
     expect(args.html).toBeDefined()
   })
 

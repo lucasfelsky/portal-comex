@@ -85,7 +85,7 @@ export function buildPendingPostReceiptImages(fileList) {
 
   return files.map((file, index) => {
     if (!String(file?.type ?? '').startsWith('image/')) {
-      throw new Error(`O arquivo "${formatImageName(file?.name)}" nao e uma imagem valida.`)
+      throw new Error(`O arquivo "${formatImageName(file?.name)}" não é uma imagem válida.`)
     }
 
     if (Number(file?.size ?? 0) > MAX_POST_RECEIPT_IMAGE_SIZE_BYTES) {

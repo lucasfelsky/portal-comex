@@ -99,7 +99,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
       const adminNotification = byRecipient.get('admin-1')
       expect(adminNotification).toBeTruthy()
       expect(adminNotification.type).toBe('process_question_created')
-      expect(adminNotification.title).toBe('Nova duvida em processo')
+      expect(adminNotification.title).toBe('Nova dúvida em processo')
       expect(adminNotification.actorUserId).toBe('user-1')
       expect(adminNotification.isRead).toBe(false)
 
@@ -149,7 +149,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
       expect(replyNotifications).toHaveLength(1)
       expect(replyNotifications[0].recipientUserId).toBe('user-1')
       expect(replyNotifications[0].actorUserId).toBe('admin-1')
-      expect(replyNotifications[0].title).toBe('Sua duvida recebeu uma resposta')
+      expect(replyNotifications[0].title).toBe('Sua dúvida recebeu uma resposta')
     },
     TRIGGER_TIMEOUT_MS
   )
@@ -207,7 +207,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
 
       expect(recipients).toEqual(['admin-1', 'fav-1'])
       postReceipt.forEach((doc) => {
-        expect(doc.title).toBe('Observacoes pos-recebimento atualizadas')
+        expect(doc.title).toBe('Observações pós-recebimento atualizadas')
         expect(doc.actorUserId).toBe('log-1')
       })
     },

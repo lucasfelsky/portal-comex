@@ -134,7 +134,7 @@ describe('sendProcessNotificationEmail', () => {
     expect(args.to).toBe('maria@sqquimica.com')
     expect(args.subject).toMatch(/\[Portal COMEX\]/)
     expect(args.subject).toContain('Sua duvida foi respondida')
-    expect(args.text).toContain('Ola, Maria')
+    expect(args.text).toContain('Olá, Maria')
     expect(args.text).toContain('Veja os detalhes do processo PO 12345')
   })
 

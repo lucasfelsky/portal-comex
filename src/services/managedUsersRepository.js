@@ -16,7 +16,7 @@ function withCallableTimeout(promise, timeoutMessage) {
 async function callManagedUserFunction(functionName, payload, timeoutMessage) {
   const callable = await getCallable(functionName)
   if (!callable) {
-    throw new Error('Firebase Functions nao configurado para gestao de usuarios.')
+    throw new Error('Firebase Functions não configurado para gestão de usuários.')
   }
 
   const result = await withCallableTimeout(callable(payload), timeoutMessage)
@@ -27,7 +27,7 @@ export async function createManagedAuthUser({ email, password, name, role, area,
   return callManagedUserFunction(
     'adminCreateUser',
     { email, password, name, role, area, status, notes },
-    'Tempo limite excedido ao criar o usuario.'
+    'Tempo limite excedido ao criar o usuário.'
   )
 }
 
@@ -38,7 +38,7 @@ export async function updateManagedUserPassword({ uid, password }) {
       uid: String(uid ?? '').trim(),
       password: String(password ?? ''),
     },
-    'Tempo limite excedido ao atualizar a senha do usuario.'
+    'Tempo limite excedido ao atualizar a senha do usuário.'
   )
 }
 
@@ -48,6 +48,6 @@ export async function deleteManagedUser(uid) {
     {
       uid: String(uid ?? '').trim(),
     },
-    'Tempo limite excedido ao excluir o usuario.'
+    'Tempo limite excedido ao excluir o usuário.'
   )
 }

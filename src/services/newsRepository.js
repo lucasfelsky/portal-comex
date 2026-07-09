@@ -230,7 +230,7 @@ export async function removeNewsItem(newsItemOrId, actor = null) {
     normalizedNewsItem?.id || String(newsItemOrId ?? '').trim()
 
   if (!newsItemId) {
-    throw new Error('Noticia invalida para exclusao.')
+    throw new Error('Notícia inválida para exclusão.')
   }
 
   if (!isFirebaseConfigured || !firestore) {

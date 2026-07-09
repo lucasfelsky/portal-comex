@@ -407,7 +407,7 @@ describe('DashboardPage', () => {
       // PR #6: secao foi renomeada de "Coleta nao agendada" pra
       // "Previsão de entrega no armazem" (mais neutro, cobre
       // tambem processos em transito / em processamento no CD).
-      const titulo = await screen.findByText(/Previsão de entrega no armazem/i)
+      const titulo = await screen.findByText(/Previsão de entrega no armazém/i)
       expect(titulo).toBeInTheDocument()
       // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
       expect((await screen.findAllByText('PO 20002')).length).toBeGreaterThan(0)

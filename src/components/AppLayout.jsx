@@ -86,16 +86,16 @@ export default function AppLayout() {
   const fcm = useFcm(profile?.uid)
   const commandItems = useMemo(
     () => [
-      { id: 'go-dashboard', label: 'Dashboard', group: 'Paginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
-      { id: 'go-news', label: 'Noticias', group: 'Paginas', to: '/news', icon: 'news' },
-      { id: 'go-processes', label: 'Chegadas', group: 'Paginas', to: '/processos', icon: 'arrivals' },
+      { id: 'go-dashboard', label: 'Dashboard', group: 'Páginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
+      { id: 'go-news', label: 'Notícias', group: 'Páginas', to: '/news', icon: 'news' },
+      { id: 'go-processes', label: 'Chegadas', group: 'Páginas', to: '/processos', icon: 'arrivals' },
       ...(profile?.role === 'admin'
         ? [
             { id: 'go-admin', label: 'Painel administrativo', group: 'Admin', to: '/admin', icon: 'admin' },
-            { id: 'go-admin-users', label: 'Usuarios', group: 'Admin', to: '/admin/usuarios', icon: 'admin' },
+            { id: 'go-admin-users', label: 'Usuários', group: 'Admin', to: '/admin/usuarios', icon: 'admin' },
             { id: 'go-admin-announcements', label: 'Comunicados', group: 'Admin', to: '/admin/comunicados', icon: 'news' },
             { id: 'go-admin-bar', label: 'Barra do porto', group: 'Admin', to: '/admin/barra', icon: 'inbox' },
-            { id: 'go-admin-forecast', label: 'Regras de previsao', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
+            { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),
@@ -471,8 +471,8 @@ export default function AppLayout() {
                 aria-pressed={dnd.isActive}
                 aria-label={
                   dnd.isActive
-                    ? `Desativar modo nao perturbe (restam ${formatRemaining(dnd.remainingMs)})`
-                    : 'Ativar modo nao perturbe por 1 hora'
+                    ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                    : 'Ativar modo não perturbe por 1 hora'
                 }
                 title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
               >

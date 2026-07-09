@@ -211,7 +211,7 @@ export default function AdminUsersPanel() {
 
         if (isFirebaseConfigured) {
           await sendCustomVerificationEmail({ uid: savedUser.id }).catch((verificationError) => {
-            console.error('Falha ao enviar email de verificacao do novo usuario.', verificationError)
+            console.error('Falha ao enviar email de verificação do novo usuário.', verificationError)
           })
         }
       } else {

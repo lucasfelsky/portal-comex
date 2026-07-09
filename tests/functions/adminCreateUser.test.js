@@ -158,7 +158,7 @@ describe('adminCreateUser (S3 / custom claims)', () => {
         auth: { uid: 'admin-1', token: { email: 'admin@sqquimica.com' } },
         data: { email: 'novo@sqquimica.com', password: 'senha-segura-123', name: 'X', role: 'root', status: 'Ativo' },
       })
-    ).rejects.toThrow(/Perfil de usuario invalido/)
+    ).rejects.toThrow(/Perfil de usuário inválido/)
     expect(mockAuthApi.setCustomUserClaims).not.toHaveBeenCalled()
   })
 
@@ -169,7 +169,7 @@ describe('adminCreateUser (S3 / custom claims)', () => {
         auth: { uid: 'admin-1', token: { email: 'admin@sqquimica.com' } },
         data: { email: 'novo@sqquimica.com', password: 'senha-segura-123', name: 'X', role: 'user', status: 'invalido' },
       })
-    ).rejects.toThrow(/Status de usuario invalido/)
+    ).rejects.toThrow(/Status de usuário inválido/)
   })
 
   it('rejeita senha curta', async () => {

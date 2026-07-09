@@ -271,7 +271,7 @@ export default function NewsPage() {
         coverImageItem: coverImage,
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Nao foi possivel carregar a capa.', uploadError))
+      setError(buildActionErrorMessage('Não foi possível carregar a capa.', uploadError))
     } finally {
       event.target.value = ''
     }
@@ -288,7 +288,7 @@ export default function NewsPage() {
         mediaItems: [...current.mediaItems, ...uploadedMedia],
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Nao foi possivel carregar os anexos.', uploadError))
+      setError(buildActionErrorMessage('Não foi possível carregar os anexos.', uploadError))
     } finally {
       setIsProcessingMedia(false)
       event.target.value = ''
@@ -367,7 +367,7 @@ export default function NewsPage() {
       } catch (refreshError) {
         setNewsItems((current) => upsertManualNews(current, savedNewsItem))
         setSelectedNewsId(saved.id)
-        setError(buildActionErrorMessage('Noticia salva, mas nao foi possivel atualizar a lista.', refreshError))
+        setError(buildActionErrorMessage('Notícia salva, mas não foi possível atualizar a lista.', refreshError))
       }
 
       setDraft(createDraftFromNewsItem(savedNewsItem))

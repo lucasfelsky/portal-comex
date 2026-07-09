@@ -201,21 +201,21 @@ describe('adminUpdateUserClaims (S3)', () => {
     const handler = getHandler(adminUpdateUserClaims)
     await expect(
       handler({ auth: authCtx, data: { uid: TARGET_UID, role: 'root' } })
-    ).rejects.toThrow(/Perfil de usuario invalido/)
+    ).rejects.toThrow(/Perfil de usuário inválido/)
   })
 
   it('rejeita status invalido', async () => {
     const handler = getHandler(adminUpdateUserClaims)
     await expect(
       handler({ auth: authCtx, data: { uid: TARGET_UID, status: 'pend' } })
-    ).rejects.toThrow(/Status de usuario invalido/)
+    ).rejects.toThrow(/Status de usuário inválido/)
   })
 
   it('bloqueia admin de se autobloquear', async () => {
     const handler = getHandler(adminUpdateUserClaims)
     await expect(
       handler({ auth: authCtx, data: { uid: ACTOR_UID, status: 'Bloqueado' } })
-    ).rejects.toThrow(/Nao e permitido bloquear o proprio usuario/)
+    ).rejects.toThrow(/Não é permitido bloquear o próprio usuário/)
     expect(mockAuthApi.setCustomUserClaims).not.toHaveBeenCalled()
   })
 
@@ -246,14 +246,14 @@ describe('adminUpdateUserClaims (S3)', () => {
     const handler = getHandler(adminUpdateUserClaims)
     await expect(
       handler({ auth: authCtx, data: { uid: 'fantasma', status: 'Ativo' } })
-    ).rejects.toThrow(/Usuario nao encontrado/)
+    ).rejects.toThrow(/Usuário não encontrado/)
   })
 
   it('rejeita uid vazio', async () => {
     const handler = getHandler(adminUpdateUserClaims)
     await expect(
       handler({ auth: authCtx, data: { uid: '', status: 'Ativo' } })
-    ).rejects.toThrow(/UID do usuario e obrigatorio/)
+    ).rejects.toThrow(/UID do usuário é obrigatório/)
   })
 
   it('adminUpdateUserClaims: set no Firestore obedece ao contrato de 6 campos (Sprint 5.1 / L18)', async () => {
