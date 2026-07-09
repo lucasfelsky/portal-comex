@@ -90,7 +90,26 @@ vi.mock('../../src/utils/collectionWindows', () => ({
   normalizeIsoDateTime: () => '',
   normalizeCollectionWindow: () => null,
   normalizeCollectionWindows: () => [],
-  getCollectionWindows: () => [],
+  // PR #5 (2026-07-09): mock parametrizado pelo id do processo. Em
+  // prod, retorna janelas de coleta (modelo novo) ou fallback pro
+  // campo legado `collectionScheduledAt`. No test, retornamos uma
+  // janela agendada so' pra 'p-with-window' (que aparece em
+  // "Coleta agendada"). Os outros retornam [] (sem janela) e
+  // dependem de `getEstimatedDeliveryDate` (mock acima) pra cair em
+  // "Coleta nao agendada" ou serem filtrados.
+  getCollectionWindows: (process) => {
+    if (process?.id === 'p-with-window') {
+      return [
+        {
+          id: 'w-1',
+          containerNumber: 1,
+          scheduledAt: '2026-07-10T08:00:00', // sexta desta semana
+          notes: '',
+        },
+      ]
+    }
+    return []
+  },
   getNextCollectionWindow: () => null,
   hasActiveCollectionSchedule: () => false,
   createCollectionWindow: () => ({}),
@@ -99,7 +118,26 @@ vi.mock('../../src/utils/collectionWindows', () => ({
   updateCollectionWindow: () => [],
 }))
 vi.mock('../../src/utils/deliveryForecast', () => ({
-  getEstimatedDeliveryDate: () => '2026-07-15',
+  // PR #5 (2026-07-09): mock agora e' parametrizado pelo id do
+  // processo. Em prod, retorna a data prevista de entrega no
+  // armazem (ETA + business days). No test, retornamos:
+  // - 'p-with-window': data irrelevante (tem janela agendada, nao
+  //   cai no fluxo unscheduled).
+  // - 'p-unscheduled': data dentro da semana atual (aparece em
+  //   "Coleta nao agendada").
+  // - 'p-in-stock': vazio (filtrado por isProcessTrulyFinalized).
+  // - 'p-far-future': data fora da semana (nao aparece em lugar
+  //   nenhum).
+  getEstimatedDeliveryDate: (process) => {
+    if (process?.id === 'p-with-window') return '2026-07-15'
+    if (process?.id === 'p-unscheduled') return '2026-07-12' // domingo desta semana
+    if (process?.id === 'p-in-stock') return ''
+    if (process?.id === 'p-far-future') return '2026-08-15'
+    return ''
+  },
+  // Necessario porque WeeklyArrivalsCard importa o shift pra cada
+  // janela. Mock retorna turno estatico.
+  getScheduledCollectionDeliveryShift: () => 'Manha',
 }))
 
 import DashboardPage from '../../src/pages/DashboardPage'
@@ -133,6 +171,55 @@ const PROCESSES = [
     collectionStatus: 'Aguardando',
     destination: 'Itapoa',
     eta: '2026-07-20',
+  },
+  // PR #5 (2026-07-09): processos pra testar o card de chegadas.
+  // - p-with-window: tem coleta agendada na semana (mock
+  //   getCollectionWindows retorna 1 janela em 2026-07-10).
+  // - p-unscheduled: sem coleta, mas ETA prevista dentro da semana
+  //   (mock getEstimatedDeliveryDate retorna 2026-07-12).
+  // - p-in-stock: collectionStatus = 'Carga disponível em estoque'
+  //   (sinal de finalizado de verdade, NAO deve aparecer no card).
+  // - p-far-future: sem coleta e ETA fora da semana
+  //   (mock getEstimatedDeliveryDate retorna 2026-08-15).
+  {
+    id: 'p-with-window',
+    name: 'PO 10001',
+    processNumber: 'PO 10001',
+    category: 'FCL',
+    processStatus: 'Embarcado',
+    collectionStatus: 'Coleta Agendada',
+    destination: 'Navegantes',
+    eta: '2026-07-15',
+  },
+  {
+    id: 'p-unscheduled',
+    name: 'PO 20002',
+    processNumber: 'PO 20002',
+    category: 'LCL',
+    processStatus: 'Embarcado',
+    collectionStatus: 'Aguardando agendamento de coleta',
+    destination: 'Itapoa',
+    eta: '2026-07-12',
+  },
+  {
+    id: 'p-in-stock',
+    name: 'PO 30003',
+    processNumber: 'PO 30003',
+    category: 'FCL',
+    processStatus: 'Carga recebida',
+    collectionStatus: 'Carga disponível em estoque',
+    destination: 'Navegantes',
+    eta: '2026-07-01',
+  },
+  {
+    id: 'p-far-future',
+    name: 'PO 40004',
+    processNumber: 'PO 40004',
+    category: 'AEREO',
+    processStatus: 'Embarcado',
+    collectionStatus: 'Aguardando agendamento de coleta',
+    destination: 'Sao Paulo',
+    eta: '2026-08-15',
   },
 ]
 
@@ -240,8 +327,13 @@ describe('DashboardPage', () => {
     })
     renderPage()
     await waitFor(() => {
-      const cards = document.querySelectorAll('.process-item')
-      expect(cards.length).toBe(1)
+      // PR #5 (2026-07-09): o card de favoritos e' o 2o `.list-card`
+      // (o 1o e' o WeeklyArrivalsCard). Pegar o ultimo e contar os
+      // `.process-item` dentro dele.
+      const cards = document.querySelectorAll('.list-card')
+      const favoriteCard = cards[cards.length - 1]
+      const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
+      expect(favoriteItems.length).toBe(1)
     })
     expect(screen.getByText('1 favoritos')).toBeInTheDocument()
   })
@@ -253,6 +345,57 @@ describe('DashboardPage', () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getByText('2 favoritos')).toBeInTheDocument()
+    })
+  })
+
+  // PR #5 (2026-07-09): card de chegadas da semana com 2 secoes
+  // (Agendada + Nao Agendada) e filtro de visibilidade por estoque.
+  describe('Chegadas da semana (WeeklyArrivalsCard)', () => {
+    it('mostra secao "Coleta agendada" com processo que tem janela na semana', async () => {
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
+      })
+      // p-with-window (PO 10001) tem coleta agendada em 10/07
+      // (titulo + subtitulo retornam o mesmo valor mockado, entao
+      // usamos getAllByText)
+      expect(screen.getAllByText('PO 10001').length).toBeGreaterThan(0)
+    })
+
+    it('mostra secao "Coleta nao agendada" com processo sem janela mas com previsao na semana', async () => {
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText(/Coleta nao agendada/i)).toBeInTheDocument()
+      })
+      // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
+      expect(screen.getAllByText('PO 20002').length).toBeGreaterThan(0)
+    })
+
+    it('NAO mostra processo com collectionStatus = "Carga disponivel em estoque"', async () => {
+      renderPage()
+      await waitFor(() => {
+        // o card carregou
+        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
+      })
+      // p-in-stock (PO 30003) ja' entrou em estoque, nao deve aparecer
+      expect(screen.queryByText('PO 30003')).not.toBeInTheDocument()
+    })
+
+    it('NAO mostra processo com previsao de entrega fora da semana', async () => {
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
+      })
+      // p-far-future (PO 40004) tem previsao 15/08, fora da semana
+      expect(screen.queryByText('PO 40004')).not.toBeInTheDocument()
+    })
+
+    it('contador total soma agendada + nao agendada', async () => {
+      renderPage()
+      await waitFor(() => {
+        // 1 agendada (p-with-window) + 1 nao agendada (p-unscheduled) = 2
+        expect(screen.getByText(/2 processos/i)).toBeInTheDocument()
+      })
     })
   })
 })
