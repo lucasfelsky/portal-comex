@@ -113,7 +113,21 @@ const emptyDraft = () => ({
 })
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
-const isEtaReached = (eta) => eta && eta <= new Date().toISOString().slice(0, 10)
+// PR #15 (2026-07-09): usa data local (nao' UTC) pra evitar bug
+// de timezone. `new Date().toISOString()` sempre usa UTC, e em
+// BRT (UTC-3) o UTC pode estar num dia diferente do local
+// (especialmente 21:00-23:59 BRT, onde UTC ja' e' dia seguinte).
+// Resultado: eta 'YYYY-MM-DD' (que e' local) seria comparado com
+// UTC, gerando falsos positivos/negativos.
+const isEtaReached = (eta) => {
+  if (!eta) return false
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const todayLocal = `${year}-${month}-${day}`
+  return eta <= todayLocal
+}
 const MAX_PROCESS_MESSAGES = 20
 
 function formatCargoUnit(quantity, singularLabel, pluralLabel) {
