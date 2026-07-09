@@ -115,10 +115,26 @@ describe('getWeeklyArrivalProcesses (PR #13: previsao no mesmo dia)', () => {
     expect(result.unscheduled).toEqual([])
   })
 
-  it('getWeekRange retorna inicio da semana e domingo 23:59:59.999', () => {
+  it('getWeekRange retorna inicio da semana (meia-noite local) e domingo 23:59:59.999 local', () => {
+    // PR #13: o spec nao' hardcoda valores em UTC porque o teste
+    // precisa rodar identico em BRT (UTC-3) e em UTC (CI linux).
+    // Em vez disso, valida as PROPRIEDADES da data:
+    // - start: meia-noite local
+    // - end: domingo 23:59:59.999 local
+    // - diferenca entre start e end <= 6 dias
     const now = new Date('2026-07-09T14:00:00-03:00') // quinta
     const { start, end } = getWeekRange(now)
-    expect(start.toISOString()).toBe('2026-07-09T03:00:00.000Z') // meia-noite BRT = 03:00 UTC
-    expect(end.toISOString()).toBe('2026-07-13T02:59:59.999Z') // domingo 23:59 BRT
+    expect(start.getHours()).toBe(0)
+    expect(start.getMinutes()).toBe(0)
+    expect(start.getSeconds()).toBe(0)
+    expect(end.getHours()).toBe(23)
+    expect(end.getMinutes()).toBe(59)
+    expect(end.getSeconds()).toBe(59)
+    // Domingo = getDay() === 0
+    expect(end.getDay()).toBe(0)
+    // Diferenca entre start e end <= 6 dias (0 se hoje = domingo)
+    const days = (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)
+    expect(days).toBeLessThanOrEqual(6.01)
+    expect(days).toBeGreaterThanOrEqual(0)
   })
 })
