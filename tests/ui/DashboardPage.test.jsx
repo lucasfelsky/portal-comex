@@ -352,55 +352,54 @@ describe('DashboardPage', () => {
   // PR #5 (2026-07-09) + PR #6 (2026-07-09): card de chegadas da
   // semana com 2 secoes (Agendada + Previsão de entrega no armazem)
   // e filtro de visibilidade por estoque.
+  // PR #8 (2026-07-09): usa `findByText` (timeout vem do
+  // configure() em tests/setup-ui.js, 3000ms) em vez de `waitFor
+  // + getByText` pra ser robusto em CI mais lento. CI do GitHub
+  // Actions roda em ubuntu-latest e pode levar > 500ms no cold
+  // start de jsdom + resolucao do mock de listProcesses.
   describe('Chegadas da semana (WeeklyArrivalsCard)', () => {
     it('mostra secao "Coleta agendada" com processo que tem janela na semana', async () => {
       renderPage()
-      await waitFor(() => {
-        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
-      })
       // p-with-window (PO 10001) tem coleta agendada em 10/07
       // (titulo + subtitulo retornam o mesmo valor mockado, entao
-      // usamos getAllByText)
+      // usamos getAllByText depois de findByText pra garantir
+      // renderizacao)
+      const titulo = await screen.findByText(/Coleta agendada/i)
+      expect(titulo).toBeInTheDocument()
       expect(screen.getAllByText('PO 10001').length).toBeGreaterThan(0)
     })
 
     it('mostra secao "Previsao de entrega no armazem" com processo sem janela mas com previsao na semana', async () => {
       renderPage()
-      await waitFor(() => {
-        // PR #6: secao foi renomeada de "Coleta nao agendada" pra
-        // "Previsao de entrega no armazem" (mais neutro, cobre
-        // tambem processos em transito / em processamento no CD).
-        expect(screen.getByText(/Previsao de entrega no armazem/i)).toBeInTheDocument()
-      })
+      // PR #6: secao foi renomeada de "Coleta nao agendada" pra
+      // "Previsao de entrega no armazem" (mais neutro, cobre
+      // tambem processos em transito / em processamento no CD).
+      const titulo = await screen.findByText(/Previsao de entrega no armazem/i)
+      expect(titulo).toBeInTheDocument()
       // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
       expect(screen.getAllByText('PO 20002').length).toBeGreaterThan(0)
     })
 
     it('NAO mostra processo com collectionStatus = "Carga disponivel em estoque"', async () => {
       renderPage()
-      await waitFor(() => {
-        // o card carregou
-        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
-      })
+      // Espera o card carregar primeiro
+      await screen.findByText(/Coleta agendada/i)
       // p-in-stock (PO 30003) ja' entrou em estoque, nao deve aparecer
       expect(screen.queryByText('PO 30003')).not.toBeInTheDocument()
     })
 
     it('NAO mostra processo com previsao de entrega fora da semana', async () => {
       renderPage()
-      await waitFor(() => {
-        expect(screen.getByText(/Coleta agendada/i)).toBeInTheDocument()
-      })
+      await screen.findByText(/Coleta agendada/i)
       // p-far-future (PO 40004) tem previsao 15/08, fora da semana
       expect(screen.queryByText('PO 40004')).not.toBeInTheDocument()
     })
 
     it('contador total soma agendada + nao agendada', async () => {
       renderPage()
-      await waitFor(() => {
-        // 1 agendada (p-with-window) + 1 nao agendada (p-unscheduled) = 2
-        expect(screen.getByText(/2 processos/i)).toBeInTheDocument()
-      })
+      // 1 agendada (p-with-window) + 1 nao agendada (p-unscheduled) = 2
+      const contador = await screen.findByText(/2 processos/i)
+      expect(contador).toBeInTheDocument()
     })
 
     // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
@@ -408,11 +407,10 @@ describe('DashboardPage', () => {
     // sentido quando o processo ja' estava em transito / no CD.
     it('mostra "Coleta ainda nao agendada" pra processo pre-coleta', async () => {
       renderPage()
-      await waitFor(() => {
-        // p-unscheduled tem collectionStatus = 'Aguardando agendamento
-        // de coleta' (pre-coleta)
-        expect(screen.getByText('Coleta ainda nao agendada')).toBeInTheDocument()
-      })
+      // p-unscheduled tem collectionStatus = 'Aguardando agendamento
+      // de coleta' (pre-coleta)
+      const label = await screen.findByText('Coleta ainda nao agendada')
+      expect(label).toBeInTheDocument()
     })
 
     it('mostra "Carga em transito para o CD" pra processo em transito', async () => {
@@ -431,11 +429,10 @@ describe('DashboardPage', () => {
         },
       ])
       renderPage()
-      await waitFor(() => {
-        // p-in-transit aparece com label "Carga em transito para o CD"
-        // (NAO "Coleta ainda nao agendada" como antes)
-        expect(screen.getByText('Carga em transito para o CD')).toBeInTheDocument()
-      })
+      // p-in-transit aparece com label "Carga em transito para o CD"
+      // (NAO "Coleta ainda nao agendada" como antes)
+      const label = await screen.findByText('Carga em transito para o CD')
+      expect(label).toBeInTheDocument()
       // E NAO mostra a label antiga errada
       const all = screen.queryAllByText('Coleta ainda nao agendada')
       // So' aparece pra p-unscheduled (que e' pre-coleta); p-in-transit
