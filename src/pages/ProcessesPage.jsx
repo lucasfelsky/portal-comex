@@ -1069,7 +1069,7 @@ export default function ProcessesPage() {
         ],
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Nao foi possivel carregar as imagens do CD.', uploadError))
+      setError(buildActionErrorMessage('Não foi possível carregar as imagens do CD.', uploadError))
     } finally {
       setIsUploadingPostReceiptImages(false)
       event.target.value = ''

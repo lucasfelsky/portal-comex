@@ -22,15 +22,15 @@ const ALLOWED_STATUSES = new Set(['Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
 const RESTRICTED_PROCESS_CATEGORIES = new Set(['FCL', 'LCL', 'AEREO'])
 
 const ROLE_PERMISSIONS_MAP = {
-  admin: ['Usuarios', 'Permissoes', 'Comunicados', 'Auditoria', 'Processos'],
+  admin: ['Usuários', 'Permissões', 'Comunicados', 'Auditoria', 'Processos'],
   user: ['Dashboard', 'Processos'],
   logistica: ['Dashboard', 'Processos'],
 }
 
 // Cores da marca (sprint 8 / sprint 6.7). Espelham os tokens do
 // `src/styles.css` do Portal COMEX e do `globals.css` do IntelliQuote.
-// Como Cloud Functions nao tem acesso ao `:root` do CSS, essas cores
-// sao injetadas inline nos templates de email. Manter sincronizado
+// Como Cloud Functions não tem acesso ao `:root` do CSS, essas cores
+// são injetadas inline nos templates de email. Manter sincronizado
 // com o design system (Portal COMEX `:root` + IntelliQuote globals.css).
 const BRAND_COLORS = {
   ink: '#1f1c18',
@@ -130,27 +130,27 @@ function getDefaultLastAccess(status) {
   if (status === 'Ativo') return 'Aguardando primeiro acesso'
   if (status === 'Bloqueado') return 'Acesso bloqueado'
   if (status === 'Reprovado') return 'Cadastro reprovado'
-  return 'Aguardando aprovacao'
+  return 'Aguardando aprovação'
 }
 
 function getDefaultNotes(status) {
   if (status === 'Ativo') return 'Acesso liberado.'
-  if (status === 'Bloqueado') return 'Acesso bloqueado pela administracao.'
-  if (status === 'Reprovado') return 'Cadastro reprovado pela administracao.'
-  return 'Cadastro corporativo aguardando aprovacao administrativa.'
+  if (status === 'Bloqueado') return 'Acesso bloqueado pela administração.'
+  if (status === 'Reprovado') return 'Cadastro reprovado pela administração.'
+  return 'Cadastro corporativo aguardando aprovação administrativa.'
 }
 
-function getUserDisplayName(user, fallback = 'Usuario') {
+function getUserDisplayName(user, fallback = 'Usuário') {
   return repairTextEncoding(
     normalizeString(user?.name ?? user?.displayName ?? user?.email ?? fallback) || fallback
   )
 }
 
 /**
- * Define as custom claims `role` e `status` em um usuario.
+ * Define as custom claims `role` e `status` em um usuário.
  * Deve ser chamado em todo ponto que altera role/status para que as rules
  * passem a ler de `request.auth.token` em vez de fazer `firestore.get(users/{uid})`.
- * Falha nao quebra a operacao principal (log apenas) — o backfill cobre gaps.
+ * Falha não quebra a operação principal (log apenas) — o backfill cobre gaps.
  */
 async function setRoleStatusClaims(uid, role, status) {
   const safeRole = ALLOWED_ROLES.has(role) ? role : 'user'
@@ -237,19 +237,19 @@ function buildRecipientProcessLabel(process, role) {
 }
 
 function buildFavoriteNotificationBody(processLabel, actorName) {
-  return `${actorName} registrou uma nova mensagem em ${processLabel}, que esta nos seus favoritos.`
+  return `${actorName} registrou uma nova mensagem em ${processLabel}, que está nos seus favoritos.`
 }
 
 function buildAdminNotificationBody(processLabel, actorName) {
-  return `${actorName} registrou uma nova duvida em ${processLabel}.`
+  return `${actorName} registrou uma nova dúvida em ${processLabel}.`
 }
 
 function buildReplyNotificationBody(processLabel, actorName) {
-  return `${actorName} respondeu uma duvida sua em ${processLabel}.`
+  return `${actorName} respondeu uma dúvida sua em ${processLabel}.`
 }
 
 function buildPostReceiptNotesNotificationBody(processLabel, actorName) {
-  return `${actorName} registrou observacoes pos-recebimento da carga em ${processLabel}.`
+  return `${actorName} registrou observações pós-recebimento da carga em ${processLabel}.`
 }
 
 function buildFavoriteProcessUpdatedTitle(processLabel) {
@@ -288,21 +288,21 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
   }
 
   if (normalizeString(previousProcess?.processNotes) !== normalizeString(nextProcess?.processNotes)) {
-    changes.push('observacoes do processo atualizadas')
+    changes.push('observações do processo atualizadas')
   }
 
   if (
     normalizeString(previousProcess?.postReceiptNotes) !==
     normalizeString(nextProcess?.postReceiptNotes)
   ) {
-    changes.push('observacoes pos-recebimento atualizadas')
+    changes.push('observações pós-recebimento atualizadas')
   }
 
   if (
     JSON.stringify(normalizePostReceiptImages(previousProcess?.postReceiptImages)) !==
     JSON.stringify(normalizePostReceiptImages(nextProcess?.postReceiptImages))
   ) {
-    changes.push('imagens pos-recebimento atualizadas')
+    changes.push('imagens pós-recebimento atualizadas')
   }
 
   if (JSON.stringify(nextProcess?.items ?? []) !== JSON.stringify(previousProcess?.items ?? [])) {
@@ -413,9 +413,9 @@ function getEmailFromAddress() {
 }
 
 function buildEmailMessage(notification, recipient) {
-  const title = repairTextEncoding(normalizeString(notification.title || 'Atualizacao em processo'))
+  const title = repairTextEncoding(normalizeString(notification.title || 'Atualização em processo'))
   const greetingName = repairTextEncoding(normalizeString(recipient?.name))
-  const greeting = greetingName ? `Ola, ${greetingName}.` : 'Ola.'
+  const greeting = greetingName ? `Olá, ${greetingName}.` : 'Olá.'
 
   return {
     subject: `[Portal COMEX] ${title}`,
@@ -433,19 +433,19 @@ function buildEmailMessage(notification, recipient) {
 }
 
 function buildNewsPublishedEmailMessage(newsItem, recipient) {
-  const title = repairTextEncoding(normalizeString(newsItem?.title || 'Nova noticia publicada'))
+  const title = repairTextEncoding(normalizeString(newsItem?.title || 'Nova notícia publicada'))
   const content = repairTextEncoding(normalizeString(newsItem?.content))
   const recipientName = repairTextEncoding(normalizeString(recipient?.name))
-  const greeting = recipientName ? `Ola, ${recipientName}.` : 'Ola.'
+  const greeting = recipientName ? `Olá, ${recipientName}.` : 'Olá.'
   const safeTitle = escapeHtml(title)
   const safeContent = escapeHtml(content).replaceAll('\n', '<br />')
 
   return {
-    subject: `[Portal COMEX] Nova noticia: ${title}`,
+    subject: `[Portal COMEX] Nova notícia: ${title}`,
     text: [
       greeting,
       '',
-      'Uma nova noticia foi publicada no Portal COMEX.',
+      'Uma nova notícia foi publicada no Portal COMEX.',
       '',
       title,
       '',
@@ -459,17 +459,17 @@ function buildNewsPublishedEmailMessage(newsItem, recipient) {
     html: `
       <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
-        <p>Uma nova noticia foi publicada no <strong>Portal COMEX</strong>.</p>
+        <p>Uma nova notícia foi publicada no <strong>Portal COMEX</strong>.</p>
         <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
           <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${safeTitle}</p>
-          <p style="margin: 0;">${safeContent || 'Acesse o portal para visualizar a noticia completa.'}</p>
+          <p style="margin: 0;">${safeContent || 'Acesse o portal para visualizar a notícia completa.'}</p>
         </div>
         <p style="margin-top: 18px;">
           <a
             href="${APP_URL}/news"
             style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
-            Ver noticia no portal
+            Ver notícia no portal
           </a>
         </p>
       </div>
@@ -482,7 +482,7 @@ function buildCustomEmailActionLink(actionLink, routePath) {
   const oobCode = parsedActionLink.searchParams.get('oobCode')
 
   if (!oobCode) {
-    throw new Error('Link de acao do Firebase sem oobCode.')
+    throw new Error('Link de ação do Firebase sem oobCode.')
   }
 
   const customLink = new URL(routePath, APP_URL)
@@ -496,7 +496,7 @@ function buildCustomEmailActionLink(actionLink, routePath) {
 
 function buildVerificationEmailMessage({ recipientName, verificationLink }) {
   const safeRecipientName = repairTextEncoding(normalizeString(recipientName))
-  const greeting = safeRecipientName ? `Ola, ${safeRecipientName}.` : 'Ola.'
+  const greeting = safeRecipientName ? `Olá, ${safeRecipientName}.` : 'Olá.'
 
   return {
     subject: '[Portal COMEX] Confirme o seu email corporativo',
@@ -507,13 +507,13 @@ function buildVerificationEmailMessage({ recipientName, verificationLink }) {
       'Para liberar o acesso, confirme o seu email corporativo no link abaixo:',
       verificationLink,
       '',
-      'Se voce nao solicitou esse cadastro, ignore esta mensagem.',
+      'Se você não solicitou esse cadastro, ignore esta mensagem.',
     ].join('\n'),
     html: `
       <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Seu cadastro no <strong>Portal COMEX</strong> foi criado.</p>
-        <p>Para liberar o acesso, confirme o seu email corporativo no botao abaixo:</p>
+        <p>Para liberar o acesso, confirme o seu email corporativo no botão abaixo:</p>
         <p>
           <a
             href="${verificationLink}"
@@ -523,7 +523,7 @@ function buildVerificationEmailMessage({ recipientName, verificationLink }) {
           </a>
         </p>
         <p style="word-break: break-all;">Se preferir, copie e cole este link no navegador:<br />${verificationLink}</p>
-        <p>Se voce nao solicitou esse cadastro, ignore esta mensagem.</p>
+        <p>Se você não solicitou esse cadastro, ignore esta mensagem.</p>
       </div>
     `,
   }
@@ -531,24 +531,24 @@ function buildVerificationEmailMessage({ recipientName, verificationLink }) {
 
 function buildPasswordResetEmailMessage({ recipientName, resetLink }) {
   const safeRecipientName = repairTextEncoding(normalizeString(recipientName))
-  const greeting = safeRecipientName ? `Ola, ${safeRecipientName}.` : 'Ola.'
+  const greeting = safeRecipientName ? `Olá, ${safeRecipientName}.` : 'Olá.'
 
   return {
     subject: '[Portal COMEX] Redefina a sua senha',
     text: [
       greeting,
       '',
-      'Recebemos uma solicitacao para redefinir a sua senha do Portal COMEX.',
+      'Recebemos uma solicitação para redefinir a sua senha do Portal COMEX.',
       'Use o link abaixo para cadastrar uma nova senha:',
       resetLink,
       '',
-      'Se voce nao fez essa solicitacao, ignore esta mensagem.',
+      'Se você não fez essa solicitação, ignore esta mensagem.',
     ].join('\n'),
     html: `
       <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
-        <p>Recebemos uma solicitacao para redefinir a sua senha do <strong>Portal COMEX</strong>.</p>
-        <p>Use o botao abaixo para cadastrar uma nova senha:</p>
+        <p>Recebemos uma solicitação para redefinir a sua senha do <strong>Portal COMEX</strong>.</p>
+        <p>Use o botão abaixo para cadastrar uma nova senha:</p>
         <p>
           <a
             href="${resetLink}"
@@ -558,7 +558,7 @@ function buildPasswordResetEmailMessage({ recipientName, resetLink }) {
           </a>
         </p>
         <p style="word-break: break-all;">Se preferir, copie e cole este link no navegador:<br />${resetLink}</p>
-        <p>Se voce nao fez essa solicitacao, ignore esta mensagem.</p>
+        <p>Se você não fez essa solicitação, ignore esta mensagem.</p>
       </div>
     `,
   }
@@ -566,22 +566,22 @@ function buildPasswordResetEmailMessage({ recipientName, resetLink }) {
 
 function buildPendingApprovalAdminEmailMessage({ pendingUser, adminRecipient }) {
   const recipientName = repairTextEncoding(normalizeString(adminRecipient?.name))
-  const greeting = recipientName ? `Ola, ${recipientName}.` : 'Ola.'
-  const pendingUserName = repairTextEncoding(normalizeString(pendingUser?.name)) || 'Usuario sem nome'
+  const greeting = recipientName ? `Olá, ${recipientName}.` : 'Olá.'
+  const pendingUserName = repairTextEncoding(normalizeString(pendingUser?.name)) || 'Usuário sem nome'
   const pendingUserEmail = normalizeEmail(pendingUser?.email)
-  const pendingUserArea = repairTextEncoding(normalizeString(pendingUser?.area)) || 'Nao informada'
+  const pendingUserArea = repairTextEncoding(normalizeString(pendingUser?.area)) || 'Não informada'
   const pendingUserStatus = repairTextEncoding(normalizeString(pendingUser?.status || 'Pendente'))
 
   return {
-    subject: '[Portal COMEX] Novo cadastro pendente de aprovacao',
+    subject: '[Portal COMEX] Novo cadastro pendente de aprovação',
     text: [
       greeting,
       '',
-      'Um novo usuario se cadastrou no Portal COMEX e aguarda aprovacao administrativa.',
+      'Um novo usuário se cadastrou no Portal COMEX e aguarda aprovação administrativa.',
       '',
       `Nome: ${pendingUserName}`,
-      `Email: ${pendingUserEmail || 'Nao informado'}`,
-      `Area: ${pendingUserArea}`,
+      `Email: ${pendingUserEmail || 'Não informado'}`,
+      `Área: ${pendingUserArea}`,
       `Status: ${pendingUserStatus}`,
       '',
       'Acesse o painel administrativo para revisar e aprovar o cadastro:',
@@ -590,11 +590,11 @@ function buildPendingApprovalAdminEmailMessage({ pendingUser, adminRecipient }) 
     html: `
       <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
-        <p>Um novo usuario se cadastrou no <strong>Portal COMEX</strong> e aguarda aprovacao administrativa.</p>
+        <p>Um novo usuário se cadastrou no <strong>Portal COMEX</strong> e aguarda aprovação administrativa.</p>
         <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
           <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${escapeHtml(pendingUserName)}</p>
-          <p style="margin: 0 0 6px;"><strong>Email:</strong> ${escapeHtml(pendingUserEmail || 'Nao informado')}</p>
-          <p style="margin: 0 0 6px;"><strong>Area:</strong> ${escapeHtml(pendingUserArea)}</p>
+          <p style="margin: 0 0 6px;"><strong>Email:</strong> ${escapeHtml(pendingUserEmail || 'Não informado')}</p>
+          <p style="margin: 0 0 6px;"><strong>Área:</strong> ${escapeHtml(pendingUserArea)}</p>
           <p style="margin: 0;"><strong>Status:</strong> ${escapeHtml(pendingUserStatus)}</p>
         </div>
         <p style="margin-top: 18px;">
@@ -646,7 +646,7 @@ async function fetchCurrencyRate(currencyCode) {
   const latestRate = payload?.value?.[0]
 
   if (!latestRate) {
-    throw new Error(`Nenhuma cotacao PTAX encontrada para ${currencyCode}.`)
+    throw new Error(`Nenhuma cotação PTAX encontrada para ${currencyCode}.`)
   }
 
   return {
@@ -707,13 +707,13 @@ async function recordAuditEvent(event) {
 
 async function assertActiveAdmin(authContext) {
   if (!authContext?.uid) {
-    throw new HttpsError('unauthenticated', 'Usuario nao autenticado.')
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
   }
 
   const actorProfile = await getUserProfile(authContext.uid)
 
   if (!actorProfile || actorProfile.role !== 'admin' || !isActiveStatus(actorProfile.status)) {
-    throw new HttpsError('permission-denied', 'Apenas administradores ativos podem executar esta acao.')
+    throw new HttpsError('permission-denied', 'Apenas administradores ativos podem executar esta ação.')
   }
 
   return actorProfile
@@ -721,17 +721,17 @@ async function assertActiveAdmin(authContext) {
 
 async function assertApprovedCaller(authContext) {
   if (!authContext?.uid) {
-    throw new HttpsError('unauthenticated', 'Usuario nao autenticado.')
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
   }
 
   if (!isCorporateEmail(authContext.token?.email)) {
-    throw new HttpsError('permission-denied', 'Email corporativo @sqquimica.com e obrigatorio.')
+    throw new HttpsError('permission-denied', 'Email corporativo @sqquimica.com é obrigatório.')
   }
 
   const actorProfile = await getUserProfile(authContext.uid)
 
   if (!actorProfile || !isActiveStatus(actorProfile.status)) {
-    throw new HttpsError('permission-denied', 'Usuario sem acesso ativo.')
+    throw new HttpsError('permission-denied', 'Usuário sem acesso ativo.')
   }
 
   return actorProfile
@@ -802,11 +802,11 @@ export const adminCreateUser = onCall(async (request) => {
   }
 
   if (!ALLOWED_ROLES.has(requestedRole)) {
-    throw new HttpsError('invalid-argument', 'Perfil de usuario invalido.')
+    throw new HttpsError('invalid-argument', 'Perfil de usuário inválido.')
   }
 
   if (!ALLOWED_STATUSES.has(requestedStatus)) {
-    throw new HttpsError('invalid-argument', 'Status de usuario invalido.')
+    throw new HttpsError('invalid-argument', 'Status de usuário inválido.')
   }
 
   const createdUser = await getAuth().createUser({
@@ -841,7 +841,7 @@ export const adminCreateUser = onCall(async (request) => {
   await setRoleStatusClaims(createdUser.uid, requestedRole, requestedStatus)
 
   await recordAuditEvent({
-    action: 'Usuario criado',
+    action: 'Usuário criado',
     actor: getUserDisplayName(actorProfile, actorProfile.email),
     target: createdUser.uid,
   })
@@ -857,11 +857,11 @@ export const adminDeleteUser = onCall(async (request) => {
   const uid = normalizeString(request.data?.uid)
 
   if (!uid) {
-    throw new HttpsError('invalid-argument', 'UID do usuario e obrigatorio.')
+    throw new HttpsError('invalid-argument', 'UID do usuário é obrigatório.')
   }
 
   if (uid === request.auth.uid) {
-    throw new HttpsError('failed-precondition', 'Nao e permitido excluir o proprio usuario logado.')
+    throw new HttpsError('failed-precondition', 'Não é permitido excluir o próprio usuário logado.')
   }
 
   try {
@@ -881,7 +881,7 @@ export const adminDeleteUser = onCall(async (request) => {
   await deleteNotificationsForRecipient(uid)
 
   await recordAuditEvent({
-    action: 'Usuario removido',
+    action: 'Usuário removido',
     actor: getUserDisplayName(actorProfile, actorProfile.email),
     target: uid,
   })
@@ -890,42 +890,42 @@ export const adminDeleteUser = onCall(async (request) => {
 })
 
 /**
- * Atualiza role e/ou status de um usuario, persistindo em ambos:
- *   - Firestore `users/{uid}` (exibicao, relatorios, historico)
- *   - Firebase Auth custom claims `role`/`status` (autorizacao via rules)
+ * Atualiza role e/ou status de um usuário, persistindo em ambos:
+ *   - Firestore `users/{uid}` (exibição, relatórios, histórico)
+ *   - Firebase Auth custom claims `role`/`status` (autorização via rules)
  *
- * O front NAO escreve mais direto em `users/{uid}.role`/`.status` — usa este callable.
+ * O front NÃO escreve mais direto em `users/{uid}.role`/`.status` — usa este callable.
  * Substitui o write direto que existia no AdminUsersPanel.
  */
 export const adminUpdateUserClaims = onCall(async (request) => {
   const actorProfile = await assertActiveAdmin(request.auth)
   const uid = normalizeString(request.data?.uid)
   if (!uid) {
-    throw new HttpsError('invalid-argument', 'UID do usuario e obrigatorio.')
+    throw new HttpsError('invalid-argument', 'UID do usuário é obrigatório.')
   }
 
   const requestedRole = request.data?.role === undefined ? null : normalizeString(request.data.role)
   const requestedStatus = request.data?.status === undefined ? null : normalizeString(request.data.status)
 
   if (requestedRole !== null && !ALLOWED_ROLES.has(requestedRole)) {
-    throw new HttpsError('invalid-argument', 'Perfil de usuario invalido.')
+    throw new HttpsError('invalid-argument', 'Perfil de usuário inválido.')
   }
   if (requestedStatus !== null && !ALLOWED_STATUSES.has(requestedStatus)) {
-    throw new HttpsError('invalid-argument', 'Status de usuario invalido.')
+    throw new HttpsError('invalid-argument', 'Status de usuário inválido.')
   }
   if (requestedRole === null && requestedStatus === null) {
     throw new HttpsError('invalid-argument', 'Informe role e/ou status para atualizar.')
   }
 
-  // Nao permite admin se autobloquear / se rebaixar.
+  // Não permite admin se autobloquear / se rebaixar.
   if (uid === request.auth.uid && requestedStatus !== null && requestedStatus !== 'Ativo') {
-    throw new HttpsError('failed-precondition', 'Nao e permitido bloquear o proprio usuario logado.')
+    throw new HttpsError('failed-precondition', 'Não é permitido bloquear o próprio usuário logado.')
   }
 
   const userRef = getFirestore().collection('users').doc(uid)
   const snapshot = await userRef.get()
   if (!snapshot.exists) {
-    throw new HttpsError('not-found', 'Usuario nao encontrado.')
+    throw new HttpsError('not-found', 'Usuário não encontrado.')
   }
   const current = snapshot.data() ?? {}
 
@@ -950,7 +950,7 @@ export const adminUpdateUserClaims = onCall(async (request) => {
   await setRoleStatusClaims(uid, safeRole, safeStatus)
 
   await recordAuditEvent({
-    action: 'Claims do usuario atualizadas',
+    action: 'Claims do usuário atualizadas',
     actor: getUserDisplayName(actorProfile, actorProfile.email),
     target: uid,
   })
@@ -965,7 +965,7 @@ export const adminUpsertUserPassword = onCall(async (request) => {
   const password = String(request.data?.password ?? '')
 
   if (!uid) {
-    throw new HttpsError('invalid-argument', 'UID do usuario e obrigatorio.')
+    throw new HttpsError('invalid-argument', 'UID do usuário é obrigatório.')
   }
 
   if (password.length < 6) {
@@ -983,7 +983,7 @@ export const sendCustomVerificationEmail = onCall(
   },
   async (request) => {
     if (!request.auth?.uid) {
-      throw new HttpsError('unauthenticated', 'Usuario nao autenticado.')
+      throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
     }
 
     const requestedUid = normalizeString(request.data?.uid)
@@ -994,7 +994,7 @@ export const sendCustomVerificationEmail = onCall(
     const targetEmail = normalizeEmail(targetUser.email)
 
     if (!targetEmail) {
-      throw new HttpsError('failed-precondition', 'Usuario sem email cadastrado.')
+      throw new HttpsError('failed-precondition', 'Usuário sem email cadastrado.')
     }
 
     if (!isCorporateEmail(targetEmail)) {
@@ -1010,7 +1010,7 @@ export const sendCustomVerificationEmail = onCall(
     if (!mailer) {
       throw new HttpsError(
         'failed-precondition',
-        'SMTP nao configurado nas Cloud Functions para enviar o email de verificacao.'
+        'SMTP não configurado nas Cloud Functions para enviar o email de verificação.'
       )
     }
 
@@ -1044,7 +1044,7 @@ export const sendCustomPasswordResetEmail = onCall(
     const email = normalizeEmail(request.data?.email)
 
     if (!email) {
-      throw new HttpsError('invalid-argument', 'Email e obrigatorio.')
+      throw new HttpsError('invalid-argument', 'Email é obrigatório.')
     }
 
     if (!isCorporateEmail(email)) {
@@ -1056,7 +1056,7 @@ export const sendCustomPasswordResetEmail = onCall(
     if (!mailer) {
       throw new HttpsError(
         'failed-precondition',
-        'SMTP nao configurado nas Cloud Functions para enviar o email de redefinicao.'
+        'SMTP não configurado nas Cloud Functions para enviar o email de redefinição.'
       )
     }
 
@@ -1113,7 +1113,7 @@ export const getDailyPtaxRates = onCall(async (request) => {
   }
 
   if (!usdRate && !eurRate) {
-    throw new HttpsError('unavailable', 'Nao foi possivel consultar a PTAX no momento.')
+    throw new HttpsError('unavailable', 'Não foi possível consultar a PTAX no momento.')
   }
 
   return {
@@ -1149,7 +1149,7 @@ export const createProcessMessageNotifications = onDocumentCreated(
     const actorRole = normalizeString(actorProfile?.role)
     const actorName = getUserDisplayName(
       actorProfile,
-      normalizeString(message.authorName || message.authorEmail || 'Usuario')
+      normalizeString(message.authorName || message.authorEmail || 'Usuário')
     )
     const notificationMap = new Map()
 
@@ -1199,7 +1199,7 @@ export const createProcessMessageNotifications = onDocumentCreated(
         maybeAddNotification(
           previousAuthorProfile,
           'process_question_answered',
-          'Sua duvida recebeu uma resposta',
+          'Sua dúvida recebeu uma resposta',
           buildReplyNotificationBody(buildProcessLabel(process), actorName)
         )
         break
@@ -1211,7 +1211,7 @@ export const createProcessMessageNotifications = onDocumentCreated(
         maybeAddNotification(
           adminUser,
           'process_question_created',
-          'Nova duvida em processo',
+          'Nova dúvida em processo',
           buildAdminNotificationBody(buildProcessLabel(process), actorName)
         )
       })
@@ -1224,7 +1224,7 @@ export const createProcessMessageNotifications = onDocumentCreated(
       maybeAddNotification(
         favoriteUser,
         'favorite_process_message',
-        'Atualizacao em processo favoritado',
+        'Atualização em processo favoritado',
         buildFavoriteNotificationBody(processLabel, actorName)
       )
     })
@@ -1251,7 +1251,7 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
     if (!actorProfile || !isActiveStatus(actorProfile.status)) return
 
     const actorRole = normalizeString(actorProfile.role)
-    const actorName = getUserDisplayName(actorProfile, normalizeString(after.updatedByName || 'Usuario'))
+    const actorName = getUserDisplayName(actorProfile, normalizeString(after.updatedByName || 'Usuário'))
     const process = {
       id: processId,
       ...after,
@@ -1295,7 +1295,7 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
         maybeAddNotification(
           adminUser,
           'post_receipt_notes_updated',
-          'Observacoes pos-recebimento atualizadas',
+          'Observações pós-recebimento atualizadas',
           buildPostReceiptNotesNotificationBody(processLabel, actorName)
         )
       })
@@ -1305,7 +1305,7 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
         maybeAddNotification(
           favoriteUser,
           'post_receipt_notes_updated',
-          'Observacoes pos-recebimento atualizadas',
+          'Observações pós-recebimento atualizadas',
           buildPostReceiptNotesNotificationBody(processLabel, actorName)
         )
       })
@@ -1354,7 +1354,7 @@ export const sendProcessNotificationEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      logger.info('SMTP nao configurado. Email de notificacao nao enviado.', {
+      logger.info('SMTP não configurado. Email de notificação não enviado.', {
         notificationId: event.params.notificationId,
         recipientUserId,
       })
@@ -1384,7 +1384,7 @@ export const sendNewsPublishedEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      logger.info('SMTP nao configurado. Email de noticia nao enviado.', {
+      logger.info('SMTP não configurado. Email de notícia não enviado.', {
         newsId: event.params.newsId,
       })
       return
@@ -1422,7 +1422,7 @@ export const sendNewsPublishedEmail = onDocumentCreated(
       .filter((entry) => entry.result.status === 'rejected')
 
     if (failedRecipients.length > 0) {
-      logger.error('Falha ao enviar algumas notificacoes de noticia.', {
+      logger.error('Falha ao enviar algumas notificações de notícia.', {
         newsId: event.params.newsId,
         failedRecipients: failedRecipients.map((entry) => ({
           email: entry.recipient.email,
@@ -1450,7 +1450,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
     const mailer = getMailer()
 
     if (!mailer) {
-      logger.info('SMTP nao configurado. Email de aprovacao pendente nao enviado.', {
+      logger.info('SMTP não configurado. Email de aprovação pendente não enviado.', {
         userId: event.params.userId,
       })
       return
@@ -1459,7 +1459,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
     const adminRecipients = await listActiveAdminUsers()
 
     if (adminRecipients.length === 0) {
-      logger.info('Nenhum admin ativo encontrado para o aviso de aprovacao pendente.', {
+      logger.info('Nenhum admin ativo encontrado para o aviso de aprovação pendente.', {
         userId: event.params.userId,
       })
       return
@@ -1487,7 +1487,7 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
       .filter((entry) => entry.result.status === 'rejected')
 
     if (failedRecipients.length > 0) {
-      logger.error('Falha ao enviar alguns emails de aprovacao pendente.', {
+      logger.error('Falha ao enviar alguns emails de aprovação pendente.', {
         userId: event.params.userId,
         failedRecipients: failedRecipients.map((entry) => ({
           email: normalizeEmail(entry.recipient.email),

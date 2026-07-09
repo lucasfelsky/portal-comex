@@ -7,27 +7,27 @@ export const dashboardStats = [
     description: 'Itens mockados em acompanhamento no fluxo atual.',
   },
   {
-    title: 'Prazos criticos',
+    title: 'Prazos críticos',
     value: '4',
-    description: 'Processos que precisariam de tratamento prioritario.',
+    description: 'Processos que precisariam de tratamento prioritário.',
   },
   {
     title: 'Equipe online',
     value: '6',
-    description: 'Indicador ficticio para compor a visao operacional.',
+    description: 'Indicador fictício para compor a visão operacional.',
   },
 ]
 
 export const dashboardHighlights = [
   'Atualizar filtros e busca quando a listagem real entrar.',
-  'Conectar cards a metricas vindas do backend.',
+  'Conectar cards a métricas vindas do backend.',
   'Definir alertas visuais por tipo de processo.',
 ]
 
 export const dashboardTasks = [
   'Criar contrato de dados do processo.',
   'Definir estados de carregamento e erro.',
-  'Mapear permissoes por perfil de usuario.',
+  'Mapear permissões por perfil de usuário.',
 ]
 
 export const processItems = [
@@ -41,14 +41,14 @@ export const processItems = [
   {
     id: 'PROC-002',
     client: 'Cliente Boreal',
-    route: 'Paranagua -> Miami',
-    status: 'Atencao',
+    route: 'Paranaguá -> Miami',
+    status: 'Atenção',
     statusTone: 'warn',
   },
   {
     id: 'PROC-003',
     client: 'Cliente Delta',
-    route: 'Itajai -> Rotterdam',
+    route: 'Itajaí -> Rotterdam',
     status: 'Em dia',
     statusTone: 'ok',
   },
@@ -71,19 +71,19 @@ export const adminUsersSeed = [
     statusTone: 'ok',
     lastAccess: 'Hoje, 08:14',
     scopes: getRolePermissions('admin'),
-    notes: 'Responsavel por aprovacoes e parametrizacao do portal.',
+    notes: 'Responsável por aprovações e parametrização do portal.',
   },
   {
     id: 'USR-002',
     name: 'Rafael Nunes',
     email: 'rafael.nunes@sqquimica.com.br',
     role: 'user',
-    area: 'Importacao',
+    area: 'Importação',
     status: 'Pendente',
     statusTone: 'warn',
     lastAccess: 'Aguardando primeiro acesso',
     scopes: getRolePermissions('user'),
-    notes: 'Cadastro aguardando validacao do perfil operacional.',
+    notes: 'Cadastro aguardando validação do perfil operacional.',
   },
   {
     id: 'USR-003',
@@ -95,7 +95,7 @@ export const adminUsersSeed = [
     statusTone: 'info',
     lastAccess: 'Hoje, 10:42',
     scopes: getRolePermissions('user'),
-    notes: 'Acompanha custos e conciliacao dos processos aprovados.',
+    notes: 'Acompanha custos e conciliação dos processos aprovados.',
   },
   {
     id: 'USR-004',
@@ -107,7 +107,7 @@ export const adminUsersSeed = [
     statusTone: 'neutral',
     lastAccess: '03 mar, 16:05',
     scopes: getRolePermissions('user'),
-    notes: 'Acesso pausado temporariamente por revisao de permissoes.',
+    notes: 'Acesso pausado temporariamente por revisão de permissões.',
   },
 ]
 
@@ -128,7 +128,7 @@ export const adminAuditEvents = [
   },
   {
     id: 'LOG-003',
-    action: 'Usuario aprovado',
+    action: 'Usuário aprovado',
     actor: 'Marina Costa',
     target: 'USR-004',
     timestamp: '09:18',
@@ -136,7 +136,7 @@ export const adminAuditEvents = [
 ]
 
 export const adminChecklist = [
-  'Definir perfis e permissoes.',
-  'Criar area de anuncios.',
+  'Definir perfis e permissões.',
+  'Criar área de anúncios.',
   'Registrar eventos importantes em log.',
 ]

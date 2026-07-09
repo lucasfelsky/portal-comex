@@ -153,7 +153,7 @@ export function buildPendingNewsMediaItems(fileList, options = {}) {
     const mimeType = normalizeStringValue(file?.type) || inferMimeType(fileName)
 
     if (imagesOnly && !String(mimeType).startsWith('image/')) {
-      throw new Error(`O arquivo "${fileName}" nao e uma imagem valida.`)
+      throw new Error(`O arquivo "${fileName}" não é uma imagem válida.`)
     }
 
     const isImage = mimeType.startsWith('image/')
