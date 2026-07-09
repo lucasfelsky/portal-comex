@@ -180,11 +180,9 @@ describeEmulator('syncExternalNews.mjs (emulador, Fluxo C)', () => {
 
     expect(item2.content).toBe('Descricao vinda do og:description da pagina.')
     expect(item2.summary).toBe('Descricao vinda do og:description da pagina.')
-    // Comportamento atual do script: og:image so substitui coverImage quando a
-    // imagem do feed e' BLOQUEADA (favicon/gstatic); cover ausente ('') fica
-    // vazio (ver ternario em fetchArticleMetadata). Se um dia virar fallback
-    // pra cover vazia tambem, atualizar esta asssercao pro og-capa-2.png.
-    expect(item2.coverImage).toBe('')
+    // og:image entra como fallback quando o feed nao traz imagem valida
+    // (ausente ou bloqueada por favicon/gstatic) — ver fetchArticleMetadata.
+    expect(item2.coverImage).toBe('https://cdn.example.com/og-capa-2.png')
   })
 
   it('feed quebrado vai pra DLQ (stage fetch-feed) sem derrubar o sync', async () => {

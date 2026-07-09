@@ -220,7 +220,8 @@ async function fetchArticleMetadata(newsItem) {
       ...newsItem,
       content: newsItem.content || metaDescription || buildEditorialFallback(newsItem),
       summary: newsItem.summary || metaDescription || buildEditorialFallback(newsItem),
-      coverImage: !isBlockedImageUrl(newsItem.coverImage) ? newsItem.coverImage : metaImage,
+      coverImage:
+        (isBlockedImageUrl(newsItem.coverImage) ? '' : newsItem.coverImage) || metaImage,
     }
   } catch {
     return {
