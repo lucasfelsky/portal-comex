@@ -5,6 +5,7 @@ import {
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import {
   isProcessTrulyFinalized,
+  getUnscheduledItemLabel,
 } from './processStatus'
 import {
   getEstimatedDeliveryDate,
@@ -152,6 +153,11 @@ export function getWeeklyArrivalProcesses(processes, now = new Date()) {
 }
 
 function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess }) {
+  // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
+  // Antes era fixa "Coleta ainda nao agendada", o que ficava
+  // estranho quando o processo ja' estava em transito (a caminho
+  // do CD) ou em processamento no CD.
+  const statusLabel = getUnscheduledItemLabel(process)
   return (
     <div
       key={process.id}
@@ -181,7 +187,9 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
             <p className="weekly-arrivals-windows__row">
               <strong className="weekly-arrivals-windows__date">{formatDateOnly(estimatedDelivery)}</strong>
             </p>
-            <small className="weekly-arrivals-windows__notes">Coleta ainda nao agendada</small>
+            {statusLabel ? (
+              <small className="weekly-arrivals-windows__notes">{statusLabel}</small>
+            ) : null}
           </li>
         </ul>
       </div>
@@ -309,7 +317,7 @@ export default function WeeklyArrivalsCard({
             {unscheduled.length > 0 ? (
               <section className="weekly-arrivals-section" aria-labelledby="weekly-arrivals-unscheduled-heading">
                 <h4 id="weekly-arrivals-unscheduled-heading" className="weekly-arrivals-section__title">
-                  Coleta nao agendada
+                  Previsao de entrega no armazem
                 </h4>
                 {unscheduled.map(({ process, estimatedDelivery }) => (
                   <UnscheduledItem

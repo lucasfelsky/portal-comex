@@ -141,6 +141,50 @@ export function isProcessTrulyFinalized(process) {
   return isProcessInStock(process)
 }
 
+// PR #6 (2026-07-09): label dinamica pro card "Coleta nao
+// agendada" (renomeada pra "Previsao de entrega no armazem") do
+// WeeklyArrivalsCard. Antes era sempre "Coleta ainda nao
+// agendada", o que nao faz sentido quando o processo ja' esta'
+// "a caminho do CD" (coleta ja' aconteceu). Agora reflete o
+// `collectionStatus` real.
+//
+// Retorna:
+// - "Carga em transito para o CD" quando collectionStatus e'
+//   "Carga a caminho do CD" ou "Veiculo no CD para descarga".
+// - "Carga em processamento no CD" quando em conferencia/etiquetagem,
+//   em processo de entrada, sendo descarregada ou recebida.
+// - "Coleta ainda nao agendada" quando pre-coleta (Aguardando
+//   agendamento de coleta, Coleta Agendada).
+// - "" (vazio) como fallback defensivo.
+export function getUnscheduledItemLabel(process) {
+  const normalized = normalizeComparableText(process?.collectionStatus)
+
+  if (
+    normalized === 'carga a caminho do cd' ||
+    normalized === 'veiculo no cd para descarga'
+  ) {
+    return 'Carga em transito para o CD'
+  }
+
+  if (
+    normalized === 'carga em conferencia/etiquetagem' ||
+    normalized === 'carga em processo de entrada' ||
+    normalized === 'carga sendo descarregada no cd' ||
+    normalized === 'carga recebida'
+  ) {
+    return 'Carga em processamento no CD'
+  }
+
+  if (
+    normalized === 'aguardando agendamento de coleta' ||
+    normalized === 'coleta agendada'
+  ) {
+    return 'Coleta ainda nao agendada'
+  }
+
+  return ''
+}
+
 export function isCdUnloadingOrReceivedStatus(status) {
   const normalizedStatus = normalizeComparableText(status)
 
