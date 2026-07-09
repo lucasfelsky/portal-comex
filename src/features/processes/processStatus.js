@@ -148,24 +148,74 @@ export function isProcessTrulyFinalized(process) {
 // "a caminho do CD" (coleta ja' aconteceu). Agora reflete o
 // `collectionStatus` real.
 //
+// PR #11 (2026-07-09): **consistência badge <-> notes**.
+// Investigacao do Lucas (image anexada) mostrou que em
+// processos com `collectionStatus` desatualizado (ex: ainda
+// "Coleta Agendada") MAS com `collectionWindows` ja' passada,
+// o `getProcessDerivedStatus` retorna fase `EM_ROTA` (badge
+// "Carga a caminho do CD"), mas esta funcao retornava
+// "Coleta ainda nao agendada" (notes). Dois sinais do mesmo
+// processo chegando a conclusoes opostas = inconsistência
+// visual pro usuario.
+//
+// Fix: usa a **fase derivada** (`getProcessDerivedStatus`)
+// como sinal primario, e so' usa `collectionStatus` direto
+// se a fase for `EM_TRANSITO` (sem janela, sem rota, sem
+// conferencia) ou `COLETA_AGENDADA` (janela no futuro).
+//
 // Retorna:
-// - "Carga em transito para o CD" quando collectionStatus e'
-//   "Carga a caminho do CD" ou "Veiculo no CD para descarga".
-// - "Carga em processamento no CD" quando em conferencia/etiquetagem,
-//   em processo de entrada, sendo descarregada ou recebida.
-// - "Coleta ainda nao agendada" quando pre-coleta (Aguardando
-//   agendamento de coleta, Coleta Agendada).
+// - "Carga em transito para o CD" quando fase EM_ROTA
+//   (collectionWindows passada, ou collectionStatus
+//   "Carga a caminho do CD" / "Veiculo no CD para descarga").
+// - "Carga em processamento no CD" quando fase POS_RECEBIMENTO
+//   (em conferencia/etiquetagem, em processo de entrada, sendo
+//   descarregada, recebida).
+// - "Coleta ainda nao agendada" quando fase COLETA_AGENDADA
+//   (janela no futuro) ou EM_TRANSITO sem contexto de CD.
+// - "Coleta ainda nao agendada" quando collectionStatus
+//   pre-coleta (Aguardando agendamento de coleta, Coleta
+//   Agendada) — fallback de seguranca.
 // - "" (vazio) como fallback defensivo.
 export function getUnscheduledItemLabel(process) {
+  // PR #11: alinhamento badge <-> notes.
+  // Pra decidir a label, olhamos o `processStatus` cru + a
+  // existencia de `collectionWindows` passada. Isso espelha
+  // (de forma simplificada) o que `getProcessDerivedStatus`
+  // faz pra decidir a fase `EM_ROTA`:
+  //   - fase `EM_ROTA` se `collectionWindows` existe e a
+  //     proxima janela ja' passou (linha 100-104 do
+  //     processDerivedStatus.js)
+  //   - fase `POS_RECEBIMENTO` se `collectionStatus` em
+  //     status de CD (conferencia, descarga, recebida)
+  // Como a funcao abaixo (caminho antigo) olha o
+  // `collectionStatus` direto, ha' casos em que o
+  // `collectionStatus` foi atualizado pra "Coleta
+  // Agendada" (intencao: "ainda vai coletar") mas a
+  // `collectionWindows` ja' passou — nesse caso a badge
+  // diz "Carga a caminho do CD" e o notes dizia
+  // "Coleta ainda nao agendada". Aqui corrigimos
+  // olhando tambem a `collectionWindows`.
   const normalized = normalizeComparableText(process?.collectionStatus)
 
-  if (
+  // Sinais de "em rota" — espelham isCdEnRouteStatus +
+  // getProcessDerivedStatus fase EM_ROTA (janela passada).
+  const isEnRoute = (
     normalized === 'carga a caminho do cd' ||
     normalized === 'veiculo no cd para descarga'
-  ) {
+  )
+  const hasOverdueWindow = Array.isArray(process?.collectionWindows) &&
+    process.collectionWindows.some((window) => {
+      const scheduled = window?.scheduledAt
+      if (!scheduled) return false
+      const time = new Date(scheduled).getTime()
+      return Number.isFinite(time) && time < Date.now()
+    })
+  if (isEnRoute || hasOverdueWindow) {
     return 'Carga em transito para o CD'
   }
 
+  // Sinais de "em processamento no CD" — em conferencia,
+  // descarga, recebida, em entrada.
   if (
     normalized === 'carga em conferencia/etiquetagem' ||
     normalized === 'carga em processo de entrada' ||
@@ -175,6 +225,7 @@ export function getUnscheduledItemLabel(process) {
     return 'Carga em processamento no CD'
   }
 
+  // Pre-coleta — "ainda nao agendada" (ou agendada no futuro).
   if (
     normalized === 'aguardando agendamento de coleta' ||
     normalized === 'coleta agendada'
