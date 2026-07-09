@@ -13,6 +13,39 @@ import {
 } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
 
+// PR #13 (2026-07-09): helper pra extrair YYYY-MM-DD em local
+// time (nao UTC). `Date.toISOString().slice(0, 10)` sempre usa
+// UTC e quebra pra quem esta' em timezone west (ex: BRT = UTC-3,
+// meia-noite local vira 03:00 do dia seguinte em UTC).
+// Usamos componentes locais e zero-pad manual.
+// Se o input for uma string YYYY-MM-DD (formato de data pura),
+// retornamos a string direto sem fazer parse (evita virar meia-
+// noite UTC, que em BRT vira 21:00 do dia anterior e bagunca a
+// comparacao).
+// Exportado (sem underscore) pra ser testavel em unit tests
+// sem precisar reimplementar a logica.
+export function toDateKeyLocal(value) {
+  if (typeof value === 'string') {
+    // Match exato de YYYY-MM-DD (formato de data, sem hora)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    // Outros formatos de string: parsea como Date
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return ''
+}
+
 function formatDateTime(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -127,14 +160,20 @@ export function getWeeklyArrivalProcesses(processes, now = new Date()) {
     // Sem janela agendada na semana: ver se a previsao automatica de
     // entrega no armazem cai na semana. Se sim, entra como
     // "Coleta nao agendada".
+    // PR #13 (2026-07-09): comparacao agora e' feita em YYYY-MM-DD
+    // (so' a data), nao em ms (que tinha problema de timezone:
+    // `new Date('2026-07-09')` e' meia-noite UTC, mas `start` e' meia-
+    // noite local. Quando a janela era HOJE matutino, a previsao
+    // calculada (hoje) caia ANTES de `start` e o processo sumia do
+    // card. Agora extraimos a data em local time e comparamos
+    // diretamente.
     const estimatedDelivery = getEstimatedDeliveryDate(process)
     if (!estimatedDelivery) continue
 
-    const deliveryDate = new Date(estimatedDelivery)
-    if (Number.isNaN(deliveryDate.getTime())) continue
-
-    const deliveryTime = deliveryDate.getTime()
-    if (deliveryTime < start.getTime() || deliveryTime > end.getTime()) continue
+    const deliveryKey = toDateKeyLocal(estimatedDelivery)
+    const startKey = toDateKeyLocal(start)
+    const endKey = toDateKeyLocal(end)
+    if (deliveryKey < startKey || deliveryKey > endKey) continue
 
     unscheduled.push({ process, estimatedDelivery })
   }
