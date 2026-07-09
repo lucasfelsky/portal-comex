@@ -363,7 +363,7 @@ describe('DashboardPage', () => {
   describe('Chegadas da semana (WeeklyArrivalsCard)', () => {
     // PR #12 (2026-07-09): badge "Carga a caminho do CD" foi
     // removida do UnscheduledItem (info duplicada com notes).
-    // O notes (statusLabel) ja' diz "Carga em transito para o CD"
+    // O notes (statusLabel) ja' diz "Carga em trânsito para o CD"
     // quando aplicavel, entao a badge era redundante.
     it('NAO renderiza badge "Carga a caminho do CD" (info duplicada com notes)', async () => {
       mockListProcesses.mockResolvedValue([
@@ -381,7 +381,7 @@ describe('DashboardPage', () => {
 
       renderPage()
       // O notes aparece
-      expect(await screen.findByText('Carga em transito para o CD')).toBeInTheDocument()
+      expect(await screen.findByText('Carga em trânsito para o CD')).toBeInTheDocument()
       // A badge NAO aparece (era duplicada)
       expect(screen.queryByText('CARGA A CAMINHO DO CD')).not.toBeInTheDocument()
     })
@@ -397,12 +397,12 @@ describe('DashboardPage', () => {
       expect(screen.getAllByText('PO 10001').length).toBeGreaterThan(0)
     })
 
-    it('mostra secao "Previsao de entrega no armazem" com processo sem janela mas com previsao na semana', async () => {
+    it('mostra secao "Previsão de entrega no armazem" com processo sem janela mas com previsao na semana', async () => {
       renderPage()
       // PR #6: secao foi renomeada de "Coleta nao agendada" pra
-      // "Previsao de entrega no armazem" (mais neutro, cobre
+      // "Previsão de entrega no armazem" (mais neutro, cobre
       // tambem processos em transito / em processamento no CD).
-      const titulo = await screen.findByText(/Previsao de entrega no armazem/i)
+      const titulo = await screen.findByText(/Previsão de entrega no armazem/i)
       expect(titulo).toBeInTheDocument()
       // p-unscheduled (PO 20002) tem previsao 12/07 (domingo desta semana)
       expect(screen.getAllByText('PO 20002').length).toBeGreaterThan(0)
@@ -431,17 +431,17 @@ describe('DashboardPage', () => {
     })
 
     // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
-    // Antes era fixa "Coleta ainda nao agendada" e nao fazia
+    // Antes era fixa "Coleta ainda não agendada" e nao fazia
     // sentido quando o processo ja' estava em transito / no CD.
-    it('mostra "Coleta ainda nao agendada" pra processo pre-coleta', async () => {
+    it('mostra "Coleta ainda não agendada" pra processo pre-coleta', async () => {
       renderPage()
       // p-unscheduled tem collectionStatus = 'Aguardando agendamento
       // de coleta' (pre-coleta)
-      const label = await screen.findByText('Coleta ainda nao agendada')
+      const label = await screen.findByText('Coleta ainda não agendada')
       expect(label).toBeInTheDocument()
     })
 
-    it('mostra "Carga em transito para o CD" pra processo em transito', async () => {
+    it('mostra "Carga em trânsito para o CD" pra processo em transito', async () => {
       mockListProcesses.mockResolvedValueOnce([
         ...PROCESSES,
         {
@@ -457,12 +457,12 @@ describe('DashboardPage', () => {
         },
       ])
       renderPage()
-      // p-in-transit aparece com label "Carga em transito para o CD"
-      // (NAO "Coleta ainda nao agendada" como antes)
-      const label = await screen.findByText('Carga em transito para o CD')
+      // p-in-transit aparece com label "Carga em trânsito para o CD"
+      // (NAO "Coleta ainda não agendada" como antes)
+      const label = await screen.findByText('Carga em trânsito para o CD')
       expect(label).toBeInTheDocument()
       // E NAO mostra a label antiga errada
-      const all = screen.queryAllByText('Coleta ainda nao agendada')
+      const all = screen.queryAllByText('Coleta ainda não agendada')
       // So' aparece pra p-unscheduled (que e' pre-coleta); p-in-transit
       // tem label "Carga em transito para o CD"
       expect(all.length).toBe(1)

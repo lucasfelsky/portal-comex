@@ -226,7 +226,7 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
         */}
         <ul className="weekly-arrivals-windows">
           <li className="weekly-arrivals-windows__item">
-            <span className="detail-label">Previsao de entrega no armazem</span>
+            <span className="detail-label">Previsão de entrega no armazem</span>
             <p className="weekly-arrivals-windows__row">
               <strong className="weekly-arrivals-windows__date">{formatDateOnly(estimatedDelivery)}</strong>
             </p>
@@ -318,7 +318,7 @@ export default function WeeklyArrivalsCard({
         <div>
           <h3>Chegadas da semana</h3>
           <p>
-            Previsao de entrega no armazem (sem coleta agendada) e coletas
+            Previsão de entrega no armazem (sem coleta agendada) e coletas
             agendadas (com data e turno) entre hoje e o proximo domingo.
           </p>
         </div>
@@ -360,7 +360,7 @@ export default function WeeklyArrivalsCard({
             {unscheduled.length > 0 ? (
               <section className="weekly-arrivals-section" aria-labelledby="weekly-arrivals-unscheduled-heading">
                 <h4 id="weekly-arrivals-unscheduled-heading" className="weekly-arrivals-section__title">
-                  Previsao de entrega no armazem
+                  Previsão de entrega no armazem
                 </h4>
                 {unscheduled.map(({ process, estimatedDelivery }) => (
                   <UnscheduledItem
