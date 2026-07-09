@@ -14,6 +14,7 @@
     "pretest": "node scripts/audit-vault-counts.cjs",
     "emulators": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:start --only auth,firestore,storage,functions",
     "test:rules": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore,storage --project demo-sqcomex \"npx vitest run emulator --no-file-parallelism\"",
+    "test:notifications": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore,functions --project demo-sqcomex \"npx vitest run notifications.triggers --no-file-parallelism\"",
     "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
     "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,storage,functions --config firebase.portal-comex.json",
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --config firebase.portal-comex.json",
@@ -29,7 +30,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.2.1",
     "@firebase/rules-unit-testing": "^3.0.2",
+    "@storybook/addon-a11y": "^10.4.6",
+    "@storybook/addon-docs": "^10.4.6",
+    "@storybook/addon-mcp": "^0.6.0",
+    "@storybook/react-vite": "^10.4.6",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/jest-dom": "^6.4.6",
     "@testing-library/react": "^16.0.1",
@@ -38,19 +44,14 @@
     "autoprefixer": "^10.4.22",
     "firebase-admin": "^12.1.0",
     "firebase-functions": "^7.2.5",
-    "firebase-tools": "^13.0.0",
+    "firebase-tools": "^15.22.4",
     "jsdom": "^25.0.0",
     "nodemailer": "^6.9.16",
     "postcss": "^8.5.6",
+    "storybook": "^10.4.6",
     "tailwindcss": "^4.1.18",
     "vite": "^5.4.21",
-    "vitest": "^1.6.0",
-    "storybook": "^10.4.6",
-    "@storybook/react-vite": "^10.4.6",
-    "@chromatic-com/storybook": "^5.2.1",
-    "@storybook/addon-a11y": "^10.4.6",
-    "@storybook/addon-docs": "^10.4.6",
-    "@storybook/addon-mcp": "^0.6.0"
+    "vitest": "^1.6.0"
   },
   "type": "module"
 }
