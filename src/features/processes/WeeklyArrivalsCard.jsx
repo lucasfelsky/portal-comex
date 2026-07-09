@@ -7,6 +7,7 @@ import {
   isProcessTrulyFinalized,
   getUnscheduledItemLabel,
 } from './processStatus'
+import { getProcessDerivedStatus } from './processDerivedStatus'
 import {
   getEstimatedDeliveryDate,
   getScheduledCollectionDeliveryShift,
@@ -158,6 +159,28 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
   // estranho quando o processo ja' estava em transito (a caminho
   // do CD) ou em processamento no CD.
   const statusLabel = getUnscheduledItemLabel(process)
+  // PR #10 (2026-07-09): DEBUG TEMPORARIO pra investigar bug
+  // reportado pelo Lucas (badge "Carga a caminho do CD" + notes
+  // "Coleta ainda nao agendada" no mesmo processo). Remover depois
+  // de investigar. Loga o collectionStatus real + length + charCodes
+  // dos primeiros 20 chars pra detectar espacos invisiveis. Roda pra
+  // TODOS os processos pra nao' precisar saber o ID especifico.
+  if (typeof window !== 'undefined') {
+    const derived = getProcessDerivedStatus(process)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG PR #10] UnscheduledItem', {
+      processId: process.id,
+      name: process.name,
+      collectionStatus: process.collectionStatus,
+      processStatus: process.processStatus,
+      collectionStatusType: typeof process.collectionStatus,
+      collectionStatusLength: process.collectionStatus?.length,
+      collectionStatusCharCodes: Array.from(String(process.collectionStatus || '').slice(0, 30)).map(c => c.charCodeAt(0)),
+      labelReturned: statusLabel,
+      derivedLabel: derived.label,
+      derivedPhase: derived.phase,
+    })
+  }
   return (
     <div
       key={process.id}
