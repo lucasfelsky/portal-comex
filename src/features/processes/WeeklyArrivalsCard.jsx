@@ -178,9 +178,13 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
           <p>{getProcessSubtitle(process, isAdmin)}</p>
         ) : null}
         <div className="process-item__line">{process.category}</div>
-        <div className="process-item__chips">
-          <ProcessDerivedStatusBadge process={process} />
-        </div>
+        {/*
+          PR #12 (2026-07-09): badge "Carga a caminho do CD" removida
+          do card "Previsao de entrega no armazem" (UnscheduledItem).
+          A info ja' e' mostrada no notes (statusLabel abaixo), entao
+          renderizar a badge aqui era duplicacao visual. Manter
+          somente no UnscheduledItem pra nao' poluir a UX.
+        */}
         <ul className="weekly-arrivals-windows">
           <li className="weekly-arrivals-windows__item">
             <span className="detail-label">Previsao de entrega no armazem</span>
