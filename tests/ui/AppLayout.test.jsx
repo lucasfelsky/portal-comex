@@ -30,6 +30,9 @@ vi.mock('../../src/services/exchangeRatesRepository', () => ({
 }))
 
 import AppLayout from '../../src/components/AppLayout.jsx'
+// SupportButton (aba de suporte) usa useToast; no app real o ToastProvider
+// mora no main.jsx, entao o wrapper do teste precisa dele tambem.
+import { ToastProvider } from '../../src/components/Toast.jsx'
 
 function renderWithRole(role) {
   mockUseAuth.mockReturnValue({
@@ -41,13 +44,15 @@ function renderWithRole(role) {
   })
 
   return render(
-    <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<div data-testid="home">Home</div>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
+    <ToastProvider>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<div data-testid="home">Home</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>
   )
 }
 

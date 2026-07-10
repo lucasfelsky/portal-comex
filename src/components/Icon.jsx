@@ -133,6 +133,13 @@ const ICONS = {
       <path d="M3 13.5V19a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 19v-5.5h-5l-1 2h-4l-1-2H3Z" />
     </>
   ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.4 9.2a2.6 2.6 0 0 1 5.2.3c0 1.7-2.6 2.2-2.6 3.7" />
+      <path d="M12 17h.01" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

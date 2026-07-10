@@ -15,7 +15,7 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 19,
+    "topLevel": 20,
     "_topLevel_list": [
       "AppLayout.jsx",
       "Breadcrumb.jsx",
@@ -33,6 +33,7 @@
       "Spinner.jsx",
       "Stagger.jsx",
       "StatCard.jsx",
+      "SupportButton.jsx",
       "TabButton.jsx",
       "Toast.jsx",
       "Tooltip.jsx"
@@ -49,7 +50,7 @@
     "count": 10
   },
   "srcServices": {
-    "count": 16,
+    "count": 17,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -64,8 +65,9 @@
       "newsRepository.js",
       "notificationsRepository.js",
       "postReceiptImagesStorage.js",
-      "processesRepository.js",
       "processMessagesRepository.js",
+      "processesRepository.js",
+      "supportTicketsRepository.js",
       "usersRepository.js"
     ]
   },
@@ -81,7 +83,7 @@
     ]
   },
   "firestore": {
-    "topLevelCollections": 11,
+    "topLevelCollections": 12,
     "subcollections": 1,
     "_topLevel_list": [
       "announcements",
@@ -92,19 +94,20 @@
       "forecastSettings",
       "news",
       "notifications",
+      "processes",
+      "supportTickets",
       "userCredentials",
-      "users",
-      "processes"
+      "users"
     ],
     "_subcollections_list": [
       "processes/messages"
     ]
   },
   "tests": {
-    "totalFiles": 51,
+    "totalFiles": 52,
     "_breakdown": {
       "firebase": 4,
-      "functions": 8,
+      "functions": 9,
       "ui": 39
     }
   }

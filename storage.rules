@@ -147,5 +147,19 @@ service firebase.storage {
           ? isAllowedImageContentType()
           : (folderName == 'attachments' && isAllowedFileContentType()));
     }
+
+    // Aba de suporte (backlog 2026-07-10): prints anexados ao chamado.
+    // Path segmentado pelo uid do autor — so' o proprio usuario grava na
+    // sua pasta; leitura para qualquer usuario aprovado (admin ve os
+    // anexos na triagem). Mesmas guardas de imagem do post-receipt.
+    match /supportTickets/{uid}/{fileName} {
+      allow read: if isApprovedUser();
+      allow write: if isApprovedUser()
+        && request.auth.uid == uid
+        && isAllowedImageContentType()
+        && isWithinImageSizeLimit()
+        && isSafeFileName(fileName)
+        && hasEmptyMetadata();
+    }
   }
 }

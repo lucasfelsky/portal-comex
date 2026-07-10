@@ -610,6 +610,57 @@ function buildPendingApprovalAdminEmailMessage({ pendingUser, adminRecipient }) 
   }
 }
 
+function buildSupportTicketAdminEmailMessage({ ticket, ticketId, adminRecipient }) {
+  const recipientName = repairTextEncoding(normalizeString(adminRecipient?.name))
+  const greeting = recipientName ? `Olá, ${recipientName}.` : 'Olá.'
+  const authorName = repairTextEncoding(normalizeString(ticket?.authorName)) || 'Usuário sem nome'
+  const authorEmail = normalizeEmail(ticket?.authorEmail)
+  const message = repairTextEncoding(normalizeString(ticket?.message)) || '(sem mensagem)'
+  const imageCount = Array.isArray(ticket?.imageUrls) ? ticket.imageUrls.length : 0
+  const priority = Number.isFinite(Number(ticket?.priority)) ? Number(ticket.priority) : 3
+
+  return {
+    subject: '[Portal COMEX] Novo chamado de suporte',
+    text: [
+      greeting,
+      '',
+      'Um novo chamado de suporte foi aberto no Portal COMEX.',
+      '',
+      `Aberto por: ${authorName}`,
+      `Email: ${authorEmail || 'Não informado'}`,
+      `Prioridade: ${priority}`,
+      imageCount > 0 ? `Anexos: ${imageCount} imagem(ns)` : 'Anexos: nenhum',
+      '',
+      'Mensagem:',
+      message,
+      '',
+      'Acesse a aba de suporte para triar o chamado:',
+      `${APP_URL}/admin/suporte`,
+    ].join('\n'),
+    html: `
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
+        <p>${escapeHtml(greeting)}</p>
+        <p>Um novo chamado de suporte foi aberto no <strong>Portal COMEX</strong>.</p>
+        <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
+          <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${escapeHtml(authorName)}</p>
+          <p style="margin: 0 0 6px;"><strong>Email:</strong> ${escapeHtml(authorEmail || 'Não informado')}</p>
+          <p style="margin: 0 0 6px;"><strong>Prioridade:</strong> ${escapeHtml(String(priority))}</p>
+          <p style="margin: 0 0 10px;"><strong>Anexos:</strong> ${escapeHtml(imageCount > 0 ? `${imageCount} imagem(ns)` : 'nenhum')}</p>
+          <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(message)}</p>
+        </div>
+        <p style="margin-top: 18px;">
+          <a
+            href="${APP_URL}/admin/suporte"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
+          >
+            Abrir aba de suporte
+          </a>
+        </p>
+      </div>
+    `,
+  }
+}
+
 function formatDateForPtax(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -1489,6 +1540,108 @@ export const sendPendingApprovalAdminEmail = onDocumentCreated(
     if (failedRecipients.length > 0) {
       logger.error('Falha ao enviar alguns emails de aprovação pendente.', {
         userId: event.params.userId,
+        failedRecipients: failedRecipients.map((entry) => ({
+          email: normalizeEmail(entry.recipient.email),
+          reason: String(entry.result.reason?.message ?? entry.result.reason ?? 'unknown'),
+        })),
+      })
+    }
+  }
+)
+
+// Aba de suporte (backlog 2026-07-10): quando um usuário abre um chamado em
+// `supportTickets/{ticketId}` (create direto do client, validado pelas rules),
+// este trigger avisa os admins por DOIS canais independentes:
+//   1. notificação in-app (`createNotifications`, type `support_ticket`) —
+//      criada mesmo sem SMTP configurado;
+//   2. e-mail (mesmo padrão de `sendPendingApprovalAdminEmail`).
+// O autor não recebe a própria notificação (caso um admin abra chamado).
+export const notifySupportTicketCreated = onDocumentCreated(
+  {
+    document: 'supportTickets/{ticketId}',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM],
+  },
+  async (event) => {
+    const ticket = event.data?.data()
+    if (!ticket) return
+
+    const ticketId = event.params.ticketId
+    const authorId = normalizeString(ticket.authorId)
+    const authorName = repairTextEncoding(normalizeString(ticket.authorName)) || 'Usuário'
+    const messageSnippet = repairTextEncoding(normalizeString(ticket.message)).slice(0, 140)
+
+    await recordAuditEvent({
+      action: 'Chamado de suporte aberto',
+      actor: authorName,
+      target: ticketId,
+    })
+
+    const adminRecipients = await listActiveAdminUsers()
+
+    if (adminRecipients.length === 0) {
+      logger.info('Nenhum admin ativo encontrado para o aviso de chamado de suporte.', {
+        ticketId,
+      })
+      return
+    }
+
+    const notificationRecipients = adminRecipients.filter((admin) => admin.id !== authorId)
+
+    try {
+      await createNotifications(
+        notificationRecipients.map((admin) => ({
+          recipientUserId: admin.id,
+          actorUserId: authorId,
+          actorName: authorName,
+          type: 'support_ticket',
+          processId: '',
+          messageId: ticketId,
+          title: 'Novo chamado de suporte',
+          body: `${authorName}: ${messageSnippet}`,
+          targetTab: 'suporte',
+        }))
+      )
+    } catch (error) {
+      logger.error('Falha ao criar notificações in-app do chamado de suporte.', {
+        ticketId,
+        reason: String(error?.message ?? error ?? 'unknown'),
+      })
+    }
+
+    const mailer = getMailer()
+
+    if (!mailer) {
+      logger.info('SMTP não configurado. Email de chamado de suporte não enviado.', {
+        ticketId,
+      })
+      return
+    }
+
+    const results = await Promise.allSettled(
+      adminRecipients.map(async (adminRecipient) => {
+        const message = buildSupportTicketAdminEmailMessage({
+          ticket,
+          ticketId,
+          adminRecipient,
+        })
+
+        await mailer.sendMail({
+          from: getEmailFromAddress(),
+          to: normalizeEmail(adminRecipient.email),
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        })
+      })
+    )
+
+    const failedRecipients = results
+      .map((result, index) => ({ result, recipient: adminRecipients[index] }))
+      .filter((entry) => entry.result.status === 'rejected')
+
+    if (failedRecipients.length > 0) {
+      logger.error('Falha ao enviar alguns emails de chamado de suporte.', {
+        ticketId,
         failedRecipients: failedRecipients.map((entry) => ({
           email: normalizeEmail(entry.recipient.email),
           reason: String(entry.result.reason?.message ?? entry.result.reason ?? 'unknown'),
