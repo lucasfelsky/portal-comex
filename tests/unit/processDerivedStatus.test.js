@@ -4,19 +4,21 @@
 // (que e' string YYYY-MM-DD em horario local). Em BRT (UTC-3) o UTC
 // pode estar num dia diferente do local, gerando classificacao errada
 // de "Atrasado". Fix: usa componentes locais.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { getProcessDerivedStatus } from '../../src/features/processes/processDerivedStatus'
 
-const realDateNow = Date.now
-
 beforeAll(() => {
-  // Mocka Date.now para 2026-07-09 14:00 BRT (quinta)
-  // = 2026-07-09 17:00 UTC
-  Date.now = () => new Date('2026-07-09T14:00:00-03:00').getTime()
+  // Congela o relogio em 2026-07-09 14:00 BRT (quinta) = 17:00 UTC.
+  // Precisa ser fake timers (nao `Date.now = ...`): a implementacao usa
+  // `new Date()` como default de `now`, que ignora um mock de Date.now e
+  // le o relogio real — o describe so passava quando a data real coincidia
+  // com a data mockada (quebrou em 2026-07-10).
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-07-09T14:00:00-03:00'))
 })
 
 afterAll(() => {
-  Date.now = realDateNow
+  vi.useRealTimers()
 })
 
 describe('getProcessDerivedStatus - isOverdue timezone (PR #15)', () => {
