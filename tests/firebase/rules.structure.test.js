@@ -67,6 +67,7 @@ describe('firestore.rules structure', () => {
       'users',
       'userCredentials',
       'audits',
+      'supportTickets',
     ]
 
     for (const collection of expectedCollections) {

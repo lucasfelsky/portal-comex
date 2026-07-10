@@ -277,4 +277,61 @@ describeEmulator('storage.rules (emulador)', () => {
       )
     })
   })
+
+  describe('supportTickets ({uid}/{file}) — aba de suporte (backlog 2026-07-10)', () => {
+    const uploadTo = (uid, email, role, status, path, contentType = 'image/png') =>
+      uploadBytes(
+        ref(storageAs(uid, email, role, status), path),
+        new Blob(['print'], { type: contentType }),
+        { contentType }
+      )
+
+    it('usuario aprovado sobe print na PROPRIA pasta', async () => {
+      await assertSucceeds(
+        uploadTo('user-1', 'user@sqquimica.com', 'user', 'Ativo', 'supportTickets/user-1/print.png')
+      )
+    })
+
+    it('usuario NAO sobe print na pasta de outro uid', async () => {
+      await assertFails(
+        uploadTo('user-1', 'user@sqquimica.com', 'user', 'Ativo', 'supportTickets/outro/print.png')
+      )
+    })
+
+    it('mime fora da whitelist de imagem FALHA (pdf)', async () => {
+      await assertFails(
+        uploadTo(
+          'user-1',
+          'user@sqquimica.com',
+          'user',
+          'Ativo',
+          'supportTickets/user-1/doc.pdf',
+          'application/pdf'
+        )
+      )
+    })
+
+    it('usuario Pendente NAO sobe print', async () => {
+      await assertFails(
+        uploadTo('pend-1', 'pend@sqquimica.com', 'user', 'Pendente', 'supportTickets/pend-1/print.png')
+      )
+    })
+
+    it('anonimo NAO sobe print', async () => {
+      await assertFails(
+        uploadBytes(
+          ref(anonStorage(), 'supportTickets/anon/print.png'),
+          new Blob(['x'], { type: 'image/png' }),
+          { contentType: 'image/png' }
+        )
+      )
+    })
+
+    it('leitura: qualquer usuario aprovado le (admin ve anexos na triagem)', async () => {
+      await seedObject('supportTickets/user-1/print.png')
+      await assertSucceeds(
+        getMetadata(ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), 'supportTickets/user-1/print.png'))
+      )
+    })
+  })
 })

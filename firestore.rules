@@ -385,6 +385,48 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Aba de suporte (backlog 2026-07-10): usuario aprovado abre chamado
+    // (create com allowlist estrita: autor = caller, status inicial 'aberto',
+    // prioridade default 3, mensagem 1..4000 chars, ate 5 imagens). Admin
+    // tria (update apenas de status/prioridade/resolucao). Autor le os
+    // proprios chamados; admin le todos. O aviso aos admins (in-app + email)
+    // sai da function `notifySupportTicketCreated` via Admin SDK.
+    function isSupportTicketCreate() {
+      return request.resource.data.keys().hasOnly([
+        'authorId', 'authorName', 'authorEmail', 'message', 'imageUrls',
+        'status', 'priority', 'createdAt', 'updatedAt',
+      ])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorEmail == request.auth.token.email
+        && request.resource.data.authorName == myName()
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 4000
+        && request.resource.data.status == 'aberto'
+        && request.resource.data.priority == 3
+        && request.resource.data.imageUrls is list
+        && request.resource.data.imageUrls.size() <= 5;
+    }
+
+    function isAdminSupportTicketUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status', 'priority', 'resolvedAt', 'resolvedById', 'resolvedByName',
+        'updatedAt',
+      ])
+        && request.resource.data.status in ['aberto', 'resolvido']
+        && request.resource.data.priority is int
+        && request.resource.data.priority >= 1
+        && request.resource.data.priority <= 5;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read: if isAdmin()
+        || (isApprovedUser() && resource.data.authorId == request.auth.uid);
+      allow create: if isApprovedUser() && isSupportTicketCreate();
+      allow update: if isAdmin() && isAdminSupportTicketUpdate();
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

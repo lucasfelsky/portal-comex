@@ -8,6 +8,7 @@ import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
+import SupportButton from './SupportButton'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
@@ -63,6 +64,10 @@ const pageMeta = {
     title: 'Regras de previsão',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Regras de previsão' }],
   },
+  '/admin/suporte': {
+    title: 'Suporte',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Suporte' }],
+  },
 }
 
 export default function AppLayout() {
@@ -96,6 +101,7 @@ export default function AppLayout() {
             { id: 'go-admin-announcements', label: 'Comunicados', group: 'Admin', to: '/admin/comunicados', icon: 'news' },
             { id: 'go-admin-bar', label: 'Barra do porto', group: 'Admin', to: '/admin/barra', icon: 'inbox' },
             { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
+            { id: 'go-admin-support', label: 'Suporte', group: 'Admin', to: '/admin/suporte', icon: 'help', keywords: ['chamado', 'bug', 'ticket'] },
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),
@@ -319,6 +325,12 @@ export default function AppLayout() {
         )
       )
       handleCloseNotificationPanel()
+      // Chamados de suporte moram na aba administrativa, não na central de
+      // chegadas (backlog 2026-07-10).
+      if (notification.type === 'support_ticket') {
+        navigate('/admin/suporte')
+        return
+      }
       navigate('/processos', {
         state: {
           selectedProcessId: notification.processId,
@@ -702,6 +714,8 @@ export default function AppLayout() {
               Sair
             </button>
           </div>
+
+          <SupportButton />
 
           <div className="mobile-notifications-fab">
             {renderNotificationsControl('ghost-button notifications__trigger mobile-notifications-fab__trigger')}

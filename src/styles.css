@@ -5159,3 +5159,178 @@ body {
   }
 }
 
+
+/* === Aba de suporte (backlog 2026-07-10) ============================== */
+/* Botao flutuante persistente no canto inferior direito. Somente na      */
+/* versao desktop do site (breakpoint padrao do projeto: 1041px) — no     */
+/* mobile o rodape ja tem a bottom-nav + FAB de notificacoes.             */
+.support-fab {
+  display: none;
+}
+
+@media (min-width: 1041px) {
+  .support-fab {
+    display: block;
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 28;
+  }
+}
+
+.support-fab__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 999px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.support-fab__trigger:hover {
+  transform: translateY(-2px);
+  background: var(--primary-strong, var(--primary));
+}
+
+.support-modal {
+  display: grid;
+  gap: 18px;
+}
+
+.support-modal__lead {
+  margin: 0;
+  color: var(--text-soft, inherit);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.support-modal__identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 12px);
+  background: var(--surface-muted, var(--surface));
+}
+
+.support-modal__identity p {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.support-modal__files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.support-modal__files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.support-modal__history {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.support-modal__history h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.support-modal__muted {
+  color: var(--text-soft, inherit);
+  font-size: 13px;
+  margin: 0;
+}
+
+.support-modal__tickets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.support-modal__tickets li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 12px);
+  padding: 10px 14px;
+}
+
+.support-modal__tickets p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.support-modal__ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.support-ticket-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.support-ticket-card__head strong {
+  display: block;
+}
+
+.support-ticket-card__meta {
+  color: var(--text-soft, inherit);
+  font-size: 12px;
+}
+
+.support-ticket-card__message {
+  margin: 10px 0;
+  white-space: pre-wrap;
+}
+
+.support-ticket-card__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.support-ticket-card__images img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.support-ticket-card__actions {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.support-ticket-card__priority {
+  min-width: 180px;
+}

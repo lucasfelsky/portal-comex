@@ -1,0 +1,266 @@
+import { useEffect, useMemo, useState } from 'react'
+import useAuth from '../../hooks/useAuth'
+import TabButton from '../../components/TabButton'
+import {
+  listAllSupportTickets,
+  updateSupportTicket,
+} from '../../services/supportTicketsRepository'
+
+// Aba de suporte — visão administrativa (backlog 2026-07-10).
+// Admin visualiza os chamados abertos pelos usuários (mensagem + prints +
+// autor), altera a prioridade (1 a 5, sendo 5 a máxima) e marca como
+// resolvido (ou reabre). A notificação de novos chamados chega por email e
+// pela central de notificações (function notifySupportTicketCreated).
+
+const PRIORITY_OPTIONS = [1, 2, 3, 4, 5]
+
+const PRIORITY_LABELS = {
+  1: '1 · Muito baixa',
+  2: '2 · Baixa',
+  3: '3 · Média',
+  4: '4 · Alta',
+  5: '5 · Máxima',
+}
+
+function buildActionErrorMessage(prefix, error) {
+  const details = error?.code ?? error?.message
+  return details ? `${prefix} (${details})` : prefix
+}
+
+function formatTicketDate(isoDate) {
+  if (!isoDate) return '—'
+  const parsed = new Date(isoDate)
+  if (Number.isNaN(parsed.getTime())) return '—'
+
+  return parsed.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export default function AdminSupportPanel() {
+  const { profile } = useAuth()
+  const [tickets, setTickets] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('aberto')
+  const [savingTicketId, setSavingTicketId] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadTickets() {
+      setIsLoading(true)
+
+      try {
+        const loadedTickets = await listAllSupportTickets()
+        if (isMounted) setTickets(loadedTickets)
+      } catch (loadError) {
+        if (isMounted) {
+          setError(buildActionErrorMessage('Não foi possível carregar os chamados.', loadError))
+        }
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+
+    loadTickets()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const visibleTickets = useMemo(() => {
+    const filteredTickets =
+      statusFilter === 'todos'
+        ? tickets
+        : tickets.filter((ticket) => ticket.status === statusFilter)
+
+    // Abertos primeiro por prioridade (5 -> 1); dentro da mesma prioridade,
+    // mais recente primeiro.
+    return [...filteredTickets].sort((left, right) => {
+      if (left.status !== right.status) {
+        return left.status === 'aberto' ? -1 : 1
+      }
+      if (left.priority !== right.priority) {
+        return right.priority - left.priority
+      }
+      return new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime()
+    })
+  }, [tickets, statusFilter])
+
+  const openCount = useMemo(
+    () => tickets.filter((ticket) => ticket.status === 'aberto').length,
+    [tickets]
+  )
+
+  async function applyTicketUpdate(ticket, nextStatus, nextPriority) {
+    setSavingTicketId(ticket.id)
+    setError('')
+
+    const isResolving = nextStatus === 'resolvido'
+
+    try {
+      await updateSupportTicket(ticket.id, { status: nextStatus, priority: nextPriority }, profile)
+
+      setTickets((currentTickets) =>
+        currentTickets.map((item) =>
+          item.id === ticket.id
+            ? {
+                ...item,
+                status: nextStatus,
+                priority: nextPriority,
+                resolvedAt: isResolving ? new Date().toISOString() : null,
+                resolvedByName: isResolving ? (profile?.name ?? null) : null,
+                updatedAt: new Date().toISOString(),
+              }
+            : item
+        )
+      )
+    } catch (saveError) {
+      setError(buildActionErrorMessage('Não foi possível atualizar o chamado.', saveError))
+    } finally {
+      setSavingTicketId(null)
+    }
+  }
+
+  return (
+    <>
+      {error ? <div className="error-banner">{error}</div> : null}
+
+      <article className="list-card">
+        <div className="card-heading">
+          <div>
+            <h3>Chamados de suporte</h3>
+            <p>
+              Demandas relatadas pelos usuários do portal.
+              {openCount > 0 ? ` ${openCount} em aberto.` : ' Nenhum chamado em aberto.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="tab-row" role="tablist" aria-label="Filtro de chamados">
+          <TabButton active={statusFilter === 'aberto'} onClick={() => setStatusFilter('aberto')}>
+            Abertos
+          </TabButton>
+          <TabButton
+            active={statusFilter === 'resolvido'}
+            onClick={() => setStatusFilter('resolvido')}
+          >
+            Resolvidos
+          </TabButton>
+          <TabButton active={statusFilter === 'todos'} onClick={() => setStatusFilter('todos')}>
+            Todos
+          </TabButton>
+        </div>
+
+        {isLoading ? (
+          <div className="empty-state">
+            <strong>Carregando chamados</strong>
+            <p>Buscando as demandas de suporte registradas.</p>
+          </div>
+        ) : visibleTickets.length === 0 ? (
+          <div className="empty-state">
+            <strong>Nenhum chamado por aqui</strong>
+            <p>
+              {statusFilter === 'aberto'
+                ? 'Não há chamados em aberto no momento.'
+                : 'Nenhum chamado corresponde ao filtro selecionado.'}
+            </p>
+          </div>
+        ) : (
+          <div className="detail-stack">
+            {visibleTickets.map((ticket) => {
+              const isSaving = savingTicketId === ticket.id
+              const isResolved = ticket.status === 'resolvido'
+
+              return (
+                <div key={ticket.id} className="detail-card support-ticket-card">
+                  <div className="support-ticket-card__head">
+                    <div>
+                      <strong>{ticket.authorName}</strong>
+                      <span className="support-ticket-card__meta">
+                        {ticket.authorEmail} · {formatTicketDate(ticket.createdAt)}
+                      </span>
+                    </div>
+                    <span className={`status-tag status-tag--${isResolved ? 'ok' : 'warn'}`}>
+                      {isResolved ? 'Resolvido' : 'Aberto'}
+                    </span>
+                  </div>
+
+                  <p className="support-ticket-card__message">{ticket.message}</p>
+
+                  {ticket.imageUrls.length > 0 ? (
+                    <div className="support-ticket-card__images">
+                      {ticket.imageUrls.map((url, index) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Abrir print ${index + 1}`}
+                        >
+                          <img src={url} alt={`Print ${index + 1} do chamado`} loading="lazy" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isResolved && ticket.resolvedByName ? (
+                    <p className="support-ticket-card__meta">
+                      Resolvido por {ticket.resolvedByName}
+                      {ticket.resolvedAt ? ` em ${formatTicketDate(ticket.resolvedAt)}` : ''}.
+                    </p>
+                  ) : null}
+
+                  <div className="action-row support-ticket-card__actions">
+                    <label className="field support-ticket-card__priority">
+                      <span>Prioridade</span>
+                      <select
+                        className="text-input"
+                        value={ticket.priority}
+                        disabled={isSaving}
+                        onChange={(event) =>
+                          applyTicketUpdate(ticket, ticket.status, Number(event.target.value))
+                        }
+                      >
+                        {PRIORITY_OPTIONS.map((priorityOption) => (
+                          <option key={priorityOption} value={priorityOption}>
+                            {PRIORITY_LABELS[priorityOption]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      className={isResolved ? 'ghost-button' : 'primary-button'}
+                      disabled={isSaving}
+                      onClick={() =>
+                        applyTicketUpdate(
+                          ticket,
+                          isResolved ? 'aberto' : 'resolvido',
+                          ticket.priority
+                        )
+                      }
+                    >
+                      {isSaving
+                        ? 'Salvando...'
+                        : isResolved
+                          ? 'Reabrir chamado'
+                          : 'Marcar como resolvido'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </article>
+    </>
+  )
+}

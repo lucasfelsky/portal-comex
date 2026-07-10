@@ -1150,6 +1150,145 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('supportTickets — aba de suporte (backlog 2026-07-10)', () => {
+    const validTicket = (overrides = {}) => ({
+      authorId: 'user-1',
+      authorName: 'Usuario Teste',
+      authorEmail: 'user@sqquimica.com',
+      message: 'O dashboard nao carrega.',
+      imageUrls: [],
+      status: 'aberto',
+      priority: 3,
+      createdAt: 'now',
+      updatedAt: 'now',
+      ...overrides,
+    })
+
+    it('usuario aprovado cria o proprio chamado valido', async () => {
+      const db = approvedUser('user-1')
+      await assertSucceeds(setDoc(doc(db, 'supportTickets/t1'), validTicket()))
+    })
+
+    it('nega create com authorId de outro usuario', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'supportTickets/t2'), validTicket({ authorId: 'outro' }))
+      )
+    })
+
+    it('nega create com authorEmail divergente do token', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'supportTickets/t3'), validTicket({ authorEmail: 'falso@sqquimica.com' }))
+      )
+    })
+
+    it('nega create com status != aberto', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'supportTickets/t4'), validTicket({ status: 'resolvido' }))
+      )
+    })
+
+    it('nega create com prioridade != 3 (default obrigatorio)', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(setDoc(doc(db, 'supportTickets/t5'), validTicket({ priority: 5 })))
+    })
+
+    it('nega create com mensagem vazia', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(setDoc(doc(db, 'supportTickets/t6'), validTicket({ message: '' })))
+    })
+
+    it('nega create com mais de 5 imagens', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(
+          doc(db, 'supportTickets/t7'),
+          validTicket({ imageUrls: ['a', 'b', 'c', 'd', 'e', 'f'] })
+        )
+      )
+    })
+
+    it('nega create com campo fora da allowlist', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'supportTickets/t8'), validTicket({ resolvedAt: 'hack' }))
+      )
+    })
+
+    it('anonimo nao cria chamado', async () => {
+      await assertFails(setDoc(doc(anon(), 'supportTickets/t9'), validTicket()))
+    })
+
+    it('autor le o proprio chamado; outro usuario nao', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tr'), validTicket()))
+      await assertSucceeds(getDoc(doc(approvedUser('user-1'), 'supportTickets/tr')))
+      await assertFails(
+        getDoc(doc(approvedUser('user-2', { email: 'u2@sqquimica.com' }), 'supportTickets/tr'))
+      )
+    })
+
+    it('admin le chamado de qualquer usuario', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tr2'), validTicket()))
+      await assertSucceeds(getDoc(doc(admin(), 'supportTickets/tr2')))
+    })
+
+    it('admin atualiza status e prioridade (triagem)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu'), validTicket()))
+      await assertSucceeds(
+        updateDoc(doc(admin(), 'supportTickets/tu'), {
+          status: 'resolvido',
+          priority: 5,
+          resolvedAt: 'now',
+          resolvedById: 'admin-1',
+          resolvedByName: 'Admin',
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('nega update de admin com prioridade fora de 1..5', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu2'), validTicket()))
+      await assertFails(
+        updateDoc(doc(admin(), 'supportTickets/tu2'), {
+          status: 'aberto',
+          priority: 9,
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('nega update de admin fora da allowlist (mensagem do autor)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu3'), validTicket()))
+      await assertFails(
+        updateDoc(doc(admin(), 'supportTickets/tu3'), {
+          status: 'aberto',
+          priority: 3,
+          message: 'admin reescrevendo a mensagem',
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('autor NAO atualiza o proprio chamado (triagem e do admin)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu4'), validTicket()))
+      await assertFails(
+        updateDoc(doc(approvedUser('user-1'), 'supportTickets/tu4'), {
+          status: 'resolvido',
+          priority: 3,
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('delete: admin pode, autor nao', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/td'), validTicket()))
+      await assertFails(deleteDoc(doc(approvedUser('user-1'), 'supportTickets/td')))
+      await assertSucceeds(deleteDoc(doc(admin(), 'supportTickets/td')))
+    })
+  })
+
   describe('catch-all', () => {
     it('colecao desconhecida eh negada ate pra admin', async () => {
       await assertFails(getDoc(doc(admin(), 'colecaoAleatoria/x')))
