@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Modal from './Modal'
@@ -63,10 +63,15 @@ export default function SupportButton() {
     }
   }, [isOpen, profile?.uid])
 
-  function handleClose() {
-    if (isSubmitting) return
+  const isSubmittingRef = useRef(false)
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting
+  }, [isSubmitting])
+
+  const handleClose = useCallback(() => {
+    if (isSubmittingRef.current) return
     setIsOpen(false)
-  }
+  }, [])
 
   function handleSelectFiles(event) {
     const selectedFiles = Array.from(event.target.files ?? [])
