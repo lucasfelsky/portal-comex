@@ -946,6 +946,72 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('forecastSettings — regras de previsao (read approved / write admin, sem allowlist)', () => {
+    // A rule de forecastSettings (firestore.rules) e' puramente por role:
+    // read: isApprovedUser(); create/update/delete: isAdmin(). NAO tem
+    // allowlist de campo (diferente de barra/processes/announcements), entao
+    // os casos cobrem role + os verbos CRUD que a rule concede, com o payload
+    // real gravado por saveForecastSettings (forecastSettings/current).
+    const forecastPayload = () => ({
+      destinations: [
+        { match: 'navegantes', label: 'Navegantes', cutoffHour: 14, cutoffMinute: 0 },
+        { match: 'itapoa', label: 'Itapoá', cutoffHour: 12, cutoffMinute: 0 },
+      ],
+      categoryBusinessDays: { FCL: 5, LCL: 7, AEREO: 10, CONSOLIDADO: 5 },
+      rollingCustoms: {
+        enabled: true,
+        businessDaysAfterBerth: 3,
+        appliesTo: ['FCL', 'CONSOLIDADO'],
+        duimpStatuses: ['aguardando registro'],
+      },
+      updatedAt: new Date(),
+      updatedBy: { uid: 'admin-1', name: 'Admin' },
+    })
+
+    it('admin cria/atualiza forecastSettings com o payload real (merge)', async () => {
+      await assertSucceeds(setDoc(doc(admin(), 'forecastSettings/current'), forecastPayload()))
+    })
+
+    it('admin atualiza doc existente (rollingCustoms.enabled off)', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      await assertSucceeds(
+        updateDoc(doc(admin(), 'forecastSettings/current'), {
+          'rollingCustoms.enabled': false,
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('admin apaga forecastSettings (a rule concede delete)', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      await assertSucceeds(deleteDoc(doc(admin(), 'forecastSettings/current')))
+    })
+
+    it('logistica le mas NAO escreve nem apaga', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      await assertSucceeds(getDoc(doc(logistics(), 'forecastSettings/current')))
+      await assertFails(setDoc(doc(logistics(), 'forecastSettings/current'), forecastPayload()))
+      await assertFails(deleteDoc(doc(logistics(), 'forecastSettings/current')))
+    })
+
+    it('usuario comum aprovado le mas NAO escreve', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      await assertSucceeds(getDoc(doc(approvedUser(), 'forecastSettings/current')))
+      await assertFails(setDoc(doc(approvedUser(), 'forecastSettings/current'), forecastPayload()))
+    })
+
+    it('usuario nao-aprovado (status Pendente) NAO le', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      const pending = approvedUser('pend-1', { status: 'Pendente' })
+      await assertFails(getDoc(doc(pending, 'forecastSettings/current')))
+    })
+
+    it('anonimo NAO le forecastSettings', async () => {
+      await seed((db) => setDoc(doc(db, 'forecastSettings/current'), forecastPayload()))
+      await assertFails(getDoc(doc(anon(), 'forecastSettings/current')))
+    })
+  })
+
   describe('announcements — admin hasOnly', () => {
     // PR #2 do backlog: hasOnly([title, content, channel, updatedAt])
     // para update; create adiciona createdAt.
