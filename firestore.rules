@@ -285,6 +285,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /externalNewsDlq/{docId} {
+      // DLQ do sync de RSS (L1): gravada pelo scripts/syncExternalNews.mjs
+      // via service account (bypassa rules). Leitura liberada so pra admin
+      // auditar falhas de feed/upsert; write fechado pra clientes.
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /barra/{docId} {
       allow read: if isApprovedUser();
       allow create, update: if isAdmin() && isAdminBarUpdate();

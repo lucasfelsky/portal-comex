@@ -185,6 +185,25 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('externalNewsDlq (DLQ do RSS sync — read admin-only)', () => {
+    it('admin le a DLQ', async () => {
+      await assertSucceeds(getDoc(doc(admin(), 'externalNewsDlq/d1')))
+    })
+
+    it('user aprovado e logistica NAO leem a DLQ', async () => {
+      await assertFails(getDoc(doc(approvedUser(), 'externalNewsDlq/d1')))
+      await assertFails(getDoc(doc(logistics(), 'externalNewsDlq/d1')))
+    })
+
+    it('anonimo NAO le a DLQ', async () => {
+      await assertFails(getDoc(doc(anon(), 'externalNewsDlq/d1')))
+    })
+
+    it('write fechado ate pra admin (so a service account do sync grava)', async () => {
+      await assertFails(setDoc(doc(admin(), 'externalNewsDlq/d1'), { stage: 'fetch-feed' }))
+    })
+  })
+
   describe('notifications (dono-only)', () => {
     beforeEach(async () => {
       await seed(async (db) => {

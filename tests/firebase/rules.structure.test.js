@@ -60,6 +60,7 @@ describe('firestore.rules structure', () => {
       'forecastSettings',
       'news',
       'externalNews',
+      'externalNewsDlq',
       'barra',
       'processes',
       'notifications',

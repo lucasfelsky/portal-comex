@@ -81,13 +81,14 @@
     ]
   },
   "firestore": {
-    "topLevelCollections": 10,
+    "topLevelCollections": 11,
     "subcollections": 1,
     "_topLevel_list": [
       "announcements",
       "audits",
       "barra",
       "externalNews",
+      "externalNewsDlq",
       "forecastSettings",
       "news",
       "notifications",
