@@ -24,10 +24,26 @@ import { createAuditEvent } from './auditRepository'
 
 const STORAGE_KEY = 'sq-comex-support-tickets'
 
-export const SUPPORT_TICKET_STATUSES = ['aberto', 'resolvido']
+// Suporte v2: status intermediário 'em_andamento' entre 'aberto' e
+// 'resolvido' (rules validam a mesma lista em isAdminSupportTicketUpdate;
+// o create continua nascendo 'aberto').
+export const SUPPORT_TICKET_STATUSES = ['aberto', 'em_andamento', 'resolvido']
 export const SUPPORT_TICKET_DEFAULT_PRIORITY = 3
 export const SUPPORT_TICKET_MAX_IMAGES = 5
 export const SUPPORT_TICKET_MAX_MESSAGE_LENGTH = 4000
+
+export const SUPPORT_TICKET_STATUS_LABELS = {
+  aberto: 'Aberto',
+  em_andamento: 'Em andamento',
+  resolvido: 'Resolvido',
+}
+
+// Tom visual do badge (`status-tag status-tag--<tone>` em styles.css).
+export const SUPPORT_TICKET_STATUS_TONES = {
+  aberto: 'warn',
+  em_andamento: 'info',
+  resolvido: 'ok',
+}
 
 function normalizeStringValue(value) {
   return String(value ?? '').trim()

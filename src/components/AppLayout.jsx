@@ -8,7 +8,7 @@ import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
-import SupportButton from './SupportButton'
+import SupportButton, { OPEN_SUPPORT_MODAL_EVENT } from './SupportButton'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
@@ -329,6 +329,13 @@ export default function AppLayout() {
       // chegadas (backlog 2026-07-10).
       if (notification.type === 'support_ticket') {
         navigate('/admin/suporte')
+        return
+      }
+      // Suporte v2: o AUTOR é avisado quando o chamado dele é resolvido. O
+      // clique abre o modal de suporte ("Meus chamados") — o autor comum não
+      // tem acesso à rota /admin/suporte.
+      if (notification.type === 'support_ticket_resolved') {
+        window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
         return
       }
       navigate('/processos', {
