@@ -22,3 +22,7 @@ serviceAccountKey.json
 
 *storybook.log
 storybook-static
+
+# Playwright (E2E browser)
+test-results/
+playwright-report/

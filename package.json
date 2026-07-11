@@ -22,7 +22,8 @@
     "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --config firebase.portal-comex.json",
     "deploy:intelliquote": "powershell -NoProfile -Command \"Copy-Item -Path ../../Intelliquote/programa/web/dist/* -Destination ./dist-intelliquote -Recurse -Force; firebase deploy --only hosting --config firebase.intelliquote.json\"",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:e2e": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only auth,firestore,storage --project demo-sqcomex \"npx playwright test\""
   },
   "dependencies": {
     "firebase": "^10.10.0",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@chromatic-com/storybook": "^5.2.1",
     "@firebase/rules-unit-testing": "^3.0.2",
+    "@playwright/test": "^1.61.1",
     "@storybook/addon-a11y": "^10.4.6",
     "@storybook/addon-docs": "^10.4.6",
     "@storybook/addon-mcp": "^0.6.0",
