@@ -239,6 +239,15 @@ function renderPage({ initialEntries = ['/'] } = {}) {
 }
 
 beforeEach(() => {
+  // Fixtures do WeeklyArrivalsCard usam datas hardcoded da semana de
+  // 2026-07-06..12 ("sexta desta semana" = 10/07 etc). Sem congelar o
+  // relogio, a suite quebrava assim que a semana real virava (bomba-
+  // relogio descoberta em 2026-07-11, sabado). Mesmo remedio do
+  // processDerivedStatus (commit 67aa5e4): fake timers pinados numa
+  // quarta-feira da semana das fixtures. shouldAdvanceTime mantem os
+  // retries assincronos do Testing Library (findByText) funcionando.
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-07-08T12:00:00'))
   mockUseAuth.mockReset()
   mockNavigate.mockReset()
   mockListAnnouncements.mockReset()
@@ -252,6 +261,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.clearAllMocks()
 })
 
