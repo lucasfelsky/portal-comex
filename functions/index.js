@@ -661,6 +661,48 @@ function buildSupportTicketAdminEmailMessage({ ticket, ticketId, adminRecipient 
   }
 }
 
+// Suporte v2: e-mail ao AUTOR quando o chamado dele é marcado como resolvido
+// (mesmo molde do buildSupportTicketAdminEmailMessage, na direção oposta).
+function buildSupportTicketResolvedAuthorEmailMessage({ ticket, resolvedByName }) {
+  const authorName = repairTextEncoding(normalizeString(ticket?.authorName)) || 'Usuário'
+  const greeting = `Olá, ${authorName}.`
+  const message = repairTextEncoding(normalizeString(ticket?.message)) || '(sem mensagem)'
+  const resolverName = repairTextEncoding(normalizeString(resolvedByName)) || 'a equipe administrativa'
+
+  return {
+    subject: '[Portal COMEX] Seu chamado de suporte foi resolvido',
+    text: [
+      greeting,
+      '',
+      `Seu chamado de suporte no Portal COMEX foi marcado como resolvido por ${resolverName}.`,
+      '',
+      'Chamado:',
+      message,
+      '',
+      'Se o problema persistir, abra um novo chamado pelo botão Suporte no portal:',
+      APP_URL,
+    ].join('\n'),
+    html: `
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
+        <p>${escapeHtml(greeting)}</p>
+        <p>Seu chamado de suporte no <strong>Portal COMEX</strong> foi marcado como <strong>resolvido</strong> por ${escapeHtml(resolverName)}.</p>
+        <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
+          <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(message)}</p>
+        </div>
+        <p style="margin-top: 18px;">Se o problema persistir, abra um novo chamado pelo botão <strong>Suporte</strong> no portal.</p>
+        <p style="margin-top: 18px;">
+          <a
+            href="${APP_URL}"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
+          >
+            Abrir o Portal COMEX
+          </a>
+        </p>
+      </div>
+    `,
+  }
+}
+
 function formatDateForPtax(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -1646,6 +1688,101 @@ export const notifySupportTicketCreated = onDocumentCreated(
           email: normalizeEmail(entry.recipient.email),
           reason: String(entry.result.reason?.message ?? entry.result.reason ?? 'unknown'),
         })),
+      })
+    }
+  }
+)
+
+// Suporte v2: quando um admin marca o chamado como resolvido, o AUTOR é
+// avisado por DOIS canais independentes (mesmo desenho do
+// notifySupportTicketCreated, na direção oposta):
+//   1. notificação in-app (type `support_ticket_resolved`) — o clique abre o
+//      modal de suporte do usuário (desvio no handleOpenNotification do
+//      AppLayout), não a aba admin;
+//   2. e-mail ao autor (se SMTP configurado).
+// Dispara só na TRANSIÇÃO para 'resolvido' (reabrir e re-resolver notifica de
+// novo, intencional). Admin que resolve o próprio chamado não é notificado.
+// A auditoria fica no client (updateSupportTicket já registra o evento).
+export const notifySupportTicketResolved = onDocumentUpdated(
+  {
+    document: 'supportTickets/{ticketId}',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM],
+  },
+  async (event) => {
+    const before = event.data?.before?.data()
+    const after = event.data?.after?.data()
+    if (!before || !after) return
+
+    const becameResolved = before.status !== 'resolvido' && after.status === 'resolvido'
+    if (!becameResolved) return
+
+    const ticketId = event.params.ticketId
+    const authorId = normalizeString(after.authorId)
+    const authorEmail = normalizeEmail(after.authorEmail)
+    const resolvedById = normalizeString(after.resolvedById)
+    const resolvedByName = repairTextEncoding(normalizeString(after.resolvedByName)) || 'Equipe administrativa'
+    const messageSnippet = repairTextEncoding(normalizeString(after.message)).slice(0, 140)
+
+    if (!authorId) {
+      logger.info('Chamado resolvido sem authorId; aviso ao autor ignorado.', { ticketId })
+      return
+    }
+
+    if (resolvedById && resolvedById === authorId) {
+      logger.info('Autor resolveu o próprio chamado; aviso ao autor ignorado.', { ticketId })
+      return
+    }
+
+    try {
+      await createNotifications([
+        {
+          recipientUserId: authorId,
+          actorUserId: resolvedById,
+          actorName: resolvedByName,
+          type: 'support_ticket_resolved',
+          processId: '',
+          messageId: ticketId,
+          title: 'Chamado de suporte resolvido',
+          body: `Seu chamado foi resolvido por ${resolvedByName}: ${messageSnippet}`,
+          targetTab: 'suporte',
+        },
+      ])
+    } catch (error) {
+      logger.error('Falha ao criar notificação in-app de chamado resolvido.', {
+        ticketId,
+        reason: String(error?.message ?? error ?? 'unknown'),
+      })
+    }
+
+    const mailer = getMailer()
+
+    if (!mailer) {
+      logger.info('SMTP não configurado. Email de chamado resolvido não enviado.', { ticketId })
+      return
+    }
+
+    if (!authorEmail) {
+      logger.info('Chamado resolvido sem email do autor; email não enviado.', { ticketId })
+      return
+    }
+
+    try {
+      const message = buildSupportTicketResolvedAuthorEmailMessage({
+        ticket: after,
+        resolvedByName,
+      })
+
+      await mailer.sendMail({
+        from: getEmailFromAddress(),
+        to: authorEmail,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      })
+    } catch (error) {
+      logger.error('Falha ao enviar email de chamado resolvido ao autor.', {
+        ticketId,
+        reason: String(error?.message ?? error ?? 'unknown'),
       })
     }
   }

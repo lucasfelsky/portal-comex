@@ -1314,6 +1314,35 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    it('admin move o chamado para em_andamento (suporte v2)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu-ea'), validTicket()))
+      await assertSucceeds(
+        updateDoc(doc(admin(), 'supportTickets/tu-ea'), {
+          status: 'em_andamento',
+          priority: 4,
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('nega create ja nascendo em_andamento (create exige aberto)', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(doc(db, 'supportTickets/t-ea'), validTicket({ status: 'em_andamento' }))
+      )
+    })
+
+    it('nega update de admin com status fora da lista (aberto/em_andamento/resolvido)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu-inv'), validTicket()))
+      await assertFails(
+        updateDoc(doc(admin(), 'supportTickets/tu-inv'), {
+          status: 'cancelado',
+          priority: 3,
+          updatedAt: 'now',
+        })
+      )
+    })
+
     it('nega update de admin com prioridade fora de 1..5', async () => {
       await seed((db) => setDoc(doc(db, 'supportTickets/tu2'), validTicket()))
       await assertFails(

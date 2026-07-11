@@ -413,7 +413,7 @@ service cloud.firestore {
         'status', 'priority', 'resolvedAt', 'resolvedById', 'resolvedByName',
         'updatedAt',
       ])
-        && request.resource.data.status in ['aberto', 'resolvido']
+        && request.resource.data.status in ['aberto', 'em_andamento', 'resolvido']
         && request.resource.data.priority is int
         && request.resource.data.priority >= 1
         && request.resource.data.priority <= 5;

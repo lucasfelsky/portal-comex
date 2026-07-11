@@ -6,9 +6,16 @@ import { useToast } from './Toast'
 import {
   SUPPORT_TICKET_MAX_IMAGES,
   SUPPORT_TICKET_MAX_MESSAGE_LENGTH,
+  SUPPORT_TICKET_STATUS_LABELS,
+  SUPPORT_TICKET_STATUS_TONES,
   createSupportTicket,
   listMySupportTickets,
 } from '../services/supportTicketsRepository'
+
+// Evento global disparado pelo AppLayout quando o usuário clica numa
+// notificação `support_ticket_resolved` — abre o modal com "Meus chamados"
+// (o autor não tem acesso à rota /admin/suporte).
+export const OPEN_SUPPORT_MODAL_EVENT = 'sq-comex:open-support-modal'
 
 // Aba de suporte (backlog 2026-07-10): botão flutuante persistente no canto
 // da tela (somente desktop, ver `.support-fab` em styles.css) que abre um
@@ -67,6 +74,15 @@ export default function SupportButton() {
   useEffect(() => {
     isSubmittingRef.current = isSubmitting
   }, [isSubmitting])
+
+  useEffect(() => {
+    function handleOpenRequest() {
+      setIsOpen(true)
+    }
+
+    window.addEventListener(OPEN_SUPPORT_MODAL_EVENT, handleOpenRequest)
+    return () => window.removeEventListener(OPEN_SUPPORT_MODAL_EVENT, handleOpenRequest)
+  }, [])
 
   const handleClose = useCallback(() => {
     if (isSubmittingRef.current) return
@@ -209,9 +225,9 @@ export default function SupportButton() {
                   <li key={ticket.id}>
                     <div className="support-modal__ticket-head">
                       <span
-                        className={`status-tag status-tag--${ticket.status === 'resolvido' ? 'ok' : 'warn'}`}
+                        className={`status-tag status-tag--${SUPPORT_TICKET_STATUS_TONES[ticket.status] ?? 'warn'}`}
                       >
-                        {ticket.status === 'resolvido' ? 'Resolvido' : 'Aberto'}
+                        {SUPPORT_TICKET_STATUS_LABELS[ticket.status] ?? 'Aberto'}
                       </span>
                       <span className="support-modal__muted">{formatTicketDate(ticket.createdAt)}</span>
                     </div>
