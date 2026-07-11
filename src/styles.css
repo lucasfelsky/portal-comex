@@ -1153,6 +1153,15 @@ body {
   text-decoration: none;
 }
 
+/* Linha de stat-cards do Dashboard (backlog v0.12): grid responsivo,
+   3 colunas no desktop, empilha no mobile. */
+.dashboard-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
 /* StatCard rich (Sprint 14). Variante com label + icon + trend +
    sparkline + valor grande + periodo. Cores do trend baseadas em
    tokens semanticos (success / danger). */

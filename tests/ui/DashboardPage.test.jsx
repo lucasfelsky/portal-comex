@@ -19,7 +19,7 @@
 // de ProcessesPage.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -481,6 +481,51 @@ describe('DashboardPage', () => {
       // So' aparece pra p-unscheduled (que e' pre-coleta); p-in-transit
       // tem label "Carga em transito para o CD"
       expect(all.length).toBe(1)
+    })
+  })
+
+  describe('Stat-cards (resumo, backlog v0.12)', () => {
+    // Relogio congelado em 2026-07-08 (beforeEach) -> semana-calendario
+    // 2026-07-06..12. Fixtures: p-unscheduled (eta 12/07, semana atual),
+    // p-in-stock (eta 01/07, semana anterior + finalizado),
+    // p-with-window (eta 15/07, semana seguinte), p-far-future (15/08).
+    it('mostra "Processos ativos" excluindo o processo em estoque', async () => {
+      const { container } = renderPage()
+      await screen.findByText('Processos ativos')
+      const row = container.querySelector('.dashboard-stat-row')
+      expect(row).not.toBeNull()
+      const activeCard = within(row).getByText('Processos ativos').closest('.stat-card')
+      // 6 processos na fixture - 1 em estoque (p-in-stock) = 5
+      expect(within(activeCard).getByText('5')).toBeInTheDocument()
+    })
+
+    it('mostra chegadas da semana com trend vs semana anterior e sparkline', async () => {
+      const { container } = renderPage()
+      await screen.findByText('Chegadas (ETA) desta semana')
+      const row = container.querySelector('.dashboard-stat-row')
+      const card = within(row).getByText('Chegadas (ETA) desta semana').closest('.stat-card')
+      // semana atual: so p-unscheduled (12/07). Anterior: p-in-stock (01/07).
+      expect(within(card).getByText('1')).toBeInTheDocument()
+      // delta 1 -> 1 = 0%
+      expect(within(card).getByText('0%')).toBeInTheDocument()
+      expect(within(card).getByText('vs. semana anterior')).toBeInTheDocument()
+      expect(card.querySelector('.stat-card__sparkline')).not.toBeNull()
+    })
+
+    it('mostra contagem de favoritos (0 sem favoritos no profile)', async () => {
+      const { container } = renderPage()
+      await screen.findByText('Processos favoritos', { selector: '.stat-card__label' })
+      const row = container.querySelector('.dashboard-stat-row')
+      const card = within(row)
+        .getByText('Processos favoritos', { selector: '.stat-card__label' })
+        .closest('.stat-card')
+      expect(within(card).getByText('0')).toBeInTheDocument()
+    })
+
+    it('nao renderiza a linha de stats enquanto processos carregam', () => {
+      mockListProcesses.mockReturnValue(new Promise(() => {}))
+      const { container } = renderPage()
+      expect(container.querySelector('.dashboard-stat-row')).toBeNull()
     })
   })
 })
