@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore/lite'
-import { getStorage } from 'firebase/storage'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore/lite'
+import { connectStorageEmulator, getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,11 +19,23 @@ let auth = null
 let app = null
 let storage = null
 
+// E2E (Playwright): quando VITE_USE_FIREBASE_EMULATORS=true, o app inteiro
+// conversa com os emuladores locais (portas fixas do bloco `emulators` em
+// firebase.json) em vez do projeto real. Opt-in explicito de build/dev —
+// nunca ativo em producao (a flag nao existe nos builds de deploy).
+const useEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+
 if (isConfigured) {
   app = initializeApp(firebaseConfig)
   firestore = getFirestore(app)
   auth = getAuth(app)
   storage = getStorage(app)
+
+  if (useEmulators) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+    connectFirestoreEmulator(firestore, '127.0.0.1', 8080)
+    connectStorageEmulator(storage, '127.0.0.1', 9199)
+  }
 }
 
 // firebase/functions e' carregado sob demanda (dynamic import) -- so' baixa o
