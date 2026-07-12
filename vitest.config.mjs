@@ -21,6 +21,7 @@ const firebaseBackendAlias = Object.fromEntries(
     'firebase-admin/app',
     'firebase-admin/auth',
     'firebase-admin/firestore',
+    'firebase-admin/messaging',
     'firebase-functions/v2/firestore',
     'firebase-functions/v2/https',
     'firebase-functions/params',
