@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { FieldValue, getFirestore } from 'firebase-admin/firestore'
+import { getMessaging } from 'firebase-admin/messaging'
 import nodemailer from 'nodemailer'
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
@@ -860,6 +861,74 @@ async function createNotifications(entries) {
   })
 
   await batch.commit()
+
+  // F6 (backlog 2026-07-12): push (FCM) best-effort na sequencia do in-app.
+  // Qualquer falha aqui NAO afeta as notificacoes ja gravadas.
+  try {
+    await sendPushForEntries(normalizedEntries)
+  } catch (error) {
+    logger.error('Falha ao enviar push das notificacoes.', {
+      reason: String(error?.message ?? error ?? 'unknown'),
+    })
+  }
+}
+
+// F6: envia push web (FCM) para os tokens salvos em users/{uid}.fcmTokens[]
+// (persistidos pelo useFcm no client). Tokens mortos (app desinstalado,
+// permissao revogada) sao removidos do doc no retorno do multicast.
+const DEAD_TOKEN_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/invalid-argument',
+])
+
+async function sendPushForEntries(entries) {
+  const firestore = getFirestore()
+
+  for (const entry of entries) {
+    const uid = normalizeString(entry.recipientUserId)
+    const userSnapshot = await firestore.collection('users').doc(uid).get()
+    if (!userSnapshot.exists) continue
+
+    const tokens = Array.isArray(userSnapshot.data()?.fcmTokens)
+      ? userSnapshot.data().fcmTokens.filter(Boolean)
+      : []
+    if (tokens.length === 0) continue
+
+    const response = await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: repairTextEncoding(normalizeString(entry.title)),
+        body: repairTextEncoding(normalizeString(entry.body)),
+      },
+      webpush: {
+        fcmOptions: { link: APP_URL },
+      },
+    })
+
+    const deadTokens = response.responses
+      .map((item, index) => ({ item, token: tokens[index] }))
+      .filter(({ item }) => item.error && DEAD_TOKEN_CODES.has(item.error.code))
+      .map(({ token }) => token)
+
+    if (deadTokens.length > 0) {
+      try {
+        await firestore
+          .collection('users')
+          .doc(uid)
+          .update({ fcmTokens: FieldValue.arrayRemove(...deadTokens) })
+        logger.info('Tokens FCM mortos removidos do perfil.', {
+          uid,
+          removed: deadTokens.length,
+        })
+      } catch (cleanupError) {
+        logger.warn('Falha ao limpar tokens FCM mortos.', {
+          uid,
+          reason: String(cleanupError?.message ?? cleanupError ?? 'unknown'),
+        })
+      }
+    }
+  }
 }
 
 async function deleteNotificationsForRecipient(uid) {

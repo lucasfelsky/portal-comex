@@ -1,16 +1,9 @@
-// Service worker do Firebase Cloud Messaging (Sprint 22).
+// TEMPLATE do service worker de FCM (F6, backlog 2026-07-12).
+// NAO e' servido direto: o plugin `messagingSwPlugin` (vite.config.js)
+// substitui os placeholders __FIREBASE_*__ pelas VITE_FIREBASE_* e:
+//   - build: emite dist/firebase-messaging-sw.js
+//   - dev:   serve /firebase-messaging-sw.js via middleware
 // Recebe mensagens em background e exibe notificacao nativa.
-//
-// Configuracao necessaria:
-//   1. firebaseConfig: copiar de .env (mesmo projeto do app)
-//   2. VITE_FCM_VAPID_KEY: gerada em Firebase Console > Project Settings >
-//      Cloud Messaging > Web Push certificates.
-//
-// As constantes vem de import.meta.env no Vite, mas service workers
-// nao acessam o build. Por isso a config abaixo e populada via
-// no-cache redirect ou substituicao em build (Vite faz isso via
-// `import.meta.url` e Workbox). Aqui usamos um placeholder que sera
-// substituido por Vite plugin ou manualmente.
 
 /* eslint-disable no-undef */
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')

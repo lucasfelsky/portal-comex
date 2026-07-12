@@ -267,6 +267,48 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    it('self adiciona/remove fcmTokens (F6), com teto de 10', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/user-1'), {
+          uid: 'user-1',
+          name: 'Usuario Teste',
+          email: 'user@sqquimica.com',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+          fcmTokens: [],
+        })
+      )
+      const db = approvedUser('user-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'users/user-1'), { fcmTokens: ['tok-1', 'tok-2'] })
+      )
+      // Acima do teto de 10: negado.
+      await assertFails(
+        updateDoc(doc(db, 'users/user-1'), {
+          fcmTokens: Array.from({ length: 11 }, (_, i) => `tok-${i}`),
+        })
+      )
+      // Tipo errado: negado.
+      await assertFails(updateDoc(doc(db, 'users/user-1'), { fcmTokens: 'nao-e-lista' }))
+    })
+
+    it('outro usuario NAO mexe nos fcmTokens de alguem', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/user-1'), {
+          uid: 'user-1',
+          name: 'Usuario Teste',
+          email: 'user@sqquimica.com',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+          fcmTokens: [],
+        })
+      )
+      const outro = approvedUser('user-2', { email: 'u2@sqquimica.com' })
+      await assertFails(updateDoc(doc(outro, 'users/user-1'), { fcmTokens: ['tok-x'] }))
+    })
+
     it('self pode atualizar name, mas nao role/status', async () => {
       await seed((db) =>
         setDoc(doc(db, 'users/user-1'), {

@@ -8,9 +8,10 @@
 // enable(): pede permissao, obtem token, registra listener de foreground
 // disable(): revoga token
 //
-// O token NAO e persistido em user profile neste hook (futuro backend
-// Cloud Function podera salvar em users/{uid}.fcmTokens[]). Aqui
-// retornamos o token pra que o chamador decida o que fazer.
+// F6 (backlog 2026-07-12): o token agora E' persistido em
+// users/{uid}.fcmTokens[] no enable() (arrayUnion) e removido no
+// disable() (arrayRemove) — e' dai que as Cloud Functions leem os
+// destinos do push (sendPushToUsers).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -20,6 +21,7 @@ import {
   onFcmMessage,
   revokeFcmToken,
 } from '../services/fcmService'
+import { addFcmToken, removeFcmToken } from '../services/usersRepository'
 
 const STORAGE_KEY = 'sq-comex:fcm-status'
 
@@ -77,6 +79,16 @@ export function useFcm(uid) {
       setStatus(newToken ? 'granted' : 'error')
       writeStoredStatus(newToken ? 'granted' : 'error')
 
+      // Persiste o token no perfil — sem isso o backend nao tem pra onde
+      // enviar o push. Falha aqui nao derruba o enable (in-app continua).
+      if (newToken && uid) {
+        try {
+          await addFcmToken(uid, newToken)
+        } catch (persistError) {
+          console.error('Falha ao salvar token FCM no perfil.', persistError)
+        }
+      }
+
       // Listener de foreground
       if (unsubscribeRef.current) unsubscribeRef.current()
       unsubscribeRef.current = await onFcmMessage((payload) => {
@@ -93,20 +105,29 @@ export function useFcm(uid) {
       writeStoredStatus('error')
       return null
     }
-  }, [supported])
+  }, [supported, uid])
 
-  // Revoga token
+  // Revoga token (e tira do perfil ANTES de revogar — depois de revogado
+  // nao da mais pra descobrir qual era o token).
   const disable = useCallback(async () => {
     if (unsubscribeRef.current) {
       unsubscribeRef.current()
       unsubscribeRef.current = null
+    }
+    try {
+      const currentToken = token ?? (await getFcmToken())
+      if (currentToken && uid) {
+        await removeFcmToken(uid, currentToken)
+      }
+    } catch (persistError) {
+      console.error('Falha ao remover token FCM do perfil.', persistError)
     }
     const ok = await revokeFcmToken()
     setToken(null)
     setStatus('idle')
     writeStoredStatus('idle')
     return ok
-  }, [])
+  }, [token, uid])
 
   // Cleanup
   useEffect(() => {

@@ -1,4 +1,6 @@
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -7,6 +9,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore/lite'
 import { isFirebaseConfigured, firestore, getCallable } from '../lib/firebase'
 import { adminUsersSeed } from '../data/mockData'
@@ -203,4 +206,25 @@ export async function deleteUser(userId, actor = null) {
     actor: actor?.name ?? actor?.email ?? 'Sistema',
     target: userId,
   })
+}
+
+// F6 (backlog 2026-07-12): persistencia do token FCM em users/{uid}.fcmTokens[].
+// arrayUnion deduplica sozinho; as rules limitam a lista a 10 tokens e o
+// campo esta na allowlist do isAllowedSelfUserUpdate.
+export async function addFcmToken(uid, token) {
+  if (!isFirebaseConfigured || !firestore || !uid || !token) return false
+  await updateDoc(doc(firestore, 'users', uid), {
+    fcmTokens: arrayUnion(token),
+    updatedAt: serverTimestamp(),
+  })
+  return true
+}
+
+export async function removeFcmToken(uid, token) {
+  if (!isFirebaseConfigured || !firestore || !uid || !token) return false
+  await updateDoc(doc(firestore, 'users', uid), {
+    fcmTokens: arrayRemove(token),
+    updatedAt: serverTimestamp(),
+  })
+  return true
 }

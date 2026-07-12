@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -34,11 +36,56 @@ function firebaseEnvGuard({ mode, envDir }) {
   )
 }
 
+// F6 (backlog 2026-07-12): o service worker de FCM nao passa pelo bundle do
+// Vite (precisa viver em /firebase-messaging-sw.js na raiz), entao os
+// placeholders __FIREBASE_*__ do template sao substituidos aqui:
+//  - build: emite o asset final em dist/
+//  - dev: serve o conteudo substituido via middleware
+function messagingSwPlugin({ mode }) {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const replacements = {
+    __FIREBASE_API_KEY__: env.VITE_FIREBASE_API_KEY ?? '',
+    __FIREBASE_AUTH_DOMAIN__: env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
+    __FIREBASE_PROJECT_ID__: env.VITE_FIREBASE_PROJECT_ID ?? '',
+    __FIREBASE_STORAGE_BUCKET__: env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
+    __FIREBASE_MESSAGING_SENDER_ID__: env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
+    __FIREBASE_APP_ID__: env.VITE_FIREBASE_APP_ID ?? '',
+  }
+
+  function renderSw() {
+    const template = readFileSync(
+      resolve(process.cwd(), 'scripts/firebase-messaging-sw.template.js'),
+      'utf-8'
+    )
+    return Object.entries(replacements).reduce(
+      (content, [placeholder, value]) => content.replaceAll(placeholder, value),
+      template
+    )
+  }
+
+  return {
+    name: 'messaging-sw',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'firebase-messaging-sw.js',
+        source: renderSw(),
+      })
+    },
+    configureServer(server) {
+      server.middlewares.use('/firebase-messaging-sw.js', (_req, res) => {
+        res.setHeader('Content-Type', 'text/javascript')
+        res.end(renderSw())
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   firebaseEnvGuard({ mode, envDir: undefined })
 
   return {
-    plugins: [react()],
+    plugins: [react(), messagingSwPlugin({ mode })],
     server: { port: 5173 },
     build: {
       rollupOptions: {

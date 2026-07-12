@@ -30,7 +30,7 @@ export const mockFirestoreApi = {
   where: vi.fn(),
   orderBy: vi.fn(),
   limit: vi.fn(),
-  FieldValue: { serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP') },
+  FieldValue: { serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'), arrayRemove: vi.fn((...values) => ({ __arrayRemove: values })) },
 }
 
 export const mockBatch = {
@@ -38,6 +38,11 @@ export const mockBatch = {
   update: vi.fn(),
   delete: vi.fn(),
   commit: vi.fn(),
+}
+
+// F6: mock do firebase-admin/messaging (push FCM). Default: tudo entregue.
+export const mockMessagingApi = {
+  sendEachForMulticast: vi.fn().mockResolvedValue({ successCount: 0, failureCount: 0, responses: [] }),
 }
 
 export const mockLogger = {
@@ -71,6 +76,9 @@ export const mocks = {
   firebaseFirestore: () => ({
     getFirestore: () => mockFirestoreApi,
     FieldValue: mockFirestoreApi.FieldValue,
+  }),
+  firebaseMessaging: () => ({
+    getMessaging: () => mockMessagingApi,
   }),
   firebaseFirestoreTriggers: () => ({
     onDocumentCreated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
@@ -112,6 +120,7 @@ export function setupFirestoreChain(collectionMap = {}) {
           data: () => dataSnapshot,
         }),
         set: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
         collection: vi.fn(),
       }
@@ -147,6 +156,7 @@ export function setupFirestoreChain(collectionMap = {}) {
             id,
             get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
             set: vi.fn().mockResolvedValue(undefined),
+            update: vi.fn().mockResolvedValue(undefined),
             collection: vi.fn(),
           }
         }
