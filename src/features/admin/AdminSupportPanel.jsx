@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import useAuth from '../../hooks/useAuth'
+import StatCard from '../../components/StatCard'
 import TabButton from '../../components/TabButton'
+import { computeTrendDelta } from '../../utils/dashboardStats'
+import {
+  averageResolutionHours,
+  buildWeeklyTicketSeries,
+  countUnresolvedByPriority,
+  formatResolutionHours,
+} from '../../utils/supportStats'
 import {
   SUPPORT_TICKET_STATUS_LABELS,
   SUPPORT_TICKET_STATUS_TONES,
@@ -105,6 +113,23 @@ export default function AdminSupportPanel() {
     [tickets]
   )
 
+  // F4 (backlog 2026-07-12): metricas derivadas dos proprios tickets.
+  const supportStats = useMemo(() => {
+    const weeklySeries = buildWeeklyTicketSeries(tickets)
+    return {
+      avgResolution: averageResolutionHours(tickets),
+      unresolved: countUnresolvedByPriority(tickets),
+      weeklySeries,
+      weeklyDelta: computeTrendDelta(
+        weeklySeries.currentWeekCount,
+        weeklySeries.previousWeekCount
+      ),
+    }
+  }, [tickets])
+
+  const highPriorityCount =
+    supportStats.unresolved.byPriority[4] + supportStats.unresolved.byPriority[5]
+
   async function applyTicketUpdate(ticket, nextStatus, nextPriority) {
     setSavingTicketId(ticket.id)
     setError('')
@@ -138,6 +163,36 @@ export default function AdminSupportPanel() {
   return (
     <>
       {error ? <div className="error-banner">{error}</div> : null}
+
+      {!isLoading && tickets.length > 0 ? (
+        <div className="dashboard-stat-row" aria-label="Métricas de suporte">
+          <StatCard
+            label="Tempo médio de resolução"
+            value={formatResolutionHours(supportStats.avgResolution)}
+            icon="check"
+          />
+          <StatCard
+            label={
+              highPriorityCount > 0
+                ? `Em aberto (${highPriorityCount} de prioridade alta)`
+                : 'Em aberto'
+            }
+            value={String(supportStats.unresolved.total)}
+            icon="help"
+          />
+          <StatCard
+            label="Chamados abertos por semana"
+            value={String(supportStats.weeklySeries.currentWeekCount)}
+            icon="trend"
+            trend={
+              supportStats.weeklyDelta === null
+                ? null
+                : { delta: supportStats.weeklyDelta, period: 'vs. semana anterior' }
+            }
+            sparkline={supportStats.weeklySeries.counts}
+          />
+        </div>
+      ) : null}
 
       <article className="list-card">
         <div className="card-heading">
