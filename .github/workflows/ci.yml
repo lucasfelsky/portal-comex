@@ -41,6 +41,38 @@ jobs:
       - name: Build de producao
         run: npm run build
 
+  e2e:
+    name: E2E browser (Playwright + emuladores)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # O Firestore Emulator exige JDK 11+; o npm script test:e2e roda via
+      # scripts/with-jdk.mjs, que prepende $JAVA_HOME/bin ao PATH (setado
+      # pelo setup-java abaixo). Config demo do playwright.config.mjs
+      # garante que nada toca producao.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Instalar Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+      - name: E2E (emulators:exec + playwright test)
+        run: npm run test:e2e
+      - name: Upload do report em falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   rules-structure:
     name: Firestore rules (structure)
     runs-on: ubuntu-latest
