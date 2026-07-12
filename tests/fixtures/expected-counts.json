@@ -72,11 +72,12 @@
     ]
   },
   "srcUtils": {
-    "count": 7,
+    "count": 8,
     "_list": [
       "collectionWindows.js",
       "dashboardStats.js",
       "deliveryForecast.js",
+      "exportProcesses.js",
       "newsMedia.js",
       "postReceiptImages.js",
       "storageUploadValidation.js",
@@ -105,11 +106,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 54,
+    "totalFiles": 55,
     "_breakdown": {
       "firebase": 4,
       "functions": 10,
-      "ui": 40
+      "ui": 41
     }
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import Skeleton from '../components/Skeleton'
 import Spinner from '../components/Spinner'
 import {
@@ -1401,6 +1402,23 @@ export default function ProcessesPage() {
           </div>
           <div className="admin-toolbar">
             <span className="inline-badge">{filteredProcesses.length} visíveis</span>
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={filteredProcesses.length === 0}
+              title="Baixar as linhas visíveis (filtros aplicados) em Excel"
+              onClick={async () => {
+                try {
+                  const exportedCount = await exportProcessesToXlsx(filteredProcesses)
+                  toast.success(`Exportados ${exportedCount} processos para Excel.`)
+                } catch (error) {
+                  console.error('Falha ao exportar processos.', error)
+                  toast.error('Não foi possível exportar os processos.')
+                }
+              }}
+            >
+              Exportar ({filteredProcesses.length})
+            </button>
             {viewMode !== 'list' ? (
               <button type="button" className="ghost-button" onClick={() => setViewMode('list')}>
                 Mostrar lista
