@@ -744,6 +744,22 @@ export default function AppLayout() {
               </span>
               <span className="mobile-bottom-nav__label">Menu</span>
             </button>
+            {/* F2 (backlog 2026-07-12): o FAB de suporte é desktop-only
+                (.support-fab, min-width 1041px) — sem este item o usuário
+                mobile não tinha COMO abrir chamado. Mesmo evento global do
+                clique em notificação resolvida. */}
+            <button
+              type="button"
+              className="mobile-bottom-nav__item mobile-bottom-nav__item--icon"
+              aria-label="Abrir suporte"
+              onClick={() => {
+                setIsMobileMenuOpen(false)
+                window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
+              }}
+            >
+              <Icon name="help" size={18} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Suporte</span>
+            </button>
           </nav>
         </div>
       </div>

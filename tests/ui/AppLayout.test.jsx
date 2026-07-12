@@ -9,7 +9,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
 
@@ -123,6 +123,48 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
     await screen.findAllByText(/Dashboard/i)
     // IntelliQuote nao deve aparecer (sidebar nem command palette)
     expect(screen.queryAllByText(/IntelliQuote/i)).toHaveLength(0)
+  })
+
+  describe('suporte no mobile (F2, backlog 2026-07-12)', () => {
+    // O FAB desktop tambem tem aria-label "Abrir suporte" — escopar as
+    // queries a bottom-nav evita a ambiguidade.
+    function bottomNav(container) {
+      return within(container.querySelector('.mobile-bottom-nav'))
+    }
+
+    it('bottom-nav tem item Suporte que dispara o evento de abrir o modal', () => {
+      const { container } = renderWithRole('user')
+
+      const listener = vi.fn()
+      window.addEventListener('sq-comex:open-support-modal', listener)
+
+      const supportItem = bottomNav(container).getByRole('button', { name: 'Abrir suporte' })
+      act(() => {
+        supportItem.click()
+      })
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      window.removeEventListener('sq-comex:open-support-modal', listener)
+    })
+
+    it('clicar em Suporte fecha o menu mobile se estiver aberto', () => {
+      const { container } = renderWithRole('user')
+
+      const menuToggle = bottomNav(container).getByRole('button', { name: 'Abrir menu' })
+      act(() => {
+        menuToggle.click()
+      })
+      expect(
+        bottomNav(container).getByRole('button', { name: 'Fechar menu' })
+      ).toBeInTheDocument()
+
+      act(() => {
+        bottomNav(container).getByRole('button', { name: 'Abrir suporte' }).click()
+      })
+      expect(
+        bottomNav(container).getByRole('button', { name: 'Abrir menu' })
+      ).toBeInTheDocument()
+    })
   })
 })
 

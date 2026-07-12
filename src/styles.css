@@ -3882,7 +3882,10 @@ body {
     right: auto;
     bottom: calc(50px + env(safe-area-inset-bottom));
     z-index: 28;
-    display: block;
+    /* F2: virou flex pra acomodar Menu + Suporte lado a lado. */
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: 18px;
