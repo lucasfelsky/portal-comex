@@ -99,6 +99,9 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          # F6: chave VAPID do web push (FCM). Opcional — sem ela o build
+          # passa e o push fica dormente (isFcmSupported() === false).
+          VITE_FCM_VAPID_KEY: ${{ secrets.VITE_FCM_VAPID_KEY }}
         run: npm run build
 
       - name: Detectar credencial disponivel
