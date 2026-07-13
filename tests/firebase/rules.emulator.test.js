@@ -293,6 +293,28 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(updateDoc(doc(db, 'users/user-1'), { fcmTokens: 'nao-e-lista' }))
     })
 
+    it('self salva notificationPreferences (F9); tipo errado negado', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/user-1'), {
+          uid: 'user-1',
+          name: 'Usuario Teste',
+          email: 'user@sqquimica.com',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+        })
+      )
+      const db = approvedUser('user-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'users/user-1'), {
+          notificationPreferences: { noticias: { email: false } },
+        })
+      )
+      await assertFails(
+        updateDoc(doc(db, 'users/user-1'), { notificationPreferences: 'nao-e-mapa' })
+      )
+    })
+
     it('outro usuario NAO mexe nos fcmTokens de alguem', async () => {
       await seed((db) =>
         setDoc(doc(db, 'users/user-1'), {

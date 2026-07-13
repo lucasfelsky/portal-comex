@@ -9,6 +9,7 @@ import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
 import SupportButton, { OPEN_SUPPORT_MODAL_EVENT } from './SupportButton'
+import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
@@ -79,6 +80,8 @@ export default function AppLayout() {
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false)
   const [isNotificationPanelMounted, setIsNotificationPanelMounted] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState('all')
+  // F9: modal de preferencias de notificacao (substitui o sino de FCM).
+  const [isPrefsModalOpen, setIsPrefsModalOpen] = useState(false)
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
@@ -454,29 +457,17 @@ export default function AppLayout() {
               >
                 Marcar todas como Lidas
               </button>
-              {fcm.supported ? (
-                <button
-                  type="button"
-                  className={`ghost-button notifications__fcm${fcm.status === 'granted' ? ' notifications__fcm--active' : ''}`}
-                  onClick={() => {
-                    if (fcm.status === 'granted') fcm.disable()
-                    else fcm.enable()
-                  }}
-                  aria-pressed={fcm.status === 'granted'}
-                  aria-label={
-                    fcm.status === 'granted'
-                      ? 'Desativar notificacoes do navegador'
-                      : 'Ativar notificacoes do navegador'
-                  }
-                  title={
-                    fcm.status === 'granted'
-                      ? 'Notificacoes do navegador ativadas'
-                      : 'Ativar notificacoes do navegador'
-                  }
-                >
-                  {fcm.status === 'granted' ? <Icon name="check" size={16} /> : <Icon name="bell" size={16} />}
-                </button>
-              ) : null}
+              {/* F9: o toggle de FCM saiu daqui (sino duplicado) — push agora
+                  e' um canal dentro das preferencias. */}
+              <button
+                type="button"
+                className="ghost-button notifications__prefs"
+                onClick={() => setIsPrefsModalOpen(true)}
+                aria-label="Preferências de notificação"
+                title="Preferências de notificação"
+              >
+                <Icon name="settings" size={16} />
+              </button>
               <button
                 type="button"
                 className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
@@ -723,6 +714,13 @@ export default function AppLayout() {
           </div>
 
           <SupportButton />
+
+          <NotificationPreferencesModal
+            open={isPrefsModalOpen}
+            onClose={() => setIsPrefsModalOpen(false)}
+            profile={profile}
+            fcm={fcm}
+          />
 
           <div className="mobile-notifications-fab">
             {renderNotificationsControl('ghost-button notifications__trigger mobile-notifications-fab__trigger')}

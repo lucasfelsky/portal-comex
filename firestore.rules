@@ -262,12 +262,17 @@ service cloud.firestore {
           'notes',
           'updatedAt',
           'fcmTokens',
+          'notificationPreferences',
         ])
         // F6: tokens de push — lista com teto (higiene; o backend tambem
         // remove tokens invalidos no retorno do multicast).
         && (!('fcmTokens' in request.resource.data)
           || (request.resource.data.fcmTokens is list
-            && request.resource.data.fcmTokens.size() <= 10));
+            && request.resource.data.fcmTokens.size() <= 10))
+        // F9: preferencias de notificacao — mapa (shape fino validado no
+        // client/functions; default ligado quando ausente).
+        && (!('notificationPreferences' in request.resource.data)
+          || request.resource.data.notificationPreferences is map);
     }
 
     match /announcements/{docId} {
