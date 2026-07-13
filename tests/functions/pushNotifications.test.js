@@ -138,6 +138,68 @@ describe('push FCM no createNotifications (via notifySupportTicketResolved)', ()
     expect(mockFirestoreApi.FieldValue.arrayRemove).toHaveBeenCalledWith('tok-morto')
   })
 
+  it('F9: pref inApp=false suprime a notificacao in-app (sem batch.set)', async () => {
+    setupFirestoreChain({
+      users: [
+        {
+          id: 'user-1',
+          data: {
+            name: 'Joana',
+            fcmTokens: ['tok-a'],
+            notificationPreferences: { suporte: { inApp: false } },
+          },
+        },
+      ],
+    })
+
+    await handler(makeEvent(BASE_TICKET, RESOLVED_TICKET))
+
+    expect(mockBatch.set).not.toHaveBeenCalled()
+    expect(mockBatch.commit).not.toHaveBeenCalled()
+    // Push segue LIGADO (canal independente).
+    expect(mockMessagingApi.sendEachForMulticast).toHaveBeenCalledTimes(1)
+  })
+
+  it('F9: pref push=false suprime o push (in-app segue)', async () => {
+    setupFirestoreChain({
+      users: [
+        {
+          id: 'user-1',
+          data: {
+            name: 'Joana',
+            fcmTokens: ['tok-a'],
+            notificationPreferences: { suporte: { push: false } },
+          },
+        },
+      ],
+    })
+
+    await handler(makeEvent(BASE_TICKET, RESOLVED_TICKET))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    expect(mockMessagingApi.sendEachForMulticast).not.toHaveBeenCalled()
+  })
+
+  it('F9: pref de OUTRA categoria nao afeta suporte (default ligado)', async () => {
+    setupFirestoreChain({
+      users: [
+        {
+          id: 'user-1',
+          data: {
+            name: 'Joana',
+            fcmTokens: ['tok-a'],
+            notificationPreferences: { noticias: { inApp: false, push: false } },
+          },
+        },
+      ],
+    })
+
+    await handler(makeEvent(BASE_TICKET, RESOLVED_TICKET))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    expect(mockMessagingApi.sendEachForMulticast).toHaveBeenCalledTimes(1)
+  })
+
   it('messaging explodindo: in-app NAO e afetado (best-effort)', async () => {
     setupFirestoreChain({
       users: [{ id: 'user-1', data: { name: 'Joana', fcmTokens: ['tok-a'] } }],

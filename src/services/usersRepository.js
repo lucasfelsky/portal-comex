@@ -228,3 +228,15 @@ export async function removeFcmToken(uid, token) {
   })
   return true
 }
+
+// F9 (backlog 2026-07-12): preferencias de notificacao (tipo x canal).
+// Shape: { processos|noticias|suporte: { inApp, email, push } } — merge
+// no doc do proprio usuario (rules: isAllowedSelfUserUpdate).
+export async function saveNotificationPreferences(uid, preferences) {
+  if (!isFirebaseConfigured || !firestore || !uid) return false
+  await updateDoc(doc(firestore, 'users', uid), {
+    notificationPreferences: preferences,
+    updatedAt: serverTimestamp(),
+  })
+  return true
+}

@@ -77,6 +77,8 @@ function buildBaseProfile(user, claims, existingProfile = null) {
     scopes: getRolePermissions(role),
     favoriteProcessIds: existingProfile?.favoriteProcessIds ?? [],
     notes: existingProfile?.notes ?? getDefaultNotes(status),
+    // F9: preferencias de notificacao (null = nunca configurou = tudo ligado).
+    notificationPreferences: existingProfile?.notificationPreferences ?? null,
   }
 }
 

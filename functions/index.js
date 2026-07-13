@@ -831,6 +831,22 @@ async function assertApprovedCaller(authContext) {
   return actorProfile
 }
 
+// F9 (backlog 2026-07-12): preferencias de notificacao por usuario.
+// users/{uid}.notificationPreferences = { processos|noticias|suporte:
+//   { inApp, email, push } }. DEFAULT LIGADO: so silencia com false
+// explicito — quem nunca configurou continua recebendo tudo.
+function prefCategoryForType(type) {
+  const normalizedType = normalizeString(type)
+  if (normalizedType.startsWith('support_ticket')) return 'suporte'
+  if (normalizedType.startsWith('news')) return 'noticias'
+  return 'processos'
+}
+
+function shouldNotify(userData, category, channel) {
+  const value = userData?.notificationPreferences?.[category]?.[channel]
+  return value !== false
+}
+
 async function createNotifications(entries) {
   const normalizedEntries = entries.filter(
     (entry) => normalizeString(entry?.recipientUserId) && normalizeString(entry?.title) && normalizeString(entry?.body)
@@ -839,9 +855,31 @@ async function createNotifications(entries) {
   if (normalizedEntries.length === 0) return
 
   const firestore = getFirestore()
+
+  // F9: carrega o doc de cada destinatario UMA vez (prefs + fcmTokens) e
+  // gateia in-app e push por preferencia. Default ligado.
+  const uniqueUids = [...new Set(normalizedEntries.map((entry) => normalizeString(entry.recipientUserId)))]
+  const userDataByUid = new Map()
+  for (const uid of uniqueUids) {
+    try {
+      const snapshot = await firestore.collection('users').doc(uid).get()
+      userDataByUid.set(uid, snapshot.exists ? snapshot.data() : null)
+    } catch (error) {
+      userDataByUid.set(uid, null)
+    }
+  }
+
+  const inAppEntries = normalizedEntries.filter((entry) =>
+    shouldNotify(
+      userDataByUid.get(normalizeString(entry.recipientUserId)),
+      prefCategoryForType(entry.type),
+      'inApp'
+    )
+  )
+
   const batch = firestore.batch()
 
-  normalizedEntries.forEach((entry) => {
+  inAppEntries.forEach((entry) => {
     const docRef = firestore.collection('notifications').doc()
 
     batch.set(docRef, {
@@ -860,12 +898,22 @@ async function createNotifications(entries) {
     })
   })
 
-  await batch.commit()
+  if (inAppEntries.length > 0) {
+    await batch.commit()
+  }
 
   // F6 (backlog 2026-07-12): push (FCM) best-effort na sequencia do in-app.
   // Qualquer falha aqui NAO afeta as notificacoes ja gravadas.
+  // F9: push tem gate proprio (preferencia por tipo x canal).
+  const pushEntries = normalizedEntries.filter((entry) =>
+    shouldNotify(
+      userDataByUid.get(normalizeString(entry.recipientUserId)),
+      prefCategoryForType(entry.type),
+      'push'
+    )
+  )
   try {
-    await sendPushForEntries(normalizedEntries)
+    await sendPushForEntries(pushEntries, userDataByUid)
   } catch (error) {
     logger.error('Falha ao enviar push das notificacoes.', {
       reason: String(error?.message ?? error ?? 'unknown'),
@@ -882,16 +930,16 @@ const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-argument',
 ])
 
-async function sendPushForEntries(entries) {
+async function sendPushForEntries(entries, userDataByUid = new Map()) {
   const firestore = getFirestore()
 
   for (const entry of entries) {
     const uid = normalizeString(entry.recipientUserId)
-    const userSnapshot = await firestore.collection('users').doc(uid).get()
-    if (!userSnapshot.exists) continue
+    const userData = userDataByUid.get(uid)
+    if (!userData) continue
 
-    const tokens = Array.isArray(userSnapshot.data()?.fcmTokens)
-      ? userSnapshot.data().fcmTokens.filter(Boolean)
+    const tokens = Array.isArray(userData.fcmTokens)
+      ? userData.fcmTokens.filter(Boolean)
       : []
     if (tokens.length === 0) continue
 
@@ -1513,6 +1561,14 @@ export const sendProcessNotificationEmail = onDocumentCreated(
       return
     }
 
+    // F9: preferencia do destinatario (processos x email). Default ligado.
+    if (!shouldNotify(recipient, 'processos', 'email')) {
+      logger.info('Email de notificacao suprimido por preferencia do usuario.', {
+        recipientUserId,
+      })
+      return
+    }
+
     const mailer = getMailer()
 
     if (!mailer) {
@@ -1560,8 +1616,11 @@ export const sendNewsPublishedEmail = onDocumentCreated(
         name: repairTextEncoding(normalizeString(user.name)),
         email: normalizeEmail(user.email),
         status: normalizeString(user.status),
+        notificationPreferences: user.notificationPreferences ?? null,
       }))
       .filter((user) => isActiveStatus(user.status) && isCorporateEmail(user.email))
+      // F9: preferencia noticias x email. Default ligado.
+      .filter((user) => shouldNotify(user, 'noticias', 'email'))
 
     const uniqueRecipients = Array.from(new Map(recipients.map((user) => [user.email, user])).values())
 
@@ -1728,8 +1787,13 @@ export const notifySupportTicketCreated = onDocumentCreated(
       return
     }
 
+    // F9: preferencia suporte x email de cada admin. Default ligado.
+    const emailRecipients = adminRecipients.filter((adminRecipient) =>
+      shouldNotify(adminRecipient, 'suporte', 'email')
+    )
+
     const results = await Promise.allSettled(
-      adminRecipients.map(async (adminRecipient) => {
+      emailRecipients.map(async (adminRecipient) => {
         const message = buildSupportTicketAdminEmailMessage({
           ticket,
           ticketId,
@@ -1747,7 +1811,7 @@ export const notifySupportTicketCreated = onDocumentCreated(
     )
 
     const failedRecipients = results
-      .map((result, index) => ({ result, recipient: adminRecipients[index] }))
+      .map((result, index) => ({ result, recipient: emailRecipients[index] }))
       .filter((entry) => entry.result.status === 'rejected')
 
     if (failedRecipients.length > 0) {
@@ -1832,6 +1896,13 @@ export const notifySupportTicketResolved = onDocumentUpdated(
 
     if (!authorEmail) {
       logger.info('Chamado resolvido sem email do autor; email não enviado.', { ticketId })
+      return
+    }
+
+    // F9: preferencia suporte x email do AUTOR. Default ligado.
+    const authorProfile = await getUserProfile(authorId)
+    if (!shouldNotify(authorProfile, 'suporte', 'email')) {
+      logger.info('Email de chamado resolvido suprimido por preferencia do autor.', { ticketId })
       return
     }
 

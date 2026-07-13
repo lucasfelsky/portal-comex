@@ -5347,3 +5347,57 @@ body {
 .support-ticket-card__priority {
   min-width: 180px;
 }
+
+/* F9: modal de preferencias de notificacao (grid tipo x canal).
+   Substitui o sino de FCM do painel de notificacoes. */
+.notification-prefs {
+  display: grid;
+  gap: 16px;
+}
+
+.notification-prefs__lead {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.notification-prefs__grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.notification-prefs__grid th,
+.notification-prefs__grid td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.notification-prefs__grid th[scope='row'] {
+  text-align: left;
+}
+
+.notification-prefs__grid input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-700);
+  cursor: pointer;
+}
+
+.notification-prefs__grid input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.notification-prefs__type {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.notification-prefs__hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
