@@ -1,3 +1,5 @@
+export const processCategoryOptions = ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']
+
 export function isMaritimeCategory(category) {
   return category === 'FCL' || category === 'LCL' || category === 'CONSOLIDADO'
 }
