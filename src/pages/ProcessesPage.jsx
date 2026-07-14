@@ -10,6 +10,7 @@ import ProcessDetailView from '../features/processes/ProcessDetailView'
 import ProcessForm from '../features/processes/ProcessForm'
 import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import ProcessListView from '../features/processes/ProcessListView'
+import ImportProcessesModal from '../features/processes/ImportProcessesModal'
 import Spinner from '../components/Spinner'
 import {
   channelOptions,
@@ -431,6 +432,14 @@ export default function ProcessesPage() {
   const [etaStartDate, setEtaStartDate] = useState('')
   const [etaEndDate, setEtaEndDate] = useState('')
   const [operationFilter, setOperationFilter] = useState('Todos')
+  const [isImportOpen, setIsImportOpen] = useState(false)
+
+  // F11: nºs de processo já existentes, pra o import marcar duplicatas sem
+  // uma query extra (os processos já estão carregados em memória).
+  const existingProcessNumbers = useMemo(
+    () => new Set(processes.map((item) => item.processNumber).filter(Boolean)),
+    [processes]
+  )
 
   // Filtros ativos: usado pra renderizar pills de filtros com X
   const hasActiveFilters =
@@ -1015,6 +1024,39 @@ export default function ProcessesPage() {
     }
   }
 
+  // F11: cria em lote as linhas válidas (já sem duplicatas) vindas do
+  // ImportProcessesModal. Cada linha vira um processo novo via saveProcess
+  // (sem id → cria), preenchendo updatedById/Name a partir do profile. Erros
+  // por linha são coletados sem abortar o lote; ao fim, refresh + toast.
+  async function handleImportProcesses(rows) {
+    if (!isAdmin) return
+    let created = 0
+    const failures = []
+    for (const row of rows) {
+      try {
+        await saveProcess(row, profile)
+        created += 1
+      } catch (importError) {
+        failures.push({ name: row.name, error: importError })
+      }
+    }
+
+    await refreshProcesses(selectedProcessId)
+
+    if (created > 0) {
+      toast.success(`Importados ${created} processo${created === 1 ? '' : 's'}.`)
+    }
+    if (failures.length > 0) {
+      console.error('Falha ao importar processos.', failures)
+      toast.error(
+        `${failures.length} processo${failures.length === 1 ? '' : 's'} não pôde ser criado.`
+      )
+    }
+    if (created === 0 && failures.length === 0) {
+      toast.info('Nenhum processo novo para importar.')
+    }
+  }
+
   async function handleSaveCollectionStatus() {
     if (!canEditCollectionStatus || !selectedProcess) return
     setIsSaving(true)
@@ -1292,6 +1334,7 @@ export default function ProcessesPage() {
             setOperationFilter('Todos')
           }}
           onSelectProcess={handleSelectProcess}
+          onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onExport={async () => {
             try {
               const exportedCount = await exportProcessesToXlsx(filteredProcesses)
@@ -1301,6 +1344,15 @@ export default function ProcessesPage() {
               toast.error('Não foi possível exportar os processos.')
             }
           }}
+        />
+      ) : null}
+
+      {isAdmin ? (
+        <ImportProcessesModal
+          open={isImportOpen}
+          onClose={() => setIsImportOpen(false)}
+          existingProcessNumbers={existingProcessNumbers}
+          onConfirm={handleImportProcesses}
         />
       ) : null}
 

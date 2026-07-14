@@ -2665,6 +2665,76 @@ body {
   font-weight: 700;
 }
 
+/* F11: badges de resumo do preview de import. */
+.inline-badge--ok {
+  background: var(--success-50);
+  color: var(--success-700);
+}
+
+.inline-badge--warn {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.inline-badge--danger {
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+
+/* F11: modal de import de processos em lote. */
+.import-processes {
+  display: grid;
+  gap: 14px;
+}
+
+.import-processes__hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.import-processes__filename {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.import-processes__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.import-processes__group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.import-processes__group summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.import-processes__group ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.import-processes__group li {
+  margin-bottom: 4px;
+}
+
+.import-processes__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .admin-user-list,
 .announcement-list,
 .audit-list,
