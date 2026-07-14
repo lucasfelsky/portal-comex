@@ -7,6 +7,8 @@ import { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel
 import PostReceiptGallery from '../features/processes/PostReceiptGallery'
 import CollectionStatusEditView from '../features/processes/CollectionStatusEditView'
 import ProcessDetailView from '../features/processes/ProcessDetailView'
+import ProcessForm from '../features/processes/ProcessForm'
+import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import Skeleton from '../components/Skeleton'
 import Spinner from '../components/Spinner'
 import {
@@ -28,9 +30,6 @@ import {
   listProcessMessages,
 } from '../services/processMessagesRepository'
 import {
-  getDisplayedCollectionStatus,
-  getDisplayedProcessStatus,
-  getQuickReadProcessStatus,
   isCollectionScheduleRetainingStatus,
   isDtaLoadingScheduledStatus,
   isDtaTransitCompletedStatus,
@@ -63,14 +62,11 @@ import {
   getEstimatedDeliveryDate,
 } from '../utils/deliveryForecast'
 import {
-  formatPostReceiptImageSize,
   buildPendingPostReceiptImages,
   MAX_POST_RECEIPT_IMAGES,
-  MAX_POST_RECEIPT_IMAGE_SIZE_BYTES,
   normalizeDraftPostReceiptImages,
   normalizePostReceiptImages,
   revokePostReceiptImagePreview,
-  toPostReceiptImagePreviewUrl,
 } from '../utils/postReceiptImages'
 import {
   deletePostReceiptImages,
@@ -1497,255 +1493,32 @@ export default function ProcessesPage() {
       ) : null}
 
       {(viewMode === 'create' || viewMode === 'edit') && isAdmin ? (
-        <article className="list-card" style={{ marginTop: '16px' }}>
-          <div className="card-heading">
-            <div>
-              <h3>{viewMode === 'create' ? 'Criar processo' : 'Editar processo'}</h3>
-            </div>
-            <div className="admin-toolbar">
-              <span className="inline-badge">{draft.category || 'Sem categoria'}</span>
-              <button type="button" className="ghost-button" onClick={() => setViewMode('list')}>
-                Voltar para lista
-              </button>
-            </div>
-          </div>
-
-          <div className="detail-tab-select">
-            <label className="field">
-              <span>Seção</span>
-              <select
-                className="text-input"
-                value={editTab}
-                onChange={(event) => setEditTab(event.target.value)}
-              >
-                <option value="general">Geral</option>
-                <option value="items">Itens</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="tab-row detail-tab-row">
-            <button
-              type="button"
-              className={`tab-button${editTab === 'general' ? ' tab-button--active' : ''}`}
-              onClick={() => setEditTab('general')}
-            >
-              Geral
-            </button>
-            <button
-              type="button"
-              className={`tab-button${editTab === 'items' ? ' tab-button--active' : ''}`}
-              onClick={() => setEditTab('items')}
-            >
-              Itens
-            </button>
-          </div>
-
-          <div className="detail-stack tab-panel-spacing" onClickCapture={handlePostReceiptDetailClick}>
-            {editTab === 'general' ? (
-              <>
-            <label className="field">
-              <span>Nome do processo</span>
-              <input className="text-input" type="text" value={draft.name} onChange={(event) => handleDraftChange('name', event.target.value)} placeholder="Ex.: Importação Atlas" />
-            </label>
-
-            <div className="detail-card detail-card--split">
-              <label className="field">
-                <span>Categoria</span>
-                <select className="text-input" value={draft.category} onChange={(event) => handleDraftChange('category', event.target.value)}>
-                  {processCategoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
-              <label className="field">
-                <span>Destino</span>
-                <input className="text-input" type="text" value={draft.destination} onChange={(event) => handleDraftChange('destination', event.target.value)} placeholder="Porto ou aeroporto de destino" />
-              </label>
-            </div>
-
-            {draft.category !== 'CONSOLIDADO' ? (
-              <label className="field">
-                <span>Código do processo</span>
-                <input className="text-input" type="text" value={draft.processNumber} onChange={(event) => handleDraftChange('processNumber', event.target.value)} placeholder="Número do processo" />
-              </label>
-            ) : null}
-
-            <div className="detail-card detail-card--split">
-              <label className="field"><span>ETD</span><input className="text-input" type="date" value={draft.etd} onChange={(event) => handleDraftChange('etd', event.target.value)} /></label>
-              <label className="field"><span>ETA</span><input className="text-input" type="date" value={draft.eta} onChange={(event) => handleDraftChange('eta', event.target.value)} /></label>
-            </div>
-
-            <div className="detail-card detail-card--split">
-              <div>
-                <span className="detail-label">Previsão automática no armazém</span>
-                <p>{getAutomaticEstimatedDeliveryLabel(draft)}</p>
-              </div>
-              <div>
-                <span className="detail-label">Previsão aplicada</span>
-                <p>{getEstimatedDeliveryLabel(draft)}</p>
-              </div>
-            </div>
-
-            <label className="field">
-              <span>Previsão manual de entrega no armazém</span>
-              <input
-                className="text-input"
-                type="date"
-                value={draft.warehouseDeliveryDateOverride}
-                onChange={(event) =>
-                  handleDraftChange('warehouseDeliveryDateOverride', event.target.value)
-                }
-              />
-              <small className="field-hint">
-                Campo opcional. Se vazio, o sistema usa a previsão automática.
-              </small>
-            </label>
-            {draft.warehouseDeliveryDateOverride ? (
-              <div className="action-row">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => handleDraftChange('warehouseDeliveryDateOverride', '')}
-                >
-                  Remover previsão manual
-                </button>
-              </div>
-            ) : null}
-
-            <div className="detail-card detail-card--split">
-              <label className="field">
-                <span>Status do processo</span>
-                <select className="text-input" value={draft.processStatus} onChange={(event) => handleDraftChange('processStatus', event.target.value)}>
-                  {processStatusOptions.map((item) => <option key={item} value={item}>{getDisplayedProcessStatus(item, draft.category)}</option>)}
-                </select>
-              </label>
-              <div className="detail-card detail-card--soft">
-                <span className="detail-label">Leitura rápida</span>
-                <span className={getStatusTagClass(draft.processStatus)}>{getDisplayedProcessStatus(draft.processStatus, draft.category)}</span>
-              </div>
-            </div>
-
-            <div className="detail-card detail-card--split">
-              <label className="field"><span>Quantidade de containers</span><input className="text-input" type="number" min="0" value={draft.containerQuantity} onChange={(event) => handleDraftChange('containerQuantity', event.target.value)} /></label>
-              <label className="field"><span>Quantidade de pallets</span><input className="text-input" type="number" min="0" value={draft.palletQuantity} onChange={(event) => handleDraftChange('palletQuantity', event.target.value)} /></label>
-            </div>
-
-            <label className="field">
-              <span>Observações do processo</span>
-              <textarea className="text-input text-area" value={draft.processNotes} onChange={(event) => handleDraftChange('processNotes', event.target.value)} placeholder="Informações operacionais relevantes do processo." />
-            </label>
-
-            {viewMode === 'edit' && draft.etaOriginal ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(draft.etaOriginal)}</p></div> : null}
-
-            {viewMode === 'edit' && isMaritimeCategory(draft.category) ? (
-              <div className="detail-card">
-                <span className="detail-label">MAPA</span>
-                <label className="field">
-                  <span>Status</span>
-                  <select className="text-input" value={draft.mapaStatus} onChange={(event) => handleDraftChange('mapaStatus', event.target.value)}>
-                    <option value="">Selecione o status</option>
-                    {mapaStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </label>
-                {shouldEditMapaInspection(draft.mapaStatus) ? <label className="field"><span>Vistoria agendada para</span><input className="text-input" type="datetime-local" value={draft.mapaInspectionScheduledAt} onChange={(event) => handleDraftChange('mapaInspectionScheduledAt', event.target.value)} /></label> : null}
-              </div>
-            ) : null}
-
-            {canShowMaritimeFlow ? (
-              <div className="detail-card">
-                <span className="detail-label">Pós-atracação</span>
-                <div className="checkbox-grid">
-                  <label className="checkbox-field"><input type="checkbox" checked={draft.berthed} onChange={(event) => handleDraftChange('berthed', event.target.checked)} /><span>Atracou?</span></label>
-                  {draft.berthed ? <label className="checkbox-field"><input type="checkbox" checked={draft.cargoPresenceInformed} onChange={(event) => handleDraftChange('cargoPresenceInformed', event.target.checked)} /><span>Presença de carga informada?</span></label> : null}
-                </div>
-                {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
-                {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
-                  <CollectionWindowsEditor
-                    value={draft.collectionWindows}
-                    maxContainers={Math.max(draft.containerQuantity || 1, 1)}
-                    onChange={(nextWindows) => handleDraftChange('collectionWindows', nextWindows)}
-                    disabled={isSaving}
-                  />
-                ) : null}
-                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
-              </div>
-            ) : null}
-
-            {canShowAirFlow ? (
-              <div className="detail-card">
-                <span className="detail-label">Pós-chegada</span>
-                <div className="checkbox-grid"><label className="checkbox-field"><input type="checkbox" checked={draft.arrived} onChange={(event) => handleDraftChange('arrived', event.target.checked)} /><span>Chegou?</span></label></div>
-                {draft.arrived ? <label className="field"><span>DTA</span><select className="text-input" value={draft.dtaStatus} onChange={(event) => handleDraftChange('dtaStatus', event.target.value)}><option value="">Selecione o status</option>{dtaStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {isDtaLoadingScheduled(draft.dtaStatus) ? <div className="detail-card detail-card--split"><label className="field"><span>Previsão do carregamento da DTA</span><input className="text-input" type="datetime-local" value={draft.dtaLoadingScheduledAt} onChange={(event) => handleDraftChange('dtaLoadingScheduledAt', event.target.value)} /></label><label className="field"><span>Previsão de chegada em Itajaí</span><input className="text-input" type="datetime-local" value={draft.dtaArrivalAtItajai} onChange={(event) => handleDraftChange('dtaArrivalAtItajai', event.target.value)} /></label></div> : null}
-                {isDtaTransitCompleted(draft.dtaStatus) ? <label className="checkbox-field"><input type="checkbox" checked={draft.cargoPresenceInformed} onChange={(event) => handleDraftChange('cargoPresenceInformed', event.target.checked)} /><span>Presença de carga informada?</span></label> : null}
-                {draft.cargoPresenceInformed ? <label className="field"><span>DUIMP</span><select className="text-input" value={draft.duimpStatus} onChange={(event) => handleDraftChange('duimpStatus', event.target.value)}><option value="">Selecione o status</option>{duimpStatusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.duimpStatus === 'Parametrizada' ? <label className="field"><span>Canal da parametrização</span><select className="text-input" value={draft.parameterizationChannel} onChange={(event) => handleDraftChange('parameterizationChannel', event.target.value)}><option value="">Selecione o canal</option>{channelOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : null}
-                {draft.parameterizationChannel === 'Verde' ? <label className="field"><span>Coleta</span><select className="text-input" value={draft.collectionStatus} onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}><option value="">Selecione o status</option>{getCollectionStatusOptions(draft).map((item) => <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>)}</select></label> : null}
-                {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
-                  <CollectionWindowsEditor
-                    value={draft.collectionWindows}
-                    maxContainers={Math.max(draft.containerQuantity || 1, 1)}
-                    onChange={(nextWindows) => handleDraftChange('collectionWindows', nextWindows)}
-                    disabled={isSaving}
-                  />
-                ) : null}
-                {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? <div className="detail-card"><span className="detail-label">Coleta</span><p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p></div> : null}
-              </div>
-            ) : null}
-              </>
-            ) : null}
-
-            {editTab === 'items' ? (
-              <div className="detail-card">
-                <div className="card-heading process-detail-card-heading">
-                  <div>
-                    <span className="detail-label">Itens do processo</span>
-                    <p>Nome comercial e quantidade vinculados ao processo. A importação aceita planilhas Excel com colunas de nome e quantidade.</p>
-                  </div>
-                  <div className="admin-toolbar">
-                    <input
-                      ref={itemsFileInputRef}
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleImportItemsFile}
-                      style={{ display: 'none' }}
-                    />
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => itemsFileInputRef.current?.click()}
-                      disabled={isImportingItems}
-                    >
-                      {isImportingItems ? 'Importando planilha...' : 'Importar planilha'}
-                    </button>
-                    <button type="button" className="ghost-button" onClick={handleAddItem}>Adicionar item</button>
-                  </div>
-                </div>
-
-                <div className="process-items-editor">
-                  {(draft.items ?? []).map((item) => (
-                    <div key={item.id} className="detail-card detail-card--split">
-                      <label className="field">
-                        <span>Nome comercial</span>
-                        <input className="text-input" type="text" value={item.commercialName} onChange={(event) => handleItemChange(item.id, 'commercialName', event.target.value)} placeholder="Ex.: Resina Atlas" />
-                      </label>
-                      <div className="process-item-editor__actions">
-                        <label className="field">
-                          <span>Quantidade</span>
-                          <input className="text-input" type="number" min="0" value={item.quantity} onChange={(event) => handleItemChange(item.id, 'quantity', event.target.value)} />
-                        </label>
-                        <button type="button" className="ghost-button" onClick={() => handleRemoveItem(item.id)}>Remover item</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="action-row"><button type="button" className="primary-button" onClick={handleSaveProcess} disabled={isSaving}>{isSaving ? <><Spinner size={14} label="Salvando" /> Salvando...</> : viewMode === 'create' ? 'Criar processo' : 'Salvar alterações'}</button></div>
-        </article>
+        <ProcessForm
+          viewMode={viewMode}
+          draft={draft}
+          editTab={editTab}
+          isSaving={isSaving}
+          isImportingItems={isImportingItems}
+          canShowMaritimeFlow={canShowMaritimeFlow}
+          canShowAirFlow={canShowAirFlow}
+          itemsFileInputRef={itemsFileInputRef}
+          channelOptions={channelOptions}
+          collectionStatusOptions={collectionStatusOptions}
+          dtaStatusOptions={dtaStatusOptions}
+          duimpStatusOptions={duimpStatusOptions}
+          mapaStatusOptions={mapaStatusOptions}
+          processCategoryOptions={processCategoryOptions}
+          processStatusOptions={processStatusOptions}
+          onDraftChange={handleDraftChange}
+          onSetViewModeList={() => setViewMode('list')}
+          onSetEditTab={setEditTab}
+          onSave={handleSaveProcess}
+          onImportItemsFile={handleImportItemsFile}
+          onAddItem={handleAddItem}
+          onItemChange={handleItemChange}
+          onRemoveItem={handleRemoveItem}
+          onClickCapture={handlePostReceiptDetailClick}
+        />
       ) : null}
 
       {viewMode === 'collection-status-edit' && selectedProcess && canEditCollectionStatus ? (
@@ -1761,89 +1534,19 @@ export default function ProcessesPage() {
       ) : null}
 
       {viewMode === 'post-receipt-edit' && selectedProcess && canEditPostReceiptNotes ? (
-        <article className="list-card" style={{ marginTop: '16px' }}>
-          <div className="card-heading">
-            <div>
-              <h3>Observações pós-recebimento da carga</h3>
-            </div>
-            <div className="admin-toolbar">
-              <span className={getStatusTagClass(selectedProcess.processStatus)}>
-                {getQuickReadProcessStatus(selectedProcess)}
-              </span>
-              <button type="button" className="ghost-button" onClick={handleClosePostReceiptEditMode}>
-                Voltar ao detalhe
-              </button>
-            </div>
-          </div>
-
-          <div className="detail-stack">
-            <div className="detail-card">
-              <span className="detail-label">Processo</span>
-              <p>{getProcessTitle(selectedProcess, isAdmin)}</p>
-            </div>
-            <label className="field">
-              <span>Observações pós-recebimento da carga no CD</span>
-              <textarea
-                className="text-input text-area"
-                value={draft.postReceiptNotes}
-                onChange={(event) => handleDraftChange('postReceiptNotes', event.target.value)}
-                placeholder="Registre observações da carga após o recebimento no CD."
-              />
-            </label>
-            <label className="field">
-              <span>Imagens do recebimento no CD</span>
-              <input
-                className="text-input"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePostReceiptImagesUpload}
-                disabled={
-                  isUploadingPostReceiptImages ||
-                  draftPostReceiptImages.length >= MAX_POST_RECEIPT_IMAGES
-                }
-              />
-              <small className="field-hint">
-                Anexo opcional. Até {MAX_POST_RECEIPT_IMAGES} imagens de{' '}
-                {formatPostReceiptImageSize(MAX_POST_RECEIPT_IMAGE_SIZE_BYTES)} cada.
-              </small>
-            </label>
-            {draftPostReceiptImages.length > 0 ? (
-              <div className="post-receipt-image-grid">
-                {draftPostReceiptImages.map((image) => (
-                  <div key={image.id} className="post-receipt-image-card">
-                    <img
-                      src={toPostReceiptImagePreviewUrl(image)}
-                      alt={image.name || 'Imagem do recebimento no CD'}
-                    />
-                    <div className="post-receipt-image-card__meta">
-                      <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
-                      <span>{formatPostReceiptImageSize(image.size)}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => handleRemovePostReceiptImage(image.id)}
-                    >
-                      Remover imagem
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="action-row">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleSavePostReceiptNotes}
-              disabled={isSaving || isUploadingPostReceiptImages}
-            >
-              {isSaving ? 'Salvando...' : 'Salvar observações'}
-            </button>
-          </div>
-        </article>
+        <PostReceiptEditView
+          selectedProcess={selectedProcess}
+          draft={draft}
+          draftPostReceiptImages={draftPostReceiptImages}
+          isSaving={isSaving}
+          isUploadingPostReceiptImages={isUploadingPostReceiptImages}
+          isAdmin={isAdmin}
+          onDraftChange={handleDraftChange}
+          onClose={handleClosePostReceiptEditMode}
+          onSave={handleSavePostReceiptNotes}
+          onImagesUpload={handlePostReceiptImagesUpload}
+          onRemoveImage={handleRemovePostReceiptImage}
+        />
       ) : null}
 
       {viewMode === 'detail' && selectedProcess ? (
