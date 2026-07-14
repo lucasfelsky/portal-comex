@@ -35,6 +35,7 @@ export default function ProcessListView({
   onClearAllFilters,
   onSelectProcess,
   onExport,
+  onImport,
 }) {
   const getDestinationLabel = (category) =>
     category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -69,6 +70,16 @@ export default function ProcessListView({
         </div>
         <div className="admin-toolbar">
           <span className="inline-badge">{filteredProcesses.length} visíveis</span>
+          {isAdmin && onImport ? (
+            <button
+              type="button"
+              className="ghost-button"
+              title="Criar processos em lote a partir de uma planilha"
+              onClick={onImport}
+            >
+              Importar
+            </button>
+          ) : null}
           <button
             type="button"
             className="ghost-button"
