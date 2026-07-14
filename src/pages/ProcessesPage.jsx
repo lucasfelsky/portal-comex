@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import { formatDateTime } from '../utils/dateFormat'
 import ProcessMessagesPanel, { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
+import PostReceiptGallery from '../features/processes/PostReceiptGallery'
 import Skeleton from '../components/Skeleton'
 import Spinner from '../components/Spinner'
 import {
@@ -1973,98 +1974,15 @@ export default function ProcessesPage() {
       ) : null}
 
       {isPostReceiptGalleryOpen ? (
-        <div className="post-receipt-gallery-backdrop" onClick={handleClosePostReceiptGallery}>
-          <div className="post-receipt-gallery" onClick={(event) => event.stopPropagation()}>
-            <div className="post-receipt-gallery__header">
-              <div>
-                <span className="detail-label">Imagens do recebimento no CD</span>
-                <h3>{selectedPostReceiptImage?.name || 'Imagem do recebimento no CD'}</h3>
-                <p>
-                  {selectedPostReceiptImageIndex + 1} de {selectedProcessPostReceiptImages.length}
-                </p>
-              </div>
-              <button type="button" className="ghost-button" onClick={handleClosePostReceiptGallery}>
-                Fechar
-              </button>
-            </div>
-
-            <div
-              className="post-receipt-gallery__stage"
-              onTouchStart={handlePostReceiptGalleryTouchStart}
-              onTouchEnd={handlePostReceiptGalleryTouchEnd}
-            >
-              {selectedProcessPostReceiptImages.length > 1 ? (
-                <button
-                  type="button"
-                  className="post-receipt-gallery__nav post-receipt-gallery__nav--prev"
-                  onClick={() => handleNavigatePostReceiptGallery(-1)}
-                  aria-label="Ver imagem anterior"
-                >
-                  <svg
-                    className="post-receipt-gallery__nav-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M14.5 5.5L8 12l6.5 6.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              ) : null}
-
-              <img
-                src={selectedPostReceiptImage.url}
-                alt={selectedPostReceiptImage.name || 'Imagem do recebimento no CD'}
-                className="post-receipt-gallery__image"
-                draggable="false"
-              />
-
-              {selectedProcessPostReceiptImages.length > 1 ? (
-                <button
-                  type="button"
-                  className="post-receipt-gallery__nav post-receipt-gallery__nav--next"
-                  onClick={() => handleNavigatePostReceiptGallery(1)}
-                  aria-label="Ver próxima imagem"
-                >
-                  <svg
-                    className="post-receipt-gallery__nav-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M9.5 5.5L16 12l-6.5 6.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              ) : null}
-            </div>
-
-            <div className="post-receipt-gallery__footer">
-              <div className="post-receipt-gallery__meta">
-                <strong>{selectedPostReceiptImage?.name || 'Imagem do recebimento no CD'}</strong>
-                {selectedPostReceiptImage?.size ? (
-                  <span>{formatPostReceiptImageSize(selectedPostReceiptImage.size)}</span>
-                ) : null}
-              </div>
-
-              {selectedProcessPostReceiptImages.length > 1 ? (
-                <p className="post-receipt-gallery__hint">
-                  Use as setas ou deslize para o lado no celular.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <PostReceiptGallery
+          image={selectedPostReceiptImage}
+          index={selectedPostReceiptImageIndex}
+          images={selectedProcessPostReceiptImages}
+          onClose={handleClosePostReceiptGallery}
+          onNavigate={handleNavigatePostReceiptGallery}
+          onTouchStart={handlePostReceiptGalleryTouchStart}
+          onTouchEnd={handlePostReceiptGalleryTouchEnd}
+        />
       ) : null}
     </section>
   )
