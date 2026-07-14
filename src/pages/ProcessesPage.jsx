@@ -6,6 +6,7 @@ import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import { formatDateTime } from '../utils/dateFormat'
 import ProcessMessagesPanel, { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
 import PostReceiptGallery from '../features/processes/PostReceiptGallery'
+import CollectionStatusEditView from '../features/processes/CollectionStatusEditView'
 import Skeleton from '../components/Skeleton'
 import Spinner from '../components/Spinner'
 import {
@@ -43,7 +44,6 @@ import {
   shouldHideProcessCardSchedule,
   shouldHideProcessStatusBadge,
   CD_EN_ROUTE_STATUS,
-  isLogisticaEditableCollectionStatus,
 } from '../features/processes/processStatus'
 import {
   getChannelToneClass,
@@ -1753,65 +1753,15 @@ export default function ProcessesPage() {
       ) : null}
 
       {viewMode === 'collection-status-edit' && selectedProcess && canEditCollectionStatus ? (
-        <article className="list-card" style={{ marginTop: '16px' }}>
-          <div className="card-heading">
-            <div>
-              <h3>Status de coleta</h3>
-            </div>
-            <div className="admin-toolbar">
-              <span className={getStatusTagClass(selectedProcess.processStatus)}>
-                {getQuickReadProcessStatus(selectedProcess)}
-              </span>
-              <button type="button" className="ghost-button" onClick={handleCloseCollectionStatusEditMode}>
-                Voltar ao detalhe
-              </button>
-            </div>
-          </div>
-
-          <div className="detail-stack">
-            <div className="detail-card">
-              <span className="detail-label">Processo</span>
-              <p>{getProcessTitle(selectedProcess, isAdmin)}</p>
-            </div>
-            <CollectionWindowsEditor
-              value={selectedProcess.collectionWindows}
-              maxContainers={Math.max(selectedProcess.containerQuantity || 1, 1)}
-              onChange={() => {}}
-              disabled
-            />
-            <label className="field">
-              <span>Status</span>
-              <select
-                className="text-input"
-                value={draft.collectionStatus}
-                onChange={(event) => handleDraftChange('collectionStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                <optgroup label="Em rota">
-                  <option value={CD_EN_ROUTE_STATUS}>{getDisplayedCollectionStatus(CD_EN_ROUTE_STATUS)}</option>
-                </optgroup>
-                <optgroup label="Pós-recebimento">
-                  {[...postCollectionStatusOptions, 'Veículo no CD para descarga', 'Carga recebida'].map((item) => (
-                    <option key={item} value={item}>
-                      {getDisplayedCollectionStatus(item)}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </label>
-          </div>
-
-          <div className="action-row">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleSaveCollectionStatus}
-              disabled={isSaving || !isLogisticaEditableCollectionStatus(draft.collectionStatus)}
-            >
-              {isSaving ? 'Salvando...' : 'Salvar status'}
-            </button>
-          </div>
-        </article>
+        <CollectionStatusEditView
+          process={selectedProcess}
+          collectionStatus={draft.collectionStatus}
+          isAdmin={isAdmin}
+          isSaving={isSaving}
+          onStatusChange={(value) => handleDraftChange('collectionStatus', value)}
+          onSave={handleSaveCollectionStatus}
+          onClose={handleCloseCollectionStatusEditMode}
+        />
       ) : null}
 
       {viewMode === 'post-receipt-edit' && selectedProcess && canEditPostReceiptNotes ? (
