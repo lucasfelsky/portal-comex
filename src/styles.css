@@ -1676,6 +1676,33 @@ body {
   font-weight: 600;
 }
 
+/* F13: banner de sugestão da barra (fonte externa via OCR da Praticagem). */
+.suggestion-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.suggestion-banner__text {
+  font-size: 0.9rem;
+}
+
+.suggestion-banner__time {
+  color: var(--text-muted);
+}
+
+.suggestion-banner__match {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 .auth-screen {
   display: flex;
   align-items: center;

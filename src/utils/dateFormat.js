@@ -14,3 +14,23 @@ export function formatDateTime(value) {
     minute: '2-digit',
   }).format(date)
 }
+
+// F13 (backlog 2026-07-12): tempo relativo curto ("há 2h") pro banner de
+// sugestão da barra. `now` é injetável pra teste determinístico. Datas no
+// futuro (relógio dessincronizado) caem em "agora".
+export function formatRelativeTime(value, now = Date.now()) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const diffMs = now - date.getTime()
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return 'agora'
+  if (minutes < 60) return `há ${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `há ${hours}h`
+
+  const days = Math.floor(hours / 24)
+  return `há ${days} d`
+}

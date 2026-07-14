@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
-import { BAR_STATUS_OPTIONS, getBarStatus, saveBarStatus } from '../../services/barStatusRepository'
+import {
+  BAR_STATUS_OPTIONS,
+  getBarStatus,
+  getBarSuggestion,
+  saveBarStatus,
+} from '../../services/barStatusRepository'
 import useAuth from '../../hooks/useAuth'
-import { isFirebaseConfigured } from '../../lib/firebase'
+import { formatRelativeTime } from '../../utils/dateFormat'
 
 function buildActionErrorMessage(prefix, error) {
   const details = error?.code ?? error?.message
@@ -15,6 +20,7 @@ export default function AdminBarStatusPanel() {
     notes: '',
   })
   const [barStatusMeta, setBarStatusMeta] = useState(null)
+  const [barSuggestion, setBarSuggestion] = useState(null)
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isSavingBarStatus, setIsSavingBarStatus] = useState(false)
   const [error, setError] = useState('')
@@ -46,7 +52,23 @@ export default function AdminBarStatusPanel() {
       }
     }
 
+    async function loadBarSuggestion() {
+      // Melhor-esforço: falha ao ler a sugestão NUNCA derruba o painel
+      // (o status atual é o que importa). Só loga e segue sem banner.
+      try {
+        const loadedSuggestion = await getBarSuggestion()
+        if (isMounted) {
+          setBarSuggestion(loadedSuggestion)
+        }
+      } catch {
+        if (isMounted) {
+          setBarSuggestion(null)
+        }
+      }
+    }
+
     loadBarStatus()
+    loadBarSuggestion()
 
     return () => {
       isMounted = false
@@ -71,6 +93,35 @@ export default function AdminBarStatusPanel() {
     }
   }
 
+  async function handleApplySuggestion() {
+    if (!barSuggestion) return
+
+    setIsSavingBarStatus(true)
+    setError('')
+
+    try {
+      // Aplica só o status sugerido; preserva as notas atuais. A decisão
+      // (clicar Aplicar) é humana e fica registrada na trilha de auditoria
+      // do saveBarStatus.
+      const savedBarStatus = await saveBarStatus(
+        { status: barSuggestion.status, notes: barStatusDraft.notes },
+        profile
+      )
+      setBarStatusMeta(savedBarStatus)
+      setBarStatusDraft({
+        status: savedBarStatus.status,
+        notes: savedBarStatus.notes,
+      })
+    } catch (applyError) {
+      setError(buildActionErrorMessage('Não foi possível aplicar a sugestão da barra.', applyError))
+    } finally {
+      setIsSavingBarStatus(false)
+    }
+  }
+
+  const suggestionMatchesCurrent =
+    barSuggestion && barStatusMeta && barSuggestion.status === barStatusMeta.status
+
   return (
     <>
       {error ? <div className="error-banner">{error}</div> : null}
@@ -93,6 +144,35 @@ export default function AdminBarStatusPanel() {
           </div>
         ) : (
           <div className="detail-stack">
+            {barSuggestion ? (
+              <div className={`suggestion-banner suggestion-banner--${barSuggestion.tone}`}>
+                <div className="suggestion-banner__text">
+                  <strong>{barSuggestion.sourceName}</strong> sugere:{' '}
+                  <span className={`status-tag status-tag--${barSuggestion.tone}`}>
+                    {barSuggestion.label}
+                  </span>
+                  {barSuggestion.fetchedAt ? (
+                    <span className="suggestion-banner__time">
+                      {' '}
+                      ({formatRelativeTime(barSuggestion.fetchedAt)})
+                    </span>
+                  ) : null}
+                </div>
+                {suggestionMatchesCurrent ? (
+                  <span className="suggestion-banner__match">Coincide com o status atual.</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={handleApplySuggestion}
+                    disabled={isSavingBarStatus}
+                  >
+                    Aplicar
+                  </button>
+                )}
+              </div>
+            ) : null}
+
             <label className="field">
               <span>Status atual</span>
               <select
