@@ -17,6 +17,7 @@ import React from 'react'
 
 const mockUseAuth = vi.fn()
 const mockGetBarStatus = vi.fn()
+const mockGetBarSuggestion = vi.fn()
 const mockSaveBarStatus = vi.fn()
 
 vi.mock('../../src/hooks/useAuth', () => ({
@@ -32,6 +33,7 @@ vi.mock('../../src/services/barStatusRepository', () => ({
     { value: 'IMPRATICAVEL', label: 'IMPRATICAVEL', tone: 'danger' },
   ],
   getBarStatus: (...args) => mockGetBarStatus(...args),
+  getBarSuggestion: (...args) => mockGetBarSuggestion(...args),
   saveBarStatus: (...args) => mockSaveBarStatus(...args),
 }))
 
@@ -55,9 +57,11 @@ function renderPanel() {
 beforeEach(() => {
   mockUseAuth.mockReset()
   mockGetBarStatus.mockReset()
+  mockGetBarSuggestion.mockReset()
   mockSaveBarStatus.mockReset()
   mockUseAuth.mockReturnValue({ profile: PROFILE })
   mockGetBarStatus.mockResolvedValue(BAR_STATUS)
+  mockGetBarSuggestion.mockResolvedValue(null)
   mockSaveBarStatus.mockImplementation((draft) => Promise.resolve({ ...BAR_STATUS, ...draft }))
 })
 
@@ -165,5 +169,79 @@ describe('AdminBarStatusPanel', () => {
     await user.click(screen.getByRole('button', { name: /Salvar status da barra/i }))
     expect(screen.getByRole('button', { name: 'Salvando...' })).toBeDisabled()
     resolveSave(BAR_STATUS)
+  })
+
+  describe('banner de sugestão (F13)', () => {
+    const SUGGESTION_DIFF = {
+      status: 'IMPRATICAVEL',
+      label: 'IMPRATICAVEL',
+      tone: 'danger',
+      sourceName: 'Praticagem ZP21',
+      sourceUrl: 'https://praticoszp21.com.br/img.jpg',
+      fetchedAt: new Date().toISOString(),
+    }
+
+    it('sem sugestão: não renderiza banner nem botão Aplicar', async () => {
+      renderPanel()
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('PRATICAVEL')).toBeInTheDocument()
+      })
+      expect(document.querySelector('.suggestion-banner')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Aplicar' })).not.toBeInTheDocument()
+    })
+
+    it('sugestão diferente do atual: mostra banner + fonte + botão Aplicar', async () => {
+      mockGetBarSuggestion.mockResolvedValueOnce(SUGGESTION_DIFF)
+      renderPanel()
+      await waitFor(() => {
+        expect(document.querySelector('.suggestion-banner')).toBeInTheDocument()
+      })
+      expect(screen.getByText(/Praticagem ZP21/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Aplicar' })).toBeInTheDocument()
+      // o label sugerido aparece no banner (além do badge de status atual)
+      expect(document.querySelector('.suggestion-banner .status-tag--danger')).toBeInTheDocument()
+    })
+
+    it('Aplicar chama saveBarStatus com o status sugerido + profile', async () => {
+      const user = userEvent.setup()
+      mockGetBarSuggestion.mockResolvedValueOnce(SUGGESTION_DIFF)
+      renderPanel()
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Aplicar' })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: 'Aplicar' }))
+      await waitFor(() => {
+        expect(mockSaveBarStatus).toHaveBeenCalledTimes(1)
+      })
+      const [draftArg, profileArg] = mockSaveBarStatus.mock.calls[0]
+      expect(draftArg.status).toBe('IMPRATICAVEL')
+      expect(profileArg).toEqual(PROFILE)
+    })
+
+    it('sugestão igual ao atual: mostra "Coincide" e esconde Aplicar', async () => {
+      mockGetBarSuggestion.mockResolvedValueOnce({
+        ...SUGGESTION_DIFF,
+        status: 'PRATICAVEL',
+        label: 'PRATICAVEL',
+        tone: 'ok',
+      })
+      renderPanel()
+      await waitFor(() => {
+        expect(document.querySelector('.suggestion-banner')).toBeInTheDocument()
+      })
+      expect(screen.getByText(/Coincide com o status atual/i)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Aplicar' })).not.toBeInTheDocument()
+    })
+
+    it('erro ao ler sugestão: painel segue funcional, sem banner', async () => {
+      mockGetBarSuggestion.mockRejectedValueOnce(new Error('boom'))
+      renderPanel()
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('PRATICAVEL')).toBeInTheDocument()
+      })
+      expect(document.querySelector('.suggestion-banner')).not.toBeInTheDocument()
+      // erro de sugestão NÃO polui o error-banner do status
+      expect(screen.queryByText(/Não foi possível/i)).not.toBeInTheDocument()
+    })
   })
 })

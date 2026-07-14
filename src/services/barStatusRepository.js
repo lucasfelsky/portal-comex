@@ -4,6 +4,7 @@ import { createAuditEvent } from './auditRepository'
 
 const STORAGE_KEY = 'sq-comex-bar-status'
 const DOCUMENT_ID = 'current'
+const SUGGESTION_DOCUMENT_ID = 'suggestion'
 
 export const BAR_STATUS_OPTIONS = [
   { value: 'PRATICAVEL', label: 'PRATICAVEL', tone: 'ok' },
@@ -73,6 +74,44 @@ export async function getBarStatus() {
     updatedAt:
       typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate().toISOString() : data.updatedAt,
   })
+}
+
+// F13 (backlog 2026-07-12): le a SUGESTAO gravada pelo cron syncBarStatus.mjs
+// em `barra/suggestion` (via service account/REST). Read admin-only nas rules.
+// Retorna null quando nao ha sugestao, quando o Firebase nao esta configurado,
+// ou quando o status sugerido nao bate com o enum conhecido (defensivo — o
+// admin nunca deve poder "aplicar" um status invalido). NUNCA toca
+// barra/current — a decisao de aplicar continua humana (botao Aplicar no
+// AdminBarStatusPanel chama saveBarStatus).
+export async function getBarSuggestion() {
+  if (!isFirebaseConfigured || !firestore) {
+    return null
+  }
+
+  const snapshot = await getDoc(doc(firestore, 'barra', SUGGESTION_DOCUMENT_ID))
+
+  if (!snapshot.exists()) {
+    return null
+  }
+
+  const data = snapshot.data()
+  const statusMeta = BAR_STATUS_OPTIONS.find((option) => option.value === data.status)
+
+  if (!statusMeta) {
+    return null
+  }
+
+  return {
+    status: statusMeta.value,
+    label: statusMeta.label,
+    tone: statusMeta.tone,
+    sourceName: data.sourceName ?? 'Fonte externa',
+    sourceUrl: data.sourceUrl ?? '',
+    fetchedAt:
+      typeof data.fetchedAt?.toDate === 'function'
+        ? data.fetchedAt.toDate().toISOString()
+        : data.fetchedAt ?? null,
+  }
 }
 
 export async function saveBarStatus(status, actor = null) {
