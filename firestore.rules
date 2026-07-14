@@ -305,9 +305,13 @@ service cloud.firestore {
     }
 
     match /barra/{docId} {
-      allow read: if isApprovedUser();
-      allow create, update: if isAdmin() && isAdminBarUpdate();
-      allow delete: if isAdmin();
+      // Rules do Firestore sao ADITIVAS (OR): este match cobriria
+      // tambem `barra/suggestion`, entao um match especifico mais
+      // restrito abaixo NAO adiantaria (nunca REMOVE permissao). Por
+      // isso excluimos `suggestion` aqui — so ela cai na rule dedicada.
+      allow read: if isApprovedUser() && docId != 'suggestion';
+      allow create, update: if isAdmin() && isAdminBarUpdate() && docId != 'suggestion';
+      allow delete: if isAdmin() && docId != 'suggestion';
     }
 
     // F13 (backlog 2026-07-12): sugestão de status da barra vinda da
