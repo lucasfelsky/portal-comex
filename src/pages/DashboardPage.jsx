@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Skeleton from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import Stagger from '../components/Stagger'
-import StatCard from '../components/StatCard'
 import {
   getChannelToneClass,
   getDisplayedCollectionStatus,
@@ -31,11 +30,6 @@ import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
-import {
-  buildWeeklyEtaSeries,
-  computeTrendDelta,
-  countActiveProcesses,
-} from '../utils/dashboardStats'
 
 function formatTimestamp(value) {
   if (!value) return 'Agora'
@@ -118,21 +112,6 @@ export default function DashboardPage() {
     navigate('/processos', { state: { selectedProcessId: processId } })
   }
 
-  // Stat-cards (backlog v0.12): números derivados dos processos reais.
-  // Chegadas por semana-calendário (ETA) alimentam sparkline + trend.
-  const dashboardStats = useMemo(() => {
-    const weeklyEtaSeries = buildWeeklyEtaSeries(loadedProcesses)
-
-    return {
-      activeCount: countActiveProcesses(loadedProcesses),
-      weeklyEtaSeries,
-      weeklyDelta: computeTrendDelta(
-        weeklyEtaSeries.currentWeekCount,
-        weeklyEtaSeries.previousWeekCount
-      ),
-    }
-  }, [loadedProcesses])
-
   useEffect(() => {
     let isMounted = true
 
@@ -188,32 +167,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-
-      {isLoadingProcesses ? null : (
-        <div className="dashboard-stat-row" aria-label="Resumo dos processos">
-          <StatCard
-            label="Processos ativos"
-            value={String(dashboardStats.activeCount)}
-            icon="dashboard"
-          />
-          <StatCard
-            label="Chegadas (ETA) desta semana"
-            value={String(dashboardStats.weeklyEtaSeries.currentWeekCount)}
-            icon="arrivals"
-            trend={
-              dashboardStats.weeklyDelta === null
-                ? null
-                : { delta: dashboardStats.weeklyDelta, period: 'vs. semana anterior' }
-            }
-            sparkline={dashboardStats.weeklyEtaSeries.counts}
-          />
-          <StatCard
-            label="Processos favoritos"
-            value={String(favoriteProcesses.length)}
-            icon="sparkle"
-          />
-        </div>
-      )}
 
       <Stagger>
         <article className="list-card">

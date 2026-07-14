@@ -1,5 +1,6 @@
 import { formatDateTime } from '../../utils/dateFormat'
 import { getCollectionWindows } from '../../utils/collectionWindows'
+import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
 import {
   CD_EN_ROUTE_STATUS,
@@ -73,14 +74,11 @@ export default function ProcessDetailView({
     return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
   }
 
-  const getEstimatedDeliveryLabel = (process) => {
-    if (!process?.warehouseDeliveryDateOverride) {
-      const eta = process?.eta
-      if (!eta) return '-'
-      return formatDate(eta)
-    }
-    return formatDate(process.warehouseDeliveryDateOverride)
-  }
+  // Previsão de entrega no armazém = data manual (override) OU cálculo
+  // automático (ETA + dias úteis por categoria / coleta agendada / rolling
+  // customs). O `getEstimatedDeliveryDate` encapsula essa regra — não
+  // repetir só o ETA aqui (regressão do F10.4).
+  const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
 
   const hasUpdatedEta = (process) =>
     Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
@@ -195,7 +193,6 @@ export default function ProcessDetailView({
               <div className="card-heading process-detail-card-heading">
                 <div>
                   <span className="detail-label">Status do processo</span>
-                  <p>Controle padronizado para evitar inconsistências de valor.</p>
                 </div>
                 <span className={getStatusTagClass(selectedProcess.processStatus)}>{getQuickReadProcessStatus(selectedProcess)}</span>
               </div>
