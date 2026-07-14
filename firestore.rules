@@ -310,6 +310,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // F13 (backlog 2026-07-12): sugestão de status da barra vinda da
+    // Praticagem ZP21 (script syncBarStatus.mjs). Read admin-only (pra
+    // o banner "Fonte externa sugere: X" no AdminBarStatusPanel), write
+    // fechado — só o service account via REST (bypassa rules). Igual
+    // externalNewsDlq. NUNCA substitui barra/current — a decisão de
+    // aplicar continua humana (admin clica "Aplicar").
+    match /barra/suggestion {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /processes/{processId} {
       allow read: if isApprovedUser();
       allow create: if isAdmin()

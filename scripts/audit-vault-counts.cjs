@@ -182,7 +182,10 @@ function audit() {
     const expectedList = fixture.firestore._topLevel_list?.sort()
     const expectedSubList = fixture.firestore._subcollections_list?.sort()
     const rules = fs.existsSync(FIRESTORE_RULES) ? fs.readFileSync(FIRESTORE_RULES, 'utf8') : ''
-    const matches = Array.from(rules.matchAll(/match \/([a-zA-Z][a-zA-Z0-9_]*)\b/g)).map((m) => m[1])
+    // Regex captura só `match /<col>/{...}` (curinga) — matches com
+    // documento nomeado (ex.: `match /barra/suggestion`) não contam
+    // como top-level collection nova.
+    const matches = Array.from(rules.matchAll(/match\s+\/([a-zA-Z][a-zA-Z0-9_]*)\/\{[a-zA-Z]+\}/g)).map((m) => m[1])
     const topLevel = matches.filter((n) => n !== 'databases' && n !== 'messages').sort()
     const subLevel = matches.filter((n) => n === 'messages').length > 0 ? 1 : 0
     checks++

@@ -16,6 +16,7 @@
     "test:rules": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore,storage --project demo-sqcomex \"npx vitest run emulator --no-file-parallelism\"",
     "test:notifications": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore,functions --project demo-sqcomex \"npx vitest run notifications.triggers --no-file-parallelism\"",
     "test:sync-news": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore --project demo-sqcomex \"npx vitest run syncExternalNews.e2e --no-file-parallelism\"",
+    "test:sync-bar": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore --project demo-sqcomex \"npx vitest run syncBarStatus.e2e --no-file-parallelism\"",
     "test:audit-status": "node scripts/with-jdk.mjs node node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --only firestore --project demo-sqcomex \"npx vitest run auditCollectionStatus.e2e --no-file-parallelism\"",
     "deploy": "firebase deploy --only hosting --config firebase.portal-comex.json",
     "deploy:full": "firebase deploy --only hosting,firestore:rules,firestore:indexes,storage,functions --config firebase.portal-comex.json",
@@ -30,6 +31,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.14.1",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

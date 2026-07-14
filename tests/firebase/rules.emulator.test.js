@@ -1010,6 +1010,37 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('barra/suggestion (F13 — sugestao semi-automatica da Praticagem)', () => {
+    // F13 (backlog 2026-07-12): barra/suggestion e' gravada pelo script
+    // syncBarStatus.mjs via service account (REST, bypassa rules). Read
+    // admin-only (pro banner "Fonte externa sugere" no AdminBarStatusPanel),
+    // write fechado. Igual externalNewsDlq.
+    it('admin le barra/suggestion', async () => {
+      await assertSucceeds(getDoc(doc(admin(), 'barra/suggestion')))
+    })
+
+    it('usuario aprovado NAO le barra/suggestion', async () => {
+      await assertFails(getDoc(doc(approvedUser(), 'barra/suggestion')))
+    })
+
+    it('logistica NAO le barra/suggestion', async () => {
+      await assertFails(getDoc(doc(logistics(), 'barra/suggestion')))
+    })
+
+    it('anonimo NAO le barra/suggestion', async () => {
+      await assertFails(getDoc(doc(anon(), 'barra/suggestion')))
+    })
+
+    it('admin NAO escreve barra/suggestion (so service account via REST)', async () => {
+      await assertFails(
+        setDoc(doc(admin(), 'barra/suggestion'), {
+          status: 'PRATICAVEL',
+          sourceName: 'Praticagem ZP21',
+        })
+      )
+    })
+  })
+
   describe('forecastSettings — regras de previsao (read approved / write admin, sem allowlist)', () => {
     // A rule de forecastSettings (firestore.rules) e' puramente por role:
     // read: isApprovedUser(); create/update/delete: isAdmin(). NAO tem
