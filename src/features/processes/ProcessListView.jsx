@@ -7,6 +7,7 @@ import {
   shouldHideProcessStatusBadge,
 } from './processStatus'
 import { shouldShowContainerQuantity } from './processCategories'
+import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 
 // F10.6 (backlog 2026-07-12): tela de listagem de processos (viewMode
 // 'list'), extraída do ProcessesPage. Presentacional — recebe a lista
@@ -50,14 +51,10 @@ export default function ProcessListView({
     return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
   }
 
-  const getEstimatedDeliveryLabel = (process) => {
-    if (!process?.warehouseDeliveryDateOverride) {
-      const eta = process?.eta
-      if (!eta) return '-'
-      return formatDate(eta)
-    }
-    return formatDate(process.warehouseDeliveryDateOverride)
-  }
+  // Previsão de entrega = data manual (override) OU cálculo automático
+  // (ETA + dias úteis por categoria / coleta / rolling customs) via
+  // getEstimatedDeliveryDate — não repetir só o ETA (regressão do F10.6).
+  const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
 
   const hasUpdatedEta = (process) =>
     Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)

@@ -1453,7 +1453,6 @@ export default function ProcessesPage() {
           onDeleteMessage={handleDeleteMessage}
         />
       ) : null}
-      ) : null}
 
       {isPostReceiptGalleryOpen ? (
         <PostReceiptGallery
