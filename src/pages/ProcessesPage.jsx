@@ -9,7 +9,7 @@ import CollectionStatusEditView from '../features/processes/CollectionStatusEdit
 import ProcessDetailView from '../features/processes/ProcessDetailView'
 import ProcessForm from '../features/processes/ProcessForm'
 import PostReceiptEditView from '../features/processes/PostReceiptEditView'
-import Skeleton from '../components/Skeleton'
+import ProcessListView from '../features/processes/ProcessListView'
 import Spinner from '../components/Spinner'
 import {
   channelOptions,
@@ -39,23 +39,12 @@ import {
   normalizeComparableText,
   postCollectionStatusOptions,
   processStatusOptions,
-  shouldHideProcessCardSchedule,
-  shouldHideProcessStatusBadge,
 } from '../features/processes/processStatus'
-import {
-  getStatusTagClass,
-} from '../features/processes/processStatusView'
-import {
-  getProcessTitle,
-  getProcessSubtitle,
-} from '../features/processes/processLabels'
 import {
   isMaritimeCategory,
   isAirCategory,
-  shouldShowContainerQuantity,
 } from '../features/processes/processCategories'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
-import FilterChip from '../components/FilterChip'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
   getAutomaticEstimatedDeliveryDate,
@@ -1278,218 +1267,41 @@ export default function ProcessesPage() {
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
 
       {viewMode === 'list' ? (
-        <article className="list-card process-list-card" style={{ marginTop: '16px' }}>
-        <div className="card-heading">
-          <div>
-            <h3>Chegadas</h3>
-          </div>
-          <div className="admin-toolbar">
-            <span className="inline-badge">{filteredProcesses.length} visíveis</span>
-            <button
-              type="button"
-              className="ghost-button"
-              disabled={filteredProcesses.length === 0}
-              title="Baixar as linhas visíveis (filtros aplicados) em Excel"
-              onClick={async () => {
-                try {
-                  const exportedCount = await exportProcessesToXlsx(filteredProcesses)
-                  toast.success(`Exportados ${exportedCount} processos para Excel.`)
-                } catch (error) {
-                  console.error('Falha ao exportar processos.', error)
-                  toast.error('Não foi possível exportar os processos.')
-                }
-              }}
-            >
-              Exportar ({filteredProcesses.length})
-            </button>
-            {viewMode !== 'list' ? (
-              <button type="button" className="ghost-button" onClick={() => setViewMode('list')}>
-                Mostrar lista
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="process-filters process-filters--panel">
-          <label className="field">
-            <span>Buscar processo</span>
-            <input
-              className="text-input"
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Nome, item, destino, categoria, PO, ETA, ETD, status ou ID"
-            />
-          </label>
-          <label className="field field--compact">
-            <span>Categoria</span>
-            <select
-              className="text-input"
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-            >
-              <option value="Todos">Todas</option>
-              {processCategoryOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="field">
-            <span>Período de ETA</span>
-            <div className="process-date-range">
-              <input
-                className="text-input"
-                type="date"
-                value={etaStartDate}
-                onChange={(event) => setEtaStartDate(event.target.value)}
-              />
-              <input
-                className="text-input"
-                type="date"
-                value={etaEndDate}
-                min={etaStartDate || undefined}
-                onChange={(event) => setEtaEndDate(event.target.value)}
-              />
-            </div>
-          </div>
-          <label className="field">
-            <span>Etapa operacional</span>
-            <select
-              className="text-input"
-              value={operationFilter}
-              onChange={(event) => setOperationFilter(event.target.value)}
-            >
-              <option value="Todos">Todas</option>
-              <option value="Pós-chegada pendente">Pós-chegada pendente</option>
-              <option value="Aguardando presença de carga">Aguardando presença de carga</option>
-              <option value="DTA em andamento">DTA em andamento</option>
-              <option value="DUIMP pendente">DUIMP pendente</option>
-              <option value="Coleta pendente">Coleta pendente</option>
-              <option value="Coleta agendada">Coleta agendada</option>
-            </select>
-          </label>
-        </div>
-
-        {hasActiveFilters ? (
-          <div className="filter-chips-row" role="list" aria-label="Filtros ativos">
-            <span className="filter-chips-row__label">Filtros:</span>
-            {searchTerm ? (
-              <FilterChip
-                label={`Busca: "${searchTerm}"`}
-                onRemove={() => setSearchTerm('')}
-                variant="primary"
-              />
-            ) : null}
-            {categoryFilter !== 'Todos' ? (
-              <FilterChip
-                label={`Categoria: ${categoryFilter}`}
-                onRemove={() => setCategoryFilter('Todos')}
-              />
-            ) : null}
-            {etaStartDate || etaEndDate ? (
-              <FilterChip
-                label={`ETA: ${etaStartDate || 'inicio'} ate ${etaEndDate || 'fim'}`}
-                onRemove={() => {
-                  setEtaStartDate('')
-                  setEtaEndDate('')
-                }}
-                variant="info"
-              />
-            ) : null}
-            {operationFilter !== 'Todos' ? (
-              <FilterChip
-                label={`Etapa: ${operationFilter}`}
-                onRemove={() => setOperationFilter('Todos')}
-                variant="warning"
-              />
-            ) : null}
-            <button
-              type="button"
-              className="filter-chips-row__clear"
-              onClick={() => {
-                setSearchTerm('')
-                setCategoryFilter('Todos')
-                setEtaStartDate('')
-                setEtaEndDate('')
-                setOperationFilter('Todos')
-              }}
-            >
-              Limpar todos
-            </button>
-          </div>
-        ) : null}
-
-        <div className="process-list process-list--scroll">
-          {isLoading ? (
-            <div className="process-list-skeletons">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="process-item process-item--skeleton">
-                  <div className="process-item__main">
-                    <Skeleton variant="title" width="60%" />
-                    <Skeleton variant="text" width="40%" />
-                  </div>
-                  <div className="process-item__meta">
-                    <Skeleton variant="text" width="80px" height="22px" radius="999px" />
-                    <Skeleton variant="text" width="100px" height="22px" radius="999px" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : filteredProcesses.length > 0 ? (
-            filteredProcesses.map((item) => {
-              const hideSchedule = shouldHideProcessCardSchedule(item)
-
-              return (
-              <button
-                key={item.id}
-                type="button"
-                className={`process-item process-item--button${selectedProcessId === item.id ? ' process-item--selected' : ''}`}
-                onClick={() => handleSelectProcess(item.id)}
-              >
-                <div className="process-item__main">
-                  <strong>{getProcessTitle(item, isAdmin)}</strong>
-                  {getProcessSubtitle(item, isAdmin) ? <p>{getProcessSubtitle(item, isAdmin)}</p> : null}
-                  <div className="process-item__line">{item.category}</div>
-                  <div className="process-item__line">
-                    {getDestinationLabel(item.category)}: {item.destination || '-'}
-                  </div>
-                    <div className="process-item__chips">
-                      {shouldHideProcessStatusBadge(item) ? null : (
-                        <span className={getStatusTagClass(item.processStatus)}>
-                          {item.processStatus}
-                        </span>
-                      )}
-                      {shouldShowContainerQuantity(item.category) ? (
-                        <span className="inline-badge">
-                          {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
-                        </span>
-                      ) : null}
-                      <span className="inline-badge">
-                        {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
-                      </span>
-                    </div>
-                </div>
-                {!hideSchedule ? (
-                  <div className="process-item__meta">
-                  <span>ETD: {formatDate(item.etd)}</span>
-                  <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
-                    ETA: {formatDate(item.eta)}
-                  </span>
-                  <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
-                  </div>
-                ) : null}
-              </button>
-            )})
-          ) : (
-            <div className="empty-state">
-              <strong>Nenhum processo encontrado</strong>
-              <p>Ajuste a busca ou cadastre um novo processo.</p>
-            </div>
-          )}
-        </div>
-        </article>
+        <ProcessListView
+          filteredProcesses={filteredProcesses}
+          isLoading={isLoading}
+          selectedProcessId={selectedProcessId}
+          isAdmin={isAdmin}
+          searchTerm={searchTerm}
+          categoryFilter={categoryFilter}
+          etaStartDate={etaStartDate}
+          etaEndDate={etaEndDate}
+          operationFilter={operationFilter}
+          hasActiveFilters={hasActiveFilters}
+          processCategoryOptions={processCategoryOptions}
+          onSearchTermChange={setSearchTerm}
+          onCategoryFilterChange={setCategoryFilter}
+          onEtaStartDateChange={setEtaStartDate}
+          onEtaEndDateChange={setEtaEndDate}
+          onOperationFilterChange={setOperationFilter}
+          onClearAllFilters={() => {
+            setSearchTerm('')
+            setCategoryFilter('Todos')
+            setEtaStartDate('')
+            setEtaEndDate('')
+            setOperationFilter('Todos')
+          }}
+          onSelectProcess={handleSelectProcess}
+          onExport={async () => {
+            try {
+              const exportedCount = await exportProcessesToXlsx(filteredProcesses)
+              toast.success(`Exportados ${exportedCount} processos para Excel.`)
+            } catch (error) {
+              console.error('Falha ao exportar processos.', error)
+              toast.error('Não foi possível exportar os processos.')
+            }
+          }}
+        />
       ) : null}
 
       {(viewMode === 'create' || viewMode === 'edit') && isAdmin ? (
