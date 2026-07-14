@@ -4,7 +4,7 @@
 // (auth + firestore lite via wiring de emulador), CSS do FAB de suporte.
 //
 // Fluxos:
-//   1. login -> dashboard (stat-cards renderizados)
+//   1. login -> dashboard (conteúdo renderizado)
 //   2. navegação Dashboard -> Notícias -> Chegadas
 //   3. usuário abre chamado de suporte -> "Meus chamados"
 //   4. admin vê o chamado em /admin/suporte e resolve (loop do Suporte v2)
@@ -24,12 +24,13 @@ async function login(page, { email, password }) {
 
 test.describe.configure({ mode: 'serial' })
 
-test('login de usuário aprovado leva ao dashboard com stat-cards', async ({ page }) => {
+test('login de usuário aprovado leva ao dashboard', async ({ page }) => {
   await login(page, E2E_USERS.user)
 
-  await expect(page.locator('.dashboard-stat-row')).toBeVisible()
-  await expect(page.getByText('Processos ativos')).toBeVisible()
-  await expect(page.getByText('Chegadas (ETA) desta semana')).toBeVisible()
+  // O heading "Visão geral" já é verificado no helper login(); confirma que
+  // o conteúdo do dashboard renderizou (os stat-cards do topo foram
+  // removidos a pedido do usuário em 2026-07-14).
+  await expect(page.getByRole('heading', { name: 'Comunicados recentes' })).toBeVisible()
 })
 
 test('navegação: Dashboard -> Notícias -> Chegadas', async ({ page }) => {
