@@ -3852,7 +3852,7 @@ body {
   .surface,
   .stat-card,
   .list-card {
-    border-radius: 24px;
+    border-radius: 18px;
   }
 
   .topbar,
@@ -3910,7 +3910,7 @@ body {
 
   .surface {
     padding: 18px;
-    border-radius: 28px;
+    border-radius: 18px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 249, 0.96)),
       var(--surface);
@@ -4064,7 +4064,7 @@ body {
     gap: 14px;
     padding: 14px;
     margin-bottom: 14px;
-    border-radius: 20px;
+    border-radius: 14px;
   }
 
   .process-filters--panel .field > span {
@@ -4090,7 +4090,7 @@ body {
 .process-list-card .process-item {
   gap: 14px;
   padding: 14px;
-  border-radius: 20px;
+  border-radius: 14px;
   box-shadow: none;
 }
 
@@ -4146,7 +4146,7 @@ body {
   .detail-card {
     gap: 6px;
     padding: 14px;
-    border-radius: 18px;
+    border-radius: 14px;
   }
 
   .detail-card .card-heading,
@@ -4172,7 +4172,7 @@ body {
   .process-message-card {
     gap: 6px;
     padding: 12px 14px;
-    border-radius: 16px;
+    border-radius: 14px;
   }
 
   .process-message-card__meta span {
@@ -4197,7 +4197,7 @@ body {
 
   .collection-window-card {
     padding: 14px;
-    border-radius: 18px;
+    border-radius: 14px;
   }
 
   .notifications__panel {
@@ -4210,13 +4210,13 @@ body {
     max-width: none;
     max-height: calc(100vh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding: 20px 16px 16px;
-    border-radius: 26px;
+    border-radius: 20px;
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(242, 249, 248, 0.44)),
-      rgba(255, 255, 255, 0.34);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(242, 249, 248, 0.68)),
+      rgba(255, 255, 255, 0.52);
     border-color: rgba(255, 255, 255, 0.28);
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(20px);
     animation: notifications-sheet-in 220ms ease forwards;
   }
 
@@ -4315,7 +4315,7 @@ body {
 
   .news-modal {
     max-height: calc(100vh - 20px);
-    border-radius: 24px;
+    border-radius: 16px;
   }
 
   .news-modal .card-heading {
@@ -4369,35 +4369,35 @@ body {
     z-index: 45;
     display: block;
     border: 0;
-    background: rgba(31, 28, 24, 0.26);
-    backdrop-filter: blur(6px);
+    background: rgba(31, 28, 24, 0.32);
+    backdrop-filter: blur(8px);
     opacity: 0;
-    animation: sidebar-backdrop-in 220ms ease forwards;
+    animation: sidebar-backdrop-in 280ms ease forwards;
   }
 
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    right: 0;
     bottom: 0;
     z-index: 50;
-    width: auto;
+    width: 85vw;
+    max-width: 360px;
     height: auto;
     max-height: 100vh;
     overflow: hidden;
-    border-radius: 0;
+    border-radius: 0 24px 24px 0;
     border: 0;
     border-right: 1px solid var(--border);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(242, 249, 248, 0.44)),
-      rgba(255, 255, 255, 0.34);
-    backdrop-filter: blur(6px);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(242, 249, 248, 0.68)),
+      rgba(255, 255, 255, 0.52);
+    backdrop-filter: blur(20px);
     transform: translateX(-100%);
     opacity: 0;
     pointer-events: none;
     transition:
-      transform 220ms ease,
+      transform 280ms cubic-bezier(0.32, 0.72, 0, 1),
       opacity 220ms ease,
       box-shadow 220ms ease;
     box-shadow: var(--shadow-lg);
@@ -4477,7 +4477,7 @@ body {
   .list-card,
   .news-modal,
   .modal {
-    border-radius: 20px;
+    border-radius: 16px;
   }
 
   .sidebar,
@@ -4586,7 +4586,7 @@ body {
   .metric-card,
   .detail-card,
   .notifications__item {
-    border-radius: 18px;
+    border-radius: 14px;
   }
 
   .process-filters--panel {
@@ -4645,7 +4645,7 @@ body {
   .process-message-card,
   .process-related-item-button {
     padding: 12px;
-    border-radius: 16px;
+    border-radius: 12px;
   }
 
   .topbar__menu-button {
@@ -4680,7 +4680,7 @@ body {
   .detail-card,
   .collection-window-card {
     padding: 12px;
-    border-radius: 16px;
+    border-radius: 12px;
   }
 
   .card-heading {
