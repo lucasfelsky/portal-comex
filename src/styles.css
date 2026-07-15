@@ -437,10 +437,6 @@ body {
   text-decoration: none;
 }
 
-.sidebar-logout-button {
-  display: none;
-}
-
 .sidebar-intelliquote-link__eyebrow {
   display: block;
   font-size: 0.66rem;
@@ -2669,6 +2665,13 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* C9: logout no drawer mobile. display:none aqui (depois de .ghost-button)
+   para que o display:inline-flex do .ghost-button nao sobrescreva por
+   ordem de cascade. Em <=720px o bloco mobile ativa display:flex. */
+.sidebar-logout-button {
+  display: none;
 }
 
 .inline-badge {
