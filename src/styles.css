@@ -1651,6 +1651,10 @@ body {
   gap: 12px;
 }
 
+.modal__sheet-handle {
+  display: none;
+}
+
 .modal__actions {
   display: flex;
   gap: 8px;
@@ -4361,6 +4365,54 @@ body {
 
   .news-modal-backdrop {
     padding: 10px;
+  }
+
+  /* C5 (auditoria mobile): modal generico vira bottom sheet em <=720px.
+     Gruda no fundo da tela, cantos arredondados so' em cima, grab handle
+     no topo pra arrastar. O JS (Modal.jsx) adiciona swipe-down pra fechar. */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: 90vh;
+    border-radius: 24px 24px 0 0;
+    border: 0;
+    padding:
+      8px 20px
+      max(20px, env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 32px rgba(0, 40, 40, 0.18);
+    animation: sheet-slide-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .modal--wide {
+    max-width: none;
+  }
+
+  @keyframes sheet-slide-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .modal--sheet-closing {
+    transform: translateY(100%) !important;
+    transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+  }
+
+  .modal__sheet-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+    width: 40px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--border-strong);
+    flex-shrink: 0;
+    touch-action: none;
   }
 
   .news-modal {
