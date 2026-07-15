@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Skeleton from '../../components/Skeleton'
 import {
   BAR_STATUS_OPTIONS,
   getBarStatus,
@@ -138,9 +139,9 @@ export default function AdminBarStatusPanel() {
         </div>
 
         {isLoadingBarStatus ? (
-          <div className="empty-state">
-            <strong>Carregando status da barra</strong>
-            <p>Buscando a última condição operacional registrada.</p>
+          <div className="detail-stack" style={{ gap: 10 }}>
+            <Skeleton variant="card" style={{ height: 80 }} />
+            <Skeleton variant="card" style={{ height: 50 }} />
           </div>
         ) : (
           <div className="detail-stack">

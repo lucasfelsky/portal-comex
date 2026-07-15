@@ -75,11 +75,11 @@ afterEach(() => {
 })
 
 describe('AdminAnnouncementsPanel', () => {
-  it('loading inicial: mostra "Carregando comunicados"', () => {
+  it('loading inicial: mostra skeleton', () => {
     let resolveList
     mockListAnnouncements.mockReturnValue(new Promise((r) => { resolveList = r }))
-    renderPanel()
-    expect(screen.getByText(/Carregando comunicados/i)).toBeInTheDocument()
+    const { container } = renderPanel()
+    expect(container.querySelector('.skeleton')).toBeTruthy()
     resolveList([])
   })
 

@@ -3,6 +3,7 @@ import useAuth from '../hooks/useAuth'
 import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
 import { listExternalNews } from '../services/externalNewsRepository'
 import Modal from '../components/Modal'
+import Skeleton from '../components/Skeleton'
 import {
   deleteNewsMediaItems,
   resolveNewsCoverImageForSave,
@@ -545,10 +546,17 @@ export default function NewsPage() {
 
           <div className="news-grid">
             {isLoading ? (
-              <div className="empty-state">
-                <strong>Carregando notícias</strong>
-                <p>Buscando as publicações mais recentes.</p>
-              </div>
+              <Skeleton.Group count={3}>
+                <div className="news-card">
+                  <div className="news-card__image-wrap"><Skeleton variant="card" style={{ height: 132 }} /></div>
+                  <div className="news-card__body" style={{ gap: 8, padding: 18 }}>
+                    <Skeleton variant="text" width={120} />
+                    <Skeleton variant="title" width="80%" />
+                    <Skeleton variant="text" />
+                    <Skeleton variant="text" />
+                  </div>
+                </div>
+              </Skeleton.Group>
             ) : newsItems.length > 0 ? (
               newsItems.map((item) => (
                 <article key={item.id} className="news-card">

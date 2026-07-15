@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Skeleton from '../../components/Skeleton'
 import {
   listAnnouncements,
   removeAnnouncement,
@@ -171,10 +172,13 @@ export default function AdminAnnouncementsPanel() {
         <div className="announcement-grid">
           <div className="announcement-list">
             {isLoadingAnnouncements ? (
-              <div className="empty-state">
-                <strong>Carregando comunicados</strong>
-                <p>Buscando os avisos cadastrados no repositório ativo.</p>
-              </div>
+              <Skeleton.Group count={3}>
+                <div className="announcement-card" style={{ gap: 8, padding: 14 }}>
+                  <Skeleton variant="title" width="70%" />
+                  <Skeleton variant="text" />
+                  <Skeleton variant="text" width="40%" />
+                </div>
+              </Skeleton.Group>
             ) : announcements.length > 0 ? (
               announcements.map((announcement) => (
                 <button

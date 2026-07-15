@@ -111,10 +111,10 @@ afterEach(() => {
 })
 
 describe('AdminForecastPage', () => {
-  it('loading: mostra "Carregando regras"', () => {
+  it('loading: mostra skeleton', () => {
     mockUseForecastSettings.mockReturnValue({ settings: SETTINGS, loading: true })
-    renderPage()
-    expect(screen.getByText(/Carregando regras/i)).toBeInTheDocument()
+    const { container } = renderPage()
+    expect(container.querySelector('.skeleton')).toBeTruthy()
   })
 
   it('render inicial: lista destinations e business days por categoria', () => {

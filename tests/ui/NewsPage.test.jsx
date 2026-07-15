@@ -109,15 +109,13 @@ afterEach(() => {
 })
 
 describe('NewsPage', () => {
-  it('isLoading=true inicial: mostra "Carregando noticias" enquanto promises nao resolvem', async () => {
+  it('isLoading=true inicial: mostra skeleton enquanto promises nao resolvem', async () => {
     let resolveManual
     let resolveAutomatic
     mockListNews.mockReturnValue(new Promise((r) => { resolveManual = r }))
     mockListExternalNews.mockReturnValue(new Promise((r) => { resolveAutomatic = r }))
     const { container } = renderPage()
-    // Enquanto nao resolveu, newsItems === [] e isLoading === true
-    // → mostra "Carregando noticias" (do branch isLoading)
-    expect(container.textContent).toMatch(/Carregando/)
+    expect(container.querySelector('.skeleton')).toBeTruthy()
     resolveManual([])
     resolveAutomatic([])
   })
