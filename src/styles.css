@@ -4426,9 +4426,10 @@ body {
   }
 
   .sidebar .nav__link {
-    padding: 10px 13px;
+    padding: 14px 16px;
     border-radius: 16px;
     text-align: center;
+    min-height: 48px;
   }
 
   .sidebar .nav__link strong {
@@ -4498,6 +4499,14 @@ body {
     padding: 16px;
   }
 
+  /* C3 (auditoria mobile): modal close 44×44px em mobile (Apple HIG minimo).
+     No desktop e' 32px (fine pointer), mas no celular o dedo cobre 32px. */
+  .modal__close {
+    width: 44px;
+    height: 44px;
+    font-size: 1.4rem;
+  }
+
   /* .command-palette tem min-width: 480px fixo -- estoura a largura do
      modal (e da pagina) em telas de celular. Deixa fluir. */
   .command-palette {
@@ -4553,7 +4562,8 @@ body {
   }
 
   .sidebar .nav__link {
-    padding: 9px 11px;
+    padding: 12px 14px;
+    min-height: 44px;
   }
 
   .sidebar .brand h1 {
