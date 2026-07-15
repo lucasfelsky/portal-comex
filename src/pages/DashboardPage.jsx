@@ -179,7 +179,7 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="announcement-list">
+        <div className="announcement-list announcement-list--scroll">
           {isLoadingAnnouncements ? (
             <Skeleton.Group count={3} gap={12}>
               <Skeleton variant="title" />

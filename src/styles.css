@@ -2857,6 +2857,13 @@ body {
   align-content: start;
 }
 
+/* C13 (auditoria mobile): carrossel horizontal com snap em mobile.
+   No desktop e' uma lista vertical normal (no-op). */
+.announcement-list--scroll {
+  display: grid;
+  gap: 12px;
+}
+
 .admin-filters {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
@@ -4435,6 +4442,30 @@ body {
   .invite-card__meta {
     flex-direction: column;
     align-items: center;
+  }
+
+  /* C13: carrossel horizontal com scroll-snap em mobile. */
+  .announcement-list--scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    margin: 0 -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .announcement-list--scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .announcement-list--scroll .announcement-card {
+    flex: 0 0 260px;
+    scroll-snap-align: start;
   }
 
   .process-item-editor__actions,

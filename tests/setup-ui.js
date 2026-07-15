@@ -17,6 +17,22 @@ import { cleanup, configure } from '@testing-library/react'
 
 configure({ asyncUtilTimeout: 3000 })
 
+// jsdom nao implementa matchMedia — polyfill pra hooks que usam
+// window.matchMedia (ex: useSwipe no AppLayout). So em ambiente jsdom
+// (tests/ui/**); testes de functions/firebase rodam em node (sem window).
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })
+}
+
 afterEach(() => {
   cleanup()
 })
