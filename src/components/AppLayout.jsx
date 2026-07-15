@@ -436,6 +436,7 @@ export default function AppLayout() {
           onClick={() => handleCloseNotificationPanel()}
         />
         <div
+          ref={notificationPanelRef}
           className={`notifications__panel${isNotificationPanelOpen ? '' : ' notifications__panel--closing'}`}
           onMouseDown={(event) => event.stopPropagation()}
           onTouchStart={(event) => event.stopPropagation()}
@@ -539,7 +540,7 @@ export default function AppLayout() {
 
   function renderNotificationsControl(triggerClassName = 'ghost-button notifications__trigger') {
     return (
-      <div className="notifications" ref={notificationPanelRef}>
+      <div className="notifications">
         <button
           type="button"
           className={`${triggerClassName}${isNotificationPanelOpen ? ' notifications__trigger--active' : ''}`}
@@ -610,6 +611,15 @@ export default function AppLayout() {
               </span>
             </a>
           ) : null}
+
+          <button
+            type="button"
+            className="ghost-button sidebar-logout-button"
+            onClick={logout}
+          >
+            <Icon name="logout" size={16} aria-hidden="true" />
+            <span>Sair</span>
+          </button>
         </aside>
 
         <div className="main-content">
@@ -707,12 +717,6 @@ export default function AppLayout() {
             <Outlet />
           </PageFade>
 
-          <div className="mobile-page-logout">
-            <button type="button" className="ghost-button mobile-page-logout__button" onClick={logout}>
-              Sair
-            </button>
-          </div>
-
           <SupportButton />
 
           <NotificationPreferencesModal
@@ -722,14 +726,48 @@ export default function AppLayout() {
             fcm={fcm}
           />
 
-          <div className="mobile-notifications-fab">
-            {renderNotificationsControl('ghost-button notifications__trigger mobile-notifications-fab__trigger')}
-          </div>
+          {isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
           <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              }
+              aria-label="Dashboard"
+            >
+              <Icon name="dashboard" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Dash</span>
+            </NavLink>
+
             <button
               type="button"
-              className="mobile-bottom-nav__item mobile-bottom-nav__item--icon"
+              className="mobile-bottom-nav__item"
+              aria-label="Notificações"
+              onClick={handleToggleNotificationPanel}
+            >
+              <Icon name="bell" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Avisos</span>
+              {unreadNotifications.length > 0 ? (
+                <span className="mobile-bottom-nav__badge">{unreadNotifications.length}</span>
+              ) : null}
+            </button>
+
+            <NavLink
+              to="/processos"
+              className={({ isActive }) =>
+                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              }
+              aria-label="Chegadas"
+            >
+              <Icon name="arrivals" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Chegadas</span>
+            </NavLink>
+
+            <button
+              type="button"
+              className="mobile-bottom-nav__item"
               aria-label={isMobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
               aria-expanded={isMobileMenuOpen}
               aria-controls="primary-navigation"
@@ -742,20 +780,17 @@ export default function AppLayout() {
               </span>
               <span className="mobile-bottom-nav__label">Menu</span>
             </button>
-            {/* F2 (backlog 2026-07-12): o FAB de suporte é desktop-only
-                (.support-fab, min-width 1041px) — sem este item o usuário
-                mobile não tinha COMO abrir chamado. Mesmo evento global do
-                clique em notificação resolvida. */}
+
             <button
               type="button"
-              className="mobile-bottom-nav__item mobile-bottom-nav__item--icon"
+              className="mobile-bottom-nav__item"
               aria-label="Abrir suporte"
               onClick={() => {
                 setIsMobileMenuOpen(false)
                 window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
               }}
             >
-              <Icon name="help" size={18} aria-hidden="true" />
+              <Icon name="help" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Suporte</span>
             </button>
           </nav>

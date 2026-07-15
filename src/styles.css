@@ -437,6 +437,18 @@ body {
   text-decoration: none;
 }
 
+.sidebar-logout-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
 .sidebar-intelliquote-link__eyebrow {
   display: block;
   font-size: 0.66rem;
@@ -3752,7 +3764,7 @@ body {
 
   .main-content {
     gap: 14px;
-    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
   }
 
   .mobile-brand-header {
@@ -3771,9 +3783,7 @@ body {
   }
 
   .mobile-page-logout {
-    display: block;
-    margin-top: 4px;
-    padding: 6px 4px 4px;
+    display: none;
   }
 
   .mobile-page-logout__button {
@@ -3798,11 +3808,7 @@ body {
   }
 
   .mobile-notifications-fab {
-    display: block;
-    position: fixed;
-    right: 10px;
-    bottom: calc(50px + env(safe-area-inset-bottom));
-    z-index: 28;
+    display: none;
   }
 
   .mobile-notifications-fab__trigger {
@@ -3982,48 +3988,75 @@ body {
 
   .mobile-bottom-nav {
     position: fixed;
-    left: 10px;
-    right: auto;
-    bottom: calc(50px + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 28;
-    /* F2: virou flex pra acomodar Menu + Suporte lado a lado. */
     display: flex;
     align-items: stretch;
-    gap: 2px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 18px;
+    justify-content: space-around;
+    gap: 0;
+    padding:
+      6px 0
+      max(6px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    border-radius: 0;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 249, 248, 0.96)),
       var(--surface);
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(12px);
+    box-shadow: 0 -2px 12px rgba(0, 40, 40, 0.06);
+    backdrop-filter: blur(20px);
   }
 
   .mobile-bottom-nav__item {
-    display: grid;
-    place-items: center;
-    gap: 3px;
-    padding: 10px 12px;
-    border-radius: 18px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1 1 0;
+    min-height: 52px;
+    padding: 6px 4px;
+    border-radius: 12px;
     color: var(--ink-soft);
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
     text-align: center;
     background: transparent;
     border: 0;
     transition:
-      background-color 140ms ease,
       color 140ms ease,
-      transform 140ms ease,
-      box-shadow 140ms ease;
+      background-color 140ms ease;
   }
 
-  .mobile-bottom-nav__item--icon {
-    width: 64px;
-    min-width: 64px;
-    min-height: 64px;
-    padding: 11px 9px;
+  .mobile-bottom-nav__item--active {
+    color: var(--primary);
+  }
+
+  .mobile-bottom-nav__item:hover {
+    color: var(--ink);
+  }
+
+  .mobile-bottom-nav__item--active:hover {
+    color: var(--primary-700);
+  }
+
+  .mobile-bottom-nav__badge {
+    position: absolute;
+    top: 2px;
+    right: 50%;
+    transform: translateX(14px);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #ffffff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
   }
 
   .mobile-bottom-nav__label {
@@ -4474,6 +4507,14 @@ body {
   .sidebar .nav {
     gap: 8px;
   }
+
+  .sidebar-logout-button {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    margin-top: 4px;
+    border-radius: 16px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -4482,7 +4523,7 @@ body {
   }
 
   .main-content {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
   }
 
   .surface {
@@ -4555,18 +4596,6 @@ body {
 
   .topbar__heading {
     gap: 10px;
-  }
-
-  .mobile-bottom-nav {
-    left: 8px;
-    right: auto;
-    bottom: calc(48px + env(safe-area-inset-bottom));
-    padding: 0;
-  }
-
-  .mobile-notifications-fab {
-    right: 8px;
-    bottom: calc(48px + env(safe-area-inset-bottom));
   }
 
   .sidebar {
