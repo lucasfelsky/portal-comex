@@ -13,6 +13,7 @@ import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
+import { useSwipe } from '../hooks/useSwipe'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -80,11 +81,27 @@ export default function AppLayout() {
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false)
   const [isNotificationPanelMounted, setIsNotificationPanelMounted] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState('all')
-  // F9: modal de preferencias de notificacao (substitui o sino de FCM).
   const [isPrefsModalOpen, setIsPrefsModalOpen] = useState(false)
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
+
+  // C15: swipe gesture no drawer (so mobile). matchMedia evita ativar
+  // em desktop (onde nao tem touch e poderia interferir com trackpad).
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1040px)')
+    setIsMobileViewport(mq.matches)
+    const handler = (event) => setIsMobileViewport(event.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  useSwipe({
+    enabled: isMobileViewport,
+    onSwipeRight: () => setIsMobileMenuOpen(true),
+    onSwipeLeft: () => setIsMobileMenuOpen(false),
+  })
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
