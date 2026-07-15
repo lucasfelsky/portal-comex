@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useForecastSettings } from '../hooks/useForecastSettings'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Skeleton from '../components/Skeleton'
 import {
   CATEGORY_OPTIONS,
   DEFAULT_FORECAST_SETTINGS,
@@ -263,9 +264,10 @@ export default function AdminForecastPage() {
 
   if (loading) {
     return (
-      <div className="empty-state">
-        <strong>Carregando regras</strong>
-        <p>Buscando a configuração atual persistida em `forecastSettings/current`.</p>
+      <div className="admin-panel-stack" style={{ gap: 16 }}>
+        <Skeleton variant="card" style={{ height: 60 }} />
+        <Skeleton variant="card" style={{ height: 180 }} />
+        <Skeleton variant="card" style={{ height: 120 }} />
       </div>
     )
   }

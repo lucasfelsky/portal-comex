@@ -120,11 +120,11 @@ afterEach(() => {
 })
 
 describe('AdminUsersPanel', () => {
-  it('loading inicial: mostra "Carregando usuarios"', () => {
+  it('loading inicial: mostra skeleton', () => {
     let resolveList
     mockListUsers.mockReturnValue(new Promise((r) => { resolveList = r }))
-    renderPanel()
-    expect(screen.getByText(/Carregando usu/i)).toBeInTheDocument()
+    const { container } = renderPanel()
+    expect(container.querySelector('.skeleton')).toBeTruthy()
     resolveList([])
   })
 

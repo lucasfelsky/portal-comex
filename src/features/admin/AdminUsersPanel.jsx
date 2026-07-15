@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
+import Skeleton from '../../components/Skeleton'
 import {
   createManagedAuthUser,
   deleteManagedUser,
@@ -392,10 +393,15 @@ export default function AdminUsersPanel() {
 
           <div className="admin-user-list admin-user-list--scroll">
             {isLoadingUsers ? (
-              <div className="empty-state">
-                <strong>Carregando usuários</strong>
-                <p>Buscando os dados disponíveis no repositório configurado.</p>
-              </div>
+              <Skeleton.Group count={4}>
+                <div className="admin-user-row" style={{ gap: 10, padding: 12 }}>
+                  <Skeleton variant="circle" width={36} height={36} />
+                  <div style={{ flex: 1, gap: 4, display: 'grid' }}>
+                    <Skeleton variant="text" width="60%" />
+                    <Skeleton variant="text" width="40%" />
+                  </div>
+                </div>
+              </Skeleton.Group>
             ) : filteredUsers.length > 0 ? (
               filteredUsers.map((user) => (
                 <button

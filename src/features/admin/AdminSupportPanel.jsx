@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import useAuth from '../../hooks/useAuth'
 import StatCard from '../../components/StatCard'
+import Skeleton from '../../components/Skeleton'
 import TabButton from '../../components/TabButton'
 import { computeTrendDelta } from '../../utils/dashboardStats'
 import {
@@ -227,10 +228,13 @@ export default function AdminSupportPanel() {
         </div>
 
         {isLoading ? (
-          <div className="empty-state">
-            <strong>Carregando chamados</strong>
-            <p>Buscando as demandas de suporte registradas.</p>
-          </div>
+          <Skeleton.Group count={3}>
+            <div className="support-ticket-card" style={{ gap: 8, padding: 14 }}>
+              <Skeleton variant="title" width="50%" />
+              <Skeleton variant="text" />
+              <Skeleton variant="text" width="30%" />
+            </div>
+          </Skeleton.Group>
         ) : visibleTickets.length === 0 ? (
           <div className="empty-state">
             <strong>Nenhum chamado por aqui</strong>

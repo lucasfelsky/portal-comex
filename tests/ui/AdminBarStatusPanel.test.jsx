@@ -70,11 +70,11 @@ afterEach(() => {
 })
 
 describe('AdminBarStatusPanel', () => {
-  it('loading inicial: mostra "Carregando status da barra"', () => {
+  it('loading inicial: mostra skeleton', () => {
     let resolveGet
     mockGetBarStatus.mockReturnValue(new Promise((r) => { resolveGet = r }))
-    renderPanel()
-    expect(screen.getByText(/Carregando status da barra/i)).toBeInTheDocument()
+    const { container } = renderPanel()
+    expect(container.querySelector('.skeleton')).toBeTruthy()
     resolveGet(BAR_STATUS)
   })
 

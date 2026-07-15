@@ -17,6 +17,12 @@
 
 import Modal from './Modal'
 
+function haptic(pattern) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try { navigator.vibrate(pattern) } catch { /* noop */ }
+  }
+}
+
 export default function ConfirmDialog({
   open,
   title,
@@ -29,6 +35,11 @@ export default function ConfirmDialog({
   busy = false,
 }) {
   const confirmClass = tone === 'danger' ? 'danger-button' : 'primary-button'
+
+  function handleConfirm() {
+    if (tone === 'danger') haptic(10)
+    onConfirm?.()
+  }
 
   return (
     <Modal open={open} onClose={onCancel} title={title}>
@@ -46,7 +57,7 @@ export default function ConfirmDialog({
           <button
             type="button"
             className={confirmClass}
-            onClick={onConfirm}
+            onClick={handleConfirm}
             disabled={busy}
           >
             {busy ? 'Aguarde...' : confirmLabel}
