@@ -438,15 +438,7 @@ body {
 }
 
 .sidebar-logout-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  color: var(--ink-soft);
-  font-weight: 600;
-  font-size: 0.875rem;
+  display: none;
 }
 
 .sidebar-intelliquote-link__eyebrow {
@@ -4561,6 +4553,7 @@ body {
   }
 
   .sidebar-logout-button {
+    display: flex;
     width: 100%;
     justify-content: center;
     min-height: 48px;
