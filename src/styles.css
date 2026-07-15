@@ -37,10 +37,13 @@
   --shadow-lg: 0 24px 48px rgba(0, 40, 40, 0.16);
   --shadow-xl: 0 30px 60px rgba(0, 40, 40, 0.22);
 
-  /* Tints de texto (intelliQuote) */
+  /* Tints de texto (intelliQuote).
+     C10 (auditoria mobile): --text-subtle e --text-faint foram escurecidos
+     para passar WCAG AA (contraste >= 4.5:1 sobre --surface #fff).
+     Antes: 0.52 (~2.7:1) e 0.42 (~2.2:1) — falhavam. Agora: 0.62 e 0.52. */
   --text-muted: rgba(31, 28, 24, 0.62);
-  --text-subtle: rgba(31, 28, 24, 0.52);
-  --text-faint: rgba(31, 28, 24, 0.42);
+  --text-subtle: rgba(31, 28, 24, 0.62);
+  --text-faint: rgba(31, 28, 24, 0.52);
   --text-mute-strong: rgba(31, 28, 24, 0.68);
 
   color: var(--ink);
@@ -1708,7 +1711,11 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 24px;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
 }
 
 .auth-card {
@@ -4076,7 +4083,6 @@ body {
     min-height: 40px;
     padding: 7px 10px;
     border-radius: 12px;
-    font-size: 0.88rem;
   }
 
   .process-date-range .text-input {
@@ -4253,6 +4259,17 @@ body {
     justify-content: center;
     text-align: center;
     min-height: 48px;
+  }
+
+  /* C1 (auditoria mobile): inputs com font-size 16px em mobile pra evitar
+     o zoom automatico do iOS Safari (ele faz viewport zoom em qualquer
+     input focado com font-size < 16px). Nao afeta o visual no desktop
+     (esta regra so' vale em <=720px). Selects e textareas inclusos. */
+  .text-input,
+  .text-area,
+  select.text-input,
+  .select {
+    font-size: 16px;
   }
 
   .tab-row {
@@ -4597,7 +4614,6 @@ body {
     min-height: 40px;
     padding: 6px 9px;
     border-radius: 12px;
-    font-size: 0.84rem;
   }
 
   .process-list-card .process-item {
