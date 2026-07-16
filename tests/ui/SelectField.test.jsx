@@ -62,6 +62,28 @@ describe('SelectField', () => {
     expect(trigger).toHaveTextContent('Aéreo')
   })
 
+  it('mobile: extrai opções dentro de <optgroup> (CollectionStatusEditView)', async () => {
+    setMatchMedia(true)
+    const onChange = vi.fn()
+    render(
+      <SelectField value="" onChange={onChange} sheetTitle="Coleta">
+        <option value="">Selecione</option>
+        <optgroup label="Em rota">
+          <option value="rota">CD em rota</option>
+        </optgroup>
+        <optgroup label="Pós-recebimento">
+          <option value="recebida">Carga recebida</option>
+        </optgroup>
+      </SelectField>
+    )
+    const user = userEvent.setup()
+    await user.click(document.querySelector('.select-field__trigger'))
+    const sheet = document.querySelector('.action-sheet')
+    // opção aninhada no optgroup aparece (com o label do grupo como prefixo)
+    await user.click(within(sheet).getByRole('button', { name: /Carga recebida/ }))
+    expect(onChange).toHaveBeenCalledWith({ target: { value: 'recebida' } })
+  })
+
   it('mobile: tocar no gatilho abre o ActionSheet; selecionar dispara onChange com {target:{value}}', async () => {
     setMatchMedia(true)
     const onChange = vi.fn()

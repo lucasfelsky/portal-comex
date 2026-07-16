@@ -24,17 +24,32 @@ export default function SelectField({
   const isMobile = useMobileLayout()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
 
-  // Extrai as opções dos <option> filhos pra alimentar o sheet.
+  // Extrai as opções dos <option> filhos pra alimentar o sheet. Desce em
+  // <optgroup> (CollectionStatusEditView usa grupos), preservando o label do
+  // grupo como prefixo no sheet (que não tem hierarquia visual como o nativo).
   const options = useMemo(() => {
-    return Children.toArray(children)
-      .filter((child) => isValidElement(child) && child.type === 'option')
-      .map((child) => ({
-        value: child.props.value ?? '',
-        label: typeof child.props.children === 'string'
-          ? child.props.children
-          : String(child.props.value ?? ''),
-        disabled: Boolean(child.props.disabled),
-      }))
+    const collected = []
+    const walk = (nodes, groupLabel) => {
+      Children.toArray(nodes).forEach((child) => {
+        if (!isValidElement(child)) return
+        if (child.type === 'optgroup') {
+          walk(child.props.children, child.props.label)
+          return
+        }
+        if (child.type === 'option') {
+          const rawLabel = typeof child.props.children === 'string'
+            ? child.props.children
+            : String(child.props.value ?? '')
+          collected.push({
+            value: child.props.value ?? '',
+            label: groupLabel ? `${groupLabel} · ${rawLabel}` : rawLabel,
+            disabled: Boolean(child.props.disabled),
+          })
+        }
+      })
+    }
+    walk(children)
+    return collected
   }, [children])
 
   const currentLabel = useMemo(() => {

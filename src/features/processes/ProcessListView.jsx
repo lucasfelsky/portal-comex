@@ -1,4 +1,5 @@
 import Skeleton from '../../components/Skeleton'
+import SelectField from '../../components/SelectField'
 import FilterChip from '../../components/FilterChip'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
 import { getStatusTagClass } from './processStatusView'
@@ -102,7 +103,7 @@ export default function ProcessListView({
         </label>
         <label className="field field--compact">
           <span>Categoria</span>
-          <select
+          <SelectField
             className="text-input"
             value={categoryFilter}
             onChange={(event) => onCategoryFilterChange(event.target.value)}
@@ -113,7 +114,7 @@ export default function ProcessListView({
                 {item}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         <div className="field">
           <span>Período de ETA</span>
@@ -135,7 +136,7 @@ export default function ProcessListView({
         </div>
         <label className="field">
           <span>Etapa operacional</span>
-          <select
+          <SelectField
             className="text-input"
             value={operationFilter}
             onChange={(event) => onOperationFilterChange(event.target.value)}
@@ -147,7 +148,7 @@ export default function ProcessListView({
             <option value="DUIMP pendente">DUIMP pendente</option>
             <option value="Coleta pendente">Coleta pendente</option>
             <option value="Coleta agendada">Coleta agendada</option>
-          </select>
+          </SelectField>
         </label>
       </div>
 
