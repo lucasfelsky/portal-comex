@@ -103,6 +103,20 @@ export default function AppLayout() {
     onSwipeLeft: () => setIsMobileMenuOpen(false),
   })
 
+  // Layout mobile (<=720px): topbar some e a bottom-nav aparece (ver
+  // styles.css). O painel de notificacao precisa renderizar SO uma vez por
+  // viewport: ancorado ao sino do topbar no desktop, ou como bottom-sheet
+  // standalone no mobile (onde o topbar — e o painel dentro dele — some).
+  // Renderizar nos dois lugares duplicava painel + backdrop no desktop.
+  const [isMobileLayout, setIsMobileLayout] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    setIsMobileLayout(mq.matches)
+    const handler = (event) => setIsMobileLayout(event.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
   const globalSearch = useGlobalSearch(profile?.role === 'admin')
@@ -569,7 +583,9 @@ export default function AppLayout() {
             <span className="notifications__count">{unreadNotifications.length}</span>
           ) : null}
         </button>
-        {renderNotificationsPanel()}
+        {/* Painel ancorado ao sino — só no desktop. No mobile o topbar some
+            e o painel renderiza como bottom-sheet standalone (ver abaixo). */}
+        {!isMobileLayout ? renderNotificationsPanel() : null}
       </div>
     )
   }
@@ -743,7 +759,7 @@ export default function AppLayout() {
             fcm={fcm}
           />
 
-          {isNotificationPanelMounted ? renderNotificationsPanel() : null}
+          {isMobileLayout && isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
           <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
             <NavLink
