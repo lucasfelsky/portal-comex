@@ -166,6 +166,46 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       ).toBeInTheDocument()
     })
   })
+
+  // Regressao (auditoria F14, 2026-07-16): ao abrir as notificacoes, o painel
+  // (e o backdrop) deve renderizar UMA unica vez. O C-series mobile passou a
+  // renderizar um painel standalone (bottom-sheet) alem do painel ancorado no
+  // topbar, duplicando painel + backdrop no desktop. Fix: gate por
+  // isMobileLayout (<=720px) — topbar no desktop, standalone no mobile.
+  describe('painel de notificacoes: renderiza uma vez por viewport', () => {
+    it('desktop (>720px): 1 painel + 1 backdrop', () => {
+      const { container } = renderWithRole('admin')
+      act(() => {
+        screen.getAllByLabelText('Notificações')[0].click()
+      })
+      expect(container.querySelectorAll('.notifications__panel')).toHaveLength(1)
+      expect(container.querySelectorAll('.notifications-backdrop')).toHaveLength(1)
+    })
+
+    it('mobile (<=720px): 1 painel + 1 backdrop', () => {
+      const originalMatchMedia = window.matchMedia
+      window.matchMedia = (query) => ({
+        matches: /max-width:\s*720px/.test(query),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      })
+      try {
+        const { container } = renderWithRole('admin')
+        act(() => {
+          screen.getAllByLabelText('Notificações')[0].click()
+        })
+        expect(container.querySelectorAll('.notifications__panel')).toHaveLength(1)
+        expect(container.querySelectorAll('.notifications-backdrop')).toHaveLength(1)
+      } finally {
+        window.matchMedia = originalMatchMedia
+      }
+    })
+  })
 })
 
 function fireKeyDown(key, init = {}) {
