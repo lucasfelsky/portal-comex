@@ -717,6 +717,15 @@ export default function AppLayout() {
                   </span>
                 </div>
               ) : null}
+              <button
+                type="button"
+                className="ghost-button topbar-theme-button"
+                onClick={theme.cyclePreference}
+                aria-label={`${themeLabel} — alternar tema`}
+                title={themeLabel}
+              >
+                <Icon name={themeIcon} size={17} aria-hidden="true" />
+              </button>
               {renderNotificationsControl()}
               <div className="topbar__user">
                 <div className="topbar__avatar" aria-hidden="true">
