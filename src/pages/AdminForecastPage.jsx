@@ -319,7 +319,7 @@ export default function AdminForecastPage() {
               <tbody>
                 {draft.destinations.map((destination, index) => (
                   <tr key={`destination-${index}`}>
-                    <td>
+                    <td data-label="Match">
                       <input
                         className="text-input"
                         type="text"
@@ -328,7 +328,7 @@ export default function AdminForecastPage() {
                         onChange={(event) => updateDestination(index, { match: event.target.value })}
                       />
                     </td>
-                    <td>
+                    <td data-label="Rótulo">
                       <input
                         className="text-input"
                         type="text"
@@ -337,7 +337,7 @@ export default function AdminForecastPage() {
                         onChange={(event) => updateDestination(index, { label: event.target.value })}
                       />
                     </td>
-                    <td>
+                    <td data-label="Cutoff (h)">
                       <input
                         className="text-input"
                         type="number"
@@ -347,7 +347,7 @@ export default function AdminForecastPage() {
                         onChange={(event) => updateDestination(index, { cutoffHour: event.target.value })}
                       />
                     </td>
-                    <td>
+                    <td data-label="Min">
                       <input
                         className="text-input"
                         type="number"
@@ -357,7 +357,7 @@ export default function AdminForecastPage() {
                         onChange={(event) => updateDestination(index, { cutoffMinute: event.target.value })}
                       />
                     </td>
-                    <td>
+                    <td className="admin-table__actions-cell">
                       <button
                         type="button"
                         className="ghost-button"
