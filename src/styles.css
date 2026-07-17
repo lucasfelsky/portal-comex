@@ -3574,6 +3574,88 @@ body {
   margin-top: 16px;
 }
 
+/* C11 (auditoria mobile): wizard do ProcessForm — barra de progresso,
+   rótulo do passo e navegação Voltar/Avançar/Salvar.
+   Ritmo vertical: header (barra + rótulo + chips) agrupado e separado do
+   conteúdo por uma linha sutil; um único vão entre blocos (nada de gaps
+   somados). */
+.wizard-header {
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.wizard-progress__bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-700), var(--primary));
+  transition: width 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Especificidade .wizard-header ... pra bater a regra `.list-card p`
+   (reset de margem dos parágrafos dentro de cards), que senão zera o
+   margin-bottom deste rótulo. */
+.wizard-header .wizard-progress__label {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+}
+
+.wizard-header .wizard-progress__label strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* Chips de passo: sem a margin-bottom do .tab-row base (o .wizard-header
+   já cuida do espaçamento). No mobile rolam na horizontal sem scrollbar. */
+.wizard-steps {
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wizard-steps::-webkit-scrollbar {
+  display: none;
+}
+
+/* Conteúdo do passo: mais respiro entre campos que o detail-stack padrão
+   (12px), pra um form menos apertado e mais profissional. */
+.wizard-panel {
+  gap: 16px;
+}
+
+.wizard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* Salvar sempre visivel e "empurrado" pro fim da linha (a direita no
+   desktop; no mobile quebra pra largura total abaixo do Voltar/Avancar). */
+.wizard-nav .primary-button {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .wizard-nav .primary-button {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 .empty-state {
   display: grid;
   gap: 8px;
