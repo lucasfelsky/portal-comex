@@ -6078,6 +6078,11 @@ body {
 [data-theme='dark'] .notifications__panel { background: var(--glass-grad); }
 [data-theme='dark'] .mobile-bottom-nav { background: var(--glass-strong); }
 
+/* .surface no bloco @media(max-width:720px) tem um gradiente BRANCO
+   hardcoded (não usa só var(--surface)) — no dark o card ficava branco.
+   Cobre com o gradiente dark. */
+[data-theme='dark'] .surface { background: var(--glass-grad); }
+
 /* Botão IntelliQuote: no claro usa background:var(--ink) (quase-preto) com
    texto branco. No dark --ink vira claro → fundo E texto E seta ficavam
    todos claros (o botão "sumia" em branco). Fixa um fundo escuro teal-ado
