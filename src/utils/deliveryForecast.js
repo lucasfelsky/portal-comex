@@ -253,6 +253,26 @@ function normalizeDeliveryDateOverride(value) {
   return date ? toDateKey(date) : ''
 }
 
+// "Coleta agendada" em diante — espelha
+// processStatus.isCollectionScheduleRetainingStatus (fonte da verdade).
+// Mantido inline pra este util seguir sem dependência de features/. A
+// partir desses status a previsão MANUAL de entrega é desconsiderada: a
+// data automática (calculada da janela de coleta) e' mais confiavel que
+// um override manual antigo.
+const COLLECTION_SCHEDULED_OR_BEYOND = new Set([
+  'coleta agendada',
+  'veiculo no cd para descarga',
+  'carga a caminho do cd',
+  'carga recebida',
+  'carga em conferencia/etiquetagem',
+  'carga em processo de entrada',
+  'carga disponivel em estoque',
+])
+
+function isCollectionScheduledOrBeyond(status) {
+  return COLLECTION_SCHEDULED_OR_BEYOND.has(normalizeText(status))
+}
+
 function ensureDeliveryNotBeforeEta(deliveryDate, eta) {
   const parsedDeliveryDate = parseDate(deliveryDate)
   if (!parsedDeliveryDate) return ''
@@ -327,7 +347,11 @@ export function getAutomaticEstimatedDeliveryDate(processOrEta, category, settin
 export function getEstimatedDeliveryDate(processOrEta, category, settings) {
   if (typeof processOrEta === 'object' && processOrEta !== null) {
     const manualDate = normalizeDeliveryDateOverride(processOrEta.warehouseDeliveryDateOverride)
-    if (manualDate) return manualDate
+    // Regra (2026-07): de "coleta agendada" em diante, ignora o override
+    // manual — nessa fase a data automatica vem da janela de coleta real.
+    if (manualDate && !isCollectionScheduledOrBeyond(processOrEta.collectionStatus)) {
+      return manualDate
+    }
   }
 
   return getAutomaticEstimatedDeliveryDate(processOrEta, category, settings)

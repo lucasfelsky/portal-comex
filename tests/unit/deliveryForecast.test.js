@@ -11,6 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   getScheduledCollectionDeliveryDate,
   getScheduledCollectionDeliveryShift,
+  getEstimatedDeliveryDate,
+  getAutomaticEstimatedDeliveryDate,
 } from '../../src/utils/deliveryForecast'
 import { DEFAULT_FORECAST_SETTINGS } from '../../src/utils/deliveryForecast'
 
@@ -199,5 +201,54 @@ describe('getScheduledCollectionDeliveryShift (PR #12)', () => {
         DEFAULT_FORECAST_SETTINGS
       )
     ).toBe('')
+  })
+})
+
+describe('getEstimatedDeliveryDate — override manual x "coleta agendada em diante" (2026-07)', () => {
+  const NAVEGANTES_SCHEDULED = {
+    destination: 'Navegantes',
+    category: 'FCL',
+    eta: '2026-07-10',
+    collectionScheduledAt: '2026-07-15T08:00:00-03:00', // dia util, antes do cutoff 14h
+    warehouseDeliveryDateOverride: '2026-08-20', // bem depois — pra distinguir
+  }
+
+  it('aplica o override manual ANTES de "coleta agendada" (ex.: Coleta Pendente)', () => {
+    const process = { ...NAVEGANTES_SCHEDULED, collectionStatus: 'Coleta Pendente' }
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).toBe(
+      '2026-08-20'
+    )
+  })
+
+  it('aplica o override quando nao ha status de coleta', () => {
+    const process = { ...NAVEGANTES_SCHEDULED, collectionStatus: '' }
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).toBe(
+      '2026-08-20'
+    )
+  })
+
+  it('IGNORA o override em "Coleta Agendada" — usa a data automatica da janela', () => {
+    const process = { ...NAVEGANTES_SCHEDULED, collectionStatus: 'Coleta Agendada' }
+    const auto = getAutomaticEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)
+    const estimated = getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)
+    expect(estimated).toBe(auto)
+    expect(estimated).not.toBe('2026-08-20')
+    expect(estimated).toBe('2026-07-15') // coleta 15/07 dia util antes do cutoff
+  })
+
+  it('IGNORA o override em status posterior (Carga a caminho do CD)', () => {
+    const process = { ...NAVEGANTES_SCHEDULED, collectionStatus: 'Carga a caminho do CD' }
+    const auto = getAutomaticEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).toBe(auto)
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).not.toBe(
+      '2026-08-20'
+    )
+  })
+
+  it('IGNORA o override em "Carga recebida"', () => {
+    const process = { ...NAVEGANTES_SCHEDULED, collectionStatus: 'Carga recebida' }
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).not.toBe(
+      '2026-08-20'
+    )
   })
 })
