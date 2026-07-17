@@ -5994,6 +5994,18 @@ body {
 [data-theme='dark'] .notifications__panel { background: var(--glass-grad); }
 [data-theme='dark'] .mobile-bottom-nav { background: var(--glass-strong); }
 
+/* Botão IntelliQuote: no claro usa background:var(--ink) (quase-preto) com
+   texto branco. No dark --ink vira claro → fundo E texto E seta ficavam
+   todos claros (o botão "sumia" em branco). Fixa um fundo escuro teal-ado
+   (premium, combina com a marca) mantendo o texto branco legível. */
+[data-theme='dark'] .sidebar-intelliquote-link {
+  background: linear-gradient(135deg, #14342d, #0f2a24);
+  border: 1px solid rgba(28, 196, 163, 0.28);
+}
+[data-theme='dark'] .sidebar-intelliquote-link:hover {
+  background: linear-gradient(135deg, #184038, #123029);
+}
+
 /* Botao de tema. Desktop: icone discreto na TOPBAR (ao lado do sino) — a
    versao da sidebar fica escondida (base .sidebar-theme-button{display:none}
    la' em cima, antes do @media mobile) pra nao deslocar o link do
