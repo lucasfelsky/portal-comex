@@ -2674,6 +2674,15 @@ body {
   display: none;
 }
 
+/* Escondido por padrao (desktop usa o icone da topbar). O bloco
+   @media (max-width:720px) reativa (display:flex) no drawer mobile.
+   IMPORTANTE: esta regra base precisa vir ANTES daquele @media no
+   arquivo — se vier depois, vence por ordem de cascata e o botao some
+   no celular (mesma especificidade). */
+.sidebar-theme-button {
+  display: none;
+}
+
 .inline-badge {
   padding: 8px 12px;
   border-radius: 999px;
@@ -5903,15 +5912,10 @@ body {
 [data-theme='dark'] .notifications__panel { background: var(--glass-grad); }
 [data-theme='dark'] .mobile-bottom-nav { background: var(--glass-strong); }
 
-/* Botao de tema. Desktop: icone discreto na TOPBAR (ao lado do sino) —
-   a versao da sidebar fica display:none pra nao deslocar o link do
-   IntelliQuote (o margin-top:auto roubava o espaco flexivel). Mobile
-   (<=720px): a topbar some, entao o botao aparece no drawer (bloco
-   mobile ativa display:flex, mesmo padrao do .sidebar-logout-button). */
-.sidebar-theme-button {
-  display: none;
-}
-
+/* Botao de tema. Desktop: icone discreto na TOPBAR (ao lado do sino) — a
+   versao da sidebar fica escondida (base .sidebar-theme-button{display:none}
+   la' em cima, antes do @media mobile) pra nao deslocar o link do
+   IntelliQuote. Mobile (<=720px): a topbar some e o do drawer assume. */
 .topbar-theme-button {
   display: inline-flex;
   align-items: center;
