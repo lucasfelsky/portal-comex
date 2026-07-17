@@ -5049,10 +5049,79 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* C16 (auditoria mobile): a .admin-table (grid editável de destinos do
+   AdminForecastPage) vira card-list no mobile em vez de scroll horizontal.
+   Cada <tr> vira um card; cada <td> empilha "rótulo → campo" usando o
+   data-label do JSX. A célula de ações fica full-width no fim do card. */
 @media (max-width: 720px) {
   .admin-grid--thirds,
   .admin-grid--quarters {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-table-wrapper {
+    overflow-x: visible;
+  }
+
+  .admin-table,
+  .admin-table tbody {
+    display: block;
+  }
+
+  .admin-table thead {
+    /* cabeçalho de colunas some — cada campo mostra o próprio rótulo */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .admin-table tr {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-alt);
+  }
+
+  .admin-table tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .admin-table td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .admin-table td::before {
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+  }
+
+  /* Célula de ações: sem rótulo, botão ocupa a largura toda do card. */
+  .admin-table td.admin-table__actions-cell {
+    display: block;
+    padding-top: 2px;
+  }
+
+  .admin-table td.admin-table__actions-cell::before {
+    content: none;
+  }
+
+  .admin-table td.admin-table__actions-cell .ghost-button {
+    width: 100%;
   }
 
   .stats-grid,
