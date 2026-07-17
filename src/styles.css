@@ -6083,6 +6083,13 @@ body {
    Cobre com o gradiente dark. */
 [data-theme='dark'] .surface { background: var(--glass-grad); }
 
+/* Outras superfícies com tint claro hardcoded (rgba(25x,25x,24x,..)) que
+   não acompanhavam os tokens do dark: card de mensagem do processo, linha
+   de checkbox (forms) e cabeçalho da tabela admin. */
+[data-theme='dark'] .process-message-card,
+[data-theme='dark'] .checkbox-field { background: var(--glass-soft); }
+[data-theme='dark'] .admin-table th { background: var(--surface-alt); }
+
 /* Botão IntelliQuote: no claro usa background:var(--ink) (quase-preto) com
    texto branco. No dark --ink vira claro → fundo E texto E seta ficavam
    todos claros (o botão "sumia" em branco). Fixa um fundo escuro teal-ado
