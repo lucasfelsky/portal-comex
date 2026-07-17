@@ -641,32 +641,34 @@ export default function ProcessForm({
         </div>
       </div>
 
-      <div className="wizard-progress" aria-hidden="true">
-        <div
-          className="wizard-progress__bar"
-          style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
-        />
-      </div>
-      <p className="wizard-progress__label">
-        Passo {currentStep + 1} de {steps.length}: <strong>{steps[currentStep].label}</strong>
-      </p>
+      <div className="wizard-header">
+        <div className="wizard-progress" aria-hidden="true">
+          <div
+            className="wizard-progress__bar"
+            style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+          />
+        </div>
+        <p className="wizard-progress__label">
+          Passo {currentStep + 1} de {steps.length}: <strong>{steps[currentStep].label}</strong>
+        </p>
 
-      <div className="tab-row detail-tab-row wizard-steps" role="tablist">
-        {steps.map((stepDef, index) => (
-          <button
-            key={stepDef.key}
-            type="button"
-            role="tab"
-            aria-selected={index === currentStep}
-            className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
-            onClick={() => setStep(index)}
-          >
-            {stepDef.label}
-          </button>
-        ))}
+        <div className="tab-row detail-tab-row wizard-steps" role="tablist">
+          {steps.map((stepDef, index) => (
+            <button
+              key={stepDef.key}
+              type="button"
+              role="tab"
+              aria-selected={index === currentStep}
+              className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
+              onClick={() => setStep(index)}
+            >
+              {stepDef.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="detail-stack tab-panel-spacing" onClickCapture={onClickCapture}>
+      <div className="detail-stack wizard-panel" onClickCapture={onClickCapture}>
         {steps[currentStep].render()}
       </div>
 
