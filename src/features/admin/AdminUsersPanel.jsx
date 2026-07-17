@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import SelectField from '../../components/SelectField'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 import Skeleton from '../../components/Skeleton'
 import {
@@ -377,7 +378,7 @@ export default function AdminUsersPanel() {
 
             <label className="field field--compact">
               <span>Status</span>
-              <select
+              <SelectField
                 className="text-input"
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
@@ -387,7 +388,7 @@ export default function AdminUsersPanel() {
                     {status}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </label>
           </div>
 
@@ -516,7 +517,7 @@ export default function AdminUsersPanel() {
           <div className="detail-card detail-card--split">
             <label className="field">
               <span>Perfil</span>
-              <select
+              <SelectField
                 className="text-input"
                 value={draft.role}
                 onChange={(event) => handleDraftChange('role', event.target.value)}
@@ -526,12 +527,12 @@ export default function AdminUsersPanel() {
                     {role.label}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </label>
 
             <label className="field">
               <span>Status</span>
-              <select
+              <SelectField
                 className="text-input"
                 value={draft.status}
                 onChange={(event) => handleDraftChange('status', event.target.value)}
@@ -543,7 +544,7 @@ export default function AdminUsersPanel() {
                       {status}
                     </option>
                   ))}
-              </select>
+              </SelectField>
             </label>
           </div>
 

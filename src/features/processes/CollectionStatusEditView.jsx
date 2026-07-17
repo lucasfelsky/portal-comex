@@ -1,3 +1,4 @@
+import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
 import {
   CD_EN_ROUTE_STATUS,
@@ -51,7 +52,7 @@ export default function CollectionStatusEditView({
         />
         <label className="field">
           <span>Status</span>
-          <select
+          <SelectField
             className="text-input"
             value={collectionStatus}
             onChange={(event) => onStatusChange(event.target.value)}
@@ -67,7 +68,7 @@ export default function CollectionStatusEditView({
                 </option>
               ))}
             </optgroup>
-          </select>
+          </SelectField>
         </label>
       </div>
 

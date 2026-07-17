@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../utils/dateFormat'
+import SelectField from '../../components/SelectField'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
@@ -133,7 +134,7 @@ export default function ProcessDetailView({
       <div className="detail-tab-select">
         <label className="field">
           <span>Seção</span>
-          <select
+          <SelectField
             className="text-input"
             value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
             onChange={(event) => onDetailTabChange(event.target.value)}
@@ -143,7 +144,7 @@ export default function ProcessDetailView({
             <option value="items">Itens</option>
             <option value="messages">Mensagens</option>
             {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
-          </select>
+          </SelectField>
         </label>
       </div>
 

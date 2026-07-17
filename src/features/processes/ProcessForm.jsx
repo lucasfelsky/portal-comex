@@ -1,4 +1,5 @@
 import Spinner from '../../components/Spinner'
+import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
 import {
   getDisplayedCollectionStatus,
@@ -130,14 +131,14 @@ export default function ProcessForm({
       <div className="detail-tab-select">
         <label className="field">
           <span>Seção</span>
-          <select
+          <SelectField
             className="text-input"
             value={editTab}
             onChange={(event) => onSetEditTab(event.target.value)}
           >
             <option value="general">Geral</option>
             <option value="items">Itens</option>
-          </select>
+          </SelectField>
         </label>
       </div>
 
@@ -175,7 +176,7 @@ export default function ProcessForm({
             <div className="detail-card detail-card--split">
               <label className="field">
                 <span>Categoria</span>
-                <select
+                <SelectField
                   className="text-input"
                   value={draft.category}
                   onChange={(event) => onDraftChange('category', event.target.value)}
@@ -183,7 +184,7 @@ export default function ProcessForm({
                   {processCategoryOptions.map((item) => (
                     <option key={item} value={item}>{item}</option>
                   ))}
-                </select>
+                </SelectField>
               </label>
               <label className="field">
                 <span>Destino</span>
@@ -271,7 +272,7 @@ export default function ProcessForm({
             <div className="detail-card detail-card--split">
               <label className="field">
                 <span>Status do processo</span>
-                <select
+                <SelectField
                   className="text-input"
                   value={draft.processStatus}
                   onChange={(event) => onDraftChange('processStatus', event.target.value)}
@@ -281,7 +282,7 @@ export default function ProcessForm({
                       {getDisplayedProcessStatus(item, draft.category)}
                     </option>
                   ))}
-                </select>
+                </SelectField>
               </label>
               <div className="detail-card detail-card--soft">
                 <span className="detail-label">Leitura rápida</span>
@@ -336,7 +337,7 @@ export default function ProcessForm({
                 <span className="detail-label">MAPA</span>
                 <label className="field">
                   <span>Status</span>
-                  <select
+                  <SelectField
                     className="text-input"
                     value={draft.mapaStatus}
                     onChange={(event) => onDraftChange('mapaStatus', event.target.value)}
@@ -345,7 +346,7 @@ export default function ProcessForm({
                     {mapaStatusOptions.map((item) => (
                       <option key={item} value={item}>{item}</option>
                     ))}
-                  </select>
+                  </SelectField>
                 </label>
                 {shouldEditMapaInspection(draft.mapaStatus) ? (
                   <label className="field">
@@ -387,7 +388,7 @@ export default function ProcessForm({
                 {draft.cargoPresenceInformed ? (
                   <label className="field">
                     <span>DUIMP</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.duimpStatus}
                       onChange={(event) => onDraftChange('duimpStatus', event.target.value)}
@@ -396,13 +397,13 @@ export default function ProcessForm({
                       {duimpStatusOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {draft.duimpStatus === 'Parametrizada' ? (
                   <label className="field">
                     <span>Canal da parametrização</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.parameterizationChannel}
                       onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
@@ -411,13 +412,13 @@ export default function ProcessForm({
                       {channelOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? (
                   <label className="field">
                     <span>Coleta</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.collectionStatus}
                       onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
@@ -426,7 +427,7 @@ export default function ProcessForm({
                       {getCollectionStatusOptions(draft).map((item) => (
                         <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
@@ -462,7 +463,7 @@ export default function ProcessForm({
                 {draft.arrived ? (
                   <label className="field">
                     <span>DTA</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.dtaStatus}
                       onChange={(event) => onDraftChange('dtaStatus', event.target.value)}
@@ -471,7 +472,7 @@ export default function ProcessForm({
                       {dtaStatusOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {isDtaLoadingScheduled(draft.dtaStatus) ? (
@@ -509,7 +510,7 @@ export default function ProcessForm({
                 {draft.cargoPresenceInformed ? (
                   <label className="field">
                     <span>DUIMP</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.duimpStatus}
                       onChange={(event) => onDraftChange('duimpStatus', event.target.value)}
@@ -518,13 +519,13 @@ export default function ProcessForm({
                       {duimpStatusOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {draft.duimpStatus === 'Parametrizada' ? (
                   <label className="field">
                     <span>Canal da parametrização</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.parameterizationChannel}
                       onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
@@ -533,13 +534,13 @@ export default function ProcessForm({
                       {channelOptions.map((item) => (
                         <option key={item} value={item}>{item}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {draft.parameterizationChannel === 'Verde' ? (
                   <label className="field">
                     <span>Coleta</span>
-                    <select
+                    <SelectField
                       className="text-input"
                       value={draft.collectionStatus}
                       onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
@@ -548,7 +549,7 @@ export default function ProcessForm({
                       {getCollectionStatusOptions(draft).map((item) => (
                         <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                 ) : null}
                 {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import SelectField from '../../components/SelectField'
 import useAuth from '../../hooks/useAuth'
 import StatCard from '../../components/StatCard'
 import Skeleton from '../../components/Skeleton'
@@ -295,7 +296,7 @@ export default function AdminSupportPanel() {
                   <div className="action-row support-ticket-card__actions">
                     <label className="field support-ticket-card__priority">
                       <span>Prioridade</span>
-                      <select
+                      <SelectField
                         className="text-input"
                         value={ticket.priority}
                         disabled={isSaving}
@@ -308,7 +309,7 @@ export default function AdminSupportPanel() {
                             {PRIORITY_LABELS[priorityOption]}
                           </option>
                         ))}
-                      </select>
+                      </SelectField>
                     </label>
 
                     {!isResolved && !isInProgress ? (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import SelectField from '../../components/SelectField'
 import Skeleton from '../../components/Skeleton'
 import {
   BAR_STATUS_OPTIONS,
@@ -176,7 +177,7 @@ export default function AdminBarStatusPanel() {
 
             <label className="field">
               <span>Status atual</span>
-              <select
+              <SelectField
                 className="text-input"
                 value={barStatusDraft.status}
                 onChange={(event) =>
@@ -191,7 +192,7 @@ export default function AdminBarStatusPanel() {
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </label>
 
             <div className="action-row">
