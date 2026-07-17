@@ -146,6 +146,28 @@ const ICONS = {
       <path d="M12 17h.01" />
     </>
   ),
+  // C17 (toggle de tema): sol = claro, lua = escuro, circulo meio
+  // preenchido = automatico (segue o sistema).
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.9 4.9 1.4 1.4" />
+      <path d="m17.7 17.7 1.4 1.4" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m4.9 19.1 1.4-1.4" />
+      <path d="m17.7 6.3 1.4-1.4" />
+    </>
+  ),
+  moon: <path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z" />,
+  'theme-auto': (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

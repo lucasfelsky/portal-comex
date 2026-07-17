@@ -14,6 +14,7 @@ import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useSwipe } from '../hooks/useSwipe'
+import { useTheme } from '../hooks/useTheme'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -123,6 +124,10 @@ export default function AppLayout() {
   const processSearcherForPalette = globalSearch.searcher
   const dnd = useDoNotDisturb()
   const fcm = useFcm(profile?.uid)
+  // C17 (toggle): tema claro/escuro/automatico, persistido em localStorage.
+  const theme = useTheme()
+  const themeLabel = { auto: 'Tema: automático', dark: 'Tema: escuro', light: 'Tema: claro' }[theme.preference]
+  const themeIcon = { auto: 'theme-auto', dark: 'moon', light: 'sun' }[theme.preference]
   const commandItems = useMemo(
     () => [
       { id: 'go-dashboard', label: 'Dashboard', group: 'Páginas', to: '/', icon: 'dashboard', keywords: ['home', 'inicio'] },
@@ -644,6 +649,17 @@ export default function AppLayout() {
               </span>
             </a>
           ) : null}
+
+          <button
+            type="button"
+            className="ghost-button sidebar-theme-button"
+            onClick={theme.cyclePreference}
+            aria-label={`${themeLabel} — alternar tema`}
+            title="Alternar tema (automático / escuro / claro)"
+          >
+            <Icon name={themeIcon} size={16} aria-hidden="true" />
+            <span>{themeLabel}</span>
+          </button>
 
           <button
             type="button"

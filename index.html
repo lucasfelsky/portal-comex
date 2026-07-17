@@ -14,6 +14,25 @@
     />
   </head>
   <body>
+    <!-- C17 toggle: resolve o tema ANTES do bundle carregar (evita flash
+         claro->escuro no load). Mesma logica do hook useTheme: preferencia
+         salva ('light'/'dark') vence; 'auto'/ausente segue o sistema. -->
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('pc-theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          document.documentElement.dataset.theme = theme
+        } catch (error) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
