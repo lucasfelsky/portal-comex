@@ -2674,6 +2674,15 @@ body {
   display: none;
 }
 
+/* Escondido por padrao (desktop usa o icone da topbar). O bloco
+   @media (max-width:720px) reativa (display:flex) no drawer mobile.
+   IMPORTANTE: esta regra base precisa vir ANTES daquele @media no
+   arquivo — se vier depois, vence por ordem de cascata e o botao some
+   no celular (mesma especificidade). */
+.sidebar-theme-button {
+  display: none;
+}
+
 .inline-badge {
   padding: 8px 12px;
   border-radius: 999px;
@@ -4586,13 +4595,19 @@ body {
     gap: 8px;
   }
 
-  .sidebar-logout-button {
+  .sidebar-logout-button,
+  .sidebar-theme-button {
     display: flex;
     width: 100%;
     justify-content: center;
     min-height: 48px;
     margin-top: 4px;
     border-radius: 16px;
+  }
+
+  /* No mobile a topbar (e o botao de tema dela) some; o do drawer assume. */
+  .topbar-theme-button {
+    display: none;
   }
 }
 
@@ -5782,18 +5797,23 @@ body {
 }
 
 /* ==========================================================================
-   C17 (auditoria mobile F14): DARK MODE via prefers-color-scheme.
+   C17 (auditoria mobile F14): DARK MODE.
    Estrategia: TODO o dark vive neste bloco anexado. O modo claro acima fica
    byte-a-byte intocado (zero risco de regressao). A maioria das superficies
    usa var(--surface/--ink/--border/...), entao redefinir os tokens ja cobre
    ~80%; os vidros/gradientes hardcoded (rgba(255,255,255,...)) sao
-   sobrescritos por seletor abaixo. Por vir por ULTIMO no arquivo, estas
-   regras vencem por ordem de cascata (mesma especificidade) inclusive as do
-   bloco @media (max-width:720px) quando as duas media queries batem
-   (mobile + dark).
+   sobrescritos por seletor abaixo.
+
+   Toggle (follow-up do C17): o dark e' ativado por [data-theme='dark'] no
+   <html>, NAO por @media (prefers-color-scheme) direto. Quem resolve a
+   preferencia e' o JS (hook useTheme + script inline no index.html contra
+   FOUC): 'auto' segue o sistema (matchMedia), 'light'/'dark' forcam. Assim
+   um unico bloco CSS serve os dois casos, e o usuario consegue forcar o
+   tema em qualquer dispositivo (o pedido: celular sem dark no SO).
+   [data-theme='dark'] .seletor tem especificidade maior que os blocos
+   @media (max-width:720px), entao vence tambem no mobile.
    ========================================================================== */
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme='dark'] {
     color-scheme: dark;
 
     --bg: #0e1413;
@@ -5845,50 +5865,69 @@ body {
     --glass-soft: rgba(22, 29, 27, 0.55);
     --glass-grad: linear-gradient(180deg, rgba(28, 36, 34, 0.98), rgba(18, 25, 23, 0.96));
     --glass-tint: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.04));
-  }
+}
 
-  /* Toast: no claro era ink(escuro)+texto branco. No dark --ink vira claro,
-     entao texto branco ficaria invisivel. Inverte para superficie clara. */
-  .toast {
-    background: var(--surface-alt);
-    color: var(--ink);
-    border: 1px solid var(--border);
-  }
+/* Toast: no claro era ink(escuro)+texto branco. No dark --ink vira claro,
+   entao texto branco ficaria invisivel. Inverte para superficie clara. */
+[data-theme='dark'] .toast {
+  background: var(--surface-alt);
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
 
-  /* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */
-  .skeleton {
-    background: linear-gradient(
-      90deg,
-      var(--surface-alt) 0%,
-      rgba(255, 255, 255, 0.06) 50%,
-      var(--surface-alt) 100%
-    );
-    background-size: 200% 100%;
-  }
+/* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */
+[data-theme='dark'] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-alt) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--surface-alt) 100%
+  );
+  background-size: 200% 100%;
+}
 
-  /* Vidros / gradientes hardcoded -> equivalentes dark. */
-  .notifications__group { background: var(--glass-strong); }
-  .notifications__item { background: var(--glass-soft); }
-  .notifications__group--unread,
-  .notifications__item--unread { background: var(--glass-tint); }
+/* Vidros / gradientes hardcoded -> equivalentes dark. */
+[data-theme='dark'] .notifications__group { background: var(--glass-strong); }
+[data-theme='dark'] .notifications__item { background: var(--glass-soft); }
+[data-theme='dark'] .notifications__group--unread,
+[data-theme='dark'] .notifications__item--unread { background: var(--glass-tint); }
 
-  .post-receipt-image-card,
-  .news-media-thumb,
-  .news-attachment { background: var(--glass-soft); }
-  .post-receipt-gallery__nav { background: var(--glass-strong); }
-  .post-receipt-gallery,
-  .news-media-file,
-  .news-modal,
-  .process-related-item-button { background: var(--glass-grad); }
+[data-theme='dark'] .post-receipt-image-card,
+[data-theme='dark'] .news-media-thumb,
+[data-theme='dark'] .news-attachment { background: var(--glass-soft); }
+[data-theme='dark'] .post-receipt-gallery__nav { background: var(--glass-strong); }
+[data-theme='dark'] .post-receipt-gallery,
+[data-theme='dark'] .news-media-file,
+[data-theme='dark'] .news-modal,
+[data-theme='dark'] .process-related-item-button { background: var(--glass-grad); }
 
-  .process-item--selected:hover,
-  .eta-meta-highlight,
-  .collection-window-card,
-  .admin-callout { background: var(--glass-tint); }
+[data-theme='dark'] .process-item--selected:hover,
+[data-theme='dark'] .eta-meta-highlight,
+[data-theme='dark'] .collection-window-card,
+[data-theme='dark'] .admin-callout { background: var(--glass-tint); }
 
-  /* Chrome mobile (bloco @media max-width:720px usa gradientes claros). */
-  .sidebar,
-  .news-modal,
-  .notifications__panel { background: var(--glass-grad); }
-  .mobile-bottom-nav { background: var(--glass-strong); }
+/* Chrome mobile (bloco @media max-width:720px usa gradientes claros). */
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .news-modal,
+[data-theme='dark'] .notifications__panel { background: var(--glass-grad); }
+[data-theme='dark'] .mobile-bottom-nav { background: var(--glass-strong); }
+
+/* Botao de tema. Desktop: icone discreto na TOPBAR (ao lado do sino) — a
+   versao da sidebar fica escondida (base .sidebar-theme-button{display:none}
+   la' em cima, antes do @media mobile) pra nao deslocar o link do
+   IntelliQuote. Mobile (<=720px): a topbar some e o do drawer assume. */
+.topbar-theme-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 12px;
+  color: var(--ink-soft);
+}
+
+.topbar-theme-button:hover {
+  color: var(--ink);
 }
