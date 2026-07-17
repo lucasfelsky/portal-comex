@@ -3574,6 +3574,65 @@ body {
   margin-top: 16px;
 }
 
+/* C11 (auditoria mobile): wizard do ProcessForm — barra de progresso,
+   rótulo do passo e navegação Voltar/Avançar/Salvar. */
+.wizard-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.wizard-progress__bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-700), var(--primary));
+  transition: width 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.wizard-progress__label {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.wizard-progress__label strong {
+  color: var(--ink);
+}
+
+/* Chips de passo: no desktop rolam lado a lado; no mobile viram scroll
+   horizontal (o .tab-row base ja cuida do overflow em <=720px). */
+.wizard-steps {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wizard-steps::-webkit-scrollbar {
+  display: none;
+}
+
+.wizard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* Salvar sempre visivel e "empurrado" pro fim da linha (a direita no
+   desktop; no mobile quebra pra largura total abaixo do Voltar/Avancar). */
+.wizard-nav .primary-button {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .wizard-nav .primary-button {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 .empty-state {
   display: grid;
   gap: 8px;

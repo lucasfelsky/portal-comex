@@ -112,11 +112,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 63,
+    "totalFiles": 64,
     "_breakdown": {
       "firebase": 4,
       "functions": 11,
-      "ui": 48
+      "ui": 49
     }
   }
 }

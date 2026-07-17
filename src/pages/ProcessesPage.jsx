@@ -424,7 +424,6 @@ export default function ProcessesPage() {
   const [draft, setDraft] = useState(emptyDraft())
   const [viewMode, setViewMode] = useState('list')
   const [detailTab, setDetailTab] = useState('general')
-  const [editTab, setEditTab] = useState('general')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -697,7 +696,6 @@ export default function ProcessesPage() {
     setDraft(processFromNotification)
     setViewMode('detail')
     setDetailTab(location.state?.detailTab ?? 'messages')
-    setEditTab('general')
     setMessageDraft('')
     setMessagesError('')
   }, [location.key, location.state, processes])
@@ -780,7 +778,6 @@ export default function ProcessesPage() {
     setDraft(process ?? emptyDraft())
     setViewMode('detail')
     setDetailTab('general')
-    setEditTab('general')
     setMessageDraft('')
     setMessagesError('')
   }
@@ -789,7 +786,6 @@ export default function ProcessesPage() {
     if (!isAdmin) return
     setDraft(emptyDraft())
     setViewMode('create')
-    setEditTab('general')
   }
 
   function handleEditMode() {
@@ -802,7 +798,6 @@ export default function ProcessesPage() {
           : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
     })
     setViewMode('edit')
-    setEditTab('general')
   }
 
   function handlePostReceiptEditMode() {
@@ -1014,8 +1009,7 @@ export default function ProcessesPage() {
       setDraft(saved)
       setViewMode('detail')
       setDetailTab('general')
-      setEditTab('general')
-    } catch (saveError) {
+      } catch (saveError) {
       const message = buildActionErrorMessage('Não foi possível salvar o processo.', saveError)
       setError(message)
       toast.error(message)
@@ -1360,7 +1354,6 @@ export default function ProcessesPage() {
         <ProcessForm
           viewMode={viewMode}
           draft={draft}
-          editTab={editTab}
           isSaving={isSaving}
           isImportingItems={isImportingItems}
           canShowMaritimeFlow={canShowMaritimeFlow}
@@ -1375,7 +1368,6 @@ export default function ProcessesPage() {
           processStatusOptions={processStatusOptions}
           onDraftChange={handleDraftChange}
           onSetViewModeList={() => setViewMode('list')}
-          onSetEditTab={setEditTab}
           onSave={handleSaveProcess}
           onImportItemsFile={handleImportItemsFile}
           onAddItem={handleAddItem}
