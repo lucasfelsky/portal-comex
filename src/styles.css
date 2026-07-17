@@ -5632,3 +5632,115 @@ body {
   font-size: 0.75rem;
   color: var(--ink-soft);
 }
+
+/* ==========================================================================
+   C17 (auditoria mobile F14): DARK MODE via prefers-color-scheme.
+   Estrategia: TODO o dark vive neste bloco anexado. O modo claro acima fica
+   byte-a-byte intocado (zero risco de regressao). A maioria das superficies
+   usa var(--surface/--ink/--border/...), entao redefinir os tokens ja cobre
+   ~80%; os vidros/gradientes hardcoded (rgba(255,255,255,...)) sao
+   sobrescritos por seletor abaixo. Por vir por ULTIMO no arquivo, estas
+   regras vencem por ordem de cascata (mesma especificidade) inclusive as do
+   bloco @media (max-width:720px) quando as duas media queries batem
+   (mobile + dark).
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #0e1413;
+    --surface: #161d1b;
+    --surface-alt: #202826;
+    --ink: #eef3f1;
+    --ink-soft: #9fb0ac;
+
+    /* --primary mantido igual ao claro: e' fundo de botao/estado ativo com
+       texto branco; clarear pioraria o contraste do texto (branco sobre teal
+       vivo cai pra ~2.2). --primary-700 fica um tom mais claro que no claro
+       so' pra dar contraste a LINKS/acentos sobre fundo escuro. */
+    --primary: #00ae91;
+    --primary-700: #14b89a;
+    --primary-50: #123029;
+    --danger: #f87171;
+    --danger-700: #e15b5b;
+    --danger-50: #3a1f1f;
+    --warning: #e0ad4d;
+    --warning-700: #c4922f;
+    --warning-50: #322a17;
+    --info: #5aa6e6;
+    --info-700: #3d84c4;
+    --info-50: #16263a;
+    --success-700: #1cc4a3;
+    --success-50: #123029;
+    --neutral-700: #9fb0ac;
+    --neutral-50: #202826;
+
+    --border: #2a3532;
+    --border-strong: #3b4a46;
+    --bg-tint-1: #121a18;
+    --bg-tint-2: #111a1b;
+
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.50);
+    --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.60);
+    --shadow-xl: 0 30px 60px rgba(0, 0, 0, 0.65);
+
+    /* Tints de texto: agora sobre --surface escuro (ink claro + alpha). */
+    --text-muted: rgba(238, 243, 241, 0.72);
+    --text-subtle: rgba(238, 243, 241, 0.60);
+    --text-faint: rgba(238, 243, 241, 0.48);
+    --text-mute-strong: rgba(238, 243, 241, 0.82);
+
+    /* Vidros dark reutilizaveis (substituem os rgba(255,255,255,..) claros). */
+    --glass-strong: rgba(22, 29, 27, 0.92);
+    --glass-soft: rgba(22, 29, 27, 0.55);
+    --glass-grad: linear-gradient(180deg, rgba(28, 36, 34, 0.98), rgba(18, 25, 23, 0.96));
+    --glass-tint: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.04));
+  }
+
+  /* Toast: no claro era ink(escuro)+texto branco. No dark --ink vira claro,
+     entao texto branco ficaria invisivel. Inverte para superficie clara. */
+  .toast {
+    background: var(--surface-alt);
+    color: var(--ink);
+    border: 1px solid var(--border);
+  }
+
+  /* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-alt) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      var(--surface-alt) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* Vidros / gradientes hardcoded -> equivalentes dark. */
+  .notifications__group { background: var(--glass-strong); }
+  .notifications__item { background: var(--glass-soft); }
+  .notifications__group--unread,
+  .notifications__item--unread { background: var(--glass-tint); }
+
+  .post-receipt-image-card,
+  .news-media-thumb,
+  .news-attachment { background: var(--glass-soft); }
+  .post-receipt-gallery__nav { background: var(--glass-strong); }
+  .post-receipt-gallery,
+  .news-media-file,
+  .news-modal,
+  .process-related-item-button { background: var(--glass-grad); }
+
+  .process-item--selected:hover,
+  .eta-meta-highlight,
+  .collection-window-card,
+  .admin-callout { background: var(--glass-tint); }
+
+  /* Chrome mobile (bloco @media max-width:720px usa gradientes claros). */
+  .sidebar,
+  .news-modal,
+  .notifications__panel { background: var(--glass-grad); }
+  .mobile-bottom-nav { background: var(--glass-strong); }
+}
