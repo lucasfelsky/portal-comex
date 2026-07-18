@@ -15,6 +15,17 @@
 //   - Empty state quando grouped vazio
 
 import { useState } from 'react'
+import Icon from './Icon'
+
+// F15.2: ícone por categoria da notificação no mobile (espelha o
+// prefCategoryForType do backend — support_ticket* → suporte,
+// news* → notícias, resto → processos).
+function iconForNotificationType(type) {
+  const normalized = String(type ?? '')
+  if (normalized.startsWith('support_ticket')) return 'help'
+  if (normalized.startsWith('news')) return 'news'
+  return 'arrivals'
+}
 
 const RECENT_LIMIT = 8
 const ITEMS_PER_GROUP = 3
@@ -73,12 +84,17 @@ export default function NotificationsList({
                     tabIndex={-1}
                     onMouseDown={(event) => event.preventDefault()}
                   >
-                    <strong>{notification.title}</strong>
-                    <p>{notification.body}</p>
-                    <span>
-                      {formatRelative(notification.createdAt)} •{' '}
-                      {formatDate(notification.createdAt)}
+                    <span className="notifications__item-icon" aria-hidden="true">
+                      <Icon name={iconForNotificationType(notification.type)} size={18} />
                     </span>
+                    <div className="notifications__item-body">
+                      <strong>{notification.title}</strong>
+                      <p>{notification.body}</p>
+                      <span>
+                        {formatRelative(notification.createdAt)} •{' '}
+                        {formatDate(notification.createdAt)}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
