@@ -102,7 +102,7 @@ export default function DebugClaimsPage() {
           {claimsState.status === 'ok' && (
             <>
               <p>role lido: <code>{claimsState.role ?? '(vazio)'}</code></p>
-              <p>claims completas: <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: '0.78rem', margin: 0 }}>{JSON.stringify(claimsState.tokenClaims, null, 2)}</pre></p>
+              <p>claims completas: <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 'var(--fs-caption)', margin: 0 }}>{JSON.stringify(claimsState.tokenClaims, null, 2)}</pre></p>
               <p>uid: <code>{claimsState.tokenUid}</code></p>
               <p>email: <code>{claimsState.tokenEmail}</code></p>
               <p>emitido em: <code>{claimsState.tokenIssuedAt}</code></p>

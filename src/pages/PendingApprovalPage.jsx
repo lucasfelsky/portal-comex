@@ -92,7 +92,7 @@ export default function PendingApprovalPage() {
         <div className="success-banner">Status atual: {currentStatus}</div>
 
         {diagnostic && (
-          <div className="auth-reset-panel" style={{ fontSize: '0.85rem' }}>
+          <div className="auth-reset-panel" style={{ fontSize: 'var(--fs-subhead)' }}>
             <strong>Diagnóstico (claims lidas agora)</strong>
             {diagnostic.ok ? (
               <>

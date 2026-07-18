@@ -3,6 +3,18 @@
 @tailwind utilities;
 
 :root {
+  /* Escala tipográfica (F15.1a): 8 stops substituem os 41 tamanhos ad-hoc
+     que existiam (23 só entre 10,6 e 16px). Inspirada no Dynamic Type da
+     Apple, adaptada ao Manrope. Tamanhos >1.3rem (títulos display, stat
+     values) são steps responsivos de elementos únicos e ficam literais. */
+  --fs-caption-2: 0.6875rem; /* 11px — bottom-nav label, badges de contagem */
+  --fs-caption: 0.75rem;     /* 12px — chips, timestamps, eyebrows, labels */
+  --fs-footnote: 0.8125rem;  /* 13px — metadados, linhas secundárias */
+  --fs-subhead: 0.875rem;    /* 14px — linhas de card, descrições, botões */
+  --fs-body: 0.9375rem;      /* 15px — texto corrente, título de item */
+  --fs-headline: 1rem;       /* 16px — títulos de card/h3 */
+  --fs-title: 1.25rem;       /* 20px — h2 de seção, título de página */
+
   /* Tokens de design system compartilhados com IntelliQuote (sprint 6.2). */
   --bg: #f5f8f7;
   --surface: #ffffff;
@@ -70,9 +82,9 @@ h1, h2, h3, h4 {
   letter-spacing: -0.01em;
 }
 h1 { font-size: 1.625rem; font-weight: 800; letter-spacing: -0.02em; }
-h2 { font-size: 1.25rem; font-weight: 700; }
-h3 { font-size: 1rem;    font-weight: 700; }
-h4 { font-size: 0.875rem; font-weight: 700; }
+h2 { font-size: var(--fs-title); font-weight: 700; }
+h3 { font-size: var(--fs-headline);    font-weight: 700; }
+h4 { font-size: var(--fs-subhead); font-weight: 700; }
 p  { margin: 0 0 8px; line-height: 1.5; color: var(--ink-soft); }
 
 a { color: var(--primary-700); text-decoration: none; transition: color 140ms ease; }
@@ -108,7 +120,7 @@ input, select, textarea { font-family: inherit; }
    Aplicado a <label> para hierarquia profissional em formularios. */
 label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -198,7 +210,7 @@ body {
 .brand__eyebrow {
   display: inline-block;
   margin-bottom: 10px;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -238,14 +250,14 @@ body {
 }
 
 .brand__ptax strong {
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink);
 }
 
 .brand__ptax p {
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   line-height: 1.3;
   color: var(--ink);
@@ -257,7 +269,7 @@ body {
 }
 
 .brand__ptax span {
-  font-size: 0.68rem;
+  font-size: var(--fs-caption-2);
   color: var(--ink-soft);
 }
 
@@ -343,7 +355,7 @@ body {
 }
 
 .nav__link-text strong {
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -353,7 +365,7 @@ body {
 
 .nav__link-text p {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
   line-height: 1.3;
   color: var(--ink-soft);
@@ -439,7 +451,7 @@ body {
 
 .sidebar-intelliquote-link__eyebrow {
   display: block;
-  font-size: 0.66rem;
+  font-size: var(--fs-caption-2);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -448,7 +460,7 @@ body {
 
 .sidebar-intelliquote-link__title {
   display: block;
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -549,7 +561,7 @@ body {
   border-radius: 999px;
   background: var(--primary-50);
   color: var(--primary-700);
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
   font-weight: 700;
 }
 
@@ -650,7 +662,7 @@ body {
   border-radius: 999px;
   background: var(--primary);
   color: #ffffff;
-  font-size: 0.76rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
 }
 
@@ -723,7 +735,7 @@ body {
 
 .notifications__filters .tab-button {
   padding: 8px 4px;
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
   border-radius: 0;
   background: transparent;
   color: var(--ink-soft);
@@ -800,14 +812,14 @@ body {
 }
 
 .notifications__group-header span {
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   white-space: nowrap;
 }
 
 .notifications__mark-all {
   padding: 9px 12px;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   white-space: nowrap;
 }
 
@@ -840,7 +852,7 @@ body {
 }
 
 .notifications__item span {
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
 }
 
@@ -867,14 +879,14 @@ body {
 }
 
 .topbar__ptax-label {
-  font-size: 0.66rem;
+  font-size: var(--fs-caption-2);
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
 }
 
 .topbar__ptax-value {
-  font-size: 0.8125rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   color: var(--ink);
 }
@@ -895,7 +907,7 @@ body {
   border-radius: 50%;
   background: var(--primary);
   color: #ffffff;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.02em;
   flex-shrink: 0;
@@ -909,7 +921,7 @@ body {
 }
 
 .topbar__user-info strong {
-  font-size: 0.8125rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   color: var(--ink);
   line-height: 1.2;
@@ -921,7 +933,7 @@ body {
 
 .topbar__user-info span {
   color: var(--text-subtle);
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -934,7 +946,7 @@ body {
   align-items: center;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: var(--fs-caption-2);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1021,7 +1033,7 @@ body {
 
 .confirm-dialog__message {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -1046,7 +1058,7 @@ body {
   gap: 4px;
   padding: 4px 4px 4px 10px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -1055,12 +1067,12 @@ body {
 
 .filter-chip--md {
   padding: 5px 5px 5px 12px;
-  font-size: 0.8125rem;
+  font-size: var(--fs-footnote);
 }
 
 .filter-chip--sm {
   padding: 2px 2px 2px 8px;
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
 }
 
 .filter-chip__label {
@@ -1133,14 +1145,14 @@ body {
 }
 
 .filter-chips-row__label {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--ink-soft);
   margin-right: 4px;
 }
 
 .filter-chips-row__clear {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   color: var(--primary-700);
   background: none;
   border: 0;
@@ -1193,7 +1205,7 @@ body {
 
 .stat-card__label {
   flex: 1;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -1206,7 +1218,7 @@ body {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1244,7 +1256,7 @@ body {
 
 .stat-card__period {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   color: var(--ink-soft);
 }
 
@@ -1281,7 +1293,7 @@ body {
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   color: var(--ink);
 }
 
@@ -1297,7 +1309,7 @@ body {
   background: var(--surface-alt);
   color: var(--ink-soft);
   font-family: ui-monospace, monospace;
-  font-size: 0.7rem;
+  font-size: var(--fs-caption-2);
   font-weight: 600;
   border: 1px solid var(--border);
   line-height: 1;
@@ -1315,7 +1327,7 @@ body {
   padding: 24px;
   text-align: center;
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
 }
 
 .command-palette__group {
@@ -1328,7 +1340,7 @@ body {
 
 .command-palette__group-label {
   padding: 8px 12px 4px;
-  font-size: 0.7rem;
+  font-size: var(--fs-caption-2);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1351,7 +1363,7 @@ body {
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   line-height: 1.3;
   transition: background-color 80ms ease;
 }
@@ -1391,7 +1403,7 @@ body {
 .command-palette__item-description {
   margin-left: auto;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
 }
 
@@ -1401,7 +1413,7 @@ body {
   gap: 16px;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   color: var(--ink-soft);
 }
 
@@ -1422,7 +1434,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.8125rem;
+  font-size: var(--fs-footnote);
   line-height: 1.2;
 }
 
@@ -1489,7 +1501,7 @@ body {
   padding: 12px 16px;
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   line-height: 1.4;
   min-width: 240px;
   max-width: 420px;
@@ -1539,7 +1551,7 @@ body {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.15);
   color: #ffffff;
-  font-size: 1.05rem;
+  font-size: var(--fs-headline);
   line-height: 1;
   cursor: pointer;
   transition: background-color 140ms ease;
@@ -1606,7 +1618,7 @@ body {
 
 .modal__title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--fs-title);
   font-weight: 700;
   color: var(--ink);
 }
@@ -1697,7 +1709,7 @@ body {
 }
 
 .suggestion-banner__text {
-  font-size: 0.9rem;
+  font-size: var(--fs-subhead);
 }
 
 .suggestion-banner__time {
@@ -1705,7 +1717,7 @@ body {
 }
 
 .suggestion-banner__match {
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -1787,7 +1799,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--primary-700);
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1878,7 +1890,7 @@ body {
 }
 
 .dashboard-bar-inline__label {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -1912,7 +1924,7 @@ body {
 }
 
 .dashboard-bar-card__text {
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -2178,7 +2190,7 @@ body {
 }
 
 .process-item-display strong {
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   overflow-wrap: anywhere;
 }
 
@@ -2237,7 +2249,7 @@ body {
 
 .process-message-limit-text {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   color: var(--ink-soft);
 }
 
@@ -2260,7 +2272,7 @@ body {
 
 .process-message-card__meta span {
   color: var(--text-subtle);
-  font-size: 0.86rem;
+  font-size: var(--fs-subhead);
 }
 
 .process-message-card p,
@@ -2318,7 +2330,7 @@ body {
 
 .post-receipt-image-card__meta span {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
 }
 
 .post-receipt-gallery-backdrop {
@@ -2477,7 +2489,7 @@ body {
   min-width: 92px;
   padding: 8px 12px;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
 }
 
@@ -2582,7 +2594,7 @@ body {
   padding: 9px 16px;
   font-family: inherit;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   line-height: 1.3;
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -2688,7 +2700,7 @@ body {
   border-radius: 999px;
   background: var(--primary-50);
   color: var(--ink);
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
 }
 
@@ -2715,12 +2727,12 @@ body {
 }
 
 .import-processes__hint {
-  font-size: 0.9rem;
+  font-size: var(--fs-subhead);
   color: var(--text-muted);
 }
 
 .import-processes__filename {
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
   font-weight: 600;
 }
 
@@ -2741,7 +2753,7 @@ body {
 .import-processes__group summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-subhead);
 }
 
 .import-processes__group ul {
@@ -2749,7 +2761,7 @@ body {
   padding-left: 18px;
   max-height: 220px;
   overflow-y: auto;
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
 }
 
 .import-processes__group li {
@@ -2911,7 +2923,7 @@ body {
   min-height: 40px;
   padding: 8px 10px;
   border-radius: 14px;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   line-height: 1.2;
 }
 
@@ -2982,7 +2994,7 @@ body {
 
 .news-media-thumb__meta span {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   word-break: break-word;
 }
 
@@ -3003,7 +3015,7 @@ body {
   border-radius: 999px;
   background: rgba(0, 174, 145, 0.12);
   color: var(--ink);
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   font-weight: 800;
   letter-spacing: 0.05em;
 }
@@ -3063,7 +3075,7 @@ body {
 .news-card__summary {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -3073,7 +3085,7 @@ body {
 
 .news-card__timestamp,
 .news-modal__meta {
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3164,7 +3176,7 @@ body {
 
 .news-attachment span {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
 }
 
 .news-references {
@@ -3185,13 +3197,13 @@ body {
 .field-hint {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   line-height: 1.45;
 }
 
 .field span,
 .detail-label {
-  font-size: 0.82rem;
+  font-size: var(--fs-footnote);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3210,7 +3222,7 @@ body {
   background: var(--surface);
   color: var(--ink);
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   line-height: 1.4;
   outline: none;
   transition:
@@ -3445,7 +3457,7 @@ body {
 }
 
 .process-derived-status-badge {
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-radius: 999px;
@@ -3605,7 +3617,7 @@ body {
    margin-bottom deste rótulo. */
 .wizard-header .wizard-progress__label {
   margin: 0 0 14px;
-  font-size: 0.8rem;
+  font-size: var(--fs-footnote);
   letter-spacing: 0.01em;
   color: var(--ink-soft);
 }
@@ -3705,14 +3717,14 @@ body {
 }
 
 .empty-state__title {
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   font-weight: 700;
   color: var(--ink);
   margin: 0;
 }
 
 .empty-state__message {
-  font-size: 0.875rem;
+  font-size: var(--fs-subhead);
   line-height: 1.5;
   color: var(--ink-soft);
   max-width: 360px;
@@ -3734,7 +3746,7 @@ body {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 10px;
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
   color: var(--text-subtle);
 }
 
@@ -3760,7 +3772,7 @@ body {
 
 .dashboard-meta {
   color: var(--text-subtle);
-  font-size: 0.88rem;
+  font-size: var(--fs-subhead);
   font-weight: 700;
 }
 
@@ -3781,7 +3793,7 @@ body {
 .invite-card__meta {
   flex-wrap: wrap;
   color: var(--ink-soft);
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
 }
 
 @media (max-width: 1040px) {
@@ -3841,7 +3853,7 @@ body {
   .topbar__avatar {
     width: 32px;
     height: 32px;
-    font-size: 0.78rem;
+    font-size: var(--fs-caption);
   }
 
   .main-content {
@@ -3894,7 +3906,7 @@ body {
   }
 
   .mobile-brand-header__eyebrow {
-    font-size: 0.78rem;
+    font-size: var(--fs-caption);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -3952,7 +3964,7 @@ body {
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    font-size: 0.66rem;
+    font-size: var(--fs-caption-2);
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active {
@@ -4127,7 +4139,7 @@ body {
     padding: 6px 4px;
     border-radius: 12px;
     color: var(--ink-soft);
-    font-size: 0.68rem;
+    font-size: var(--fs-caption-2);
     font-weight: 700;
     text-align: center;
     background: transparent;
@@ -4160,7 +4172,7 @@ body {
     border-radius: 999px;
     background: var(--primary);
     color: #ffffff;
-    font-size: 0.62rem;
+    font-size: var(--fs-caption-2);
     font-weight: 800;
     line-height: 18px;
     text-align: center;
@@ -4224,7 +4236,7 @@ body {
   }
 
   .process-filters--panel .field > span {
-    font-size: 0.78rem;
+    font-size: var(--fs-caption);
     letter-spacing: 0.02em;
   }
 
@@ -4264,12 +4276,12 @@ body {
   }
 
   .process-list-card .process-item__main strong {
-    font-size: 1rem;
+    font-size: var(--fs-headline);
     line-height: 1.25;
   }
 
   .process-list-card .process-item__line {
-    font-size: 0.88rem;
+    font-size: var(--fs-subhead);
     line-height: 1.45;
   }
 
@@ -4285,7 +4297,7 @@ body {
   }
 
   .process-list-card .process-item__meta span {
-    font-size: 0.8rem;
+    font-size: var(--fs-footnote);
     line-height: 1.4;
     color: var(--ink);
   }
@@ -4309,14 +4321,14 @@ body {
   }
 
   .detail-label {
-    font-size: 0.74rem;
+    font-size: var(--fs-caption);
     letter-spacing: 0.03em;
   }
 
   .detail-card p,
   .process-message-card p,
   .collection-window-card p {
-    font-size: 0.92rem;
+    font-size: var(--fs-body);
     line-height: 1.5;
   }
 
@@ -4327,7 +4339,7 @@ body {
   }
 
   .process-message-card__meta span {
-    font-size: 0.8rem;
+    font-size: var(--fs-footnote);
   }
 
   .process-items-list--scroll {
@@ -4341,7 +4353,7 @@ body {
   }
 
   .process-item-display strong {
-    font-size: 0.96rem;
+    font-size: var(--fs-body);
     line-height: 1.35;
     text-align: center;
   }
@@ -4656,7 +4668,7 @@ body {
 
   .sidebar .brand__eyebrow {
     margin-bottom: 4px;
-    font-size: 0.86rem;
+    font-size: var(--fs-subhead);
   }
 
   .sidebar .brand h1 {
@@ -4671,12 +4683,12 @@ body {
   }
 
   .sidebar .nav__link strong {
-    font-size: 1.06rem;
+    font-size: var(--fs-headline);
     line-height: 1.2;
   }
 
   .sidebar .nav__link p {
-    font-size: 0.74rem;
+    font-size: var(--fs-caption);
     line-height: 1.3;
     text-align: center;
     align-self: center;
@@ -4771,7 +4783,7 @@ body {
   .detail-label,
   .news-card__timestamp,
   .news-modal__meta {
-    font-size: 0.74rem;
+    font-size: var(--fs-caption);
   }
 
   .mobile-brand-header {
@@ -4786,7 +4798,7 @@ body {
   .brand h1,
   .dashboard-heading h2,
   .topbar__title {
-    font-size: 1.3rem;
+    font-size: var(--fs-title);
   }
 
   .topbar__heading {
@@ -4812,7 +4824,7 @@ body {
   }
 
   .sidebar .brand__eyebrow {
-    font-size: 0.8rem;
+    font-size: var(--fs-footnote);
   }
 
   .notifications__panel {
@@ -4864,7 +4876,7 @@ body {
   .topbar__badge,
   .status-tag,
   .inline-badge {
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     padding: 5px 11px;
   }
 
@@ -4876,18 +4888,18 @@ body {
   }
 
   .process-list-card .process-item__main strong {
-    font-size: 0.96rem;
+    font-size: var(--fs-body);
   }
 
   .process-list-card .process-item__line,
   .process-list-card .process-item__main p {
-    font-size: 0.84rem;
+    font-size: var(--fs-footnote);
   }
 
   .process-list-card .process-item__meta span,
   .inline-badge,
   .status-tag {
-    font-size: 0.72rem;
+    font-size: var(--fs-caption);
   }
 
   .detail-card,
@@ -5036,7 +5048,7 @@ body {
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
 }
 
 .admin-table th,
@@ -5048,7 +5060,7 @@ body {
 }
 
 .admin-table th {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
@@ -5122,7 +5134,7 @@ body {
 
   .admin-table td::before {
     content: attr(data-label);
-    font-size: 0.72rem;
+    font-size: var(--fs-caption);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -5184,7 +5196,7 @@ body {
   margin-left: 8px;
   border: 0;
   background: transparent;
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   line-height: 1;
   cursor: pointer;
   color: inherit;
@@ -5329,7 +5341,7 @@ body {
 }
 
 .notifications__mark-all {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   padding: 5px 10px;
 }
@@ -5375,7 +5387,7 @@ body {
 }
 
 .notifications__section-label {
-  font-size: 0.72rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -5385,7 +5397,7 @@ body {
 
 .notifications__show-more {
   justify-self: center;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   padding: 6px 12px;
   color: var(--primary-700);
@@ -5430,7 +5442,7 @@ body {
   border-radius: 6px;
   background: var(--ink);
   color: #ffffff;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -5548,7 +5560,7 @@ body {
 }
 
 .page-toolbar__eyebrow {
-  font-size: 0.74rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -5557,7 +5569,7 @@ body {
 
 .page-toolbar__title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--fs-title);
   font-weight: 800;
   line-height: 1.2;
   color: var(--ink);
@@ -5566,7 +5578,7 @@ body {
 
 .page-toolbar__description {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--fs-subhead);
   color: var(--ink-soft);
   line-height: 1.4;
 }
@@ -5617,7 +5629,7 @@ body {
   background: var(--primary);
   color: #ffffff;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--fs-subhead);
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
@@ -5636,7 +5648,7 @@ body {
 .support-modal__lead {
   margin: 0;
   color: var(--text-soft, inherit);
-  font-size: 14px;
+  font-size: var(--fs-subhead);
   line-height: 1.55;
 }
 
@@ -5671,7 +5683,7 @@ body {
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-size: 13px;
+  font-size: var(--fs-footnote);
 }
 
 .support-modal__history {
@@ -5681,12 +5693,12 @@ body {
 
 .support-modal__history h3 {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: var(--fs-body);
 }
 
 .support-modal__muted {
   color: var(--text-soft, inherit);
-  font-size: 13px;
+  font-size: var(--fs-footnote);
   margin: 0;
 }
 
@@ -5708,7 +5720,7 @@ body {
 
 .support-modal__tickets p {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-footnote);
   white-space: pre-wrap;
 }
 
@@ -5732,7 +5744,7 @@ body {
 
 .support-ticket-card__meta {
   color: var(--text-soft, inherit);
-  font-size: 12px;
+  font-size: var(--fs-caption);
 }
 
 .support-ticket-card__message {
@@ -5774,7 +5786,7 @@ body {
 .notification-prefs__lead {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: var(--fs-subhead);
 }
 
 .notification-prefs__grid {
@@ -5787,7 +5799,7 @@ body {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   text-align: center;
-  font-size: 0.85rem;
+  font-size: var(--fs-subhead);
 }
 
 .notification-prefs__grid th[scope='row'] {
@@ -5814,7 +5826,7 @@ body {
 
 .notification-prefs__hint {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--ink-soft);
 }
 
@@ -5898,7 +5910,7 @@ body {
   margin: 0 0 8px;
   padding: 0 8px;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -5926,7 +5938,7 @@ body {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   text-align: left;
   cursor: pointer;
 }
@@ -5961,7 +5973,7 @@ body {
   background: var(--surface-alt);
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--fs-headline);
   font-weight: 700;
   cursor: pointer;
 }
