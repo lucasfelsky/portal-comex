@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import SelectField from '../../components/SelectField'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
+
+// F15.2: iniciais pro avatar da lista mobile (mesma lógica do topbar).
+function getInitials(value) {
+  const cleaned = String(value ?? '').trim()
+  if (!cleaned) return '?'
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
 import Skeleton from '../../components/Skeleton'
 import {
   createManagedAuthUser,
@@ -413,6 +423,10 @@ export default function AdminUsersPanel() {
                   }`}
                   onClick={() => handleSelectUser(user.id)}
                 >
+                  {/* F15.2: avatar de iniciais — só aparece no mobile (CSS). */}
+                  <span className="admin-user-row__avatar" aria-hidden="true">
+                    {getInitials(user.name || user.email)}
+                  </span>
                   <div>
                     <strong>{user.name}</strong>
                     <p>
