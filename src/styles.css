@@ -6611,3 +6611,54 @@ body {
 .topbar-theme-button:hover {
   color: var(--ink);
 }
+
+/* ============================================================
+   F16.1 — Fundações do redesign iOS (protótipo aprovado 2026-07-18).
+   Paleta e fonte SÓ NO MOBILE (≤720px): fundo agrupado claro / preto
+   puro no dark, cards sólidos, hairlines, tint dark mais vivo pra
+   links, e system font (SF Pro no iPhone; Manrope segue no desktop).
+   Este bloco fica no FIM do arquivo de propósito — re-valora os
+   tokens por cascata (mesma especificidade, ordem vence).
+   ============================================================ */
+@media (max-width: 720px) {
+  :root {
+    --bg: #f2f4f3;
+    --surface: #ffffff;
+    --surface-alt: #e8ecea;
+    --ink: #0b1512;
+    --ink-soft: #66736e;
+    --border: rgba(20, 40, 35, 0.13);
+    --text-muted: rgba(11, 21, 18, 0.72);
+    --text-subtle: rgba(11, 21, 18, 0.6);
+    --text-faint: rgba(11, 21, 18, 0.48);
+    --text-mute-strong: rgba(11, 21, 18, 0.82);
+  }
+
+  :root[data-theme='dark'] {
+    --bg: #000000;
+    --surface: #1b1f1e;
+    --surface-alt: #2b312f;
+    --ink: #f2f5f4;
+    --ink-soft: #98a39e;
+    /* Tint de links/acentos mais vivo sobre o preto puro (o protótipo usa
+       #14c4a3). --primary segue intacto: é fundo de botão com texto branco. */
+    --primary-700: #14c4a3;
+    --border: rgba(235, 245, 242, 0.14);
+    --text-muted: rgba(242, 245, 244, 0.72);
+    --text-subtle: rgba(242, 245, 244, 0.6);
+    --text-faint: rgba(242, 245, 244, 0.48);
+    --text-mute-strong: rgba(242, 245, 244, 0.82);
+    --glass-strong: rgba(16, 18, 17, 0.88);
+    --glass-grad: linear-gradient(180deg, rgba(27, 31, 30, 0.98), rgba(16, 18, 17, 0.96));
+  }
+
+  body {
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      'SF Pro Text',
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+  }
+}
