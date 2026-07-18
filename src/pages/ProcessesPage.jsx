@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import { useSwipe } from '../hooks/useSwipe'
 import { useToast } from '../components/Toast'
 import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
@@ -424,6 +425,30 @@ export default function ProcessesPage() {
   const [draft, setDraft] = useState(emptyDraft())
   const [viewMode, setViewMode] = useState('list')
   const [detailTab, setDetailTab] = useState('general')
+
+  // F15.3: swipe-back (borda esquerda) volta detalhe→lista e sub-edições→
+  // detalhe, imitando o gesto do iOS. Touch-only (desktop não é afetado).
+  // O wizard (create/edit) trata o próprio swipe por passo no ProcessForm.
+  useSwipe({
+    enabled:
+      viewMode === 'detail' ||
+      viewMode === 'collection-status-edit' ||
+      viewMode === 'post-receipt-edit',
+    onSwipeRight: () => setViewMode(viewMode === 'detail' ? 'list' : 'detail'),
+  })
+
+  // F15.3: transição push/pop — a lista só anima quando o usuário VOLTA de
+  // outra view (pop); no primeiro mount fica parada. Flag one-shot: liga na
+  // primeira saída da lista e nunca desliga — a classe só tem efeito no
+  // MOUNT do ProcessListView (o conditional remonta a cada retorno), e todo
+  // mount depois da primeira saída é um retorno. Um ref não funciona aqui:
+  // re-renders logo após o retorno removeriam a classe e cancelariam a
+  // animação no meio.
+  const [hasLeftListOnce, setHasLeftListOnce] = useState(false)
+  useEffect(() => {
+    if (viewMode !== 'list') setHasLeftListOnce(true)
+  }, [viewMode])
+  const listReturnClass = hasLeftListOnce ? 'view-pop' : ''
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -1304,6 +1329,7 @@ export default function ProcessesPage() {
 
       {viewMode === 'list' ? (
         <ProcessListView
+          rootClassName={listReturnClass}
           filteredProcesses={filteredProcesses}
           isLoading={isLoading}
           selectedProcessId={selectedProcessId}

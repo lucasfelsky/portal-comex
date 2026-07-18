@@ -18,6 +18,7 @@ import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 // na página. É a tela de entrada do módulo de Chegadas. Zero mudança
 // visual/comportamental.
 export default function ProcessListView({
+  rootClassName = '',
   filteredProcesses,
   isLoading,
   selectedProcessId,
@@ -61,7 +62,10 @@ export default function ProcessListView({
     Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
 
   return (
-    <article className="list-card process-list-card" style={{ marginTop: '16px' }}>
+    <article
+      className={`list-card process-list-card${rootClassName ? ` ${rootClassName}` : ''}`}
+      style={{ marginTop: '16px' }}
+    >
       <div className="card-heading">
         <div>
           <h3>Chegadas</h3>
