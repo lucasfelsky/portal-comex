@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSwipe } from '../../hooks/useSwipe'
 import Spinner from '../../components/Spinner'
 import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
@@ -627,8 +628,15 @@ export default function ProcessForm({
   const isFirstStep = currentStep === 0
   const isLastStep = currentStep === steps.length - 1
 
+  // F15.3: swipe-back (borda esquerda) volta um passo do wizard; no primeiro
+  // passo sai pra lista — espelha o botão "Voltar". Touch-only.
+  useSwipe({
+    onSwipeRight: () =>
+      isFirstStep ? onSetViewModeList() : setStep(Math.max(currentStep - 1, 0)),
+  })
+
   return (
-    <article className="list-card" style={{ marginTop: '16px' }}>
+    <article className="list-card view-push" style={{ marginTop: '16px' }}>
       <div className="card-heading">
         <div>
           <h3>{viewMode === 'create' ? 'Criar processo' : 'Editar processo'}</h3>

@@ -5560,6 +5560,87 @@ body {
   }
 }
 
+/* F15.3: transição push/pop estilo iOS entre lista↔detalhe (viewMode do
+   ProcessesPage — não é troca de rota, então o PageFade não dispara).
+   Push: a view "de dentro" (detalhe/form) entra deslizando da direita.
+   Pop: a lista volta deslizando da esquerda (classe aplicada só quando o
+   render veio de outra view — ver listReturnClass no ProcessesPage).
+   Só mobile; desktop mantém troca instantânea. */
+@keyframes view-push-in {
+  from {
+    transform: translateX(48px);
+    opacity: 0.4;
+  }
+}
+
+@keyframes view-pop-in {
+  from {
+    transform: translateX(-32px);
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 720px) {
+  .view-push {
+    animation: view-push-in 250ms cubic-bezier(0.32, 0.72, 0.36, 1) both;
+  }
+
+  .view-pop {
+    animation: view-pop-in 220ms cubic-bezier(0.32, 0.72, 0.36, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-push,
+  .view-pop {
+    animation: none;
+  }
+}
+
+/* F15.3: mini-header sticky do detalhe do processo no mobile (voltar +
+   título sempre visíveis no scroll). Margens negativas sangram até a borda
+   do list-card pai (padding 14px em ≤560px, 18px em 561–720px — usa 14px e
+   aceita 4px de folga na faixa intermediária). */
+.process-detail-mobilebar {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .process-detail-mobilebar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -14px -14px 12px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .process-detail-mobilebar__back {
+    flex-shrink: 0;
+    border: 0;
+    background: none;
+    color: var(--primary-700);
+    font-size: var(--fs-body);
+    font-weight: 700;
+    padding: 4px 10px 4px 0;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .process-detail-mobilebar__title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-body);
+  }
+}
+
 /* Sprint 17.1: PageToolbar.
    Wrapper flex com heading a esquerda + actions a direita. Substitui
    o padrao de section-heading solto + botoes adjacentes em paineis. */

@@ -100,7 +100,22 @@ export default function ProcessDetailView({
   const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
 
   return (
-    <article className="list-card" style={{ marginTop: '16px' }}>
+    <article className="list-card view-push" style={{ marginTop: '16px' }}>
+      {/* F15.3: mini-header sticky no mobile (voltar + título do processo
+          sempre visíveis durante o scroll do detalhe). Escondido no desktop
+          via CSS — lá o "Voltar para lista" do card-heading basta. */}
+      <div className="process-detail-mobilebar">
+        <button
+          type="button"
+          className="process-detail-mobilebar__back"
+          onClick={onSetViewModeList}
+        >
+          ‹ Voltar
+        </button>
+        <strong className="process-detail-mobilebar__title">
+          {getProcessTitle(selectedProcess)}
+        </strong>
+      </div>
       <div className="card-heading">
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar">
