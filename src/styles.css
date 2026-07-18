@@ -5757,6 +5757,137 @@ body {
   }
 }
 
+/* F15.6: refino Apple-like (pedido do Lucas pós-QA do F15.4). Quatro
+   padrões que fazem web parecer app nativo:
+   (a) press states — rows destacam o fundo ao toque (UITableView),
+       cards encolhem de leve (App Store);
+   (b) listas agrupadas — linhas sem borda/fundo próprios, separadas por
+       hairline, o card pai é o grupo (iOS grouped list);
+   (c) tab-row como segmented control (trilho surface-alt + pill ativa
+       clara com sombra curta), exceto os filtros de notificação que têm
+       linguagem própria de underline;
+   (d) ações do detalhe como text buttons tintados (barra de navegação
+       iOS). Tudo ≤720px; desktop segue como está. */
+@media (max-width: 720px) {
+  .process-item--button,
+  .notifications__item,
+  .admin-user-row--button,
+  .weekly-arrivals-item--clickable {
+    transition: background-color 120ms ease;
+  }
+
+  .process-item--button:active,
+  .notifications__item:active,
+  .admin-user-row--button:active,
+  .weekly-arrivals-item--clickable:active {
+    background: var(--surface-alt);
+  }
+
+  .announcement-card,
+  .news-card {
+    transition: transform 150ms ease;
+  }
+
+  .announcement-card:active,
+  .news-card:active {
+    transform: scale(0.97);
+  }
+
+  /* (b) Chegadas como grupo com separadores hairline. */
+  .process-list-card .process-list {
+    gap: 0;
+  }
+
+  .process-list-card .process-item {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .process-list-card .process-item:last-child {
+    border-bottom: 0;
+  }
+
+  .process-list-card .process-item--selected,
+  .process-list-card .process-item--selected:hover {
+    box-shadow: none;
+    background: var(--surface-alt);
+  }
+
+  /* (b) Usuários admin idem. */
+  .admin-user-list {
+    gap: 0;
+  }
+
+  .admin-user-list .admin-user-row--button {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .admin-user-list .admin-user-row--button:last-child {
+    border-bottom: 0;
+  }
+
+  .admin-user-list .admin-user-row--selected {
+    background: var(--surface-alt);
+  }
+
+  /* (c) Segmented control. */
+  .tab-row:not(.notifications__filters) {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .tab-row:not(.notifications__filters) .tab-button {
+    background: none;
+    box-shadow: none;
+  }
+
+  .tab-row:not(.notifications__filters) .tab-button--active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.16);
+    transform: none;
+  }
+
+  /* (d) Ações do detalhe como text buttons tintados. */
+  .process-detail-toolbar .ghost-button {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--primary-700);
+    font-weight: 700;
+    padding-inline: 8px;
+  }
+
+  /* No dark os tokens invertem (--surface fica mais escuro que
+     --surface-alt) e o pill ativo sumiria — clareia na mão, como o
+     segmented do iOS dark. */
+  [data-theme='dark'] .tab-row:not(.notifications__filters) .tab-button--active {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-card,
+  .news-card,
+  .announcement-card:active,
+  .news-card:active {
+    transition: none;
+    transform: none;
+  }
+}
+
 /* F15.2 (partes 2–3): linguagem de lista nas notificações e na lista de
    usuários do admin — leading icon/avatar só no mobile, desktop intacto.
    Cards de suporte ficam de fora: são workcards de edição (C16), não
@@ -5850,7 +5981,12 @@ body {
     gap: 8px;
     margin: -14px -14px 12px;
     padding: 8px 14px;
+    /* F15.6: translúcida com blur (barra de navegação iOS) — o conteúdo
+       passa por baixo desfocado. Fallback sólido via ordem de declaração. */
     background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
     border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
