@@ -118,7 +118,9 @@ export default function ProcessDetailView({
       </div>
       <div className="card-heading">
         <div><h3>Detalhe do processo</h3></div>
-        <div className="admin-toolbar">
+        {/* F15.4: no mobile a toolbar vira linha horizontal com scroll —
+            botões empilhados full-width empurravam o conteúdo pra baixo. */}
+        <div className="admin-toolbar process-detail-toolbar">
           <button type="button" className="ghost-button" onClick={onSetViewModeList}>Voltar para lista</button>
           <button type="button" className="ghost-button" onClick={() => onToggleFavorite(selectedProcess.id)}>{favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}</button>
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
