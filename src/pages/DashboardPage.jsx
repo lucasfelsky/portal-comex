@@ -152,7 +152,12 @@ export default function DashboardPage() {
         <div>
           <h2>Visão geral</h2>
         </div>
-        <div className="dashboard-bar-inline" aria-label="Condicao da Barra do Rio Itajai-Acu">
+        {/* F15.4: no mobile este bloco vira banner hero colorido por tom
+            (status de relance no topo do dashboard) — ver CSS. */}
+        <div
+          className={`dashboard-bar-inline${barStatus ? ` dashboard-bar-inline--${barStatus.tone}` : ''}`}
+          aria-label="Condicao da Barra do Rio Itajai-Acu"
+        >
           <span className="dashboard-bar-inline__label">Barra do Rio</span>
           {isLoadingBarStatus ? (
             <span className="dashboard-bar-card__text">Carregando</span>
@@ -235,7 +240,7 @@ export default function DashboardPage() {
               const hideEta = showMaritimePostArrival || showAirPostArrival || hideSchedule
 
               return (
-                <div key={item.id} className="process-item">
+                <div key={item.id} className="process-item dashboard-favorites-item">
                   <div className="process-item__main">
                     <strong>{getProcessTitle(item, profile?.role === 'admin')}</strong>
                     {getProcessSubtitle(item, profile?.role === 'admin') ? (

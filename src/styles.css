@@ -5678,6 +5678,85 @@ body {
   }
 }
 
+/* F15.4: hierarquia por tela no mobile.
+   (a) Barra do Rio como banner hero no topo do dashboard — colorido por
+       tom, status de relance (no desktop continua o inline discreto).
+   (b) Cards do dashboard (chegadas da semana / favoritos) mais enxutos:
+       subtítulo e linha de categoria saem; a caixinha da janela de entrega
+       vira linha; o pseudo-CTA "Abrir processo" sai (o item todo é
+       clicável). Conteúdo segue CENTRADO — D1 híbrido: dashboard é
+       destaque, não lista.
+   (c) Toolbar do detalhe do processo em linha horizontal com scroll —
+       botões empilhados full-width empurravam o conteúdo pra baixo. */
+@media (max-width: 720px) {
+  .dashboard-heading .dashboard-bar-inline {
+    align-self: stretch;
+    justify-content: center;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-card__text {
+    font-size: var(--fs-headline);
+    font-weight: 800;
+  }
+
+  /* Mesma especificidade da regra base acima (0,2,0) pro tom vencer. */
+  .dashboard-heading .dashboard-bar-inline--ok {
+    background: var(--primary-50);
+    border-color: rgba(0, 174, 145, 0.3);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--warn {
+    background: var(--warning-50);
+    border-color: rgba(180, 138, 45, 0.35);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--danger {
+    background: var(--danger-50);
+    border-color: rgba(220, 38, 38, 0.35);
+  }
+
+  .weekly-arrivals-item .process-item__main > p,
+  .weekly-arrivals-item .process-item__line,
+  .weekly-arrivals-item .process-item__meta,
+  .dashboard-favorites-item .process-item__main > p,
+  .dashboard-favorites-item .process-item__line,
+  .dashboard-favorites-item .inline-badge {
+    display: none;
+  }
+
+  .weekly-arrivals-windows__item {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .process-detail-toolbar {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .process-detail-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .process-detail-toolbar .ghost-button,
+  .process-detail-toolbar .primary-button {
+    width: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding-inline: 14px;
+  }
+}
+
 /* F15.2 (partes 2–3): linguagem de lista nas notificações e na lista de
    usuários do admin — leading icon/avatar só no mobile, desktop intacto.
    Cards de suporte ficam de fora: são workcards de edição (C16), não
