@@ -3090,6 +3090,19 @@ body {
   overflow: hidden;
 }
 
+/* Números tabulares (F15.5): datas, horas e contagens alinham na vertical
+   em listas — cada dígito ocupa a mesma largura (Manrope suporta tnum). */
+.process-item__meta,
+.news-card__timestamp,
+.news-modal__meta,
+.stat-card__value,
+.notifications__item,
+.admin-table td,
+.eta-meta-highlight,
+.eta-meta-secondary {
+  font-variant-numeric: tabular-nums;
+}
+
 .news-card__timestamp,
 .news-modal__meta {
   font-size: var(--fs-footnote);

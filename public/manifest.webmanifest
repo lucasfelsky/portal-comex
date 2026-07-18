@@ -1,0 +1,26 @@
+{
+  "name": "Portal COMEX — SQ Química",
+  "short_name": "Portal COMEX",
+  "description": "Acompanhamento de processos de importação, chegadas e comunicados da SQ Química.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f8f7",
+  "theme_color": "#00ae91",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icons/icon-225.png",
+      "sizes": "225x225",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
