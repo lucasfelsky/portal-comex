@@ -5597,6 +5597,87 @@ body {
   }
 }
 
+/* F15.2: linguagem de lista iOS na tela de Chegadas (D1 híbrido — listas à
+   esquerda; destaques/dashboard continuam centrados). No desktop os três
+   elementos novos (leading icon, resumo condensado, chevron) ficam
+   escondidos e o layout atual não muda em nada. No mobile o item vira
+   grid [icon | conteúdo | chevron]: título 1 linha, resumo "ETA · destino
+   · carga" e chip de status; as linhas detalhadas (categoria, destino,
+   ETD/ETA/previsão, badges de carga) saem — o detalhe completo mora na
+   tela de detalhe. */
+.process-item__leading,
+.process-item__chevron,
+.process-item__summary {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .process-list-card .process-item--button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .process-list-card .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  .process-list-card .process-item__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+  }
+
+  .process-list-card .process-item__summary {
+    display: block;
+    font-size: var(--fs-footnote);
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .process-list-card .process-item__summary--eta-updated {
+    color: var(--warning-700);
+    font-weight: 700;
+  }
+
+  /* D1 híbrido: conteúdo das LISTAS à esquerda. */
+  .process-list-card .process-item__main {
+    text-align: left;
+    gap: 3px;
+  }
+
+  .process-list-card .process-item__main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Linhas detalhadas saem no mobile — viram o resumo condensado. */
+  .process-list-card .process-item__main p,
+  .process-list-card .process-item__line,
+  .process-list-card .process-item__meta,
+  .process-list-card .process-item__chips .inline-badge {
+    display: none;
+  }
+
+  .process-list-card .process-item__chips {
+    justify-content: flex-start;
+    margin-top: 4px;
+    margin-bottom: 0;
+  }
+}
+
 /* F15.3: mini-header sticky do detalhe do processo no mobile (voltar +
    título sempre visíveis no scroll). Margens negativas sangram até a borda
    do list-card pai (padding 14px em ≤560px, 18px em 561–720px — usa 14px e

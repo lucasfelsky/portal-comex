@@ -1,13 +1,14 @@
 import Skeleton from '../../components/Skeleton'
 import SelectField from '../../components/SelectField'
 import FilterChip from '../../components/FilterChip'
+import Icon from '../../components/Icon'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
 import { getStatusTagClass } from './processStatusView'
 import {
   shouldHideProcessCardSchedule,
   shouldHideProcessStatusBadge,
 } from './processStatus'
-import { shouldShowContainerQuantity } from './processCategories'
+import { isAirCategory, shouldShowContainerQuantity } from './processCategories'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 
 // F10.6 (backlog 2026-07-12): tela de listagem de processos (viewMode
@@ -226,12 +227,34 @@ export default function ProcessListView({
                 className={`process-item process-item--button${selectedProcessId === item.id ? ' process-item--selected' : ''}`}
                 onClick={() => onSelectProcess(item.id)}
               >
+                {/* F15.2: leading icon por categoria + resumo condensado +
+                    chevron — só aparecem no mobile (≤720px); no desktop o
+                    CSS os esconde e o layout atual permanece intacto. */}
+                <span className="process-item__leading" aria-hidden="true">
+                  <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={20} />
+                </span>
                 <div className="process-item__main">
                   <strong>{getProcessTitle(item, isAdmin)}</strong>
                   {getProcessSubtitle(item, isAdmin) ? <p>{getProcessSubtitle(item, isAdmin)}</p> : null}
                   <div className="process-item__line">{item.category}</div>
                   <div className="process-item__line">
                     {getDestinationLabel(item.category)}: {item.destination || '-'}
+                  </div>
+                  <div
+                    className={`process-item__summary${hasUpdatedEta(item) ? ' process-item__summary--eta-updated' : ''}`}
+                  >
+                    {[
+                      // dd/mm basta no resumo — o ano é ruído numa linha condensada
+                      hideSchedule || !item.eta ? null : `ETA ${formatDate(item.eta).slice(0, 5)}`,
+                      item.destination || null,
+                      shouldShowContainerQuantity(item.category) && item.containerQuantity > 0
+                        ? formatCargoUnit(item.containerQuantity, 'container', 'containers')
+                        : item.palletQuantity > 0
+                          ? formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')
+                          : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </div>
                   <div className="process-item__chips">
                     {shouldHideProcessStatusBadge(item) ? null : (
@@ -258,6 +281,9 @@ export default function ProcessListView({
                     <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
                   </div>
                 ) : null}
+                <span className="process-item__chevron" aria-hidden="true">
+                  <Icon name="chevron" size={18} />
+                </span>
               </button>
             )
           })
