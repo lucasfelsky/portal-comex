@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import useAuth from '../hooks/useAuth'
+import Icon from '../components/Icon'
 import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
 import { listExternalNews } from '../services/externalNewsRepository'
 import Modal from '../components/Modal'
@@ -558,36 +559,52 @@ export default function NewsPage() {
                 </div>
               </Skeleton.Group>
             ) : newsItems.length > 0 ? (
-              newsItems.map((item) => (
-                <article key={item.id} className="news-card">
-                  <button type="button" className="news-card__button" onClick={() => handleOpenNews(item.id)}>
-                    <div className="news-card__image-wrap">
-                      <img
-                        src={getNewsCoverImage(item)}
-                        alt={item.title}
-                        className="news-card__image"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null
-                          event.currentTarget.src = defaultNewsCoverImage
-                        }}
-                      />
-                    </div>
-                    <div className="news-card__body">
-                      <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
-                      <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
-                      <strong>{item.title}</strong>
-                      <p className="news-card__summary">{getNewsSummary(item)}</p>
-                    </div>
-                  </button>
-
-                  {isAdmin && item.sourceType !== 'automatic' ? (
-                    <div className="news-card__actions">
-                      <button type="button" className="ghost-button" onClick={() => handleEditNews(item)}>
-                        Editar
-                      </button>
+              // F16.6 (redesign iOS): 1ª notícia como featured card (cover
+              // grande), o resto como rows sob "Anteriores". As classes
+              // --featured/--row só mudam o layout no mobile (CSS); no
+              // desktop o grid de cards segue igual.
+              newsItems.map((item, index) => (
+                <Fragment key={item.id}>
+                  {index === 1 ? (
+                    <div className="news-section-label" aria-hidden="true">
+                      Anteriores
                     </div>
                   ) : null}
-                </article>
+                  <article
+                    className={`news-card${index === 0 ? ' news-card--featured' : ' news-card--row'}`}
+                  >
+                    <button type="button" className="news-card__button" onClick={() => handleOpenNews(item.id)}>
+                      <div className="news-card__image-wrap">
+                        <img
+                          src={getNewsCoverImage(item)}
+                          alt={item.title}
+                          className="news-card__image"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null
+                            event.currentTarget.src = defaultNewsCoverImage
+                          }}
+                        />
+                      </div>
+                      <div className="news-card__body">
+                        <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
+                        <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
+                        <strong>{item.title}</strong>
+                        <p className="news-card__summary">{getNewsSummary(item)}</p>
+                      </div>
+                      <span className="news-card__chevron" aria-hidden="true">
+                        <Icon name="chevron" size={16} />
+                      </span>
+                    </button>
+
+                    {isAdmin && item.sourceType !== 'automatic' ? (
+                      <div className="news-card__actions">
+                        <button type="button" className="ghost-button" onClick={() => handleEditNews(item)}>
+                          Editar
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                </Fragment>
               ))
             ) : (
               <div className="empty-state">
