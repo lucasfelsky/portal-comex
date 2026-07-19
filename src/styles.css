@@ -7284,3 +7284,113 @@ body {
     color: var(--primary-700);
   }
 }
+
+/* ============================================================
+   F16.6 — Notícias do redesign iOS (protótipo). Só ≤720px.
+   1ª notícia = featured card (cover grande); o resto = rows sob
+   "Anteriores" (sem cover, título + resumo 2 linhas + chevron).
+   No desktop o grid de cards com thumb lateral segue igual.
+   ============================================================ */
+.news-card__chevron,
+.news-section-label {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* Grupo vira coluna sem gap — as rows encostam com hairline. */
+  .news-list-card .news-grid {
+    gap: 12px;
+  }
+
+  .news-section-label {
+    display: block;
+    font-size: var(--fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    padding: 8px 2px 2px;
+  }
+
+  /* Featured: cover grande + corpo arejado (já é o default mobile do
+     news-card; só reforça o radius e o chevron oculto). */
+  .news-card--featured {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .news-card--featured .news-card__chevron {
+    display: none;
+  }
+
+  /* Row: sem cover, grid [corpo | chevron], separador hairline. */
+  .news-card--row {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .news-card--row + .news-card--row {
+    border-top: 1px solid var(--border);
+  }
+
+  .news-card--row .news-card__button {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 2px;
+  }
+
+  .news-card--row .news-card__image-wrap {
+    display: none;
+  }
+
+  .news-card--row .news-card__body {
+    padding: 0;
+    gap: 3px;
+  }
+
+  .news-card--row .news-card__body .inline-badge {
+    display: none;
+  }
+
+  .news-card--row .news-card__body strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .news-card--row .news-card__summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .news-card--row .news-card__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+  }
+
+  /* Ação de admin (Editar) compacta na row — text button à direita em vez
+     de bloco full-width que dobrava a altura. */
+  .news-card--row .news-card__actions {
+    justify-content: flex-end;
+    padding: 0 2px 10px;
+  }
+
+  .news-card--row .news-card__actions .ghost-button {
+    width: auto;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--primary-700);
+    font-weight: 700;
+    padding: 4px 8px;
+    min-height: 0;
+  }
+}
