@@ -313,7 +313,7 @@ export default function WeeklyArrivalsCard({
   const total = scheduled.length + unscheduled.length
 
   return (
-    <article className="list-card">
+    <article className="list-card weekly-arrivals-card">
       <div className="card-heading">
         <div>
           <h3>Chegadas da semana</h3>

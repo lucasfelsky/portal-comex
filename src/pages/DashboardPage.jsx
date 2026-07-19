@@ -25,7 +25,9 @@ import {
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
 import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
+import Icon from '../components/Icon'
 import { getCollectionWindows } from '../utils/collectionWindows'
+import { formatRelativeTime } from '../utils/dateFormat'
 import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
@@ -152,8 +154,9 @@ export default function DashboardPage() {
         <div>
           <h2>Visão geral</h2>
         </div>
-        {/* F15.4: no mobile este bloco vira banner hero colorido por tom
-            (status de relance no topo do dashboard) — ver CSS. */}
+        {/* F16.3: no mobile este bloco vira o TIDE CARD (protótipo) — hero
+            gradiente por tom, dot pulsante e nota de atualização. O dot e a
+            nota só existem no mobile (CSS); no desktop segue o inline. */}
         <div
           className={`dashboard-bar-inline${barStatus ? ` dashboard-bar-inline--${barStatus.tone}` : ''}`}
           aria-label="Condicao da Barra do Rio Itajai-Acu"
@@ -162,11 +165,21 @@ export default function DashboardPage() {
           {isLoadingBarStatus ? (
             <span className="dashboard-bar-card__text">Carregando</span>
           ) : barStatus ? (
-            <span
-              className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}
-            >
-              {barStatus.label}
-            </span>
+            <>
+              <span className="dashboard-bar-inline__status">
+                <span className="dashboard-bar-inline__dot" aria-hidden="true" />
+                <span
+                  className={`dashboard-bar-card__text dashboard-bar-card__text--${barStatus.tone}`}
+                >
+                  {barStatus.label}
+                </span>
+              </span>
+              {barStatus.updatedAt ? (
+                <span className="dashboard-bar-inline__note">
+                  Praticagem ZP-21 · atualizado {formatRelativeTime(barStatus.updatedAt)}
+                </span>
+              ) : null}
+            </>
           ) : (
             <span className="dashboard-bar-card__text">Indisponível</span>
           )}
@@ -241,6 +254,10 @@ export default function DashboardPage() {
 
               return (
                 <div key={item.id} className="process-item dashboard-favorites-item">
+                  {/* F16.3: ícone por categoria (só mobile — CSS). */}
+                  <span className="process-item__leading" aria-hidden="true">
+                    <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={18} />
+                  </span>
                   <div className="process-item__main">
                     <strong>{getProcessTitle(item, profile?.role === 'admin')}</strong>
                     {getProcessSubtitle(item, profile?.role === 'admin') ? (
@@ -248,6 +265,16 @@ export default function DashboardPage() {
                     ) : null}
                     <div className="process-item__line">{item.category}</div>
                     <div className="process-item__line">{getDestinationLabel(item.category)}: {item.destination || '-'}</div>
+                    {/* F16.3: resumo condensado — só mobile (CSS); o detalhe
+                        verboso (meta, pós-atracação) some lá. */}
+                    <div className="process-item__summary">
+                      {[
+                        item.eta ? `ETA ${formatDate(item.eta).slice(0, 5)}` : null,
+                        item.destination || null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </div>
                     <div className="process-item__chips">
                       {shouldHideProcessStatusBadge(item) ? null : (
                         <span className={getStatusTagClass(item.processStatus)}>
