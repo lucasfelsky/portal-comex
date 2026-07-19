@@ -125,45 +125,28 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
     expect(screen.queryAllByText(/IntelliQuote/i)).toHaveLength(0)
   })
 
-  describe('suporte no mobile (F2, backlog 2026-07-12)', () => {
-    // O FAB desktop tambem tem aria-label "Abrir suporte" — escopar as
-    // queries a bottom-nav evita a ambiguidade.
+  describe('tab bar do redesign iOS (F16.2)', () => {
     function bottomNav(container) {
       return within(container.querySelector('.mobile-bottom-nav'))
     }
 
-    it('bottom-nav tem item Suporte que dispara o evento de abrir o modal', () => {
+    it('tem os 5 itens novos: Início, Chegadas, Notícias, Avisos e Menu', () => {
       const { container } = renderWithRole('user')
+      const nav = bottomNav(container)
 
-      const listener = vi.fn()
-      window.addEventListener('sq-comex:open-support-modal', listener)
-
-      const supportItem = bottomNav(container).getByRole('button', { name: 'Abrir suporte' })
-      act(() => {
-        supportItem.click()
-      })
-
-      expect(listener).toHaveBeenCalledTimes(1)
-      window.removeEventListener('sq-comex:open-support-modal', listener)
+      expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
+      expect(nav.getByRole('link', { name: 'Chegadas' })).toHaveAttribute('href', '/processos')
+      expect(nav.getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
+      expect(nav.getByRole('button', { name: 'Notificações' })).toBeInTheDocument()
+      expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
     })
 
-    it('clicar em Suporte fecha o menu mobile se estiver aberto', () => {
+    it('não tem mais Suporte nem toggle de drawer (migraram pra tela Menu)', () => {
       const { container } = renderWithRole('user')
+      const nav = bottomNav(container)
 
-      const menuToggle = bottomNav(container).getByRole('button', { name: 'Abrir menu' })
-      act(() => {
-        menuToggle.click()
-      })
-      expect(
-        bottomNav(container).getByRole('button', { name: 'Fechar menu' })
-      ).toBeInTheDocument()
-
-      act(() => {
-        bottomNav(container).getByRole('button', { name: 'Abrir suporte' }).click()
-      })
-      expect(
-        bottomNav(container).getByRole('button', { name: 'Abrir menu' })
-      ).toBeInTheDocument()
+      expect(nav.queryByRole('button', { name: 'Abrir suporte' })).not.toBeInTheDocument()
+      expect(nav.queryByRole('button', { name: 'Abrir menu' })).not.toBeInTheDocument()
     })
   })
 

@@ -13,7 +13,6 @@ import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
-import { useSwipe } from '../hooks/useSwipe'
 import { useTheme } from '../hooks/useTheme'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -50,6 +49,7 @@ const pageMeta = {
   '/': { title: 'Dashboard operacional', breadcrumb: [] },
   '/news': { title: 'Notícias', breadcrumb: [] },
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
+  '/menu': { title: 'Menu', breadcrumb: [] },
   '/admin': { title: 'Painel administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
     title: 'Usuários',
@@ -98,11 +98,9 @@ export default function AppLayout() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  useSwipe({
-    enabled: isMobileViewport,
-    onSwipeRight: () => setIsMobileMenuOpen(true),
-    onSwipeLeft: () => setIsMobileMenuOpen(false),
-  })
+  // F16.2: o drawer aposentou no mobile (a tela /menu assumiu na tab bar) —
+  // o swipe lateral que o abria (C15) saiu junto. O swipe-back de conteúdo
+  // (detalhe→lista) vive nas páginas, não aqui.
 
   // Layout mobile (<=720px): topbar some e a bottom-nav aparece (ver
   // styles.css). O painel de notificacao precisa renderizar SO uma vez por
@@ -150,6 +148,30 @@ export default function AppLayout() {
   )
 
   const meta = pageMeta[location.pathname] ?? pageMeta[location.pathname.startsWith('/admin') ? '/admin' : '/']
+
+  // F16.2: large title por página no mobile (substitui o brand header fixo
+  // "Portal COMEX") + nav compacta com blur que aparece ao rolar, como o
+  // UINavigationBar do iOS. Título curto próprio; admin usa o meta.title.
+  const mobileTitle =
+    { '/': 'Início', '/news': 'Notícias', '/processos': 'Chegadas', '/menu': 'Menu' }[
+      location.pathname
+    ] ?? meta.title
+  const mobileEyebrow = useMemo(() => {
+    if (location.pathname !== '/') return null
+    const text = new Date().toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    })
+    return text.charAt(0).toUpperCase() + text.slice(1)
+  }, [location.pathname])
+  const [isPageScrolled, setIsPageScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setIsPageScrolled(window.scrollY > 48)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
   )
@@ -672,11 +694,17 @@ export default function AppLayout() {
         </aside>
 
         <div className="main-content">
-          <div className="mobile-brand-header" aria-label="Portal COMEX">
-            <span className="mobile-brand-header__eyebrow">SQ Química</span>
-            <div className="mobile-brand-header__row">
-              <strong className="mobile-brand-header__title">Portal COMEX</strong>
-            </div>
+          <div
+            className={`mobile-nav-compact${isPageScrolled ? ' mobile-nav-compact--visible' : ''}`}
+            aria-hidden="true"
+          >
+            {mobileTitle}
+          </div>
+          <div className="mobile-page-header">
+            {mobileEyebrow ? (
+              <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
+            ) : null}
+            <h1 className="mobile-page-header__title">{mobileTitle}</h1>
           </div>
 
           <header className="topbar">
@@ -786,6 +814,9 @@ export default function AppLayout() {
 
           {isMobileLayout && isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
+          {/* F16.2 (redesign iOS): tab bar nova — Início/Chegadas/Notícias/
+              Avisos/Menu. Suporte migrou pra tela Menu; o drawer não é mais
+              alcançável no mobile. */}
           <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
             <NavLink
               to="/"
@@ -793,10 +824,32 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
               }
-              aria-label="Dashboard"
+              aria-label="Início"
             >
-              <Icon name="dashboard" size={22} aria-hidden="true" />
-              <span className="mobile-bottom-nav__label">Dash</span>
+              <Icon name="house" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Início</span>
+            </NavLink>
+
+            <NavLink
+              to="/processos"
+              className={({ isActive }) =>
+                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              }
+              aria-label="Chegadas"
+            >
+              <Icon name="ship" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Chegadas</span>
+            </NavLink>
+
+            <NavLink
+              to="/news"
+              className={({ isActive }) =>
+                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              }
+              aria-label="Notícias"
+            >
+              <Icon name="news" size={22} aria-hidden="true" />
+              <span className="mobile-bottom-nav__label">Notícias</span>
             </NavLink>
 
             <button
@@ -813,44 +866,15 @@ export default function AppLayout() {
             </button>
 
             <NavLink
-              to="/processos"
+              to="/menu"
               className={({ isActive }) =>
                 `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
               }
-              aria-label="Chegadas"
+              aria-label="Menu"
             >
-              <Icon name="arrivals" size={22} aria-hidden="true" />
-              <span className="mobile-bottom-nav__label">Chegadas</span>
-            </NavLink>
-
-            <button
-              type="button"
-              className="mobile-bottom-nav__item"
-              aria-label={isMobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
-              aria-expanded={isMobileMenuOpen}
-              aria-controls="primary-navigation"
-              onClick={() => setIsMobileMenuOpen((current) => !current)}
-            >
-              <span className="topbar__menu-icon" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
+              <Icon name="person" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Menu</span>
-            </button>
-
-            <button
-              type="button"
-              className="mobile-bottom-nav__item"
-              aria-label="Abrir suporte"
-              onClick={() => {
-                setIsMobileMenuOpen(false)
-                window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
-              }}
-            >
-              <Icon name="help" size={22} aria-hidden="true" />
-              <span className="mobile-bottom-nav__label">Suporte</span>
-            </button>
+            </NavLink>
           </nav>
         </div>
       </div>

@@ -682,7 +682,9 @@ body {
   display: none;
 }
 
-.mobile-brand-header {
+.mobile-brand-header,
+.mobile-page-header,
+.mobile-nav-compact {
   display: none;
 }
 
@@ -3902,19 +3904,53 @@ body {
     padding: 8px 16px calc(72px + env(safe-area-inset-bottom));
   }
 
-  .mobile-brand-header {
+  /* F16.2: large title por página (iOS) no lugar do brand header fixo. */
+  .mobile-page-header {
     display: grid;
     gap: 2px;
-    padding: 8px 4px 12px;
-    text-align: center;
+    padding: 14px 4px 4px;
   }
 
-  .mobile-brand-header__row {
-    position: relative;
+  .mobile-page-header__eyebrow {
+    font-size: var(--fs-footnote);
+    font-weight: 600;
+    color: var(--text-subtle);
+  }
+
+  .mobile-page-header__title {
+    font-size: 2.125rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    color: var(--ink);
+  }
+
+  /* Nav compacta que assume quando o large title rola pra fora. */
+  .mobile-nav-compact {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 26;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
-    min-height: 48px;
+    height: calc(44px + env(safe-area-inset-top, 0px));
+    padding-bottom: 10px;
+    font-size: var(--fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    border-bottom: 1px solid var(--border);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .mobile-nav-compact--visible {
+    opacity: 1;
   }
 
   .mobile-page-logout {
@@ -3923,23 +3959,6 @@ body {
 
   .mobile-page-logout__button {
     width: 100%;
-  }
-
-  .mobile-brand-header__eyebrow {
-    font-size: var(--fs-caption);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(0, 174, 145, 0.9);
-  }
-
-  .mobile-brand-header__title {
-    font-size: 2.34rem;
-    line-height: 1.02;
-    letter-spacing: -0.03em;
-    font-weight: 800;
-    color: var(--ink);
-    text-align: center;
   }
 
   .mobile-notifications-fab {
@@ -4804,15 +4823,6 @@ body {
   .news-card__timestamp,
   .news-modal__meta {
     font-size: var(--fs-caption);
-  }
-
-  .mobile-brand-header {
-    padding-top: 16px;
-    padding-bottom: 10px;
-  }
-
-  .mobile-brand-header__title {
-    font-size: 2.08rem;
   }
 
   .brand h1,
@@ -6661,4 +6671,166 @@ body {
       Roboto,
       sans-serif;
   }
+}
+
+/* ============================================================
+   F16.2 — Grouped list genérica do redesign (tela Menu; as próximas
+   fases reusam). Fora de media query: a rota /menu existe também no
+   desktop (não linkada — a sidebar cobre), e o estilo se sustenta.
+   ============================================================ */
+.menu-page {
+  display: grid;
+  gap: 0;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.ios-section-label {
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+  padding: 22px 18px 8px;
+}
+
+.ios-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.ios-group--spaced {
+  margin-top: 26px;
+}
+
+.ios-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 120ms ease;
+}
+
+.ios-row:active {
+  background: var(--surface-alt);
+}
+
+.ios-row + .ios-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 58px;
+  right: 0;
+  border-top: 1px solid var(--border);
+}
+
+.ios-row__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ios-row__body {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.ios-row__title {
+  font-size: var(--fs-headline);
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-row__title--danger {
+  color: var(--danger);
+}
+
+.ios-row__sub {
+  font-size: var(--fs-footnote);
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ios-row__end {
+  font-size: var(--fs-subhead);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.ios-row__chevron {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.ios-row--center {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.menu-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.menu-profile__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(140deg, var(--primary), var(--primary-700));
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.menu-profile__body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.menu-profile__body strong {
+  font-size: 1.1875rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.menu-profile__body span {
+  font-size: var(--fs-subhead);
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
