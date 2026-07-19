@@ -105,6 +105,19 @@ const ICONS = {
       <path d="M5 20h14" />
     </>
   ),
+  // F16.2: tab bar nova (Início / Menu).
+  house: (
+    <>
+      <path d="m3.5 10.5 8.5-7 8.5 7" />
+      <path d="M5.5 9v10.5h13V9" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="12" cy="8.4" r="3.6" />
+      <path d="M4.8 20c.9-3.6 3.7-5.4 7.2-5.4s6.3 1.8 7.2 5.4" />
+    </>
+  ),
   // F15.2: categorias de processo na lista mobile (marítimo/aéreo).
   ship: (
     <>

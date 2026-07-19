@@ -50,7 +50,7 @@
     ]
   },
   "srcPages": {
-    "count": 10
+    "count": 11
   },
   "srcServices": {
     "count": 17,
@@ -112,11 +112,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 64,
+    "totalFiles": 65,
     "_breakdown": {
       "firebase": 4,
       "functions": 11,
-      "ui": 49
+      "ui": 50
     }
   }
 }

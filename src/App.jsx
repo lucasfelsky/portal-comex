@@ -48,6 +48,7 @@ const PendingApprovalPage = lazyWithRetry(
   'pending-approval-page'
 )
 const ProcessesPage = lazyWithRetry(() => import('./pages/ProcessesPage'), 'processes-page')
+const MenuPage = lazyWithRetry(() => import('./pages/MenuPage'), 'menu-page')
 const VerifyEmailPage = lazyWithRetry(() => import('./pages/VerifyEmailPage'), 'verify-email-page')
 const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'), 'not-found-page')
 const DebugClaimsPage = lazyWithRetry(() => import('./pages/DebugClaimsPage'), 'debug-claims-page')
@@ -81,6 +82,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/processos" element={<ProcessesPage />} />
+          <Route path="/menu" element={<MenuPage />} />
           <Route
             path="/admin"
             element={
