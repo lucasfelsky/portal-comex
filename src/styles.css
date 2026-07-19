@@ -7195,3 +7195,92 @@ body {
     padding-top: 2px;
   }
 }
+
+/* ============================================================
+   F16.5 — Timeline de estágios do detalhe (protótipo). Mobile-only:
+   no desktop o select de abas + cards cobrem o estado; a timeline seria
+   redundante com a coluna densa de status. Track = nós + barras; o nó
+   ativo pulsa com halo, os concluídos ficam teal cheios.
+   ============================================================ */
+.process-timeline {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .process-timeline {
+    display: block;
+    margin: 4px 0 14px;
+    padding: 14px 6px 12px;
+    background: var(--surface-alt);
+    border-radius: var(--radius-sm);
+  }
+
+  .process-timeline__track {
+    display: flex;
+    align-items: center;
+  }
+
+  .process-timeline__cell {
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+
+  .process-timeline__cell:first-child {
+    flex: 0 0 auto;
+  }
+
+  .process-timeline__bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+
+  .process-timeline__bar--done {
+    background: var(--primary-700);
+  }
+
+  .process-timeline__node {
+    width: 13px;
+    height: 13px;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .process-timeline__node--done {
+    background: var(--primary-700);
+  }
+
+  .process-timeline__node--now {
+    background: var(--primary-700);
+    box-shadow: 0 0 0 4px var(--primary-50);
+  }
+
+  .process-timeline__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .process-timeline__labels span {
+    flex: 1;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--text-faint);
+    text-align: center;
+  }
+
+  .process-timeline__labels span:first-child {
+    text-align: left;
+  }
+
+  .process-timeline__labels span:last-child {
+    text-align: right;
+  }
+
+  .process-timeline__label--now {
+    color: var(--primary-700);
+  }
+}

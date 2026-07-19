@@ -14,6 +14,7 @@ import {
 import { getChannelToneClass, getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
+import { getProcessStage, PROCESS_STAGES } from './processStage'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
@@ -116,6 +117,45 @@ export default function ProcessDetailView({
           {getProcessTitle(selectedProcess)}
         </strong>
       </div>
+
+      {/* F16.5: timeline de 5 estágios (mobile-only via CSS) — o estado do
+          processo virado em forma, o dado mais importante em relance. */}
+      {(() => {
+        const { currentStage, isComplete } = getProcessStage(selectedProcess)
+        return (
+          <div className="process-timeline" aria-hidden="true">
+            <div className="process-timeline__track">
+              {PROCESS_STAGES.map((stage, index) => {
+                const done = isComplete || index < currentStage
+                const now = !isComplete && index === currentStage
+                return (
+                  <div className="process-timeline__cell" key={stage}>
+                    {index > 0 ? (
+                      <span
+                        className={`process-timeline__bar${isComplete || index <= currentStage ? ' process-timeline__bar--done' : ''}`}
+                      />
+                    ) : null}
+                    <span
+                      className={`process-timeline__node${done ? ' process-timeline__node--done' : ''}${now ? ' process-timeline__node--now' : ''}`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            <div className="process-timeline__labels">
+              {PROCESS_STAGES.map((stage, index) => (
+                <span
+                  key={stage}
+                  className={!isComplete && index === currentStage ? 'process-timeline__label--now' : ''}
+                >
+                  {stage}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="card-heading">
         <div><h3>Detalhe do processo</h3></div>
         {/* F15.4: no mobile a toolbar vira linha horizontal com scroll —
