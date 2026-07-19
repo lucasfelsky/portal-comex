@@ -6834,3 +6834,256 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ============================================================
+   F16.3 — Início do redesign iOS (protótipo é a spec). Só ≤720px.
+   (a) TIDE CARD: o banner da Barra vira o cartão-assinatura — gradiente
+       teal profundo por tom, dot pulsante, nota de atualização. Fica no
+       fim do arquivo pra vencer o hero do F15.4 por cascata.
+   (b) "Chegadas da semana" vira rail horizontal com snap (o list-card
+       pai fica flat — label na tela, cards soltos no canvas).
+   (c) Comunicados: o carrossel do C13 vira grupo de rows com separador
+       hairline (o rail agora é da semana).
+   (d) Favoritos ganham leading icon por categoria.
+   ============================================================ */
+/* Dot e nota do tide card são mobile-only; no desktop o inline discreto
+   da topbar segue como sempre foi. */
+.dashboard-bar-inline__dot,
+.dashboard-bar-inline__note {
+  display: none;
+}
+
+.dashboard-bar-inline__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  /* (a) tide card */
+  .dashboard-heading .dashboard-bar-inline {
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+    padding: 16px 16px 14px;
+    border: 0;
+    border-radius: 18px;
+    color: #eafffa;
+    background: linear-gradient(150deg, #0a5f50, #063f38 70%);
+    box-shadow: 0 8px 24px rgba(4, 48, 42, 0.28);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dashboard-heading .dashboard-bar-inline::after {
+    content: '';
+    position: absolute;
+    left: -20%;
+    right: -20%;
+    bottom: -34px;
+    height: 72px;
+    background: radial-gradient(60% 100% at 50% 0%, rgba(120, 255, 226, 0.16), transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .dashboard-heading .dashboard-bar-inline--warn {
+    background: linear-gradient(150deg, #7a5410, #4a3208 70%);
+    box-shadow: 0 8px 24px rgba(74, 50, 8, 0.3);
+    color: #fdf3dd;
+  }
+
+  .dashboard-heading .dashboard-bar-inline--danger {
+    background: linear-gradient(150deg, #7a221a, #4a130e 70%);
+    box-shadow: 0 8px 24px rgba(74, 19, 14, 0.3);
+    color: #ffe9e6;
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-inline__label {
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: currentColor;
+    opacity: 0.72;
+  }
+
+  .dashboard-bar-inline__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .dashboard-bar-inline__dot {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: var(--radius-full);
+    background: #4fe3ab;
+    box-shadow: 0 0 0 5px rgba(79, 227, 171, 0.22);
+    flex-shrink: 0;
+  }
+
+  .dashboard-bar-inline--warn .dashboard-bar-inline__dot {
+    background: #ffce56;
+    box-shadow: 0 0 0 5px rgba(255, 206, 86, 0.22);
+  }
+
+  .dashboard-bar-inline--danger .dashboard-bar-inline__dot {
+    background: #ff7a6e;
+    box-shadow: 0 0 0 5px rgba(255, 122, 110, 0.22);
+  }
+
+  /* Status grande sobre o gradiente — os tons por texto do desktop saem. */
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-card__text {
+    font-size: 1.6875rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: currentColor;
+  }
+
+  .dashboard-bar-inline__note {
+    display: block;
+    font-size: var(--fs-footnote);
+    color: currentColor;
+    opacity: 0.75;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* (b) semana em rail horizontal; card pai flat */
+  .weekly-arrivals-card {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .weekly-arrivals-card .process-list--scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-height: none;
+    padding-bottom: 4px;
+  }
+
+  .weekly-arrivals-card .process-list--scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .weekly-arrivals-card .process-item {
+    flex: 0 0 216px;
+    scroll-snap-align: start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Cards do rail e rows de favoritos são LISTAS no protótipo — esquerda. */
+  .weekly-arrivals-card .process-item,
+  .weekly-arrivals-card .process-item__main,
+  .weekly-arrivals-windows__item,
+  .dashboard-favorites-item .process-item__main {
+    text-align: left;
+  }
+
+  .dashboard-favorites-item .process-item__chips {
+    justify-content: flex-start;
+  }
+
+  /* (c) comunicados: carrossel C13 → grupo de rows */
+  .announcement-list--scroll {
+    display: grid;
+    grid-auto-flow: row;
+    gap: 0;
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+  }
+
+  .announcement-list--scroll .announcement-card {
+    flex: none;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    padding: 11px 2px;
+    position: relative;
+    text-align: left;
+  }
+
+  .announcement-list--scroll .announcement-card + .announcement-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2px;
+    right: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .announcement-list--scroll .announcement-card__meta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: var(--fs-caption);
+  }
+
+  .announcement-list--scroll .announcement-card p {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* (d) favoritos com leading icon (grid igual às listas F15.2) */
+  .dashboard-favorites-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dashboard-favorites-item .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  /* Favorito condensado: título 1 linha + resumo + chips de status; o
+     detalhe verboso (datas, pós-atracação, DUIMP/MAPA) mora no processo. */
+  .dashboard-favorites-item .process-item__summary {
+    display: block;
+    font-size: var(--fs-footnote);
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-favorites-item .process-item__main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-favorites-item .process-item__meta,
+  .dashboard-favorites-item .dashboard-process-inline {
+    display: none;
+  }
+}
