@@ -3832,6 +3832,13 @@ body {
     height: auto;
     overflow: visible;
     padding-top: 12px;
+    /* F16.7.2: o base tem min-height:100vh. No mobile o body é o scroller e
+       100vh = viewport GRANDE do iOS (barra do Safari escondida); com o
+       align-content:start isso deixa área morta abaixo do conteúdo em telas
+       curtas — dava "scroll infinito no vazio" ao chegar no fim. 100dvh
+       acompanha a viewport visível: enche a tela sem sobra rolável. */
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .news-list-card,
