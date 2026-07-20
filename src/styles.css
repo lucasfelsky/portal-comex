@@ -4435,24 +4435,53 @@ body {
     animation: notifications-sheet-in 220ms ease forwards;
   }
 
+  /* F16.7.1: título e ações não cabiam numa linha (título quebrava, "Marcar
+     todas como Lidas" cortava). Empilha: título em cima, ações embaixo
+     (texto flex + ícones compactos). */
   .notifications__panel .card-heading {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
     margin: 0 0 2px;
   }
 
-  /* Lista de notificações ocupa a linha 1fr e rola dentro dela. */
+  .notifications__panel .notifications__heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .notifications__panel .notifications__heading-actions .ghost-button {
+    width: auto;
+    min-height: 40px;
+  }
+
+  .notifications__panel .notifications__mark-all {
+    flex: 1;
+  }
+
+  .notifications__panel .notifications__prefs,
+  .notifications__panel .notifications__dnd {
+    flex: 0 0 auto;
+  }
+
+  /* Lista ocupa a linha 1fr e rola dentro dela. align-content:start impede
+     o empty-state (grid) de esticar e afastar título/mensagem (o buraco do
+     screenshot); :has centraliza o vazio, mantendo a lista rolando do topo. */
   .notifications__panel .notifications__list {
     max-height: none;
     min-height: 0;
     overflow-y: auto;
+    align-content: start;
+  }
+
+  .notifications__panel .notifications__list:has(.empty-state) {
+    align-content: center;
   }
 
   .notifications__panel .card-heading > div {
     width: 100%;
-    text-align: center;
   }
 
   .notifications__panel .card-heading > div strong {
