@@ -1354,6 +1354,8 @@ export default function ProcessesPage() {
             setOperationFilter('Todos')
           }}
           onSelectProcess={handleSelectProcess}
+          favoriteProcessIds={favoriteProcessIds}
+          onToggleFavorite={toggleFavoriteProcess}
           onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onExport={async () => {
             try {

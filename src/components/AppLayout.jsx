@@ -370,7 +370,11 @@ export default function AppLayout() {
     handleOpenNotificationPanel()
   }
 
-  async function handleOpenNotification(notification) {
+  // Marca-como-lida (backend + estado local otimista) isolado do
+  // fechar-painel/navegar — reusado pelo tap normal (handleOpenNotification)
+  // e pelo swipe-to-mark-as-read (F16.8), que só quer o "marcar como lida"
+  // sem sair do painel.
+  async function markOneNotificationAsRead(notification) {
     try {
       if (!notification.isRead) {
         await markNotificationAsRead(notification.id)
@@ -385,27 +389,31 @@ export default function AppLayout() {
             : item
         )
       )
-      handleCloseNotificationPanel()
-      // Chamados de suporte moram na aba administrativa, não na central de
-      // chegadas (backlog 2026-07-10).
-      if (notification.type === 'support_ticket') {
-        navigate('/admin/suporte')
-        return
-      }
-      // Suporte v2: o AUTOR é avisado quando o chamado dele é resolvido. O
-      // clique abre o modal de suporte ("Meus chamados") — o autor comum não
-      // tem acesso à rota /admin/suporte.
-      if (notification.type === 'support_ticket_resolved') {
-        window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
-        return
-      }
-      navigate('/processos', {
-        state: {
-          selectedProcessId: notification.processId,
-          detailTab: notification.targetTab ?? 'messages',
-        },
-      })
     }
+  }
+
+  async function handleOpenNotification(notification) {
+    await markOneNotificationAsRead(notification)
+    handleCloseNotificationPanel()
+    // Chamados de suporte moram na aba administrativa, não na central de
+    // chegadas (backlog 2026-07-10).
+    if (notification.type === 'support_ticket') {
+      navigate('/admin/suporte')
+      return
+    }
+    // Suporte v2: o AUTOR é avisado quando o chamado dele é resolvido. O
+    // clique abre o modal de suporte ("Meus chamados") — o autor comum não
+    // tem acesso à rota /admin/suporte.
+    if (notification.type === 'support_ticket_resolved') {
+      window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
+      return
+    }
+    navigate('/processos', {
+      state: {
+        selectedProcessId: notification.processId,
+        detailTab: notification.targetTab ?? 'messages',
+      },
+    })
   }
 
   async function handleMarkAllNotificationsAsRead() {
@@ -587,6 +595,7 @@ export default function AppLayout() {
             <NotificationsList
               grouped={groupedNotifications}
               onOpenNotification={handleOpenNotification}
+              onMarkAsRead={markOneNotificationAsRead}
               formatRelative={formatRelativeNotificationTime}
               formatDate={formatNotificationDate}
             />

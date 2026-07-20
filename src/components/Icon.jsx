@@ -57,6 +57,10 @@ const ICONS = {
   check: (
     <path d="M5 12.5 10 17.5 19 7.5" />
   ),
+  // F16.8: ação de swipe "favoritar" (Chegadas).
+  star: (
+    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.4 1 6.1L12 17l-5.4 3 1-6.1-4.4-4.4 6.1-.9Z" />
+  ),
   external: (
     <>
       <path d="M14 4.5h5.5V10" />

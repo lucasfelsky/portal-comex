@@ -16,6 +16,8 @@
 
 import { useState } from 'react'
 import Icon from './Icon'
+import { useSwipeReveal } from '../hooks/useSwipeReveal'
+import { useMobileLayout } from '../hooks/useMobileLayout'
 
 // F15.2: ícone por categoria da notificação no mobile (espelha o
 // prefCategoryForType do backend — support_ticket* → suporte,
@@ -32,13 +34,82 @@ const ITEMS_PER_GROUP = 3
 const OLDER_INITIAL = 4
 const OLDER_STEP = 8
 
+// F16.8: linha de notificação com swipe-to-marcar-como-lida (mobile).
+// Componente próprio pelo mesmo motivo do ProcessRow (Chegadas) — hook por
+// linha (useSwipeReveal) não pode viver dentro de um .map() solto.
+function NotificationRow({
+  notification,
+  isMobile,
+  isSwipeOpen,
+  onSwipeOpenChange,
+  onOpenNotification,
+  onMarkAsRead,
+  formatRelative,
+  formatDate,
+}) {
+  const swipe = useSwipeReveal({
+    actionCount: onMarkAsRead ? 1 : 0,
+    isOpen: isSwipeOpen,
+    onOpenChange: onSwipeOpenChange,
+    disabled: !isMobile || !onMarkAsRead,
+  })
+
+  return (
+    <div className="notifications-swipe-row">
+      {onMarkAsRead ? (
+        <div className="notifications-swipe-row__actions" aria-hidden={!isSwipeOpen}>
+          <button
+            type="button"
+            className="notifications-swipe-row__action"
+            tabIndex={isSwipeOpen ? 0 : -1}
+            onClick={() => {
+              onMarkAsRead(notification)
+              onSwipeOpenChange(false)
+            }}
+          >
+            <Icon name="check" size={18} aria-hidden="true" />
+            <span>Marcar lida</span>
+          </button>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="notifications__item notifications__item--unread notifications-swipe-row__content"
+        style={
+          isMobile
+            ? { transform: `translateX(${swipe.translateX}px)`, transition: swipe.isDragging ? 'none' : undefined }
+            : undefined
+        }
+        onClick={swipe.guardClick(() => onOpenNotification(notification))}
+        tabIndex={-1}
+        onMouseDown={(event) => event.preventDefault()}
+        {...swipe.handlers}
+      >
+        <span className="notifications__item-icon" aria-hidden="true">
+          <Icon name={iconForNotificationType(notification.type)} size={18} />
+        </span>
+        <div className="notifications__item-body">
+          <strong>{notification.title}</strong>
+          <p>{notification.body}</p>
+          <span>
+            {formatRelative(notification.createdAt)} • {formatDate(notification.createdAt)}
+          </span>
+        </div>
+      </button>
+    </div>
+  )
+}
+
 export default function NotificationsList({
   grouped,
   onOpenNotification,
+  onMarkAsRead,
   formatRelative,
   formatDate,
 }) {
   const [olderLimit, setOlderLimit] = useState(OLDER_INITIAL)
+  const isMobile = useMobileLayout()
+  const [openSwipeId, setOpenSwipeId] = useState(null)
 
   if (!grouped || grouped.length === 0) {
     return (
@@ -76,26 +147,17 @@ export default function NotificationsList({
               </div>
               <div className="notifications__group-items">
                 {group.items.slice(0, ITEMS_PER_GROUP).map((notification) => (
-                  <button
+                  <NotificationRow
                     key={notification.id}
-                    type="button"
-                    className="notifications__item notifications__item--unread"
-                    onClick={() => onOpenNotification(notification)}
-                    tabIndex={-1}
-                    onMouseDown={(event) => event.preventDefault()}
-                  >
-                    <span className="notifications__item-icon" aria-hidden="true">
-                      <Icon name={iconForNotificationType(notification.type)} size={18} />
-                    </span>
-                    <div className="notifications__item-body">
-                      <strong>{notification.title}</strong>
-                      <p>{notification.body}</p>
-                      <span>
-                        {formatRelative(notification.createdAt)} •{' '}
-                        {formatDate(notification.createdAt)}
-                      </span>
-                    </div>
-                  </button>
+                    notification={notification}
+                    isMobile={isMobile}
+                    isSwipeOpen={openSwipeId === notification.id}
+                    onSwipeOpenChange={(open) => setOpenSwipeId(open ? notification.id : null)}
+                    onOpenNotification={onOpenNotification}
+                    onMarkAsRead={onMarkAsRead}
+                    formatRelative={formatRelative}
+                    formatDate={formatDate}
+                  />
                 ))}
               </div>
             </div>

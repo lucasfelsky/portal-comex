@@ -135,4 +135,33 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
       expect(container.querySelectorAll('.process-item--button')).toHaveLength(3)
     })
   })
+
+  describe('swipe-to-favoritar (F16.8)', () => {
+    beforeEach(() => stubMatchMedia(true))
+
+    it('sem onToggleFavorite, nenhuma ação de favoritar é renderizada', () => {
+      const { container } = renderView({ onToggleFavorite: undefined })
+      expect(container.querySelectorAll('.process-swipe-row__action--favorite')).toHaveLength(0)
+    })
+
+    it('rótulo da ação reflete favoriteProcessIds (Favoritar/Desfavoritar)', () => {
+      const { container } = renderView({
+        onToggleFavorite: vi.fn(),
+        favoriteProcessIds: ['p-sea-active'],
+      })
+      const rows = container.querySelectorAll('.process-swipe-row')
+      const labelFor = (row) => row.querySelector('.process-swipe-row__action--favorite span').textContent
+      expect(labelFor(rows[0])).toBe('Desfavoritar') // p-sea-active já é favorito
+      expect(labelFor(rows[1])).toBe('Favoritar') // p-air-active não é
+    })
+
+    it('clicar na ação chama onToggleFavorite com o id do processo', async () => {
+      const user = userEvent.setup()
+      const onToggleFavorite = vi.fn()
+      const { container } = renderView({ onToggleFavorite, favoriteProcessIds: [] })
+      const action = container.querySelector('.process-swipe-row__action--favorite')
+      await user.click(action)
+      expect(onToggleFavorite).toHaveBeenCalledWith('p-sea-active')
+    })
+  })
 })
