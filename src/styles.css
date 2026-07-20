@@ -3902,6 +3902,11 @@ body {
   .main-content {
     gap: 14px;
     padding: 8px 16px calc(72px + env(safe-area-inset-bottom));
+    /* F16.7: o main-content é grid de altura cheia (min-height 100vh no
+       shell). Em telas curtas (ex.: Menu) o align-content default esticava
+       as linhas pra preencher — o large title virava 92px. Empacota no
+       topo; o conteúdo curto fica no topo, não esticado. */
+    align-content: start;
   }
 
   /* F16.2: large title por página (iOS) no lugar do brand header fixo. */
@@ -3909,6 +3914,7 @@ body {
     display: grid;
     gap: 2px;
     padding: 14px 4px 4px;
+    align-content: start;
   }
 
   .mobile-page-header__eyebrow {
@@ -4411,7 +4417,14 @@ body {
     width: auto;
     max-width: none;
     max-height: calc(100vh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    padding: 20px 16px 16px;
+    /* F16.7: o painel tem altura fixa (top+bottom); como grid, o
+       align-content default esticava header/filtros/lista pra preencher o
+       vazio (header 180px, tabs 137px de altura — bug dos screenshots).
+       Fixando as linhas: header e filtros no tamanho do conteúdo, a lista
+       pega o resto e rola internamente. */
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 16px 16px;
     border-radius: var(--radius-md);
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(242, 249, 248, 0.68)),
@@ -4423,9 +4436,18 @@ body {
   }
 
   .notifications__panel .card-heading {
+    flex-direction: row;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    margin-top: 8px;
+    margin: 0 0 2px;
+  }
+
+  /* Lista de notificações ocupa a linha 1fr e rola dentro dela. */
+  .notifications__panel .notifications__list {
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .notifications__panel .card-heading > div {
@@ -4490,22 +4512,51 @@ body {
     min-height: 44px;
   }
 
+  /* F16.7: o <select> nativo "SEÇÃO" abria o picker do iOS, quebrando a
+     linguagem do app (feedback do Lucas). Trocado por abas roláveis
+     in-app — some o select, entram as tab-buttons como pills horizontais
+     com scroll. (.tab-row.detail-tab-row vence a regra segmented do
+     F15.6 por igual especificidade + ordem.) */
   .detail-tab-select {
-    display: block;
-    margin-bottom: 10px;
-  }
-
-  .detail-tab-select .field {
-    gap: 6px;
-  }
-
-  .detail-tab-select .text-input {
-    min-height: 42px;
-    text-align: center;
-  }
-
-  .detail-tab-row {
     display: none;
+  }
+
+  .tab-row.detail-tab-row {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 6px;
+    margin: 0 -16px 12px;
+    padding: 0 16px;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .tab-row.detail-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-row.detail-tab-row .tab-button {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    background: var(--surface-alt);
+    box-shadow: none;
+    white-space: nowrap;
+  }
+
+  .tab-row.detail-tab-row .tab-button--active {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  [data-theme='dark'] .tab-row.detail-tab-row .tab-button--active {
+    background: var(--primary-700);
+    color: #04211c;
   }
 
   .news-card__button {
@@ -5850,7 +5901,7 @@ body {
   }
 
   /* (c) Segmented control. */
-  .tab-row:not(.notifications__filters) {
+  .tab-row:not(.notifications__filters):not(.detail-tab-row) {
     background: var(--surface-alt);
     border: 1px solid var(--border);
     border-radius: var(--radius-full);
@@ -5858,12 +5909,12 @@ body {
     gap: 2px;
   }
 
-  .tab-row:not(.notifications__filters) .tab-button {
+  .tab-row:not(.notifications__filters):not(.detail-tab-row) .tab-button {
     background: none;
     box-shadow: none;
   }
 
-  .tab-row:not(.notifications__filters) .tab-button--active {
+  .tab-row:not(.notifications__filters):not(.detail-tab-row) .tab-button--active {
     background: var(--surface);
     color: var(--ink);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.16);
@@ -5883,7 +5934,7 @@ body {
   /* No dark os tokens invertem (--surface fica mais escuro que
      --surface-alt) e o pill ativo sumiria — clareia na mão, como o
      segmented do iOS dark. */
-  [data-theme='dark'] .tab-row:not(.notifications__filters) .tab-button--active {
+  [data-theme='dark'] .tab-row:not(.notifications__filters):not(.detail-tab-row) .tab-button--active {
     background: rgba(255, 255, 255, 0.14);
   }
 }
@@ -7392,5 +7443,42 @@ body {
     font-weight: 700;
     padding: 4px 8px;
     min-height: 0;
+  }
+}
+
+/* ============================================================
+   F16.7 — Revisão de espaçamentos (feedback do Lucas). Só ≤720px.
+   Chegadas: "Fila de chegadas" duplicava o large title, e a toolbar
+   admin (Importar/Exportar) vinha full-width empilhada empurrando a
+   lista pra baixo. Notificações foram corrigidas na regra do painel.
+   ============================================================ */
+@media (max-width: 720px) {
+  /* "Fila de chegadas" some (o large title "Chegadas" já nomeia); só o
+     CTA "Novo processo" permanece, colado ao topo. */
+  .surface > .section-heading:not(.dashboard-heading) > div:first-child {
+    display: none;
+  }
+
+  .surface > .section-heading:not(.dashboard-heading) {
+    margin-bottom: 8px;
+  }
+
+  /* Toolbar admin (badge + Importar + Exportar) compacta: text-buttons
+     auto-width numa linha, em vez de blocos full-width empilhados. */
+  .process-list-card > .card-heading .admin-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    width: auto;
+  }
+
+  .process-list-card > .card-heading .admin-toolbar .ghost-button,
+  .process-list-card > .card-heading .admin-toolbar .primary-button {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 6px 12px;
   }
 }
