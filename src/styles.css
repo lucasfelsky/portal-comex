@@ -7355,7 +7355,10 @@ body {
     flex: 1;
     font-size: 0.625rem;
     font-weight: 600;
-    color: var(--text-faint);
+    /* --text-faint é pra ícones decorativos (limiar 3:1); aqui é texto de
+       navegação de verdade a 10px — precisa do limiar de texto pequeno
+       (4.5:1). --text-faint dava só 3.28:1 no claro (medido). */
+    color: var(--text-subtle);
     text-align: center;
   }
 
