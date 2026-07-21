@@ -125,6 +125,54 @@ async function clearAuth() {
   })
 }
 
+function firestoreTimestamp(date = new Date()) {
+  return {
+    timestampValue: date.toISOString(),
+  }
+}
+
+function firestoreMap(fields) {
+  return { mapValue: { fields } }
+}
+
+async function seedNewsItem() {
+  const newsId = 'e2e-news-mobile-modal'
+  const response = await fetch(
+    `${FIRESTORE_HOST}/v1/projects/${PROJECT_ID}/databases/(default)/documents/news/${newsId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer owner',
+      },
+      body: JSON.stringify({
+        fields: {
+          title: firestoreString(
+            'Portaria conjunta altera regras de despacho aduaneiro para importações por via marítima e aérea'
+          ),
+          content: firestoreString(
+            'A nova portaria publicada no Diário Oficial altera os prazos e documentos exigidos para o despacho aduaneiro. ' +
+              'As mudanças entram em vigor na próxima semana e afetam principalmente importações por via marítima e aérea.'
+          ),
+          coverImage: firestoreString(''),
+          coverImageStoragePath: firestoreString(''),
+          coverImageName: firestoreString(''),
+          coverImageMimeType: firestoreString(''),
+          coverImageSize: { nullValue: null },
+          coverImageUploadedAt: firestoreString(''),
+          mediaItems: { arrayValue: { values: [] } },
+          references: { arrayValue: { values: [] } },
+          createdAt: firestoreTimestamp(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          updatedAt: firestoreTimestamp(),
+        },
+      }),
+    }
+  )
+  if (!response.ok) {
+    throw new Error(`Firestore emulator seed news/${newsId}: ${await response.text()}`)
+  }
+}
+
 export default async function globalSetup() {
   await requireEmulator()
   await clearAuth()
@@ -134,4 +182,6 @@ export default async function globalSetup() {
     const uid = await createAuthUser(user)
     await seedUserDoc(uid, user)
   }
+
+  await seedNewsItem()
 }
