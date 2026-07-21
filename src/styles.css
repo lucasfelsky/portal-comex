@@ -4322,6 +4322,15 @@ body {
     justify-content: flex-end;
   }
 
+  .card-heading .process-detail-toolbar {
+    gap: 12px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   /* Filtros: o grid base tem 4 colunas com minmax(220px,..) — em <=720px
      cada coluna exigiria >=220px e estourava o card (clipado por overflow).
      Empilha em coluna única no mobile. */
@@ -5896,10 +5905,15 @@ body {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: flex-start;
+    align-items: center;
     overflow-x: visible;
     scrollbar-width: none;
-    gap: 6px;
-    padding-bottom: 0;
+    gap: 12px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .process-detail-toolbar::-webkit-scrollbar {
@@ -5911,13 +5925,20 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
-    padding: 8px 12px;
-    font-size: var(--fs-caption-2);
-    border-radius: var(--radius-full);
+    padding: 0;
+    font-size: var(--fs-body-2);
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--primary-700);
+    font-weight: 600;
+    min-height: auto;
   }
 
   .process-detail-toolbar .primary-button {
     order: -1;
+    color: var(--primary-700);
   }
 }
 
@@ -6030,12 +6051,12 @@ body {
     background: none;
     box-shadow: none;
     color: var(--primary-700);
-    font-weight: 700;
-    padding-inline: 8px;
+    font-weight: 600;
+    padding-inline: 4px;
   }
 
   .process-detail-toolbar .primary-button {
-    padding: 8px 14px;
+    padding-inline: 4px;
   }
 
   /* No dark os tokens invertem (--surface fica mais escuro que
@@ -7413,7 +7434,7 @@ body {
   .process-timeline {
     display: block;
     margin: 4px 0 14px;
-    padding: 14px 6px 12px;
+    padding: 14px 16px 12px;
     background: var(--surface-alt);
     border-radius: var(--radius-sm);
   }
@@ -7422,7 +7443,6 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 14px;
   }
 
   .process-timeline__cell {
@@ -7470,28 +7490,22 @@ body {
 
   .process-timeline__labels {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     margin-top: 10px;
-    padding: 0 14px;
-    position: relative;
   }
 
   .process-timeline__labels span {
-    position: absolute;
     font-size: 0.625rem;
     font-weight: 600;
     color: var(--text-subtle);
     text-align: center;
-    transform: translateX(-50%);
   }
 
   .process-timeline__labels span:first-child {
-    transform: translateX(-25%);
     text-align: left;
   }
 
   .process-timeline__labels span:last-child {
-    transform: translateX(25%);
     text-align: right;
   }
 

@@ -143,19 +143,14 @@ export default function ProcessDetailView({
               })}
             </div>
             <div className="process-timeline__labels">
-              {PROCESS_STAGES.map((stage, index) => {
-                const total = PROCESS_STAGES.length - 1
-                const left = total === 0 ? 0 : (index / total) * 100
-                return (
-                  <span
-                    key={stage}
-                    className={!isComplete && index === currentStage ? 'process-timeline__label--now' : ''}
-                    style={{ left: `${left}%` }}
-                  >
-                    {stage}
-                  </span>
-                )
-              })}
+              {PROCESS_STAGES.map((stage, index) => (
+                <span
+                  key={stage}
+                  className={!isComplete && index === currentStage ? 'process-timeline__label--now' : ''}
+                >
+                  {stage}
+                </span>
+              ))}
             </div>
           </div>
         )
