@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
-// Componente Modal (Sprint 9, a11y Sprint 28, bottom sheet C5).
+// Componente Modal (Sprint 9, a11y Sprint 28, bottom sheet C5, portal Sprint 34).
 // API:
 //   <Modal
 //     open={boolean}
@@ -12,7 +13,8 @@ import { useEffect, useRef, useState } from 'react'
 //   </Modal>
 //
 // Comportamento:
-//   - Renderiza um .modal-backdrop com .modal dentro
+//   - Renderiza via Portal em document.body para ficar acima de todo o app
+//     e evitar stacking contexts de ancestrais (transform/animations).
 //   - close on Esc
 //   - close on click no backdrop (fora do .modal)
 //   - bloqueia scroll do body enquanto aberto
@@ -153,7 +155,7 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
     ? `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''} modal--sheet-closing`
     : `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''}`
 
-  return (
+  return createPortal(
     <div className={`modal-backdrop${className ? ` ${className}-backdrop` : ''}`} onClick={handleBackdropClick} role="presentation">
       <div
         ref={modalRef}
@@ -184,6 +186,7 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
         </div>
         <div className="modal__body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
