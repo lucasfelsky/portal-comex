@@ -274,7 +274,7 @@ export default function ProcessListView({
   return (
     <article
       className={`list-card process-list-card${rootClassName ? ` ${rootClassName}` : ''}`}
-      style={{ marginTop: '16px' }}
+      style={{ marginTop: '8px' }}
     >
       <div className="card-heading">
         <div>
@@ -291,25 +291,27 @@ export default function ProcessListView({
               Novo processo
             </button>
           ) : null}
-          {isAdmin && onImport ? (
+          <div className="secondary-row">
+            {isAdmin && onImport ? (
+              <button
+                type="button"
+                className="ghost-button"
+                title="Criar processos em lote a partir de uma planilha"
+                onClick={onImport}
+              >
+                Importar
+              </button>
+            ) : null}
             <button
               type="button"
               className="ghost-button"
-              title="Criar processos em lote a partir de uma planilha"
-              onClick={onImport}
+              disabled={filteredProcesses.length === 0}
+              title="Baixar as linhas visíveis (filtros aplicados) em Excel"
+              onClick={onExport}
             >
-              Importar
+              Exportar ({filteredProcesses.length})
             </button>
-          ) : null}
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={filteredProcesses.length === 0}
-            title="Baixar as linhas visíveis (filtros aplicados) em Excel"
-            onClick={onExport}
-          >
-            Exportar ({filteredProcesses.length})
-          </button>
+          </div>
         </div>
       </div>
 
