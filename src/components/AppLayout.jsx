@@ -157,7 +157,7 @@ export default function AppLayout() {
       location.pathname
     ] ?? meta.title
   const mobileEyebrow = useMemo(() => {
-    if (location.pathname !== '/') return null
+    if (location.pathname === '/menu') return null
     const text = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
