@@ -61,6 +61,20 @@ const ICONS = {
   star: (
     <path d="m12 3 2.7 5.6 6.1.9-4.4 4.4 1 6.1L12 17l-5.4 3 1-6.1-4.4-4.4 6.1-.9Z" />
   ),
+  // F16.8: ações de swipe "arquivar" / "restaurar" (Chegadas, admin).
+  archive: (
+    <>
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v10.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V8" />
+      <path d="M10 12.5h4" />
+    </>
+  ),
+  restore: (
+    <>
+      <path d="M3.5 9a8.5 8.5 0 1 1 1.1 6.6" />
+      <path d="M3.5 4v5h5" />
+    </>
+  ),
   external: (
     <>
       <path d="M14 4.5h5.5V10" />

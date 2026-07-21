@@ -518,6 +518,77 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    // F16.8 (swipe-to-arquivar, admin-only): archived/archivedAt/archivedBy
+    // sao' aditivos na allowlist de isAdminProcessFields(); logistica e
+    // usuario comum tem suas proprias allowlists (isLogisticsPostReceiptUpdate,
+    // isLogisticsCollectionStatusUpdate) que NAO incluem esses 3 campos.
+    it('admin arquiva processo (archived/archivedAt/archivedBy)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p9'), { name: 'Orig' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p9'), {
+          archived: true,
+          archivedAt: new Date(),
+          archivedBy: 'Admin',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('admin restaura processo (archived: false)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/p10'), {
+          name: 'Orig',
+          archived: true,
+          archivedAt: new Date(),
+          archivedBy: 'Admin',
+        })
+      )
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p10'), {
+          archived: false,
+          archivedAt: null,
+          archivedBy: '',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('logistica NAO arquiva processo', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p11'), { name: 'Orig' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p11'), {
+          archived: true,
+          archivedAt: new Date(),
+          archivedBy: 'Logistica',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('usuario comum NAO arquiva processo', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p12'), { name: 'Orig' }))
+      const db = approvedUser('user-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p12'), {
+          archived: true,
+          archivedAt: new Date(),
+          archivedBy: 'Usuario',
+          updatedById: 'user-1',
+          updatedByName: 'Usuario',
+          updatedAt: new Date(),
+        })
+      )
+    })
   })
 
   describe('processes — atualizacao por logistica (ramos especificos)', () => {

@@ -7598,6 +7598,16 @@ body {
   .process-swipe-row__action--favorite {
     background: var(--warning);
   }
+
+  /* F16.8: arquivar (admin) — some da lista; restaurar (seção Arquivados)
+     usa a cor primária, mesmo tom de "ação construtiva" do marcar-lida. */
+  .process-swipe-row__action--archive {
+    background: var(--danger);
+  }
+
+  .process-swipe-row__action--restore {
+    background: var(--primary);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
