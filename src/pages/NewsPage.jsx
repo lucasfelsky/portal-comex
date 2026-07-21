@@ -621,6 +621,7 @@ export default function NewsPage() {
         onClose={handleCloseModal}
         title={selectedNews?.title}
         wide
+        className="news-modal"
         ariaLabel="Detalhes da noticia"
       >
         {selectedNews ? (
