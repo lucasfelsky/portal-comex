@@ -19,10 +19,16 @@ export default function SelectField({
   className = 'text-input',
   sheetTitle,
   disabled,
+  forceMobile,
   ...rest
 }) {
   const isMobile = useMobileLayout()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+
+  // Se forceMobile for true, renderiza o gatilho/action-sheet mesmo que o
+  // hook useMobileLayout ainda não tenha detectado a viewport (caso de
+  // hidratacao/client hint). O container externo usa CSS para mostrar/esconder.
+  const showMobileTrigger = forceMobile || isMobile
 
   // Extrai as opções dos <option> filhos pra alimentar o sheet. Desce em
   // <optgroup> (CollectionStatusEditView usa grupos), preservando o label do
@@ -72,13 +78,13 @@ export default function SelectField({
         disabled={disabled}
         // No mobile o gatilho cobre o select; deixamos o select acessível
         // por teclado (fallback), mas fora do tab order visual redundante.
-        tabIndex={isMobile ? -1 : undefined}
+        tabIndex={showMobileTrigger ? -1 : undefined}
         {...rest}
       >
         {children}
       </select>
 
-      {isMobile && !disabled ? (
+      {showMobileTrigger && !disabled ? (
         <button
           type="button"
           className="select-field__trigger"
