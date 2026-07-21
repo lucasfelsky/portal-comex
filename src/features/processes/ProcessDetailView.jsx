@@ -197,6 +197,7 @@ export default function ProcessDetailView({
           <SelectField
             className="text-input"
             sheetTitle="Seção do processo"
+            forceMobile
             value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
             onChange={(event) => onDetailTabChange(event.target.value)}
           >
