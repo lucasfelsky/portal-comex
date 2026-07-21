@@ -5908,7 +5908,7 @@ body {
     align-items: center;
     overflow-x: visible;
     scrollbar-width: none;
-    gap: 12px;
+    gap: 10px;
     padding: 0;
     background: transparent;
     border: 0;
@@ -5925,20 +5925,40 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
-    padding: 0;
+    padding: 6px 12px;
     font-size: var(--fs-body-2);
-    border-radius: 0;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 1px 0 rgba(31, 28, 24, 0.04);
     color: var(--primary-700);
     font-weight: 600;
     min-height: auto;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .process-detail-toolbar .ghost-button:hover,
+  .process-detail-toolbar .ghost-button:focus-visible,
+  .process-detail-toolbar .primary-button:hover,
+  .process-detail-toolbar .primary-button:focus-visible {
+    background: var(--primary-50);
+    border-color: var(--primary-400);
+  }
+
+  .process-detail-toolbar .ghost-button:active,
+  .process-detail-toolbar .primary-button:active {
+    background: var(--primary-100);
+    transform: scale(0.98);
   }
 
   .process-detail-toolbar .primary-button {
     order: -1;
     color: var(--primary-700);
+    background: var(--surface);
+  }
+
+  .process-detail-toolbar .primary-button::before {
+    display: none;
   }
 }
 
