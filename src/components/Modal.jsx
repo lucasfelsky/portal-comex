@@ -30,7 +30,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const SWIPE_CLOSE_THRESHOLD = 120
 
-export default function Modal({ open, onClose, title, wide = false, children, ariaLabel }) {
+export default function Modal({ open, onClose, title, wide = false, children, ariaLabel, className = '' }) {
   const modalRef = useRef(null)
   const lastFocusedRef = useRef(null)
   const [dragOffset, setDragOffset] = useState(0)
@@ -150,11 +150,11 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
     : undefined
 
   const sheetClass = isClosing
-    ? `modal${wide ? ' modal--wide' : ''} modal--sheet-closing`
-    : `modal${wide ? ' modal--wide' : ''}`
+    ? `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''} modal--sheet-closing`
+    : `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''}`
 
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="presentation">
+    <div className={`modal-backdrop${className ? ` ${className}-backdrop` : ''}`} onClick={handleBackdropClick} role="presentation">
       <div
         ref={modalRef}
         className={sheetClass}

@@ -201,6 +201,7 @@ export default function ProcessListView({
   onToggleFavorite,
   archivedProcesses = [],
   onArchiveProcess,
+  onNewProcess,
 }) {
   // F16.8: swipe-to-favoritar — só uma linha revelada por vez.
   const [openSwipeId, setOpenSwipeId] = useState(null)
@@ -208,8 +209,8 @@ export default function ProcessListView({
   // F16.4: no mobile (≤720px) a tela de Chegadas ganha a linguagem do
   // protótipo — busca em pill, segmented Todos/Marítimo/Aéreo (filtro de
   // exibição client-side, além dos filtros do painel) e seções Em
-  // andamento/Concluídos. No desktop o painel de filtros e a lista plana
-  // ordenada por ETA seguem intocados.
+  // andamento/Concluídos. No desktop o painel de filtros completo abaixo
+  // segue intocados. */
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
   )
@@ -280,7 +281,16 @@ export default function ProcessListView({
           <h3>Chegadas</h3>
         </div>
         <div className="admin-toolbar">
-          <span className="inline-badge">{filteredProcesses.length} visíveis</span>
+          {isAdmin && onNewProcess ? (
+            <button
+              type="button"
+              className="primary-button primary-button--compact"
+              title="Cadastrar um novo processo"
+              onClick={onNewProcess}
+            >
+              Novo processo
+            </button>
+          ) : null}
           {isAdmin && onImport ? (
             <button
               type="button"

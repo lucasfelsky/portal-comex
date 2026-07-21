@@ -1351,11 +1351,6 @@ export default function ProcessesPage() {
         <div>
           <h2>Fila de chegadas</h2>
         </div>
-        {isAdmin ? (
-          <button type="button" className="primary-button" onClick={handleCreateMode}>
-            Novo processo
-          </button>
-        ) : null}
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
@@ -1392,6 +1387,7 @@ export default function ProcessesPage() {
           onToggleFavorite={toggleFavoriteProcess}
           archivedProcesses={archivedProcesses}
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
+          onNewProcess={isAdmin ? handleCreateMode : undefined}
           onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onExport={async () => {
             try {

@@ -1584,6 +1584,18 @@ body {
   animation: modal-fade-in 160ms ease-out;
 }
 
+.news-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(31, 28, 24, 0.30);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
 @keyframes modal-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1912,6 +1924,7 @@ body {
 
 .dashboard-heading {
   align-items: stretch;
+  gap: 14px;
 }
 
 .dashboard-heading h2 {
@@ -2969,8 +2982,15 @@ body {
   display: block;
   width: 100%;
   max-height: 320px;
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   object-fit: cover;
+}
+
+@media (max-width: 720px) {
+  .news-modal__cover {
+    border-radius: 0;
+    max-height: 240px;
+  }
 }
 
 .news-media-grid {
@@ -3919,7 +3939,7 @@ body {
   /* F16.2: large title por página (iOS) no lugar do brand header fixo. */
   .mobile-page-header {
     display: grid;
-    gap: 2px;
+    gap: 7px;
     padding: 14px 4px 4px;
     align-content: start;
   }
@@ -4125,6 +4145,18 @@ body {
 
   .dashboard-heading h2 {
     display: none;
+  }
+
+  /* dashboard mobile usa list-card visual para cada bloco; espaçamento
+     uniforme entre eles. */
+  .surface > .list-card,
+  .surface > article.list-card {
+    margin-bottom: 14px;
+  }
+
+  .surface > .list-card:last-child,
+  .surface > article.list-card:last-child {
+    margin-bottom: 0;
   }
 
   .topbar__title {
@@ -4581,7 +4613,12 @@ body {
   }
 
   .news-modal-backdrop {
-    padding: 10px;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+    background: rgba(31, 28, 24, 0.42);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   /* C5 (auditoria mobile): modal generico vira bottom sheet em <=720px.
@@ -4633,16 +4670,28 @@ body {
   }
 
   .news-modal {
-    max-height: calc(100vh - 20px);
-    border-radius: var(--radius-md);
+    width: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    border: 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.22);
   }
 
   .news-modal .card-heading {
-    padding: 18px 18px 10px;
+    padding: 12px 18px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .news-modal__cover,
+  .news-modal__gallery-image,
+  .news-modal__content {
+    padding: 0 18px;
   }
 
   .news-modal__content {
-    padding: 0 18px 18px;
+    padding-bottom: 18px;
   }
 
   .news-modal__gallery {
@@ -4835,31 +4884,30 @@ body {
   }
 
   .sidebar,
-  .topbar,
-  .stat-card,
-  .list-card,
-  .news-modal,
-  .modal {
-    border-radius: var(--radius-md);
-  }
+    .topbar,
+    .stat-card,
+    .list-card {
+      border-radius: var(--radius-md);
+    }
 
-  .sidebar,
-  .topbar,
-  .stat-card,
-  .list-card {
-    padding: 14px;
-  }
+    .news-modal,
+    .modal {
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
 
-  /* O modal generico (Modal.jsx/ConfirmDialog.jsx) nao recebia tratamento
-     mobile como os demais cartoes -- ganhava padding 24px + radius 14px
-     fixos. Alinha com o resto e da mais largura util ao conteudo. */
-  .modal-backdrop {
-    padding: 12px;
-  }
+    .sidebar,
+    .topbar,
+    .stat-card,
+    .list-card {
+      padding: 14px;
+    }
 
-  .modal {
-    padding: 16px;
-  }
+    .news-modal,
+    .modal {
+      padding:
+        8px 20px
+        max(20px, env(safe-area-inset-bottom));
+    }
 
   /* C3 (auditoria mobile): modal close 44×44px em mobile (Apple HIG minimo).
      No desktop e' 32px (fine pointer), mas no celular o dedo cobre 32px. */
@@ -5764,6 +5812,7 @@ body {
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
     background: var(--surface-alt);
+    margin-top: 4px;
   }
 
   .dashboard-heading .dashboard-bar-inline .dashboard-bar-card__text {
@@ -6931,6 +6980,7 @@ body {
     box-shadow: 0 8px 24px rgba(4, 48, 42, 0.28);
     position: relative;
     overflow: hidden;
+    margin-top: 0;
   }
 
   .dashboard-heading .dashboard-bar-inline::after {
@@ -6970,7 +7020,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-top: 4px;
+    margin-top: 2px;
   }
 
   .dashboard-bar-inline__dot {
@@ -7006,17 +7056,25 @@ body {
     font-size: var(--fs-footnote);
     color: currentColor;
     opacity: 0.75;
-    margin-top: 3px;
+    margin-top: 2px;
     font-variant-numeric: tabular-nums;
   }
 
   /* (b) semana em rail horizontal; card pai flat */
   .weekly-arrivals-card {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 14px;
+  }
+
+  .weekly-arrivals-card .card-heading {
+    margin-bottom: 12px;
+  }
+
+  .weekly-arrivals-card .card-heading p {
+    display: none;
   }
 
   .weekly-arrivals-card .process-list--scroll {
@@ -7166,7 +7224,7 @@ body {
 }
 
 @media (max-width: 720px) {
-  /* h3 redundante com o large title; toolbar admin (Importar/Exportar)
+  /* h3 redundante com o large title; toolbar admin (Novo processo/Importar/Exportar)
      permanece à direita. */
   .process-list-card > .card-heading > div:first-child {
     display: none;
@@ -7174,7 +7232,7 @@ body {
 
   .process-list-card > .card-heading {
     justify-content: flex-end;
-    margin-bottom: 4px;
+    margin-bottom: 10px;
   }
 
   /* Painel de filtros completo e chips → desktop-only. */
@@ -7498,6 +7556,12 @@ body {
     flex: 0 0 auto;
     min-height: 36px;
     padding: 6px 12px;
+    font-size: var(--fs-body);
+  }
+
+  .process-list-card > .card-heading .admin-toolbar .primary-button {
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
   }
 }
 
