@@ -1347,7 +1347,7 @@ export default function ProcessesPage() {
 
   return (
     <section className="surface">
-      <div className="section-heading">
+      <div className="section-heading" style={{ marginBottom: '4px' }}>
         <div>
           <h2>Fila de chegadas</h2>
         </div>
