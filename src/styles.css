@@ -4118,10 +4118,13 @@ body {
     padding: 18px;
   }
 
-  .brand h1,
-  .dashboard-heading h2 {
+  .brand h1 {
     font-size: 1.6rem;
     line-height: 1.1;
+  }
+
+  .dashboard-heading h2 {
+    display: none;
   }
 
   .topbar__title {
@@ -4321,38 +4324,6 @@ body {
 .process-list-card .process-item--selected:hover {
   box-shadow: inset 0 0 0 1.5px rgba(0, 174, 145, 0.28);
 }
-
-  .process-list-card .process-item__main {
-    gap: 6px;
-    text-align: center;
-  }
-
-  .process-list-card .process-item__main strong {
-    font-size: var(--fs-headline);
-    line-height: 1.25;
-  }
-
-  .process-list-card .process-item__line {
-    font-size: var(--fs-subhead);
-    line-height: 1.45;
-  }
-
-  /* Meta como linhas de detalhe, não mini-cards: as caixinhas com borda
-     eram um 4º nível de moldura aninhada e custavam ~50px/card. */
-  .process-list-card .process-item__meta {
-    width: 100%;
-    grid-template-columns: 1fr;
-    gap: 4px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-    justify-items: center;
-  }
-
-  .process-list-card .process-item__meta span {
-    font-size: var(--fs-footnote);
-    line-height: 1.4;
-    color: var(--ink);
-  }
 
   .detail-stack {
     gap: 12px;
@@ -7086,35 +7057,34 @@ body {
     justify-content: flex-start;
   }
 
-  /* (c) comunicados: carrossel C13 → grupo de rows */
+  /* (c) comunicados: carrossel horizontal com snap (Apple-like). */
   .announcement-list--scroll {
-    display: grid;
-    grid-auto-flow: row;
-    gap: 0;
-    overflow-x: visible;
-    margin: 0;
-    padding: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -18px;
+    padding: 0 18px 4px;
+    scroll-padding-inline: 18px;
+    max-height: none;
+  }
+
+  .announcement-list--scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .announcement-list--scroll .announcement-card {
-    flex: none;
-    width: 100%;
-    border: 0;
-    border-radius: 0;
-    background: none;
-    box-shadow: none;
-    padding: 11px 2px;
-    position: relative;
+    flex: 0 0 calc(100vw - 48px);
+    scroll-snap-align: start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    padding: 14px;
     text-align: left;
-  }
-
-  .announcement-list--scroll .announcement-card + .announcement-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 2px;
-    right: 0;
-    border-top: 1px solid var(--border);
   }
 
   .announcement-list--scroll .announcement-card__meta {
@@ -7127,9 +7097,18 @@ body {
 
   .announcement-list--scroll .announcement-card p {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .announcement-list--scroll .empty-state {
+    flex: 1 1 100%;
+  }
+
+  .announcement-list--scroll .skeleton-group {
+    flex: 0 0 calc(100vw - 48px);
+    scroll-snap-align: start;
   }
 
   /* (d) favoritos com leading icon (grid igual às listas F15.2) */
