@@ -97,12 +97,16 @@ export default defineConfig(({ mode }) => {
             // junto com auth/firestore, o import dinamico perde o efeito: o
             // arquivo inteiro (que ja carrega eager por causa do Auth) ficaria
             // maior, em vez do FCM baixar sob demanda pos-login.
+            // Firebase: split por produto para nao concentrar tudo num chunk
+            // unico de ~580 kB. A ordem importa: subpacotes mais especificos
+            // primeiro, fallback generico por ultimo.
             if (id.includes('firebase/messaging')) return 'firebase-messaging'
-            // firebase/functions tambem so' e' importado dinamicamente
-            // (lib/firebase.js getCallable) -- chunk proprio, carregado sob
-            // demanda quando a primeira callable roda (pos-login).
             if (id.includes('firebase/functions')) return 'firebase-functions'
-            if (id.includes('firebase')) return 'firebase'
+            if (id.includes('firebase/firestore/lite')) return 'firebase-firestore-lite'
+            if (id.includes('firebase/firestore')) return 'firebase-firestore'
+            if (id.includes('firebase/storage')) return 'firebase-storage'
+            if (id.includes('firebase/auth')) return 'firebase-auth'
+            if (id.includes('firebase')) return 'firebase-core'
             if (id.includes('xlsx')) return 'spreadsheet'
             return undefined
           },
