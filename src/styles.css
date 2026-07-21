@@ -1591,9 +1591,8 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 28, 24, 0.30);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(31, 28, 24, 0.42);
+  animation: modal-fade-in 160ms ease-out;
 }
 
 @keyframes modal-fade-in {
