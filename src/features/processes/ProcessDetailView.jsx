@@ -143,14 +143,19 @@ export default function ProcessDetailView({
               })}
             </div>
             <div className="process-timeline__labels">
-              {PROCESS_STAGES.map((stage, index) => (
-                <span
-                  key={stage}
-                  className={!isComplete && index === currentStage ? 'process-timeline__label--now' : ''}
-                >
-                  {stage}
-                </span>
-              ))}
+              {PROCESS_STAGES.map((stage, index) => {
+                const total = PROCESS_STAGES.length - 1
+                const left = total === 0 ? 0 : (index / total) * 100
+                return (
+                  <span
+                    key={stage}
+                    className={!isComplete && index === currentStage ? 'process-timeline__label--now' : ''}
+                    style={{ left: `${left}%` }}
+                  >
+                    {stage}
+                  </span>
+                )
+              })}
             </div>
           </div>
         )
@@ -161,19 +166,19 @@ export default function ProcessDetailView({
         {/* F15.4: no mobile a toolbar vira linha horizontal com scroll —
             botões empilhados full-width empurravam o conteúdo pra baixo. */}
         <div className="admin-toolbar process-detail-toolbar">
-          <button type="button" className="ghost-button" onClick={onSetViewModeList}>Voltar para lista</button>
+          <button type="button" className="ghost-button" onClick={onSetViewModeList}>Voltar</button>
           <button type="button" className="ghost-button" onClick={() => onToggleFavorite(selectedProcess.id)}>{favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}</button>
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
             <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>
-              Editar obs. CD
+              Editar obs.
             </button>
           ) : null}
           {canEditSelectedCollectionStatus ? (
             <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>
-              Editar status de coleta
+              Status coleta
             </button>
           ) : null}
-          {isAdmin && !canEditSelectedCollectionStatus ? <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button> : null}
+          {isAdmin && !canEditSelectedCollectionStatus ? <button type="button" className="primary-button" onClick={onEditMode}>Editar</button> : null}
         </div>
       </div>
 

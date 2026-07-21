@@ -5883,12 +5883,12 @@ body {
 
   .process-detail-toolbar {
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: flex-start;
-    overflow-x: auto;
+    overflow-x: visible;
     scrollbar-width: none;
-    gap: 8px;
-    padding-bottom: 2px;
+    gap: 6px;
+    padding-bottom: 0;
   }
 
   .process-detail-toolbar::-webkit-scrollbar {
@@ -5900,7 +5900,13 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
-    padding-inline: 14px;
+    padding: 8px 12px;
+    font-size: var(--fs-caption-2);
+    border-radius: var(--radius-full);
+  }
+
+  .process-detail-toolbar .primary-button {
+    order: -1;
   }
 }
 
@@ -6015,6 +6021,10 @@ body {
     color: var(--primary-700);
     font-weight: 700;
     padding-inline: 8px;
+  }
+
+  .process-detail-toolbar .primary-button {
+    padding: 8px 14px;
   }
 
   /* No dark os tokens invertem (--surface fica mais escuro que
@@ -7400,16 +7410,23 @@ body {
   .process-timeline__track {
     display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 0 14px;
   }
 
   .process-timeline__cell {
     display: flex;
     align-items: center;
+    flex: 0 0 24px;
+    justify-content: center;
+  }
+
+  .process-timeline__cell:not(:first-child) {
     flex: 1;
   }
 
   .process-timeline__cell:first-child {
-    flex: 0 0 auto;
+    flex: 0 0 24px;
   }
 
   .process-timeline__bar {
@@ -7442,26 +7459,28 @@ body {
 
   .process-timeline__labels {
     display: flex;
-    justify-content: space-between;
-    margin-top: 8px;
+    justify-content: center;
+    margin-top: 10px;
+    padding: 0 14px;
+    position: relative;
   }
 
   .process-timeline__labels span {
-    flex: 1;
+    position: absolute;
     font-size: 0.625rem;
     font-weight: 600;
-    /* --text-faint é pra ícones decorativos (limiar 3:1); aqui é texto de
-       navegação de verdade a 10px — precisa do limiar de texto pequeno
-       (4.5:1). --text-faint dava só 3.28:1 no claro (medido). */
     color: var(--text-subtle);
     text-align: center;
+    transform: translateX(-50%);
   }
 
   .process-timeline__labels span:first-child {
+    transform: translateX(-25%);
     text-align: left;
   }
 
   .process-timeline__labels span:last-child {
+    transform: translateX(25%);
     text-align: right;
   }
 
