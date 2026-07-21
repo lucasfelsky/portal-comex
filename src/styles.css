@@ -4612,6 +4612,20 @@ body {
     grid-template-columns: 1fr;
   }
 
+  /* F16.9: featured card mobile — capa com aspect-ratio controlado, evitando
+     que a imagem coma a tela; rows mantêm layout sem cover. A regra base
+     acima (grid-template-columns: 1fr) aplica só aos cards que realmente
+     exibem imagem; rows sobrescrem no bloco --row abaixo. */
+  .news-card--featured .news-card__image-wrap {
+    min-height: auto;
+    max-height: none;
+    aspect-ratio: 16 / 9;
+  }
+
+  .news-card--featured .news-card__image {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
   .news-card__image-wrap {
     width: 100%;
     min-height: 180px;
@@ -7462,7 +7476,7 @@ body {
 }
 
 @media (max-width: 720px) {
-  /* Grupo vira coluna sem gap — as rows encostam com hairline. */
+  /* Grupo vira coluna com gap apertado. */
   .news-list-card .news-grid {
     gap: 12px;
   }
@@ -7474,19 +7488,29 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-subtle);
-    padding: 8px 2px 2px;
+    padding: 4px 2px 2px;
+    margin-top: 4px;
   }
 
-  /* Featured: cover grande + corpo arejado (já é o default mobile do
-     news-card; só reforça o radius e o chevron oculto). */
+  .news-section-label:first-child {
+    margin-top: 0;
+    padding-top: 2px;
+  }
+
+  /* Featured: cover com aspect-ratio 16/9, cantos só em cima, corpo arejado. */
   .news-card--featured {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+    overflow: hidden;
   }
 
   .news-card--featured .news-card__chevron {
     display: none;
+  }
+
+  .news-card--featured .news-card__body {
+    padding: 14px 16px 12px;
   }
 
   /* Row: sem cover, grid [corpo | chevron], separador hairline. */
