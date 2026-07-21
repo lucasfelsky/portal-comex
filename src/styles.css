@@ -4613,7 +4613,7 @@ body {
   }
 
   .news-modal-backdrop {
-    align-items: stretch;
+    align-items: flex-end;
     justify-content: stretch;
     padding: 0;
     background: rgba(31, 28, 24, 0.42);
