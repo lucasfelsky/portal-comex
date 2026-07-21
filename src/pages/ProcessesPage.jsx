@@ -14,6 +14,7 @@ import ProcessListView from '../features/processes/ProcessListView'
 import ImportProcessesModal from '../features/processes/ImportProcessesModal'
 import Spinner from '../components/Spinner'
 import {
+  archiveProcess,
   channelOptions,
   collectionStatusOptions,
   deleteProcess,
@@ -538,6 +539,11 @@ export default function ProcessesPage() {
         const query = searchTerm.trim().toLowerCase()
         const normalizedQuery = normalizeItemName(searchTerm)
         const today = new Date().toISOString().slice(0, 10)
+        // F16.8 (swipe-to-arquivar): processos arquivados somem da lista
+        // principal — só aparecem na seção "Arquivados" (admin), via
+        // archivedProcesses abaixo.
+        if (item.archived) return false
+
         const matchesCategory = categoryFilter === 'Todos' || item.category === categoryFilter
         const matchesEta =
           (!etaStartDate && !etaEndDate) ||
@@ -601,6 +607,14 @@ export default function ProcessesPage() {
         return left.eta.localeCompare(right.eta)
       })
   }, [categoryFilter, etaEndDate, etaStartDate, isAdmin, operationFilter, processes, searchTerm])
+
+  // F16.8 (swipe-to-arquivar, admin-only): fonte da seção "Arquivados" —
+  // sem os filtros de busca/categoria/ETA (é uma tela de gestão à parte,
+  // não uma view filtrada da fila de chegadas).
+  const archivedProcesses = useMemo(
+    () => processes.filter((item) => item.archived),
+    [processes]
+  )
 
   const selectedProcess =
     processes.find((item) => item.id === selectedProcessId) ?? filteredProcesses[0] ?? null
@@ -1096,6 +1110,26 @@ export default function ProcessesPage() {
     }
   }
 
+  // F16.8 (swipe-to-arquivar, admin-only): some da lista principal e entra
+  // na seção "Arquivados"; reversível via a mesma função (nextArchived
+  // false = restaurar). Chamado pelo swipe em ProcessListView/ProcessRow.
+  async function handleArchiveProcess(processId, nextArchived) {
+    if (!isAdmin) return
+    setError('')
+    try {
+      await archiveProcess(processId, nextArchived, profile)
+      await refreshProcesses(selectedProcessId)
+      toast.success(nextArchived ? 'Processo arquivado.' : 'Processo restaurado.')
+    } catch (archiveError) {
+      const message = buildActionErrorMessage(
+        nextArchived ? 'Não foi possível arquivar o processo.' : 'Não foi possível restaurar o processo.',
+        archiveError
+      )
+      setError(message)
+      toast.error(message)
+    }
+  }
+
   async function handleSavePostReceiptNotes() {
     if (!canEditPostReceiptNotes || !selectedProcess) return
     setIsSaving(true)
@@ -1356,6 +1390,8 @@ export default function ProcessesPage() {
           onSelectProcess={handleSelectProcess}
           favoriteProcessIds={favoriteProcessIds}
           onToggleFavorite={toggleFavoriteProcess}
+          archivedProcesses={archivedProcesses}
+          onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onExport={async () => {
             try {

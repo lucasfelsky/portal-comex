@@ -165,6 +165,10 @@ service cloud.firestore {
         'mapaStatus', 'mapaInspectionScheduledAt', 'dtaStatus',
         'dtaLoadingScheduledAt', 'dtaArrivalAtItajai', 'updatedById',
         'updatedByName', 'updatedAt',
+        // F16.8 (swipe-to-arquivar): update estreito e admin-only —
+        // archiveProcess() em processesRepository.js grava soh esses 3 +
+        // updatedById/Name/updatedAt (ja' na lista acima).
+        'archived', 'archivedAt', 'archivedBy',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (
