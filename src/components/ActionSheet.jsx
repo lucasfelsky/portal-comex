@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 // C12 (auditoria mobile F14): bottom sheet com lista de opções, estilo iOS.
 // Genérico — recebe `options` [{ value, label, disabled? }], a `value`
 // selecionada e callbacks. Não é acoplado a <select>; o SelectField é quem
 // liga isso ao form. Fecha por: tocar numa opção, tocar no backdrop, botão
 // "Cancelar" ou tecla Esc. Foco vai pra opção ativa ao abrir (a11y).
+//
+// Renderiza via Portal em document.body para evitar o mesmo problema de
+// stacking context que o Modal teve dentro de PageFade (transform/will-change).
 export default function ActionSheet({
   title,
   options = [],
@@ -20,6 +24,9 @@ export default function ActionSheet({
   }, [])
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
     function handleKey(event) {
       if (event.key === 'Escape') {
         event.stopPropagation()
@@ -27,10 +34,13 @@ export default function ActionSheet({
       }
     }
     document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = previousOverflow
+    }
   }, [onClose])
 
-  return (
+  const sheet = (
     <div
       className="action-sheet-backdrop"
       role="presentation"
@@ -76,4 +86,7 @@ export default function ActionSheet({
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(sheet, document.body)
 }

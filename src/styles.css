@@ -4224,6 +4224,13 @@ body {
     backdrop-filter: blur(20px);
   }
 
+  /* F16.11: action-sheet fica abaixo dos modais (200) mas acima da bottom nav
+     (28) e da nav compacta (26). O valor 80 da regra base é mantido no
+     desktop; em mobile sobe para 90 para garantir sobreposição correta. */
+  .action-sheet-backdrop {
+    z-index: 90;
+  }
+
   .mobile-bottom-nav__item {
     position: relative;
     display: flex;
