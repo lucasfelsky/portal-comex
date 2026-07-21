@@ -533,15 +533,15 @@ export default function NewsPage() {
 
       {viewMode === 'list' ? (
         <article className="list-card news-list-card">
-          <div className="card-heading">
-            <div className="admin-toolbar">
-              {isAdmin ? (
+          {isAdmin ? (
+            <div className="card-heading">
+              <div className="admin-toolbar">
                 <button type="button" className="primary-button" onClick={handleCreateMode}>
                   Nova notícia
                 </button>
-              ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {error ? <div className="error-banner">{error}</div> : null}
 
