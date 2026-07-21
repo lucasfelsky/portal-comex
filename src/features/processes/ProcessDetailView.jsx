@@ -159,7 +159,11 @@ export default function ProcessDetailView({
       <div className="card-heading">
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
-          <button type="button" className="ghost-button" onClick={() => onToggleFavorite(selectedProcess.id)}>
+          <button
+            type="button"
+            className="ghost-button process-detail-toolbar__favorite"
+            onClick={() => onToggleFavorite(selectedProcess.id)}
+          >
             {favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}
           </button>
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
@@ -192,6 +196,7 @@ export default function ProcessDetailView({
           <span>Seção</span>
           <SelectField
             className="text-input"
+            sheetTitle="Seção do processo"
             value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
             onChange={(event) => onDetailTabChange(event.target.value)}
           >
