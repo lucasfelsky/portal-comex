@@ -89,27 +89,27 @@ export default function MenuPage() {
               <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
             </button>
           </div>
+
+          <div className="ios-section-label">Suite SQ</div>
+          <div className="ios-group">
+            <a
+              className="ios-row"
+              href={INTELLIQUOTE_WEB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
+                <Icon name="external" size={15} aria-hidden="true" />
+              </span>
+              <span className="ios-row__body">
+                <span className="ios-row__title">IntelliQuote</span>
+                <span className="ios-row__sub">Cotações de fornecedores</span>
+              </span>
+              <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
+            </a>
+          </div>
         </>
       ) : null}
-
-      <div className="ios-section-label">Suite SQ</div>
-      <div className="ios-group">
-        <a
-          className="ios-row"
-          href={INTELLIQUOTE_WEB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
-            <Icon name="external" size={15} aria-hidden="true" />
-          </span>
-          <span className="ios-row__body">
-            <span className="ios-row__title">IntelliQuote</span>
-            <span className="ios-row__sub">Cotações de fornecedores</span>
-          </span>
-          <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
-        </a>
-      </div>
 
       <div className="ios-group ios-group--spaced">
         <button type="button" className="ios-row ios-row--center" onClick={logout}>

@@ -96,11 +96,16 @@ describe('MenuPage (F16.2)', () => {
     expect(screen.queryByText(/painel administrativo/i)).not.toBeInTheDocument()
   })
 
-  it('IntelliQuote abre em nova aba com rel seguro', () => {
-    renderWithRole('user')
+  it('admin vê IntelliQuote e abre em nova aba com rel seguro', () => {
+    renderWithRole('admin')
     const link = screen.getByRole('link', { name: /intelliquote/i })
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('user comum NÃO vê IntelliQuote', () => {
+    renderWithRole('user')
+    expect(screen.queryByText(/intelliquote/i)).not.toBeInTheDocument()
   })
 
   it('Sair chama o logout', () => {
