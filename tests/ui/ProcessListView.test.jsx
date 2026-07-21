@@ -164,4 +164,58 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
       expect(onToggleFavorite).toHaveBeenCalledWith('p-sea-active')
     })
   })
+
+  describe('swipe-to-arquivar (F16.8, admin-only)', () => {
+    beforeEach(() => stubMatchMedia(true))
+
+    it('sem isAdmin, nenhuma ação de arquivar é renderizada (mesmo com onArchiveProcess)', () => {
+      const { container } = renderView({ isAdmin: false, onArchiveProcess: vi.fn() })
+      expect(container.querySelectorAll('.process-swipe-row__action--archive')).toHaveLength(0)
+    })
+
+    it('admin: ação de arquivar aparece e clicar chama onArchiveProcess(id, true)', async () => {
+      const user = userEvent.setup()
+      const onArchiveProcess = vi.fn()
+      const { container } = renderView({ isAdmin: true, onArchiveProcess })
+      const action = container.querySelector('.process-swipe-row__action--archive')
+      expect(action).not.toBeNull()
+      await user.click(action)
+      expect(onArchiveProcess).toHaveBeenCalledWith('p-sea-active', true)
+    })
+
+    it('sem isAdmin, seção "Arquivados" não aparece mesmo com archivedProcesses preenchido', () => {
+      const { container } = renderView({
+        isAdmin: false,
+        archivedProcesses: [PROCESSES[0]],
+      })
+      const labels = [...container.querySelectorAll('.process-list__section-label')].map(
+        (el) => el.textContent
+      )
+      expect(labels).not.toContain('Arquivados')
+    })
+
+    it('admin: seção "Arquivados" lista os processos arquivados com ação "Restaurar"', async () => {
+      const user = userEvent.setup()
+      const onArchiveProcess = vi.fn()
+      // Em uso real, filteredProcesses (vindo de ProcessesPage) já exclui
+      // os processos arquivados — aqui simulamos isso passando só os 2
+      // ativos, com o 3º (p-sea-done) vindo exclusivamente via archivedProcesses.
+      const { container } = renderView({
+        isAdmin: true,
+        onArchiveProcess,
+        filteredProcesses: PROCESSES.slice(0, 2),
+        archivedProcesses: [PROCESSES[2]],
+      })
+      const labels = [...container.querySelectorAll('.process-list__section-label')].map(
+        (el) => el.textContent
+      )
+      expect(labels).toEqual(['Em andamento', 'Arquivados'])
+
+      const restoreAction = container.querySelector('.process-swipe-row__action--restore')
+      expect(restoreAction).not.toBeNull()
+      expect(restoreAction.querySelector('span').textContent).toBe('Restaurar')
+      await user.click(restoreAction)
+      expect(onArchiveProcess).toHaveBeenCalledWith('p-sea-done', false)
+    })
+  })
 })

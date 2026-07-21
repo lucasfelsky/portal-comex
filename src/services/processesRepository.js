@@ -491,6 +491,11 @@ function normalizeProcess(rawProcess, fallbackId) {
     cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
     items: normalizeProcessItems(rawProcess.items),
     ...operationalFields,
+    // F16.8 (swipe-to-arquivar, admin-only): aditivo — processos sem o
+    // campo (todo o histórico anterior) normalizam pra archived:false.
+    archived: Boolean(rawProcess.archived),
+    archivedAt: normalizeIsoDateTime(rawProcess.archivedAt),
+    archivedBy: String(rawProcess.archivedBy ?? '').trim(),
     updatedAt: rawProcess.updatedAt ?? new Date().toISOString(),
   }
 }
@@ -604,6 +609,10 @@ export async function listProcesses() {
             typeof data.cargoReceivedAt?.toDate === 'function'
               ? data.cargoReceivedAt.toDate().toISOString()
               : data.cargoReceivedAt,
+          archivedAt:
+            typeof data.archivedAt?.toDate === 'function'
+              ? data.archivedAt.toDate().toISOString()
+              : data.archivedAt,
         },
         item.id
       )
@@ -727,6 +736,72 @@ export async function saveProcessCollectionStatus(processId, collectionStatus, a
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,
+  }
+}
+
+// F16.8 (swipe-to-arquivar, admin-only): arquivar é reversível — some da
+// lista (seções Em andamento/Concluídos) sem apagar o registro; a seção
+// "Arquivados" (admin) permite restaurar. Update estreito, mesmo padrão de
+// saveProcessCollectionStatus. A regra do Firestore restringe archived/
+// archivedAt/archivedBy ao isAdmin() via isAdminProcessFields().
+export async function archiveProcess(processId, archived, actor = null) {
+  const normalizedId = String(processId ?? '').trim()
+  const now = new Date().toISOString()
+
+  if (!normalizedId) {
+    throw new Error('Processo inválido para arquivar.')
+  }
+
+  const actorName = String(actor?.name ?? actor?.email ?? '').trim()
+
+  if (!isFirebaseConfigured || !firestore) {
+    const currentProcesses = readLocalProcesses().map((item) => normalizeProcess(item))
+    const existingIndex = currentProcesses.findIndex((item) => item.id === normalizedId)
+
+    if (existingIndex < 0) {
+      throw new Error('Processo não encontrado para arquivar.')
+    }
+
+    const nextProcess = {
+      ...currentProcesses[existingIndex],
+      archived: Boolean(archived),
+      archivedAt: archived ? now : '',
+      archivedBy: archived ? actorName : '',
+      updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+      updatedByName: actorName,
+      updatedAt: now,
+    }
+
+    currentProcesses[existingIndex] = nextProcess
+    writeLocalProcesses(sortProcesses(currentProcesses))
+    await recordProcessAudit({
+      action: archived ? 'Processo arquivado' : 'Processo restaurado',
+      actor: actorName || 'Sistema local',
+      target: nextProcess.id,
+    })
+    return nextProcess
+  }
+
+  await updateDoc(doc(firestore, 'processes', normalizedId), {
+    archived: Boolean(archived),
+    archivedAt: archived ? serverTimestamp() : null,
+    archivedBy: archived ? actorName : '',
+    updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
+    updatedByName: actorName,
+    updatedAt: serverTimestamp(),
+  })
+
+  await recordProcessAudit({
+    action: archived ? 'Processo arquivado' : 'Processo restaurado',
+    actor: actorName || 'Sistema',
+    target: normalizedId,
+  })
+
+  return {
+    id: normalizedId,
+    archived: Boolean(archived),
+    archivedAt: archived ? now : '',
+    archivedBy: archived ? actorName : '',
   }
 }
 

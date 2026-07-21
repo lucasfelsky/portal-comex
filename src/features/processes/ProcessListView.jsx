@@ -50,9 +50,13 @@ function ProcessRow({
   onSelectProcess,
   isFavorite,
   onToggleFavorite,
+  onArchiveProcess,
+  isArchivedRow = false,
 }) {
+  const canArchive = isAdmin && typeof onArchiveProcess === 'function'
+  const actionCount = (onToggleFavorite ? 1 : 0) + (canArchive ? 1 : 0)
   const swipe = useSwipeReveal({
-    actionCount: 1,
+    actionCount,
     isOpen: isSwipeOpen,
     onOpenChange: onSwipeOpenChange,
     disabled: !isMobile,
@@ -74,6 +78,20 @@ function ProcessRow({
           >
             <Icon name="star" size={18} aria-hidden="true" />
             <span>{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
+          </button>
+        ) : null}
+        {canArchive ? (
+          <button
+            type="button"
+            className={`process-swipe-row__action${isArchivedRow ? ' process-swipe-row__action--restore' : ' process-swipe-row__action--archive'}`}
+            tabIndex={isSwipeOpen ? 0 : -1}
+            onClick={() => {
+              onArchiveProcess(item.id, !isArchivedRow)
+              onSwipeOpenChange(false)
+            }}
+          >
+            <Icon name={isArchivedRow ? 'restore' : 'archive'} size={18} aria-hidden="true" />
+            <span>{isArchivedRow ? 'Restaurar' : 'Arquivar'}</span>
           </button>
         ) : null}
       </div>
@@ -181,6 +199,8 @@ export default function ProcessListView({
   onImport,
   favoriteProcessIds,
   onToggleFavorite,
+  archivedProcesses = [],
+  onArchiveProcess,
 }) {
   // F16.8: swipe-to-favoritar — só uma linha revelada por vez.
   const [openSwipeId, setOpenSwipeId] = useState(null)
@@ -229,6 +249,24 @@ export default function ProcessListView({
       onSelectProcess={onSelectProcess}
       isFavorite={Boolean(favoriteProcessIds?.includes(item.id))}
       onToggleFavorite={onToggleFavorite}
+      onArchiveProcess={onArchiveProcess}
+    />
+  )
+
+  // F16.8: linhas da seção "Arquivados" (admin) — sem ação de favoritar,
+  // só "Restaurar" (isArchivedRow inverte o alvo do onArchiveProcess).
+  const renderArchivedRow = (item) => (
+    <ProcessRow
+      key={item.id}
+      item={item}
+      isAdmin={isAdmin}
+      isSelected={selectedProcessId === item.id}
+      isMobile={isMobile}
+      isSwipeOpen={openSwipeId === item.id}
+      onSwipeOpenChange={(open) => setOpenSwipeId(open ? item.id : null)}
+      onSelectProcess={onSelectProcess}
+      onArchiveProcess={onArchiveProcess}
+      isArchivedRow
     />
   )
 
@@ -419,27 +457,40 @@ export default function ProcessListView({
               </div>
             ))}
           </div>
+        ) : isMobile ? (
+          shownProcesses.length === 0 && !(isAdmin && archivedProcesses.length > 0) ? (
+            <div className="empty-state">
+              <strong>Nenhum processo encontrado</strong>
+              <p>Ajuste a busca ou cadastre um novo processo.</p>
+            </div>
+          ) : (
+            // Mobile: seções Em andamento / Concluídos / Arquivados (admin).
+            <>
+              {activeProcesses.length > 0 ? (
+                <>
+                  <div className="process-list__section-label">Em andamento</div>
+                  {activeProcesses.map(renderProcessRow)}
+                </>
+              ) : null}
+              {doneProcesses.length > 0 ? (
+                <>
+                  <div className="process-list__section-label">Concluídos</div>
+                  {doneProcesses.map(renderProcessRow)}
+                </>
+              ) : null}
+              {isAdmin && archivedProcesses.length > 0 ? (
+                <>
+                  <div className="process-list__section-label">Arquivados</div>
+                  {archivedProcesses.map(renderArchivedRow)}
+                </>
+              ) : null}
+            </>
+          )
         ) : shownProcesses.length === 0 ? (
           <div className="empty-state">
             <strong>Nenhum processo encontrado</strong>
             <p>Ajuste a busca ou cadastre um novo processo.</p>
           </div>
-        ) : isMobile ? (
-          // Mobile: seções Em andamento / Concluídos (protótipo iOS).
-          <>
-            {activeProcesses.length > 0 ? (
-              <>
-                <div className="process-list__section-label">Em andamento</div>
-                {activeProcesses.map(renderProcessRow)}
-              </>
-            ) : null}
-            {doneProcesses.length > 0 ? (
-              <>
-                <div className="process-list__section-label">Concluídos</div>
-                {doneProcesses.map(renderProcessRow)}
-              </>
-            ) : null}
-          </>
         ) : (
           // Desktop: lista plana ordenada por ETA (inalterada).
           shownProcesses.map(renderProcessRow)
