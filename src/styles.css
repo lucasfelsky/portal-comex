@@ -4690,6 +4690,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
     margin: 0 auto 12px;
     width: 40px;
     height: 5px;
@@ -4697,6 +4698,16 @@ body {
     background: var(--border-strong);
     flex-shrink: 0;
     touch-action: none;
+  }
+
+  /* Hitbox expandida: area transparente em volta do tracinho, pra o swipe
+     fechar funcionar sem precisar tocar no pixel exato. */
+  .modal__sheet-handle::before {
+    content: '';
+    position: absolute;
+    inset: -14px -30px;
+    border-radius: 99px;
+    background: transparent;
   }
 
   .news-modal {
