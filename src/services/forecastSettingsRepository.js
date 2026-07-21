@@ -1,11 +1,37 @@
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
-import { onSnapshot } from 'firebase/firestore'
-import { firestore, isFirebaseConfigured } from '../lib/firebase'
+import {
+  connectFirestoreEmulator,
+  doc as realtimeDoc,
+  getFirestore as getRealtimeFirestore,
+  onSnapshot,
+} from 'firebase/firestore'
+import { app, firestore, isFirebaseConfigured } from '../lib/firebase'
 import { createAuditEvent } from './auditRepository'
 
 const STORAGE_KEY = 'sq-comex-forecast-settings'
 const DOCUMENT_ID = 'current'
 const COLLECTION = 'forecastSettings'
+
+// Bug reportado pelo Lucas (2026-07-21): onSnapshot (SDK "completo") não
+// aceita uma referência criada com doc() do SDK "lite" (usado no resto do
+// app pra bundle menor) — throw "Expected type 'Ni', but it was: a custom
+// wd object". Os dois builds registram o Firestore sob nomes de componente
+// diferentes ('firestore' vs 'firestore/lite'), então pedir os dois pro
+// MESMO app não conflita — só precisa criar/usar uma instância própria do
+// SDK completo aqui (só onde tem onSnapshot) e não reaproveitar a lite.
+// Lazy + isolado neste módulo (que já é lazy-loaded com AdminForecastPage)
+// pra não puxar o SDK completo pro bundle eager do app inteiro.
+let realtimeFirestore = null
+function getRealtimeFirestoreInstance() {
+  if (!app) return null
+  if (!realtimeFirestore) {
+    realtimeFirestore = getRealtimeFirestore(app)
+    if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+      connectFirestoreEmulator(realtimeFirestore, '127.0.0.1', 8080)
+    }
+  }
+  return realtimeFirestore
+}
 
 export const CATEGORY_OPTIONS = ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']
 
@@ -192,8 +218,13 @@ export function subscribeForecastSettings(onChange) {
     return subscribeLocalSettings(onChange)
   }
 
+  const realtimeDb = getRealtimeFirestoreInstance()
+  if (!realtimeDb) {
+    return subscribeLocalSettings(onChange)
+  }
+
   return onSnapshot(
-    doc(firestore, COLLECTION, DOCUMENT_ID),
+    realtimeDoc(realtimeDb, COLLECTION, DOCUMENT_ID),
     (snapshot) => {
       if (!snapshot.exists()) {
         onChange({
