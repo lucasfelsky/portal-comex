@@ -13,6 +13,7 @@ import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import {
   canonicalizeProcessStatus,
   CD_EN_ROUTE_STATUS,
+  isLogisticaEditableCollectionStatus,
   isPostCollectionStatus,
   processStatusOptions,
   postCollectionStatusOptions,
@@ -681,7 +682,14 @@ export async function saveProcessCollectionStatus(processId, collectionStatus, a
     throw new Error('Processo inválido para atualizar o status de coleta.')
   }
 
-  if (!postCollectionStatusOptions.includes(normalizedStatus)) {
+  // Bug reportado pelo Lucas (2026-07-21): esta validação checava só os 3
+  // valores de postCollectionStatusOptions, mas a tela de edição
+  // (CollectionStatusEditView) também libera "Carga a caminho do CD",
+  // "Veículo no CD para descarga" e "Carga recebida" via
+  // isLogisticaEditableCollectionStatus — logística conseguia selecionar e
+  // clicar Salvar num valor que o repo então rejeitava. Usar a mesma função
+  // que já gate-a o botão Salvar na tela, pra allowlist ficar em UM lugar só.
+  if (!isLogisticaEditableCollectionStatus(normalizedStatus)) {
     throw new Error('Status de coleta inválido para atualização logística.')
   }
 
