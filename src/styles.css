@@ -4594,17 +4594,19 @@ body {
   }
 
   .detail-tab-select .select-field {
+    position: relative;
     display: block;
   }
 
   .detail-tab-select .select-field select {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    pointer-events: none;
+    display: none;
   }
 
   .detail-tab-select .select-field__trigger {
+    position: relative;
+    inset: auto;
+    display: flex;
+    align-items: center;
     width: 100%;
     justify-content: space-between;
     min-height: 48px;
@@ -5935,48 +5937,53 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
-    padding: 6px 12px;
+    padding: 7px 14px;
     font-size: var(--fs-body-2);
-    border-radius: var(--radius-md);
-    background: var(--primary-50);
-    border: 1px solid var(--primary-300);
-    box-shadow: 0 1px 0 rgba(0, 174, 145, 0.08);
-    color: var(--primary-800);
-    font-weight: 700;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(31, 28, 24, 0.06);
+    color: var(--ink);
+    font-weight: 600;
     min-height: auto;
-    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
   }
 
   .process-detail-toolbar .ghost-button:hover,
   .process-detail-toolbar .ghost-button:focus-visible,
   .process-detail-toolbar .primary-button:hover,
   .process-detail-toolbar .primary-button:focus-visible {
-    background: var(--primary-100);
-    border-color: var(--primary);
+    background: var(--surface-alt);
+    border-color: var(--primary-300);
+    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.10);
   }
 
   .process-detail-toolbar .ghost-button:active,
   .process-detail-toolbar .primary-button:active {
-    background: var(--primary-200);
-    transform: scale(0.98);
+    background: var(--primary-50);
+    border-color: var(--primary-400);
+    transform: scale(0.97);
   }
 
   .process-detail-toolbar .primary-button {
     order: -1;
     color: #ffffff;
-    background: var(--primary-700);
+    background: linear-gradient(180deg, var(--primary-600) 0%, var(--primary-700) 100%);
     border-color: var(--primary-700);
-    box-shadow: 0 3px 10px rgba(0, 174, 145, 0.24);
+    box-shadow: 0 3px 10px rgba(0, 174, 145, 0.22);
+    font-weight: 700;
   }
 
   .process-detail-toolbar .primary-button:hover,
   .process-detail-toolbar .primary-button:focus-visible {
-    background: var(--primary-800);
+    background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary-800) 100%);
     border-color: var(--primary-800);
+    box-shadow: 0 4px 12px rgba(0, 174, 145, 0.28);
   }
 
   .process-detail-toolbar .primary-button:active {
-    background: var(--primary);
+    background: var(--primary-700);
+    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.18);
   }
 
   .process-detail-toolbar .primary-button::before {
