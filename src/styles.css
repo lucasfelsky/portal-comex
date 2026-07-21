@@ -7521,3 +7521,155 @@ body {
     padding: 6px 12px;
   }
 }
+
+/* ============================================================
+   F16.8 — Swipe-to-action nas linhas de processo (Chegadas). Só mobile
+   (≤720px, gated também via JS — disabled:true no hook em desktop).
+   O wrapper .process-swipe-row é quem participa do grid da lista agora
+   (não mais o .process-item direto); em desktop ele "desaparece" via
+   display:contents, então o layout de lá fica bit-a-bit igual ao de
+   antes — zero risco pro desktop.
+   ============================================================ */
+.process-swipe-row {
+  display: contents;
+}
+
+.process-swipe-row__actions {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .process-swipe-row {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .process-list-card .process-swipe-row:last-child {
+    border-bottom: 0;
+  }
+
+  /* O conteúdo precisa ser opaco (--surface) pra ocultar a ação revelada
+     atrás dele em repouso — mesmo com a lista "flat" (sem card por item),
+     a linha que desliza precisa de fundo próprio, senão a cor da ação
+     vazaria por trás mesmo sem arrastar. */
+  .process-list-card .process-item.process-swipe-row__content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+    padding: 12px 2px;
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0.3, 1);
+  }
+
+  .process-list-card .process-item--selected.process-swipe-row__content,
+  .process-list-card .process-item--selected.process-swipe-row__content:hover {
+    box-shadow: none;
+    background: var(--surface-alt);
+  }
+
+  .process-swipe-row__actions {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .process-swipe-row__action {
+    width: 76px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    font: inherit;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .process-swipe-row__action--favorite {
+    background: var(--warning);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-list-card .process-item.process-swipe-row__content {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   F16.8 — Swipe-to-marcar-como-lida nas notificações não lidas
+   ("Recentes"). Mesmo padrão do .process-swipe-row (Chegadas): wrapper
+   com display:contents no desktop (zero risco de layout lá), vira
+   positioning context só no mobile.
+   ============================================================ */
+.notifications-swipe-row {
+  display: contents;
+}
+
+.notifications-swipe-row__actions {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .notifications-swipe-row {
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* .notifications__item usa fundo translúcido (efeito vidro do painel) —
+     precisa ficar OPACO aqui, senão a cor da ação vazaria por trás mesmo
+     em repouso (sem arrastar). Escopado só à variante swipeable. */
+  .notifications__item.notifications-swipe-row__content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background: var(--surface);
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0.3, 1);
+  }
+
+  [data-theme='dark'] .notifications__item.notifications-swipe-row__content {
+    background: var(--surface);
+  }
+
+  .notifications-swipe-row__actions {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .notifications-swipe-row__action {
+    width: 76px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notifications__item.notifications-swipe-row__content {
+    transition: none;
+  }
+}

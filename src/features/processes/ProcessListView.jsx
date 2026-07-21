@@ -3,6 +3,7 @@ import Skeleton from '../../components/Skeleton'
 import SelectField from '../../components/SelectField'
 import FilterChip from '../../components/FilterChip'
 import Icon from '../../components/Icon'
+import { useSwipeReveal } from '../../hooks/useSwipeReveal'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
 import { getStatusTagClass } from './processStatusView'
 import {
@@ -13,97 +14,79 @@ import {
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 
-// F10.6 (backlog 2026-07-12): tela de listagem de processos (viewMode
-// 'list'), extraída do ProcessesPage. Presentacional — recebe a lista
-// filtrada + os filtros + flags de loading/erro por props, e chama
-// callbacks (`onSelectProcess`, `onSearchTermChange`, etc.). Todo o
-// estado (filtros, selectedProcessId, isLoading) e os handlers continuam
-// na página. É a tela de entrada do módulo de Chegadas. Zero mudança
-// visual/comportamental.
-export default function ProcessListView({
-  rootClassName = '',
-  filteredProcesses,
-  isLoading,
-  selectedProcessId,
+const getDestinationLabel = (category) =>
+  category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
+
+const formatCargoUnit = (quantity, singularLabel, pluralLabel) =>
+  `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
+
+const formatDate = (value) => {
+  if (!value) return '-'
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+}
+
+// Previsão de entrega = data manual (override) OU cálculo automático
+// (ETA + dias úteis por categoria / coleta / rolling customs) via
+// getEstimatedDeliveryDate — não repetir só o ETA (regressão do F10.6).
+const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
+
+const hasUpdatedEta = (process) =>
+  Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
+
+// F16.8: linha de processo com swipe-to-favoritar (mobile). Componente
+// próprio (não uma função helper chamada em .map()) porque precisa de
+// hook por linha (useSwipeReveal) — hooks só valem dentro de um
+// componente de verdade. "Só uma linha aberta por vez" é controlado pelo
+// pai (ProcessListView guarda qual item.id está com o swipe revelado).
+function ProcessRow({
+  item,
   isAdmin,
-  searchTerm,
-  categoryFilter,
-  etaStartDate,
-  etaEndDate,
-  operationFilter,
-  hasActiveFilters,
-  processCategoryOptions,
-  onSearchTermChange,
-  onCategoryFilterChange,
-  onEtaStartDateChange,
-  onEtaEndDateChange,
-  onOperationFilterChange,
-  onClearAllFilters,
+  isSelected,
+  isMobile,
+  isSwipeOpen,
+  onSwipeOpenChange,
   onSelectProcess,
-  onExport,
-  onImport,
+  isFavorite,
+  onToggleFavorite,
 }) {
-  const getDestinationLabel = (category) =>
-    category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
+  const swipe = useSwipeReveal({
+    actionCount: 1,
+    isOpen: isSwipeOpen,
+    onOpenChange: onSwipeOpenChange,
+    disabled: !isMobile,
+  })
+  const hideSchedule = shouldHideProcessCardSchedule(item)
 
-  const formatCargoUnit = (quantity, singularLabel, pluralLabel) =>
-    `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
-
-  const formatDate = (value) => {
-    if (!value) return '-'
-    const date = new Date(`${value}T00:00:00`)
-    if (Number.isNaN(date.getTime())) return value
-    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
-  }
-
-  // Previsão de entrega = data manual (override) OU cálculo automático
-  // (ETA + dias úteis por categoria / coleta / rolling customs) via
-  // getEstimatedDeliveryDate — não repetir só o ETA (regressão do F10.6).
-  const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
-
-  const hasUpdatedEta = (process) =>
-    Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
-
-  // F16.4: no mobile (≤720px) a tela de Chegadas ganha a linguagem do
-  // protótipo — busca em pill, segmented Todos/Marítimo/Aéreo (filtro de
-  // exibição client-side, além dos filtros do painel) e seções Em
-  // andamento/Concluídos. No desktop o painel de filtros e a lista plana
-  // ordenada por ETA seguem intocados.
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
-  )
-  const [mobileCategory, setMobileCategory] = useState('all')
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 720px)')
-    const apply = () => setIsMobile(mq.matches)
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
-  }, [])
-
-  const shownProcesses =
-    mobileCategory === 'all'
-      ? filteredProcesses
-      : filteredProcesses.filter((process) =>
-          mobileCategory === 'air'
-            ? isAirCategory(process.category)
-            : isMaritimeCategory(process.category)
-        )
-  const activeProcesses = shownProcesses.filter(
-    (process) => !isProcessStatusFinalized(process.processStatus)
-  )
-  const doneProcesses = shownProcesses.filter((process) =>
-    isProcessStatusFinalized(process.processStatus)
-  )
-
-  const renderProcessRow = (item) => {
-    const hideSchedule = shouldHideProcessCardSchedule(item)
-    return (
+  return (
+    <div className="process-swipe-row">
+      <div className="process-swipe-row__actions" aria-hidden={!isSwipeOpen}>
+        {onToggleFavorite ? (
+          <button
+            type="button"
+            className="process-swipe-row__action process-swipe-row__action--favorite"
+            tabIndex={isSwipeOpen ? 0 : -1}
+            onClick={() => {
+              onToggleFavorite(item.id)
+              onSwipeOpenChange(false)
+            }}
+          >
+            <Icon name="star" size={18} aria-hidden="true" />
+            <span>{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
+          </button>
+        ) : null}
+      </div>
       <button
-        key={item.id}
         type="button"
-        className={`process-item process-item--button${selectedProcessId === item.id ? ' process-item--selected' : ''}`}
-        onClick={() => onSelectProcess(item.id)}
+        className={`process-item process-item--button process-swipe-row__content${isSelected ? ' process-item--selected' : ''}`}
+        style={
+          isMobile
+            ? { transform: `translateX(${swipe.translateX}px)`, transition: swipe.isDragging ? 'none' : undefined }
+            : undefined
+        }
+        onClick={swipe.guardClick(() => onSelectProcess(item.id))}
+        {...swipe.handlers}
       >
         {/* F15.2: leading icon por categoria + resumo condensado +
             chevron — só aparecem no mobile (≤720px); no desktop o
@@ -163,8 +146,91 @@ export default function ProcessListView({
           <Icon name="chevron" size={18} />
         </span>
       </button>
-    )
-  }
+    </div>
+  )
+}
+
+// F10.6 (backlog 2026-07-12): tela de listagem de processos (viewMode
+// 'list'), extraída do ProcessesPage. Presentacional — recebe a lista
+// filtrada + os filtros + flags de loading/erro por props, e chama
+// callbacks (`onSelectProcess`, `onSearchTermChange`, etc.). Todo o
+// estado (filtros, selectedProcessId, isLoading) e os handlers continuam
+// na página. É a tela de entrada do módulo de Chegadas. Zero mudança
+// visual/comportamental.
+export default function ProcessListView({
+  rootClassName = '',
+  filteredProcesses,
+  isLoading,
+  selectedProcessId,
+  isAdmin,
+  searchTerm,
+  categoryFilter,
+  etaStartDate,
+  etaEndDate,
+  operationFilter,
+  hasActiveFilters,
+  processCategoryOptions,
+  onSearchTermChange,
+  onCategoryFilterChange,
+  onEtaStartDateChange,
+  onEtaEndDateChange,
+  onOperationFilterChange,
+  onClearAllFilters,
+  onSelectProcess,
+  onExport,
+  onImport,
+  favoriteProcessIds,
+  onToggleFavorite,
+}) {
+  // F16.8: swipe-to-favoritar — só uma linha revelada por vez.
+  const [openSwipeId, setOpenSwipeId] = useState(null)
+
+  // F16.4: no mobile (≤720px) a tela de Chegadas ganha a linguagem do
+  // protótipo — busca em pill, segmented Todos/Marítimo/Aéreo (filtro de
+  // exibição client-side, além dos filtros do painel) e seções Em
+  // andamento/Concluídos. No desktop o painel de filtros e a lista plana
+  // ordenada por ETA seguem intocados.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+  )
+  const [mobileCategory, setMobileCategory] = useState('all')
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const apply = () => setIsMobile(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  const shownProcesses =
+    mobileCategory === 'all'
+      ? filteredProcesses
+      : filteredProcesses.filter((process) =>
+          mobileCategory === 'air'
+            ? isAirCategory(process.category)
+            : isMaritimeCategory(process.category)
+        )
+  const activeProcesses = shownProcesses.filter(
+    (process) => !isProcessStatusFinalized(process.processStatus)
+  )
+  const doneProcesses = shownProcesses.filter((process) =>
+    isProcessStatusFinalized(process.processStatus)
+  )
+
+  const renderProcessRow = (item) => (
+    <ProcessRow
+      key={item.id}
+      item={item}
+      isAdmin={isAdmin}
+      isSelected={selectedProcessId === item.id}
+      isMobile={isMobile}
+      isSwipeOpen={openSwipeId === item.id}
+      onSwipeOpenChange={(open) => setOpenSwipeId(open ? item.id : null)}
+      onSelectProcess={onSelectProcess}
+      isFavorite={Boolean(favoriteProcessIds?.includes(item.id))}
+      onToggleFavorite={onToggleFavorite}
+    />
+  )
 
   return (
     <article
