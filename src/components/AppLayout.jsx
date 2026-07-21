@@ -153,7 +153,7 @@ export default function AppLayout() {
   // "Portal COMEX") + nav compacta com blur que aparece ao rolar, como o
   // UINavigationBar do iOS. Título curto próprio; admin usa o meta.title.
   const mobileTitle =
-    { '/': 'Início', '/news': 'Notícias', '/processos': 'Chegadas', '/menu': 'Menu' }[
+    { '/': 'Visão geral', '/news': 'Notícias', '/processos': 'Chegadas', '/menu': 'Menu' }[
       location.pathname
     ] ?? meta.title
   const mobileEyebrow = useMemo(() => {
