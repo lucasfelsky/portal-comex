@@ -3396,6 +3396,11 @@ body {
   color: rgba(0, 120, 100, 0.92);
 }
 
+.detail-label--muted {
+  color: var(--text-subtle);
+  opacity: 0.85;
+}
+
 .eta-detail-highlight p {
   color: var(--ink);
   font-weight: 700;
@@ -5934,18 +5939,17 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
-    padding: 7px 14px;
-    font-size: var(--fs-body-2);
-    border-radius: var(--radius-full);
+    padding: 8px 16px;
+    font-size: var(--fs-body);
+    line-height: 1.4;
+    border-radius: var(--radius-md);
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(31, 28, 24, 0.06);
-    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(31, 28, 24, 0.04);
+    color: var(--primary-700);
     font-weight: 600;
-    min-height: auto;
+    min-height: 40px;
     transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
-    /* Reset do primary-button base: evita o pseudo-elemento ::before e o
-       background sólido default que estavam bagunçando o estilo mobile. */
     position: relative;
     overflow: visible;
   }
@@ -5959,58 +5963,33 @@ body {
   .process-detail-toolbar .ghost-button:focus-visible,
   .process-detail-toolbar .primary-button:hover,
   .process-detail-toolbar .primary-button:focus-visible {
-    background: var(--surface-alt);
+    background: var(--primary-50);
     border-color: var(--primary-300);
-    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.10);
+    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.08);
   }
 
   .process-detail-toolbar .ghost-button:active,
   .process-detail-toolbar .primary-button:active {
-    background: var(--primary-50);
+    background: var(--primary-100);
     border-color: var(--primary-400);
-    transform: scale(0.97);
-  }
-
-  .process-detail-toolbar .primary-button {
-    order: -1;
-    color: #ffffff;
-    background: linear-gradient(180deg, var(--primary-600) 0%, var(--primary-700) 100%);
-    border-color: var(--primary-700);
-    box-shadow: 0 3px 10px rgba(0, 174, 145, 0.22);
-    font-weight: 700;
-  }
-
-  .process-detail-toolbar .primary-button:hover,
-  .process-detail-toolbar .primary-button:focus-visible {
-    background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary-800) 100%);
-    border-color: var(--primary-800);
-    box-shadow: 0 4px 12px rgba(0, 174, 145, 0.28);
-  }
-
-  .process-detail-toolbar .primary-button:active {
-    background: var(--primary-700);
-    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.18);
-  }
-
-  .process-detail-toolbar .primary-button::before {
-    display: none;
+    transform: scale(0.98);
   }
 
   .process-detail-toolbar__favorite {
-    background: var(--surface) !important;
-    color: var(--primary-700) !important;
-    border-color: var(--primary-200) !important;
-    font-weight: 700 !important;
+    background: var(--surface);
+    color: var(--primary-700);
+    border-color: var(--primary-200);
+    font-weight: 700;
   }
 
   .process-detail-toolbar__favorite:hover,
   .process-detail-toolbar__favorite:focus-visible {
-    background: var(--primary-50) !important;
-    border-color: var(--primary-400) !important;
+    background: var(--primary-50);
+    border-color: var(--primary-400);
   }
 
   .process-detail-toolbar__favorite:active {
-    background: var(--primary-100) !important;
+    background: var(--primary-100);
   }
 }
 
