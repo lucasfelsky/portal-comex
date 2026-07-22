@@ -159,6 +159,17 @@ export default function ProcessDetailView({
       <div className="card-heading">
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
+          {isAdmin && canEditSelectedCollectionStatus ? (
+            <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button>
+          ) : isAdmin && !canEditSelectedCollectionStatus ? (
+            <button type="button" className="primary-button" onClick={onEditMode}>Editar</button>
+          ) : null}
+          {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
+            <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar obs.</button>
+          ) : null}
+          {canEditSelectedCollectionStatus ? (
+            <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>Status coleta</button>
+          ) : null}
           <button
             type="button"
             className="ghost-button process-detail-toolbar__favorite"
@@ -166,30 +177,8 @@ export default function ProcessDetailView({
           >
             {favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}
           </button>
-          {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
-            <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>
-              Editar obs.
-            </button>
-          ) : null}
-          {canEditSelectedCollectionStatus ? (
-            <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>
-              Status coleta
-            </button>
-          ) : null}
-          {isAdmin && !canEditSelectedCollectionStatus ? <button type="button" className="primary-button" onClick={onEditMode}>Editar</button> : null}
         </div>
       </div>
-
-      {isAdmin && canEditSelectedCollectionStatus ? (
-        <div
-          className="action-row"
-          style={{ justifyContent: 'flex-end', marginTop: '-8px', marginBottom: '18px' }}
-        >
-          <button type="button" className="primary-button" onClick={onEditMode}>
-            Editar processo
-          </button>
-        </div>
-      ) : null}
 
       <div className="detail-tab-select">
         <label className="field">
