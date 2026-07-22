@@ -137,7 +137,7 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
       expect(nav.getByRole('link', { name: 'Chegadas' })).toHaveAttribute('href', '/processos')
       expect(nav.getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
-      expect(nav.getByRole('button', { name: 'Notificações' })).toBeInTheDocument()
+      expect(nav.getByRole('link', { name: 'Notificações' })).toHaveAttribute('href', '/notifications')
       expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
     })
 

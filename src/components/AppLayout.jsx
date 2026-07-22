@@ -8,6 +8,7 @@ import PageFade from './PageFade'
 import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
+import { NotificationsContext } from '../contexts/NotificationsContext'
 import SupportButton, { OPEN_SUPPORT_MODAL_EVENT } from './SupportButton'
 import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
@@ -809,7 +810,25 @@ export default function AppLayout() {
           ) : null}
 
           <PageFade>
-            <Outlet />
+            <NotificationsContext.Provider
+              value={{
+                notifications,
+                unreadNotifications,
+                groupedNotifications,
+                notificationFilter,
+                setNotificationFilter,
+                markAllAsRead: handleMarkAllNotificationsAsRead,
+                markOneAsRead: markOneNotificationAsRead,
+                handleOpenNotification,
+                formatRelativeNotificationTime,
+                formatNotificationDate,
+                dnd,
+                isPrefsModalOpen,
+                setIsPrefsModalOpen,
+              }}
+            >
+              <Outlet />
+            </NotificationsContext.Provider>
           </PageFade>
 
           <SupportButton />
@@ -861,18 +880,19 @@ export default function AppLayout() {
               <span className="mobile-bottom-nav__label">Notícias</span>
             </NavLink>
 
-            <button
-              type="button"
-              className="mobile-bottom-nav__item"
+            <NavLink
+              to="/notifications"
+              className={({ isActive }) =>
+                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              }
               aria-label="Notificações"
-              onClick={handleToggleNotificationPanel}
             >
               <Icon name="bell" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Avisos</span>
               {unreadNotifications.length > 0 ? (
                 <span className="mobile-bottom-nav__badge">{unreadNotifications.length}</span>
               ) : null}
-            </button>
+            </NavLink>
 
             <NavLink
               to="/menu"

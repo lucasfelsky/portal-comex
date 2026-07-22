@@ -4530,30 +4530,31 @@ body {
   }
 
   .notifications__panel {
-    position: fixed;
-    left: 24px;
-    right: 24px;
-    top: calc(52px + env(safe-area-inset-top));
-    bottom: calc(132px + env(safe-area-inset-bottom));
+    /* F16.12: no mobile o painel de notificações virou uma página normal
+       (rota /notifications). O overlay flutuante com blur e backdrop foi
+       removido — o conteúdo usa o layout padrão da página (section.surface).
+       O desktop mantém o painel ancorado ao sino (position: absolute). */
+    position: static;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
     width: auto;
     max-width: none;
-    max-height: calc(100vh - 184px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    /* F16.7: o painel tem altura fixa (top+bottom); como grid, o
-       align-content default esticava header/filtros/lista pra preencher o
-       vazio (header 180px, tabs 137px de altura — bug dos screenshots).
-       Fixando as linhas: header e filtros no tamanho do conteúdo, a lista
-       pega o resto e rola internamente. */
-    grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 12px;
-    padding: 16px 16px 16px;
-    border-radius: var(--radius-md);
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(242, 249, 248, 0.68)),
-      rgba(255, 255, 255, 0.52);
-    border-color: rgba(255, 255, 255, 0.28);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(20px);
-    animation: notifications-sheet-in 220ms ease forwards;
+    max-height: none;
+    grid-template-rows: auto;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    animation: none;
+  }
+
+  .notifications-backdrop {
+    display: none;
   }
 
   /* F16.7.1: título e ações não cabiam numa linha (título quebrava, "Marcar
