@@ -1,5 +1,4 @@
 import { formatDateTime } from '../../utils/dateFormat'
-import SelectField from '../../components/SelectField'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
@@ -156,7 +155,14 @@ export default function ProcessDetailView({
         )
       })()}
 
-      <div className="card-heading">
+      <div className="card-heading process-detail-card-heading">
+        <button
+          type="button"
+          className="ghost-button process-detail-card-heading__back"
+          onClick={onSetViewModeList}
+        >
+          ‹ Voltar
+        </button>
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
           {isAdmin && canEditSelectedCollectionStatus ? (
@@ -181,22 +187,18 @@ export default function ProcessDetailView({
       </div>
 
       <div className="detail-tab-select">
-        <label className="field">
-          <span>Seção</span>
-          <SelectField
-            className="text-input"
-            sheetTitle="Seção do processo"
-            forceMobile
-            value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
-            onChange={(event) => onDetailTabChange(event.target.value)}
-          >
-            <option value="general">Detalhes gerais</option>
-            <option value="process">Processo</option>
-            <option value="items">Itens</option>
-            <option value="messages">Mensagens</option>
-            {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
-          </SelectField>
-        </label>
+        <select
+          className="detail-tab-select__native"
+          value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
+          onChange={(event) => onDetailTabChange(event.target.value)}
+          aria-label="Seção do processo"
+        >
+          <option value="general">Detalhes gerais</option>
+          <option value="process">Processo</option>
+          <option value="items">Itens</option>
+          <option value="messages">Mensagens</option>
+          {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
+        </select>
       </div>
 
       <div className="tab-row detail-tab-row">
