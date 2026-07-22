@@ -64,6 +64,7 @@ export default function AdminSupportPanel() {
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('aberto')
   const [savingTicketId, setSavingTicketId] = useState(null)
+  const [resolutionDrafts, setResolutionDrafts] = useState({})
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -132,14 +133,18 @@ export default function AdminSupportPanel() {
   const highPriorityCount =
     supportStats.unresolved.byPriority[4] + supportStats.unresolved.byPriority[5]
 
-  async function applyTicketUpdate(ticket, nextStatus, nextPriority) {
-    setSavingTicketId(ticket.id)
-    setError('')
+  async function applyTicketUpdate(ticket, nextStatus, nextPriority, resolutionMessage = '') {
+      setSavingTicketId(ticket.id)
+      setError('')
 
-    const isResolving = nextStatus === 'resolvido'
+      const isResolving = nextStatus === 'resolvido'
 
-    try {
-      await updateSupportTicket(ticket.id, { status: nextStatus, priority: nextPriority }, profile)
+      try {
+        await updateSupportTicket(
+          ticket.id,
+          { status: nextStatus, priority: nextPriority, resolutionMessage: isResolving ? resolutionMessage : '' },
+          profile
+        )
 
       setTickets((currentTickets) =>
         currentTickets.map((item) =>
@@ -150,6 +155,7 @@ export default function AdminSupportPanel() {
                 priority: nextPriority,
                 resolvedAt: isResolving ? new Date().toISOString() : null,
                 resolvedByName: isResolving ? (profile?.name ?? null) : null,
+                resolutionMessage: isResolving ? resolutionMessage || null : null,
                 updatedAt: new Date().toISOString(),
               }
             : item
@@ -293,6 +299,32 @@ export default function AdminSupportPanel() {
                     </p>
                   ) : null}
 
+                  {isResolved && ticket.resolutionMessage ? (
+                    <div className="detail-card detail-card--soft">
+                      <span className="detail-label">Resposta da equipe</span>
+                      <p>{ticket.resolutionMessage}</p>
+                    </div>
+                  ) : null}
+
+                  {!isResolved ? (
+                    <label className="field">
+                      <span>Resposta ao usuário (opcional)</span>
+                      <textarea
+                        className="text-input text-input--textarea"
+                        value={resolutionDrafts[ticket.id] ?? ''}
+                        onChange={(event) =>
+                          setResolutionDrafts((current) => ({
+                            ...current,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Explique a resolução ou deixe instruções para o usuário"
+                        rows={3}
+                        disabled={isSaving}
+                      />
+                    </label>
+                  ) : null}
+
                   <div className="action-row support-ticket-card__actions">
                     <label className="field support-ticket-card__priority">
                       <span>Prioridade</span>
@@ -331,7 +363,8 @@ export default function AdminSupportPanel() {
                         applyTicketUpdate(
                           ticket,
                           isResolved ? 'aberto' : 'resolvido',
-                          ticket.priority
+                          ticket.priority,
+                          resolutionDrafts[ticket.id] ?? ''
                         )
                       }
                     >

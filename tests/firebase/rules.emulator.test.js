@@ -1491,6 +1491,21 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    it('admin resolve o chamado com mensagem de resolucao', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tu-res-msg'), validTicket({ status: 'em_andamento' })))
+      await assertSucceeds(
+        updateDoc(doc(admin(), 'supportTickets/tu-res-msg'), {
+          status: 'resolvido',
+          priority: 4,
+          resolvedAt: 'now',
+          resolvedById: 'admin-1',
+          resolvedByName: 'Admin E2E',
+          resolutionMessage: 'Verifique se o cache do navegador esta limpo.',
+          updatedAt: 'now',
+        })
+      )
+    })
+
     it('nega create ja nascendo em_andamento (create exige aberto)', async () => {
       const db = approvedUser('user-1')
       await assertFails(

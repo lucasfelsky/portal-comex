@@ -441,8 +441,12 @@ service cloud.firestore {
     function isAdminSupportTicketUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'status', 'priority', 'resolvedAt', 'resolvedById', 'resolvedByName',
-        'updatedAt',
+        'resolutionMessage', 'updatedAt',
       ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['resolutionMessage']) || (
+          request.resource.data.resolutionMessage == null
+          || (request.resource.data.resolutionMessage is string && request.resource.data.resolutionMessage.size() <= 1000)
+        ))
         && request.resource.data.status in ['aberto', 'em_andamento', 'resolvido']
         && request.resource.data.priority is int
         && request.resource.data.priority >= 1
