@@ -3003,6 +3003,12 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 720px) {
+  .news-list-card--no-admin {
+    padding-top: 12px;
+  }
+}
+
 .news-list-card {
   min-height: 620px;
 }
@@ -3315,6 +3321,14 @@ body {
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+@media (max-width: 720px) {
+  .text-input,
+  select.text-input,
+  textarea.text-input {
+    font-size: var(--fs-headline);
+  }
 }
 
 .text-input::placeholder {

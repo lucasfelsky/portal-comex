@@ -532,7 +532,7 @@ export default function NewsPage() {
       ) : null}
 
       {viewMode === 'list' ? (
-        <article className="list-card news-list-card">
+        <article className={`list-card news-list-card${isAdmin ? '' : ' news-list-card--no-admin'}`}>
           {isAdmin ? (
             <div className="card-heading">
               <div className="admin-toolbar">
