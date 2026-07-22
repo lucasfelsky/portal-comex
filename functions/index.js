@@ -669,26 +669,29 @@ function buildSupportTicketResolvedAuthorEmailMessage({ ticket, resolvedByName }
   const greeting = `Olá, ${authorName}.`
   const message = repairTextEncoding(normalizeString(ticket?.message)) || '(sem mensagem)'
   const resolverName = repairTextEncoding(normalizeString(resolvedByName)) || 'a equipe administrativa'
+  const resolutionMessage = repairTextEncoding(normalizeString(ticket?.resolutionMessage)) || ''
+
+  const textLines = [
+    greeting,
+    '',
+    `Seu chamado de suporte no Portal COMEX foi marcado como resolvido por ${resolverName}.`,
+  ]
+  if (resolutionMessage) {
+    textLines.push('', 'Resposta da equipe:', resolutionMessage)
+  }
+  textLines.push('', 'Chamado:', message, '', 'Se o problema persistir, abra um novo chamado pelo botão Suporte no portal:', APP_URL)
 
   return {
     subject: '[Portal COMEX] Seu chamado de suporte foi resolvido',
-    text: [
-      greeting,
-      '',
-      `Seu chamado de suporte no Portal COMEX foi marcado como resolvido por ${resolverName}.`,
-      '',
-      'Chamado:',
-      message,
-      '',
-      'Se o problema persistir, abra um novo chamado pelo botão Suporte no portal:',
-      APP_URL,
-    ].join('\n'),
+    text: textLines.join('\n'),
     html: `
       <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
         <p>${escapeHtml(greeting)}</p>
         <p>Seu chamado de suporte no <strong>Portal COMEX</strong> foi marcado como <strong>resolvido</strong> por ${escapeHtml(resolverName)}.</p>
+        ${resolutionMessage ? `<div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.primary}; color: #ffffff; border: 1px solid ${BRAND_COLORS.border}; margin-bottom: 16px;"><p style="margin: 0; font-weight: 700;">Resposta da equipe:</p><p style="margin: 8px 0 0; white-space: pre-wrap;">${escapeHtml(resolutionMessage)}</p></div>` : ''}
         <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
-          <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(message)}</p>
+          <p style="margin: 0; font-weight: 700;">Chamado:</p>
+          <p style="margin: 8px 0 0; white-space: pre-wrap;">${escapeHtml(message)}</p>
         </div>
         <p style="margin-top: 18px;">Se o problema persistir, abra um novo chamado pelo botão <strong>Suporte</strong> no portal.</p>
         <p style="margin-top: 18px;">
@@ -1876,7 +1879,7 @@ export const notifySupportTicketResolved = onDocumentUpdated(
           processId: '',
           messageId: ticketId,
           title: 'Chamado de suporte resolvido',
-          body: `Seu chamado foi resolvido por ${resolvedByName}: ${messageSnippet}`,
+          body: `Seu chamado foi resolvido por ${resolvedByName}${after.resolutionMessage ? ': ' + repairTextEncoding(normalizeString(after.resolutionMessage)) : ': ' + messageSnippet}`,
           targetTab: 'suporte',
         },
       ])

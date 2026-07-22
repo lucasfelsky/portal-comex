@@ -31,6 +31,7 @@ export const SUPPORT_TICKET_STATUSES = ['aberto', 'em_andamento', 'resolvido']
 export const SUPPORT_TICKET_DEFAULT_PRIORITY = 3
 export const SUPPORT_TICKET_MAX_IMAGES = 5
 export const SUPPORT_TICKET_MAX_MESSAGE_LENGTH = 4000
+export const SUPPORT_TICKET_MAX_RESOLUTION_LENGTH = 1000
 
 export const SUPPORT_TICKET_STATUS_LABELS = {
   aberto: 'Aberto',
@@ -91,6 +92,7 @@ function normalizeTicket(rawTicket, fallbackId) {
     updatedAt: toIsoString(rawTicket.updatedAt) ?? toIsoString(rawTicket.createdAt),
     resolvedAt: toIsoString(rawTicket.resolvedAt),
     resolvedByName: normalizeStringValue(rawTicket.resolvedByName) || null,
+    resolutionMessage: normalizeStringValue(rawTicket.resolutionMessage) || null,
   }
 }
 
@@ -254,7 +256,7 @@ export async function listAllSupportTickets() {
   return snapshot.docs.map((item) => normalizeTicket(item.data(), item.id))
 }
 
-export async function updateSupportTicket(ticketId, { status, priority }, actor = null) {
+export async function updateSupportTicket(ticketId, { status, priority, resolutionMessage = '' }, actor = null) {
   const normalizedStatus = SUPPORT_TICKET_STATUSES.includes(status) ? status : null
   const normalizedPriority = Number(priority)
 
@@ -267,6 +269,11 @@ export async function updateSupportTicket(ticketId, { status, priority }, actor 
   }
 
   const isResolved = normalizedStatus === 'resolvido'
+  const normalizedResolutionMessage = normalizeStringValue(resolutionMessage)
+
+  if (normalizedResolutionMessage.length > SUPPORT_TICKET_MAX_RESOLUTION_LENGTH) {
+    throw new Error(`A mensagem de resolução pode ter no máximo ${SUPPORT_TICKET_MAX_RESOLUTION_LENGTH} caracteres.`)
+  }
 
   if (!isFirebaseConfigured || !firestore) {
     const now = new Date().toISOString()
@@ -280,6 +287,7 @@ export async function updateSupportTicket(ticketId, { status, priority }, actor 
               priority: normalizedPriority,
               resolvedAt: isResolved ? now : null,
               resolvedByName: isResolved ? (actor?.name ?? 'Sistema local') : null,
+              ...(isResolved && { resolutionMessage: normalizedResolutionMessage || null }),
               updatedAt: now,
             }
           : item
@@ -289,14 +297,20 @@ export async function updateSupportTicket(ticketId, { status, priority }, actor 
     return nextTickets.find((item) => item.id === ticketId) ?? null
   }
 
-  await updateDoc(doc(firestore, 'supportTickets', ticketId), {
+  const updatePayload = {
     status: normalizedStatus,
     priority: normalizedPriority,
     resolvedAt: isResolved ? serverTimestamp() : null,
     resolvedById: isResolved ? (normalizeStringValue(actor?.uid) || null) : null,
     resolvedByName: isResolved ? (normalizeStringValue(actor?.name) || null) : null,
     updatedAt: serverTimestamp(),
-  })
+  }
+
+  if (isResolved) {
+    updatePayload.resolutionMessage = normalizedResolutionMessage || null
+  }
+
+  await updateDoc(doc(firestore, 'supportTickets', ticketId), updatePayload)
 
   await createAuditEvent({
     action: isResolved ? 'Chamado de suporte resolvido' : 'Chamado de suporte atualizado',
