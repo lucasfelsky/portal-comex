@@ -1109,6 +1109,23 @@ body {
   background: rgba(0, 0, 0, 0.18);
 }
 
+@media (max-width: 720px) {
+  .filter-chip__remove {
+    width: 44px;
+    height: 44px;
+    margin: -8px -10px -8px 0;
+  }
+
+  .filter-chip__remove svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .filter-chip--md .filter-chip__remove {
+    margin-right: -8px;
+  }
+}
+
 .filter-chip--default {
   background: var(--surface-alt);
   color: var(--ink);
@@ -1461,6 +1478,20 @@ body {
   color: var(--primary-700);
   background: var(--primary-50);
   text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .breadcrumb__link,
+  .breadcrumb__current {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
+  .breadcrumb__current {
+    font-size: 1.25rem;
+  }
 }
 
 /* Item atual (ultimo) herda o destaque do h2 da topbar (1.5rem/700).
