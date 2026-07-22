@@ -2200,8 +2200,9 @@ body {
 }
 
 @media (max-width: 720px) {
+  .process-detail-card-heading .process-detail-card-heading__back,
   .process-detail-card-heading__back {
-    display: none;
+    display: none !important;
   }
 }
 
@@ -2583,6 +2584,18 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+/* F15.3/17: as abas do detalhe do processo ficam mais afastadas da linha
+   de acao (voltar/editar/favoritar) para nao parecerem grudadas. */
+.detail-tab-row {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .detail-tab-row {
+    margin-top: 14px;
+  }
 }
 
 .tab-panel-spacing {
