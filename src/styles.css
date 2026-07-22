@@ -1936,6 +1936,12 @@ body {
   gap: 6px;
 }
 
+@media (max-width: 720px) {
+  .dashboard-heading {
+    margin-bottom: 18px;
+  }
+}
+
 .dashboard-heading h2 {
   font-size: 2.3rem;
   line-height: 1;
