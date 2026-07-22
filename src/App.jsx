@@ -43,6 +43,7 @@ const AdminSupportPanel = lazyWithRetry(() => import('./features/admin/AdminSupp
 const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'), 'dashboard-page')
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'), 'login-page')
 const NewsPage = lazyWithRetry(() => import('./pages/NewsPage'), 'news-page')
+const NotificationsPage = lazyWithRetry(() => import('./pages/NotificationsPage'), 'notifications-page')
 const PendingApprovalPage = lazyWithRetry(
   () => import('./pages/PendingApprovalPage'),
   'pending-approval-page'
@@ -82,6 +83,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/processos" element={<ProcessesPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/menu" element={<MenuPage />} />
           <Route
             path="/admin"
