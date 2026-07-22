@@ -166,9 +166,9 @@ export default function ProcessDetailView({
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
           {isAdmin && canEditSelectedCollectionStatus ? (
-            <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button>
+            <button type="button" className="ghost-button" onClick={onEditMode}>Editar processo</button>
           ) : isAdmin && !canEditSelectedCollectionStatus ? (
-            <button type="button" className="primary-button" onClick={onEditMode}>Editar</button>
+            <button type="button" className="ghost-button" onClick={onEditMode}>Editar</button>
           ) : null}
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
             <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar obs.</button>
@@ -178,7 +178,7 @@ export default function ProcessDetailView({
           ) : null}
           <button
             type="button"
-            className="ghost-button process-detail-toolbar__favorite"
+            className="ghost-button"
             onClick={() => onToggleFavorite(selectedProcess.id)}
           >
             {favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}
@@ -216,11 +216,17 @@ export default function ProcessDetailView({
             <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
             {selectedProcess.processNumber && canShowProcessName(selectedProcess, isAdmin) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
             <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
-            <div className="detail-card detail-card--split">
-              <div><span className="detail-label">ETD</span><p>{formatDate(selectedProcess.etd)}</p></div>
-              <div className={getEtaDisplayClassName(selectedProcess)}>
-                <span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span>
-                <p>{formatDate(selectedProcess.eta)}</p>
+            <div className="detail-card">
+              <span className="detail-label">ETD / ETA</span>
+              <div className="detail-card--split" style={{ marginTop: '8px' }}>
+                <div>
+                  <span className="detail-label detail-label--muted">ETD</span>
+                  <p>{formatDate(selectedProcess.etd)}</p>
+                </div>
+                <div className={getEtaDisplayClassName(selectedProcess)}>
+                  <span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span>
+                  <p>{formatDate(selectedProcess.eta)}</p>
+                </div>
               </div>
             </div>
             {selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}
