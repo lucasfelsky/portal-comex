@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import SelectField from '../../components/SelectField'
-import Icon from '../../components/Icon'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 
 // F15.2: iniciais pro avatar da lista mobile (mesma lógica do topbar).
@@ -79,7 +78,6 @@ export default function AdminUsersPanel() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
-  const [userListExpanded, setUserListExpanded] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -373,50 +371,38 @@ export default function AdminUsersPanel() {
             <div>
               <h3>Gestão de usuários</h3>
             </div>
-            <div className="card-heading__actions">
-              <span className="inline-badge">{filteredUsers.length} visíveis</span>
-              <button
-                type="button"
-                className="ghost-button admin-user-list__toggle"
-                onClick={() => setUserListExpanded((prev) => !prev)}
-                aria-expanded={userListExpanded}
-              >
-                {userListExpanded ? 'Esconder lista' : 'Mostrar lista'}
-                <Icon name="chevron" size={12} className={`admin-user-list__toggle-icon${userListExpanded ? ' admin-user-list__toggle-icon--open' : ''}`} aria-hidden="true" />
-              </button>
-            </div>
+            <span className="inline-badge">{filteredUsers.length} visíveis</span>
           </div>
 
-          <div className={`admin-user-list__collapsible${userListExpanded ? ' admin-user-list__collapsible--open' : ''}`}>
-            <div className="admin-filters">
-              <label className="field">
-                <span>Buscar usuário</span>
-                <input
-                  className="text-input"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Nome, email, perfil ou ID"
-                />
-              </label>
+          <div className="admin-filters">
+            <label className="field">
+              <span>Buscar usuário</span>
+              <input
+                className="text-input"
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Nome, email, perfil ou ID"
+              />
+            </label>
 
-              <label className="field field--compact">
-                <span>Status</span>
-                <SelectField
-                  className="text-input"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                >
-                  {statusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </SelectField>
-              </label>
-            </div>
+            <label className="field field--compact">
+              <span>Status</span>
+              <SelectField
+                className="text-input"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </SelectField>
+            </label>
+          </div>
 
-            <div className="admin-user-list admin-user-list--scroll">
+          <div className="admin-user-list admin-user-list--scroll">
               {isLoadingUsers ? (
                 <Skeleton.Group count={4}>
                   <div className="admin-user-row" style={{ gap: 10, padding: 12 }}>
@@ -458,7 +444,6 @@ export default function AdminUsersPanel() {
                 </div>
               )}
             </div>
-          </div>
         </article>
       </div>
 

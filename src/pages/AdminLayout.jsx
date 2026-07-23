@@ -19,8 +19,30 @@ export default function AdminLayout() {
 
   return (
     <section className="surface admin-section">
-      {/* Mobile: dropdown estilizado — acima do título */}
+      {/* Título principal da página */}
+      <PageToolbar
+        title="Centro administrativo"
+        description="Gerencie cadastros, avisos, status da barra e regras de previsão de entrega."
+      />
+
+      {/* Desktop: tabs normais */}
+      <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
+        {sections.map((section) => (
+          <NavLink
+            key={section.to}
+            to={section.to}
+            className={({ isActive }) =>
+              `tab-button${isActive ? ' tab-button--active' : ''}`
+            }
+          >
+            {section.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Mobile: título da sub-aba + dropdown abaixo */}
       <div className="admin-tabs--mobile">
+        <h2 className="admin-tabs__section-title">{activeSection.label}</h2>
         <button
           type="button"
           className="admin-tabs__dropdown-trigger"
@@ -28,7 +50,7 @@ export default function AdminLayout() {
           aria-expanded={dropdownOpen}
           aria-haspopup="listbox"
         >
-          <span>{activeSection.label}</span>
+          <span>Trocar seção</span>
           <Icon name="chevron" size={14} className={`admin-tabs__chevron${dropdownOpen ? ' admin-tabs__chevron--open' : ''}`} aria-hidden="true" />
         </button>
 
@@ -57,26 +79,6 @@ export default function AdminLayout() {
           </>
         ) : null}
       </div>
-
-      <PageToolbar
-        title="Centro administrativo"
-        description="Gerencie cadastros, avisos, status da barra e regras de previsão de entrega."
-      />
-
-      {/* Desktop: tabs normais */}
-      <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
-        {sections.map((section) => (
-          <NavLink
-            key={section.to}
-            to={section.to}
-            className={({ isActive }) =>
-              `tab-button${isActive ? ' tab-button--active' : ''}`
-            }
-          >
-            {section.label}
-          </NavLink>
-        ))}
-      </nav>
 
       <div className="admin-panel-stack">
         <Outlet />
