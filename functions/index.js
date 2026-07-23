@@ -807,13 +807,26 @@ async function assertActiveAdmin(authContext) {
     throw new HttpsError('unauthenticated', 'Usuário não autenticado.')
   }
 
-  const actorProfile = await getUserProfile(authContext.uid)
+  // Lê role/status das custom claims (fonte da verdade desde Sprint 5.1 / L18).
+  // Antes lia do Firestore, mas o ensureUserProfile do client não persiste
+  // role/status no Firestore — só nas claims. Isso fazia o assertActiveAdmin
+  // falhar para admins que fizeram self-register e foram promovidos depois.
+  const role = normalizeString(authContext.token?.role)
+  const status = normalizeString(authContext.token?.status)
 
-  if (!actorProfile || actorProfile.role !== 'admin' || !isActiveStatus(actorProfile.status)) {
-    throw new HttpsError('permission-denied', 'Apenas administradores ativos podem executar esta ação.')
+  if (role !== 'admin' || !isActiveStatus(status)) {
+    // Fallback: lê do Firestore caso as claims não estejam no token ainda
+    // (ex: admin recém-promovido que ainda não fez reload).
+    const actorProfile = await getUserProfile(authContext.uid)
+    if (!actorProfile || actorProfile.role !== 'admin' || !isActiveStatus(actorProfile.status)) {
+      throw new HttpsError('permission-denied', 'Apenas administradores ativos podem executar esta ação.')
+    }
+    return actorProfile
   }
 
-  return actorProfile
+  // Claims válidas — busca o nome no Firestore para auditoria.
+  const actorProfile = await getUserProfile(authContext.uid)
+  return actorProfile ?? { id: authContext.uid, name: authContext.token?.email ?? 'Admin', email: authContext.token?.email ?? '' }
 }
 
 async function assertApprovedCaller(authContext) {

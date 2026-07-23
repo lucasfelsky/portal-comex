@@ -127,16 +127,13 @@ export async function saveUser(user, actor = null) {
   // direto (callable exige emulador).
   const updateClaims = await getCallable('adminUpdateUserClaims')
   if (updateClaims) {
-    try {
-      await updateClaims({
-        uid: normalizedUser.id,
-        role: normalizedUser.role,
-        status: normalizedUser.status,
-      })
-    } catch (error) {
-      console.error('Falha ao sincronizar custom claims do usuario.', error)
-      // Nao bloqueia o save — a role ainda vai como espelho em `users/{uid}`.
-    }
+    // NAO engole o erro — se as claims nao atualizarem, o usuario fica
+    // preso na tela "Acesso pendente" mesmo apos o admin aprovar.
+    await updateClaims({
+      uid: normalizedUser.id,
+      role: normalizedUser.role,
+      status: normalizedUser.status,
+    })
   }
 
   await setDoc(
