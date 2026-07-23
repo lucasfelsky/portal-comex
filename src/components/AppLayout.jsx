@@ -50,6 +50,7 @@ const pageMeta = {
   '/': { title: 'Dashboard operacional', breadcrumb: [] },
   '/news': { title: 'Notícias', breadcrumb: [] },
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
+  '/notifications': { title: 'Central de Notificações', breadcrumb: [] },
   '/menu': { title: 'Menu', breadcrumb: [] },
   '/admin': { title: 'Painel administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
