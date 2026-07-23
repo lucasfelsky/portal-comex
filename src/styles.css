@@ -4557,6 +4557,39 @@ body {
     display: none;
   }
 
+  /* F16.12: botões do topo refinados — touch targets 44px,
+     ícones maiores, layout mais limpo. */
+  .notifications__heading-actions {
+    gap: 8px;
+  }
+
+  .notifications__heading-actions .ghost-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+  }
+
+  .notifications__mark-all {
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    padding: 8px 14px;
+    min-height: 44px;
+    border-radius: var(--radius-sm);
+  }
+
+  .notifications__dnd {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+  }
+
+  .notifications__prefs {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+  }
+
   /* F16.7.1: título e ações não cabiam numa linha (título quebrava, "Marcar
      todas como Lidas" cortava). Empilha: título em cima, ações embaixo
      (texto flex + ícones compactos). */
