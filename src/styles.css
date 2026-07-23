@@ -5401,6 +5401,15 @@ body {
     display: block;
     position: relative;
   }
+
+  /* Título da sub-aba no mobile */
+  .admin-tabs__section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 10px;
+    padding: 0;
+  }
 }
 
 .admin-tabs .tab-button {
@@ -5667,42 +5676,38 @@ body {
   }
 
   /* Lista de usuários colapsável no mobile */
-  .card-heading__actions {
-    display: flex;
-    align-items: center;
+  /* Suporte mobile: StatCards em 1 coluna, cards de ticket compactos */
+  .dashboard-stat-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .admin-support-ticket {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .admin-support-ticket__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .admin-support-ticket__actions {
+    flex-direction: column;
     gap: 8px;
-    flex-wrap: wrap;
   }
 
-  .admin-user-list__toggle {
+  .admin-support-ticket__actions .ghost-button,
+  .admin-support-ticket__actions .primary-button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .admin-support-ticket__resolution {
+    padding: 10px;
     font-size: var(--fs-caption);
-    font-weight: 600;
-    min-height: 36px;
-    padding: 6px 12px;
-    gap: 4px;
-  }
-
-  .admin-user-list__toggle-icon {
-    transition: transform 200ms ease;
-  }
-
-  .admin-user-list__toggle-icon--open {
-    transform: rotate(180deg);
-  }
-
-  .admin-user-list__collapsible {
-    display: grid;
-    grid-template-rows: 0fr;
-    overflow: hidden;
-    transition: grid-template-rows 250ms ease;
-  }
-
-  .admin-user-list__collapsible--open {
-    grid-template-rows: 1fr;
-  }
-
-  .admin-user-list__collapsible > * {
-    min-height: 0;
   }
 }
 
