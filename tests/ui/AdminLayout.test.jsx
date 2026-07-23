@@ -1,10 +1,12 @@
 // Tests do AdminLayout (shell do centro administrativo).
 // Cobre:
-//   - Render: heading "Centro administrativo" + descricao
 //   - Nav: 5 links (Usuarios, Comunicados, Barra do porto, Previsoes, Suporte)
 //   - Cada NavLink aponta para a rota correta
 //   - Outlet renderiza children quando rota filha ativa
 //   - NavLink com isActive=true tem classe tab-button--active
+//
+// Nota: o titulo "Centro Administrativo" vem do pageMeta do AppLayout,
+// nao do AdminLayout (removido para evitar duplicidade).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
@@ -43,12 +45,6 @@ afterEach(() => {
 })
 
 describe('AdminLayout', () => {
-  it('render: heading "Centro administrativo" + descricao', () => {
-    renderPage()
-    expect(screen.getByText(/Centro administrativo/i)).toBeInTheDocument()
-    expect(screen.getByText(/Gerencie cadastros, avisos, status da barra/i)).toBeInTheDocument()
-  })
-
   it('Nav: 5 links (Usuarios, Comunicados, Barra do porto, Previsoes, Suporte)', () => {
     renderPage()
     const links = screen.getAllByRole('link')
