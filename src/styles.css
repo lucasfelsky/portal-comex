@@ -5460,6 +5460,103 @@ body {
   }
 }
 
+/* F16.13: admin mobile refinado — tabs com scroll, padding, touch targets */
+@media (max-width: 720px) {
+  .admin-section {
+    padding: 0 0 16px;
+  }
+
+  /* Tabs com scroll horizontal — 5 abas não cabem em 375px */
+  .admin-tabs {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px;
+    border-radius: var(--radius-md);
+  }
+
+  .admin-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-tabs .tab-button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: var(--fs-caption);
+  }
+
+  /* User rows: manter layout em linha no mobile */
+  .admin-user-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .admin-user-row > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Grids de 2 colunas viram 1 coluna */
+  .announcement-grid,
+  .bar-status-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  /* Formulários: touch targets 44px */
+  .admin-section .text-input,
+  .admin-section .select-field,
+  .admin-section .ghost-button,
+  .admin-section .primary-button {
+    min-height: 44px;
+  }
+
+  .admin-section .text-input {
+    padding: 10px 14px;
+    font-size: var(--fs-body);
+  }
+
+  /* SelectField nativo no mobile */
+  .admin-section .select-field select {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: var(--fs-body);
+  }
+
+  /* Feature footer empilhado */
+  .admin-feature-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  /* Cards de anúncio e bar status */
+  .announcement-card,
+  .bar-status-grid .list-card {
+    padding: 14px;
+  }
+
+  /* Toolbar admin */
+  .admin-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-toolbar .ghost-button,
+  .admin-toolbar .primary-button {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+}
+
 /* .announcement-grid/.bar-status-grid tem minimos fixos em px por coluna
    (320+420 / 420+280, ver regras acima) -- precisam de mais espaco que
    720px pra caber sem estourar (760px/720px de minimo real + gap), entao
