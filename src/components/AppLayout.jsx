@@ -274,6 +274,19 @@ export default function AppLayout() {
     }
   }, [profile?.uid])
 
+  // F6: auto-enable FCM quando o usuario faz login — pede permissao de
+  // notificacao e registra o token automaticamente. Se o usuario negar,
+  // respeita a escolha (nao insiste). O push so funciona com service
+  // worker (public/firebase-messaging-sw.js).
+  useEffect(() => {
+    if (!profile?.uid || !fcm.supported) return
+    if (fcm.status === 'granted' || fcm.status === 'denied') return
+    // Auto-enable apenas se o browser ainda nao tem decisao de permissao
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      fcm.enable()
+    }
+  }, [profile?.uid, fcm.supported, fcm.status])
+
   useEffect(() => {
     setIsMobileMenuOpen(false)
     handleCloseNotificationPanel(true)
