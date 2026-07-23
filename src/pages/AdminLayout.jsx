@@ -19,27 +19,7 @@ export default function AdminLayout() {
 
   return (
     <section className="surface admin-section">
-      <PageToolbar
-        title="Centro administrativo"
-        description="Gerencie cadastros, avisos, status da barra e regras de previsão de entrega."
-      />
-
-      {/* Desktop: tabs normais */}
-      <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
-        {sections.map((section) => (
-          <NavLink
-            key={section.to}
-            to={section.to}
-            className={({ isActive }) =>
-              `tab-button${isActive ? ' tab-button--active' : ''}`
-            }
-          >
-            {section.label}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Mobile: dropdown estilizado */}
+      {/* Mobile: dropdown estilizado — acima do título */}
       <div className="admin-tabs--mobile">
         <button
           type="button"
@@ -77,6 +57,26 @@ export default function AdminLayout() {
           </>
         ) : null}
       </div>
+
+      <PageToolbar
+        title="Centro administrativo"
+        description="Gerencie cadastros, avisos, status da barra e regras de previsão de entrega."
+      />
+
+      {/* Desktop: tabs normais */}
+      <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
+        {sections.map((section) => (
+          <NavLink
+            key={section.to}
+            to={section.to}
+            className={({ isActive }) =>
+              `tab-button${isActive ? ' tab-button--active' : ''}`
+            }
+          >
+            {section.label}
+          </NavLink>
+        ))}
+      </nav>
 
       <div className="admin-panel-stack">
         <Outlet />
