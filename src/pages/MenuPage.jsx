@@ -1,12 +1,15 @@
 // F16.2 (redesign iOS): tela Menu do mobile — substitui o drawer lateral
 // na tab bar (perfil, tema, suporte, admin, IntelliQuote, sair). No
 // desktop a rota existe mas não é linkada (a sidebar cobre tudo).
-// F16.7 vai enriquecer (preferências de notificação etc.); esta é a
-// versão funcional mínima que permite aposentar o drawer no mobile.
+// F16.7: enriquecida com central de notificações, preferências e DND.
 
+import { useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
+import { NotificationsContext } from '../contexts/NotificationsContext'
+import NotificationPreferencesModal from '../components/NotificationPreferencesModal'
 import Icon from '../components/Icon'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
 
@@ -27,8 +30,13 @@ const THEME_LABEL = { auto: 'Automático', dark: 'Escuro', light: 'Claro' }
 export default function MenuPage() {
   const { profile, logout } = useAuth()
   const theme = useTheme()
+  const dnd = useDoNotDisturb()
+  const notificationsCtx = useContext(NotificationsContext)
   const navigate = useNavigate()
+  const [isPrefsModalOpen, setIsPrefsModalOpen] = useState(false)
   const isAdmin = profile?.role === 'admin'
+
+  const unreadCount = notificationsCtx?.unreadNotifications?.length ?? 0
 
   return (
     <section className="menu-page" aria-label="Menu">
@@ -47,6 +55,48 @@ export default function MenuPage() {
         </div>
       </div>
 
+      <div className="ios-section-label">Central de notificações</div>
+      <div className="ios-group">
+        <button type="button" className="ios-row" onClick={() => navigate('/notifications')}>
+          <span className="ios-row__icon" style={{ background: 'var(--warn)' }}>
+            <Icon name="bell" size={15} aria-hidden="true" />
+          </span>
+          <span className="ios-row__body">
+            <span className="ios-row__title">Notificações</span>
+            <span className="ios-row__sub">
+              {unreadCount > 0 ? `${unreadCount} pendentes` : 'Nenhuma pendente'}
+            </span>
+          </span>
+          {unreadCount > 0 ? (
+            <span className="ios-row__badge">{unreadCount}</span>
+          ) : (
+            <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          className="ios-row"
+          onClick={() => {
+            if (dnd.isActive) {
+              dnd.disable()
+            } else {
+              dnd.enableFor(60 * 60 * 1000)
+            }
+          }}
+        >
+          <span className="ios-row__icon" style={{ background: dnd.isActive ? 'var(--danger)' : 'var(--ink-soft)' }}>
+            <Icon name="bell" size={15} aria-hidden="true" />
+          </span>
+          <span className="ios-row__body">
+            <span className="ios-row__title">Não perturbe</span>
+            <span className="ios-row__sub">
+              {dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Desativado'}
+            </span>
+          </span>
+          <span className={`ios-row__toggle${dnd.isActive ? ' ios-row__toggle--on' : ''}`} aria-hidden="true" />
+        </button>
+      </div>
+
       <div className="ios-section-label">Preferências</div>
       <div className="ios-group">
         <button type="button" className="ios-row" onClick={theme.cyclePreference}>
@@ -57,6 +107,20 @@ export default function MenuPage() {
             <span className="ios-row__title">Tema</span>
           </span>
           <span className="ios-row__end">{THEME_LABEL[theme.preference] ?? 'Automático'}</span>
+        </button>
+        <button
+          type="button"
+          className="ios-row"
+          onClick={() => setIsPrefsModalOpen(true)}
+        >
+          <span className="ios-row__icon" style={{ background: 'var(--primary)' }}>
+            <Icon name="settings" size={15} aria-hidden="true" />
+          </span>
+          <span className="ios-row__body">
+            <span className="ios-row__title">Canais de notificação</span>
+            <span className="ios-row__sub">E-mail, push e notificações no portal</span>
+          </span>
+          <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
         </button>
         <button
           type="button"
