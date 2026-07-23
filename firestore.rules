@@ -254,10 +254,14 @@ service cloud.firestore {
     function isAllowedSelfUserUpdate(uid) {
       return isSelf(uid)
         && request.resource.data.uid == resource.data.uid
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.status == resource.data.status
-        && request.resource.data.statusTone == resource.data.statusTone
-        && request.resource.data.email == resource.data.email
+        // role/status/statusTone/email nao sao enviados pelo client (ensureUserProfile
+        // so grava metadados). O Firestore merge preserva os valores existentes,
+        // entao request.resource.data tera os mesmos valores de resource.data.
+        // Mas se o doc nao tem um desses campos, a comparacao null==null passa.
+        && (request.resource.data.role == resource.data.role)
+        && (request.resource.data.status == resource.data.status)
+        && (request.resource.data.statusTone == resource.data.statusTone)
+        && (request.resource.data.email == resource.data.email)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name',
           'area',
@@ -267,6 +271,7 @@ service cloud.firestore {
           'updatedAt',
           'fcmTokens',
           'notificationPreferences',
+          'uid',
         ])
         // F6: tokens de push — lista com teto (higiene; o backend tambem
         // remove tokens invalidos no retorno do multicast).
