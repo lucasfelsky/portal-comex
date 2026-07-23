@@ -6813,6 +6813,16 @@ body {
   white-space: pre-wrap;
 }
 
+.support-ticket-card__context {
+  font-size: var(--fs-caption);
+  color: var(--ink-soft);
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-xs);
+  border-left: 3px solid var(--primary);
+}
+
 .support-ticket-card__images {
   display: flex;
   flex-wrap: wrap;

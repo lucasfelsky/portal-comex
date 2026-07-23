@@ -28,6 +28,21 @@ import {
 
 const PRIORITY_OPTIONS = [1, 2, 3, 4, 5]
 
+// Traduz pathnames em labels legíveis para o contexto do chamado.
+const PAGE_LABELS = {
+  '/': 'Dashboard',
+  '/news': 'Notícias',
+  '/processos': 'Chegadas',
+  '/notifications': 'Central de Notificações',
+  '/menu': 'Menu',
+  '/admin': 'Centro Administrativo',
+  '/admin/usuarios': 'Admin · Usuários',
+  '/admin/comunicados': 'Admin · Comunicados',
+  '/admin/barra': 'Admin · Barra do porto',
+  '/admin/previsoes': 'Admin · Previsões',
+  '/admin/suporte': 'Admin · Suporte',
+}
+
 // Abertos primeiro, depois em andamento; resolvidos por último.
 const STATUS_SORT_RANK = { aberto: 0, em_andamento: 1, resolvido: 2 }
 
@@ -275,6 +290,14 @@ export default function AdminSupportPanel() {
                   </div>
 
                   <p className="support-ticket-card__message">{ticket.message}</p>
+
+                  {ticket.contextPage ? (
+                    <p className="support-ticket-card__context">
+                      <span className="detail-label">Contexto:</span>{' '}
+                      {PAGE_LABELS[ticket.contextPage] ?? ticket.contextPage}
+                      {ticket.contextProcessId ? ` · processo ${ticket.contextProcessId.slice(0, 8)}` : ''}
+                    </p>
+                  ) : null}
 
                   {ticket.imageUrls.length > 0 ? (
                     <div className="support-ticket-card__images">
