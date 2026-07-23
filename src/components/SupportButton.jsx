@@ -4,6 +4,7 @@ import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Modal from './Modal'
 import { useToast } from './Toast'
+import { getActiveProcess } from '../utils/activeProcessContext'
 import {
   SUPPORT_TICKET_MAX_IMAGES,
   SUPPORT_TICKET_MAX_MESSAGE_LENGTH,
@@ -120,9 +121,13 @@ export default function SupportButton() {
       // Captura a aba atual e o processo selecionado (se houver)
       // para dar contexto ao admin mesmo sem o usuário descrever.
       const contextPage = location.pathname
-      const contextProcessId = location.state?.selectedProcessId ?? null
+      const activeProcess = getActiveProcess()
+      const contextProcessId = activeProcess?.id ?? location.state?.selectedProcessId ?? null
+      const contextProcessName = activeProcess
+        ? [activeProcess.processNumber, activeProcess.destination].filter(Boolean).join(' · ') || activeProcess.name || null
+        : null
 
-      const createdTicket = await createSupportTicket({ message, files, contextPage, contextProcessId }, profile)
+      const createdTicket = await createSupportTicket({ message, files, contextPage, contextProcessId, contextProcessName }, profile)
 
       setMyTickets((currentTickets) => [createdTicket, ...currentTickets])
       setMessage('')

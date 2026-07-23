@@ -295,7 +295,7 @@ export default function AdminSupportPanel() {
                     <p className="support-ticket-card__context">
                       <span className="detail-label">Contexto:</span>{' '}
                       {PAGE_LABELS[ticket.contextPage] ?? ticket.contextPage}
-                      {ticket.contextProcessId ? ` · processo ${ticket.contextProcessId.slice(0, 8)}` : ''}
+                      {ticket.contextProcessName ? ` · ${ticket.contextProcessName}` : ticket.contextProcessId ? ` · processo ${ticket.contextProcessId.slice(0, 8)}` : ''}
                     </p>
                   ) : null}
 

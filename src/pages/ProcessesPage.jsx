@@ -13,6 +13,7 @@ import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import ProcessListView from '../features/processes/ProcessListView'
 import ImportProcessesModal from '../features/processes/ImportProcessesModal'
 import Spinner from '../components/Spinner'
+import { setActiveProcess } from '../utils/activeProcessContext'
 import {
   archiveProcess,
   channelOptions,
@@ -618,6 +619,12 @@ export default function ProcessesPage() {
 
   const selectedProcess =
     processes.find((item) => item.id === selectedProcessId) ?? filteredProcesses[0] ?? null
+
+  // Atualiza o contexto de processo ativo para o SupportButton
+  useEffect(() => {
+    setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination } : null)
+    return () => setActiveProcess(null)
+  }, [selectedProcess?.id, selectedProcess?.name, selectedProcess?.processNumber, selectedProcess?.destination])
   const canEditSelectedCollectionStatus =
     canEditCollectionStatus && canUsePostCollectionStatuses(selectedProcess)
   const draftPostReceiptImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)

@@ -75,8 +75,9 @@
     ]
   },
   "srcUtils": {
-    "count": 11,
+    "count": 12,
     "_list": [
+      "activeProcessContext.js",
       "collectionWindows.js",
       "dashboardStats.js",
       "dateFormat.js",

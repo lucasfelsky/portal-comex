@@ -425,7 +425,7 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
         'authorId', 'authorName', 'authorEmail', 'message', 'imageUrls',
         'status', 'priority', 'createdAt', 'updatedAt',
-        'contextPage', 'contextProcessId',
+        'contextPage', 'contextProcessId', 'contextProcessName',
       ])
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.authorEmail == request.auth.token.email

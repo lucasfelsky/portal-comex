@@ -95,6 +95,7 @@ function normalizeTicket(rawTicket, fallbackId) {
     resolutionMessage: normalizeStringValue(rawTicket.resolutionMessage) || null,
     contextPage: normalizeStringValue(rawTicket.contextPage) || null,
     contextProcessId: normalizeStringValue(rawTicket.contextProcessId) || null,
+    contextProcessName: normalizeStringValue(rawTicket.contextProcessName) || null,
   }
 }
 
@@ -157,7 +158,7 @@ async function uploadTicketImages(files, authorId) {
   }
 }
 
-export async function createSupportTicket({ message, files = [], contextPage = null, contextProcessId = null }, profile) {
+export async function createSupportTicket({ message, files = [], contextPage = null, contextProcessId = null, contextProcessName = null }, profile) {
   const normalizedMessage = String(message ?? '').trim()
 
   if (!normalizedMessage) {
@@ -189,6 +190,7 @@ export async function createSupportTicket({ message, files = [], contextPage = n
       priority: SUPPORT_TICKET_DEFAULT_PRIORITY,
       contextPage: contextPage || null,
       contextProcessId: contextProcessId || null,
+      contextProcessName: contextProcessName || null,
       createdAt: now,
       updatedAt: now,
     })
@@ -209,6 +211,7 @@ export async function createSupportTicket({ message, files = [], contextPage = n
     priority: SUPPORT_TICKET_DEFAULT_PRIORITY,
     contextPage: contextPage || null,
     contextProcessId: contextProcessId || null,
+    contextProcessName: contextProcessName || null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -224,6 +227,7 @@ export async function createSupportTicket({ message, files = [], contextPage = n
       priority: SUPPORT_TICKET_DEFAULT_PRIORITY,
       contextPage: contextPage || null,
       contextProcessId: contextProcessId || null,
+      contextProcessName: contextProcessName || null,
       createdAt: new Date().toISOString(),
     },
     createdRef.id
