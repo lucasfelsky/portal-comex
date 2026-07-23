@@ -52,25 +52,25 @@ const pageMeta = {
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
   '/notifications': { title: 'Central de Notificações', breadcrumb: [] },
   '/menu': { title: 'Menu', breadcrumb: [] },
-  '/admin': { title: 'Painel administrativo', breadcrumb: [{ label: 'Admin' }] },
+  '/admin': { title: 'Centro Administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
-    title: 'Usuários',
+    title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Usuários' }],
   },
   '/admin/comunicados': {
-    title: 'Comunicados',
+    title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Comunicados' }],
   },
   '/admin/barra': {
-    title: 'Barra do porto',
+    title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Barra do porto' }],
   },
   '/admin/previsoes': {
-    title: 'Regras de previsão',
+    title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Regras de previsão' }],
   },
   '/admin/suporte': {
-    title: 'Suporte',
+    title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Suporte' }],
   },
 }
