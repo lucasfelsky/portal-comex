@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Modal from './Modal'
@@ -39,6 +40,7 @@ function formatTicketDate(isoDate) {
 
 export default function SupportButton() {
   const { profile } = useAuth()
+  const location = useLocation()
   const toast = useToast()
   const fileInputRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -115,7 +117,12 @@ export default function SupportButton() {
     setIsSubmitting(true)
 
     try {
-      const createdTicket = await createSupportTicket({ message, files }, profile)
+      // Captura a aba atual e o processo selecionado (se houver)
+      // para dar contexto ao admin mesmo sem o usuário descrever.
+      const contextPage = location.pathname
+      const contextProcessId = location.state?.selectedProcessId ?? null
+
+      const createdTicket = await createSupportTicket({ message, files, contextPage, contextProcessId }, profile)
 
       setMyTickets((currentTickets) => [createdTicket, ...currentTickets])
       setMessage('')
