@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import PageToolbar from '../components/PageToolbar'
 import Icon from '../components/Icon'
 
 const sections = [
@@ -19,12 +18,6 @@ export default function AdminLayout() {
 
   return (
     <section className="surface admin-section">
-      {/* Título principal da página */}
-      <PageToolbar
-        title="Centro administrativo"
-        description="Gerencie cadastros, avisos, status da barra e regras de previsão de entrega."
-      />
-
       {/* Desktop: tabs normais */}
       <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
         {sections.map((section) => (
