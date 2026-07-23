@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import SelectField from '../../components/SelectField'
+import Icon from '../../components/Icon'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 
 // F15.2: iniciais pro avatar da lista mobile (mesma lógica do topbar).
@@ -78,6 +79,7 @@ export default function AdminUsersPanel() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
+  const [userListExpanded, setUserListExpanded] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -371,78 +373,91 @@ export default function AdminUsersPanel() {
             <div>
               <h3>Gestão de usuários</h3>
             </div>
-            <span className="inline-badge">{filteredUsers.length} visíveis</span>
-          </div>
-
-          <div className="admin-filters">
-            <label className="field">
-              <span>Buscar usuário</span>
-              <input
-                className="text-input"
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Nome, email, perfil ou ID"
-              />
-            </label>
-
-            <label className="field field--compact">
-              <span>Status</span>
-              <SelectField
-                className="text-input"
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+            <div className="card-heading__actions">
+              <span className="inline-badge">{filteredUsers.length} visíveis</span>
+              <button
+                type="button"
+                className="ghost-button admin-user-list__toggle"
+                onClick={() => setUserListExpanded((prev) => !prev)}
+                aria-expanded={userListExpanded}
               >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </SelectField>
-            </label>
+                {userListExpanded ? 'Esconder lista' : 'Mostrar lista'}
+                <Icon name="chevron" size={12} className={`admin-user-list__toggle-icon${userListExpanded ? ' admin-user-list__toggle-icon--open' : ''}`} aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
-          <div className="admin-user-list admin-user-list--scroll">
-            {isLoadingUsers ? (
-              <Skeleton.Group count={4}>
-                <div className="admin-user-row" style={{ gap: 10, padding: 12 }}>
-                  <Skeleton variant="circle" width={36} height={36} />
-                  <div style={{ flex: 1, gap: 4, display: 'grid' }}>
-                    <Skeleton variant="text" width="60%" />
-                    <Skeleton variant="text" width="40%" />
-                  </div>
-                </div>
-              </Skeleton.Group>
-            ) : filteredUsers.length > 0 ? (
-              filteredUsers.map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  className={`admin-user-row admin-user-row--button${
-                    selectedUserId === user.id && !isCreating ? ' admin-user-row--selected' : ''
-                  }`}
-                  onClick={() => handleSelectUser(user.id)}
+          <div className={`admin-user-list__collapsible${userListExpanded ? ' admin-user-list__collapsible--open' : ''}`}>
+            <div className="admin-filters">
+              <label className="field">
+                <span>Buscar usuário</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Nome, email, perfil ou ID"
+                />
+              </label>
+
+              <label className="field field--compact">
+                <span>Status</span>
+                <SelectField
+                  className="text-input"
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
                 >
-                  {/* F15.2: avatar de iniciais — só aparece no mobile (CSS). */}
-                  <span className="admin-user-row__avatar" aria-hidden="true">
-                    {getInitials(user.name || user.email)}
-                  </span>
-                  <div>
-                    <strong>{user.name}</strong>
-                    <p>
-                      {getRoleLabel(user.role)} · {user.area || 'Geral'}
-                    </p>
-                    <span>{user.id}</span>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </SelectField>
+              </label>
+            </div>
+
+            <div className="admin-user-list admin-user-list--scroll">
+              {isLoadingUsers ? (
+                <Skeleton.Group count={4}>
+                  <div className="admin-user-row" style={{ gap: 10, padding: 12 }}>
+                    <Skeleton variant="circle" width={36} height={36} />
+                    <div style={{ flex: 1, gap: 4, display: 'grid' }}>
+                      <Skeleton variant="text" width="60%" />
+                      <Skeleton variant="text" width="40%" />
+                    </div>
                   </div>
-                  <span className={statusClassName(user.statusTone)}>{user.status}</span>
-                </button>
-              ))
-            ) : (
-              <div className="empty-state">
-                <strong>Nenhum usuário encontrado</strong>
-                <p>Ajuste a busca ou o filtro para voltar a exibir resultados.</p>
-              </div>
-            )}
+                </Skeleton.Group>
+              ) : filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className={`admin-user-row admin-user-row--button${
+                      selectedUserId === user.id && !isCreating ? ' admin-user-row--selected' : ''
+                    }`}
+                    onClick={() => handleSelectUser(user.id)}
+                  >
+                    {/* F15.2: avatar de iniciais — só aparece no mobile (CSS). */}
+                    <span className="admin-user-row__avatar" aria-hidden="true">
+                      {getInitials(user.name || user.email)}
+                    </span>
+                    <div>
+                      <strong>{user.name}</strong>
+                      <p>
+                        {getRoleLabel(user.role)} · {user.area || 'Geral'}
+                      </p>
+                      <span>{user.id}</span>
+                    </div>
+                    <span className={statusClassName(user.statusTone)}>{user.status}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="empty-state">
+                  <strong>Nenhum usuário encontrado</strong>
+                  <p>Ajuste a busca ou o filtro para voltar a exibir resultados.</p>
+                </div>
+              )}
+            </div>
           </div>
         </article>
       </div>
