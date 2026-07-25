@@ -279,8 +279,15 @@ service cloud.firestore {
           || (request.resource.data.fcmTokens is list
             && request.resource.data.fcmTokens.size() <= 10))
         // F9: preferencias de notificacao — mapa (shape fino validado no
-        // client/functions; default ligado quando ausente).
+        // client/functions; default ligado quando ausente). `null` tambem e'
+        // valido: e' o default gravado pelo ensureUserProfile ate' o usuario
+        // configurar preferencias (buildBaseProfile em AuthContext.jsx), e um
+        // merge que nao mexe no campo o preserva como null vindo do doc
+        // existente. Sem este caso, TODO self-update (nome/area/favoritos)
+        // de um usuario que nunca configurou notificacoes caia em
+        // permission-denied — bug real de prod, 2026-07-23.
         && (!('notificationPreferences' in request.resource.data)
+          || request.resource.data.notificationPreferences == null
           || request.resource.data.notificationPreferences is map);
     }
 
