@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 
@@ -28,6 +28,15 @@ export default function VerifyEmailPage() {
 
   const oobCode = useMemo(() => String(searchParams.get('oobCode') ?? '').trim(), [searchParams])
 
+  // confirmEmailVerification muda de referência a cada render do AuthProvider
+  // (o useMemo do contexto recalcula quando setUser/setProfile disparam, o
+  // que a propria confirmacao causa via refreshAuthenticatedUser). Guardamos
+  // a versao mais recente numa ref para nao precisar dela nas deps do efeito
+  // abaixo — do contrario o efeito reexecuta e reaplica o MESMO oobCode ja
+  // consumido, e o Firebase Auth responde auth/invalid-action-code na 2a vez.
+  const confirmEmailVerificationRef = useRef(confirmEmailVerification)
+  confirmEmailVerificationRef.current = confirmEmailVerification
+
   useEffect(() => {
     if (!oobCode) {
       return undefined
@@ -40,7 +49,7 @@ export default function VerifyEmailPage() {
       setError('')
 
       try {
-        await confirmEmailVerification(oobCode)
+        await confirmEmailVerificationRef.current(oobCode)
 
         if (!isMounted) {
           return
@@ -63,7 +72,8 @@ export default function VerifyEmailPage() {
     return () => {
       isMounted = false
     }
-  }, [confirmEmailVerification, oobCode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- oobCode so' deve ser aplicado 1x; ver comentario acima
+  }, [oobCode])
 
   if (loading) {
     return (
@@ -105,7 +115,7 @@ export default function VerifyEmailPage() {
     setFeedback('')
 
     try {
-      const refreshedUser = await refreshAuthenticatedUser()
+      const refreshedUser = await refreshAuthenticatedUser({ forceClaimsRefresh: true })
 
       if (refreshedUser?.emailVerified) {
         setFeedback(

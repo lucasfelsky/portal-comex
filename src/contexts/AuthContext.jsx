@@ -104,23 +104,40 @@ async function ensureUserProfile(user, { forceRefresh = false } = {}) {
       updatedAt: serverTimestamp(),
     }
 
-    await setDoc(userRef, profile, { merge: true })
-    return profile
+    try {
+      await setDoc(userRef, profile, { merge: true })
+      return profile
+    } catch (error) {
+      // Corrida entre chamadas concorrentes de ensureUserProfile (login +
+      // verificacao de email + refresh de status podem disparar isso quase
+      // ao mesmo tempo apos o cadastro): outra chamada ja criou o doc entre
+      // o getDoc acima e este setDoc. O Firestore agora ve isto como um
+      // `update`, e o payload de create (com role/status/createdAt) nao
+      // esta na whitelist de auto-update das rules -> permission-denied.
+      // Cai para o fluxo de update abaixo, que relê o doc e grava so' os
+      // metadados permitidos.
+      if (error?.code !== 'permission-denied') {
+        throw error
+      }
+    }
   }
+
+  const latestSnapshot = snapshot.exists() ? snapshot : await getDoc(userRef)
+  const latestData = latestSnapshot.exists() ? latestSnapshot.data() : {}
 
   const mergedProfile = {
     // Omit role/status/statusTone/scopes: a fonte da verdade sao as custom
     // claims (L18 / Sprint 5.1). O spread final de baseProfile garante
     // que role/status venham das claims, NAO do Firestore (que e' read-only).
     uid: user.uid,
-    name: user.displayName ?? snapshot.data().name ?? snapshot.data().email ?? 'Usuário',
-    area: existingProfile?.area ?? 'Geral',
+    name: user.displayName ?? latestData.name ?? latestData.email ?? 'Usuário',
+    area: latestData.area ?? 'Geral',
     lastAccess:
       normalizeProfileStatus(claims.status) === 'Ativo'
         ? now
-        : snapshot.data().lastAccess ?? baseProfile.lastAccess,
-    favoriteProcessIds: existingProfile?.favoriteProcessIds ?? [],
-    notes: existingProfile?.notes ?? getDefaultNotes(claims.status),
+        : latestData.lastAccess ?? baseProfile.lastAccess,
+    favoriteProcessIds: latestData.favoriteProcessIds ?? [],
+    notes: latestData.notes ?? getDefaultNotes(claims.status),
     updatedAt: serverTimestamp(),
   }
 
