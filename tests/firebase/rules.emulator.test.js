@@ -21,7 +21,7 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const RULES_PATH = join(HERE, '..', '..', 'firestore.rules')
@@ -1330,6 +1330,74 @@ describeEmulator('firestore.rules (emulador)', () => {
       await seed((db) => setDoc(doc(db, 'users/outro'), { uid: 'outro', role: 'user', name: 'X' }))
       const db = approvedUser('user-1')
       await assertFails(updateDoc(doc(db, 'users/outro'), { name: 'Invadido' }))
+    })
+
+    it('reproduz o setDoc merge de ensureUserProfile (AuthContext.jsx) apos aprovacao do admin', async () => {
+      const db = approvedUser('user-1')
+      await assertSucceeds(
+        setDoc(
+          doc(db, 'users/user-1'),
+          {
+            uid: 'user-1',
+            name: 'maria.leonor@sqquimica.com',
+            area: 'Geral',
+            lastAccess: '2026-07-23T19:19:15.244Z',
+            favoriteProcessIds: [],
+            notes: 'Cadastro corporativo aguardando aprovação administrativa.',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+      )
+    })
+
+    // Bug de prod 2026-07-23: notificationPreferences: null e' o default
+    // gravado pelo ensureUserProfile ate' o usuario configurar preferencias
+    // (buildBaseProfile). Um self-update que nao mexe nesse campo o preserva
+    // como null (vindo do doc existente) — sem o `== null` na rule, isso
+    // negava TODO self-update (nome/area/favoritos/etc) de qualquer usuario
+    // que nunca tivesse configurado notificacoes. Ver firestore.rules.
+    it('permite self-update quando notificationPreferences existente e null (default de novo usuario)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/user-3'), {
+          uid: 'user-3',
+          role: 'user',
+          status: 'Ativo',
+          statusTone: 'ok',
+          email: 'user3@sqquimica.com',
+          name: 'Maria Leonor Wiese',
+          area: 'Geral',
+          favoriteProcessIds: [],
+          notificationPreferences: null,
+        })
+      )
+      const db = approvedUser('user-3', { email: 'user3@sqquimica.com' })
+      await assertSucceeds(
+        setDoc(
+          doc(db, 'users/user-3'),
+          {
+            uid: 'user-3',
+            name: 'Maria Leonor Wiese',
+            area: 'Geral',
+            lastAccess: '2026-07-23T19:19:15.244Z',
+            favoriteProcessIds: [],
+            notes: 'Cadastro corporativo aguardando aprovação administrativa.',
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        )
+      )
+    })
+
+    it('nega notificationPreferences com shape invalido (nem map nem null)', async () => {
+      const db = approvedUser('user-1')
+      await assertFails(
+        setDoc(
+          doc(db, 'users/user-1'),
+          { notificationPreferences: 'ligado' },
+          { merge: true }
+        )
+      )
     })
   })
 
