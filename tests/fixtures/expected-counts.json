@@ -119,5 +119,183 @@
       "functions": 11,
       "ui": 52
     }
+  },
+  "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",
+  "firestoreAllowlists": {
+    "_comment": "Campos de cada hasOnly([...]) em firestore.rules. Espelha as tabelas de campo de Coleções.md. Campo novo aqui = campo novo pra documentar. Origem: bug de prod L25 (notificationPreferences nunca documentado).",
+    "isAllowedSelfUserUpdate": [
+      "area",
+      "favoriteProcessIds",
+      "fcmTokens",
+      "lastAccess",
+      "name",
+      "notes",
+      "notificationPreferences",
+      "uid",
+      "updatedAt"
+    ],
+    "isAdminUserFieldsUpdate": [
+      "role",
+      "status",
+      "statusTone",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
+    ],
+    "isAdminProcessFields": [
+      "archived",
+      "archivedAt",
+      "archivedBy",
+      "arrived",
+      "berthed",
+      "cargoPresenceInformed",
+      "cargoReceivedAt",
+      "category",
+      "collectionScheduledAt",
+      "collectionStatus",
+      "collectionWindows",
+      "containerQuantity",
+      "destination",
+      "dtaArrivalAtItajai",
+      "dtaLoadingScheduledAt",
+      "dtaStatus",
+      "duimpStatus",
+      "eta",
+      "etaOriginal",
+      "etd",
+      "items",
+      "mapaInspectionScheduledAt",
+      "mapaStatus",
+      "name",
+      "palletQuantity",
+      "parameterizationChannel",
+      "postReceiptImages",
+      "postReceiptNotes",
+      "processNotes",
+      "processNumber",
+      "processStatus",
+      "updatedAt",
+      "updatedById",
+      "updatedByName",
+      "warehouseDeliveryDateOverride"
+    ],
+    "isAdminAnnouncementUpdate": [
+      "channel",
+      "content",
+      "createdAt",
+      "title",
+      "updatedAt"
+    ],
+    "isAdminBarUpdate": [
+      "notes",
+      "status",
+      "updatedAt"
+    ],
+    "isLogisticsPostReceiptUpdate": [
+      "postReceiptImages",
+      "postReceiptNotes",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
+    ],
+    "isLogisticsCollectionStatusUpdate": [
+      "collectionStatus",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
+    ],
+    "isSupportTicketCreate": [
+      "authorEmail",
+      "authorId",
+      "authorName",
+      "contextPage",
+      "contextProcessId",
+      "contextProcessName",
+      "createdAt",
+      "imageUrls",
+      "message",
+      "priority",
+      "status",
+      "updatedAt"
+    ],
+    "isAdminSupportTicketUpdate": [
+      "priority",
+      "resolutionMessage",
+      "resolvedAt",
+      "resolvedById",
+      "resolvedByName",
+      "status",
+      "updatedAt"
+    ]
+  },
+  "routes": {
+    "_comment": "Valores literais de path=\"...\" em src/App.jsx, incluindo os relativos das filhas de /admin. Espelha Rotas.md. Em 2026-07-23 faltavam 3 rotas em producao no vault: /notifications, /menu, /admin/suporte.",
+    "_list": [
+      "*",
+      "/admin",
+      "/aguardando-aprovacao",
+      "/debug/claims",
+      "/login",
+      "/menu",
+      "/news",
+      "/notifications",
+      "/processos",
+      "/verificar-email",
+      "barra",
+      "comunicados",
+      "previsoes",
+      "suporte",
+      "usuarios"
+    ]
+  },
+  "declaredDependencies": {
+    "_comment": "Dependencias que Stack.md afirma que o app usa. Todas devem existir no package.json. Origem: o vault listava lucide-react, date-fns e zod — nenhuma instalada.",
+    "_list": [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "firebase",
+      "vite",
+      "tailwindcss",
+      "vitest"
+    ]
+  },
+  "onSnapshotServices": {
+    "_comment": "Unicos arquivos de src/services que usam onSnapshot. O app usa firebase/firestore/lite (SEM onSnapshot) em tudo o mais — por isso NAO e' real-time. Se esta lista crescer, a descricao do vault fica errada e o mix de SDK lite/completo reintroduz a L24.",
+    "_list": [
+      "forecastSettingsRepository.js"
+    ]
+  },
+  "vaultMustMention": {
+    "_comment": "Identificadores que existem no codigo e DEVEM estar documentados em algum lugar do Inventario. Origem: L25 — notificationPreferences existia na rule e em nenhum arquivo do vault, e virou bug de producao.",
+    "_list": [
+      "notificationPreferences",
+      "fcmTokens",
+      "favoriteProcessIds",
+      "scopes",
+      "supportTickets",
+      "externalNewsDlq",
+      "userCredentials",
+      "archivedBy",
+      "collectionWindows",
+      "statusTone"
+    ]
+  },
+  "vaultMustNotMention": {
+    "_comment": "Identificadores-FANTASMA (nunca existiram ou foram removidos). Mencao e' permitida em contexto historico (linha em blockquote \">\" ou com marcador de correcao); acusada fora disso. Seed: achados da auditoria de 2026-07-23.",
+    "_list": [
+      "lucide-react",
+      "date-fns",
+      "AdminPage.jsx",
+      "isActiveUser",
+      "isCorporateEmail",
+      "isLogisticaUser",
+      "markNotificationsRead",
+      "refreshProfile",
+      "loginWithFirebase",
+      "customsFlow",
+      "mapaFlow",
+      "operationalFields"
+    ]
   }
 }
