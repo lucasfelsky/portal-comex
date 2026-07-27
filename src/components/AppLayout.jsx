@@ -522,62 +522,53 @@ export default function AppLayout() {
           onTouchStart={(event) => event.stopPropagation()}
         >
           <div className="card-heading">
-            <div className="notifications__heading-top">
-              <div>
-                <strong>Central de notificações</strong>
-                <p>
-                  {unreadNotifications.length} pendentes
-                  {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
-                </p>
-              </div>
-              {/* Ícones na linha do título: sino (não perturbe) à esquerda,
-                  engrenagem (preferências) à direita. F9: o toggle de FCM saiu
-                  daqui (sino duplicado) — push agora é canal dentro das prefs. */}
-              <div className="notifications__icon-actions">
-                <button
-                  type="button"
-                  className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
-                  onClick={() => {
-                    if (dnd.isActive) {
-                      dnd.disable()
-                    } else {
-                      dnd.enableFor(60 * 60 * 1000) // 1h
-                    }
-                  }}
-                  aria-pressed={dnd.isActive}
-                  aria-label={
-                    dnd.isActive
-                      ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
-                      : 'Ativar modo não perturbe por 1 hora'
-                  }
-                  title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
-                >
-                  <Icon name="bell" size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button notifications__prefs"
-                  onClick={() => setIsPrefsModalOpen(true)}
-                  aria-label="Preferências de notificação"
-                  title="Preferências de notificação"
-                >
-                  <Icon name="settings" size={16} />
-                </button>
-              </div>
+            <div>
+              <strong>Central de notificações</strong>
+              <p>
+                {unreadNotifications.length} pendentes
+                {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
+              </p>
             </div>
-            <button
-              type="button"
-              className="ghost-button notifications__mark-all"
-              onClick={handleMarkAllNotificationsAsRead}
-              disabled={unreadNotifications.length === 0}
-            >
-              Marcar todas como Lidas
-            </button>
+            {/* Ícones na linha do título: sino (não perturbe) à esquerda,
+                engrenagem (preferências) à direita. F9: o toggle de FCM saiu
+                daqui (sino duplicado) — push agora é canal dentro das prefs. */}
+            <div className="notifications__icon-actions">
+              <button
+                type="button"
+                className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
+                onClick={() => {
+                  if (dnd.isActive) {
+                    dnd.disable()
+                  } else {
+                    dnd.enableFor(60 * 60 * 1000) // 1h
+                  }
+                }}
+                aria-pressed={dnd.isActive}
+                aria-label={
+                  dnd.isActive
+                    ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                    : 'Ativar modo não perturbe por 1 hora'
+                }
+                title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+              >
+                <Icon name="bell" size={16} />
+              </button>
+              <button
+                type="button"
+                className="ghost-button notifications__prefs"
+                onClick={() => setIsPrefsModalOpen(true)}
+                aria-label="Preferências de notificação"
+                title="Preferências de notificação"
+              >
+                <Icon name="settings" size={16} />
+              </button>
+            </div>
           </div>
 
-          {/* Categorias como select nativo estilizado (antes eram 5 abas que
-              quebravam em 2 linhas no drawer de 420px). Só desktop — no mobile
-              a NotificationsPage mantém a tab-row com scroll horizontal. */}
+          {/* Filtro de categoria (select nativo estilizado — antes eram 5 abas
+              que quebravam em 2 linhas em 420px) à esquerda e "Marcar todas
+              como lidas" à direita, na mesma linha. Só desktop — no mobile a
+              NotificationsPage mantém a tab-row com scroll horizontal. */}
           <div className="notifications__filter-row">
             <select
               className="notifications__filter-select"
@@ -591,6 +582,14 @@ export default function AppLayout() {
               <option value="favorite_process_message">Favoritos</option>
               <option value="post_receipt_notes_updated">Pós-recebimento</option>
             </select>
+            <button
+              type="button"
+              className="ghost-button notifications__mark-all"
+              onClick={handleMarkAllNotificationsAsRead}
+              disabled={unreadNotifications.length === 0}
+            >
+              Marcar todas como Lidas
+            </button>
           </div>
 
           <div className="notifications__list">

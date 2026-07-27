@@ -729,23 +729,15 @@ body {
   animation: notifications-sheet-out 220ms ease forwards;
 }
 
-/* Refino do drawer desktop (2026-07-27): o cabeçalho é empilhado em 2 blocos —
-   (1) linha do título + ícones (sino/engrenagem) à direita, (2) "Marcar todas
-   como lidas" abaixo do contador. Em 420px os 3 botões não cabiam ao lado do
-   título de 2 linhas (sino cortado, engrenagem gigante herdando .ghost-button).
-   Mobile tem media query própria (não é afetado). */
+/* Refino do drawer desktop (2026-07-27): cabeçalho em 1 linha (título + subtítulo
+   à esquerda, ícones sino/engrenagem à direita); os filtros e o "Marcar todas
+   como lidas" ficam na linha de baixo (select à esquerda, botão à direita).
+   Em 420px os 3 botões não cabiam ao lado do título de 2 linhas (sino cortado,
+   engrenagem gigante herdando .ghost-button). Mobile tem media query própria. */
 .notifications__panel .card-heading {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.notifications__panel .notifications__heading-top {
-  display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 4px;
 }
 
 .notifications__panel .notifications__icon-actions {
@@ -755,17 +747,21 @@ body {
   flex: 0 0 auto;
 }
 
-/* mark-all abaixo do contador, largura do conteúdo (não estica no drawer). */
-.notifications__panel .notifications__mark-all {
-  align-self: flex-start;
-}
-
-/* Categorias como select nativo estilizado — mesmo caret teal do
-   .detail-tab-select__native (F16.11). Largura do conteúdo, alinhado à esquerda. */
+/* Linha do filtro: categorias (select) à esquerda, "Marcar todas" à direita. */
 .notifications__filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
+
+.notifications__panel .notifications__mark-all {
+  flex: 0 0 auto;
+}
+
+/* Select de categorias — mesmo caret teal do .detail-tab-select__native (F16.11). */
 
 .notifications__filter-select {
   width: auto;
