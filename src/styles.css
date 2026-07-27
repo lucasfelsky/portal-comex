@@ -6995,6 +6995,67 @@ body {
   gap: 16px;
 }
 
+/* Guia "Instalar como app" (MenuPage) — passos de PWA por plataforma. */
+.install-guide {
+  display: grid;
+  gap: 18px;
+}
+
+.install-guide__lead {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-subhead);
+  line-height: 1.45;
+}
+
+.install-guide__block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.install-guide__block--active {
+  border-color: var(--primary);
+  background: var(--primary-50);
+}
+
+.install-guide__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.install-guide__badge {
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary-700);
+  background: var(--surface);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+}
+
+.install-guide__steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+}
+
+.install-guide__steps strong {
+  font-weight: 700;
+}
+
 .notification-prefs__lead {
   margin: 0;
   color: var(--ink-soft);
