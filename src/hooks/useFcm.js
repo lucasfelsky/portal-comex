@@ -5,7 +5,14 @@
 //
 // status: 'unsupported' | 'idle' | 'requesting' | 'granted' | 'denied' | 'error'
 // supported: boolean (VAPID_KEY configurado + browser suporta)
-// enable(): pede permissao, obtem token, registra listener de foreground
+// enable(): pede permissao, obtem token, registra listener de foreground.
+//   Retorna { token, status } — 'status' distingue POR QUE deu null:
+//   'denied'/'default' (usuario/navegador recusou a permissao) vs 'error'
+//   (permissao concedida, mas getToken() falhou por motivo tecnico — VAPID
+//   key invalida, service worker, API do FCM, etc). Antes retornava so' o
+//   token, e qualquer falha virava a mesma mensagem "permissao nao
+//   concedida" pro usuario — inclusive quando a permissao TINHA sido
+//   concedida e o problema era outro. Ver NotificationPreferencesModal.
 // disable(): revoga token
 //
 // F6 (backlog 2026-07-12): o token agora E' persistido em
@@ -64,7 +71,7 @@ export function useFcm(uid) {
   const enable = useCallback(async () => {
     if (!supported) {
       setStatus('unsupported')
-      return null
+      return { token: null, status: 'unsupported' }
     }
     setStatus('requesting')
     try {
@@ -72,12 +79,13 @@ export function useFcm(uid) {
       if (permission !== 'granted') {
         setStatus(permission)
         writeStoredStatus(permission)
-        return null
+        return { token: null, status: permission }
       }
       const newToken = await getFcmToken()
+      const resultStatus = newToken ? 'granted' : 'error'
       setToken(newToken)
-      setStatus(newToken ? 'granted' : 'error')
-      writeStoredStatus(newToken ? 'granted' : 'error')
+      setStatus(resultStatus)
+      writeStoredStatus(resultStatus)
 
       // Persiste o token no perfil — sem isso o backend nao tem pra onde
       // enviar o push. Falha aqui nao derruba o enable (in-app continua).
@@ -98,12 +106,12 @@ export function useFcm(uid) {
         }
       })
 
-      return newToken
+      return { token: newToken, status: resultStatus }
     } catch (error) {
       console.error('Falha ao habilitar FCM.', error)
       setStatus('error')
       writeStoredStatus('error')
-      return null
+      return { token: null, status: 'error' }
     }
   }, [supported, uid])
 

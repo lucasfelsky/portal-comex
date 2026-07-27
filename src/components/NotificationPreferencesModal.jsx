@@ -70,10 +70,17 @@ export default function NotificationPreferencesModal({ open, onClose, profile, f
       // Ligar qualquer push exige permissão do navegador — pedida AQUI,
       // no clique de salvar (gesto do usuário).
       if (anyPushOn && pushSupported && !pushEnabled) {
-        const token = await fcm.enable()
+        const { token, status } = await fcm.enable()
         if (!token) {
+          // 'denied'/'default' = o usuário/navegador recusou a permissão.
+          // Qualquer outro status (ex. 'error') é falha técnica (VAPID key,
+          // service worker, API do FCM) com a permissão JÁ concedida — dizer
+          // "permissão não concedida" nesse caso confundia o diagnóstico
+          // (o usuário reportava "não deu permissão" quando tinha dado).
           toast.error(
-            'Permissão de notificações do navegador não concedida — os canais "Navegador" seguem inativos.'
+            status === 'denied' || status === 'default'
+              ? 'Permissão de notificações do navegador não concedida — os canais "Navegador" seguem inativos.'
+              : 'Não foi possível ativar as notificações do navegador agora (falha técnica, não é a permissão). Os canais "Navegador" seguem inativos — tente novamente mais tarde.'
           )
         }
       }
