@@ -13,6 +13,23 @@ import { saveNotificationPreferences } from '../services/usersRepository'
 // Default LIGADO: ausência de preferência = recebe tudo (mesma semântica
 // do shouldNotify nas functions).
 
+// iOS só concede Web Push com o site instalado na Tela de Início (nunca em aba
+// do Safari). Quando o push não é suportado E o aparelho é iOS não-instalado,
+// mostramos uma dica acionável em vez do "não disponível" genérico. Inline (sem
+// util novo — audit:vault trava a contagem de src/utils).
+function isIosNotInstalled() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  const isIOS =
+    /iP(hone|ad|od)/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  if (!isIOS) return false
+  const standalone =
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    window.navigator.standalone === true
+  return !standalone
+}
+
 export const PREFERENCE_TYPES = [
   { key: 'processos', label: 'Processos', hint: 'Mensagens, atualizações e pós-recebimento' },
   { key: 'noticias', label: 'Notícias', hint: 'Publicações manuais e automáticas' },
@@ -145,9 +162,19 @@ export default function NotificationPreferencesModal({ open, onClose, profile, f
         </table>
 
         {!pushSupported ? (
-          <p className="notification-prefs__hint">
-            Notificações do navegador não estão disponíveis neste dispositivo/navegador.
-          </p>
+          isIosNotInstalled() ? (
+            <p className="notification-prefs__hint">
+              No iPhone/iPad, as notificações só funcionam com o Portal instalado na
+              Tela de Início: abra pelo <strong>Safari</strong>, toque em{' '}
+              <strong>Compartilhar → “Adicionar à Tela de Início”</strong> e ative as
+              notificações abrindo o app pelo ícone. (O passo a passo está no Menu →
+              “Instalar como app”.)
+            </p>
+          ) : (
+            <p className="notification-prefs__hint">
+              Notificações do navegador não estão disponíveis neste dispositivo/navegador.
+            </p>
+          )
         ) : null}
 
         <div className="action-row">

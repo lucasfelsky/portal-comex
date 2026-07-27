@@ -2,14 +2,38 @@
 // na tab bar (perfil, tema, suporte, admin, IntelliQuote, sair). No
 // desktop a rota existe mas não é linkada (a sidebar cobre tudo).
 
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import Icon from '../components/Icon'
+import Modal from '../components/Modal'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
 
 const INTELLIQUOTE_WEB_URL =
   import.meta.env.VITE_INTELLIQUOTE_WEB_URL ?? 'https://intelliquote.portal-comex.com'
+
+// Detecção de plataforma pro guia "Instalar como app". Inline (sem util novo —
+// audit:vault trava a contagem de src/utils). iPadOS 13+ se disfarça de Mac,
+// daí o check de maxTouchPoints.
+function detectPlatform() {
+  if (typeof navigator === 'undefined') return 'other'
+  const ua = navigator.userAgent || ''
+  const isIOS =
+    /iP(hone|ad|od)/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  if (isIOS) return 'ios'
+  if (/Android/.test(ua)) return 'android'
+  return 'other'
+}
+
+function isStandalone() {
+  if (typeof window === 'undefined') return false
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    window.navigator.standalone === true
+  )
+}
 
 function getInitials(value) {
   const cleaned = String(value ?? '').trim()
@@ -27,6 +51,9 @@ export default function MenuPage() {
   const theme = useTheme()
   const navigate = useNavigate()
   const isAdmin = profile?.role === 'admin'
+  const [installGuideOpen, setInstallGuideOpen] = useState(false)
+  const platform = detectPlatform()
+  const alreadyInstalled = isStandalone()
 
   return (
     <section className="menu-page" aria-label="Menu">
@@ -72,6 +99,24 @@ export default function MenuPage() {
         </button>
       </div>
 
+      {!alreadyInstalled ? (
+        <>
+          <div className="ios-section-label">Aplicativo</div>
+          <div className="ios-group">
+            <button type="button" className="ios-row" onClick={() => setInstallGuideOpen(true)}>
+              <span className="ios-row__icon" style={{ background: '#0aa06e' }}>
+                <Icon name="download" size={15} aria-hidden="true" />
+              </span>
+              <span className="ios-row__body">
+                <span className="ios-row__title">Instalar como app</span>
+                <span className="ios-row__sub">Adicionar à tela inicial (e receber notificações)</span>
+              </span>
+              <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
+            </button>
+          </div>
+        </>
+      ) : null}
+
       {isAdmin ? (
         <>
           <div className="ios-section-label">Administração</div>
@@ -114,6 +159,59 @@ export default function MenuPage() {
           <span className="ios-row__title ios-row__title--danger">Sair</span>
         </button>
       </div>
+
+      <Modal
+        open={installGuideOpen}
+        onClose={() => setInstallGuideOpen(false)}
+        title="Instalar o Portal como app"
+      >
+        <div className="install-guide">
+          <p className="install-guide__lead">
+            Instalar o Portal na tela inicial deixa ele em tela cheia (sem a barra do
+            navegador) e é o que permite receber <strong>notificações push</strong> no celular.
+          </p>
+
+          <section
+            className={`install-guide__block${platform === 'ios' ? ' install-guide__block--active' : ''}`}
+          >
+            <h3 className="install-guide__title">
+              iPhone / iPad — Safari
+              {platform === 'ios' ? <span className="install-guide__badge">seu aparelho</span> : null}
+            </h3>
+            <ol className="install-guide__steps">
+              <li>Abra o Portal no <strong>Safari</strong> (o atalho só aparece nele).</li>
+              <li>
+                Toque no botão <strong>Compartilhar</strong> — o quadrado com uma seta para
+                cima, na barra de baixo.
+              </li>
+              <li>Deslize e toque em <strong>“Adicionar à Tela de Início”</strong>.</li>
+              <li>Toque em <strong>“Adicionar”</strong>, no canto superior direito.</li>
+              <li>
+                Abra o Portal pelo <strong>ícone</strong> na tela inicial. Pronto — agora dá
+                para ativar as notificações nas preferências.
+              </li>
+            </ol>
+          </section>
+
+          <section
+            className={`install-guide__block${platform === 'android' ? ' install-guide__block--active' : ''}`}
+          >
+            <h3 className="install-guide__title">
+              Android — Chrome
+              {platform === 'android' ? <span className="install-guide__badge">seu aparelho</span> : null}
+            </h3>
+            <ol className="install-guide__steps">
+              <li>Abra o Portal no <strong>Chrome</strong>.</li>
+              <li>Toque no menu <strong>⋮</strong> (três pontinhos, canto superior direito).</li>
+              <li>
+                Toque em <strong>“Instalar app”</strong> ou <strong>“Adicionar à tela inicial”</strong>.
+              </li>
+              <li>Confirme em <strong>“Instalar”</strong> / <strong>“Adicionar”</strong>.</li>
+              <li>Abra pelo ícone na tela inicial.</li>
+            </ol>
+          </section>
+        </div>
+      </Modal>
     </section>
   )
 }
