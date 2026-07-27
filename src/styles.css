@@ -3318,7 +3318,10 @@ body {
      conteúdo já preenche a altura, então não muda nada. */
   align-content: start;
   gap: 8px;
-  padding: 18px;
+  /* padding-top menor (4px) que os lados/baixo (18px): a imagem sangra até o
+     topo do card, então o cabeçalho (pill + data) fica encostadinho no topo da
+     imagem em vez de 18px abaixo. */
+  padding: 4px 18px 18px;
 }
 
 /* Cabeçalho do card: pill da fonte (dimensionado ao conteúdo) à esquerda + data
