@@ -586,8 +586,10 @@ export default function NewsPage() {
                         />
                       </div>
                       <div className="news-card__body">
-                        <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
-                        <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
+                        <div className="news-card__meta">
+                          <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
+                          <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
+                        </div>
                         <strong>{item.title}</strong>
                         <p className="news-card__summary">{getNewsSummary(item)}</p>
                       </div>
