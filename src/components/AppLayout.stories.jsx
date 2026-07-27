@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { AuthContext } from '../contexts/AuthContext'
+import { ToastProvider } from './Toast'
 import AppLayout from './AppLayout'
 
 // AppLayout e' o shell inteiro do app (sidebar + topbar + outlet +
@@ -24,19 +25,21 @@ const mockAuthValue = {
 
 export const AdminShell = {
   render: () => (
-    <AuthContext.Provider value={mockAuthValue}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route
-            index
-            element={(
-              <div className="card">
-                <p>Conteúdo da página (renderizado via &lt;Outlet /&gt;).</p>
-              </div>
-            )}
-          />
-        </Route>
-      </Routes>
-    </AuthContext.Provider>
+    <ToastProvider>
+      <AuthContext.Provider value={mockAuthValue}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route
+              index
+              element={(
+                <div className="card">
+                  <p>Conteúdo da página (renderizado via &lt;Outlet /&gt;).</p>
+                </div>
+              )}
+            />
+          </Route>
+        </Routes>
+      </AuthContext.Provider>
+    </ToastProvider>
   ),
 }
