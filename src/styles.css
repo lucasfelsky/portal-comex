@@ -3304,7 +3304,11 @@ body {
 
 .news-card__body {
   display: grid;
-  align-content: center;
+  /* align-content: start (não center): em notícia de texto curto (menor que a
+     imagem de 132px), centralizar deixava o texto flutuando no meio, com o topo
+     desalinhado do topo da imagem. Com start os topos batem. Em texto longo o
+     conteúdo já preenche a altura, então não muda nada. */
+  align-content: start;
   gap: 8px;
   padding: 18px;
 }
