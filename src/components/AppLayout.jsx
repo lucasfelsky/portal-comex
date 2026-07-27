@@ -620,9 +620,10 @@ export default function AppLayout() {
             <span className="notifications__count">{unreadNotifications.length}</span>
           ) : null}
         </button>
-        {/* Painel ancorado ao sino — só no desktop. No mobile o topbar some
-            e o painel renderiza como bottom-sheet standalone (ver abaixo). */}
-        {!isMobileLayout ? renderNotificationsPanel() : null}
+        {/* O painel/backdrop do desktop NÃO ficam aqui: são renderizados na
+            raiz do .shell (ver abaixo). Dentro da topbar (stacking context
+            z-index:25) o backdrop não conseguia cobrir a sidebar (z-index:30);
+            na raiz do shell o z-index dele (68) passa a valer globalmente. */}
       </div>
     )
   }
@@ -637,6 +638,12 @@ export default function AppLayout() {
           onClick={() => setIsMobileMenuOpen(false)}
         />
       ) : null}
+
+      {/* Central de notificações do desktop na raiz do .shell (fora da topbar):
+          assim o backdrop (z-index:68) cobre a sidebar (30) e a topbar (25), e o
+          painel (72) fica por cima de tudo. Clicar no backdrop — inclusive sobre
+          a sidebar — fecha a central (comportamento de overlay). */}
+      {!isMobileLayout && isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
       <div className="shell__frame">
         <aside className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`}>

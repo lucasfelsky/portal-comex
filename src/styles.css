@@ -838,28 +838,36 @@ body {
   align-content: center;
 }
 
-/* Sem blur/escurecimento (pedido do Lucas) — mas continua um elemento real
-   cobrindo a tela, então cliques no conteúdo por trás continuam bloqueados
-   enquanto o painel está aberto (mesmo comportamento de antes). O fechar-
-   ao-clicar-fora já é feito por um listener de mousedown no documento
-   (ver handlePointerDown em AppLayout.jsx), não depende deste elemento.
-
-   Véu de segurança (5%): achado em 2026-07-24, ao testar esta mudança —
-   clicar num item do menu que já é a rota ativa, com o painel aberto,
-   deixa este elemento (bloqueador de clique) preso pra sempre; bug
-   PRÉ-EXISTENTE, reproduzido igual com o CSS antigo (blur), então não é
-   causado por esta mudança. Mas com fundo 100% transparente esse
-   travamento fica invisível — o app para de responder a clique sem
-   nenhuma pista visual. Este tom quase imperceptível existe só pra um
-   travamento continuar detectável. Não resolve a causa raiz (fica como
-   próximo passo). */
+/* Backdrop da central: escurecimento leve (sem blur — decisão de 2026-07-24
+   mantida), cobrindo conteúdo + sidebar + topbar. Renderizado na raiz do .shell
+   (ver AppLayout) pra este z-index vencer a sidebar (30) e a topbar (25). É um
+   <button>: clicar em qualquer ponto do fundo (inclusive sobre a sidebar) fecha
+   a central — comportamento de overlay. Isso também encerra o travamento antigo
+   (L27): antes dava pra clicar num item de menu da rota ativa com o painel
+   aberto e o backdrop ficava preso; agora o backdrop cobre a sidebar, então o
+   clique fecha a central em vez de atravessar. */
 .notifications-backdrop {
   position: fixed;
   inset: 0;
   z-index: 68;
   display: block;
   border: 0;
-  background: rgba(20, 20, 20, 0.05);
+  background: rgba(20, 20, 20, 0.32);
+  animation: notifications-backdrop-in 200ms ease forwards;
+}
+
+.notifications-backdrop--closing {
+  animation: notifications-backdrop-out 200ms ease forwards;
+}
+
+@keyframes notifications-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes notifications-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .notifications__filters {
