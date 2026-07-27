@@ -66,6 +66,22 @@ export async function requestNotificationPermission() {
   return result
 }
 
+// Registra o SW de FCM e espera ele ficar ATIVO antes de devolver o
+// registration. `navigator.serviceWorker.register()` resolve assim que o
+// registro COMEÇA (worker ainda em "installing"), não quando termina — na
+// primeira visita (nenhum SW controlando a página ainda) isso corre contra
+// `pushManager.subscribe()`, que exige um worker ativo. Sem esperar,
+// `getToken()` falha com `AbortError: ... Subscription failed - no active
+// Service Worker` (bug real de produção, achado em 2026-07-24 com o
+// diagnóstico do PR #134 — antes disso o erro técnico virava "permissão
+// não concedida" na UI e mascarava a causa).
+// `serviceWorker.ready` só resolve quando HÁ um worker ativo controlando a
+// página — é o jeito documentado de esperar isso no MDN/spec.
+async function getReadyServiceWorkerRegistration() {
+  await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+  return navigator.serviceWorker.ready
+}
+
 export async function getFcmToken() {
   if (!(await isFcmSupported())) return null
   const messaging = await getMessagingInstance()
@@ -74,9 +90,7 @@ export async function getFcmToken() {
     const { getToken } = await loadMessagingModule()
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: await navigator.serviceWorker.register(
-        '/firebase-messaging-sw.js'
-      ),
+      serviceWorkerRegistration: await getReadyServiceWorkerRegistration(),
     })
     return token
   } catch (error) {

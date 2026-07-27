@@ -26,7 +26,14 @@ function renderModal({ profile, fcm } = {}) {
         open
         onClose={onClose}
         profile={profile ?? { uid: 'u-1', notificationPreferences: null }}
-        fcm={fcm ?? { supported: true, status: 'idle', enable: vi.fn(), disable: vi.fn() }}
+        fcm={
+          fcm ?? {
+            supported: true,
+            status: 'idle',
+            enable: vi.fn().mockResolvedValue({ token: 'tok-default', status: 'granted' }),
+            disable: vi.fn(),
+          }
+        }
       />
     </ToastProvider>
   )
@@ -81,13 +88,44 @@ describe('NotificationPreferencesModal', () => {
 
   it('salvar com push ligado e permissao ausente chama fcm.enable()', async () => {
     const user = userEvent.setup()
-    const enable = vi.fn().mockResolvedValue('tok-1')
+    const enable = vi.fn().mockResolvedValue({ token: 'tok-1', status: 'granted' })
     renderModal({ fcm: { supported: true, status: 'idle', enable, disable: vi.fn() } })
 
     await user.click(screen.getByRole('button', { name: 'Salvar preferências' }))
 
     await waitFor(() => expect(enable).toHaveBeenCalledTimes(1))
     expect(mockSavePreferences).toHaveBeenCalled()
+  })
+
+  // Regressao: fcm.enable() falhando por motivo TECNICO (permissao ja'
+  // concedida, mas getToken() quebrou — VAPID key, service worker, API do
+  // FCM) nao pode virar a mesma mensagem de "permissao nao concedida". Essa
+  // confusao pode ter mascarado a causa real do push nunca funcionar em
+  // producao: quem reportasse o erro diria "nao deu permissao" mesmo tendo
+  // dado.
+  it('enable() falha por motivo tecnico (nao permissao): mensagem diferente', async () => {
+    const user = userEvent.setup()
+    const enable = vi.fn().mockResolvedValue({ token: null, status: 'error' })
+    renderModal({ fcm: { supported: true, status: 'idle', enable, disable: vi.fn() } })
+
+    await user.click(screen.getByRole('button', { name: 'Salvar preferências' }))
+
+    await waitFor(() => expect(enable).toHaveBeenCalledTimes(1))
+    expect(screen.getByText(/falha técnica, não é a permissão/i)).toBeInTheDocument()
+    expect(screen.queryByText(/permissão de notificações do navegador não concedida/i)).not.toBeInTheDocument()
+  })
+
+  it('enable() falha por permissao negada: mensagem de permissao', async () => {
+    const user = userEvent.setup()
+    const enable = vi.fn().mockResolvedValue({ token: null, status: 'denied' })
+    renderModal({ fcm: { supported: true, status: 'idle', enable, disable: vi.fn() } })
+
+    await user.click(screen.getByRole('button', { name: 'Salvar preferências' }))
+
+    await waitFor(() => expect(enable).toHaveBeenCalledTimes(1))
+    expect(
+      screen.getByText(/permissão de notificações do navegador não concedida/i)
+    ).toBeInTheDocument()
   })
 
   it('desligar TODOS os push e salvar chama fcm.disable()', async () => {
