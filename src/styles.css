@@ -3321,6 +3321,18 @@ body {
   padding: 18px;
 }
 
+/* Cabeçalho do card: pill da fonte (dimensionado ao conteúdo) à esquerda + data
+   à direita, numa linha só no topo — em vez da data sozinha acima de um pill
+   full-width. Como .news-card__body é grid, o pill esticava; dentro deste flex
+   ele encolhe pro tamanho do texto sem tocar na regra base .inline-badge
+   (compartilhada com processos/dashboard/admin). */
+.news-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .news-card__summary {
   margin: 0;
   color: var(--ink-soft);
