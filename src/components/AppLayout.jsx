@@ -5,7 +5,6 @@ import Icon from './Icon'
 import Breadcrumb from './Breadcrumb'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
-import TabButton from './TabButton'
 import Tooltip from './Tooltip'
 import NotificationsList from './NotificationsList'
 import { NotificationsContext } from '../contexts/NotificationsContext'
@@ -523,87 +522,75 @@ export default function AppLayout() {
           onTouchStart={(event) => event.stopPropagation()}
         >
           <div className="card-heading">
-            <div>
-              <strong>Central de notificações</strong>
-              <p>
-                {unreadNotifications.length} pendentes
-                {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
-              </p>
-            </div>
-            <div className="notifications__heading-actions">
-              <button
-                type="button"
-                className="ghost-button notifications__mark-all"
-                onClick={handleMarkAllNotificationsAsRead}
-                disabled={unreadNotifications.length === 0}
-              >
-                Marcar todas como Lidas
-              </button>
-              {/* F9: o toggle de FCM saiu daqui (sino duplicado) — push agora
-                  e' um canal dentro das preferencias. */}
-              <button
-                type="button"
-                className="ghost-button notifications__prefs"
-                onClick={() => setIsPrefsModalOpen(true)}
-                aria-label="Preferências de notificação"
-                title="Preferências de notificação"
-              >
-                <Icon name="settings" size={16} />
-              </button>
-              <button
-                type="button"
-                className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
-                onClick={() => {
-                  if (dnd.isActive) {
-                    dnd.disable()
-                  } else {
-                    dnd.enableFor(60 * 60 * 1000) // 1h
+            <div className="notifications__heading-top">
+              <div>
+                <strong>Central de notificações</strong>
+                <p>
+                  {unreadNotifications.length} pendentes
+                  {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
+                </p>
+              </div>
+              {/* Ícones na linha do título: sino (não perturbe) à esquerda,
+                  engrenagem (preferências) à direita. F9: o toggle de FCM saiu
+                  daqui (sino duplicado) — push agora é canal dentro das prefs. */}
+              <div className="notifications__icon-actions">
+                <button
+                  type="button"
+                  className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
+                  onClick={() => {
+                    if (dnd.isActive) {
+                      dnd.disable()
+                    } else {
+                      dnd.enableFor(60 * 60 * 1000) // 1h
+                    }
+                  }}
+                  aria-pressed={dnd.isActive}
+                  aria-label={
+                    dnd.isActive
+                      ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                      : 'Ativar modo não perturbe por 1 hora'
                   }
-                }}
-                aria-pressed={dnd.isActive}
-                aria-label={
-                  dnd.isActive
-                    ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
-                    : 'Ativar modo não perturbe por 1 hora'
-                }
-                title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
-              >
-                <Icon name="bell" size={16} />
-              </button>
+                  title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+                >
+                  <Icon name="bell" size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button notifications__prefs"
+                  onClick={() => setIsPrefsModalOpen(true)}
+                  aria-label="Preferências de notificação"
+                  title="Preferências de notificação"
+                >
+                  <Icon name="settings" size={16} />
+                </button>
+              </div>
             </div>
+            <button
+              type="button"
+              className="ghost-button notifications__mark-all"
+              onClick={handleMarkAllNotificationsAsRead}
+              disabled={unreadNotifications.length === 0}
+            >
+              Marcar todas como Lidas
+            </button>
           </div>
 
-          <div className="tab-row notifications__filters">
-            <TabButton
-              active={notificationFilter === 'all'}
-              onClick={() => setNotificationFilter('all')}
+          {/* Categorias como select nativo estilizado (antes eram 5 abas que
+              quebravam em 2 linhas no drawer de 420px). Só desktop — no mobile
+              a NotificationsPage mantém a tab-row com scroll horizontal. */}
+          <div className="notifications__filter-row">
+            <select
+              className="notifications__filter-select"
+              value={notificationFilter}
+              onChange={(event) => setNotificationFilter(event.target.value)}
+              aria-label="Filtrar notificações por categoria"
             >
-              Todas
-            </TabButton>
-            <TabButton
-              active={notificationFilter === 'process_question_created'}
-              onClick={() => setNotificationFilter('process_question_created')}
-            >
-              Dúvidas
-            </TabButton>
-            <TabButton
-              active={notificationFilter === 'process_question_answered'}
-              onClick={() => setNotificationFilter('process_question_answered')}
-            >
-              Respostas
-            </TabButton>
-            <TabButton
-              active={notificationFilter === 'favorite_process_message'}
-              onClick={() => setNotificationFilter('favorite_process_message')}
-            >
-              Favoritos
-            </TabButton>
-            <TabButton
-              active={notificationFilter === 'post_receipt_notes_updated'}
-              onClick={() => setNotificationFilter('post_receipt_notes_updated')}
-            >
-              Pós-recebimento
-            </TabButton>
+              <option value="all">Todas</option>
+              <option value="process_question_created">Dúvidas</option>
+              <option value="process_question_answered">Respostas</option>
+              <option value="favorite_process_message">Favoritos</option>
+              <option value="post_receipt_notes_updated">Pós-recebimento</option>
+            </select>
           </div>
 
           <div className="notifications__list">
