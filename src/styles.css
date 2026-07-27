@@ -700,40 +700,57 @@ body {
   display: none;
 }
 
+/* Desktop: painel de notificações como drawer fixo, ancorado na borda
+   direita da tela (feedback do Lucas, 2026-07-24) — antes era um dropdown
+   ancorado no sino (position: absolute) sobre um backdrop com blur. O
+   mobile não é afetado: @media (max-width: 720px) já reseta TODAS essas
+   propriedades pra position:static/transparent (F16.12, painel virou
+   página normal em /notifications) — confirmado antes de mexer aqui. */
 .notifications__panel {
-  position: absolute;
-  top: calc(100% + 10px);
+  position: fixed;
+  top: 0;
   right: 0;
+  bottom: 0;
   z-index: 72;
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 14px;
-  width: min(520px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
+  width: min(420px, 100vw);
+  max-width: 100vw;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
+  animation: notifications-sheet-in 220ms ease forwards;
 }
 
 .notifications__panel--closing {
   animation: notifications-sheet-out 220ms ease forwards;
 }
 
+/* Sem blur/escurecimento (pedido do Lucas) — mas continua um elemento real
+   cobrindo a tela, então cliques no conteúdo por trás continuam bloqueados
+   enquanto o painel está aberto (mesmo comportamento de antes). O fechar-
+   ao-clicar-fora já é feito por um listener de mousedown no documento
+   (ver handlePointerDown em AppLayout.jsx), não depende deste elemento.
+
+   Véu de segurança (5%): achado em 2026-07-24, ao testar esta mudança —
+   clicar num item do menu que já é a rota ativa, com o painel aberto,
+   deixa este elemento (bloqueador de clique) preso pra sempre; bug
+   PRÉ-EXISTENTE, reproduzido igual com o CSS antigo (blur), então não é
+   causado por esta mudança. Mas com fundo 100% transparente esse
+   travamento fica invisível — o app para de responder a clique sem
+   nenhuma pista visual. Este tom quase imperceptível existe só pra um
+   travamento continuar detectável. Não resolve a causa raiz (fica como
+   próximo passo). */
 .notifications-backdrop {
   position: fixed;
   inset: 0;
   z-index: 68;
   display: block;
   border: 0;
-  background: rgba(31, 28, 24, 0.34);
-  backdrop-filter: blur(10px);
-  opacity: 0;
-  animation: sidebar-backdrop-in 220ms ease forwards;
-}
-
-.notifications-backdrop--closing {
-  animation: sidebar-backdrop-out 220ms ease forwards;
+  background: rgba(20, 20, 20, 0.05);
 }
 
 .notifications__filters {
@@ -5776,27 +5793,30 @@ body {
   }
 }
 
+/* Slide horizontal (drawer vindo da direita) — antes era fade+translateY,
+   fazia sentido pro dropdown ancorado no sino; virou translateX pro
+   comportamento de drawer fixo na borda (2026-07-24). */
 @keyframes notifications-sheet-in {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.985);
+    transform: translateX(100%);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 }
 
 @keyframes notifications-sheet-out {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 
   to {
     opacity: 0;
-    transform: translateY(18px) scale(0.985);
+    transform: translateX(100%);
   }
 }
 
