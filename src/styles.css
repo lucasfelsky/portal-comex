@@ -713,7 +713,7 @@ body {
   bottom: 0;
   z-index: 72;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   gap: 14px;
   width: min(420px, 100vw);
   max-width: 100vw;
@@ -727,6 +727,63 @@ body {
 
 .notifications__panel--closing {
   animation: notifications-sheet-out 220ms ease forwards;
+}
+
+/* Refino do drawer desktop (2026-07-27): em 420px os 3 botões do cabeçalho não
+   cabiam ao lado do título de 2 linhas — o sino (DND) saía cortado pela borda e
+   a engrenagem (.notifications__prefs) herdava o padding cheio de .ghost-button
+   (pílula gigante). Empilha título em cima + ações numa linha à direita, com os
+   dois ícones compactos 32x32. Mobile tem media query própria (não é afetado). */
+.notifications__panel .card-heading {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.notifications__panel .notifications__heading-actions {
+  justify-content: flex-end;
+}
+
+/* .notifications__panel prefixado de propósito: eleva a especificidade acima de
+   .ghost-button (0,1,0), que senão venceria por vir depois no arquivo e manteria
+   o padding cheio (engrenagem gigante). Continua antes da media query mobile, que
+   por ordem de fonte segue vencendo no celular. */
+.notifications__panel .notifications__prefs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-xs);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.notifications__panel .notifications__prefs:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+/* A lista ocupa a fileira 1fr do drawer full-height e rola dentro dela (antes o
+   1fr caía na fileira dos filtros: as abas esticavam, o underline ativo desgrudava
+   e sobrava um vão enorme). align-content:start ancora no topo; :has centraliza o
+   vazio para o empty-state não esticar. */
+.notifications__panel .notifications__list {
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.notifications__panel .notifications__list:has(.empty-state) {
+  align-content: center;
 }
 
 /* Sem blur/escurecimento (pedido do Lucas) — mas continua um elemento real
