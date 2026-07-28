@@ -440,6 +440,12 @@ describe('DashboardPage', () => {
       expect(screen.queryByText('PO 40004')).not.toBeInTheDocument()
     })
 
+    it('mostra estado vazio quando total de chegadas é zero', async () => {
+      mockListProcesses.mockResolvedValueOnce([])
+      renderPage()
+      const emptyState = await screen.findByText(/Nenhuma chegada prevista/i)
+      expect(emptyState).toBeInTheDocument()
+    })
 
     // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
     // Antes era fixa "Coleta ainda não agendada" e nao fazia
