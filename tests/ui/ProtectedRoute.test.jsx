@@ -27,7 +27,9 @@ import ProtectedRoute from '../../src/components/ProtectedRoute'
 let lastLocation = null
 function LocationCapture() {
   const loc = useLocation()
-  lastLocation = loc
+  React.useEffect(() => {
+    lastLocation = loc
+  }, [loc])
   return <div data-testid="current-location">{loc.pathname}</div>
 }
 
