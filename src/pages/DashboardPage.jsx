@@ -192,9 +192,6 @@ export default function DashboardPage() {
           <div>
             <h3>Comunicados recentes</h3>
           </div>
-          <span className="inline-badge">
-            {isLoadingAnnouncements ? '...' : `${announcements.length} ${announcements.length === 1 ? 'comunicado' : 'comunicados'}`}
-          </span>
         </div>
 
         <div className="announcement-list announcement-list--scroll">
@@ -236,7 +233,6 @@ export default function DashboardPage() {
           <div>
             <h3>Processos favoritos</h3>
           </div>
-          <span className="inline-badge">{favoriteProcesses.length} favoritos</span>
         </div>
 
         <div className="process-list process-list--scroll">

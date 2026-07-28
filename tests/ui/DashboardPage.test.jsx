@@ -349,16 +349,18 @@ describe('DashboardPage', () => {
       const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
       expect(favoriteItems.length).toBe(1)
     })
-    expect(screen.getByText('1 favoritos')).toBeInTheDocument()
   })
 
-  it('Favoritos: contador mostra total', async () => {
+  it('Favoritos: renderiza a quantidade correta de processos', async () => {
     mockUseAuth.mockReturnValue({
       profile: { uid: 'u-1', role: 'user', favoriteProcessIds: ['p-1', 'p-2'] },
     })
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('2 favoritos')).toBeInTheDocument()
+      const cards = document.querySelectorAll('.list-card')
+      const favoriteCard = cards[cards.length - 1]
+      const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
+      expect(favoriteItems.length).toBe(2)
     })
   })
 
@@ -438,12 +440,6 @@ describe('DashboardPage', () => {
       expect(screen.queryByText('PO 40004')).not.toBeInTheDocument()
     })
 
-    it('contador total soma agendada + nao agendada', async () => {
-      renderPage()
-      // 1 agendada (p-with-window) + 1 nao agendada (p-unscheduled) = 2
-      const contador = await screen.findByText(/2 processos/i)
-      expect(contador).toBeInTheDocument()
-    })
 
     // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
     // Antes era fixa "Coleta ainda não agendada" e nao fazia

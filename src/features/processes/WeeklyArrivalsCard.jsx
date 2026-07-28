@@ -322,9 +322,6 @@ export default function WeeklyArrivalsCard({
             agendadas (com data e turno) entre hoje e o proximo domingo.
           </p>
         </div>
-        <span className="inline-badge">
-          {isLoading ? '...' : `${total} ${total === 1 ? 'processo' : 'processos'}`}
-        </span>
       </div>
 
       <div className="process-list process-list--scroll">
