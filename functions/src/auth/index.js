@@ -9,7 +9,7 @@ import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import {
   ALLOWED_ROLES, ALLOWED_STATUSES, APP_URL, BRAND_COLORS, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-  normalizeString, normalizeEmail, isCorporateEmail, isActiveStatus, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName, getMailer, getEmailFromAddress, getUserProfile, listActiveAdminUsers, recordAuditEvent, assertActiveAdmin, deleteNotificationsForRecipient
+  normalizeString, normalizeEmail, normalizeList, isCorporateEmail, isActiveStatus, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName, getMailer, getEmailFromAddress, getUserProfile, listActiveAdminUsers, recordAuditEvent, assertActiveAdmin, deleteNotificationsForRecipient
 } from '../core/shared.js';
 
 /**
