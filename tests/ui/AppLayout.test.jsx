@@ -33,6 +33,7 @@ import AppLayout from '../../src/components/AppLayout.jsx'
 // SupportButton (aba de suporte) usa useToast; no app real o ToastProvider
 // mora no main.jsx, entao o wrapper do teste precisa dele tambem.
 import { ToastProvider } from '../../src/components/Toast.jsx'
+import { NotificationsProvider } from '../../src/contexts/NotificationsContext.jsx'
 
 function renderWithRole(role) {
   mockUseAuth.mockReturnValue({
@@ -46,11 +47,13 @@ function renderWithRole(role) {
   return render(
     <ToastProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<div data-testid="home">Home</div>} />
-          </Route>
-        </Routes>
+        <NotificationsProvider>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<div data-testid="home">Home</div>} />
+            </Route>
+          </Routes>
+        </NotificationsProvider>
       </MemoryRouter>
     </ToastProvider>
   )

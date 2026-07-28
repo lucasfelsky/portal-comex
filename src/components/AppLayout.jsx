@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useContext } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
@@ -10,16 +10,9 @@ import NotificationsList from './NotificationsList'
 import { NotificationsContext } from '../contexts/NotificationsContext'
 import SupportButton, { OPEN_SUPPORT_MODAL_EVENT } from './SupportButton'
 import NotificationPreferencesModal from './NotificationPreferencesModal'
-import { useDoNotDisturb, formatRemaining } from '../hooks/useDoNotDisturb'
-import { useFcm } from '../hooks/useFcm'
+import { formatRemaining } from '../hooks/useDoNotDisturb'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useTheme } from '../hooks/useTheme'
-import {
-  NOTIFICATIONS_CHANGED_EVENT,
-  listNotifications,
-  markAllNotificationsAsRead,
-  markNotificationAsRead,
-} from '../services/notificationsRepository'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
@@ -79,11 +72,25 @@ export default function AppLayout() {
   const location = useLocation()
   const { profile, logout, isEmailVerified } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [notifications, setNotifications] = useState([])
+  
+  const {
+    unreadNotifications,
+    groupedNotifications,
+    notificationFilter,
+    setNotificationFilter,
+    markAllAsRead,
+    markOneAsRead,
+    handleOpenNotification,
+    formatRelativeNotificationTime,
+    formatNotificationDate,
+    dnd,
+    fcm,
+    isPrefsModalOpen,
+    setIsPrefsModalOpen,
+  } = useContext(NotificationsContext)
+
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false)
   const [isNotificationPanelMounted, setIsNotificationPanelMounted] = useState(false)
-  const [notificationFilter, setNotificationFilter] = useState('all')
-  const [isPrefsModalOpen, setIsPrefsModalOpen] = useState(false)
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
@@ -121,8 +128,6 @@ export default function AppLayout() {
   const commandPalette = useCommandPalette()
   const globalSearch = useGlobalSearch(profile?.role === 'admin')
   const processSearcherForPalette = globalSearch.searcher
-  const dnd = useDoNotDisturb()
-  const fcm = useFcm(profile?.uid)
   // C17 (toggle): tema claro/escuro/automatico, persistido em localStorage.
   const theme = useTheme()
   const themeLabel = { auto: 'Tema: automático', dark: 'Tema: escuro', light: 'Tema: claro' }[theme.preference]
@@ -177,119 +182,10 @@ export default function AppLayout() {
     (item) => !item.roles || item.roles.includes(profile?.role)
   )
 
-  const unreadNotifications = useMemo(
-    () => notifications.filter((item) => !item.isRead),
-    [notifications]
-  )
-
-  const filteredNotifications = useMemo(() => {
-    if (notificationFilter === 'all') return notifications
-    return notifications.filter((item) => item.type === notificationFilter)
-  }, [notificationFilter, notifications])
-
-  const groupedNotifications = useMemo(() => {
-    const groups = new Map()
-
-    filteredNotifications.forEach((notification) => {
-      const groupKey = `${notification.processId || notification.id}:${notification.type}`
-      const currentGroup = groups.get(groupKey) ?? {
-        processId: notification.processId,
-        type: notification.type,
-        title: notification.title,
-        items: [],
-        unreadCount: 0,
-        latestCreatedAt: notification.createdAt,
-      }
-
-      currentGroup.items.push(notification)
-      currentGroup.unreadCount += notification.isRead ? 0 : 1
-
-      const currentGroupTime = new Date(currentGroup.latestCreatedAt ?? 0).getTime()
-      const notificationTime = new Date(notification.createdAt ?? 0).getTime()
-
-      if (notificationTime > currentGroupTime) {
-        currentGroup.latestCreatedAt = notification.createdAt
-        currentGroup.title = notification.title
-      }
-
-      groups.set(groupKey, currentGroup)
-    })
-
-    return [...groups.values()].sort((left, right) => {
-      const leftTime = new Date(left.latestCreatedAt ?? 0).getTime()
-      const rightTime = new Date(right.latestCreatedAt ?? 0).getTime()
-      return rightTime - leftTime
-    })
-  }, [filteredNotifications])
-
-  useEffect(() => {
-    if (!profile?.uid) {
-      setNotifications([])
-      return undefined
-    }
-
-    let isMounted = true
-
-    async function loadNotifications() {
-      try {
-        const loadedNotifications = await listNotifications(profile.uid)
-        if (isMounted) {
-          setNotifications(loadedNotifications)
-        }
-      } catch (error) {
-        console.error('Falha ao carregar notificações.', error)
-      }
-    }
-
-    function handleNotificationsChanged(event) {
-      const affectedRecipients = event?.detail?.recipientUserIds ?? []
-      if (affectedRecipients.length === 0 || affectedRecipients.includes(profile.uid)) {
-        loadNotifications()
-      }
-    }
-
-    function handleWindowFocus() {
-      loadNotifications()
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        loadNotifications()
-      }
-    }
-
-    loadNotifications()
-    const intervalId = window.setInterval(loadNotifications, 10000)
-    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged)
-    window.addEventListener('focus', handleWindowFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      isMounted = false
-      window.clearInterval(intervalId)
-      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged)
-      window.removeEventListener('focus', handleWindowFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [profile?.uid])
-
-  // F6: auto-enable FCM quando o usuario faz login — pede permissao de
-  // notificacao e registra o token automaticamente. Se o usuario negar,
-  // respeita a escolha (nao insiste). O push so funciona com service
-  // worker (public/firebase-messaging-sw.js).
-  useEffect(() => {
-    if (!profile?.uid || !fcm.supported) return
-    if (fcm.status === 'granted' || fcm.status === 'denied') return
-    // Auto-enable apenas se o browser ainda nao tem decisao de permissao
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      fcm.enable()
-    }
-  }, [profile?.uid, fcm.supported, fcm.status])
-
   useEffect(() => {
     setIsMobileMenuOpen(false)
     handleCloseNotificationPanel(true)
-  }, [location.pathname])
+  }, [location.key])
 
   useEffect(() => {
     return () => {
@@ -382,101 +278,6 @@ export default function AppLayout() {
     }
 
     handleOpenNotificationPanel()
-  }
-
-  // Marca-como-lida (backend + estado local otimista) isolado do
-  // fechar-painel/navegar — reusado pelo tap normal (handleOpenNotification)
-  // e pelo swipe-to-mark-as-read (F16.8), que só quer o "marcar como lida"
-  // sem sair do painel.
-  async function markOneNotificationAsRead(notification) {
-    try {
-      if (!notification.isRead) {
-        await markNotificationAsRead(notification.id)
-      }
-    } catch (error) {
-      console.error('Falha ao marcar notificação como lida.', error)
-    } finally {
-      setNotifications((currentNotifications) =>
-        currentNotifications.map((item) =>
-          item.id === notification.id
-            ? { ...item, isRead: true, readAt: new Date().toISOString() }
-            : item
-        )
-      )
-    }
-  }
-
-  async function handleOpenNotification(notification) {
-    await markOneNotificationAsRead(notification)
-    handleCloseNotificationPanel()
-    // Chamados de suporte moram na aba administrativa, não na central de
-    // chegadas (backlog 2026-07-10).
-    if (notification.type === 'support_ticket') {
-      navigate('/admin/suporte')
-      return
-    }
-    // Suporte v2: o AUTOR é avisado quando o chamado dele é resolvido. O
-    // clique abre o modal de suporte ("Meus chamados") — o autor comum não
-    // tem acesso à rota /admin/suporte.
-    if (notification.type === 'support_ticket_resolved') {
-      window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
-      return
-    }
-    navigate('/processos', {
-      state: {
-        selectedProcessId: notification.processId,
-        detailTab: notification.targetTab ?? 'messages',
-      },
-    })
-  }
-
-  async function handleMarkAllNotificationsAsRead() {
-    if (!profile?.uid || unreadNotifications.length === 0) return
-
-    try {
-      await markAllNotificationsAsRead(profile.uid)
-      setNotifications((currentNotifications) =>
-        currentNotifications.map((item) => ({
-          ...item,
-          isRead: true,
-          readAt: item.readAt ?? new Date().toISOString(),
-        }))
-      )
-    } catch (error) {
-      console.error('Falha ao marcar notificações como lidas.', error)
-    }
-  }
-
-  function formatNotificationDate(value) {
-    if (!value) return ''
-
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date)
-  }
-
-  function formatRelativeNotificationTime(value) {
-    if (!value) return ''
-
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-
-    const diffInMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000))
-
-    if (diffInMinutes < 1) return 'agora'
-    if (diffInMinutes < 60) return `há ${diffInMinutes} min`
-
-    const diffInHours = Math.round(diffInMinutes / 60)
-    if (diffInHours < 24) return `há ${diffInHours} h`
-
-    const diffInDays = Math.round(diffInHours / 24)
-    return `há ${diffInDays} d`
   }
 
   function formatCurrencyRate(value) {
@@ -585,7 +386,7 @@ export default function AppLayout() {
             <button
               type="button"
               className="ghost-button notifications__mark-all"
-              onClick={handleMarkAllNotificationsAsRead}
+              onClick={markAllAsRead}
               disabled={unreadNotifications.length === 0}
             >
               Marcar todas como Lidas
@@ -595,8 +396,8 @@ export default function AppLayout() {
           <div className="notifications__list">
             <NotificationsList
               grouped={groupedNotifications}
-              onOpenNotification={handleOpenNotification}
-              onMarkAsRead={markOneNotificationAsRead}
+              onOpenNotification={(notification) => handleOpenNotification(notification, () => handleCloseNotificationPanel())}
+              onMarkAsRead={markOneAsRead}
               formatRelative={formatRelativeNotificationTime}
               formatDate={formatNotificationDate}
             />
@@ -817,25 +618,7 @@ export default function AppLayout() {
           ) : null}
 
           <PageFade>
-            <NotificationsContext.Provider
-              value={{
-                notifications,
-                unreadNotifications,
-                groupedNotifications,
-                notificationFilter,
-                setNotificationFilter,
-                markAllAsRead: handleMarkAllNotificationsAsRead,
-                markOneAsRead: markOneNotificationAsRead,
-                handleOpenNotification,
-                formatRelativeNotificationTime,
-                formatNotificationDate,
-                dnd,
-                isPrefsModalOpen,
-                setIsPrefsModalOpen,
-              }}
-            >
-              <Outlet />
-            </NotificationsContext.Provider>
+            <Outlet />
           </PageFade>
 
           <SupportButton />

@@ -1,8 +1,8 @@
-﻿import { Suspense, lazy } from 'react'
+import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
-
+import { NotificationsProvider } from './contexts/NotificationsContext'
 function lazyWithRetry(importPage, pageKey) {
   return lazy(async () => {
     try {
@@ -76,7 +76,9 @@ export default function App() {
         <Route
           element={
             <ProtectedRoute>
-              <AppLayout />
+              <NotificationsProvider>
+                <AppLayout />
+              </NotificationsProvider>
             </ProtectedRoute>
           }
         >

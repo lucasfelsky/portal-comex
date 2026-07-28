@@ -72,7 +72,7 @@ export default function VerifyEmailPage() {
     return () => {
       isMounted = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- oobCode so' deve ser aplicado 1x; ver comentario acima
+     
   }, [oobCode])
 
   if (loading) {
