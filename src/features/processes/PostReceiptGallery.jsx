@@ -1,4 +1,6 @@
+import { useRef } from 'react'
 import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 
 // F10.2 (backlog 2026-07-12): lightbox das imagens de pós-recebimento no CD,
 // extraído do ProcessesPage. Presentacional puro — o estado (índice, imagem
@@ -14,13 +16,25 @@ export default function PostReceiptGallery({
   onTouchStart,
   onTouchEnd,
 }) {
+  const containerRef = useRef(null)
+  
+  useFocusTrap(true, onClose, containerRef)
+
   return (
     <div className="post-receipt-gallery-backdrop" onClick={onClose}>
-      <div className="post-receipt-gallery" onClick={(event) => event.stopPropagation()}>
+      <div 
+        ref={containerRef}
+        className="post-receipt-gallery" 
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="post-receipt-gallery-title"
+        tabIndex={-1}
+      >
         <div className="post-receipt-gallery__header">
           <div>
             <span className="detail-label">Imagens do recebimento no CD</span>
-            <h3>{image?.name || 'Imagem do recebimento no CD'}</h3>
+            <h3 id="post-receipt-gallery-title">{image?.name || 'Imagem do recebimento no CD'}</h3>
             <p>
               {index + 1} de {images.length}
             </p>

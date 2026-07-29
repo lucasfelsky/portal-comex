@@ -646,11 +646,6 @@ export default function ProcessesPage() {
     const previousBodyOverflow = document.body.style.overflow
 
     function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        setSelectedPostReceiptImageIndex(-1)
-        return
-      }
-
       if (selectedProcessPostReceiptImages.length <= 1) return
 
       if (event.key === 'ArrowLeft') {
