@@ -70,7 +70,7 @@ function renderForm(props = {}) {
   return { ...utils, onSave, onDraftChange }
 }
 
-const stepsRow = () => screen.getByRole('tablist')
+const stepsRow = () => screen.getByLabelText('Etapas do cadastro')
 
 describe('ProcessForm — wizard de etapas (C11)', () => {
   beforeEach(() => {
@@ -104,7 +104,7 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
   it('chip de passo pula direto (Itens) sem passar pelos intermediários', async () => {
     const user = userEvent.setup()
     renderForm()
-    await user.click(within(stepsRow()).getByRole('tab', { name: 'Itens' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
     expect(screen.getByText(/Passo 4 de 4/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar item' })).toBeInTheDocument()
     // No último passo, "Avançar" some
@@ -125,7 +125,7 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     const user = userEvent.setup()
     renderForm({ canShowMaritimeFlow: true })
     expect(screen.getByText(/Passo 1 de 5/)).toBeInTheDocument()
-    await user.click(within(stepsRow()).getByRole('tab', { name: 'Fluxo operacional' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
     expect(screen.getByText('Pós-atracação')).toBeInTheDocument()
     expect(screen.getByText('Atracou?')).toBeInTheDocument()
   })
@@ -162,7 +162,7 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
   it('edit marítimo inclui fluxo mesmo sem canShowMaritimeFlow (passo MAPA)', async () => {
     const user = userEvent.setup()
     renderForm({ viewMode: 'edit', draft: makeDraft({ category: 'FCL' }) })
-    const flowTab = within(stepsRow()).getByRole('tab', { name: 'Fluxo operacional' })
+    const flowTab = within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' })
     await user.click(flowTab)
     expect(screen.getByText('MAPA')).toBeInTheDocument()
   })

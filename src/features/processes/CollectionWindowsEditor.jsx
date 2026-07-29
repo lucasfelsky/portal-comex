@@ -77,7 +77,7 @@ export default function CollectionWindowsEditor({
       </div>
 
       {windows.length === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state" role="status">
           <strong>Nenhuma janela agendada</strong>
           <p>Adicione um container para informar o horário previsto de coleta no CD.</p>
           <button

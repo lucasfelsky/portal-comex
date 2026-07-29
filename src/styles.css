@@ -30,7 +30,7 @@
   --ink: #1f1c18;
   --ink-soft: #4a5560;
   --primary: #00ae91;
-  --primary-700: #008f76;
+  --primary-700: #007a64;
   --primary-50: #e3f5f0;
   --danger: #dc2626;
   --danger-700: #b91c1c;
@@ -1705,7 +1705,7 @@ body {
 }
 
 .toast--warning {
-  background: var(--warning);
+  background: var(--warning-700);
 }
 
 .toast--info {
@@ -2834,7 +2834,15 @@ body {
     background-color 140ms ease,
     box-shadow 140ms ease,
     border-color 140ms ease,
-    color 140ms ease;
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.primary-button:active:not(:disabled),
+.ghost-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.secondary-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .primary-button {
@@ -3609,7 +3617,7 @@ body {
 }
 
 .eta-detail-highlight .detail-label {
-  color: rgba(0, 120, 100, 0.92);
+  color: var(--primary-700);
 }
 
 .detail-label--muted {
@@ -7342,6 +7350,30 @@ body {
   background: var(--surface-alt);
   color: var(--ink);
   border: 1px solid var(--border);
+}
+
+[data-theme='dark'] .toast.toast--success {
+  background: #007a64;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--error {
+  background: var(--danger-700);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--warning {
+  background: var(--warning-700);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--info {
+  background: var(--info-700);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 /* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */

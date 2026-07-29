@@ -400,7 +400,7 @@ export default function ProcessDetailView({
                   </button>
                 ))
               ) : (
-                <div className="empty-state">
+                <div className="empty-state" role="status">
                   <strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong>
                   <p>{selectedProcess.items?.length > 0 ? 'Ajuste a busca para localizar outro item deste processo.' : 'Os itens vinculados ao processo aparecerão aqui.'}</p>
                 </div>
@@ -438,7 +438,7 @@ export default function ProcessDetailView({
                   </button>
                 ))
               ) : (
-                <div className="empty-state">
+                <div className="empty-state" role="status">
                   <strong>Nenhuma chegada ativa encontrada</strong>
                   <p>Não há chegadas ativas com este item fora do CD no momento.</p>
                 </div>

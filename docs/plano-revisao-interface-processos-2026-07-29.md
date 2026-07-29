@@ -116,6 +116,7 @@
 ---
 
 ### P1-8 · Empty state não deve mandar não-admin "cadastrar processo"
+### ✅ P1-8 · Empty state não deve mandar não-admin "cadastrar processo"
 **Domínio:** Writing · **Arquivos:** `src/features/processes/ProcessListView.jsx` (~474-477, ~502-505).
 
 **Objetivo:** usuário sem permissão de criar processo não deve ser instruído a fazê-lo.
@@ -126,7 +127,7 @@
 
 ---
 
-### P1-9 · Mensagem de erro específica enterrada em parênteses
+### ✅ P1-9 · Mensagem de erro específica enterrada em parênteses
 **Domínio:** Writing · **Arquivos:** `src/pages/ProcessesPage.jsx` (`buildActionErrorMessage`, ~129-132, e ~10 pontos de uso: 513, 768, 984-995, 1059, 1112-1134, 1187, 1210, 1268-1269, 1333, 1349).
 
 **Objetivo:** a mensagem acionável (ex: "máximo 6 imagens por observação") hoje vira parênteses depois de um prefixo genérico — precisa virar a frase principal.
@@ -164,7 +165,7 @@
 
 ---
 
-### P2-12 · Empty states sem `role="status"`
+### ✅ P2-12 · Empty states sem `role="status"`
 **Domínio:** Acessibilidade · **Arquivos:** `ProcessListView.jsx` (474-477, 502-505), `ProcessDetailView.jsx` (403-406, 441-444), `ProcessMessagesPanel.jsx` (37-40, 63-67), `ImportProcessesModal.jsx` (119-124), `CollectionWindowsEditor.jsx` (80-91).
 
 **Passos:** trocar as divs ad hoc pelo componente `src/components/EmptyState.jsx` (já tem `role="status"`) onde o layout permitir; onde não for viável, adicionar `role="status"` direto na div.
@@ -173,7 +174,7 @@
 
 ---
 
-### P2-13 · `role="tab"` sem o modelo de teclado correspondente
+### ✅ P2-13 · `role="tab"` sem o modelo de teclado correspondente
 **Domínio:** Acessibilidade · **Arquivos:** `ProcessListView.jsx` (~331-348, filtro segmentado mobile), `ProcessForm.jsx` (~663-676, wizard steps).
 
 **Passos:** decidir — se forem abas de conteúdo de verdade, implementar roving `tabindex` (só a ativa com `tabIndex=0`) + Arrow keys; se forem só um grupo de botões, remover `role="tab"`/`tablist`/`aria-selected`.
@@ -182,7 +183,7 @@
 
 ---
 
-### P2-14 · Toasts perdem cor semântica no modo escuro
+### ✅ P2-14 · Toasts perdem cor semântica no modo escuro
 **Domínio:** Cores · **Arquivos:** `src/styles.css` (`[data-theme='dark'] .toast` ~7341-7345 vs. `.toast--*` ~1699-1713).
 
 **Objetivo:** a regra genérica de dark mode tem mais especificidade que as classes de tom, então os 4 tons colapsam para o mesmo cinza no escuro.
@@ -193,7 +194,7 @@
 
 ---
 
-### P2-15 · Botões sem feedback de pressionar (`:active`)
+### ✅ P2-15 · Botões sem feedback de pressionar (`:active`)
 **Domínio:** UI · **Arquivos:** `src/styles.css` (`.primary-button`/`.ghost-button`/`.danger-button`, ~2816-2838).
 
 **Objetivo:** hoje só os botões do toolbar mobile de detalhe do processo (`styles.css:6475-6480`) têm `scale(0.98)` no `:active`; o resto do app não tem nenhum feedback tátil.
