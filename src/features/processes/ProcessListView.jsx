@@ -328,7 +328,7 @@ export default function ProcessListView({
             aria-label="Buscar processo"
           />
         </label>
-        <div className="chegadas-segmented" role="tablist" aria-label="Filtrar por modal">
+        <div className="chegadas-segmented" aria-label="Filtrar por modal">
           {[
             { key: 'all', label: 'Todos' },
             { key: 'sea', label: 'Marítimo' },
@@ -337,8 +337,7 @@ export default function ProcessListView({
             <button
               key={option.key}
               type="button"
-              role="tab"
-              aria-selected={mobileCategory === option.key}
+              aria-pressed={mobileCategory === option.key}
               className={`chegadas-segmented__item${mobileCategory === option.key ? ' chegadas-segmented__item--on' : ''}`}
               onClick={() => setMobileCategory(option.key)}
             >
@@ -440,7 +439,7 @@ export default function ProcessListView({
             <FilterChip
               label={`Etapa: ${operationFilter}`}
               onRemove={() => onOperationFilterChange('Todos')}
-              variant="warning"
+              variant="info"
             />
           ) : null}
           <button
@@ -471,9 +470,13 @@ export default function ProcessListView({
           </div>
         ) : isMobile ? (
           shownProcesses.length === 0 && !(isAdmin && archivedProcesses.length > 0) ? (
-            <div className="empty-state">
+            <div className="empty-state" role="status">
               <strong>Nenhum processo encontrado</strong>
-              <p>Ajuste a busca ou cadastre um novo processo.</p>
+              <p>
+                {isAdmin
+                  ? 'Ajuste a busca ou cadastre um novo processo.'
+                  : 'Ajuste a busca ou os filtros aplicados.'}
+              </p>
             </div>
           ) : (
             // Mobile: seções Em andamento / Concluídos / Arquivados (admin).
@@ -499,9 +502,13 @@ export default function ProcessListView({
             </>
           )
         ) : shownProcesses.length === 0 ? (
-          <div className="empty-state">
+          <div className="empty-state" role="status">
             <strong>Nenhum processo encontrado</strong>
-            <p>Ajuste a busca ou cadastre um novo processo.</p>
+            <p>
+              {isAdmin
+                ? 'Ajuste a busca ou cadastre um novo processo.'
+                : 'Ajuste a busca ou os filtros aplicados.'}
+            </p>
           </div>
         ) : (
           // Desktop: lista plana ordenada por ETA (inalterada).

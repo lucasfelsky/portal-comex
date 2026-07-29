@@ -127,8 +127,9 @@ function getDestinationLabel(category) {
 }
 
 function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
+  if (error?.code) return `${prefix} (${error.code})`
+  if (error?.message) return error.message
+  return prefix
 }
 
 function formatDate(value) {
@@ -1084,12 +1085,12 @@ export default function ProcessesPage() {
     await refreshProcesses(selectedProcessId)
 
     if (created > 0) {
-      toast.success(`Importados ${created} processo${created === 1 ? '' : 's'}.`)
+      toast.success(`Importado${created === 1 ? '' : 's'} ${created} processo${created === 1 ? '' : 's'}.`)
     }
     if (failures.length > 0) {
       console.error('Falha ao importar processos.', failures)
       toast.error(
-        `${failures.length} processo${failures.length === 1 ? '' : 's'} não pôde ser criado.`
+        `${failures.length} processo${failures.length === 1 ? '' : 's'} não pôde${failures.length === 1 ? '' : 'ram'} ser criado${failures.length === 1 ? '' : 's'}.`
       )
     }
     if (created === 0 && failures.length === 0) {

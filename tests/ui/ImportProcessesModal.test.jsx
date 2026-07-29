@@ -97,7 +97,7 @@ describe('ImportProcessesModal', () => {
     await waitFor(() => {
       expect(screen.getByText('1 a criar')).toBeInTheDocument()
     })
-    expect(screen.getByText(/1 duplicada \(puladas\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 duplicada \(pulada\)/i)).toBeInTheDocument()
   })
 
   it('erros do parser aparecem no preview', async () => {
