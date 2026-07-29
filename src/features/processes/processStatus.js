@@ -91,14 +91,28 @@ export function canonicalizeProcessStatus(status, duimpStatus = '') {
   return ''
 }
 
+const STATUS_DISPLAY_LABELS = {
+  'Aguardando Embarque': 'Aguardando embarque',
+  'Embarcou': 'Embarcou',
+  'Aguardando atracação': 'Aguardando atracação',
+  'Atracação Confirmada': 'Atracação confirmada',
+  'Coleta Agendada': 'Coleta agendada',
+}
+
 export function getDisplayedProcessStatus(status, category) {
   const normalizedStatus = String(status ?? '').trim()
 
-  if (category !== 'AEREO') return normalizedStatus
-  if (normalizedStatus === 'Aguardando atracação') return 'Aguardando chegada'
-  if (normalizedStatus === 'Atracação Confirmada') return 'Chegada Confirmada'
+  if (category === 'AEREO') {
+    if (normalizedStatus === 'Aguardando atracação') return 'Aguardando chegada'
+    if (normalizedStatus === 'Atracação Confirmada') return 'Chegada confirmada'
+  }
 
-  return normalizedStatus
+  return STATUS_DISPLAY_LABELS[normalizedStatus] || normalizedStatus
+}
+
+const COLLECTION_STATUS_DISPLAY_LABELS = {
+  'Carga em Conferência/Etiquetagem': 'Carga em conferência/etiquetagem',
+  'Carga em processo de Entrada': 'Carga em processo de entrada',
 }
 
 export function getDisplayedCollectionStatus(status) {
@@ -114,7 +128,8 @@ export function getDisplayedCollectionStatus(status) {
   if (normalizedStatus === 'carga a caminho do cd') return CD_EN_ROUTE_STATUS
   if (normalizedStatus === 'carga recebida') return 'Carga recebida'
 
-  return String(status ?? '').trim()
+  const trimmed = String(status ?? '').trim()
+  return COLLECTION_STATUS_DISPLAY_LABELS[trimmed] || trimmed
 }
 
 export function isProcessStatusFinalized(status) {
