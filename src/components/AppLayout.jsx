@@ -13,6 +13,7 @@ import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { formatRemaining } from '../hooks/useDoNotDisturb'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useTheme } from '../hooks/useTheme'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
@@ -93,7 +94,11 @@ export default function AppLayout() {
   const [isNotificationPanelMounted, setIsNotificationPanelMounted] = useState(false)
   const [ptaxRates, setPtaxRates] = useState(null)
   const notificationPanelRef = useRef(null)
+  const sidebarRef = useRef(null)
   const notificationPanelCloseTimeoutRef = useRef(null)
+
+  useFocusTrap(isNotificationPanelOpen, () => handleCloseNotificationPanel(), notificationPanelRef)
+  useFocusTrap(isMobileMenuOpen, () => setIsMobileMenuOpen(false), sidebarRef)
 
   // C15: swipe gesture no drawer (so mobile). matchMedia evita ativar
   // em desktop (onde nao tem touch e poderia interferir com trackpad).
@@ -321,6 +326,7 @@ export default function AppLayout() {
           className={`notifications__panel${isNotificationPanelOpen ? '' : ' notifications__panel--closing'}`}
           onMouseDown={(event) => event.stopPropagation()}
           onTouchStart={(event) => event.stopPropagation()}
+          tabIndex={-1}
         >
           <div className="card-heading">
             <div>
@@ -447,7 +453,7 @@ export default function AppLayout() {
       {!isMobileLayout && isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
       <div className="shell__frame">
-        <aside className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`}>
+        <aside ref={sidebarRef} className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`} tabIndex={-1}>
           <div className="brand">
             <span className="brand__eyebrow">SQ Química</span>
             <h1>Portal COMEX</h1>
@@ -511,7 +517,7 @@ export default function AppLayout() {
           </button>
         </aside>
 
-        <div className="main-content">
+        <div className="main-content" inert={isMobileMenuOpen || isNotificationPanelOpen ? '' : undefined}>
           <div
             className={`mobile-nav-compact${isPageScrolled ? ' mobile-nav-compact--visible' : ''}`}
             aria-hidden="true"
