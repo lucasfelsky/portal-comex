@@ -30,7 +30,7 @@
   --ink: #1f1c18;
   --ink-soft: #4a5560;
   --primary: #00ae91;
-  --primary-700: #007a64;
+  --primary-700: #008f76;
   --primary-50: #e3f5f0;
   --danger: #dc2626;
   --danger-700: #b91c1c;
@@ -1697,7 +1697,7 @@ body {
 }
 
 .toast--success {
-  background: var(--primary-700);
+  background: #007a64;
 }
 
 .toast--error {
@@ -3617,7 +3617,7 @@ body {
 }
 
 .eta-detail-highlight .detail-label {
-  color: var(--primary-700);
+  color: rgba(0, 120, 100, 0.92);
 }
 
 .detail-label--muted {
@@ -7353,7 +7353,7 @@ body {
 }
 
 [data-theme='dark'] .toast.toast--success {
-  background: #007a64;
+  background: var(--success-700);
   color: #ffffff;
   border-color: transparent;
 }
