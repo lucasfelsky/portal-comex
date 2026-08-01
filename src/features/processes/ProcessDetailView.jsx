@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
@@ -15,6 +16,7 @@ import { getProcessTitle } from './processLabels'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
 // 'detail'), extraída do ProcessesPage. Presentacional — lê só o
@@ -62,6 +64,8 @@ export default function ProcessDetailView({
   onSendMessage,
   onDeleteMessage,
 }) {
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+
   const getDestinationLabel = (category) =>
     category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
 
@@ -468,7 +472,21 @@ export default function ProcessDetailView({
 
         {isAdmin ? (
           <div className="action-row">
-            <button type="button" className="ghost-button" onClick={onDeleteProcess} disabled={isSaving}>Excluir processo</button>
+            <button type="button" className="ghost-button" onClick={() => setIsConfirmDeleteOpen(true)} disabled={isSaving}>Excluir processo</button>
+            <ConfirmDialog
+              open={isConfirmDeleteOpen}
+              title="Excluir processo?"
+              message="Esta ação é irreversível e excluirá o processo e todas as suas mensagens."
+              confirmLabel="Excluir"
+              cancelLabel="Cancelar"
+              tone="danger"
+              busy={isSaving}
+              onConfirm={() => {
+                setIsConfirmDeleteOpen(false)
+                onDeleteProcess()
+              }}
+              onCancel={() => setIsConfirmDeleteOpen(false)}
+            />
           </div>
         ) : null}
       </div>
