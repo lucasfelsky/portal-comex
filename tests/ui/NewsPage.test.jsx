@@ -58,13 +58,16 @@ vi.mock('../../src/assets/sqquimica.png', () => ({ default: 'data:image/png;base
 
 import NewsPage from '../../src/pages/NewsPage'
 
+const NOW = Date.now()
+const RECENT = new Date(NOW - 2 * 60 * 60 * 1000).toISOString() // 2h atrás, dentro da janela de 48h
+
 const MANUAL_NEWS = [
   {
     id: 'n-1',
     title: 'Manutencao programada sabado',
     content: 'Sistema em manutencao das 02h as 06h.',
     summary: 'Sistema em manutencao sabado das 02h as 06h.',
-    updatedAt: '2026-06-30T10:00:00Z',
+    updatedAt: RECENT,
     coverImage: 'https://example.com/cover1.jpg',
     references: ['https://example.com/ref1', 'https://example.com/ref2'],
     mediaItems: [],
@@ -77,8 +80,8 @@ const AUTOMATIC_NEWS = [
     title: 'SISCOMEX publica nova portaria',
     content: '',
     summary: '',
-    updatedAt: '2026-06-30T08:00:00Z',
-    publishedAt: '2026-06-30T08:00:00Z',
+    updatedAt: RECENT,
+    publishedAt: RECENT,
     sourceType: 'automatic',
     sourceName: 'SISCOMEX',
     externalUrl: 'https://siscomex.gov.br/portaria/123',
