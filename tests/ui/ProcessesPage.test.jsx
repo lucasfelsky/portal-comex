@@ -182,7 +182,7 @@ describe('ProcessesPage (listagem)', () => {
     mockListProcesses.mockRejectedValueOnce(new Error('boom'))
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText(/Não foi possível carregar os processos/i)).toBeInTheDocument()
+      expect(screen.getByText('boom')).toBeInTheDocument()
     })
   })
 

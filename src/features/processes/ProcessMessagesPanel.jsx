@@ -34,7 +34,7 @@ export default function ProcessMessagesPanel({
 
       <div className="process-messages-list">
         {isLoading ? (
-          <div className="empty-state">
+          <div className="empty-state" role="status">
             <strong>Carregando mensagens</strong>
             <p>Buscando o histórico deste processo.</p>
           </div>
@@ -61,7 +61,7 @@ export default function ProcessMessagesPanel({
             </article>
           ))
         ) : (
-          <div className="empty-state">
+          <div className="empty-state" role="status">
             <strong>Nenhuma dúvida registrada</strong>
             <p>As interações do processo passam a ficar salvas neste histórico.</p>
           </div>
@@ -86,7 +86,7 @@ export default function ProcessMessagesPanel({
         </div>
       ) : showRemainingMessages ? (
         <p className="process-message-limit-text">
-          Restam {remainingMessages} mensagens disponíveis nesta conversa para este perfil.
+          Resta{remainingMessages === 1 ? '' : 'm'} {remainingMessages} mensagem{remainingMessages === 1 ? '' : 'ns'} disponível{remainingMessages === 1 ? '' : 'is'} nesta conversa para este perfil.
         </p>
       ) : null}
 

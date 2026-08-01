@@ -117,7 +117,7 @@ export default function ImportProcessesModal({
         {fileName ? <p className="import-processes__filename">Arquivo: {fileName}</p> : null}
 
         {phase === 'parsing' ? (
-          <div className="empty-state">
+          <div className="empty-state" role="status">
             <strong>Lendo planilha…</strong>
             <p>Validando as linhas do arquivo.</p>
           </div>
@@ -131,7 +131,7 @@ export default function ImportProcessesModal({
               <span className="inline-badge inline-badge--ok">{toCreate.length} a criar</span>
               {skipped.length > 0 ? (
                 <span className="inline-badge inline-badge--warn">
-                  {skipped.length} duplicada{skipped.length > 1 ? 's' : ''} (puladas)
+                  {skipped.length} duplicada{skipped.length > 1 ? 's' : ''} (pulada{skipped.length > 1 ? 's' : ''})
                 </span>
               ) : null}
               {rowErrors.length > 0 ? (

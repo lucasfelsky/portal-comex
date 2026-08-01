@@ -32,6 +32,7 @@
   --primary: #00ae91;
   --primary-700: #008f76;
   --primary-50: #e3f5f0;
+  --eta-label-color: #007864;
   --danger: #dc2626;
   --danger-700: #b91c1c;
   --danger-50: #fee2e2;
@@ -1697,7 +1698,7 @@ body {
 }
 
 .toast--success {
-  background: var(--primary-700);
+  background: #007a64;
 }
 
 .toast--error {
@@ -1705,7 +1706,7 @@ body {
 }
 
 .toast--warning {
-  background: var(--warning);
+  background: var(--warning-700);
 }
 
 .toast--info {
@@ -2834,7 +2835,15 @@ body {
     background-color 140ms ease,
     box-shadow 140ms ease,
     border-color 140ms ease,
-    color 140ms ease;
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.primary-button:active:not(:disabled),
+.ghost-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.secondary-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .primary-button {
@@ -3609,7 +3618,7 @@ body {
 }
 
 .eta-detail-highlight .detail-label {
-  color: rgba(0, 120, 100, 0.92);
+  color: var(--eta-label-color);
 }
 
 .detail-label--muted {
@@ -7298,6 +7307,7 @@ body {
     --primary: #00ae91;
     --primary-700: #14b89a;
     --primary-50: #123029;
+    --eta-label-color: #6ed9be;
     --danger: #f87171;
     --danger-700: #e15b5b;
     --danger-50: #3a1f1f;
@@ -7342,6 +7352,30 @@ body {
   background: var(--surface-alt);
   color: var(--ink);
   border: 1px solid var(--border);
+}
+
+[data-theme='dark'] .toast.toast--success {
+  background: #005948;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--error {
+  background: #a31616;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--warning {
+  background: #755919;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+[data-theme='dark'] .toast.toast--info {
+  background: #114c82;
+  color: #ffffff;
+  border-color: transparent;
 }
 
 /* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */

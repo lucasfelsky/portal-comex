@@ -660,13 +660,12 @@ export default function ProcessForm({
           Passo {currentStep + 1} de {steps.length}: <strong>{steps[currentStep].label}</strong>
         </p>
 
-        <div className="tab-row detail-tab-row wizard-steps" role="tablist">
+        <div className="tab-row detail-tab-row wizard-steps" aria-label="Etapas do cadastro">
           {steps.map((stepDef, index) => (
             <button
               key={stepDef.key}
               type="button"
-              role="tab"
-              aria-selected={index === currentStep}
+              aria-current={index === currentStep ? 'step' : undefined}
               className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
               onClick={() => setStep(index)}
             >

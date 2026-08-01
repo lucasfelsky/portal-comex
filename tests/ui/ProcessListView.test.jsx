@@ -105,7 +105,7 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
     it('segmented Aéreo filtra só processos aéreos', async () => {
       const user = userEvent.setup()
       const { container } = renderView()
-      await user.click(screen.getByRole('tab', { name: 'Aéreo' }))
+      await user.click(screen.getByRole('button', { name: 'Aéreo' }))
 
       const rows = container.querySelectorAll('.process-item--button')
       expect(rows).toHaveLength(1)
@@ -116,7 +116,7 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
     it('segmented Marítimo esconde o aéreo e mantém as duas seções', async () => {
       const user = userEvent.setup()
       const { container } = renderView()
-      await user.click(screen.getByRole('tab', { name: 'Marítimo' }))
+      await user.click(screen.getByRole('button', { name: 'Marítimo' }))
 
       expect(container.querySelectorAll('.process-item--button')).toHaveLength(2)
       const labels = [...container.querySelectorAll('.process-list__section-label')].map(
