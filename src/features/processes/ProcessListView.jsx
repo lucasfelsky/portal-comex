@@ -95,8 +95,9 @@ function ProcessRow({
           </button>
         ) : null}
       </div>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={`process-item process-item--button process-swipe-row__content${isSelected ? ' process-item--selected' : ''}`}
         style={
           isMobile
@@ -104,6 +105,12 @@ function ProcessRow({
             : undefined
         }
         onClick={swipe.guardClick(() => onSelectProcess(item.id))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            swipe.guardClick(() => onSelectProcess(item.id))()
+          }
+        }}
         {...swipe.handlers}
       >
         {/* F15.2: leading icon por categoria + resumo condensado +
@@ -160,10 +167,38 @@ function ProcessRow({
             <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
           </div>
         ) : null}
+        <div className="process-item__inline-actions" onClick={(e) => e.stopPropagation()}>
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              className="action-icon-button"
+              aria-label={isFavorite ? 'Desfavoritar processo' : 'Favoritar processo'}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleFavorite(item.id)
+              }}
+            >
+              <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} />
+            </button>
+          ) : null}
+          {canArchive ? (
+            <button
+              type="button"
+              className="action-icon-button"
+              aria-label={isArchivedRow ? 'Restaurar processo' : 'Arquivar processo'}
+              onClick={(e) => {
+                e.stopPropagation()
+                onArchiveProcess(item.id, !isArchivedRow)
+              }}
+            >
+              <Icon name={isArchivedRow ? 'restore' : 'archive'} size={20} />
+            </button>
+          ) : null}
+        </div>
         <span className="process-item__chevron" aria-hidden="true">
           <Icon name="chevron" size={18} />
         </span>
-      </button>
+      </div>
     </div>
   )
 }

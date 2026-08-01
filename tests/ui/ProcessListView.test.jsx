@@ -218,4 +218,39 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
       expect(onArchiveProcess).toHaveBeenCalledWith('p-sea-done', false)
     })
   })
+
+  describe('acessibilidade e teclado (P1-2)', () => {
+    beforeEach(() => stubMatchMedia(false))
+
+    it('ativa onSelectProcess apertando Enter ou Espaço na linha do processo', async () => {
+      const user = userEvent.setup()
+      const onSelectProcess = vi.fn()
+      const { container } = renderView({ onSelectProcess })
+      
+      const rows = container.querySelectorAll('.process-item--button')
+      expect(rows.length).toBeGreaterThan(0)
+      
+      rows[0].focus()
+      await user.keyboard('{Enter}')
+      expect(onSelectProcess).toHaveBeenCalledWith('p-sea-active')
+      
+      rows[1].focus()
+      await user.keyboard(' ')
+      expect(onSelectProcess).toHaveBeenCalledWith('p-air-active')
+    })
+
+    it('clicar na ação inline Favoritar chama onToggleFavorite sem acionar a linha pai', async () => {
+      const user = userEvent.setup()
+      const onSelectProcess = vi.fn()
+      const onToggleFavorite = vi.fn()
+      const { container } = renderView({ onSelectProcess, onToggleFavorite, favoriteProcessIds: [] })
+      
+      const starButton = container.querySelector('.action-icon-button')
+      expect(starButton).not.toBeNull()
+      
+      await user.click(starButton)
+      expect(onToggleFavorite).toHaveBeenCalledWith('p-sea-active')
+      expect(onSelectProcess).not.toHaveBeenCalled()
+    })
+  })
 })

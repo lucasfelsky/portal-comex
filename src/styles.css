@@ -8464,3 +8464,42 @@ body {
     transition: none;
   }
 }
+
+/* ============================================================
+   P1-2 - Ações inline no ProcessItem
+   ============================================================ */
+
+.process-item__inline-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .process-item__inline-actions {
+    display: none;
+  }
+}
+
+.action-icon-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-full);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 150ms, color 150ms;
+}
+
+.action-icon-button:hover {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.action-icon-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

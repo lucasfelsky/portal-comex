@@ -61,6 +61,9 @@ const ICONS = {
   star: (
     <path d="m12 3 2.7 5.6 6.1.9-4.4 4.4 1 6.1L12 17l-5.4 3 1-6.1-4.4-4.4 6.1-.9Z" />
   ),
+  'star-filled': (
+    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.4 1 6.1L12 17l-5.4 3 1-6.1-4.4-4.4 6.1-.9Z" fill="currentColor" />
+  ),
   // F16.8: ações de swipe "arquivar" / "restaurar" (Chegadas, admin).
   archive: (
     <>
