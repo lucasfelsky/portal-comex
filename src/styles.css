@@ -69,6 +69,8 @@
   color: var(--ink);
   background: var(--bg);
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -775,7 +777,7 @@ body {
   color: var(--ink);
   font-family: inherit;
   font-weight: 600;
-  font-size: var(--fs-subhead);
+  font-size: 16px;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -2721,6 +2723,7 @@ body {
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-tag--ok {
@@ -3825,7 +3828,7 @@ body {
   gap: 6px;
   flex-wrap: wrap;
   margin: 0;
-  font-size: 0.85em;
+  font-size: var(--fs-footnote);
 }
 
 .weekly-arrivals-windows__date {
@@ -4884,7 +4887,7 @@ body {
     background: var(--surface);
     color: var(--ink);
     font-weight: 600;
-    font-size: var(--fs-body);
+    font-size: 16px;
     box-shadow: 0 1px 0 rgba(31, 28, 24, 0.04);
     appearance: none;
     -webkit-appearance: none;

@@ -584,8 +584,8 @@ export default function AppLayout() {
                   {getInitials(profile?.name ?? profile?.email ?? '?')}
                 </div>
                 <div className="topbar__user-info">
-                  <strong>{profile?.name ?? 'Usuário'}</strong>
-                  <span>{profile?.email ?? 'Sem email'}</span>
+                  <strong title={profile?.name}>{profile?.name ?? 'Usuário'}</strong>
+                  <span title={profile?.email}>{profile?.email ?? 'Sem email'}</span>
                 </div>
                 {profile?.role ? (
                   <span className={`topbar__role-badge topbar__role-badge--${profile.role}`}>
