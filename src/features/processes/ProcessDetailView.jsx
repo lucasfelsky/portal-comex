@@ -170,16 +170,14 @@ export default function ProcessDetailView({
         </button>
         <div><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
-          {isAdmin && canEditSelectedCollectionStatus ? (
+          {isAdmin ? (
             <button type="button" className="ghost-button" onClick={onEditMode}>Editar processo</button>
-          ) : isAdmin && !canEditSelectedCollectionStatus ? (
-            <button type="button" className="ghost-button" onClick={onEditMode}>Editar</button>
           ) : null}
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
-            <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar obs.</button>
+            <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar observações</button>
           ) : null}
           {canEditSelectedCollectionStatus ? (
-            <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>Status coleta</button>
+            <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>Status de coleta</button>
           ) : null}
           <button
             type="button"
