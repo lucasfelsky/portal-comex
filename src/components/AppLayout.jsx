@@ -73,6 +73,21 @@ export default function AppLayout() {
   const location = useLocation()
   const { profile, logout, isEmailVerified } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [shouldRenderMobileMenu, setShouldRenderMobileMenu] = useState(false)
+  const [isMobileMenuClosing, setIsMobileMenuClosing] = useState(false)
+
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      setShouldRenderMobileMenu(true)
+      setIsMobileMenuClosing(false)
+    } else if (shouldRenderMobileMenu) {
+      setIsMobileMenuClosing(true)
+      const timer = setTimeout(() => {
+        setShouldRenderMobileMenu(false)
+      }, 240)
+      return () => clearTimeout(timer)
+    }
+  }, [isMobileMenuOpen, shouldRenderMobileMenu])
   
   const {
     unreadNotifications,
@@ -437,10 +452,10 @@ export default function AppLayout() {
 
   return (
     <div className="shell">
-      {isMobileMenuOpen ? (
+      {shouldRenderMobileMenu ? (
         <button
           type="button"
-          className="sidebar-backdrop"
+          className={`sidebar-backdrop${isMobileMenuClosing ? ' sidebar-backdrop--closing' : ''}`}
           aria-label="Fechar menu"
           onClick={() => setIsMobileMenuOpen(false)}
         />
@@ -521,6 +536,7 @@ export default function AppLayout() {
           <div
             className={`mobile-nav-compact${isPageScrolled ? ' mobile-nav-compact--visible' : ''}`}
             aria-hidden="true"
+            title={mobileTitle}
           >
             {mobileTitle}
           </div>
@@ -528,7 +544,7 @@ export default function AppLayout() {
             {mobileEyebrow ? (
               <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
             ) : null}
-            <h1 className="mobile-page-header__title">{mobileTitle}</h1>
+            <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
           </div>
 
           <header className="topbar">
@@ -552,7 +568,7 @@ export default function AppLayout() {
                   <Breadcrumb items={meta.breadcrumb} />
                 ) : null}
                 {meta.breadcrumb && meta.breadcrumb.length > 0 ? null : (
-                  <h2 className="topbar__title">{meta.title}</h2>
+                  <h2 className="topbar__title" title={meta.title}>{meta.title}</h2>
                 )}
               </div>
             </div>

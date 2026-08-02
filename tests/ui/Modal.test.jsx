@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import Modal from '../../src/components/Modal.jsx'
 
@@ -136,7 +136,7 @@ describe('Modal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('bloqueia scroll do body quando aberto; restaura ao fechar', () => {
+  it('bloqueia scroll do body quando aberto; restaura ao fechar', async () => {
     const { rerender } = render(
       <Modal open={true} onClose={() => {}} title="Scroll lock">
         <p>conteudo</p>
@@ -149,7 +149,9 @@ describe('Modal', () => {
         <p>conteudo</p>
       </Modal>
     )
-    expect(document.body.style.overflow).not.toBe('hidden')
+    await waitFor(() => {
+      expect(document.body.style.overflow).not.toBe('hidden')
+    })
   })
 
   it('foco inicial vai para o PRIMEIRO focusable do modal (close button do header)', async () => {
