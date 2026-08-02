@@ -37,7 +37,7 @@
   --danger-700: #b91c1c;
   --danger-50: #fee2e2;
   --warning: #b48a2d;
-  --warning-700: #8a6b22;
+  --warning-700: #7a5e1b;
   --warning-50: #faf2dc;
   --info: #1e6fb6;
   --info-700: #155793;
@@ -3644,19 +3644,19 @@ body {
 }
 
 .detail-card--success {
-  background: rgba(0, 174, 145, 0.12);
+  background: var(--success-50);
 }
 
 .detail-card--warning {
-  background: rgba(183, 121, 31, 0.12);
+  background: var(--warning-50);
 }
 
 .detail-card--danger {
-  background: rgba(197, 48, 48, 0.1);
+  background: var(--danger-50);
 }
 
 .detail-card--neutral {
-  background: rgba(31, 28, 24, 0.08);
+  background: var(--neutral-50);
 }
 
 .detail-card--split {
