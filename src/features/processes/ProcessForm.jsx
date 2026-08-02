@@ -660,7 +660,7 @@ export default function ProcessForm({
           Passo {currentStep + 1} de {steps.length}: <strong>{steps[currentStep].label}</strong>
         </p>
 
-        <div className="tab-row detail-tab-row wizard-steps" aria-label="Etapas do cadastro">
+        <div className="tab-row wizard-steps" aria-label="Etapas do cadastro">
           {steps.map((stepDef, index) => (
             <button
               key={stepDef.key}
