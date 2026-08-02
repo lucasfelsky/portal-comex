@@ -3,6 +3,7 @@ import Skeleton from '../../components/Skeleton'
 import SelectField from '../../components/SelectField'
 import FilterChip from '../../components/FilterChip'
 import Icon from '../../components/Icon'
+import Spinner from '../../components/Spinner'
 import { useSwipeReveal } from '../../hooks/useSwipeReveal'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
 import { getStatusTagClass } from './processStatusView'
@@ -76,7 +77,7 @@ function ProcessRow({
               onSwipeOpenChange(false)
             }}
           >
-            <Icon name="star" size={18} aria-hidden="true" />
+            <Icon name={isFavorite ? 'star-filled' : 'star'} size={18} aria-hidden="true" />
             <span>{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
           </button>
         ) : null}
@@ -214,6 +215,7 @@ export default function ProcessListView({
   rootClassName = '',
   filteredProcesses,
   isLoading,
+  isExporting,
   selectedProcessId,
   isAdmin,
   searchTerm,
@@ -340,11 +342,11 @@ export default function ProcessListView({
             <button
               type="button"
               className="ghost-button"
-              disabled={filteredProcesses.length === 0}
+              disabled={filteredProcesses.length === 0 || isExporting}
               title="Baixar as linhas visíveis (filtros aplicados) em Excel"
               onClick={onExport}
             >
-              Exportar ({filteredProcesses.length})
+              {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
             </button>
           </div>
         </div>

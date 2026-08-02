@@ -13,6 +13,7 @@ import {
 } from './processStatus'
 import { getChannelToneClass, getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
+import Spinner from '../../components/Spinner'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
@@ -472,7 +473,9 @@ export default function ProcessDetailView({
 
         {isAdmin ? (
           <div className="action-row">
-            <button type="button" className="ghost-button" onClick={() => setIsConfirmDeleteOpen(true)} disabled={isSaving}>Excluir processo</button>
+            <button type="button" className="ghost-button" onClick={() => setIsConfirmDeleteOpen(true)} disabled={isSaving}>
+              {isSaving ? <Spinner size={14} /> : null} Excluir processo
+            </button>
             <ConfirmDialog
               open={isConfirmDeleteOpen}
               title="Excluir processo?"
