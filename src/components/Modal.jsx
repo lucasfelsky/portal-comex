@@ -35,15 +35,32 @@ const SWIPE_CLOSE_THRESHOLD = 120
 export default function Modal({ open, onClose, title, wide = false, children, ariaLabel, className = '' }) {
   const modalRef = useRef(null)
   const lastFocusedRef = useRef(null)
+  const [shouldRender, setShouldRender] = useState(open)
   const [dragOffset, setDragOffset] = useState(0)
   const [isClosing, setIsClosing] = useState(false)
   const dragStartRef = useRef({ y: 0, started: false })
 
   useEffect(() => {
-    if (!open) return undefined
+    if (open) {
+      setShouldRender(true)
+      setIsClosing(false)
+      setDragOffset(0)
+    } else if (shouldRender) {
+      setIsClosing(true)
+      const timer = setTimeout(() => {
+        setShouldRender(false)
+      }, 240)
+      return () => clearTimeout(timer)
+    }
+  }, [open, shouldRender])
 
-    setDragOffset(0)
-    setIsClosing(false)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!shouldRender) return undefined
 
     lastFocusedRef.current = document.activeElement
 
@@ -71,7 +88,7 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose?.()
+        onCloseRef.current?.()
         return
       }
       if (event.key !== 'Tab') return
@@ -110,9 +127,9 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
         lastFocusedRef.current.focus()
       }
     }
-  }, [open, onClose])
+  }, [shouldRender])
 
-  if (!open) return null
+  if (!shouldRender) return null
 
   function handleBackdropClick(event) {
     if (event.target === event.currentTarget) {
@@ -155,8 +172,12 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
     ? `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''} modal--sheet-closing`
     : `modal${wide ? ' modal--wide' : ''}${className ? ` ${className}` : ''}`
 
+  const backdropClass = isClosing
+    ? `modal-backdrop${className ? ` ${className}-backdrop` : ''} modal-backdrop--closing`
+    : `modal-backdrop${className ? ` ${className}-backdrop` : ''}`
+
   return createPortal(
-    <div className={`modal-backdrop${className ? ` ${className}-backdrop` : ''}`} onClick={handleBackdropClick} role="presentation">
+    <div className={backdropClass} onClick={handleBackdropClick} role="presentation">
       <div
         ref={modalRef}
         className={sheetClass}

@@ -37,7 +37,7 @@
   --danger-700: #b91c1c;
   --danger-50: #fee2e2;
   --warning: #b48a2d;
-  --warning-700: #8a6b22;
+  --warning-700: #7a5e1b;
   --warning-50: #faf2dc;
   --info: #1e6fb6;
   --info-700: #155793;
@@ -69,6 +69,8 @@
   color: var(--ink);
   background: var(--bg);
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -775,7 +777,7 @@ body {
   color: var(--ink);
   font-family: inherit;
   font-weight: 600;
-  font-size: var(--fs-subhead);
+  font-size: 14px;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -796,6 +798,12 @@ body {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-50);
+}
+
+@media (max-width: 720px) {
+  .notifications__filter-select {
+    font-size: 16px; /* evita zoom do iOS */
+  }
 }
 
 /* .notifications__panel prefixado de propósito: eleva a especificidade acima de
@@ -2358,6 +2366,15 @@ body {
 
 .process-detail-card-heading {
   margin-bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.process-detail-card-heading > :first-child {
+  justify-self: start;
+}
+.process-detail-card-heading > :last-child {
+  justify-self: end;
 }
 
 /* Botao "Voltar" da listagem no desktop: escondido no mobile porque la o
@@ -2712,6 +2729,7 @@ body {
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-tag--ok {
@@ -3632,19 +3650,19 @@ body {
 }
 
 .detail-card--success {
-  background: rgba(0, 174, 145, 0.12);
+  background: var(--success-50);
 }
 
 .detail-card--warning {
-  background: rgba(183, 121, 31, 0.12);
+  background: var(--warning-50);
 }
 
 .detail-card--danger {
-  background: rgba(197, 48, 48, 0.1);
+  background: var(--danger-50);
 }
 
 .detail-card--neutral {
-  background: rgba(31, 28, 24, 0.08);
+  background: var(--neutral-50);
 }
 
 .detail-card--split {
@@ -3816,7 +3834,7 @@ body {
   gap: 6px;
   flex-wrap: wrap;
   margin: 0;
-  font-size: 0.85em;
+  font-size: var(--fs-footnote);
 }
 
 .weekly-arrivals-windows__date {
@@ -3931,6 +3949,7 @@ body {
   margin-bottom: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  flex-wrap: nowrap;
 }
 
 .wizard-steps::-webkit-scrollbar {
@@ -4874,7 +4893,7 @@ body {
     background: var(--surface);
     color: var(--ink);
     font-weight: 600;
-    font-size: var(--fs-body);
+    font-size: 16px;
     box-shadow: 0 1px 0 rgba(31, 28, 24, 0.04);
     appearance: none;
     -webkit-appearance: none;
@@ -7193,6 +7212,19 @@ body {
   animation: sheet-slide-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+.toast {
+  animation: toast-slide-in 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast--closing {
+  animation: toast-slide-out 200ms ease forwards;
+}
+
+@keyframes toast-slide-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
 .action-sheet__handle {
   flex-shrink: 0;
   width: 40px;
@@ -7826,7 +7858,7 @@ body {
   }
 
   .weekly-arrivals-card .process-item {
-    flex: 0 0 216px;
+    flex: 0 0 85%;
     scroll-snap-align: start;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -8053,6 +8085,7 @@ body {
     padding: 6px 4px;
     border-radius: 7px;
     cursor: pointer;
+    transition: all 200ms ease;
   }
 
   .chegadas-segmented__item--on {

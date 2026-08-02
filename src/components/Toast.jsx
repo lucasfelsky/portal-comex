@@ -21,7 +21,10 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
   const dismiss = useCallback((id) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id))
+    setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, closing: true } : toast)))
+    setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id))
+    }, 200)
   }, [])
 
   const push = useCallback(
@@ -35,7 +38,7 @@ export function ToastProvider({ children }) {
           : next
       })
 
-      if (TOAST_TIMEOUT_MS > 0) {
+      if (TOAST_TIMEOUT_MS > 0 && tone !== 'error') {
         setTimeout(() => dismiss(id), TOAST_TIMEOUT_MS)
       }
     },
@@ -93,7 +96,7 @@ function ToastItem({ toast, onDismiss }) {
 
   return (
     <div
-      className={`toast toast--${toast.tone}`}
+      className={`toast toast--${toast.tone}${toast.closing ? ' toast--closing' : ''}`}
       role={toast.tone === 'error' ? 'alert' : 'status'}
       aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
     >

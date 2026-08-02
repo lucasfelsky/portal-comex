@@ -96,7 +96,7 @@ describe('Toast', () => {
     expect(screen.getByText('Vai sumir')).toBeInTheDocument()
 
     act(() => {
-      vi.advanceTimersByTime(4000)
+      vi.advanceTimersByTime(4200)
     })
 
     expect(screen.queryByText('Vai sumir')).not.toBeInTheDocument()
@@ -111,6 +111,7 @@ describe('Toast', () => {
     const closeBtn = screen.getByLabelText('Fechar')
     act(() => {
       closeBtn.click()
+      vi.advanceTimersByTime(200)
     })
     expect(screen.queryByText('Dispensavel')).not.toBeInTheDocument()
   })
@@ -125,6 +126,7 @@ describe('Toast', () => {
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      vi.advanceTimersByTime(200)
     })
 
     expect(screen.queryByText('Pressione Esc')).not.toBeInTheDocument()
@@ -146,6 +148,11 @@ describe('Toast', () => {
       </ToastProvider>
     )
 
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+
+    // O mais antigo 't1' some, 't6' aparece
     expect(screen.queryByText('t1')).not.toBeInTheDocument()
     expect(screen.getByText('t2')).toBeInTheDocument()
     expect(screen.getByText('t6')).toBeInTheDocument()

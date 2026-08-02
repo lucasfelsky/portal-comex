@@ -166,7 +166,7 @@ export function isProcessTrulyFinalized(process) {
 // PR #11 (2026-07-09): **consistência badge <-> notes**.
 // Investigacao do Lucas (image anexada) mostrou que em
 // processos com `collectionStatus` desatualizado (ex: ainda
-// "Coleta Agendada") MAS com `collectionWindows` ja' passada,
+// "Coleta agendada") MAS com `collectionWindows` ja' passada,
 // o `getProcessDerivedStatus` retorna fase `EM_ROTA` (badge
 // "Carga a caminho do CD"), mas esta funcao retornava
 // "Coleta ainda nao agendada" (notes). Dois sinais do mesmo

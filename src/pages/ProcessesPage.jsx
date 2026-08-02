@@ -454,6 +454,7 @@ export default function ProcessesPage() {
   const listReturnClass = hasLeftListOnce ? 'view-pop' : ''
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('Todos')
   const [etaStartDate, setEtaStartDate] = useState('')
@@ -1350,7 +1351,7 @@ export default function ProcessesPage() {
 
   return (
     <section className="surface">
-      <div className="section-heading" style={{ marginBottom: '4px' }}>
+      <div className="section-heading">
         <div>
           <h2>Fila de chegadas</h2>
         </div>
@@ -1364,6 +1365,7 @@ export default function ProcessesPage() {
           rootClassName={listReturnClass}
           filteredProcesses={filteredProcesses}
           isLoading={isLoading}
+          isExporting={isExporting}
           selectedProcessId={selectedProcessId}
           isAdmin={isAdmin}
           searchTerm={searchTerm}
@@ -1393,12 +1395,15 @@ export default function ProcessesPage() {
           onNewProcess={isAdmin ? handleCreateMode : undefined}
           onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onExport={async () => {
+            setIsExporting(true)
             try {
               const exportedCount = await exportProcessesToXlsx(filteredProcesses)
               toast.success(`Exportados ${exportedCount} processos para Excel.`)
             } catch (error) {
               console.error('Falha ao exportar processos.', error)
               toast.error('Não foi possível exportar os processos.')
+            } finally {
+              setIsExporting(false)
             }
           }}
         />
