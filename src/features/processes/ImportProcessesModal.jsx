@@ -105,6 +105,7 @@ export default function ImportProcessesModal({
         </p>
 
         <label className="import-processes__file">
+          <span style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Arquivo da planilha</span>
           <input
             ref={fileInputRef}
             type="file"
@@ -183,7 +184,7 @@ export default function ImportProcessesModal({
           </div>
         ) : null}
 
-        <div className="import-processes__actions">
+        <div className="import-processes__actions" style={{ position: 'sticky', bottom: 0, background: 'var(--surface)', padding: '12px 0', borderTop: '1px solid var(--border)', marginTop: 'auto', zIndex: 1 }}>
           <button type="button" className="ghost-button" onClick={handleClose} disabled={isImporting}>
             Cancelar
           </button>

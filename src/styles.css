@@ -2358,6 +2358,15 @@ body {
 
 .process-detail-card-heading {
   margin-bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.process-detail-card-heading > :first-child {
+  justify-self: start;
+}
+.process-detail-card-heading > :last-child {
+  justify-self: end;
 }
 
 /* Botao "Voltar" da listagem no desktop: escondido no mobile porque la o
@@ -3931,6 +3940,7 @@ body {
   margin-bottom: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  flex-wrap: nowrap;
 }
 
 .wizard-steps::-webkit-scrollbar {
@@ -7826,7 +7836,7 @@ body {
   }
 
   .weekly-arrivals-card .process-item {
-    flex: 0 0 216px;
+    flex: 0 0 85%;
     scroll-snap-align: start;
     background: var(--surface);
     border: 1px solid var(--border);
