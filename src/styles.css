@@ -2769,6 +2769,20 @@ body {
   max-width: 100%;
 }
 
+/* Toolbar de Chegadas: sem esta regra este wrapper e um block e os dois
+   .ghost-button (inline-flex) alinham por BASELINE. Como "Exportar" comeca com
+   um <svg>, a baseline sintetizada dele e a borda de baixo do icone, o que
+   empurrava "Importar" ~3px para baixo em relacao a "Novo processo"/"Exportar".
+   Flex + align-items:center iguala o topo dos tres. Em <=720px a regra
+   display:grid da linha ~8018 vence por especificidade (0,4,0 vs 0,1,0), entao o
+   layout mobile fica bit-a-bit igual. O gap de 8px iguala o valor que o par
+   ja usa no mobile (~8034); menor que os 10px do .admin-toolbar, cluster. */
+.secondary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .tab-row {
   display: flex;
   flex-wrap: wrap;
