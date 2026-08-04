@@ -159,42 +159,44 @@ function ProcessRow({
             </span>
           </div>
         </div>
-        {!hideSchedule ? (
-          <div className="process-item__meta">
-            <span>ETD: {formatDate(item.etd)}</span>
-            <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
-              ETA: {formatDate(item.eta)}
-            </span>
-            <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
+        <div className="process-item__aside">
+          {!hideSchedule ? (
+            <div className="process-item__meta">
+              <span>ETD: {formatDate(item.etd)}</span>
+              <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
+                ETA: {formatDate(item.eta)}
+              </span>
+              <span>Previsão de entrega: {getEstimatedDeliveryLabel(item)}</span>
+            </div>
+          ) : null}
+          <div className="process-item__inline-actions" onClick={(e) => e.stopPropagation()}>
+            {onToggleFavorite ? (
+              <button
+                type="button"
+                className="action-icon-button"
+                aria-label={isFavorite ? 'Desfavoritar processo' : 'Favoritar processo'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleFavorite(item.id)
+                }}
+              >
+                <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} />
+              </button>
+            ) : null}
+            {canArchive ? (
+              <button
+                type="button"
+                className="action-icon-button"
+                aria-label={isArchivedRow ? 'Restaurar processo' : 'Arquivar processo'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onArchiveProcess(item.id, !isArchivedRow)
+                }}
+              >
+                <Icon name={isArchivedRow ? 'restore' : 'archive'} size={20} />
+              </button>
+            ) : null}
           </div>
-        ) : null}
-        <div className="process-item__inline-actions" onClick={(e) => e.stopPropagation()}>
-          {onToggleFavorite ? (
-            <button
-              type="button"
-              className="action-icon-button"
-              aria-label={isFavorite ? 'Desfavoritar processo' : 'Favoritar processo'}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleFavorite(item.id)
-              }}
-            >
-              <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} />
-            </button>
-          ) : null}
-          {canArchive ? (
-            <button
-              type="button"
-              className="action-icon-button"
-              aria-label={isArchivedRow ? 'Restaurar processo' : 'Arquivar processo'}
-              onClick={(e) => {
-                e.stopPropagation()
-                onArchiveProcess(item.id, !isArchivedRow)
-              }}
-            >
-              <Icon name={isArchivedRow ? 'restore' : 'archive'} size={20} />
-            </button>
-          ) : null}
         </div>
         <span className="process-item__chevron" aria-hidden="true">
           <Icon name="chevron" size={18} />

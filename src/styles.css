@@ -8542,8 +8542,19 @@ body {
   align-items: center;
 }
 
+.process-item__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 720px) {
   .process-item__inline-actions {
+    display: none;
+  }
+
+  .process-item__aside {
     display: none;
   }
 }
