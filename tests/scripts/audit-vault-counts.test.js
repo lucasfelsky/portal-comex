@@ -60,7 +60,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/src\/utils\/ count = 12/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 12/)
     expect(result.stdout).toMatch(/firestore\.rules subcollections = 1/)
-    expect(result.stdout).toMatch(/tests\/ total = 67/)
+    expect(result.stdout).toMatch(/tests\/ total = 68/)
   })
 
   describe('detecao de drift', () => {
@@ -155,7 +155,7 @@ describe('audit-vault-counts', () => {
       const result = runScript()
       expect(isAuditFailure(result)).toBe(false)
       expect(result.stdout).toMatch(/firestore\.rules isAllowedSelfUserUpdate\(\) = 9 campos/)
-      expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 35 campos/)
+      expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 36 campos/)
       expect(result.stdout).toMatch(/src\/App\.jsx rotas = 15/)
       expect(result.stdout).toMatch(/declaredDependencies = \d+ \(todas instaladas\)/)
       expect(result.stdout).toMatch(

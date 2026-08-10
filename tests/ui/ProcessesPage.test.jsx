@@ -66,6 +66,7 @@ vi.mock('../../src/features/processes/processStatus', () => ({
   getProcessStatusTone: () => 'ok',
   getQuickReadProcessStatus: (s) => s,
   isCollectionScheduleRetainingStatus: () => false,
+  isCollectionScheduledOrBeyondStatus: () => false,
   isDtaLoadingScheduledStatus: () => false,
   isDtaTransitCompletedStatus: () => false,
   isMapaInspectionScheduledStatus: () => false,

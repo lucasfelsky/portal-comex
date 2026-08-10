@@ -7,6 +7,7 @@ import {
   CD_EN_ROUTE_STATUS,
   getDisplayedCollectionStatus,
   getQuickReadProcessStatus,
+  isCollectionScheduledOrBeyondStatus,
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus,
   isProcessStatusFinalized,
@@ -359,6 +360,12 @@ export default function ProcessDetailView({
               <div className="detail-card">
                 <span className="detail-label">Coleta</span>
                 <p>{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</p>
+              </div>
+            ) : null}
+            {isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus) ? (
+              <div className="detail-card">
+                <span className="detail-label">Transportadora</span>
+                <p>{selectedProcess.carrierName || '-'}</p>
               </div>
             ) : null}
           </>

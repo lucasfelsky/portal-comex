@@ -81,6 +81,7 @@ const emptyDraft = () => ({
   containerQuantity: 0,
   palletQuantity: 0,
   processNotes: '',
+  carrierName: '',
   warehouseDeliveryDateOverride: '',
   postReceiptNotes: '',
   postReceiptImages: [],

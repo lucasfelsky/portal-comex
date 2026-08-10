@@ -6,6 +6,7 @@ import CollectionWindowsEditor from './CollectionWindowsEditor'
 import {
   getDisplayedCollectionStatus,
   getDisplayedProcessStatus,
+  isCollectionScheduledOrBeyondStatus,
   isDtaLoadingScheduledStatus,
   isDtaTransitCompletedStatus,
   isMapaInspectionScheduledStatus,
@@ -534,6 +535,20 @@ export default function ProcessForm({
               <p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {isCollectionScheduledOrBeyondStatus(draft.collectionStatus) ? (
+        <div className="detail-card">
+          <label className="field">
+            <span>Transportadora</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.carrierName}
+              onChange={(event) => onDraftChange('carrierName', event.target.value)}
+            />
+          </label>
         </div>
       ) : null}
     </>

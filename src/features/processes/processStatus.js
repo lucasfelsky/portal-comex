@@ -284,6 +284,15 @@ export function isCollectionScheduleRetainingStatus(status) {
   )
 }
 
+// Uniao deliberada de `isCollectionScheduleRetainingStatus` +
+// `isCdUnloadingOrReceivedStatus` — cobre "Coleta Agendada" e todo status
+// posterior (veiculo no CD, carga a caminho do CD, pos-recebimento, em
+// estoque). Nao cria lista de status nova de proposito: allowlist positiva
+// de status ja causou 2 bugs de producao em 2026-07 (L21/L22).
+export function isCollectionScheduledOrBeyondStatus(status) {
+  return isCollectionScheduleRetainingStatus(status) || isCdUnloadingOrReceivedStatus(status)
+}
+
 export function shouldHideProcessCardSchedule(process) {
   return (
     isCdUnloadingOrReceivedStatus(process?.processStatus) ||

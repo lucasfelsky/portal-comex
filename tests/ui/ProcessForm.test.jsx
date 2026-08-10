@@ -22,6 +22,7 @@ function makeDraft(overrides = {}) {
     containerQuantity: 0,
     palletQuantity: 0,
     processNotes: '',
+    carrierName: '',
     mapaStatus: '',
     mapaInspectionScheduledAt: '',
     berthed: false,
@@ -165,5 +166,27 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     const flowTab = within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' })
     await user.click(flowTab)
     expect(screen.getByText('MAPA')).toBeInTheDocument()
+  })
+
+  it('coleta agendada mostra "Transportadora" no passo de fluxo e dispara onDraftChange', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ collectionStatus: 'Coleta Agendada' }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    expect(screen.getByText('Transportadora')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Transportadora'), 'X')
+    expect(onDraftChange).toHaveBeenCalledWith('carrierName', expect.any(String))
+  })
+
+  it('sem coleta agendada NÃO mostra "Transportadora" no passo de fluxo', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ collectionStatus: '' }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    expect(screen.queryByText('Transportadora')).not.toBeInTheDocument()
   })
 })

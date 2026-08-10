@@ -589,6 +589,34 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       )
     })
+
+    // PLAN.md — campo transportadora no fluxo de coleta: carrierName entra
+    // na allowlist de isAdminProcessFields() (admin-only). Logistica nao'
+    // esta' listada em isLogisticsPostReceiptUpdate nem em
+    // isLogisticsCollectionStatusUpdate, logo fica sem poder gravar.
+    it('admin atualiza carrierName', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p13'), { name: 'Orig', collectionStatus: 'Coleta Agendada' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p13'), {
+          carrierName: 'Rapido Sul',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza carrierName', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p14'), { name: 'Orig', collectionStatus: 'Coleta Agendada' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p14'), {
+          carrierName: 'Rapido Sul',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
   })
 
   describe('processes — atualizacao por logistica (ramos especificos)', () => {
