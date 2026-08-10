@@ -158,7 +158,7 @@ service cloud.firestore {
       ).hasOnly([
         'name', 'category', 'processNumber', 'destination', 'etd', 'eta',
         'etaOriginal', 'processStatus', 'containerQuantity', 'palletQuantity',
-        'processNotes', 'warehouseDeliveryDateOverride', 'postReceiptNotes',
+        'processNotes', 'carrierName', 'warehouseDeliveryDateOverride', 'postReceiptNotes',
         'postReceiptImages', 'cargoReceivedAt', 'items', 'berthed', 'arrived',
         'cargoPresenceInformed', 'duimpStatus', 'parameterizationChannel',
         'collectionStatus', 'collectionScheduledAt', 'collectionWindows',
