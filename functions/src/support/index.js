@@ -106,6 +106,51 @@ function buildSupportTicketResolvedAuthorEmailMessage({ ticket, resolvedByName }
     `,
   }
 }
+// Suporte v3 (thread, 2026-08-11): e-mail ao AUTOR quando o time responde no
+// chamado sem necessariamente resolvê-lo (mesmo molde do
+// buildSupportTicketResolvedAuthorEmailMessage).
+function buildSupportTicketReplyAuthorEmailMessage({ ticket, reply }) {
+  const authorName = repairTextEncoding(normalizeString(ticket?.authorName)) || 'Usuário'
+  const greeting = `Olá, ${authorName}.`
+  const message = repairTextEncoding(normalizeString(ticket?.message)) || '(sem mensagem)'
+  const replyAuthorName = repairTextEncoding(normalizeString(reply?.authorName)) || 'a equipe administrativa'
+  const replyMessage = repairTextEncoding(normalizeString(reply?.message)) || ''
+
+  const textLines = [
+    greeting,
+    '',
+    `${replyAuthorName} respondeu no seu chamado de suporte no Portal COMEX.`,
+  ]
+  if (replyMessage) {
+    textLines.push('', 'Resposta:', replyMessage)
+  }
+  textLines.push('', 'Chamado:', message, '', 'Acesse o botão Suporte no portal para ver a conversa completa:', APP_URL)
+
+  return {
+    subject: '[Portal COMEX] Nova resposta no seu chamado de suporte',
+    text: textLines.join('\n'),
+    html: `
+      <div style="font-family: Arial, sans-serif; color: ${BRAND_COLORS.ink}; line-height: 1.5;">
+        <p>${escapeHtml(greeting)}</p>
+        <p><strong>${escapeHtml(replyAuthorName)}</strong> respondeu no seu chamado de suporte no <strong>Portal COMEX</strong>.</p>
+        ${replyMessage ? `<div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.primary}; color: #ffffff; border: 1px solid ${BRAND_COLORS.border}; margin-bottom: 16px;"><p style="margin: 0; font-weight: 700;">Resposta:</p><p style="margin: 8px 0 0; white-space: pre-wrap;">${escapeHtml(replyMessage)}</p></div>` : ''}
+        <div style="padding: 16px 18px; border-radius: 14px; background: ${BRAND_COLORS.bgTint1}; border: 1px solid ${BRAND_COLORS.border};">
+          <p style="margin: 0; font-weight: 700;">Chamado:</p>
+          <p style="margin: 8px 0 0; white-space: pre-wrap;">${escapeHtml(message)}</p>
+        </div>
+        <p style="margin-top: 18px;">Acesse o botão <strong>Suporte</strong> no portal para ver a conversa completa.</p>
+        <p style="margin-top: 18px;">
+          <a
+            href="${APP_URL}"
+            style="display: inline-block; padding: 12px 18px; border-radius: 10px; background: ${BRAND_COLORS.primary}; color: #ffffff; text-decoration: none; font-weight: 700;"
+          >
+            Abrir o Portal COMEX
+          </a>
+        </p>
+      </div>
+    `,
+  }
+}
 // Aba de suporte (backlog 2026-07-10): quando um usuário abre um chamado em
 // `supportTickets/{ticketId}` (create direto do client, validado pelas rules),
 // este trigger avisa os admins por DOIS canais independentes:
@@ -307,6 +352,113 @@ export const notifySupportTicketResolved = onDocumentUpdated(
       })
     } catch (error) {
       logger.error('Falha ao enviar email de chamado resolvido ao autor.', {
+        ticketId,
+        reason: String(error?.message ?? error ?? 'unknown'),
+      })
+    }
+  }
+)
+// Suporte v3 (thread, 2026-08-11): quando o admin acrescenta uma resposta em
+// `replies[]` sem necessariamente resolver o chamado, o AUTOR é avisado por
+// DOIS canais independentes (mesmo desenho do notifySupportTicketResolved):
+//   1. notificação in-app (type `support_ticket_reply`) — o clique abre o
+//      modal de suporte do usuário (mesmo desvio de support_ticket_resolved);
+//   2. e-mail ao autor (se SMTP configurado).
+// Guard contra notificação dupla: se o MESMO write responde E resolve, só o
+// notifySupportTicketResolved avisa (evita 2 emails pro autor). Admin que
+// responde ao próprio chamado não é notificado.
+export const notifySupportTicketReplied = onDocumentUpdated(
+  {
+    document: 'supportTickets/{ticketId}',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM],
+  },
+  async (event) => {
+    const before = event.data?.before?.data()
+    const after = event.data?.after?.data()
+    if (!before || !after) return
+
+    const beforeReplies = Array.isArray(before.replies) ? before.replies : []
+    const afterReplies = Array.isArray(after.replies) ? after.replies : []
+    if (afterReplies.length <= beforeReplies.length) return
+
+    const becameResolved = before.status !== 'resolvido' && after.status === 'resolvido'
+    if (becameResolved) return
+
+    const ticketId = event.params.ticketId
+    const authorId = normalizeString(after.authorId)
+
+    if (!authorId) {
+      logger.info('Resposta em chamado sem authorId; aviso ao autor ignorado.', { ticketId })
+      return
+    }
+
+    const reply = afterReplies[afterReplies.length - 1]
+    const replyAuthorId = normalizeString(reply?.authorId)
+    const replyAuthorName = repairTextEncoding(normalizeString(reply?.authorName)) || 'Equipe administrativa'
+    const replySnippet = repairTextEncoding(normalizeString(reply?.message)).slice(0, 140)
+
+    if (replyAuthorId && replyAuthorId === authorId) {
+      logger.info('Autor respondeu ao próprio chamado; aviso ao autor ignorado.', { ticketId })
+      return
+    }
+
+    try {
+      await createNotifications([
+        {
+          recipientUserId: authorId,
+          actorUserId: replyAuthorId,
+          actorName: replyAuthorName,
+          type: 'support_ticket_reply',
+          processId: '',
+          messageId: ticketId,
+          title: 'Nova resposta no seu chamado',
+          body: `${replyAuthorName}: ${replySnippet}`,
+          targetTab: 'suporte',
+        },
+      ])
+    } catch (error) {
+      logger.error('Falha ao criar notificação in-app de resposta em chamado de suporte.', {
+        ticketId,
+        reason: String(error?.message ?? error ?? 'unknown'),
+      })
+    }
+
+    const mailer = getMailer()
+
+    if (!mailer) {
+      logger.info('SMTP não configurado. Email de resposta em chamado não enviado.', { ticketId })
+      return
+    }
+
+    const authorEmail = normalizeEmail(after.authorEmail)
+
+    if (!authorEmail) {
+      logger.info('Resposta em chamado sem email do autor; email não enviado.', { ticketId })
+      return
+    }
+
+    // F9: preferencia suporte x email do AUTOR. Default ligado.
+    const authorProfile = await getUserProfile(authorId)
+    if (!shouldNotify(authorProfile, 'suporte', 'email')) {
+      logger.info('Email de resposta em chamado suprimido por preferencia do autor.', { ticketId })
+      return
+    }
+
+    try {
+      const message = buildSupportTicketReplyAuthorEmailMessage({
+        ticket: after,
+        reply,
+      })
+
+      await mailer.sendMail({
+        from: getEmailFromAddress(),
+        to: authorEmail,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      })
+    } catch (error) {
+      logger.error('Falha ao enviar email de resposta em chamado ao autor.', {
         ticketId,
         reason: String(error?.message ?? error ?? 'unknown'),
       })

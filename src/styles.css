@@ -6989,6 +6989,29 @@ body {
   gap: 12px;
 }
 
+.support-modal__replies {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.support-modal__reply {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.support-modal__reply p {
+  margin: 4px 0 0;
+  font-size: var(--fs-footnote);
+  white-space: pre-wrap;
+}
+
+.support-modal__reply--resolution {
+  border-top: 1px solid var(--border);
+}
+
 .support-ticket-card__head {
   display: flex;
   align-items: flex-start;
@@ -7042,6 +7065,41 @@ body {
 
 .support-ticket-card__priority {
   min-width: 180px;
+}
+
+.support-ticket-card__replies {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-alt);
+}
+
+.support-ticket-card__replies-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.support-ticket-card__reply {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.support-ticket-card__reply:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.support-ticket-card__reply p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
 }
 
 /* F9: modal de preferencias de notificacao (grid tipo x canal).
