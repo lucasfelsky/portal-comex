@@ -244,6 +244,26 @@ export default function SupportButton() {
                       <span className="support-modal__muted">{formatTicketDate(ticket.createdAt)}</span>
                     </div>
                     <p>{ticket.message}</p>
+
+                    {ticket.replies.length > 0 ? (
+                      <ul className="support-modal__replies">
+                        {ticket.replies.map((reply) => (
+                          <li key={reply.id} className="support-modal__reply">
+                            <span className="support-modal__muted">
+                              {reply.authorName} respondeu em {formatTicketDate(reply.createdAt)}
+                            </span>
+                            <p>{reply.message}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {ticket.status === 'resolvido' && ticket.resolutionMessage ? (
+                      <div className="support-modal__reply support-modal__reply--resolution">
+                        <span className="support-modal__muted">Resposta da equipe</span>
+                        <p>{ticket.resolutionMessage}</p>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>

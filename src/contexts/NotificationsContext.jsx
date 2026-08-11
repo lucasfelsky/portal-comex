@@ -156,7 +156,7 @@ export function NotificationsProvider({ children }) {
       navigate('/admin/suporte')
       return
     }
-    if (notification.type === 'support_ticket_resolved') {
+    if (notification.type === 'support_ticket_resolved' || notification.type === 'support_ticket_reply') {
       window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
       return
     }

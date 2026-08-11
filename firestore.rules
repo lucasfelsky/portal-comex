@@ -454,11 +454,19 @@ service cloud.firestore {
     function isAdminSupportTicketUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'status', 'priority', 'resolvedAt', 'resolvedById', 'resolvedByName',
-        'resolutionMessage', 'updatedAt',
+        'resolutionMessage', 'replies', 'updatedAt',
       ])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['resolutionMessage']) || (
           request.resource.data.resolutionMessage == null
           || (request.resource.data.resolutionMessage is string && request.resource.data.resolutionMessage.size() <= 1000)
+        ))
+        // Thread de respostas do time (append-only, teto 50; conteudo do item
+        // NAO e validado aqui — mitigador e que update continua restrito a isAdmin()).
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['replies']) || (
+          request.resource.data.replies is list
+          && request.resource.data.replies.size() <= 50
+          && (!('replies' in resource.data)
+              || request.resource.data.replies.size() >= resource.data.replies.size())
         ))
         && request.resource.data.status in ['aberto', 'em_andamento', 'resolvido']
         && request.resource.data.priority is int

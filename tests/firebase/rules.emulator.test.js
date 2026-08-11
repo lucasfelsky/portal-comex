@@ -1659,6 +1659,99 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(deleteDoc(doc(approvedUser('user-1'), 'supportTickets/td')))
       await assertSucceeds(deleteDoc(doc(admin(), 'supportTickets/td')))
     })
+
+    it('admin adiciona replies (thread, suporte v3)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tr-reply'), validTicket()))
+      await assertSucceeds(
+        updateDoc(doc(admin(), 'supportTickets/tr-reply'), {
+          replies: [
+            {
+              id: 'reply-1',
+              authorId: 'admin-1',
+              authorName: 'Admin E2E',
+              message: 'Estamos verificando o problema.',
+              createdAt: 'now',
+            },
+          ],
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('nega admin encolhendo replies (append-only)', async () => {
+      await seed((db) =>
+        setDoc(
+          doc(db, 'supportTickets/tr-shrink'),
+          validTicket({
+            replies: [
+              {
+                id: 'reply-1',
+                authorId: 'admin-1',
+                authorName: 'Admin E2E',
+                message: 'Primeira resposta.',
+                createdAt: 'now',
+              },
+              {
+                id: 'reply-2',
+                authorId: 'admin-1',
+                authorName: 'Admin E2E',
+                message: 'Segunda resposta.',
+                createdAt: 'now',
+              },
+            ],
+          })
+        )
+      )
+      await assertFails(
+        updateDoc(doc(admin(), 'supportTickets/tr-shrink'), {
+          replies: [
+            {
+              id: 'reply-1',
+              authorId: 'admin-1',
+              authorName: 'Admin E2E',
+              message: 'Primeira resposta.',
+              createdAt: 'now',
+            },
+          ],
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('nega admin mandando 51 replies (teto)', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tr-teto'), validTicket()))
+      const tooManyReplies = Array.from({ length: 51 }, (_, index) => ({
+        id: `reply-${index}`,
+        authorId: 'admin-1',
+        authorName: 'Admin E2E',
+        message: `Resposta ${index}`,
+        createdAt: 'now',
+      }))
+      await assertFails(
+        updateDoc(doc(admin(), 'supportTickets/tr-teto'), {
+          replies: tooManyReplies,
+          updatedAt: 'now',
+        })
+      )
+    })
+
+    it('autor nao-admin nao consegue escrever replies', async () => {
+      await seed((db) => setDoc(doc(db, 'supportTickets/tr-autor'), validTicket()))
+      await assertFails(
+        updateDoc(doc(approvedUser('user-1'), 'supportTickets/tr-autor'), {
+          replies: [
+            {
+              id: 'reply-1',
+              authorId: 'user-1',
+              authorName: 'Usuario Teste',
+              message: 'Eu mesmo respondendo.',
+              createdAt: 'now',
+            },
+          ],
+          updatedAt: 'now',
+        })
+      )
+    })
   })
 
   describe('catch-all', () => {

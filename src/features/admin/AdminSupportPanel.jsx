@@ -12,8 +12,10 @@ import {
   formatResolutionHours,
 } from '../../utils/supportStats'
 import {
+  SUPPORT_TICKET_MAX_REPLY_LENGTH,
   SUPPORT_TICKET_STATUS_LABELS,
   SUPPORT_TICKET_STATUS_TONES,
+  addSupportTicketReply,
   listAllSupportTickets,
   updateSupportTicket,
 } from '../../services/supportTicketsRepository'
@@ -80,6 +82,8 @@ export default function AdminSupportPanel() {
   const [statusFilter, setStatusFilter] = useState('aberto')
   const [savingTicketId, setSavingTicketId] = useState(null)
   const [resolutionDrafts, setResolutionDrafts] = useState({})
+  const [replyDrafts, setReplyDrafts] = useState({})
+  const [sendingReplyTicketId, setSendingReplyTicketId] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -180,6 +184,29 @@ export default function AdminSupportPanel() {
       setError(buildActionErrorMessage('Não foi possível atualizar o chamado.', saveError))
     } finally {
       setSavingTicketId(null)
+    }
+  }
+
+  async function sendTicketReply(ticket) {
+    const draftMessage = (replyDrafts[ticket.id] ?? '').trim()
+    if (!draftMessage) return
+
+    setSendingReplyTicketId(ticket.id)
+    setError('')
+
+    try {
+      const reply = await addSupportTicketReply(ticket.id, draftMessage, profile)
+
+      setTickets((currentTickets) =>
+        currentTickets.map((item) =>
+          item.id === ticket.id ? { ...item, replies: [...item.replies, reply] } : item
+        )
+      )
+      setReplyDrafts((current) => ({ ...current, [ticket.id]: '' }))
+    } catch (sendError) {
+      setError(buildActionErrorMessage('Não foi possível enviar a resposta.', sendError))
+    } finally {
+      setSendingReplyTicketId(null)
     }
   }
 
@@ -329,9 +356,59 @@ export default function AdminSupportPanel() {
                     </div>
                   ) : null}
 
+                  <div className="support-ticket-card__replies">
+                    <span className="detail-label">Conversa com o usuário</span>
+
+                    {ticket.replies.length > 0 ? (
+                      <ul className="support-ticket-card__replies-list">
+                        {ticket.replies.map((reply) => (
+                          <li key={reply.id} className="support-ticket-card__reply">
+                            <span className="support-ticket-card__meta">
+                              {reply.authorName} · {formatTicketDate(reply.createdAt)}
+                            </span>
+                            <p>{reply.message}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="support-ticket-card__meta">Nenhuma resposta enviada ainda.</p>
+                    )}
+
+                    <label className="field">
+                      <span>Nova resposta</span>
+                      <textarea
+                        className="text-input text-input--textarea"
+                        value={replyDrafts[ticket.id] ?? ''}
+                        onChange={(event) =>
+                          setReplyDrafts((current) => ({
+                            ...current,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Escreva uma resposta para o usuário"
+                        rows={2}
+                        maxLength={SUPPORT_TICKET_MAX_REPLY_LENGTH}
+                        disabled={sendingReplyTicketId === ticket.id}
+                      />
+                    </label>
+
+                    <div className="action-row">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={
+                          sendingReplyTicketId === ticket.id || !(replyDrafts[ticket.id] ?? '').trim()
+                        }
+                        onClick={() => sendTicketReply(ticket)}
+                      >
+                        {sendingReplyTicketId === ticket.id ? 'Enviando...' : 'Enviar resposta'}
+                      </button>
+                    </div>
+                  </div>
+
                   {!isResolved ? (
                     <label className="field">
-                      <span>Resposta ao usuário (opcional)</span>
+                      <span>Mensagem de encerramento (opcional)</span>
                       <textarea
                         className="text-input text-input--textarea"
                         value={resolutionDrafts[ticket.id] ?? ''}

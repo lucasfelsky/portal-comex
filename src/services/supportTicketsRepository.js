@@ -8,6 +8,7 @@
 //   `notifySupportTicketCreated` (Admin SDK), não do client.
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDocs,
@@ -32,6 +33,8 @@ export const SUPPORT_TICKET_DEFAULT_PRIORITY = 3
 export const SUPPORT_TICKET_MAX_IMAGES = 5
 export const SUPPORT_TICKET_MAX_MESSAGE_LENGTH = 4000
 export const SUPPORT_TICKET_MAX_RESOLUTION_LENGTH = 1000
+export const SUPPORT_TICKET_MAX_REPLY_LENGTH = 1000
+export const SUPPORT_TICKET_MAX_REPLIES = 50
 
 export const SUPPORT_TICKET_STATUS_LABELS = {
   aberto: 'Aberto',
@@ -71,6 +74,16 @@ function toIsoString(value) {
   return null
 }
 
+function normalizeReply(rawReply) {
+  return {
+    id: normalizeStringValue(rawReply?.id),
+    authorId: normalizeStringValue(rawReply?.authorId),
+    authorName: normalizeStringValue(rawReply?.authorName) || 'Usuário',
+    message: String(rawReply?.message ?? ''),
+    createdAt: toIsoString(rawReply?.createdAt) ?? new Date().toISOString(),
+  }
+}
+
 function normalizeTicket(rawTicket, fallbackId) {
   const priority = Number(rawTicket.priority)
 
@@ -96,6 +109,12 @@ function normalizeTicket(rawTicket, fallbackId) {
     contextPage: normalizeStringValue(rawTicket.contextPage) || null,
     contextProcessId: normalizeStringValue(rawTicket.contextProcessId) || null,
     contextProcessName: normalizeStringValue(rawTicket.contextProcessName) || null,
+    replies: Array.isArray(rawTicket.replies)
+      ? rawTicket.replies
+          .map(normalizeReply)
+          .filter((reply) => reply.message)
+          .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+      : [],
   }
 }
 
@@ -331,4 +350,62 @@ export async function updateSupportTicket(ticketId, { status, priority, resoluti
   })
 
   return null
+}
+
+export async function addSupportTicketReply(ticketId, message, actor = null) {
+  const normalizedMessage = String(message ?? '').trim()
+
+  if (!normalizedMessage) {
+    throw new Error('Escreva uma mensagem antes de enviar a resposta.')
+  }
+
+  if (normalizedMessage.length > SUPPORT_TICKET_MAX_REPLY_LENGTH) {
+    throw new Error(`A resposta pode ter no máximo ${SUPPORT_TICKET_MAX_REPLY_LENGTH} caracteres.`)
+  }
+
+  const reply = normalizeReply({
+    id: crypto.randomUUID?.() ?? String(Date.now()),
+    authorId: normalizeStringValue(actor?.uid),
+    authorName: normalizeStringValue(actor?.name) || 'Usuário',
+    message: normalizedMessage,
+    createdAt: new Date().toISOString(),
+  })
+
+  if (!isFirebaseConfigured || !firestore) {
+    const now = new Date().toISOString()
+    const nextTickets = readLocalTickets()
+      .map((item) => normalizeTicket(item))
+      .map((item) =>
+        item.id === ticketId
+          ? {
+              ...item,
+              replies: [...item.replies, reply],
+              updatedAt: now,
+            }
+          : item
+      )
+
+    writeLocalTickets(nextTickets)
+
+    await createAuditEvent({
+      action: 'Resposta enviada no chamado de suporte',
+      actor: actor?.name ?? actor?.email ?? 'Sistema',
+      target: ticketId,
+    })
+
+    return reply
+  }
+
+  await updateDoc(doc(firestore, 'supportTickets', ticketId), {
+    replies: arrayUnion(reply),
+    updatedAt: serverTimestamp(),
+  })
+
+  await createAuditEvent({
+    action: 'Resposta enviada no chamado de suporte',
+    actor: actor?.name ?? actor?.email ?? 'Sistema',
+    target: ticketId,
+  })
+
+  return reply
 }

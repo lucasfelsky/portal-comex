@@ -60,7 +60,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/src\/utils\/ count = 12/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 12/)
     expect(result.stdout).toMatch(/firestore\.rules subcollections = 1/)
-    expect(result.stdout).toMatch(/tests\/ total = 68/)
+    expect(result.stdout).toMatch(/tests\/ total = 70/)
   })
 
   describe('detecao de drift', () => {
