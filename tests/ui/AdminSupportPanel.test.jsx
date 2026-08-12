@@ -97,6 +97,97 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function buildTicket(overrides) {
+  return { ...TICKET, replies: [], ...overrides }
+}
+
+const TICKET_1 = buildTicket({ id: 'ticket-1', message: 'Mensagem do chamado 1' })
+const TICKET_2 = buildTicket({ id: 'ticket-2', message: 'Mensagem do chamado 2' })
+const TICKET_3 = buildTicket({ id: 'ticket-3', message: 'Mensagem do chamado 3' })
+
+describe('AdminSupportPanel — navegação entre chamados (pager)', () => {
+  it('com 3 chamados na aba, so a mensagem do 1o esta no documento', async () => {
+    mockListAllSupportTickets.mockResolvedValue([TICKET_1, TICKET_2, TICKET_3])
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Mensagem do chamado 1')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Mensagem do chamado 2')).not.toBeInTheDocument()
+    expect(screen.queryByText('Mensagem do chamado 3')).not.toBeInTheDocument()
+  })
+
+  it('contador exibe "1 de 3"', async () => {
+    mockListAllSupportTickets.mockResolvedValue([TICKET_1, TICKET_2, TICKET_3])
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('1 de 3')).toBeInTheDocument()
+    })
+  })
+
+  it('clicar "Próximo chamado" mostra a mensagem do 2o e esconde a do 1o', async () => {
+    const user = userEvent.setup()
+    mockListAllSupportTickets.mockResolvedValue([TICKET_1, TICKET_2, TICKET_3])
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Mensagem do chamado 1')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByLabelText('Próximo chamado'))
+
+    expect(screen.getByText('Mensagem do chamado 2')).toBeInTheDocument()
+    expect(screen.queryByText('Mensagem do chamado 1')).not.toBeInTheDocument()
+  })
+
+  it('no 3o chamado, clicar "Próximo chamado" volta pro 1o (wrap)', async () => {
+    const user = userEvent.setup()
+    mockListAllSupportTickets.mockResolvedValue([TICKET_1, TICKET_2, TICKET_3])
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Mensagem do chamado 1')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByLabelText('Próximo chamado'))
+    await user.click(screen.getByLabelText('Próximo chamado'))
+    expect(screen.getByText('Mensagem do chamado 3')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Próximo chamado'))
+    expect(screen.getByText('Mensagem do chamado 1')).toBeInTheDocument()
+  })
+
+  it('com 1 unico ticket, as setas do pager nao aparecem', async () => {
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Estamos verificando, já retornamos.')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByLabelText('Próximo chamado')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Chamado anterior')).not.toBeInTheDocument()
+  })
+
+  it('trocar pra aba "Todos" e voltar reseta o contador pra "1 de N"', async () => {
+    const user = userEvent.setup()
+    mockListAllSupportTickets.mockResolvedValue([TICKET_1, TICKET_2, TICKET_3])
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('1 de 3')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByLabelText('Próximo chamado'))
+    expect(screen.getByText('2 de 3')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Todos' }))
+    await waitFor(() => {
+      expect(screen.getByText('1 de 3')).toBeInTheDocument()
+    })
+  })
+})
+
 describe('AdminSupportPanel — thread de respostas', () => {
   it('thread existente e renderizada', async () => {
     renderPanel()

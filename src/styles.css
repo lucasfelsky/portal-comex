@@ -5224,6 +5224,14 @@ body {
   .topbar-theme-button {
     display: none;
   }
+
+  .support-tabs-row {
+    flex-wrap: wrap;
+  }
+
+  .support-tabs-row .tab-row {
+    flex: 1 1 100%;
+  }
 }
 
 @media (max-width: 560px) {
@@ -7010,6 +7018,33 @@ body {
 
 .support-modal__reply--resolution {
   border-top: 1px solid var(--border);
+}
+
+.support-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.support-tabs-row .tab-row {
+  margin-bottom: 0;
+}
+
+.support-ticket-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.support-ticket-pager__counter {
+  font-size: var(--fs-caption);
+  color: var(--ink-soft);
+  min-width: 56px;
+  text-align: center;
 }
 
 .support-ticket-card__head {
