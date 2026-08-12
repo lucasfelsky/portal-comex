@@ -22,6 +22,8 @@ export default [
   {
     ignores: [
       'dist',
+      'storybook-static',
+      'dist-intelliquote',
       'node_modules',
       'functions/node_modules',
       '.gemini',
