@@ -4,6 +4,7 @@ import useAuth from '../../hooks/useAuth'
 import StatCard from '../../components/StatCard'
 import Skeleton from '../../components/Skeleton'
 import TabButton from '../../components/TabButton'
+import Icon from '../../components/Icon'
 import { computeTrendDelta } from '../../utils/dashboardStats'
 import {
   averageResolutionHours,
@@ -80,6 +81,7 @@ export default function AdminSupportPanel() {
   const [tickets, setTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('aberto')
+  const [ticketIndex, setTicketIndex] = useState(0)
   const [savingTicketId, setSavingTicketId] = useState(null)
   const [resolutionDrafts, setResolutionDrafts] = useState({})
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -111,6 +113,10 @@ export default function AdminSupportPanel() {
     }
   }, [])
 
+  useEffect(() => {
+    setTicketIndex(0)
+  }, [statusFilter])
+
   const visibleTickets = useMemo(() => {
     const filteredTickets =
       statusFilter === 'todos'
@@ -129,6 +135,10 @@ export default function AdminSupportPanel() {
       return new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime()
     })
   }, [tickets, statusFilter])
+
+  const safeTicketIndex =
+    visibleTickets.length === 0 ? 0 : Math.min(ticketIndex, visibleTickets.length - 1)
+  const currentTicket = visibleTickets[safeTicketIndex] ?? null
 
   const openCount = useMemo(
     () => tickets.filter((ticket) => ticket.status === 'aberto').length,
@@ -255,25 +265,55 @@ export default function AdminSupportPanel() {
           </div>
         </div>
 
-        <div className="tab-row" role="tablist" aria-label="Filtro de chamados">
-          <TabButton active={statusFilter === 'aberto'} onClick={() => setStatusFilter('aberto')}>
-            Abertos
-          </TabButton>
-          <TabButton
-            active={statusFilter === 'em_andamento'}
-            onClick={() => setStatusFilter('em_andamento')}
-          >
-            Em andamento
-          </TabButton>
-          <TabButton
-            active={statusFilter === 'resolvido'}
-            onClick={() => setStatusFilter('resolvido')}
-          >
-            Resolvidos
-          </TabButton>
-          <TabButton active={statusFilter === 'todos'} onClick={() => setStatusFilter('todos')}>
-            Todos
-          </TabButton>
+        <div className="support-tabs-row">
+          <div className="tab-row" role="tablist" aria-label="Filtro de chamados">
+            <TabButton active={statusFilter === 'aberto'} onClick={() => setStatusFilter('aberto')}>
+              Abertos
+            </TabButton>
+            <TabButton
+              active={statusFilter === 'em_andamento'}
+              onClick={() => setStatusFilter('em_andamento')}
+            >
+              Em andamento
+            </TabButton>
+            <TabButton
+              active={statusFilter === 'resolvido'}
+              onClick={() => setStatusFilter('resolvido')}
+            >
+              Resolvidos
+            </TabButton>
+            <TabButton active={statusFilter === 'todos'} onClick={() => setStatusFilter('todos')}>
+              Todos
+            </TabButton>
+          </div>
+
+          {visibleTickets.length > 1 ? (
+            <div className="support-ticket-pager">
+              <button
+                type="button"
+                className="action-icon-button"
+                aria-label="Chamado anterior"
+                onClick={() =>
+                  setTicketIndex(
+                    (safeTicketIndex - 1 + visibleTickets.length) % visibleTickets.length
+                  )
+                }
+              >
+                <Icon name="chevron-left" />
+              </button>
+              <span className="support-ticket-pager__counter">
+                {safeTicketIndex + 1} de {visibleTickets.length}
+              </span>
+              <button
+                type="button"
+                className="action-icon-button"
+                aria-label="Próximo chamado"
+                onClick={() => setTicketIndex((safeTicketIndex + 1) % visibleTickets.length)}
+              >
+                <Icon name="chevron-right" />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -295,7 +335,7 @@ export default function AdminSupportPanel() {
           </div>
         ) : (
           <div className="detail-stack">
-            {visibleTickets.map((ticket) => {
+            {[currentTicket].filter(Boolean).map((ticket) => {
               const isSaving = savingTicketId === ticket.id
               const isResolved = ticket.status === 'resolvido'
               const isInProgress = ticket.status === 'em_andamento'
