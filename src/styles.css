@@ -24,7 +24,7 @@
   --radius-full: 999px; /* pills, badges, handles */
 
   /* Tokens de design system compartilhados com IntelliQuote (sprint 6.2). */
-  --bg: #f5f8f7;
+  --bg: #e9eeec;
   --surface: #ffffff;
   --surface-alt: #eef4f1;
   --ink: #1f1c18;
@@ -50,6 +50,15 @@
   --border-strong: #b7cdc5;
   --bg-tint-1: #eef7f6;
   --bg-tint-2: #e6f1f2;
+
+  /* Fase 1 do redesign geral: tokens frios do shell (sidebar navy + tint).
+     --sidebar-ink/-ink-soft ficam claros nos dois temas porque o navy e'
+     escuro em ambos (ver contraparte em :root[data-theme='dark']). */
+  --sidebar-bg: linear-gradient(180deg, #0b2530, #123845);
+  --sidebar-ink: #f3f8f7;
+  --sidebar-ink-soft: rgba(243, 248, 247, 0.68);
+  --sidebar-pill-hover: rgba(255, 255, 255, 0.1);
+  --tint: #e3f5f0;
   --radius: var(--radius-sm); /* legado — aponta pra escala F15.1b */
   --shadow: 0 8px 28px rgba(0, 40, 40, 0.08);
   --shadow-sm: 0 2px 8px rgba(0, 40, 40, 0.06);
@@ -65,6 +74,10 @@
   --text-subtle: rgba(31, 28, 24, 0.62);
   --text-faint: rgba(31, 28, 24, 0.52);
   --text-mute-strong: rgba(31, 28, 24, 0.68);
+
+  /* Fase 1 do redesign: fonte de headings (Bricolage Grotesque, adicionada
+     no index.html). Fallback pra Manrope (corpo) se a webfont nao carregar. */
+  --font-heading: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
 
   color: var(--ink);
   background: var(--bg);
@@ -90,6 +103,7 @@ h1, h2, h3, h4 {
   margin: 0 0 12px;
   color: var(--ink);
   letter-spacing: -0.01em;
+  font-family: var(--font-heading);
 }
 h1 { font-size: 1.625rem; font-weight: 800; letter-spacing: -0.02em; }
 h2 { font-size: var(--fs-title); font-weight: 700; }
@@ -7466,6 +7480,16 @@ body {
     --bg-tint-1: #121a18;
     --bg-tint-2: #111a1b;
 
+    /* Fase 1 do redesign: contraparte dark dos tokens frios do shell.
+       Sidebar navy ainda mais escura que no claro; ink/ink-soft/pill-hover
+       ficam iguais (texto claro vale nos dois temas, navy ja' e' escura
+       nos dois); tint aponta pro --primary-50 deste bloco (#123029). */
+    --sidebar-bg: linear-gradient(180deg, #071820, #0c2029);
+    --sidebar-ink: #f3f8f7;
+    --sidebar-ink-soft: rgba(243, 248, 247, 0.62);
+    --sidebar-pill-hover: rgba(255, 255, 255, 0.08);
+    --tint: #123029;
+
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.40);
     --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.50);
@@ -7598,6 +7622,87 @@ body {
 
 .topbar-theme-button:hover {
   color: var(--ink);
+}
+
+/* ============================================================
+   Fase 1 do redesign geral — restyle do shell no DESKTOP (sidebar navy
+   com nav em pills translucidos, card IntelliQuote discreto sobre navy).
+   So' ativa em min-width:1041px (breakpoint desktop do repo; abaixo disso
+   a sidebar vira drawer — @media max-width:1040px/720px, nao tocados
+   aqui). Vem depois de todas as regras base de .sidebar/.nav__link/
+   .brand/.sidebar-intelliquote-link no arquivo pra vencer por cascata
+   (mesma especificidade). Usa somente os tokens --sidebar-* do :root (e
+   a contraparte dark), sem hex novo hardcoded aqui.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* [data-theme='dark'] .sidebar (linha ~7576, especificidade 0,2,0) e
+     [data-theme='dark'] .sidebar-intelliquote-link[:hover] (linhas ~7599/7603,
+     especificidade 0,2,0/0,3,0) vencem por especificidade as regras deste bloco
+     se ficarem so' com o seletor simples (media query nao soma especificidade).
+     Por isso os seletores abaixo repetem a variante [data-theme='dark'] pra
+     igualar a especificidade — igualdade resolvida por ordem no arquivo (este
+     bloco vem depois), mesmo padrao ja usado no bloco F16.1 mais abaixo. */
+  [data-theme='dark'] .sidebar,
+  .sidebar {
+    background: var(--sidebar-bg);
+    border-right: none;
+    color: var(--sidebar-ink);
+  }
+
+  .sidebar::-webkit-scrollbar-thumb {
+    background: var(--sidebar-pill-hover);
+  }
+  .sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--sidebar-pill-hover);
+  }
+
+  .brand h1 {
+    color: var(--sidebar-ink);
+  }
+
+  /* Accent teal ja' contrasta bem sobre o navy (mantido igual ao claro);
+     redeclarado aqui so' pra deixar explicito que foi revisado pro shell. */
+  .brand__eyebrow {
+    color: var(--primary);
+  }
+
+  .nav__link {
+    background: transparent;
+    border-color: transparent;
+    color: var(--sidebar-ink);
+    border-radius: var(--radius-full);
+  }
+
+  .nav__link-icon {
+    background: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink-soft);
+  }
+
+  .nav__link-text p {
+    color: var(--sidebar-ink-soft);
+  }
+
+  .nav__link:hover {
+    background: var(--sidebar-pill-hover);
+    border-color: transparent;
+    color: var(--sidebar-ink);
+  }
+
+  .nav__link--active {
+    border-color: var(--primary);
+    border-radius: var(--radius-full);
+  }
+
+  [data-theme='dark'] .sidebar-intelliquote-link,
+  .sidebar-intelliquote-link {
+    background: var(--sidebar-pill-hover);
+    border: 1px solid var(--sidebar-pill-hover);
+  }
+
+  [data-theme='dark'] .sidebar-intelliquote-link:hover,
+  .sidebar-intelliquote-link:hover {
+    background: var(--sidebar-pill-hover);
+  }
 }
 
 /* ============================================================

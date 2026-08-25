@@ -49,7 +49,7 @@ module.exports = {
       },
       fontFamily: {
         ui: ['Manrope', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial'],
-        heading: ['"Space Grotesk"', 'Manrope', 'system-ui', 'sans-serif'],
+        heading: ['"Bricolage Grotesque"', 'Manrope', 'system-ui', 'sans-serif'],
         mono: ['"Roboto Mono"', 'ui-monospace', 'monospace']
       }
     }
