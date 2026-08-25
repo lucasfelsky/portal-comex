@@ -9391,3 +9391,59 @@ body {
     font-weight: 700;
   }
 }
+
+/* ============================================================
+   Ciclo 4b (redesign Fase 4) — Centro Administrativo: abas
+   Comunicados (`.announcement-grid`, src/features/admin/
+   AdminAnnouncementsPanel.jsx:172) e Barra do porto
+   (`.suggestion-banner`, src/features/admin/AdminBarStatusPanel.jsx:150).
+   Raiz unica `.admin-section` (AdminLayout.jsx:20) -- todo seletor
+   comeca por ela, pra nao vazar pras Fases 1-3 nem pras outras abas
+   do admin, que reusam `.list-card`/`.card-heading` como classes
+   soltas. So' tokens (--radius-*, --shadow-*, --success/--warning/
+   --danger-*), sem hex fora do :root.
+
+   `.admin-section .list-card` (card de status atual da barra) e
+   `.admin-section .card-heading h3` ja' ficaram cobertos pelo bloco
+   do ciclo 4a acima (mesmo seletor, ja' se aplica a qualquer aba do
+   admin) -- re-escopar aqui seria duplicado, entao nao repete.
+
+   Nao toca `.admin-tabs`/`.tab-button--active` nem `.admin-table`
+   (traps do ciclo 4a/4c, fora de escopo deste sub-ciclo). Os tokens
+   de tom (--success-700/-50, --warning-700/-50, --danger-700/-50) ja'
+   tem contraparte redefinida em `:root[data-theme='dark']`
+   (styles.css:7473-7482), entao o dark acompanha sem seletor duplo.
+   Nao toca nenhum bloco @media (max-width:*), nem JSX/classes/textos/
+   aria de AdminAnnouncementsPanel.jsx/AdminBarStatusPanel.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .announcement-grid {
+    gap: 24px;
+  }
+
+  .admin-section .announcement-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .announcement-card--button:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .admin-section .suggestion-banner {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .suggestion-banner--ok {
+    border-left: 3px solid var(--success-700);
+  }
+
+  .admin-section .suggestion-banner--warn {
+    border-left: 3px solid var(--warning-700);
+  }
+
+  .admin-section .suggestion-banner--danger {
+    border-left: 3px solid var(--danger-700);
+  }
+}
