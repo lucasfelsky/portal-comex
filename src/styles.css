@@ -9182,3 +9182,55 @@ body {
     color: var(--primary-700);
   }
 }
+
+/* ============================================================
+   Ciclo 3b (redesign Fase 3) — Notificacoes: DRAWER do desktop
+   (`.notifications__panel`, renderNotificationsPanel em AppLayout.jsx:328),
+   nao a pagina `/notifications` (mobile, NotificationsPage.jsx). Escopado
+   via `.notifications__panel` (root unico do drawer) pra nao vazar pra
+   NotificationsPage, que reusa as mesmas classes soltas
+   (`.notifications__group`/`.notifications__item`/`.notifications__section-label`)
+   fora do painel. So' tokens (--radius-*, --shadow-*, --font-heading,
+   --primary-700), sem hex fora do :root. Trap do tema escuro (documentado
+   em src/styles.css:7563-7587): ha' overrides `[data-theme='dark']
+   .notifications__group/.notifications__item/--unread/.notifications__panel`
+   FORA de media query que setam `background`. Por isso este bloco NAO toca
+   `background`/`color` dessas classes — so' radii/shadow/border/spacing/
+   tipografia, e os tokens usados (--primary-700, --border-strong,
+   --shadow-sm, --text-muted) ja' sao redefinidos dentro de
+   `[data-theme='dark']` no :root (linhas ~7469-7508), entao o dark
+   acompanha de graca sem precisar de seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .notifications__panel .card-heading > div strong {
+    font-family: var(--font-heading);
+  }
+
+  .notifications__panel .notifications__section-label {
+    color: var(--primary-700);
+    letter-spacing: 0.08em;
+  }
+
+  .notifications__panel .notifications__group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications__panel .notifications__item {
+    border-radius: var(--radius-md);
+    transition:
+      box-shadow 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .notifications__panel .notifications__item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-strong);
+  }
+
+  .notifications__panel .notifications__mark-all,
+  .notifications__panel .notifications__show-more {
+    border-radius: var(--radius-sm);
+  }
+}
