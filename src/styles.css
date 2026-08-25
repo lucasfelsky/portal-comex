@@ -8953,3 +8953,177 @@ body {
     min-width: 0;
   }
 }
+
+/* ============================================================
+   Ciclo 2c (redesign Fase 2) — Chegadas (detalhe) desktop: traz a
+   timeline de estagios (F16.5) tambem pro desktop com layout proprio
+   (as regras dela dentro de @media (max-width:720px), 8342-8428, sao
+   mobile-only e nao sao tocadas aqui; o aria-hidden do JSX continua
+   como esta) + restyle do header-resumo, `.detail-card` em grid 2
+   colunas, abas e destaque de canal na DUIMP, na linguagem da Fase 1.
+   Escopado via `.process-detail-view` — classe nova, adicionada so' no
+   <article> raiz de ProcessDetailView.jsx (unica no app) — pra nao
+   vazar pro ProcessForm/ProcessMessagesPanel/paineis admin, que reusam
+   `.process-detail-card-heading`/`.detail-card`/`.detail-stack` como
+   classes soltas, nem pro Dashboard (2a, `.dashboard-heading ~
+   .stagger`) ou pra lista (2b, `.process-list-card`). So' tokens
+   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
+   do :root. Nao toca nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .process-detail-view {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Timeline horizontal (F16.5 so' definia mobile). Track = celulas
+     [bar? + node]; a primeira celula so' tem node (largura fixa), as
+     demais crescem (flex:1) pra' preencher a barra entre nodes —
+     mesma tecnica do bloco mobile, so' com metricas maiores. */
+  .process-detail-view .process-timeline {
+    display: block;
+    margin: 0 0 20px;
+    padding: 22px 26px 18px;
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-detail-view .process-timeline__track {
+    display: flex;
+    align-items: center;
+  }
+
+  .process-detail-view .process-timeline__cell {
+    display: flex;
+    align-items: center;
+    flex: 0 0 28px;
+  }
+
+  .process-detail-view .process-timeline__cell:not(:first-child) {
+    flex: 1;
+  }
+
+  .process-detail-view .process-timeline__bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+
+  .process-detail-view .process-timeline__bar--done {
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .process-timeline__node {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .process-detail-view .process-timeline__node--done {
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .process-timeline__node--now {
+    background: var(--primary-700);
+    box-shadow: 0 0 0 6px var(--primary-50);
+  }
+
+  .process-detail-view .process-timeline__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+  }
+
+  .process-detail-view .process-timeline__labels span {
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    color: var(--text-subtle);
+    text-align: center;
+  }
+
+  .process-detail-view .process-timeline__labels span:first-child {
+    text-align: left;
+  }
+
+  .process-detail-view .process-timeline__labels span:last-child {
+    text-align: right;
+  }
+
+  .process-detail-view .process-timeline__label--now {
+    color: var(--primary-700);
+  }
+
+  /* Header-resumo: o card-heading de TOPO (botao voltar + titulo +
+     toolbar) — combinador de filho direto pra nao pegar os outros
+     `.process-detail-card-heading` aninhados dentro de `.detail-card`
+     (Itens vinculados, Status do processo etc.), que continuam como
+     estao. */
+  .process-detail-view > .process-detail-card-heading {
+    margin-bottom: 20px;
+  }
+
+  .process-detail-view > .process-detail-card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  /* Abas do detalhe (o select nativo do F16.11 continua mobile-only,
+     regra em @media (max-width:720px) intocada). */
+  .process-detail-view .detail-tab-row {
+    margin-top: 16px;
+    margin-bottom: 20px;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    padding: 10px 20px;
+  }
+
+  /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
+     Cards que precisam da linha inteira (ETD/ETA e quantidades em
+     --split, listas roladas de itens/mensagens, e a acao de excluir
+     processo) ganham `grid-column: 1 / -1` pra nao ficar espremidos
+     numa coluna de 50%. */
+  .process-detail-view .tab-panel-spacing {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .process-detail-view .tab-panel-spacing > .detail-card--split,
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.detail-card--split),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-items-list),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-messages-list),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.post-receipt-image-grid),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-detail-collection-windows),
+  .process-detail-view .tab-panel-spacing > .action-row {
+    grid-column: 1 / -1;
+  }
+
+  .process-detail-view .detail-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Destaque de canal da DUIMP (getChannelToneClass ja' aplica a
+     classe certa no JSX; aqui so' se reforca o contorno pra chamar
+     mais atencao no desktop, mesmo padrao de cor ja usado em
+     .dashboard-process-inline__row--duimp, linhas 2272-2289). */
+  .process-detail-view .detail-card--danger {
+    border: 1px solid var(--danger-700);
+  }
+
+  .process-detail-view .detail-card--warning {
+    border: 1px solid var(--warning-700);
+  }
+
+  .process-detail-view .detail-card--success {
+    border: 1px solid var(--success-700);
+  }
+
+  .process-detail-view .detail-card--neutral {
+    border: 1px solid var(--neutral-700);
+  }
+}
