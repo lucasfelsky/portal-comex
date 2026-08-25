@@ -9127,3 +9127,58 @@ body {
     border: 1px solid var(--neutral-700);
   }
 }
+
+/* ============================================================
+   Ciclo 3a (redesign Fase 3) — Noticias desktop: cards da lista
+   (`.news-list-card`/`.news-editor-card`), grid de cards (`.news-grid`/
+   `.news-card`), titulo do form de admin e badge de fonte na
+   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*,
+   --font-heading, --primary-700), sem hex fora do :root. Escopado via
+   `.surface--news` (root de NewsPage.jsx:425, classe unica no app) pra
+   nao vazar pro Dashboard/Chegadas, que reusam `.list-card`/
+   `.card-heading`/`.admin-toolbar`/`.inline-badge` como classes
+   soltas. Mantem a estrutura de grid do desktop (sem introduzir
+   `--featured`/`--row`, que sao mobile-only — comentario em
+   NewsPage.jsx:562-565). `.news-modal` nao e' tocado aqui: e'
+   renderizado via `createPortal` (Modal.jsx:179-211) direto em
+   `document.body`, fora da subarvore de `.surface--news` no DOM —
+   nao seria alcancado por este escopo mesmo se tocado. Nao toca
+   nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .surface--news .news-list-card,
+  .surface--news .news-editor-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-list-card:hover,
+  .surface--news .news-editor-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-grid {
+    gap: 20px;
+  }
+
+  .surface--news .news-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .news-card strong {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-card__meta .inline-badge {
+    color: var(--primary-700);
+  }
+}
