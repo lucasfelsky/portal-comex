@@ -2135,6 +2135,14 @@ body {
   line-height: 1;
 }
 
+/* Ciclo 2a (redesign Fase 2): eyebrow do hero do Dashboard. So' visivel
+   no desktop (revelado dentro de @media (min-width: 1041px), bloco no
+   final do arquivo) — no mobile o hero continua o TIDE CARD (F16.3),
+   sem eyebrow. */
+.dashboard-heading__eyebrow {
+  display: none;
+}
+
 .dashboard-bar-card--header {
   width: fit-content;
   min-width: 0;
@@ -8792,4 +8800,82 @@ body {
 .action-icon-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   Ciclo 2a (redesign Fase 2) — Dashboard desktop: hero + faixa de KPIs
+   + restyle das listas do dashboard (Comunicados / Chegadas da semana /
+   Favoritos). So' tokens (--radius-*, --shadow-*, --font-heading,
+   --primary), sem hex fora do :root. Escopado via `.dashboard-heading`
+   (classe unica do Dashboard) pra nao vazar pra ProcessesPage — que tem
+   os proprios .list-card/.process-item/.card-heading restilizados em
+   ciclos separados (2b/2c do mesmo PLAN.md). Nao toca nenhum bloco
+   @media (max-width:*). */
+@media (min-width: 1041px) {
+  .dashboard-heading {
+    margin-bottom: 28px;
+  }
+
+  .dashboard-heading__eyebrow {
+    display: block;
+    margin-bottom: 6px;
+    font-family: var(--font-heading);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: capitalize;
+    color: var(--primary);
+  }
+
+  .dashboard-heading h2 {
+    font-family: var(--font-heading);
+  }
+
+  .dashboard-stat-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .dashboard-stat-row .stat-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-stat-row .stat-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Restyle desktop dos cards do corpo do dashboard (dentro do
+     `.stagger` que segue o hero): Comunicados, Chegadas da semana e
+     Favoritos. Escopo via combinador de irmao geral + descendente pra
+     nao afetar `.list-card`/`.process-item`/`.card-heading` de outras
+     paginas (ProcessesPage etc.), que compartilham as mesmas classes. */
+  .dashboard-heading ~ .stagger {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-heading ~ .stagger .list-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-heading ~ .stagger .list-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .dashboard-heading ~ .stagger .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .dashboard-heading ~ .stagger .process-item {
+    border-radius: var(--radius-sm);
+  }
 }
