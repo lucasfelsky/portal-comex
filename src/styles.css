@@ -8879,3 +8879,77 @@ body {
     border-radius: var(--radius-sm);
   }
 }
+
+/* ============================================================
+   Ciclo 2b (redesign Fase 2) — Chegadas (lista) desktop: card + painel
+   de filtros + linhas de processo na linguagem da Fase 1, e revelacao
+   do leading icon + chevron (F15.2 os deixa so' no mobile). So' tokens
+   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
+   do :root. Escopado via `.process-list-card` (classe unica desta
+   tela) pra nao vazar pro Dashboard (2a, `.dashboard-heading ~
+   .stagger`) nem pro detalhe (2c, `ProcessDetailView`). Nao toca
+   nenhum bloco @media (max-width:*) nem o `.chegadas-mobilebar`
+   (mobile-only, F16.4).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .process-list-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-list-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .process-list-card .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .process-list-card .process-filters--panel {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-list-card .process-item {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Revela leading icon (categoria) + chevron — F15.2 os deixa
+     display:none fora do @media (max-width:720px). Reusa os mesmos
+     tokens do bloco mobile (styles.css ~6378-6394) pra ficar
+     dark-aware de graca. As linhas detalhadas que ja existem so' no
+     desktop (categoria, destino, ETD/ETA/previsao, badges) continuam
+     como estao; .process-item__summary (resumo condensado) permanece
+     mobile-only. */
+  .process-list-card .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  .process-list-card .process-item__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  /* Sem isto, o `justify-content: space-between` da regra base
+     (pensada pra so' 2 filhos: main + aside) distribui o espaco livre
+     entre os 4 filhos agora existentes (leading, main, aside, chevron)
+     e afasta main/aside de forma estranha. */
+  .process-list-card .process-item--button {
+    justify-content: flex-start;
+  }
+
+  .process-list-card .process-item__main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
