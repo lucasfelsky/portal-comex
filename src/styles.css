@@ -9401,6 +9401,25 @@ body {
 
   .process-detail-view .detail-tab-row .tab-button {
     padding: 10px 20px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Aba ativa vira "card elevado" (mockup Detalhe.dc.html `.tab--on`) em
+     vez do pill gradiente teal global (`.tab-button--active`,
+     styles.css:2866). Mesmo padrao ja aprovado pro segmented control
+     mobile em `.tab-row:not(...):not(.detail-tab-row)
+     .tab-button--active` (styles.css:6683-6688) -- aqui e' o equivalente
+     pra esta tab-row especifica no desktop, que aquela regra exclui de
+     proposito. Especificidade (0,3,0) + ordem no arquivo ja vencem o
+     `.tab-button--active` base sem precisar de !important; so' tokens
+     dark-aware, nao ha override `[data-theme='dark'] .tab-button--active`
+     fora de @media (max-width:720px) pra disputar. */
+  .process-detail-view .detail-tab-row .tab-button--active {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transform: none;
   }
 
   /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
@@ -9425,8 +9444,18 @@ body {
   }
 
   .process-detail-view .detail-card {
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+  }
+
+  /* Cartoes split (ETD/ETA e Carga, `.detail-card--split` ja' renderizado
+     pelo JSX -- ProcessDetailView.jsx:225 e :264) ganham valores maiores
+     em `--font-heading`, ecoando `.split .dv` do mockup Detalhe.dc.html.
+     Rotulo (`.detail-label`) ja' e' uppercase/tracking na base
+     (styles.css:3558-3565); nao repetido aqui. */
+  .process-detail-view .detail-card--split p {
+    font-family: var(--font-heading);
+    font-size: var(--fs-headline);
   }
 
   /* Destaque de canal da DUIMP (getChannelToneClass ja' aplica a
