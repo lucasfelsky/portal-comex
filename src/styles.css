@@ -9892,6 +9892,19 @@ body {
    acompanha sem seletor duplo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminLayout.jsx/AdminUsersPanel.jsx.
+
+   Sub-ciclo 6f (Fase 6, delta de fidelidade vs mockup AdminUsuarios.dc.html):
+   `.invite-card__meta` vira chips discretos (`--surface-alt`), acoes da
+   invite alinhadas a esquerda (mockup mostra os 3 botoes em linha, nao
+   espalhados pelas pontas); `.admin-user-row--selected` ganha o nome em
+   `--primary-700` (reforca o estado ativo alem do border/bg que a base
+   ja aplica); `.admin-toolbar` centralizado verticalmente pra alinhar o
+   `.status-tag` com o botao ao lado (fica "a direita" junto do grupo,
+   como no `card__h` do mockup); `.detail-stack` com mais respiro e
+   labels do form com tracking levemente maior. NAO revela
+   `.admin-user-row__avatar` no desktop (ja e' `display:none` por
+   padrao, F15.2 e' mobile-only) e NAO mexe no reflow 3->2 colunas do
+   `.dual-grid` (decisao do plano). So' tokens, sem hex fora do :root.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .admin-tabs {
@@ -9943,6 +9956,34 @@ body {
   .admin-section .scope-chip {
     color: var(--primary-700);
     font-weight: 700;
+  }
+
+  .admin-section .invite-card__meta span {
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    background: var(--surface-alt);
+    color: var(--text-subtle);
+    font-weight: 600;
+  }
+
+  .admin-section .invite-card__actions {
+    justify-content: flex-start;
+  }
+
+  .admin-section .admin-user-row--selected strong {
+    color: var(--primary-700);
+  }
+
+  .admin-section .admin-toolbar {
+    align-items: center;
+  }
+
+  .admin-section .detail-stack {
+    gap: 16px;
+  }
+
+  .admin-section .detail-stack .field span {
+    letter-spacing: 0.06em;
   }
 }
 
