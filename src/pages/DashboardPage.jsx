@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Skeleton from '../components/Skeleton'
@@ -25,7 +25,9 @@ import {
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
 import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
+import { getDashboardKpis } from '../features/processes/dashboardKpis'
 import Icon from '../components/Icon'
+import StatCard from '../components/StatCard'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import { formatRelativeTime } from '../utils/dateFormat'
 import { listAnnouncements } from '../services/announcementsRepository'
@@ -69,6 +71,19 @@ function formatDateTime(value) {
   }).format(date)
 }
 
+// Ciclo 2a (redesign Fase 2): eyebrow do hero desktop do Dashboard — so'
+// exibicao (nao e' data manual comparavel/armazenada, entao nao precisa
+// de `toDateKey`/`toDateKeyLocal`; segue o mesmo padrao de formatacao
+// via `Intl.DateTimeFormat` ja usado por `formatDate`/`formatDateTime`
+// acima).
+function formatHeadingDate(value) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  }).format(value)
+}
+
 function getEstimatedDeliveryLabel(process) {
   return formatDate(getEstimatedDeliveryDate(process))
 }
@@ -108,6 +123,8 @@ export default function DashboardPage() {
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(true)
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(true)
+
+  const dashboardKpis = useMemo(() => getDashboardKpis(loadedProcesses), [loadedProcesses])
 
   function handleSelectProcess(processId) {
     if (!processId) return
@@ -152,6 +169,7 @@ export default function DashboardPage() {
     <section className="surface">
       <div className="section-heading dashboard-heading">
         <div>
+          <span className="dashboard-heading__eyebrow">{formatHeadingDate(new Date())}</span>
           <h2>Visão geral</h2>
         </div>
         {/* F16.3: no mobile este bloco vira o TIDE CARD (protótipo) — hero
@@ -184,6 +202,17 @@ export default function DashboardPage() {
             <span className="dashboard-bar-card__text">Indisponível</span>
           )}
         </div>
+      </div>
+
+      {/* Ciclo 2a (redesign Fase 2): faixa de KPIs, so' visivel no
+          desktop via CSS (@media min-width:1041px em styles.css).
+          Deriva de `loadedProcesses` (ja carregado acima) — sem nova
+          query/estado/loading. */}
+      <div className="dashboard-stat-row">
+        <StatCard label="Chegadas na semana" value={dashboardKpis.chegadasNaSemana} icon="arrivals" />
+        <StatCard label="Em trânsito" value={dashboardKpis.emTransito} icon="ship" />
+        <StatCard label="Aguardando atracação" value={dashboardKpis.aguardandoAtracacao} icon="bell" />
+        <StatCard label="Canal vermelho" value={dashboardKpis.canalVermelho} icon="check" />
       </div>
 
       <Stagger>

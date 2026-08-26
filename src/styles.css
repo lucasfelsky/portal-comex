@@ -24,7 +24,7 @@
   --radius-full: 999px; /* pills, badges, handles */
 
   /* Tokens de design system compartilhados com IntelliQuote (sprint 6.2). */
-  --bg: #f5f8f7;
+  --bg: #e9eeec;
   --surface: #ffffff;
   --surface-alt: #eef4f1;
   --ink: #1f1c18;
@@ -50,6 +50,15 @@
   --border-strong: #b7cdc5;
   --bg-tint-1: #eef7f6;
   --bg-tint-2: #e6f1f2;
+
+  /* Fase 1 do redesign geral: tokens frios do shell (sidebar navy + tint).
+     --sidebar-ink/-ink-soft ficam claros nos dois temas porque o navy e'
+     escuro em ambos (ver contraparte em :root[data-theme='dark']). */
+  --sidebar-bg: linear-gradient(180deg, #0b2530, #123845);
+  --sidebar-ink: #f3f8f7;
+  --sidebar-ink-soft: rgba(243, 248, 247, 0.68);
+  --sidebar-pill-hover: rgba(255, 255, 255, 0.1);
+  --tint: #e3f5f0;
   --radius: var(--radius-sm); /* legado — aponta pra escala F15.1b */
   --shadow: 0 8px 28px rgba(0, 40, 40, 0.08);
   --shadow-sm: 0 2px 8px rgba(0, 40, 40, 0.06);
@@ -65,6 +74,10 @@
   --text-subtle: rgba(31, 28, 24, 0.62);
   --text-faint: rgba(31, 28, 24, 0.52);
   --text-mute-strong: rgba(31, 28, 24, 0.68);
+
+  /* Fase 1 do redesign: fonte de headings (Bricolage Grotesque, adicionada
+     no index.html). Fallback pra Manrope (corpo) se a webfont nao carregar. */
+  --font-heading: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
 
   color: var(--ink);
   background: var(--bg);
@@ -90,6 +103,7 @@ h1, h2, h3, h4 {
   margin: 0 0 12px;
   color: var(--ink);
   letter-spacing: -0.01em;
+  font-family: var(--font-heading);
 }
 h1 { font-size: 1.625rem; font-weight: 800; letter-spacing: -0.02em; }
 h2 { font-size: var(--fs-title); font-weight: 700; }
@@ -2119,6 +2133,14 @@ body {
 .dashboard-heading h2 {
   font-size: 2.3rem;
   line-height: 1;
+}
+
+/* Ciclo 2a (redesign Fase 2): eyebrow do hero do Dashboard. So' visivel
+   no desktop (revelado dentro de @media (min-width: 1041px), bloco no
+   final do arquivo) — no mobile o hero continua o TIDE CARD (F16.3),
+   sem eyebrow. */
+.dashboard-heading__eyebrow {
+  display: none;
 }
 
 .dashboard-bar-card--header {
@@ -7466,6 +7488,16 @@ body {
     --bg-tint-1: #121a18;
     --bg-tint-2: #111a1b;
 
+    /* Fase 1 do redesign: contraparte dark dos tokens frios do shell.
+       Sidebar navy ainda mais escura que no claro; ink/ink-soft/pill-hover
+       ficam iguais (texto claro vale nos dois temas, navy ja' e' escura
+       nos dois); tint aponta pro --primary-50 deste bloco (#123029). */
+    --sidebar-bg: linear-gradient(180deg, #071820, #0c2029);
+    --sidebar-ink: #f3f8f7;
+    --sidebar-ink-soft: rgba(243, 248, 247, 0.62);
+    --sidebar-pill-hover: rgba(255, 255, 255, 0.08);
+    --tint: #123029;
+
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.40);
     --shadow-md: 0 14px 30px rgba(0, 0, 0, 0.50);
@@ -7598,6 +7630,87 @@ body {
 
 .topbar-theme-button:hover {
   color: var(--ink);
+}
+
+/* ============================================================
+   Fase 1 do redesign geral — restyle do shell no DESKTOP (sidebar navy
+   com nav em pills translucidos, card IntelliQuote discreto sobre navy).
+   So' ativa em min-width:1041px (breakpoint desktop do repo; abaixo disso
+   a sidebar vira drawer — @media max-width:1040px/720px, nao tocados
+   aqui). Vem depois de todas as regras base de .sidebar/.nav__link/
+   .brand/.sidebar-intelliquote-link no arquivo pra vencer por cascata
+   (mesma especificidade). Usa somente os tokens --sidebar-* do :root (e
+   a contraparte dark), sem hex novo hardcoded aqui.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* [data-theme='dark'] .sidebar (linha ~7576, especificidade 0,2,0) e
+     [data-theme='dark'] .sidebar-intelliquote-link[:hover] (linhas ~7599/7603,
+     especificidade 0,2,0/0,3,0) vencem por especificidade as regras deste bloco
+     se ficarem so' com o seletor simples (media query nao soma especificidade).
+     Por isso os seletores abaixo repetem a variante [data-theme='dark'] pra
+     igualar a especificidade — igualdade resolvida por ordem no arquivo (este
+     bloco vem depois), mesmo padrao ja usado no bloco F16.1 mais abaixo. */
+  [data-theme='dark'] .sidebar,
+  .sidebar {
+    background: var(--sidebar-bg);
+    border-right: none;
+    color: var(--sidebar-ink);
+  }
+
+  .sidebar::-webkit-scrollbar-thumb {
+    background: var(--sidebar-pill-hover);
+  }
+  .sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--sidebar-pill-hover);
+  }
+
+  .brand h1 {
+    color: var(--sidebar-ink);
+  }
+
+  /* Accent teal ja' contrasta bem sobre o navy (mantido igual ao claro);
+     redeclarado aqui so' pra deixar explicito que foi revisado pro shell. */
+  .brand__eyebrow {
+    color: var(--primary);
+  }
+
+  .nav__link {
+    background: transparent;
+    border-color: transparent;
+    color: var(--sidebar-ink);
+    border-radius: var(--radius-full);
+  }
+
+  .nav__link-icon {
+    background: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink-soft);
+  }
+
+  .nav__link-text p {
+    color: var(--sidebar-ink-soft);
+  }
+
+  .nav__link:hover {
+    background: var(--sidebar-pill-hover);
+    border-color: transparent;
+    color: var(--sidebar-ink);
+  }
+
+  .nav__link--active {
+    border-color: var(--primary);
+    border-radius: var(--radius-full);
+  }
+
+  [data-theme='dark'] .sidebar-intelliquote-link,
+  .sidebar-intelliquote-link {
+    background: var(--sidebar-pill-hover);
+    border: 1px solid var(--sidebar-pill-hover);
+  }
+
+  [data-theme='dark'] .sidebar-intelliquote-link:hover,
+  .sidebar-intelliquote-link:hover {
+    background: var(--sidebar-pill-hover);
+  }
 }
 
 /* ============================================================
@@ -8687,4 +8800,798 @@ body {
 .action-icon-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   Ciclo 2a (redesign Fase 2) — Dashboard desktop: hero + faixa de KPIs
+   + restyle das listas do dashboard (Comunicados / Chegadas da semana /
+   Favoritos). So' tokens (--radius-*, --shadow-*, --font-heading,
+   --primary), sem hex fora do :root. Escopado via `.dashboard-heading`
+   (classe unica do Dashboard) pra nao vazar pra ProcessesPage — que tem
+   os proprios .list-card/.process-item/.card-heading restilizados em
+   ciclos separados (2b/2c do mesmo PLAN.md). Nao toca nenhum bloco
+   @media (max-width:*). */
+@media (min-width: 1041px) {
+  .dashboard-heading {
+    margin-bottom: 28px;
+  }
+
+  .dashboard-heading__eyebrow {
+    display: block;
+    margin-bottom: 6px;
+    font-family: var(--font-heading);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: capitalize;
+    color: var(--primary);
+  }
+
+  .dashboard-heading h2 {
+    font-family: var(--font-heading);
+  }
+
+  .dashboard-stat-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .dashboard-stat-row .stat-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-stat-row .stat-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Restyle desktop dos cards do corpo do dashboard (dentro do
+     `.stagger` que segue o hero): Comunicados, Chegadas da semana e
+     Favoritos. Escopo via combinador de irmao geral + descendente pra
+     nao afetar `.list-card`/`.process-item`/`.card-heading` de outras
+     paginas (ProcessesPage etc.), que compartilham as mesmas classes. */
+  .dashboard-heading ~ .stagger {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-heading ~ .stagger .list-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-heading ~ .stagger .list-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .dashboard-heading ~ .stagger .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .dashboard-heading ~ .stagger .process-item {
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* ============================================================
+   Ciclo 2b (redesign Fase 2) — Chegadas (lista) desktop: card + painel
+   de filtros + linhas de processo na linguagem da Fase 1, e revelacao
+   do leading icon + chevron (F15.2 os deixa so' no mobile). So' tokens
+   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
+   do :root. Escopado via `.process-list-card` (classe unica desta
+   tela) pra nao vazar pro Dashboard (2a, `.dashboard-heading ~
+   .stagger`) nem pro detalhe (2c, `ProcessDetailView`). Nao toca
+   nenhum bloco @media (max-width:*) nem o `.chegadas-mobilebar`
+   (mobile-only, F16.4).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .process-list-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-list-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .process-list-card .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .process-list-card .process-filters--panel {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-list-card .process-item {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Revela leading icon (categoria) + chevron — F15.2 os deixa
+     display:none fora do @media (max-width:720px). Reusa os mesmos
+     tokens do bloco mobile (styles.css ~6378-6394) pra ficar
+     dark-aware de graca. As linhas detalhadas que ja existem so' no
+     desktop (categoria, destino, ETD/ETA/previsao, badges) continuam
+     como estao; .process-item__summary (resumo condensado) permanece
+     mobile-only. */
+  .process-list-card .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  .process-list-card .process-item__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  /* Sem isto, o `justify-content: space-between` da regra base
+     (pensada pra so' 2 filhos: main + aside) distribui o espaco livre
+     entre os 4 filhos agora existentes (leading, main, aside, chevron)
+     e afasta main/aside de forma estranha. */
+  .process-list-card .process-item--button {
+    justify-content: flex-start;
+  }
+
+  .process-list-card .process-item__main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* ============================================================
+   Ciclo 2c (redesign Fase 2) — Chegadas (detalhe) desktop: traz a
+   timeline de estagios (F16.5) tambem pro desktop com layout proprio
+   (as regras dela dentro de @media (max-width:720px), 8342-8428, sao
+   mobile-only e nao sao tocadas aqui; o aria-hidden do JSX continua
+   como esta) + restyle do header-resumo, `.detail-card` em grid 2
+   colunas, abas e destaque de canal na DUIMP, na linguagem da Fase 1.
+   Escopado via `.process-detail-view` — classe nova, adicionada so' no
+   <article> raiz de ProcessDetailView.jsx (unica no app) — pra nao
+   vazar pro ProcessForm/ProcessMessagesPanel/paineis admin, que reusam
+   `.process-detail-card-heading`/`.detail-card`/`.detail-stack` como
+   classes soltas, nem pro Dashboard (2a, `.dashboard-heading ~
+   .stagger`) ou pra lista (2b, `.process-list-card`). So' tokens
+   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
+   do :root. Nao toca nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .process-detail-view {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Timeline horizontal (F16.5 so' definia mobile). Track = celulas
+     [bar? + node]; a primeira celula so' tem node (largura fixa), as
+     demais crescem (flex:1) pra' preencher a barra entre nodes —
+     mesma tecnica do bloco mobile, so' com metricas maiores. */
+  .process-detail-view .process-timeline {
+    display: block;
+    margin: 0 0 20px;
+    padding: 22px 26px 18px;
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-detail-view .process-timeline__track {
+    display: flex;
+    align-items: center;
+  }
+
+  .process-detail-view .process-timeline__cell {
+    display: flex;
+    align-items: center;
+    flex: 0 0 28px;
+  }
+
+  .process-detail-view .process-timeline__cell:not(:first-child) {
+    flex: 1;
+  }
+
+  .process-detail-view .process-timeline__bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+
+  .process-detail-view .process-timeline__bar--done {
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .process-timeline__node {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .process-detail-view .process-timeline__node--done {
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .process-timeline__node--now {
+    background: var(--primary-700);
+    box-shadow: 0 0 0 6px var(--primary-50);
+  }
+
+  .process-detail-view .process-timeline__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+  }
+
+  .process-detail-view .process-timeline__labels span {
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    color: var(--text-subtle);
+    text-align: center;
+  }
+
+  .process-detail-view .process-timeline__labels span:first-child {
+    text-align: left;
+  }
+
+  .process-detail-view .process-timeline__labels span:last-child {
+    text-align: right;
+  }
+
+  .process-detail-view .process-timeline__label--now {
+    color: var(--primary-700);
+  }
+
+  /* Header-resumo: o card-heading de TOPO (botao voltar + titulo +
+     toolbar) — combinador de filho direto pra nao pegar os outros
+     `.process-detail-card-heading` aninhados dentro de `.detail-card`
+     (Itens vinculados, Status do processo etc.), que continuam como
+     estao. */
+  .process-detail-view > .process-detail-card-heading {
+    margin-bottom: 20px;
+  }
+
+  .process-detail-view > .process-detail-card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  /* Abas do detalhe (o select nativo do F16.11 continua mobile-only,
+     regra em @media (max-width:720px) intocada). */
+  .process-detail-view .detail-tab-row {
+    margin-top: 16px;
+    margin-bottom: 20px;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    padding: 10px 20px;
+  }
+
+  /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
+     Cards que precisam da linha inteira (ETD/ETA e quantidades em
+     --split, listas roladas de itens/mensagens, e a acao de excluir
+     processo) ganham `grid-column: 1 / -1` pra nao ficar espremidos
+     numa coluna de 50%. */
+  .process-detail-view .tab-panel-spacing {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .process-detail-view .tab-panel-spacing > .detail-card--split,
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.detail-card--split),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-items-list),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-messages-list),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.post-receipt-image-grid),
+  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-detail-collection-windows),
+  .process-detail-view .tab-panel-spacing > .action-row {
+    grid-column: 1 / -1;
+  }
+
+  .process-detail-view .detail-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Destaque de canal da DUIMP (getChannelToneClass ja' aplica a
+     classe certa no JSX; aqui so' se reforca o contorno pra chamar
+     mais atencao no desktop, mesmo padrao de cor ja usado em
+     .dashboard-process-inline__row--duimp, linhas 2272-2289). */
+  .process-detail-view .detail-card--danger {
+    border: 1px solid var(--danger-700);
+  }
+
+  .process-detail-view .detail-card--warning {
+    border: 1px solid var(--warning-700);
+  }
+
+  .process-detail-view .detail-card--success {
+    border: 1px solid var(--success-700);
+  }
+
+  .process-detail-view .detail-card--neutral {
+    border: 1px solid var(--neutral-700);
+  }
+}
+
+/* ============================================================
+   Ciclo 3a (redesign Fase 3) — Noticias desktop: cards da lista
+   (`.news-list-card`/`.news-editor-card`), grid de cards (`.news-grid`/
+   `.news-card`), titulo do form de admin e badge de fonte na
+   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*,
+   --font-heading, --primary-700), sem hex fora do :root. Escopado via
+   `.surface--news` (root de NewsPage.jsx:425, classe unica no app) pra
+   nao vazar pro Dashboard/Chegadas, que reusam `.list-card`/
+   `.card-heading`/`.admin-toolbar`/`.inline-badge` como classes
+   soltas. Mantem a estrutura de grid do desktop (sem introduzir
+   `--featured`/`--row`, que sao mobile-only — comentario em
+   NewsPage.jsx:562-565). `.news-modal` nao e' tocado aqui: e'
+   renderizado via `createPortal` (Modal.jsx:179-211) direto em
+   `document.body`, fora da subarvore de `.surface--news` no DOM —
+   nao seria alcancado por este escopo mesmo se tocado. Nao toca
+   nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .surface--news .news-list-card,
+  .surface--news .news-editor-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-list-card:hover,
+  .surface--news .news-editor-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-grid {
+    gap: 20px;
+  }
+
+  .surface--news .news-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .news-card strong {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-card__meta .inline-badge {
+    color: var(--primary-700);
+  }
+}
+
+/* ============================================================
+   Ciclo 3b (redesign Fase 3) — Notificacoes: DRAWER do desktop
+   (`.notifications__panel`, renderNotificationsPanel em AppLayout.jsx:328),
+   nao a pagina `/notifications` (mobile, NotificationsPage.jsx). Escopado
+   via `.notifications__panel` (root unico do drawer) pra nao vazar pra
+   NotificationsPage, que reusa as mesmas classes soltas
+   (`.notifications__group`/`.notifications__item`/`.notifications__section-label`)
+   fora do painel. So' tokens (--radius-*, --shadow-*, --font-heading,
+   --primary-700), sem hex fora do :root. Trap do tema escuro (documentado
+   em src/styles.css:7563-7587): ha' overrides `[data-theme='dark']
+   .notifications__group/.notifications__item/--unread/.notifications__panel`
+   FORA de media query que setam `background`. Por isso este bloco NAO toca
+   `background`/`color` dessas classes — so' radii/shadow/border/spacing/
+   tipografia, e os tokens usados (--primary-700, --border-strong,
+   --shadow-sm, --text-muted) ja' sao redefinidos dentro de
+   `[data-theme='dark']` no :root (linhas ~7469-7508), entao o dark
+   acompanha de graca sem precisar de seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .notifications__panel .card-heading > div strong {
+    font-family: var(--font-heading);
+  }
+
+  .notifications__panel .notifications__section-label {
+    color: var(--primary-700);
+    letter-spacing: 0.08em;
+  }
+
+  .notifications__panel .notifications__group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications__panel .notifications__item {
+    border-radius: var(--radius-md);
+    transition:
+      box-shadow 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .notifications__panel .notifications__item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-strong);
+  }
+
+  .notifications__panel .notifications__mark-all,
+  .notifications__panel .notifications__show-more {
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* ============================================================
+   Ciclo 3c (redesign Fase 3) — Login desktop: cartao de auth
+   (`.auth-card`/`.auth-card--form`, root `.auth-screen` de
+   LoginPage.jsx:88-89, fora do shell), toggle Entrar/Cadastrar
+   (`.auth-toggle`), campos (`.field`/`.text-input`), acoes
+   (`.auth-button`/`.primary-button`, `.auth-link-button`), banners
+   (`.error-banner`/`.success-banner`) e `.brand__eyebrow`, na
+   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*), sem hex
+   fora do :root. DECISAO 3c do plano: SEM split de dois paineis --
+   LoginPage renderiza em todos os viewports sem shell; um split
+   desktop exigiria JSX novo e caminho de colapso mobile, fora de
+   escopo. Este bloco e' so' polimento visual do cartao existente.
+   Titulo (`<h1>`) ja' usa `--font-heading` via regra global (h1,h2,h3,h4
+   em src/styles.css:102-106), entao nao precisa de regra nova aqui.
+   `.auth-screen`/`.auth-card`/`.brand__eyebrow`/`.error-banner`/
+   `.success-banner`/`.auth-reset-panel`/`.auth-button` sao
+   compartilhados com VerifyEmailPage e PendingApprovalPage (telas
+   irmas sem shell, confirmado por grep -- reusam as mesmas classes),
+   entao as regras genericas abaixo refinam as tres igualmente, como
+   decidido no plano; `.auth-toggle`/`.field`/`.text-input` existem
+   so' no form de Login e nao vazam pras irmas. Sem
+   `[data-theme='dark'] .auth-*` fora de media query (confirmado por
+   grep) -- todos os tokens usados aqui ja' tem contraparte redefinida
+   em `:root[data-theme='dark']` (src/styles.css:7455-7518), entao o
+   dark acompanha sem precisar de seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de LoginPage.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .auth-screen .auth-card {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .auth-screen .auth-card--form {
+    gap: 18px;
+  }
+
+  .auth-screen .auth-toggle {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .field {
+    gap: 6px;
+  }
+
+  .auth-screen .text-input {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .auth-button {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .auth-link-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--primary-50);
+    border-radius: var(--radius-xs);
+  }
+
+  .auth-screen .error-banner,
+  .auth-screen .success-banner {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth-screen .auth-reset-panel {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth-screen .brand__eyebrow {
+    letter-spacing: 0.14em;
+  }
+}
+
+/* ============================================================
+   Ciclo 4a (redesign Fase 4) — Centro Administrativo: SHELL (tabs
+   desktop, `.admin-tabs`/`.admin-tabs--desktop`, AdminLayout.jsx:22)
+   e aba Usuarios (`.dual-grid`, src/features/admin/AdminUsersPanel.jsx:308-448/450).
+   Raiz unica `.admin-section` (`<section className="surface admin-section">`,
+   AdminLayout.jsx:20) -- todo seletor comeca por ela, pra nao vazar
+   pras Fases 1-3, que reusam `.list-card`/`.detail-card`/
+   `.card-heading`/`.scope-chip` como classes soltas em
+   Dashboard/Chegadas/Noticias. So' tokens (--radius-*, --shadow-*,
+   --primary-*, --font-heading), sem hex fora do :root.
+
+   TRAP tabs (dark): `[data-theme='dark'] .tab-row:not(...)
+   .tab-button--active` (styles.css:6692, especificidade 0,5,0,
+   dentro de @media max-width:720px) e o gradiente ativo light
+   (`.admin-tabs .tab-button--active`, styles.css:5644) ja cobrem o
+   estado ativo. Este bloco NAO seta background/color de
+   `.tab-button--active` -- so' spacing/tipografia, pra nao entrar
+   em disputa de especificidade com o dark.
+
+   TRAP tabela (fora de escopo deste sub-ciclo, reservado pro 4c):
+   NAO toca `.admin-table`/`.admin-table th`.
+
+   Dark "de graca": os tokens usados (--radius-*, --shadow-*,
+   --primary-700, --font-heading) ja tem contraparte redefinida em
+   `:root[data-theme='dark']` (styles.css:7455-7518), entao o dark
+   acompanha sem seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de
+   AdminLayout.jsx/AdminUsersPanel.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .admin-tabs {
+    gap: 6px;
+  }
+
+  .admin-section .admin-tabs .tab-button {
+    padding: 10px 20px;
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .dual-grid {
+    gap: 20px;
+    align-items: start;
+  }
+
+  .admin-section .list-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .list-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .admin-section .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .invite-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+    border-left: 3px solid var(--primary);
+  }
+
+  .admin-section .admin-user-row--button {
+    border-radius: var(--radius-sm);
+  }
+
+  .admin-section .admin-user-row--button:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .detail-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .scope-chip {
+    color: var(--primary-700);
+    font-weight: 700;
+  }
+}
+
+/* ============================================================
+   Ciclo 4b (redesign Fase 4) — Centro Administrativo: abas
+   Comunicados (`.announcement-grid`, src/features/admin/
+   AdminAnnouncementsPanel.jsx:172) e Barra do porto
+   (`.suggestion-banner`, src/features/admin/AdminBarStatusPanel.jsx:150).
+   Raiz unica `.admin-section` (AdminLayout.jsx:20) -- todo seletor
+   comeca por ela, pra nao vazar pras Fases 1-3 nem pras outras abas
+   do admin, que reusam `.list-card`/`.card-heading` como classes
+   soltas. So' tokens (--radius-*, --shadow-*, --success/--warning/
+   --danger-*), sem hex fora do :root.
+
+   `.admin-section .list-card` (card de status atual da barra) e
+   `.admin-section .card-heading h3` ja' ficaram cobertos pelo bloco
+   do ciclo 4a acima (mesmo seletor, ja' se aplica a qualquer aba do
+   admin) -- re-escopar aqui seria duplicado, entao nao repete.
+
+   Nao toca `.admin-tabs`/`.tab-button--active` nem `.admin-table`
+   (traps do ciclo 4a/4c, fora de escopo deste sub-ciclo). Os tokens
+   de tom (--success-700/-50, --warning-700/-50, --danger-700/-50) ja'
+   tem contraparte redefinida em `:root[data-theme='dark']`
+   (styles.css:7473-7482), entao o dark acompanha sem seletor duplo.
+   Nao toca nenhum bloco @media (max-width:*), nem JSX/classes/textos/
+   aria de AdminAnnouncementsPanel.jsx/AdminBarStatusPanel.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .announcement-grid {
+    gap: 24px;
+  }
+
+  .admin-section .announcement-card {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .announcement-card--button:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .admin-section .suggestion-banner {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .suggestion-banner--ok {
+    border-left: 3px solid var(--success-700);
+  }
+
+  .admin-section .suggestion-banner--warn {
+    border-left: 3px solid var(--warning-700);
+  }
+
+  .admin-section .suggestion-banner--danger {
+    border-left: 3px solid var(--danger-700);
+  }
+}
+
+/* ============================================================
+   Ciclo 4c (redesign Fase 4) — Centro Administrativo: aba Previsoes
+   (`.admin-feature-stack`, src/pages/AdminForecastPage.jsx:296),
+   cards "Destinos e cutoff" (tabela `.admin-table`), "Dias uteis por
+   categoria" e "Rolling customs forecast" (toggle/chips), rodape de
+   acoes (`.admin-feature-footer`) e banners de status Firestore
+   ativo/Fallback local (`.inline-badge`, AdminForecastPage.jsx:278-280).
+   Raiz unica `.admin-section` (AdminLayout.jsx:20) -- todo seletor
+   comeca por ela, pra nao vazar pras Fases 1-3 nem pras outras abas
+   do admin, que reusam `.inline-badge`/`.scope-chip`/`.chip-add` como
+   classes soltas fora do admin. So' tokens (--radius-*, --shadow-*,
+   --font-heading), sem hex fora do :root.
+
+   `.admin-section .list-card` e `.admin-section .card-heading h3` ja'
+   ficaram cobertos pelo bloco do ciclo 4a (mesmo seletor, se aplica a
+   qualquer aba do admin) -- nao repete aqui.
+
+   TRAP tabela (dark): `[data-theme='dark'] .admin-table th { background:
+   var(--surface-alt) }` (styles.css:7601) fora de media query, com
+   especificidade (0,2,1) -- igual a `.admin-section .admin-table th`
+   (0,2,1); por ordem no arquivo um seletor novo aqui venceria e
+   vazaria pro dark. A base (:5708) ja usa um rgba hardcoded
+   pre-existente. Este bloco NAO toca `background` de `.admin-table th`
+   -- so' tipografia/espacamento.
+
+   Dark "de graca": os tokens usados (--radius-*, --shadow-*,
+   --font-heading) ja' tem contraparte redefinida em
+   `:root[data-theme='dark']` (styles.css:7455-7518), entao o dark
+   acompanha sem seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de
+   AdminForecastPage.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .admin-feature-stack {
+    gap: 24px;
+  }
+
+  .admin-section .admin-table-wrapper {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .admin-table th {
+    font-family: var(--font-heading);
+    letter-spacing: 0.06em;
+  }
+
+  .admin-section .admin-table td {
+    padding: 12px;
+  }
+
+  .admin-section .admin-feature-footer {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .scope-chip--button {
+    transition: box-shadow 0.15s ease;
+  }
+
+  .admin-section .scope-chip--button:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .scope-chip--active {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .chip-add {
+    gap: 10px;
+  }
+
+  .admin-section .admin-toolbar--right .inline-badge {
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+/* ============================================================
+   Ciclo 4d (redesign Fase 4) — Centro Administrativo: aba Suporte
+   (`.support-tabs-row`/`.support-ticket-card`/`.support-ticket-pager`,
+   src/features/admin/AdminSupportPanel.jsx:228-524). Raiz unica
+   `.admin-section` (AdminLayout.jsx:20) -- todo seletor comeca por
+   ela, pra nao vazar pras Fases 1-3 nem pras outras abas do admin.
+   So' tokens (--radius-*, --shadow-*, --font-heading), sem hex fora
+   do :root.
+
+   TRAP `.dashboard-stat-row` (ciclo 2a, styles.css:8834, dentro de
+   @media min-width:1041px): forca `grid-template-columns: repeat(4,
+   minmax(0,1fr))` no desktop, pensado pro Dashboard (4 StatCards). O
+   painel de Suporte usa a mesma classe com so' 3 StatCards
+   (AdminSupportPanel.jsx:228), entao sem override fica um card
+   faltando. `.admin-section .dashboard-stat-row` tem especificidade
+   maior (0,2,0 vs 0,1,0 da global) e resolve pro desktop do admin,
+   sem tocar a regra global do Dashboard.
+
+   `.admin-section .list-card`/`.detail-card`/`.card-heading h3` ja'
+   ficaram cobertos pelo ciclo 4a (mesmo seletor; `.support-ticket-card`
+   tambem carrega `.detail-card`, entao ja' herda `box-shadow:
+   var(--shadow-sm)` de la') -- nao repete a sombra aqui, so' refina
+   o radius e o que e especifico da aba (heading, pager, replies).
+
+   Dark "de graca": os tokens usados (--radius-*, --font-heading) ja'
+   tem contraparte redefinida em `:root[data-theme='dark']`
+   (styles.css:7455-7518), entao o dark acompanha sem seletor duplo.
+   Nao ha override `[data-theme='dark']` para nenhuma classe
+   `.support-*` no arquivo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de
+   AdminSupportPanel.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .dashboard-stat-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-section .support-tabs-row {
+    gap: 16px;
+  }
+
+  .admin-section .support-tabs-row .tab-row .tab-button {
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-card {
+    border-radius: var(--radius-md);
+    gap: 12px;
+  }
+
+  .admin-section .support-ticket-card__head strong {
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-pager {
+    gap: 8px;
+  }
+
+  .admin-section .support-ticket-pager__counter {
+    min-width: 64px;
+  }
+
+  .admin-section .support-ticket-card__replies-list {
+    gap: 10px;
+  }
+
+  .admin-section .support-ticket-card__reply {
+    padding-top: 10px;
+  }
 }
