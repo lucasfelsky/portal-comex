@@ -10297,6 +10297,22 @@ body {
    `.support-*` no arquivo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminSupportPanel.jsx.
+
+   Sub-ciclo 6i (Fase 6) -- delta de fidelidade vs `AdminSuporte.dc.html`
+   sobre este mesmo bloco: `__head` com autor+status-tag alinhados ao
+   centro (o mockup usa `align-items:center` no `.thead`; a base fora
+   de media so' tem `align-items:flex-start`, sobrescrita aqui so' no
+   desktop); `__context` vira pill (`--radius-full`, `inline-flex`) --
+   sem icone, pois o JSX (`AdminSupportPanel.jsx:361-367`) nao renderiza
+   nenhum `Icon`/SVG ali, so' texto; fabricar um glifo puramente em CSS
+   pra imitar o `<svg>` do mockup contaria como dado/elemento que o app
+   nao tem, e o sub-ciclo e' CSS-only (sem tocar JSX) -- mantido so'
+   texto, com a forma de pill; `__replies` com radius/padding maiores;
+   `__reply p` vira bolha de mensagem (fundo + borda), sem avatar de
+   iniciais (nao fabricar, per PLAN.md); `__actions` (footer: priority
+   select + botoes) alinhado ao centro com mais respiro. TRAP reforcado:
+   nenhuma regra abaixo toca `.stat-card`/`.dashboard-stat-row` sem o
+   prefixo `.admin-section`.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .dashboard-stat-row {
@@ -10316,8 +10332,23 @@ body {
     gap: 12px;
   }
 
+  .admin-section .support-ticket-card__head {
+    align-items: center;
+    gap: 16px;
+  }
+
   .admin-section .support-ticket-card__head strong {
     font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-card__context {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
   }
 
   .admin-section .support-ticket-pager {
@@ -10328,12 +10359,33 @@ body {
     min-width: 64px;
   }
 
+  .admin-section .support-ticket-card__replies {
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+
   .admin-section .support-ticket-card__replies-list {
     gap: 10px;
   }
 
   .admin-section .support-ticket-card__reply {
     padding-top: 10px;
+  }
+
+  .admin-section .support-ticket-card__reply p {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
+  .admin-section .support-ticket-card__actions {
+    align-items: center;
+    gap: 14px;
+  }
+
+  .admin-section .support-ticket-card__priority {
+    min-width: 220px;
   }
 }
 
