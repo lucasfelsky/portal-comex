@@ -9027,6 +9027,18 @@ body {
     font-size: 2.125rem;
   }
 
+  /* Ajuste (feedback 2026-08-26) — sem animacao de hover nos KPIs do
+     Dashboard. NAO mexe na regra solta `.dashboard-stat-row
+     .stat-card:hover` (~9008, compartilhada com AdminSupportPanel,
+     mesma classe sem `.dashboard-heading` de irmao la') nem na base
+     global `.stat-card:hover` (~2214, tambem usada no admin) -- so'
+     cancela o efeito aqui, escopado ao Dashboard, com especificidade
+     maior que as duas. */
+  .dashboard-heading ~ .dashboard-stat-row .stat-card:hover {
+    box-shadow: var(--shadow-sm);
+    transform: none;
+  }
+
   /* Restyle desktop dos cards do corpo do dashboard (dentro do
      `.stagger` que segue o hero): Comunicados, Chegadas da semana e
      Favoritos. Escopo via combinador de irmao geral + descendente pra
@@ -9054,9 +9066,10 @@ body {
     box-shadow: var(--shadow-sm);
   }
 
-  .dashboard-heading ~ .stagger .list-card:hover {
-    box-shadow: var(--shadow-md);
-  }
+  /* Ajuste (feedback 2026-08-26) — hover animado (mudanca de sombra)
+     removido dos cards do Dashboard (Comunicados/Chegadas/Favoritos);
+     a sombra base (`--shadow-sm` acima) fica, so' o CHANGE no hover
+     sai. Escopado igual as demais regras deste bloco. */
 
   .dashboard-heading ~ .stagger .card-heading h3 {
     font-family: var(--font-heading);
@@ -9067,17 +9080,18 @@ body {
   }
 
   /* Ajuste (feedback 2026-08-26) — "Chegadas da semana" mostra no
-     maximo ~3 processos visiveis no desktop; o resto rola dentro do
-     proprio card (nao estica o card nem empurra o resto do dashboard).
-     max-height estimado a partir da estrutura real de um
+     maximo ~2 processos visiveis no desktop (era ~3); o resto rola
+     dentro do proprio card (nao estica o card nem empurra o resto do
+     dashboard). max-height estimado a partir da estrutura real de um
      `.process-item.weekly-arrivals-item` (title+subtitle+categoria+
      chips + `.weekly-arrivals-windows`, padding 16px, gap do
-     `.process-list` 12px): ~200px por item x3 + 2 gaps de 12px ~= 600px.
+     `.process-list` 12px): ~200px por item x2 + 1 gap de 12px ~= 412px,
+     arredondado pra 400px (mesma logica de estimativa do ciclo 5c).
      Escopado ao Dashboard (`.dashboard-heading ~ .stagger`) pra nao
      afetar o WeeklyArrivalsCard se ele passar a ser usado em outra
      tela. Nao mexe no JSX/logica de janelas do WeeklyArrivalsCard. */
   .dashboard-heading ~ .stagger .weekly-arrivals-card .process-list--scroll {
-    max-height: 600px;
+    max-height: 400px;
     overflow-y: auto;
     padding-right: 6px;
   }
