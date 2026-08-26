@@ -241,6 +241,14 @@ body {
   color: var(--primary);
 }
 
+/* Sub-ciclo 5a passo 5 — chip com o logo real (assets/sqquimica.png).
+   Escondido por padrão: só aparece no desktop (bloco @media min-width:1041px
+   abaixo, junto do resto do restyle do shell), mobile/tablet mantêm a marca
+   só em texto (mesmo comportamento de hoje). */
+.sidebar__logo {
+  display: none;
+}
+
 .brand h1,
 .section-heading h2,
 .topbar h2,
@@ -7710,6 +7718,127 @@ body {
   [data-theme='dark'] .sidebar-intelliquote-link:hover,
   .sidebar-intelliquote-link:hover {
     background: var(--sidebar-pill-hover);
+  }
+
+  /* Sub-ciclo 5a passo 5 — logo real (assets/sqquimica.png) num chip branco
+     (o PNG é colorido com texto navy, por isso o fundo precisa ficar sempre
+     branco independente do tema — mesmo raciocínio de #ffffff hardcoded já
+     usado em .primary-button/.danger-button etc, cor invariante ao tema). */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+  }
+
+  .sidebar__logo img {
+    display: block;
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+  }
+
+  /* Sub-ciclo 5a passo 4 — rodapé Tema+Sair em 2 colunas (mockup .sb__foot).
+     Especificidade .sidebar__foot .sidebar-theme-button (0,2,0) vence a
+     regra base .sidebar-theme-button{display:none} (0,1,0, linha ~2989)
+     independente de ordem no arquivo. */
+  .sidebar__foot {
+    display: flex;
+    gap: 9px;
+  }
+
+  .sidebar__foot .sidebar-theme-button,
+  .sidebar__foot .sidebar-logout-button {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    padding: 11px;
+    border-radius: var(--radius-sm);
+    border-color: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink-soft);
+  }
+
+  .sidebar__foot .sidebar-theme-button:hover,
+  .sidebar__foot .sidebar-logout-button:hover {
+    background: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink);
+  }
+}
+
+/* ============================================================
+   Sub-ciclo 5a — Topbar (passos 1-3 do pass de fidelidade ao mockup
+   Main.dc.html). Só desktop (min-width:1041px); a faixa tablet
+   (max-width:1040px, bloco ~4196) já esconde ptax/user-info/role-badge/
+   logout e reduz o avatar — não é tocada aqui.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* Passo 1 — notificação vira botão-ícone (sino) com dot (mockup
+     .icobtn + .dot). O texto "Notificações" (.notifications__label)
+     some visualmente no desktop; o aria-label no <button> continua
+     garantindo o acesso por leitor de tela. */
+  .notifications__label {
+    display: none;
+  }
+
+  .notifications__trigger {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  .notifications__count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    background: var(--danger);
+    border: 2px solid var(--bg);
+  }
+
+  /* Passo 2 — "Sair" só mora na sidebar no desktop (mockup não tem
+     logout na topbar). Markup do botão continua existindo (tablet
+     721-1040px segue mostrando, bloco ~4196 não é tocado). */
+  .topbar__logout {
+    display: none;
+  }
+
+  /* Passo 3 — PTAX como card com borda (mockup .ptax) + par label/valor
+     empilhado; avatar mais denso (mockup .av). */
+  .topbar__ptax {
+    display: flex;
+    gap: 16px;
+    padding: 9px 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .topbar__ptax-pair {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .topbar__avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
   }
 }
 

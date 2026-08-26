@@ -15,6 +15,7 @@ import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
+import sqQuimicaLogo from '../../assets/sqquimica.png'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
 
@@ -437,6 +438,7 @@ export default function AppLayout() {
           aria-label="Notificações"
           onClick={handleToggleNotificationPanel}
         >
+          <Icon name="bell" size={19} aria-hidden="true" />
           <span className="notifications__label">Notificações</span>
           {unreadNotifications.length > 0 ? (
             <span className="notifications__count">{unreadNotifications.length}</span>
@@ -470,8 +472,13 @@ export default function AppLayout() {
       <div className="shell__frame">
         <aside ref={sidebarRef} className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`} tabIndex={-1}>
           <div className="brand">
-            <span className="brand__eyebrow">SQ Química</span>
-            <h1>Portal COMEX</h1>
+            <span className="sidebar__logo" aria-hidden="true">
+              <img src={sqQuimicaLogo} alt="" />
+            </span>
+            <div className="brand__text">
+              <span className="brand__eyebrow">SQ Química</span>
+              <h1>Portal COMEX</h1>
+            </div>
           </div>
 
           <nav id="primary-navigation" className="nav" aria-label="Principal">
@@ -511,25 +518,27 @@ export default function AppLayout() {
             </a>
           ) : null}
 
-          <button
-            type="button"
-            className="ghost-button sidebar-theme-button"
-            onClick={theme.cyclePreference}
-            aria-label={`${themeLabel} — alternar tema`}
-            title="Alternar tema (automático / escuro / claro)"
-          >
-            <Icon name={themeIcon} size={16} aria-hidden="true" />
-            <span>{themeLabel}</span>
-          </button>
+          <div className="sidebar__foot">
+            <button
+              type="button"
+              className="ghost-button sidebar-theme-button"
+              onClick={theme.cyclePreference}
+              aria-label={`${themeLabel} — alternar tema`}
+              title="Alternar tema (automático / escuro / claro)"
+            >
+              <Icon name={themeIcon} size={16} aria-hidden="true" />
+              <span>{themeLabel}</span>
+            </button>
 
-          <button
-            type="button"
-            className="ghost-button sidebar-logout-button"
-            onClick={logout}
-          >
-            <Icon name="logout" size={16} aria-hidden="true" />
-            <span>Sair</span>
-          </button>
+            <button
+              type="button"
+              className="ghost-button sidebar-logout-button"
+              onClick={logout}
+            >
+              <Icon name="logout" size={16} aria-hidden="true" />
+              <span>Sair</span>
+            </button>
+          </div>
         </aside>
 
         <div className="main-content" inert={isMobileMenuOpen || isNotificationPanelOpen ? '' : undefined}>
