@@ -9127,3 +9127,185 @@ body {
     border: 1px solid var(--neutral-700);
   }
 }
+
+/* ============================================================
+   Ciclo 3a (redesign Fase 3) — Noticias desktop: cards da lista
+   (`.news-list-card`/`.news-editor-card`), grid de cards (`.news-grid`/
+   `.news-card`), titulo do form de admin e badge de fonte na
+   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*,
+   --font-heading, --primary-700), sem hex fora do :root. Escopado via
+   `.surface--news` (root de NewsPage.jsx:425, classe unica no app) pra
+   nao vazar pro Dashboard/Chegadas, que reusam `.list-card`/
+   `.card-heading`/`.admin-toolbar`/`.inline-badge` como classes
+   soltas. Mantem a estrutura de grid do desktop (sem introduzir
+   `--featured`/`--row`, que sao mobile-only — comentario em
+   NewsPage.jsx:562-565). `.news-modal` nao e' tocado aqui: e'
+   renderizado via `createPortal` (Modal.jsx:179-211) direto em
+   `document.body`, fora da subarvore de `.surface--news` no DOM —
+   nao seria alcancado por este escopo mesmo se tocado. Nao toca
+   nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .surface--news .news-list-card,
+  .surface--news .news-editor-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-list-card:hover,
+  .surface--news .news-editor-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .card-heading h3 {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-grid {
+    gap: 20px;
+  }
+
+  .surface--news .news-card {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--news .news-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .news-card strong {
+    font-family: var(--font-heading);
+  }
+
+  .surface--news .news-card__meta .inline-badge {
+    color: var(--primary-700);
+  }
+}
+
+/* ============================================================
+   Ciclo 3b (redesign Fase 3) — Notificacoes: DRAWER do desktop
+   (`.notifications__panel`, renderNotificationsPanel em AppLayout.jsx:328),
+   nao a pagina `/notifications` (mobile, NotificationsPage.jsx). Escopado
+   via `.notifications__panel` (root unico do drawer) pra nao vazar pra
+   NotificationsPage, que reusa as mesmas classes soltas
+   (`.notifications__group`/`.notifications__item`/`.notifications__section-label`)
+   fora do painel. So' tokens (--radius-*, --shadow-*, --font-heading,
+   --primary-700), sem hex fora do :root. Trap do tema escuro (documentado
+   em src/styles.css:7563-7587): ha' overrides `[data-theme='dark']
+   .notifications__group/.notifications__item/--unread/.notifications__panel`
+   FORA de media query que setam `background`. Por isso este bloco NAO toca
+   `background`/`color` dessas classes — so' radii/shadow/border/spacing/
+   tipografia, e os tokens usados (--primary-700, --border-strong,
+   --shadow-sm, --text-muted) ja' sao redefinidos dentro de
+   `[data-theme='dark']` no :root (linhas ~7469-7508), entao o dark
+   acompanha de graca sem precisar de seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .notifications__panel .card-heading > div strong {
+    font-family: var(--font-heading);
+  }
+
+  .notifications__panel .notifications__section-label {
+    color: var(--primary-700);
+    letter-spacing: 0.08em;
+  }
+
+  .notifications__panel .notifications__group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications__panel .notifications__item {
+    border-radius: var(--radius-md);
+    transition:
+      box-shadow 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .notifications__panel .notifications__item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-strong);
+  }
+
+  .notifications__panel .notifications__mark-all,
+  .notifications__panel .notifications__show-more {
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* ============================================================
+   Ciclo 3c (redesign Fase 3) — Login desktop: cartao de auth
+   (`.auth-card`/`.auth-card--form`, root `.auth-screen` de
+   LoginPage.jsx:88-89, fora do shell), toggle Entrar/Cadastrar
+   (`.auth-toggle`), campos (`.field`/`.text-input`), acoes
+   (`.auth-button`/`.primary-button`, `.auth-link-button`), banners
+   (`.error-banner`/`.success-banner`) e `.brand__eyebrow`, na
+   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*), sem hex
+   fora do :root. DECISAO 3c do plano: SEM split de dois paineis --
+   LoginPage renderiza em todos os viewports sem shell; um split
+   desktop exigiria JSX novo e caminho de colapso mobile, fora de
+   escopo. Este bloco e' so' polimento visual do cartao existente.
+   Titulo (`<h1>`) ja' usa `--font-heading` via regra global (h1,h2,h3,h4
+   em src/styles.css:102-106), entao nao precisa de regra nova aqui.
+   `.auth-screen`/`.auth-card`/`.brand__eyebrow`/`.error-banner`/
+   `.success-banner`/`.auth-reset-panel`/`.auth-button` sao
+   compartilhados com VerifyEmailPage e PendingApprovalPage (telas
+   irmas sem shell, confirmado por grep -- reusam as mesmas classes),
+   entao as regras genericas abaixo refinam as tres igualmente, como
+   decidido no plano; `.auth-toggle`/`.field`/`.text-input` existem
+   so' no form de Login e nao vazam pras irmas. Sem
+   `[data-theme='dark'] .auth-*` fora de media query (confirmado por
+   grep) -- todos os tokens usados aqui ja' tem contraparte redefinida
+   em `:root[data-theme='dark']` (src/styles.css:7455-7518), entao o
+   dark acompanha sem precisar de seletor duplo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de LoginPage.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .auth-screen .auth-card {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .auth-screen .auth-card--form {
+    gap: 18px;
+  }
+
+  .auth-screen .auth-toggle {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .field {
+    gap: 6px;
+  }
+
+  .auth-screen .text-input {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .auth-button {
+    border-radius: var(--radius-sm);
+  }
+
+  .auth-screen .auth-link-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--primary-50);
+    border-radius: var(--radius-xs);
+  }
+
+  .auth-screen .error-banner,
+  .auth-screen .success-banner {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth-screen .auth-reset-panel {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth-screen .brand__eyebrow {
+    letter-spacing: 0.14em;
+  }
+}
