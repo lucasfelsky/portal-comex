@@ -1463,6 +1463,13 @@ body {
   max-width: 640px;
 }
 
+/* Sem titulo, o .modal__header so contem o botao "x". A palette fecha
+   via Esc (rodape) ou clique no backdrop -- o "x" foi removido por ser
+   redundante nesse fluxo. Some o header inteiro so pra esse modal. */
+.command-palette-modal .modal__header {
+  display: none;
+}
+
 .command-palette__search {
   display: flex;
   align-items: center;
@@ -7820,6 +7827,17 @@ body {
     display: none;
   }
 
+  /* Ajuste (feedback 2026-08-26) — toggle de tema duplicado no desktop:
+     mantém SÓ o da sidebar (`.sidebar-theme-button`, rodapé `.sidebar__foot`
+     do 5a acima); esconde o da topbar só aqui (min-width:1041px). NÃO
+     esconder em max-width nenhum — no tablet (721-1040px) a sidebar é
+     drawer escondido e o `.topbar-theme-button` precisa continuar visível
+     (o `.sidebar-theme-button` já é `display:none` por padrão fora do
+     drawer mobile, linha ~2997). Markup do botão não muda. */
+  .topbar-theme-button {
+    display: none;
+  }
+
   /* Passo 3 — PTAX como card com borda (mockup .ptax) + par label/valor
      empilhado; avatar mais denso (mockup .av). */
   .topbar__ptax {
@@ -9046,6 +9064,22 @@ body {
 
   .dashboard-heading ~ .stagger .process-item {
     border-radius: var(--radius-sm);
+  }
+
+  /* Ajuste (feedback 2026-08-26) — "Chegadas da semana" mostra no
+     maximo ~3 processos visiveis no desktop; o resto rola dentro do
+     proprio card (nao estica o card nem empurra o resto do dashboard).
+     max-height estimado a partir da estrutura real de um
+     `.process-item.weekly-arrivals-item` (title+subtitle+categoria+
+     chips + `.weekly-arrivals-windows`, padding 16px, gap do
+     `.process-list` 12px): ~200px por item x3 + 2 gaps de 12px ~= 600px.
+     Escopado ao Dashboard (`.dashboard-heading ~ .stagger`) pra nao
+     afetar o WeeklyArrivalsCard se ele passar a ser usado em outra
+     tela. Nao mexe no JSX/logica de janelas do WeeklyArrivalsCard. */
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-list--scroll {
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 6px;
   }
 
   /* Passo 9 — Favoritos em 2 colunas com leading icon + chips + ETA
