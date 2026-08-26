@@ -9513,6 +9513,8 @@ body {
   }
 
   .surface--news .news-grid {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
     gap: 20px;
   }
 
@@ -9531,6 +9533,87 @@ body {
 
   .surface--news .news-card__meta .inline-badge {
     color: var(--primary-700);
+  }
+
+  /* Sub-ciclo 6c (Fase 6) — layout "featured + rows" também no desktop
+     (o JSX já marca `news-card--featured`/`news-card--row`/
+     `news-section-label`, F16.6, mobile-only até aqui — comentário em
+     NewsPage.jsx:562-565). Featured ocupa a coluna 1 inteira; label +
+     rows fluem na coluna 2. CSS-only, sem markup novo. */
+  .surface--news .news-card--featured {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .surface--news .news-section-label,
+  .surface--news .news-card--row {
+    grid-column: 2;
+  }
+
+  .surface--news .news-section-label {
+    display: block;
+    padding: 2px 2px 0;
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+  }
+
+  /* Featured: capa alta, corpo com meta + título grande + resumo. */
+  .surface--news .news-card--featured .news-card__button {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .surface--news .news-card--featured .news-card__image-wrap {
+    width: 100%;
+    min-height: 280px;
+    max-height: 280px;
+  }
+
+  .surface--news .news-card--featured .news-card__body {
+    padding: 24px;
+    gap: 12px;
+  }
+
+  .surface--news .news-card--featured .news-card__body strong {
+    font-size: var(--fs-title);
+    line-height: 1.2;
+  }
+
+  .surface--news .news-card--featured .news-card__summary {
+    -webkit-line-clamp: 4;
+  }
+
+  /* Row: thumb pequena + corpo + chevron, resumo em 2 linhas. */
+  .surface--news .news-card--row .news-card__button {
+    grid-template-columns: 104px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .surface--news .news-card--row .news-card__image-wrap {
+    width: 104px;
+    min-height: 88px;
+    max-height: 88px;
+    border-radius: var(--radius-sm);
+  }
+
+  .surface--news .news-card--row .news-card__body {
+    padding: 0;
+    gap: 6px;
+  }
+
+  .surface--news .news-card--row .news-card__summary {
+    -webkit-line-clamp: 2;
+  }
+
+  .surface--news .news-card--row .news-card__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
   }
 }
 
