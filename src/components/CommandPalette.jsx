@@ -180,7 +180,7 @@ export default function CommandPalette({
   }, [filtered])
 
   return (
-    <Modal open={open} onClose={onClose} ariaLabel="Paleta de comandos">
+    <Modal open={open} onClose={onClose} ariaLabel="Paleta de comandos" className="command-palette-modal">
       <div className="command-palette">
         <div className="command-palette__search">
           <span className="command-palette__search-icon" aria-hidden="true">

@@ -241,6 +241,14 @@ body {
   color: var(--primary);
 }
 
+/* Sub-ciclo 5a passo 5 — chip com o logo real (assets/sqquimica.png).
+   Escondido por padrão: só aparece no desktop (bloco @media min-width:1041px
+   abaixo, junto do resto do restyle do shell), mobile/tablet mantêm a marca
+   só em texto (mesmo comportamento de hoje). */
+.sidebar__logo {
+  display: none;
+}
+
 .brand h1,
 .section-heading h2,
 .topbar h2,
@@ -1455,6 +1463,13 @@ body {
   max-width: 640px;
 }
 
+/* Sem titulo, o .modal__header so contem o botao "x". A palette fecha
+   via Esc (rodape) ou clique no backdrop -- o "x" foi removido por ser
+   redundante nesse fluxo. Some o header inteiro so pra esse modal. */
+.command-palette-modal .modal__header {
+  display: none;
+}
+
 .command-palette__search {
   display: flex;
   align-items: center;
@@ -1950,6 +1965,15 @@ body {
     max(24px, env(safe-area-inset-right))
     max(24px, env(safe-area-inset-bottom))
     max(24px, env(safe-area-inset-left));
+}
+
+/* .auth-brand (Fase 6 / 6e): painel de marca do split-screen do Login.
+   Escondido por padrao (mobile/tablet); revelado so' dentro do bloco
+   @media (min-width:1041px) do Ciclo 3c, mais abaixo. Nao existe em
+   VerifyEmailPage/PendingApprovalPage (mesma raiz .auth-screen), entao
+   essas telas nunca renderizam este elemento. */
+.auth-brand {
+  display: none;
 }
 
 .auth-card {
@@ -3339,6 +3363,16 @@ body {
   max-height: 760px;
   overflow-y: auto;
   padding-right: 6px;
+}
+
+/* Fix estrutural (2026-08-26): `.news-aside` agrupa o rótulo "Anteriores" +
+   as rows num filho SÓ do `.news-grid` (ver Sub-ciclo 6c abaixo). No
+   mobile/tablet (< 1041px, `.news-grid` continua 1 coluna) ele precisa
+   "sumir" da árvore de layout pra manter o fluxo antigo (featured, label,
+   rows empilhados direto no grid) — `display: contents` faz isso; o
+   desktop sobrescreve para `flex column` dentro do bloco Sub-ciclo 6c. */
+.news-aside {
+  display: contents;
 }
 
 .news-card {
@@ -7711,6 +7745,138 @@ body {
   .sidebar-intelliquote-link:hover {
     background: var(--sidebar-pill-hover);
   }
+
+  /* Sub-ciclo 5a passo 5 — logo real (assets/sqquimica.png) num chip branco
+     (o PNG é colorido com texto navy, por isso o fundo precisa ficar sempre
+     branco independente do tema — mesmo raciocínio de #ffffff hardcoded já
+     usado em .primary-button/.danger-button etc, cor invariante ao tema). */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+  }
+
+  .sidebar__logo img {
+    display: block;
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+  }
+
+  /* Sub-ciclo 5a passo 4 — rodapé Tema+Sair em 2 colunas (mockup .sb__foot).
+     Especificidade .sidebar__foot .sidebar-theme-button (0,2,0) vence a
+     regra base .sidebar-theme-button{display:none} (0,1,0, linha ~2989)
+     independente de ordem no arquivo. */
+  .sidebar__foot {
+    display: flex;
+    gap: 9px;
+  }
+
+  .sidebar__foot .sidebar-theme-button,
+  .sidebar__foot .sidebar-logout-button {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    padding: 11px;
+    border-radius: var(--radius-sm);
+    border-color: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink-soft);
+  }
+
+  .sidebar__foot .sidebar-theme-button:hover,
+  .sidebar__foot .sidebar-logout-button:hover {
+    background: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink);
+  }
+}
+
+/* ============================================================
+   Sub-ciclo 5a — Topbar (passos 1-3 do pass de fidelidade ao mockup
+   Main.dc.html). Só desktop (min-width:1041px); a faixa tablet
+   (max-width:1040px, bloco ~4196) já esconde ptax/user-info/role-badge/
+   logout e reduz o avatar — não é tocada aqui.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* Passo 1 — notificação vira botão-ícone (sino) com dot (mockup
+     .icobtn + .dot). O texto "Notificações" (.notifications__label)
+     some visualmente no desktop; o aria-label no <button> continua
+     garantindo o acesso por leitor de tela. */
+  .notifications__label {
+    display: none;
+  }
+
+  .notifications__trigger {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  .notifications__count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    background: var(--danger);
+    border: 2px solid var(--bg);
+  }
+
+  /* Passo 2 — "Sair" só mora na sidebar no desktop (mockup não tem
+     logout na topbar). Markup do botão continua existindo (tablet
+     721-1040px segue mostrando, bloco ~4196 não é tocado). */
+  .topbar__logout {
+    display: none;
+  }
+
+  /* Ajuste (feedback 2026-08-26) — toggle de tema duplicado no desktop:
+     mantém SÓ o da sidebar (`.sidebar-theme-button`, rodapé `.sidebar__foot`
+     do 5a acima); esconde o da topbar só aqui (min-width:1041px). NÃO
+     esconder em max-width nenhum — no tablet (721-1040px) a sidebar é
+     drawer escondido e o `.topbar-theme-button` precisa continuar visível
+     (o `.sidebar-theme-button` já é `display:none` por padrão fora do
+     drawer mobile, linha ~2997). Markup do botão não muda. */
+  .topbar-theme-button {
+    display: none;
+  }
+
+  /* Passo 3 — PTAX como card com borda (mockup .ptax) + par label/valor
+     empilhado; avatar mais denso (mockup .av). */
+  .topbar__ptax {
+    display: flex;
+    gap: 16px;
+    padding: 9px 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .topbar__ptax-pair {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .topbar__avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
+  }
 }
 
 /* ============================================================
@@ -8810,7 +8976,12 @@ body {
    (classe unica do Dashboard) pra nao vazar pra ProcessesPage — que tem
    os proprios .list-card/.process-item/.card-heading restilizados em
    ciclos separados (2b/2c do mesmo PLAN.md). Nao toca nenhum bloco
-   @media (max-width:*). */
+   @media (max-width:*).
+   Sub-ciclo 5b: Barra do Rio vira pill com borda (mockup `.bar`); KPIs
+   perdem o icone e o valor vira Bricolage grande (mockup `.kpi`); grid
+   inverte — Favoritos full-width, Chegadas volta pra coluna (mockup
+   `.grid`/`.fav`); favlist 2-col com leading icon + card `--surface-alt`
+   (mockup `.favlist`/`.fitem`). */
 @media (min-width: 1041px) {
   .dashboard-heading {
     margin-bottom: 28px;
@@ -8831,6 +9002,17 @@ body {
     font-family: var(--font-heading);
   }
 
+  /* Passo 6 — Barra do Rio como pill com borda (mockup `.bar`). Mantem
+     `.dashboard-bar-card__text`/`--${tone}` e `.dashboard-bar-inline__dot`
+     intocados (DashboardPage.test.jsx:285/295 dependem deles). */
+  .dashboard-heading .dashboard-bar-inline {
+    padding: 12px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
   .dashboard-stat-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
@@ -8846,6 +9028,36 @@ body {
     box-shadow: var(--shadow-md);
   }
 
+  /* Passo 7 — KPIs sem icone, valor grande (mockup `.kpi`). Trends
+     "+2"/"atencao" ficam FORA (Decisao D2 — sem dado real de serie).
+     Escopado com `.dashboard-heading ~` (TRAP `.dashboard-stat-row`
+     tambem existe em AdminSupportPanel/Suporte, que nao tem
+     `.dashboard-heading` como irmao — ver REVIEW.md rodada 1). */
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__icon {
+    display: none;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__label {
+    letter-spacing: 0.08em;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__value {
+    font-family: var(--font-heading);
+    font-size: 2.125rem;
+  }
+
+  /* Ajuste (feedback 2026-08-26) — sem animacao de hover nos KPIs do
+     Dashboard. NAO mexe na regra solta `.dashboard-stat-row
+     .stat-card:hover` (~9008, compartilhada com AdminSupportPanel,
+     mesma classe sem `.dashboard-heading` de irmao la') nem na base
+     global `.stat-card:hover` (~2214, tambem usada no admin) -- so'
+     cancela o efeito aqui, escopado ao Dashboard, com especificidade
+     maior que as duas. */
+  .dashboard-heading ~ .dashboard-stat-row .stat-card:hover {
+    box-shadow: var(--shadow-sm);
+    transform: none;
+  }
+
   /* Restyle desktop dos cards do corpo do dashboard (dentro do
      `.stagger` que segue o hero): Comunicados, Chegadas da semana e
      Favoritos. Escopo via combinador de irmao geral + descendente pra
@@ -8853,12 +9065,18 @@ body {
      paginas (ProcessesPage etc.), que compartilham as mesmas classes. */
   .dashboard-heading ~ .stagger {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1.15fr 1fr;
     align-items: start;
     gap: 20px;
   }
 
-  .dashboard-heading ~ .stagger .weekly-arrivals-card {
+  /* Passo 8 — inverte o full-width: Favoritos ocupa a linha inteira,
+     Chegadas (`.weekly-arrivals-card`) volta pra coluna (mockup `.fav`
+     e' quem tem `grid-column:1/-1`, nao mais o card de chegadas). A
+     ordem do JSX (Comunicados -> Chegadas -> Favoritos) nao muda, entao
+     Favoritos continua sendo o ULTIMO `.list-card`
+     (DashboardPage.test.jsx:347-363). */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card {
     grid-column: 1 / -1;
   }
 
@@ -8867,9 +9085,10 @@ body {
     box-shadow: var(--shadow-sm);
   }
 
-  .dashboard-heading ~ .stagger .list-card:hover {
-    box-shadow: var(--shadow-md);
-  }
+  /* Ajuste (feedback 2026-08-26) — hover animado (mudanca de sombra)
+     removido dos cards do Dashboard (Comunicados/Chegadas/Favoritos);
+     a sombra base (`--shadow-sm` acima) fica, so' o CHANGE no hover
+     sai. Escopado igual as demais regras deste bloco. */
 
   .dashboard-heading ~ .stagger .card-heading h3 {
     font-family: var(--font-heading);
@@ -8877,6 +9096,60 @@ body {
 
   .dashboard-heading ~ .stagger .process-item {
     border-radius: var(--radius-sm);
+  }
+
+  /* Ajuste (feedback 2026-08-26) — "Chegadas da semana" mostra no
+     maximo ~2 processos visiveis no desktop (era ~3); o resto rola
+     dentro do proprio card (nao estica o card nem empurra o resto do
+     dashboard). max-height estimado a partir da estrutura real de um
+     `.process-item.weekly-arrivals-item` (title+subtitle+categoria+
+     chips + `.weekly-arrivals-windows`, padding 16px, gap do
+     `.process-list` 12px): ~200px por item x2 + 1 gap de 12px ~= 412px,
+     arredondado pra 400px (mesma logica de estimativa do ciclo 5c).
+     Escopado ao Dashboard (`.dashboard-heading ~ .stagger`) pra nao
+     afetar o WeeklyArrivalsCard se ele passar a ser usado em outra
+     tela. Nao mexe no JSX/logica de janelas do WeeklyArrivalsCard. */
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-list--scroll {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+
+  /* Passo 9 — Favoritos em 2 colunas com leading icon + chips + ETA
+     empilhada com estrela (mockup `.favlist`/`.fitem`). Escopado em
+     `.dashboard-favorites-card` pra nao vazar pro card de Chegadas
+     (que compartilha `.process-item`/`.process-list` no mesmo grid). O
+     bloco verboso `.dashboard-process-inline` (MAPA/DUIMP/janelas)
+     continua visivel — Decisao D1, e' dado operacional real. */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item {
+    align-items: flex-start;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  /* Leading icon (categoria) e' mobile-only por padrao (styles.css
+     ~6372-6376); revelado aqui igual a tecnica ja usada em
+     `.process-list-card .process-item__leading` (~9053). */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .dashboard-favorites-item__star {
+    display: inline-flex;
+    color: var(--warning-700);
   }
 }
 
@@ -8890,6 +9163,13 @@ body {
    .stagger`) nem pro detalhe (2c, `ProcessDetailView`). Nao toca
    nenhum bloco @media (max-width:*) nem o `.chegadas-mobilebar`
    (mobile-only, F16.4).
+
+   Sub-ciclo 6a (Fase 6, delta de fidelidade vs mockup Chegadas.dc.html):
+   separador entre linhas, hover com --surface-alt, botoes de acao
+   inline como caixa com borda (estilo `.iconbtn` do mockup), meta em
+   destaque (ETA em negrito / atualizada com --danger-700) e grid do
+   painel de filtros em 4 colunas proporcionais + inputs em pill.
+   `.process-item__summary` continua mobile-only (nao tocado aqui).
    ============================================================ */
 @media (min-width: 1041px) {
   .process-list-card {
@@ -8908,10 +9188,71 @@ body {
   .process-list-card .process-filters--panel {
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+    grid-template-columns: 1.6fr 1fr 1.3fr 1.2fr;
+  }
+
+  /* Inputs do painel de filtros com cara de pill (mockup `.inp`): a
+     altura de 40px (regra base em styles.css:3232) faz o
+     --radius-full ser clampado pra ~20px, virando estadio/pill em vez
+     de retangulo com cantos levemente arredondados. Cobre texto, os
+     dois <select> (SelectField renderiza <select class="text-input">
+     no desktop) e o range de datas. */
+  .process-list-card .process-filters--panel .text-input {
+    border-radius: var(--radius-full);
   }
 
   .process-list-card .process-item {
     border-radius: var(--radius-sm);
+  }
+
+  /* Separador entre linhas (mockup `.row+.row{border-top}`). O wrapper
+     `.process-swipe-row` (F16.8) usa `display: contents` fora do
+     mobile, entao `.process-item` continua enxergando o irmao anterior
+     no combinador de sibling apesar do wrapper "sumir" da caixa. */
+  .process-list-card .process-item + .process-item {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Hover de linha (mockup `.row:hover{background:var(--card2)}`). So'
+     o background muda aqui; lift/box-shadow/border-color do hover
+     global de `.process-item--button` (styles.css:2317) continuam,
+     igual ao resto do app — nao e' o mesmo caso do D1 (Dashboard, que
+     removeu o hover animado). */
+  .process-list-card .process-item:hover {
+    background: var(--surface-alt);
+  }
+
+  /* Botoes de acao inline como caixa com borda (mockup `.iconbtn`: ~38px,
+     border, radius). `.action-icon-button` (styles.css:8929) e'
+     compartilhado com outras telas (ex.: ProcessDetailView) — por isso
+     o prefixo desce ate `.process-item__inline-actions` pra nao vazar. */
+  .process-list-card .process-item__inline-actions .action-icon-button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  .process-list-card .process-item__inline-actions .action-icon-button:hover {
+    border-color: var(--border-strong);
+  }
+
+  /* Meta a direita (o grid base de `.process-item__meta`,
+     styles.css:2355, ja usa justify-items:end globalmente) com ETA em
+     destaque. A ordem dos <span> em ProcessRow (ProcessListView.jsx)
+     e' sempre ETD / ETA / Previsao de entrega — nth-child(2) e' o jeito
+     CSS-only de pegar so' a linha de ETA sem precisar de classe nova
+     no JSX. ETA atualizada usa `.eta-meta-highlight` (ja setada pelo
+     JSX via `hasUpdatedEta`); aqui so' se recolore pra --danger-700,
+     escopado a esta tela pra nao mexer no mesmo uso global em
+     `.weekly-arrivals-card`/`.dashboard-favorites-item` (Dashboard). */
+  .process-list-card .process-item__meta span:nth-child(2) {
+    font-weight: 700;
+  }
+
+  .process-list-card .process-item__meta .eta-meta-highlight {
+    color: var(--danger-700);
   }
 
   /* Revela leading icon (categoria) + chevron — F15.2 os deixa
@@ -9079,6 +9420,25 @@ body {
 
   .process-detail-view .detail-tab-row .tab-button {
     padding: 10px 20px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Aba ativa vira "card elevado" (mockup Detalhe.dc.html `.tab--on`) em
+     vez do pill gradiente teal global (`.tab-button--active`,
+     styles.css:2866). Mesmo padrao ja aprovado pro segmented control
+     mobile em `.tab-row:not(...):not(.detail-tab-row)
+     .tab-button--active` (styles.css:6683-6688) -- aqui e' o equivalente
+     pra esta tab-row especifica no desktop, que aquela regra exclui de
+     proposito. Especificidade (0,3,0) + ordem no arquivo ja vencem o
+     `.tab-button--active` base sem precisar de !important; so' tokens
+     dark-aware, nao ha override `[data-theme='dark'] .tab-button--active`
+     fora de @media (max-width:720px) pra disputar. */
+  .process-detail-view .detail-tab-row .tab-button--active {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transform: none;
   }
 
   /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
@@ -9103,8 +9463,18 @@ body {
   }
 
   .process-detail-view .detail-card {
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+  }
+
+  /* Cartoes split (ETD/ETA e Carga, `.detail-card--split` ja' renderizado
+     pelo JSX -- ProcessDetailView.jsx:225 e :264) ganham valores maiores
+     em `--font-heading`, ecoando `.split .dv` do mockup Detalhe.dc.html.
+     Rotulo (`.detail-label`) ja' e' uppercase/tracking na base
+     (styles.css:3558-3565); nao repetido aqui. */
+  .process-detail-view .detail-card--split p {
+    font-family: var(--font-heading);
+    font-size: var(--fs-headline);
   }
 
   /* Destaque de canal da DUIMP (getChannelToneClass ja' aplica a
@@ -9125,6 +9495,67 @@ body {
 
   .process-detail-view .detail-card--neutral {
     border: 1px solid var(--neutral-700);
+  }
+
+  /* Feedback pos-6b: cards de item da aba "Itens" e "Item relacionado"
+     (mesmo componente .process-related-item-button, ProcessDetailView.jsx
+     ~396-410 e ~437-448) ainda estavam no visual antigo (fundo gradiente
+     hardcoded, sombra none). Refino na linguagem do redesign: fundo
+     --surface, borda+shadow leves, hover com --surface-alt/--shadow;
+     nome comercial/chegada em --font-heading a' esquerda, quantidade em
+     destaque (--fs-title) a' direita.
+     `.process-related-item-button` tem override dark FORA de media
+     (styles.css ~7610, `background: var(--glass-grad)`) com a MESMA
+     especificidade (0,2,0) de `.process-detail-view .process-related-item-button`
+     -- por isso o background/shadow aqui usam seletor duplo com
+     `[data-theme='dark']` na frente pra vencer de forma explicita (regra 3
+     do PLAN), nao so' por ordem de fonte. So' tokens dark-aware, sem hex
+     fora do :root. */
+  [data-theme='dark'] .process-detail-view .process-related-item-button,
+  .process-detail-view .process-related-item-button {
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-detail-view .process-related-item-button {
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      border-color 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .process-detail-view .process-related-item-button--compact {
+    padding: 16px 20px;
+  }
+
+  [data-theme='dark'] .process-detail-view .process-related-item-button:hover,
+  .process-detail-view .process-related-item-button:hover {
+    background: var(--surface-alt);
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+
+  .process-detail-view .process-items-list {
+    gap: 14px;
+  }
+
+  .process-detail-view .process-item-display strong {
+    font-family: var(--font-heading);
+  }
+
+  .process-detail-view .process-item-display--quantity strong {
+    font-size: var(--fs-title);
+  }
+
+  /* Heading da aba "Itens" (rotulo eyebrow + badge "N itens") e o campo
+     de busca -- so' pill no input de busca pra combinar com o card
+     refinado acima; `.detail-label`/`.inline-badge` ja' sao dark-aware
+     na base (nao setar background/color novos aqui). */
+  .process-detail-view .field .text-input {
+    border-radius: var(--radius-full);
+    padding-left: 16px;
   }
 }
 
@@ -9162,6 +9593,8 @@ body {
   }
 
   .surface--news .news-grid {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
     gap: 20px;
   }
 
@@ -9180,6 +9613,97 @@ body {
 
   .surface--news .news-card__meta .inline-badge {
     color: var(--primary-700);
+  }
+
+  /* Sub-ciclo 6c (Fase 6) — layout "featured + rows" também no desktop
+     (o JSX já marca `news-card--featured`/`news-card--row`/
+     `news-section-label`, F16.6, mobile-only até aqui — comentário em
+     NewsPage.jsx:562-565). Featured ocupa a coluna 1; `.news-aside`
+     (rótulo "Anteriores" + rows) ocupa a coluna 2.
+     Fix ESTRUTURAL (2026-08-26): o hack anterior (`grid-row: 1 / -1` no
+     featured, sem `grid-template-rows` explícito) colapsava — sem linha
+     explícita final, `-1` resolvia pra row 1 e o featured nunca cobria as
+     rows abaixo, que caíam para rows 2, 3... (abaixo do featured, não ao
+     lado). Fix real: `.news-aside` (NewsPage.jsx) agrupa label+rows num
+     ÚNICO filho do `.news-grid`, que ocupa a coluna 2 inteira por ser uma
+     célula própria — sem depender de span de linha. Capa do featured
+     reduzida de 280px pra 200px e resumo de 4 pra 3 linhas para não
+     dominar a tela. */
+  .surface--news .news-card--featured {
+    grid-column: 1;
+  }
+
+  .surface--news .news-aside {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .surface--news .news-section-label {
+    display: block;
+    padding: 2px 2px 0;
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+  }
+
+  /* Featured: capa alta, corpo com meta + título grande + resumo. */
+  .surface--news .news-card--featured .news-card__button {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .surface--news .news-card--featured .news-card__image-wrap {
+    width: 100%;
+    min-height: 200px;
+    max-height: 200px;
+  }
+
+  .surface--news .news-card--featured .news-card__body {
+    padding: 24px;
+    gap: 12px;
+  }
+
+  .surface--news .news-card--featured .news-card__body strong {
+    font-size: var(--fs-title);
+    line-height: 1.2;
+  }
+
+  .surface--news .news-card--featured .news-card__summary {
+    -webkit-line-clamp: 3;
+  }
+
+  /* Row: thumb pequena + corpo + chevron, resumo em 2 linhas. */
+  .surface--news .news-card--row .news-card__button {
+    grid-template-columns: 104px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .surface--news .news-card--row .news-card__image-wrap {
+    width: 104px;
+    min-height: 88px;
+    max-height: 88px;
+    border-radius: var(--radius-sm);
+  }
+
+  .surface--news .news-card--row .news-card__body {
+    padding: 0;
+    gap: 6px;
+  }
+
+  .surface--news .news-card--row .news-card__summary {
+    -webkit-line-clamp: 2;
+  }
+
+  .surface--news .news-card--row .news-card__chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-faint);
   }
 }
 
@@ -9238,20 +9762,14 @@ body {
 /* ============================================================
    Ciclo 3c (redesign Fase 3) — Login desktop: cartao de auth
    (`.auth-card`/`.auth-card--form`, root `.auth-screen` de
-   LoginPage.jsx:88-89, fora do shell), toggle Entrar/Cadastrar
+   LoginPage.jsx), toggle Entrar/Cadastrar
    (`.auth-toggle`), campos (`.field`/`.text-input`), acoes
    (`.auth-button`/`.primary-button`, `.auth-link-button`), banners
    (`.error-banner`/`.success-banner`) e `.brand__eyebrow`, na
    linguagem da Fase 1. So' tokens (--radius-*, --shadow-*), sem hex
-   fora do :root. DECISAO 3c do plano: SEM split de dois paineis --
-   LoginPage renderiza em todos os viewports sem shell; um split
-   desktop exigiria JSX novo e caminho de colapso mobile, fora de
-   escopo. Este bloco e' so' polimento visual do cartao existente.
-   Titulo (`<h1>`) ja' usa `--font-heading` via regra global (h1,h2,h3,h4
-   em src/styles.css:102-106), entao nao precisa de regra nova aqui.
-   `.auth-screen`/`.auth-card`/`.brand__eyebrow`/`.error-banner`/
-   `.success-banner`/`.auth-reset-panel`/`.auth-button` sao
-   compartilhados com VerifyEmailPage e PendingApprovalPage (telas
+   fora do :root. `.auth-screen`/`.auth-card`/`.brand__eyebrow`/
+   `.error-banner`/`.success-banner`/`.auth-reset-panel`/`.auth-button`
+   sao compartilhados com VerifyEmailPage e PendingApprovalPage (telas
    irmas sem shell, confirmado por grep -- reusam as mesmas classes),
    entao as regras genericas abaixo refinam as tres igualmente, como
    decidido no plano; `.auth-toggle`/`.field`/`.text-input` existem
@@ -9260,9 +9778,126 @@ body {
    grep) -- todos os tokens usados aqui ja' tem contraparte redefinida
    em `:root[data-theme='dark']` (src/styles.css:7455-7518), entao o
    dark acompanha sem precisar de seletor duplo. Nao toca nenhum bloco
-   @media (max-width:*), nem JSX/classes/textos/aria de LoginPage.jsx.
+   @media (max-width:*).
+
+   Ciclo 6e (redesign Fase 6) — reverte a decisao 3c de "sem split": o
+   mockup `Login.dc.html` pede split-screen (aside de marca + card de
+   auth). `.auth-brand` (escondido na base, fora de media -- ver acima
+   de `.auth-card`) e' revelado aqui como flex item fixo (~560px) de
+   `.auth-screen`, que vira flex-row; `.auth-panel` (novo wrapper em
+   volta so' do <form>, LoginPage.jsx) fica flex:1 e centraliza o card
+   igual antes. VerifyEmailPage/PendingApprovalPage nao renderizam
+   `.auth-brand`/`.auth-panel` (raiz `.auth-screen` sem eles) -- com um
+   unico filho (`.auth-card`), flex-direction:row + align-items/
+   justify-content:center herdados da base continuam centralizando
+   normalmente, sem regressao. `.auth-brand` usa os tokens de sidebar
+   (`--sidebar-bg`/`--sidebar-ink`/`--sidebar-ink-soft`/
+   `--sidebar-pill-hover`, mesmos do shell em src/styles.css:57-60) --
+   navy dark-aware nos dois temas, sem hex novo.
    ============================================================ */
 @media (min-width: 1041px) {
+  .auth-screen {
+    flex-direction: row;
+    gap: 40px;
+  }
+
+  .auth-brand {
+    display: flex;
+    flex: 0 0 560px;
+    max-width: 560px;
+    flex-direction: column;
+    align-self: stretch;
+    padding: 48px 44px;
+    border-radius: var(--radius-lg);
+    background: var(--sidebar-bg);
+    color: var(--sidebar-ink);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .auth-brand__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .auth-brand__logo img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+  }
+
+  .auth-brand__eyebrow {
+    margin-top: 40px;
+    color: var(--sidebar-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .auth-brand h1 {
+    margin-top: 12px;
+    margin-bottom: 0;
+    color: var(--sidebar-ink);
+    font-size: 2.5rem;
+  }
+
+  .auth-brand p {
+    margin-top: 16px;
+    max-width: 380px;
+    color: var(--sidebar-ink-soft);
+    line-height: 1.6;
+  }
+
+  .auth-brand__feats {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: auto;
+    padding-top: 32px;
+  }
+
+  .auth-brand__feat {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+  }
+
+  .auth-brand__feat-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    background: var(--sidebar-pill-hover);
+    color: var(--primary);
+  }
+
+  .auth-brand__feat strong {
+    display: block;
+    color: var(--sidebar-ink);
+    font-size: var(--fs-subhead);
+    font-weight: 600;
+  }
+
+  .auth-brand__feat small {
+    color: var(--sidebar-ink-soft);
+    font-size: var(--fs-caption);
+  }
+
+  .auth-panel {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+  }
+
   .auth-screen .auth-card {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
@@ -9338,6 +9973,19 @@ body {
    acompanha sem seletor duplo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminLayout.jsx/AdminUsersPanel.jsx.
+
+   Sub-ciclo 6f (Fase 6, delta de fidelidade vs mockup AdminUsuarios.dc.html):
+   `.invite-card__meta` vira chips discretos (`--surface-alt`), acoes da
+   invite alinhadas a esquerda (mockup mostra os 3 botoes em linha, nao
+   espalhados pelas pontas); `.admin-user-row--selected` ganha o nome em
+   `--primary-700` (reforca o estado ativo alem do border/bg que a base
+   ja aplica); `.admin-toolbar` centralizado verticalmente pra alinhar o
+   `.status-tag` com o botao ao lado (fica "a direita" junto do grupo,
+   como no `card__h` do mockup); `.detail-stack` com mais respiro e
+   labels do form com tracking levemente maior. NAO revela
+   `.admin-user-row__avatar` no desktop (ja e' `display:none` por
+   padrao, F15.2 e' mobile-only) e NAO mexe no reflow 3->2 colunas do
+   `.dual-grid` (decisao do plano). So' tokens, sem hex fora do :root.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .admin-tabs {
@@ -9390,6 +10038,34 @@ body {
     color: var(--primary-700);
     font-weight: 700;
   }
+
+  .admin-section .invite-card__meta span {
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    background: var(--surface-alt);
+    color: var(--text-subtle);
+    font-weight: 600;
+  }
+
+  .admin-section .invite-card__actions {
+    justify-content: flex-start;
+  }
+
+  .admin-section .admin-user-row--selected strong {
+    color: var(--primary-700);
+  }
+
+  .admin-section .admin-toolbar {
+    align-items: center;
+  }
+
+  .admin-section .detail-stack {
+    gap: 16px;
+  }
+
+  .admin-section .detail-stack .field span {
+    letter-spacing: 0.06em;
+  }
 }
 
 /* ============================================================
@@ -9415,6 +10091,21 @@ body {
    (styles.css:7473-7482), entao o dark acompanha sem seletor duplo.
    Nao toca nenhum bloco @media (max-width:*), nem JSX/classes/textos/
    aria de AdminAnnouncementsPanel.jsx/AdminBarStatusPanel.jsx.
+
+   Sub-ciclo 6g (Fase 6, delta de fidelidade vs mockups AdminComunicados.dc.html
+   e AdminBarra.dc.html): `.announcement-card__meta` ganha o canal (2o span)
+   como chip discreto (`--info-50/--info-700`, so' estilo -- o texto do canal
+   ja' vem do dado real, nao e' fabricado); `.announcement-card--selected`
+   ganha left-border `--primary` alem do box-shadow/bg que a base ja aplica;
+   o card "Resumo" (`.detail-card` dentro de `.announcement-grid`, escopado
+   por isso pra nao vazar pro `.detail-card` de Usuarios/Suporte) ganha borda
+   tracejada + texto em destaque; `.text-area` do comunicado fica mais alto.
+   Na Barra: `.status-tag` inline no `.suggestion-banner__text` perde o
+   `min-width` da versao pill (fica compacto dentro da frase, como no
+   mockup); `.status-tag` do `.card-heading` (indicador de status atual)
+   ganha leve elevacao (`--shadow-sm`). DECISAO: mantido o `<select>` da
+   barra (nao converte pra radios -- ver PLAN.md, AdminBarStatusPanel.test.jsx
+   e' sensivel). So' tokens, sem hex fora do :root.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .announcement-grid {
@@ -9428,6 +10119,38 @@ body {
 
   .admin-section .announcement-card--button:hover {
     box-shadow: var(--shadow-md);
+  }
+
+  .admin-section .announcement-card__meta {
+    font-weight: 600;
+  }
+
+  .admin-section .announcement-card__meta span:last-child {
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--info-50);
+    color: var(--info-700);
+    font-size: var(--fs-footnote);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .admin-section .announcement-card--selected {
+    border-left: 3px solid var(--primary);
+  }
+
+  .admin-section .announcement-grid .detail-card {
+    border: 1px dashed var(--border);
+    background: var(--surface-alt);
+  }
+
+  .admin-section .announcement-grid .detail-card p {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .admin-section .announcement-grid .text-area {
+    min-height: 140px;
   }
 
   .admin-section .suggestion-banner {
@@ -9445,6 +10168,14 @@ body {
 
   .admin-section .suggestion-banner--danger {
     border-left: 3px solid var(--danger-700);
+  }
+
+  .admin-section .suggestion-banner .status-tag {
+    min-width: auto;
+  }
+
+  .admin-section .card-heading .status-tag {
+    box-shadow: var(--shadow-sm);
   }
 }
 
@@ -9479,6 +10210,24 @@ body {
    acompanha sem seletor duplo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminForecastPage.jsx.
+
+   Sub-ciclo 6h (Fase 6, delta de fidelidade vs mockup AdminPrevisoes.dc.html):
+   `.admin-grid--quarters .field` (dias uteis por categoria) vira cartao
+   (`.cat` do mockup) com borda/fundo `--surface-alt` e o `<input type=
+   number>` (mesmo `.text-input`, continua editavel) ganha numero grande
+   centralizado em `--font-heading`. `.admin-grid--thirds .scope-chip--button`
+   inativo (rolling customs "Aplicar a") ganha borda/fundo neutros pra
+   contrastar com o `.scope-chip--active` (gradiente + branco, ja existe) --
+   `:not(.scope-chip--active)` evita sobrescrever o estado ativo por
+   especificidade. `.toggle` vira switch (input checkbox com
+   `appearance:none`, trilho + thumb via `::after`, sem markup novo --
+   continua um `<input type=checkbox>` real, so' o visual muda) com
+   `:focus-visible` (mesmo padrao de `.tab-button:focus-visible`,
+   styles.css:2882). `.chip-add` ganha o input flexivel e o botao fixo
+   (inline, como `.addrow` do mockup). So' tokens (--surface-alt, --border,
+   --border-strong, --surface, --primary, --font-heading, --fs-headline,
+   --radius-sm/--radius-full, --shadow-sm), sem hex fora do :root. NAO toca
+   `background` de `.admin-table th` (trap acima).
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .admin-feature-stack {
@@ -9523,6 +10272,79 @@ body {
   .admin-section .admin-toolbar--right .inline-badge {
     box-shadow: var(--shadow-sm);
   }
+
+  .admin-section .admin-grid--quarters .field {
+    padding: 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-alt);
+  }
+
+  .admin-section .admin-grid--quarters .text-input {
+    height: 44px;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-size: var(--fs-headline);
+    font-weight: 700;
+  }
+
+  .admin-section .admin-grid--thirds .scope-chip--button:not(.scope-chip--active) {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-subtle);
+  }
+
+  .admin-section .toggle {
+    gap: 10px;
+  }
+
+  .admin-section .toggle input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    width: 44px;
+    height: 26px;
+    margin: 0;
+    border-radius: var(--radius-full);
+    background: var(--border-strong);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .admin-section .toggle input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s ease;
+  }
+
+  .admin-section .toggle input[type='checkbox']:checked {
+    background: var(--primary);
+  }
+
+  .admin-section .toggle input[type='checkbox']:checked::after {
+    transform: translateX(18px);
+  }
+
+  .admin-section .toggle input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .admin-section .chip-add .text-input {
+    flex: 1 1 220px;
+  }
+
+  .admin-section .chip-add .ghost-button {
+    flex: none;
+  }
 }
 
 /* ============================================================
@@ -9556,6 +10378,22 @@ body {
    `.support-*` no arquivo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminSupportPanel.jsx.
+
+   Sub-ciclo 6i (Fase 6) -- delta de fidelidade vs `AdminSuporte.dc.html`
+   sobre este mesmo bloco: `__head` com autor+status-tag alinhados ao
+   centro (o mockup usa `align-items:center` no `.thead`; a base fora
+   de media so' tem `align-items:flex-start`, sobrescrita aqui so' no
+   desktop); `__context` vira pill (`--radius-full`, `inline-flex`) --
+   sem icone, pois o JSX (`AdminSupportPanel.jsx:361-367`) nao renderiza
+   nenhum `Icon`/SVG ali, so' texto; fabricar um glifo puramente em CSS
+   pra imitar o `<svg>` do mockup contaria como dado/elemento que o app
+   nao tem, e o sub-ciclo e' CSS-only (sem tocar JSX) -- mantido so'
+   texto, com a forma de pill; `__replies` com radius/padding maiores;
+   `__reply p` vira bolha de mensagem (fundo + borda), sem avatar de
+   iniciais (nao fabricar, per PLAN.md); `__actions` (footer: priority
+   select + botoes) alinhado ao centro com mais respiro. TRAP reforcado:
+   nenhuma regra abaixo toca `.stat-card`/`.dashboard-stat-row` sem o
+   prefixo `.admin-section`.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .dashboard-stat-row {
@@ -9575,8 +10413,23 @@ body {
     gap: 12px;
   }
 
+  .admin-section .support-ticket-card__head {
+    align-items: center;
+    gap: 16px;
+  }
+
   .admin-section .support-ticket-card__head strong {
     font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-card__context {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
   }
 
   .admin-section .support-ticket-pager {
@@ -9587,11 +10440,137 @@ body {
     min-width: 64px;
   }
 
+  .admin-section .support-ticket-card__replies {
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+
   .admin-section .support-ticket-card__replies-list {
     gap: 10px;
   }
 
   .admin-section .support-ticket-card__reply {
     padding-top: 10px;
+  }
+
+  .admin-section .support-ticket-card__reply p {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
+  .admin-section .support-ticket-card__actions {
+    align-items: center;
+    gap: 14px;
+  }
+
+  .admin-section .support-ticket-card__priority {
+    min-width: 220px;
+  }
+}
+
+/* ============================================================
+   Sub-ciclo 6d (Fase 6) — Notificacoes: pagina `/notifications`
+   desktop (NotificationsPage.jsx). Raiz PROPRIA `.notifications-page`
+   (classe adicionada ao `<section className="surface">` em
+   NotificationsPage.jsx:34) -- `.notifications__list/__group/__item/
+   __section-label/__filters/__show-more/__group-header` sao
+   COMPARTILHADAS com o drawer (`.notifications__panel`, Ciclo 3b,
+   styles.css:9639-9670) e `.surface` e' raiz generica de outras paginas;
+   sem raiz propria o estilo vazaria pro drawer. Todo seletor comeca por
+   `.notifications-page`. So' tokens (--radius-*, --shadow-*, --primary*,
+   --font-heading, --border-strong, --surface-alt, --bg-tint-1), sem hex
+   fora do :root, sem dependencia nova.
+
+   Trap tema escuro (documentado em styles.css:7579-7582): ha' overrides
+   `[data-theme='dark'] .notifications__group/.notifications__item/--unread`
+   FORA de media que setam `background`. Por isso este bloco NAO seta
+   `background`/`color` dessas duas classes -- so' radius/shadow/border/
+   spacing/tipografia. `.notifications__filters`/`.notifications__group-header`/
+   `.notifications__section-label`/`.notifications__show-more` NAO tem
+   override dark fora de media (confirmado por grep), entao podem usar
+   `background`/`color` com tokens normalmente (ja' dark-aware via
+   :root[data-theme='dark'], styles.css:7470-7533).
+
+   DECISAO do plano (6d): manter a tab-row de 5 filtros (Todas/Duvidas/
+   Respostas/Favoritos/Pos-recebimento) em vez do `<select>` do mockup --
+   estiliza-la aqui como pill-tabs (mesma linguagem do segmented control
+   generico de styles.css:6669-6688, que exclui `.notifications__filters`
+   de proposito) so' dentro de `.notifications-page`, sem tocar
+   `.notifications__filters` fora dessa raiz (o drawer, Ciclo 3b, continua
+   com o underline). Nao revela `.notifications__item-icon` no desktop
+   (fica `display:none` fora do mobile, F15.2 — styles.css:6726-6729) -- o
+   markup nao expoe cor por tipo, entao mantem como ja' esta', sem
+   fabricar variacao. Nao toca nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .notifications-page {
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .notifications-page .notifications__section-label {
+    color: var(--primary-700);
+  }
+
+  .notifications-page .notifications__group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications-page .notifications__group--unread {
+    border-left: 3px solid var(--primary);
+  }
+
+  .notifications-page .notifications__group-header strong {
+    font-family: var(--font-heading);
+    font-size: var(--fs-body);
+  }
+
+  .notifications-page .notifications__item {
+    transition:
+      box-shadow 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .notifications-page .notifications__item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-strong);
+  }
+
+  .notifications-page .notifications__filters {
+    display: inline-flex;
+    width: auto;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .notifications-page .notifications__filters .tab-button {
+    margin-right: 0;
+    border-radius: var(--radius-full);
+  }
+
+  .notifications-page .notifications__filters .tab-button::after {
+    display: none;
+  }
+
+  .notifications-page .notifications__filters .tab-button:hover:not(.tab-button--active) {
+    background: var(--bg-tint-1);
+    color: var(--primary-700);
+  }
+
+  .notifications-page .notifications__filters .tab-button--active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications-page .notifications__show-more {
+    margin-top: 18px;
   }
 }

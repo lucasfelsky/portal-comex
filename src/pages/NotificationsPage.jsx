@@ -31,7 +31,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <section className="surface">
+    <section className="surface notifications-page">
       <div className="section-heading">
         <div>
           <h2>Central de notificações</h2>

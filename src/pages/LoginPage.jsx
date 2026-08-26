@@ -2,6 +2,8 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import Icon from '../components/Icon'
+import sqQuimicaLogo from '../../assets/sqquimica.png'
 
 export default function LoginPage() {
   const {
@@ -86,6 +88,35 @@ export default function LoginPage() {
 
   return (
     <div className="auth-screen">
+      <aside className="auth-brand">
+        <span className="auth-brand__logo">
+          <img src={sqQuimicaLogo} alt="SQ Química" />
+        </span>
+        <span className="auth-brand__eyebrow">SQ Química · Suite COMEX</span>
+        <h1>Portal COMEX</h1>
+        <p>Acompanhe chegadas, comunicados e o fluxo de importação da operação em um só lugar.</p>
+        <div className="auth-brand__feats">
+          <div className="auth-brand__feat">
+            <span className="auth-brand__feat-icon">
+              <Icon name="arrivals" size={20} />
+            </span>
+            <span>
+              <strong>Fila de chegadas em tempo real</strong>
+              <small>ETA, DUIMP, MAPA e coleta por processo</small>
+            </span>
+          </div>
+          <div className="auth-brand__feat">
+            <span className="auth-brand__feat-icon">
+              <Icon name="bell" size={20} />
+            </span>
+            <span>
+              <strong>Notificações e comunicados</strong>
+              <small>Avisos da operação e das suas cargas</small>
+            </span>
+          </div>
+        </div>
+      </aside>
+      <div className="auth-panel">
       <form className="auth-card auth-card--form" onSubmit={handleSubmit}>
         <span className="brand__eyebrow">SQ Comex Updates</span>
         <div className="auth-toggle">
@@ -199,6 +230,7 @@ export default function LoginPage() {
               : 'Entrar'}
         </button>
       </form>
+      </div>
     </div>
   )
 }

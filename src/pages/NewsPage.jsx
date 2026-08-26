@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useAuth from '../hooks/useAuth'
 import Icon from '../components/Icon'
 import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
@@ -259,6 +259,52 @@ export default function NewsPage() {
 
   function handleCloseModal() {
     setSelectedNewsId(null)
+  }
+
+  // Fix estrutural (2026-08-26): extrai o markup interno do card pra ser
+  // reaproveitado pelo featured (índice 0, filho direto do `.news-grid`) e
+  // pelas rows (índice >= 1, dentro do `.news-aside`) sem duplicar
+  // botão/imagem/meta/ação admin.
+  function renderNewsCard(item, index) {
+    return (
+      <article
+        key={item.id}
+        className={`news-card${index === 0 ? ' news-card--featured' : ' news-card--row'}`}
+      >
+        <button type="button" className="news-card__button" onClick={() => handleOpenNews(item.id)}>
+          <div className="news-card__image-wrap">
+            <img
+              src={getNewsCoverImage(item)}
+              alt={item.title}
+              className="news-card__image"
+              onError={(event) => {
+                event.currentTarget.onerror = null
+                event.currentTarget.src = defaultNewsCoverImage
+              }}
+            />
+          </div>
+          <div className="news-card__body">
+            <div className="news-card__meta">
+              <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
+              <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
+            </div>
+            <strong>{item.title}</strong>
+            <p className="news-card__summary">{getNewsSummary(item)}</p>
+          </div>
+          <span className="news-card__chevron" aria-hidden="true">
+            <Icon name="chevron" size={16} />
+          </span>
+        </button>
+
+        {isAdmin && item.sourceType !== 'automatic' ? (
+          <div className="news-card__actions">
+            <button type="button" className="ghost-button" onClick={() => handleEditNews(item)}>
+              Editar
+            </button>
+          </div>
+        ) : null}
+      </article>
+    )
   }
 
   async function handleCoverUpload(event) {
@@ -559,55 +605,24 @@ export default function NewsPage() {
                 </div>
               </Skeleton.Group>
             ) : newsItems.length > 0 ? (
-              // F16.6 (redesign iOS): 1ª notícia como featured card (cover
-              // grande), o resto como rows sob "Anteriores". As classes
-              // --featured/--row só mudam o layout no mobile (CSS); no
-              // desktop o grid de cards segue igual.
-              newsItems.map((item, index) => (
-                <Fragment key={item.id}>
-                  {index === 1 ? (
+              // F16.6 (redesign iOS) + fix estrutural 2026-08-26: 1ª notícia
+              // é o featured (filho direto do `.news-grid`, ocupa a coluna 1
+              // no desktop); as demais ("Anteriores" + rows) vivem dentro de
+              // `.news-aside` — 2 células REAIS do grid, sem depender de
+              // `grid-row: 1 / -1` (que colapsava por falta de
+              // `grid-template-rows` explícito). No mobile `.news-aside` é
+              // `display: contents` e o fluxo fica igual ao anterior.
+              <>
+                {renderNewsCard(newsItems[0], 0)}
+                {newsItems.length > 1 ? (
+                  <div className="news-aside">
                     <div className="news-section-label" aria-hidden="true">
                       Anteriores
                     </div>
-                  ) : null}
-                  <article
-                    className={`news-card${index === 0 ? ' news-card--featured' : ' news-card--row'}`}
-                  >
-                    <button type="button" className="news-card__button" onClick={() => handleOpenNews(item.id)}>
-                      <div className="news-card__image-wrap">
-                        <img
-                          src={getNewsCoverImage(item)}
-                          alt={item.title}
-                          className="news-card__image"
-                          onError={(event) => {
-                            event.currentTarget.onerror = null
-                            event.currentTarget.src = defaultNewsCoverImage
-                          }}
-                        />
-                      </div>
-                      <div className="news-card__body">
-                        <div className="news-card__meta">
-                          <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
-                          <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
-                        </div>
-                        <strong>{item.title}</strong>
-                        <p className="news-card__summary">{getNewsSummary(item)}</p>
-                      </div>
-                      <span className="news-card__chevron" aria-hidden="true">
-                        <Icon name="chevron" size={16} />
-                      </span>
-                    </button>
-
-                    {isAdmin && item.sourceType !== 'automatic' ? (
-                      <div className="news-card__actions">
-                        <button type="button" className="ghost-button" onClick={() => handleEditNews(item)}>
-                          Editar
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                </Fragment>
-              ))
+                    {newsItems.slice(1).map((item, index) => renderNewsCard(item, index + 1))}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <div className="empty-state">
                 <strong>Nenhuma notícia publicada</strong>
