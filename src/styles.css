@@ -9144,6 +9144,13 @@ body {
    .stagger`) nem pro detalhe (2c, `ProcessDetailView`). Nao toca
    nenhum bloco @media (max-width:*) nem o `.chegadas-mobilebar`
    (mobile-only, F16.4).
+
+   Sub-ciclo 6a (Fase 6, delta de fidelidade vs mockup Chegadas.dc.html):
+   separador entre linhas, hover com --surface-alt, botoes de acao
+   inline como caixa com borda (estilo `.iconbtn` do mockup), meta em
+   destaque (ETA em negrito / atualizada com --danger-700) e grid do
+   painel de filtros em 4 colunas proporcionais + inputs em pill.
+   `.process-item__summary` continua mobile-only (nao tocado aqui).
    ============================================================ */
 @media (min-width: 1041px) {
   .process-list-card {
@@ -9162,10 +9169,71 @@ body {
   .process-list-card .process-filters--panel {
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+    grid-template-columns: 1.6fr 1fr 1.3fr 1.2fr;
+  }
+
+  /* Inputs do painel de filtros com cara de pill (mockup `.inp`): a
+     altura de 40px (regra base em styles.css:3232) faz o
+     --radius-full ser clampado pra ~20px, virando estadio/pill em vez
+     de retangulo com cantos levemente arredondados. Cobre texto, os
+     dois <select> (SelectField renderiza <select class="text-input">
+     no desktop) e o range de datas. */
+  .process-list-card .process-filters--panel .text-input {
+    border-radius: var(--radius-full);
   }
 
   .process-list-card .process-item {
     border-radius: var(--radius-sm);
+  }
+
+  /* Separador entre linhas (mockup `.row+.row{border-top}`). O wrapper
+     `.process-swipe-row` (F16.8) usa `display: contents` fora do
+     mobile, entao `.process-item` continua enxergando o irmao anterior
+     no combinador de sibling apesar do wrapper "sumir" da caixa. */
+  .process-list-card .process-item + .process-item {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Hover de linha (mockup `.row:hover{background:var(--card2)}`). So'
+     o background muda aqui; lift/box-shadow/border-color do hover
+     global de `.process-item--button` (styles.css:2317) continuam,
+     igual ao resto do app — nao e' o mesmo caso do D1 (Dashboard, que
+     removeu o hover animado). */
+  .process-list-card .process-item:hover {
+    background: var(--surface-alt);
+  }
+
+  /* Botoes de acao inline como caixa com borda (mockup `.iconbtn`: ~38px,
+     border, radius). `.action-icon-button` (styles.css:8929) e'
+     compartilhado com outras telas (ex.: ProcessDetailView) — por isso
+     o prefixo desce ate `.process-item__inline-actions` pra nao vazar. */
+  .process-list-card .process-item__inline-actions .action-icon-button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  .process-list-card .process-item__inline-actions .action-icon-button:hover {
+    border-color: var(--border-strong);
+  }
+
+  /* Meta a direita (o grid base de `.process-item__meta`,
+     styles.css:2355, ja usa justify-items:end globalmente) com ETA em
+     destaque. A ordem dos <span> em ProcessRow (ProcessListView.jsx)
+     e' sempre ETD / ETA / Previsao de entrega — nth-child(2) e' o jeito
+     CSS-only de pegar so' a linha de ETA sem precisar de classe nova
+     no JSX. ETA atualizada usa `.eta-meta-highlight` (ja setada pelo
+     JSX via `hasUpdatedEta`); aqui so' se recolore pra --danger-700,
+     escopado a esta tela pra nao mexer no mesmo uso global em
+     `.weekly-arrivals-card`/`.dashboard-favorites-item` (Dashboard). */
+  .process-list-card .process-item__meta span:nth-child(2) {
+    font-weight: 700;
+  }
+
+  .process-list-card .process-item__meta .eta-meta-highlight {
+    color: var(--danger-700);
   }
 
   /* Revela leading icon (categoria) + chevron — F15.2 os deixa
