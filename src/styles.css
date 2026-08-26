@@ -10129,6 +10129,24 @@ body {
    acompanha sem seletor duplo. Nao toca nenhum bloco
    @media (max-width:*), nem JSX/classes/textos/aria de
    AdminForecastPage.jsx.
+
+   Sub-ciclo 6h (Fase 6, delta de fidelidade vs mockup AdminPrevisoes.dc.html):
+   `.admin-grid--quarters .field` (dias uteis por categoria) vira cartao
+   (`.cat` do mockup) com borda/fundo `--surface-alt` e o `<input type=
+   number>` (mesmo `.text-input`, continua editavel) ganha numero grande
+   centralizado em `--font-heading`. `.admin-grid--thirds .scope-chip--button`
+   inativo (rolling customs "Aplicar a") ganha borda/fundo neutros pra
+   contrastar com o `.scope-chip--active` (gradiente + branco, ja existe) --
+   `:not(.scope-chip--active)` evita sobrescrever o estado ativo por
+   especificidade. `.toggle` vira switch (input checkbox com
+   `appearance:none`, trilho + thumb via `::after`, sem markup novo --
+   continua um `<input type=checkbox>` real, so' o visual muda) com
+   `:focus-visible` (mesmo padrao de `.tab-button:focus-visible`,
+   styles.css:2882). `.chip-add` ganha o input flexivel e o botao fixo
+   (inline, como `.addrow` do mockup). So' tokens (--surface-alt, --border,
+   --border-strong, --surface, --primary, --font-heading, --fs-headline,
+   --radius-sm/--radius-full, --shadow-sm), sem hex fora do :root. NAO toca
+   `background` de `.admin-table th` (trap acima).
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .admin-feature-stack {
@@ -10172,6 +10190,79 @@ body {
 
   .admin-section .admin-toolbar--right .inline-badge {
     box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section .admin-grid--quarters .field {
+    padding: 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-alt);
+  }
+
+  .admin-section .admin-grid--quarters .text-input {
+    height: 44px;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-size: var(--fs-headline);
+    font-weight: 700;
+  }
+
+  .admin-section .admin-grid--thirds .scope-chip--button:not(.scope-chip--active) {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-subtle);
+  }
+
+  .admin-section .toggle {
+    gap: 10px;
+  }
+
+  .admin-section .toggle input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    width: 44px;
+    height: 26px;
+    margin: 0;
+    border-radius: var(--radius-full);
+    background: var(--border-strong);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .admin-section .toggle input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s ease;
+  }
+
+  .admin-section .toggle input[type='checkbox']:checked {
+    background: var(--primary);
+  }
+
+  .admin-section .toggle input[type='checkbox']:checked::after {
+    transform: translateX(18px);
+  }
+
+  .admin-section .toggle input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .admin-section .chip-add .text-input {
+    flex: 1 1 220px;
+  }
+
+  .admin-section .chip-add .ghost-button {
+    flex: none;
   }
 }
 
