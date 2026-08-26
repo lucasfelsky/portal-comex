@@ -1967,6 +1967,15 @@ body {
     max(24px, env(safe-area-inset-left));
 }
 
+/* .auth-brand (Fase 6 / 6e): painel de marca do split-screen do Login.
+   Escondido por padrao (mobile/tablet); revelado so' dentro do bloco
+   @media (min-width:1041px) do Ciclo 3c, mais abaixo. Nao existe em
+   VerifyEmailPage/PendingApprovalPage (mesma raiz .auth-screen), entao
+   essas telas nunca renderizam este elemento. */
+.auth-brand {
+  display: none;
+}
+
 .auth-card {
   width: min(100%, 440px);
   padding: 28px;
@@ -9672,20 +9681,14 @@ body {
 /* ============================================================
    Ciclo 3c (redesign Fase 3) — Login desktop: cartao de auth
    (`.auth-card`/`.auth-card--form`, root `.auth-screen` de
-   LoginPage.jsx:88-89, fora do shell), toggle Entrar/Cadastrar
+   LoginPage.jsx), toggle Entrar/Cadastrar
    (`.auth-toggle`), campos (`.field`/`.text-input`), acoes
    (`.auth-button`/`.primary-button`, `.auth-link-button`), banners
    (`.error-banner`/`.success-banner`) e `.brand__eyebrow`, na
    linguagem da Fase 1. So' tokens (--radius-*, --shadow-*), sem hex
-   fora do :root. DECISAO 3c do plano: SEM split de dois paineis --
-   LoginPage renderiza em todos os viewports sem shell; um split
-   desktop exigiria JSX novo e caminho de colapso mobile, fora de
-   escopo. Este bloco e' so' polimento visual do cartao existente.
-   Titulo (`<h1>`) ja' usa `--font-heading` via regra global (h1,h2,h3,h4
-   em src/styles.css:102-106), entao nao precisa de regra nova aqui.
-   `.auth-screen`/`.auth-card`/`.brand__eyebrow`/`.error-banner`/
-   `.success-banner`/`.auth-reset-panel`/`.auth-button` sao
-   compartilhados com VerifyEmailPage e PendingApprovalPage (telas
+   fora do :root. `.auth-screen`/`.auth-card`/`.brand__eyebrow`/
+   `.error-banner`/`.success-banner`/`.auth-reset-panel`/`.auth-button`
+   sao compartilhados com VerifyEmailPage e PendingApprovalPage (telas
    irmas sem shell, confirmado por grep -- reusam as mesmas classes),
    entao as regras genericas abaixo refinam as tres igualmente, como
    decidido no plano; `.auth-toggle`/`.field`/`.text-input` existem
@@ -9694,9 +9697,126 @@ body {
    grep) -- todos os tokens usados aqui ja' tem contraparte redefinida
    em `:root[data-theme='dark']` (src/styles.css:7455-7518), entao o
    dark acompanha sem precisar de seletor duplo. Nao toca nenhum bloco
-   @media (max-width:*), nem JSX/classes/textos/aria de LoginPage.jsx.
+   @media (max-width:*).
+
+   Ciclo 6e (redesign Fase 6) — reverte a decisao 3c de "sem split": o
+   mockup `Login.dc.html` pede split-screen (aside de marca + card de
+   auth). `.auth-brand` (escondido na base, fora de media -- ver acima
+   de `.auth-card`) e' revelado aqui como flex item fixo (~560px) de
+   `.auth-screen`, que vira flex-row; `.auth-panel` (novo wrapper em
+   volta so' do <form>, LoginPage.jsx) fica flex:1 e centraliza o card
+   igual antes. VerifyEmailPage/PendingApprovalPage nao renderizam
+   `.auth-brand`/`.auth-panel` (raiz `.auth-screen` sem eles) -- com um
+   unico filho (`.auth-card`), flex-direction:row + align-items/
+   justify-content:center herdados da base continuam centralizando
+   normalmente, sem regressao. `.auth-brand` usa os tokens de sidebar
+   (`--sidebar-bg`/`--sidebar-ink`/`--sidebar-ink-soft`/
+   `--sidebar-pill-hover`, mesmos do shell em src/styles.css:57-60) --
+   navy dark-aware nos dois temas, sem hex novo.
    ============================================================ */
 @media (min-width: 1041px) {
+  .auth-screen {
+    flex-direction: row;
+    gap: 40px;
+  }
+
+  .auth-brand {
+    display: flex;
+    flex: 0 0 560px;
+    max-width: 560px;
+    flex-direction: column;
+    align-self: stretch;
+    padding: 48px 44px;
+    border-radius: var(--radius-lg);
+    background: var(--sidebar-bg);
+    color: var(--sidebar-ink);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .auth-brand__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .auth-brand__logo img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+  }
+
+  .auth-brand__eyebrow {
+    margin-top: 40px;
+    color: var(--sidebar-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .auth-brand h1 {
+    margin-top: 12px;
+    margin-bottom: 0;
+    color: var(--sidebar-ink);
+    font-size: 2.5rem;
+  }
+
+  .auth-brand p {
+    margin-top: 16px;
+    max-width: 380px;
+    color: var(--sidebar-ink-soft);
+    line-height: 1.6;
+  }
+
+  .auth-brand__feats {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: auto;
+    padding-top: 32px;
+  }
+
+  .auth-brand__feat {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+  }
+
+  .auth-brand__feat-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    background: var(--sidebar-pill-hover);
+    color: var(--primary);
+  }
+
+  .auth-brand__feat strong {
+    display: block;
+    color: var(--sidebar-ink);
+    font-size: var(--fs-subhead);
+    font-weight: 600;
+  }
+
+  .auth-brand__feat small {
+    color: var(--sidebar-ink-soft);
+    font-size: var(--fs-caption);
+  }
+
+  .auth-panel {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+  }
+
   .auth-screen .auth-card {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
