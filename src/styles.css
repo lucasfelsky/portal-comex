@@ -10010,6 +10010,21 @@ body {
    (styles.css:7473-7482), entao o dark acompanha sem seletor duplo.
    Nao toca nenhum bloco @media (max-width:*), nem JSX/classes/textos/
    aria de AdminAnnouncementsPanel.jsx/AdminBarStatusPanel.jsx.
+
+   Sub-ciclo 6g (Fase 6, delta de fidelidade vs mockups AdminComunicados.dc.html
+   e AdminBarra.dc.html): `.announcement-card__meta` ganha o canal (2o span)
+   como chip discreto (`--info-50/--info-700`, so' estilo -- o texto do canal
+   ja' vem do dado real, nao e' fabricado); `.announcement-card--selected`
+   ganha left-border `--primary` alem do box-shadow/bg que a base ja aplica;
+   o card "Resumo" (`.detail-card` dentro de `.announcement-grid`, escopado
+   por isso pra nao vazar pro `.detail-card` de Usuarios/Suporte) ganha borda
+   tracejada + texto em destaque; `.text-area` do comunicado fica mais alto.
+   Na Barra: `.status-tag` inline no `.suggestion-banner__text` perde o
+   `min-width` da versao pill (fica compacto dentro da frase, como no
+   mockup); `.status-tag` do `.card-heading` (indicador de status atual)
+   ganha leve elevacao (`--shadow-sm`). DECISAO: mantido o `<select>` da
+   barra (nao converte pra radios -- ver PLAN.md, AdminBarStatusPanel.test.jsx
+   e' sensivel). So' tokens, sem hex fora do :root.
    ============================================================ */
 @media (min-width: 1041px) {
   .admin-section .announcement-grid {
@@ -10023,6 +10038,38 @@ body {
 
   .admin-section .announcement-card--button:hover {
     box-shadow: var(--shadow-md);
+  }
+
+  .admin-section .announcement-card__meta {
+    font-weight: 600;
+  }
+
+  .admin-section .announcement-card__meta span:last-child {
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--info-50);
+    color: var(--info-700);
+    font-size: var(--fs-footnote);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .admin-section .announcement-card--selected {
+    border-left: 3px solid var(--primary);
+  }
+
+  .admin-section .announcement-grid .detail-card {
+    border: 1px dashed var(--border);
+    background: var(--surface-alt);
+  }
+
+  .admin-section .announcement-grid .detail-card p {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .admin-section .announcement-grid .text-area {
+    min-height: 140px;
   }
 
   .admin-section .suggestion-banner {
@@ -10040,6 +10087,14 @@ body {
 
   .admin-section .suggestion-banner--danger {
     border-left: 3px solid var(--danger-700);
+  }
+
+  .admin-section .suggestion-banner .status-tag {
+    min-width: auto;
+  }
+
+  .admin-section .card-heading .status-tag {
+    box-shadow: var(--shadow-sm);
   }
 }
 
