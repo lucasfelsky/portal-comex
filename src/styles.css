@@ -9524,3 +9524,74 @@ body {
     box-shadow: var(--shadow-sm);
   }
 }
+
+/* ============================================================
+   Ciclo 4d (redesign Fase 4) — Centro Administrativo: aba Suporte
+   (`.support-tabs-row`/`.support-ticket-card`/`.support-ticket-pager`,
+   src/features/admin/AdminSupportPanel.jsx:228-524). Raiz unica
+   `.admin-section` (AdminLayout.jsx:20) -- todo seletor comeca por
+   ela, pra nao vazar pras Fases 1-3 nem pras outras abas do admin.
+   So' tokens (--radius-*, --shadow-*, --font-heading), sem hex fora
+   do :root.
+
+   TRAP `.dashboard-stat-row` (ciclo 2a, styles.css:8834, dentro de
+   @media min-width:1041px): forca `grid-template-columns: repeat(4,
+   minmax(0,1fr))` no desktop, pensado pro Dashboard (4 StatCards). O
+   painel de Suporte usa a mesma classe com so' 3 StatCards
+   (AdminSupportPanel.jsx:228), entao sem override fica um card
+   faltando. `.admin-section .dashboard-stat-row` tem especificidade
+   maior (0,2,0 vs 0,1,0 da global) e resolve pro desktop do admin,
+   sem tocar a regra global do Dashboard.
+
+   `.admin-section .list-card`/`.detail-card`/`.card-heading h3` ja'
+   ficaram cobertos pelo ciclo 4a (mesmo seletor; `.support-ticket-card`
+   tambem carrega `.detail-card`, entao ja' herda `box-shadow:
+   var(--shadow-sm)` de la') -- nao repete a sombra aqui, so' refina
+   o radius e o que e especifico da aba (heading, pager, replies).
+
+   Dark "de graca": os tokens usados (--radius-*, --font-heading) ja'
+   tem contraparte redefinida em `:root[data-theme='dark']`
+   (styles.css:7455-7518), entao o dark acompanha sem seletor duplo.
+   Nao ha override `[data-theme='dark']` para nenhuma classe
+   `.support-*` no arquivo. Nao toca nenhum bloco
+   @media (max-width:*), nem JSX/classes/textos/aria de
+   AdminSupportPanel.jsx.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .admin-section .dashboard-stat-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-section .support-tabs-row {
+    gap: 16px;
+  }
+
+  .admin-section .support-tabs-row .tab-row .tab-button {
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-card {
+    border-radius: var(--radius-md);
+    gap: 12px;
+  }
+
+  .admin-section .support-ticket-card__head strong {
+    font-family: var(--font-heading);
+  }
+
+  .admin-section .support-ticket-pager {
+    gap: 8px;
+  }
+
+  .admin-section .support-ticket-pager__counter {
+    min-width: 64px;
+  }
+
+  .admin-section .support-ticket-card__replies-list {
+    gap: 10px;
+  }
+
+  .admin-section .support-ticket-card__reply {
+    padding-top: 10px;
+  }
+}
