@@ -9496,6 +9496,67 @@ body {
   .process-detail-view .detail-card--neutral {
     border: 1px solid var(--neutral-700);
   }
+
+  /* Feedback pos-6b: cards de item da aba "Itens" e "Item relacionado"
+     (mesmo componente .process-related-item-button, ProcessDetailView.jsx
+     ~396-410 e ~437-448) ainda estavam no visual antigo (fundo gradiente
+     hardcoded, sombra none). Refino na linguagem do redesign: fundo
+     --surface, borda+shadow leves, hover com --surface-alt/--shadow;
+     nome comercial/chegada em --font-heading a' esquerda, quantidade em
+     destaque (--fs-title) a' direita.
+     `.process-related-item-button` tem override dark FORA de media
+     (styles.css ~7610, `background: var(--glass-grad)`) com a MESMA
+     especificidade (0,2,0) de `.process-detail-view .process-related-item-button`
+     -- por isso o background/shadow aqui usam seletor duplo com
+     `[data-theme='dark']` na frente pra vencer de forma explicita (regra 3
+     do PLAN), nao so' por ordem de fonte. So' tokens dark-aware, sem hex
+     fora do :root. */
+  [data-theme='dark'] .process-detail-view .process-related-item-button,
+  .process-detail-view .process-related-item-button {
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-detail-view .process-related-item-button {
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      border-color 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .process-detail-view .process-related-item-button--compact {
+    padding: 16px 20px;
+  }
+
+  [data-theme='dark'] .process-detail-view .process-related-item-button:hover,
+  .process-detail-view .process-related-item-button:hover {
+    background: var(--surface-alt);
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+  }
+
+  .process-detail-view .process-items-list {
+    gap: 14px;
+  }
+
+  .process-detail-view .process-item-display strong {
+    font-family: var(--font-heading);
+  }
+
+  .process-detail-view .process-item-display--quantity strong {
+    font-size: var(--fs-title);
+  }
+
+  /* Heading da aba "Itens" (rotulo eyebrow + badge "N itens") e o campo
+     de busca -- so' pill no input de busca pra combinar com o card
+     refinado acima; `.detail-label`/`.inline-badge` ja' sao dark-aware
+     na base (nao setar background/color novos aqui). */
+  .process-detail-view .field .text-input {
+    border-radius: var(--radius-full);
+    padding-left: 16px;
+  }
 }
 
 /* ============================================================
