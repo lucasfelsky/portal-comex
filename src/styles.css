@@ -10029,3 +10029,108 @@ body {
     padding-top: 10px;
   }
 }
+
+/* ============================================================
+   Sub-ciclo 6d (Fase 6) — Notificacoes: pagina `/notifications`
+   desktop (NotificationsPage.jsx). Raiz PROPRIA `.notifications-page`
+   (classe adicionada ao `<section className="surface">` em
+   NotificationsPage.jsx:34) -- `.notifications__list/__group/__item/
+   __section-label/__filters/__show-more/__group-header` sao
+   COMPARTILHADAS com o drawer (`.notifications__panel`, Ciclo 3b,
+   styles.css:9639-9670) e `.surface` e' raiz generica de outras paginas;
+   sem raiz propria o estilo vazaria pro drawer. Todo seletor comeca por
+   `.notifications-page`. So' tokens (--radius-*, --shadow-*, --primary*,
+   --font-heading, --border-strong, --surface-alt, --bg-tint-1), sem hex
+   fora do :root, sem dependencia nova.
+
+   Trap tema escuro (documentado em styles.css:7579-7582): ha' overrides
+   `[data-theme='dark'] .notifications__group/.notifications__item/--unread`
+   FORA de media que setam `background`. Por isso este bloco NAO seta
+   `background`/`color` dessas duas classes -- so' radius/shadow/border/
+   spacing/tipografia. `.notifications__filters`/`.notifications__group-header`/
+   `.notifications__section-label`/`.notifications__show-more` NAO tem
+   override dark fora de media (confirmado por grep), entao podem usar
+   `background`/`color` com tokens normalmente (ja' dark-aware via
+   :root[data-theme='dark'], styles.css:7470-7533).
+
+   DECISAO do plano (6d): manter a tab-row de 5 filtros (Todas/Duvidas/
+   Respostas/Favoritos/Pos-recebimento) em vez do `<select>` do mockup --
+   estiliza-la aqui como pill-tabs (mesma linguagem do segmented control
+   generico de styles.css:6669-6688, que exclui `.notifications__filters`
+   de proposito) so' dentro de `.notifications-page`, sem tocar
+   `.notifications__filters` fora dessa raiz (o drawer, Ciclo 3b, continua
+   com o underline). Nao revela `.notifications__item-icon` no desktop
+   (fica `display:none` fora do mobile, F15.2 — styles.css:6726-6729) -- o
+   markup nao expoe cor por tipo, entao mantem como ja' esta', sem
+   fabricar variacao. Nao toca nenhum bloco @media (max-width:*).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .notifications-page {
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .notifications-page .notifications__section-label {
+    color: var(--primary-700);
+  }
+
+  .notifications-page .notifications__group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications-page .notifications__group--unread {
+    border-left: 3px solid var(--primary);
+  }
+
+  .notifications-page .notifications__group-header strong {
+    font-family: var(--font-heading);
+    font-size: var(--fs-body);
+  }
+
+  .notifications-page .notifications__item {
+    transition:
+      box-shadow 140ms ease,
+      border-color 140ms ease;
+  }
+
+  .notifications-page .notifications__item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-strong);
+  }
+
+  .notifications-page .notifications__filters {
+    display: inline-flex;
+    width: auto;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .notifications-page .notifications__filters .tab-button {
+    margin-right: 0;
+    border-radius: var(--radius-full);
+  }
+
+  .notifications-page .notifications__filters .tab-button::after {
+    display: none;
+  }
+
+  .notifications-page .notifications__filters .tab-button:hover:not(.tab-button--active) {
+    background: var(--bg-tint-1);
+    color: var(--primary-700);
+  }
+
+  .notifications-page .notifications__filters .tab-button--active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notifications-page .notifications__show-more {
+    margin-top: 18px;
+  }
+}
