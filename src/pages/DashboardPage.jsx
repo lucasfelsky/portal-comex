@@ -258,7 +258,7 @@ export default function DashboardPage() {
         onSelectProcess={handleSelectProcess}
       />
 
-      <article className="list-card">        <div className="card-heading">
+      <article className="list-card dashboard-favorites-card">        <div className="card-heading">
           <div>
             <h3>Processos favoritos</h3>
           </div>
@@ -432,6 +432,9 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="process-item__meta process-item__meta--top">
+                    <span className="dashboard-favorites-item__star" aria-hidden="true">
+                      <Icon name="star-filled" size={16} />
+                    </span>
                     {!hideEta ? (
                       <span className={hasUpdatedEta(item) ? 'eta-meta-highlight' : ''}>
                         {hasUpdatedEta(item) ? 'ETA atualizada' : 'ETA'}: {formatDate(item.eta)}

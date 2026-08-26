@@ -8939,7 +8939,12 @@ body {
    (classe unica do Dashboard) pra nao vazar pra ProcessesPage — que tem
    os proprios .list-card/.process-item/.card-heading restilizados em
    ciclos separados (2b/2c do mesmo PLAN.md). Nao toca nenhum bloco
-   @media (max-width:*). */
+   @media (max-width:*).
+   Sub-ciclo 5b: Barra do Rio vira pill com borda (mockup `.bar`); KPIs
+   perdem o icone e o valor vira Bricolage grande (mockup `.kpi`); grid
+   inverte — Favoritos full-width, Chegadas volta pra coluna (mockup
+   `.grid`/`.fav`); favlist 2-col com leading icon + card `--surface-alt`
+   (mockup `.favlist`/`.fitem`). */
 @media (min-width: 1041px) {
   .dashboard-heading {
     margin-bottom: 28px;
@@ -8960,6 +8965,17 @@ body {
     font-family: var(--font-heading);
   }
 
+  /* Passo 6 — Barra do Rio como pill com borda (mockup `.bar`). Mantem
+     `.dashboard-bar-card__text`/`--${tone}` e `.dashboard-bar-inline__dot`
+     intocados (DashboardPage.test.jsx:285/295 dependem deles). */
+  .dashboard-heading .dashboard-bar-inline {
+    padding: 12px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
   .dashboard-stat-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
@@ -8975,6 +8991,24 @@ body {
     box-shadow: var(--shadow-md);
   }
 
+  /* Passo 7 — KPIs sem icone, valor grande (mockup `.kpi`). Trends
+     "+2"/"atencao" ficam FORA (Decisao D2 — sem dado real de serie).
+     Escopado com `.dashboard-heading ~` (TRAP `.dashboard-stat-row`
+     tambem existe em AdminSupportPanel/Suporte, que nao tem
+     `.dashboard-heading` como irmao — ver REVIEW.md rodada 1). */
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__icon {
+    display: none;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__label {
+    letter-spacing: 0.08em;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__value {
+    font-family: var(--font-heading);
+    font-size: 2.125rem;
+  }
+
   /* Restyle desktop dos cards do corpo do dashboard (dentro do
      `.stagger` que segue o hero): Comunicados, Chegadas da semana e
      Favoritos. Escopo via combinador de irmao geral + descendente pra
@@ -8982,12 +9016,18 @@ body {
      paginas (ProcessesPage etc.), que compartilham as mesmas classes. */
   .dashboard-heading ~ .stagger {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1.15fr 1fr;
     align-items: start;
     gap: 20px;
   }
 
-  .dashboard-heading ~ .stagger .weekly-arrivals-card {
+  /* Passo 8 — inverte o full-width: Favoritos ocupa a linha inteira,
+     Chegadas (`.weekly-arrivals-card`) volta pra coluna (mockup `.fav`
+     e' quem tem `grid-column:1/-1`, nao mais o card de chegadas). A
+     ordem do JSX (Comunicados -> Chegadas -> Favoritos) nao muda, entao
+     Favoritos continua sendo o ULTIMO `.list-card`
+     (DashboardPage.test.jsx:347-363). */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card {
     grid-column: 1 / -1;
   }
 
@@ -9006,6 +9046,43 @@ body {
 
   .dashboard-heading ~ .stagger .process-item {
     border-radius: var(--radius-sm);
+  }
+
+  /* Passo 9 — Favoritos em 2 colunas com leading icon + chips + ETA
+     empilhada com estrela (mockup `.favlist`/`.fitem`). Escopado em
+     `.dashboard-favorites-card` pra nao vazar pro card de Chegadas
+     (que compartilha `.process-item`/`.process-list` no mesmo grid). O
+     bloco verboso `.dashboard-process-inline` (MAPA/DUIMP/janelas)
+     continua visivel — Decisao D1, e' dado operacional real. */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item {
+    align-items: flex-start;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  /* Leading icon (categoria) e' mobile-only por padrao (styles.css
+     ~6372-6376); revelado aqui igual a tecnica ja usada em
+     `.process-list-card .process-item__leading` (~9053). */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__leading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    flex-shrink: 0;
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .dashboard-favorites-item__star {
+    display: inline-flex;
+    color: var(--warning-700);
   }
 }
 
