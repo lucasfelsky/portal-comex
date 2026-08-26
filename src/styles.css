@@ -9523,7 +9523,9 @@ body {
 
   .surface--news .news-grid {
     grid-template-columns: 1.4fr 1fr;
+    grid-auto-rows: min-content;
     align-items: start;
+    align-content: start;
     gap: 20px;
   }
 
@@ -9548,7 +9550,14 @@ body {
      (o JSX já marca `news-card--featured`/`news-card--row`/
      `news-section-label`, F16.6, mobile-only até aqui — comentário em
      NewsPage.jsx:562-565). Featured ocupa a coluna 1 inteira; label +
-     rows fluem na coluna 2. CSS-only, sem markup novo. */
+     rows fluem na coluna 2. CSS-only, sem markup novo.
+     Fix de feedback (2026-08-26): `grid-auto-rows: min-content` +
+     `align-content: start` no `.news-grid` (acima) impedem que as linhas
+     implícitas da coluna 2 estiquem para acompanhar a altura do featured
+     span (row 1/-1) — a coluna 2 empacota no topo com altura natural; o
+     espaço sobra embaixo do featured (align-items: start já cuidava do
+     alinhamento do próprio card). Capa do featured reduzida de 280px pra
+     200px e resumo de 4 pra 3 linhas para não dominar a tela. */
   .surface--news .news-card--featured {
     grid-column: 1;
     grid-row: 1 / -1;
@@ -9577,8 +9586,8 @@ body {
 
   .surface--news .news-card--featured .news-card__image-wrap {
     width: 100%;
-    min-height: 280px;
-    max-height: 280px;
+    min-height: 200px;
+    max-height: 200px;
   }
 
   .surface--news .news-card--featured .news-card__body {
@@ -9592,7 +9601,7 @@ body {
   }
 
   .surface--news .news-card--featured .news-card__summary {
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 3;
   }
 
   /* Row: thumb pequena + corpo + chevron, resumo em 2 linhas. */
