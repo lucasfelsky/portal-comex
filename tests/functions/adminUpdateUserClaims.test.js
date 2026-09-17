@@ -256,11 +256,13 @@ describe('adminUpdateUserClaims (S3)', () => {
     ).rejects.toThrow(/UID do usuário é obrigatório/)
   })
 
-  it('adminUpdateUserClaims: set no Firestore obedece ao contrato de 6 campos (Sprint 5.1 / L18)', async () => {
-    // A rule `isAdminUserFieldsUpdate` exige que o write no Firestore
-    // altere SOMENTE os 6 campos: role, status, statusTone, updatedAt,
-    // updatedById, updatedByName. Se o callable enviar outros campos,
-    // a rule bloqueia. Aqui validamos o contrato no codigo.
+  it('adminUpdateUserClaims: set no Firestore obedece ao contrato do Admin SDK (Sprint 5.1 / L18 + fix admin-user-edit-permission-denied)', async () => {
+    // O Admin SDK ignora as rules (`isAdminUserFieldsUpdate` so' vale para
+    // escrita via cliente). O callable e' o UNICO escritor no caminho admin
+    // e por isso grava, alem de role/status/statusTone/updatedAt/updatedById/
+    // updatedByName, tambem `scopes` (sempre, derivado de role) e `name`/`area`
+    // quando enviados no payload (fix admin-user-edit-permission-denied: o
+    // `setDoc` amplo do cliente foi removido para evitar permission-denied).
     const handler = getHandler(adminUpdateUserClaims)
     await handler({
       auth: authCtx,
@@ -270,13 +272,30 @@ describe('adminUpdateUserClaims (S3)', () => {
     expect(targetDocRef.set).toHaveBeenCalledTimes(1)
     const [payload, options] = targetDocRef.set.mock.calls[0]
 
-    // 6 campos editados (incluindo updatedAt que vem de FieldValue.serverTimestamp()).
+    // Campos sempre presentes (role/status/statusTone/updatedAt/updatedById/
+    // updatedByName + scopes, derivado do role via getRolePermissions).
     const editedKeys = Object.keys(payload).sort()
     expect(editedKeys).toEqual(
-      expect.arrayContaining(['role', 'status', 'statusTone', 'updatedAt', 'updatedById', 'updatedByName'])
+      expect.arrayContaining([
+        'role',
+        'status',
+        'statusTone',
+        'scopes',
+        'updatedAt',
+        'updatedById',
+        'updatedByName',
+      ])
     )
-    // Nenhum campo extra (ex.: nao podemos ter 'name', 'email', 'area' no payload).
-    const allowed = new Set(['role', 'status', 'statusTone', 'updatedAt', 'updatedById', 'updatedByName'])
+    // Sem name/area no payload: nao vieram em request.data.
+    const allowed = new Set([
+      'role',
+      'status',
+      'statusTone',
+      'scopes',
+      'updatedAt',
+      'updatedById',
+      'updatedByName',
+    ])
     for (const key of editedKeys) {
       expect(allowed.has(key), `campo extra ${key} no payload de adminUpdateUserClaims`).toBe(true)
     }
@@ -285,6 +304,30 @@ describe('adminUpdateUserClaims (S3)', () => {
     // updatedById e updatedByName vem do actor (auth context).
     expect(payload.updatedById).toBe(ACTOR_UID)
     expect(payload.updatedByName).toBe('Admin da Silva')
+  })
+
+  it('grava name/area quando presentes em request.data (fix admin-user-edit-permission-denied)', async () => {
+    const handler = getHandler(adminUpdateUserClaims)
+    await handler({
+      auth: authCtx,
+      data: { uid: TARGET_UID, role: 'logistica', status: 'Ativo', name: 'Novo Nome', area: 'Compras' },
+    })
+
+    const [payload] = targetDocRef.set.mock.calls[0]
+    expect(payload.name).toBe('Novo Nome')
+    expect(payload.area).toBe('Compras')
+  })
+
+  it('NAO grava name/area quando ausentes em request.data', async () => {
+    const handler = getHandler(adminUpdateUserClaims)
+    await handler({
+      auth: authCtx,
+      data: { uid: TARGET_UID, role: 'logistica', status: 'Ativo' },
+    })
+
+    const [payload] = targetDocRef.set.mock.calls[0]
+    expect(payload).not.toHaveProperty('name')
+    expect(payload).not.toHaveProperty('area')
   })
 
   it('normaliza status com capitalizacao (Ativo/Bloqueado/Reprovado/Pendente)', async () => {
