@@ -21,7 +21,7 @@ export default function PostReceiptEditView({
   draftPostReceiptImages,
   isSaving,
   isUploadingPostReceiptImages,
-  isAdmin,
+  canSeeName,
   onDraftChange,
   onClose,
   onSave,
@@ -47,7 +47,7 @@ export default function PostReceiptEditView({
       <div className="detail-stack">
         <div className="detail-card">
           <span className="detail-label">Processo</span>
-          <p>{getProcessTitle(selectedProcess, isAdmin)}</p>
+          <p>{getProcessTitle(selectedProcess, canSeeName)}</p>
         </div>
         <label className="field">
           <span>Observações pós-recebimento da carga no CD</span>

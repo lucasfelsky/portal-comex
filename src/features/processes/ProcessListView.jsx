@@ -44,6 +44,7 @@ const hasUpdatedEta = (process) =>
 function ProcessRow({
   item,
   isAdmin,
+  canSeeName,
   isSelected,
   isMobile,
   isSwipeOpen,
@@ -121,8 +122,8 @@ function ProcessRow({
           <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={20} />
         </span>
         <div className="process-item__main">
-          <strong>{getProcessTitle(item, isAdmin)}</strong>
-          {getProcessSubtitle(item, isAdmin) ? <p>{getProcessSubtitle(item, isAdmin)}</p> : null}
+          <strong>{getProcessTitle(item, canSeeName)}</strong>
+          {getProcessSubtitle(item, canSeeName) ? <p>{getProcessSubtitle(item, canSeeName)}</p> : null}
           <div className="process-item__line">{item.category}</div>
           <div className="process-item__line">
             {getDestinationLabel(item.category)}: {item.destination || '-'}
@@ -220,6 +221,7 @@ export default function ProcessListView({
   isExporting,
   selectedProcessId,
   isAdmin,
+  canSeeName,
   searchTerm,
   categoryFilter,
   etaStartDate,
@@ -282,6 +284,7 @@ export default function ProcessListView({
       key={item.id}
       item={item}
       isAdmin={isAdmin}
+      canSeeName={canSeeName}
       isSelected={selectedProcessId === item.id}
       isMobile={isMobile}
       isSwipeOpen={openSwipeId === item.id}
@@ -300,6 +303,7 @@ export default function ProcessListView({
       key={item.id}
       item={item}
       isAdmin={isAdmin}
+      canSeeName={canSeeName}
       isSelected={selectedProcessId === item.id}
       isMobile={isMobile}
       isSwipeOpen={openSwipeId === item.id}

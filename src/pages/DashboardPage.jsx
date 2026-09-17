@@ -114,6 +114,7 @@ function hasUpdatedEta(process) {
 export default function DashboardPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
+  const canSeeName = profile?.role === 'admin' || profile?.role === 'logistica'
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)
@@ -253,7 +254,7 @@ export default function DashboardPage() {
 
       <WeeklyArrivalsCard
         processes={loadedProcesses}
-        isAdmin={profile?.role === 'admin'}
+        canSeeName={canSeeName}
         isLoading={isLoadingProcesses}
         onSelectProcess={handleSelectProcess}
       />
@@ -284,9 +285,9 @@ export default function DashboardPage() {
                     <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={18} />
                   </span>
                   <div className="process-item__main">
-                    <strong>{getProcessTitle(item, profile?.role === 'admin')}</strong>
-                    {getProcessSubtitle(item, profile?.role === 'admin') ? (
-                      <p>{getProcessSubtitle(item, profile?.role === 'admin')}</p>
+                    <strong>{getProcessTitle(item, canSeeName)}</strong>
+                    {getProcessSubtitle(item, canSeeName) ? (
+                      <p>{getProcessSubtitle(item, canSeeName)}</p>
                     ) : null}
                     <div className="process-item__line">{item.category}</div>
                     <div className="process-item__line">{getDestinationLabel(item.category)}: {item.destination || '-'}</div>

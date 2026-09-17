@@ -148,8 +148,8 @@ function getAutomaticEstimatedDeliveryLabel(process) {
   return formatDate(getAutomaticEstimatedDeliveryDate(process))
 }
 
-function canShowProcessName(process, isAdmin) {
-  return isAdmin || !isRestrictedCategory(process.category)
+function canShowProcessName(process, canSeeName) {
+  return canSeeName || !isRestrictedCategory(process.category)
 }
 
 function hasUpdatedEta(process) {
@@ -420,6 +420,7 @@ export default function ProcessesPage() {
   const { profile, toggleFavoriteProcess } = useAuth()
   const toast = useToast()
   const isAdmin = profile?.role === 'admin'
+  const canSeeName = isAdmin || profile?.role === 'logistica'
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
@@ -585,7 +586,7 @@ export default function ProcessesPage() {
         }
 
         if (!query) return true
-        const visibleName = canShowProcessName(item, isAdmin) ? item.name : ''
+        const visibleName = canShowProcessName(item, canSeeName) ? item.name : ''
         const matchesItemName = (item.items ?? []).some((processItem) =>
           normalizeItemName(processItem?.commercialName).includes(normalizedQuery)
         )
@@ -610,7 +611,7 @@ export default function ProcessesPage() {
         if (!right.eta) return -1
         return left.eta.localeCompare(right.eta)
       })
-  }, [categoryFilter, etaEndDate, etaStartDate, isAdmin, operationFilter, processes, searchTerm])
+  }, [categoryFilter, canSeeName, etaEndDate, etaStartDate, operationFilter, processes, searchTerm])
 
   // F16.8 (swipe-to-arquivar, admin-only): fonte da seção "Arquivados" —
   // sem os filtros de busca/categoria/ETA (é uma tela de gestão à parte,
@@ -1369,6 +1370,7 @@ export default function ProcessesPage() {
           isExporting={isExporting}
           selectedProcessId={selectedProcessId}
           isAdmin={isAdmin}
+          canSeeName={canSeeName}
           searchTerm={searchTerm}
           categoryFilter={categoryFilter}
           etaStartDate={etaStartDate}
@@ -1450,7 +1452,7 @@ export default function ProcessesPage() {
         <CollectionStatusEditView
           process={selectedProcess}
           collectionStatus={draft.collectionStatus}
-          isAdmin={isAdmin}
+          canSeeName={canSeeName}
           isSaving={isSaving}
           onStatusChange={(value) => handleDraftChange('collectionStatus', value)}
           onSave={handleSaveCollectionStatus}
@@ -1465,7 +1467,7 @@ export default function ProcessesPage() {
           draftPostReceiptImages={draftPostReceiptImages}
           isSaving={isSaving}
           isUploadingPostReceiptImages={isUploadingPostReceiptImages}
-          isAdmin={isAdmin}
+          canSeeName={canSeeName}
           onDraftChange={handleDraftChange}
           onClose={handleClosePostReceiptEditMode}
           onSave={handleSavePostReceiptNotes}
@@ -1479,6 +1481,7 @@ export default function ProcessesPage() {
           selectedProcess={selectedProcess}
           detailTab={detailTab}
           isAdmin={isAdmin}
+          canSeeName={canSeeName}
           isSaving={isSaving}
           favoriteProcessIds={favoriteProcessIds}
           canEditPostReceiptNotes={canEditPostReceiptNotes}
