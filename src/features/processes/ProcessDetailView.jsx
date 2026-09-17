@@ -32,6 +32,7 @@ export default function ProcessDetailView({
   selectedProcess,
   detailTab,
   isAdmin,
+  canSeeName,
   isSaving,
   favoriteProcessIds,
   canEditPostReceiptNotes,
@@ -119,7 +120,7 @@ export default function ProcessDetailView({
           ‹ Voltar
         </button>
         <strong className="process-detail-mobilebar__title">
-          {getProcessTitle(selectedProcess)}
+          {getProcessTitle(selectedProcess, canSeeName)}
         </strong>
       </div>
 
@@ -216,9 +217,9 @@ export default function ProcessDetailView({
       <div className="detail-stack tab-panel-spacing">
         {detailTab === 'general' ? (
           <>
-            <div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, isAdmin)}</p></div>
+            <div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, canSeeName)}</p></div>
             <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
-            {selectedProcess.processNumber && canShowProcessName(selectedProcess, isAdmin) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
+            {selectedProcess.processNumber && canShowProcessName(selectedProcess, canSeeName) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
             <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
             <div className="detail-card">
               <span className="detail-label">ETD / ETA</span>
@@ -439,7 +440,7 @@ export default function ProcessDetailView({
                   >
                     <div className="process-item-display">
                       <span className="detail-label">Chegada:</span>
-                      <strong>{getProcessTitle(process, isAdmin)}</strong>
+                      <strong>{getProcessTitle(process, canSeeName)}</strong>
                     </div>
                     <div className="process-item-display process-item-display--quantity">
                       <span className="detail-label">Quantidade:</span>

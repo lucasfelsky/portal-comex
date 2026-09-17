@@ -37,7 +37,7 @@ function writeHistory(items) {
   }
 }
 
-export function useGlobalSearch(isAdmin) {
+export function useGlobalSearch(canSeeName) {
   const navigate = useNavigate()
   const [recentSearches, setRecentSearches] = useState(readHistory)
 
@@ -75,7 +75,7 @@ export function useGlobalSearch(isAdmin) {
         const description = `${process.processNumber ?? 'sem PO'}${destination}`
         return {
           id: `process-${process.id}`,
-          label: getProcessTitle(process, isAdmin) ?? 'Processo sem nome',
+          label: getProcessTitle(process, canSeeName) ?? 'Processo sem nome',
           description,
           group: 'Resultados',
           icon: 'arrivals',
@@ -86,7 +86,7 @@ export function useGlobalSearch(isAdmin) {
         }
       })
     },
-    [navigate, pushRecent, isAdmin]
+    [navigate, pushRecent, canSeeName]
   )
 
   return { searcher, recentSearches, clearRecent }

@@ -191,7 +191,7 @@ export function getWeeklyArrivalProcesses(processes, now = new Date()) {
   return { scheduled, unscheduled }
 }
 
-function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess }) {
+function UnscheduledItem({ process, estimatedDelivery, canSeeName, onSelectProcess }) {
   // PR #6 (2026-07-09): label dinamica baseada no collectionStatus.
   // Antes era fixa "Coleta ainda nao agendada", o que ficava
   // estranho quando o processo ja' estava em transito (a caminho
@@ -212,9 +212,9 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
       }}
     >
       <div className="process-item__main">
-        <strong>{getProcessTitle(process, isAdmin)}</strong>
-        {getProcessSubtitle(process, isAdmin) ? (
-          <p>{getProcessSubtitle(process, isAdmin)}</p>
+        <strong>{getProcessTitle(process, canSeeName)}</strong>
+        {getProcessSubtitle(process, canSeeName) ? (
+          <p>{getProcessSubtitle(process, canSeeName)}</p>
         ) : null}
         <div className="process-item__line">{process.category}</div>
         {/*
@@ -245,7 +245,7 @@ function UnscheduledItem({ process, estimatedDelivery, isAdmin, onSelectProcess 
   )
 }
 
-function ScheduledItem({ process, windows, isAdmin, onSelectProcess }) {
+function ScheduledItem({ process, windows, canSeeName, onSelectProcess }) {
   return (
     <div
       key={process.id}
@@ -261,9 +261,9 @@ function ScheduledItem({ process, windows, isAdmin, onSelectProcess }) {
       }}
     >
       <div className="process-item__main">
-        <strong>{getProcessTitle(process, isAdmin)}</strong>
-        {getProcessSubtitle(process, isAdmin) ? (
-          <p>{getProcessSubtitle(process, isAdmin)}</p>
+        <strong>{getProcessTitle(process, canSeeName)}</strong>
+        {getProcessSubtitle(process, canSeeName) ? (
+          <p>{getProcessSubtitle(process, canSeeName)}</p>
         ) : null}
         <div className="process-item__line">{process.category}</div>
         <div className="process-item__chips">
@@ -303,7 +303,7 @@ function ScheduledItem({ process, windows, isAdmin, onSelectProcess }) {
 
 export default function WeeklyArrivalsCard({
   processes,
-  isAdmin,
+  canSeeName,
   isLoading,
   onSelectProcess,
 }) {
@@ -347,7 +347,7 @@ export default function WeeklyArrivalsCard({
                     key={process.id}
                     process={process}
                     windows={windows}
-                    isAdmin={isAdmin}
+                    canSeeName={canSeeName}
                     onSelectProcess={onSelectProcess}
                   />
                 ))}
@@ -364,7 +364,7 @@ export default function WeeklyArrivalsCard({
                     key={process.id}
                     process={process}
                     estimatedDelivery={estimatedDelivery}
-                    isAdmin={isAdmin}
+                    canSeeName={canSeeName}
                     onSelectProcess={onSelectProcess}
                   />
                 ))}

@@ -12,6 +12,7 @@ import SupportButton, { OPEN_SUPPORT_MODAL_EVENT } from './SupportButton'
 import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { formatRemaining } from '../hooks/useDoNotDisturb'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
+import { canSeeProcessName } from '../features/processes/processLabels'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
@@ -147,7 +148,7 @@ export default function AppLayout() {
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
-  const globalSearch = useGlobalSearch(profile?.role === 'admin')
+  const globalSearch = useGlobalSearch(canSeeProcessName(profile?.role))
   const processSearcherForPalette = globalSearch.searcher
   // C17 (toggle): tema claro/escuro/automatico, persistido em localStorage.
   const theme = useTheme()

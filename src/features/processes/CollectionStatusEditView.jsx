@@ -17,7 +17,7 @@ import { getProcessTitle } from './processLabels'
 export default function CollectionStatusEditView({
   process,
   collectionStatus,
-  isAdmin,
+  canSeeName,
   isSaving,
   onStatusChange,
   onSave,
@@ -42,7 +42,7 @@ export default function CollectionStatusEditView({
       <div className="detail-stack">
         <div className="detail-card">
           <span className="detail-label">Processo</span>
-          <p>{getProcessTitle(process, isAdmin)}</p>
+          <p>{getProcessTitle(process, canSeeName)}</p>
         </div>
         <CollectionWindowsEditor
           value={process.collectionWindows}
