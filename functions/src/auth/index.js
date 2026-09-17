@@ -330,14 +330,20 @@ export const adminUpdateUserClaims = onCall(async (request) => {
   const safeRole = ALLOWED_ROLES.has(nextRole) ? nextRole : 'user'
   const safeStatus = ALLOWED_STATUSES.has(nextStatus) ? nextStatus : 'Pendente'
 
+  const requestedName = request.data?.name === undefined ? undefined : normalizeString(request.data.name)
+  const requestedArea = request.data?.area === undefined ? undefined : normalizeString(request.data.area)
+
   await userRef.set(
     {
       role: safeRole,
       status: safeStatus,
       statusTone: getStatusTone(safeStatus),
+      scopes: getRolePermissions(safeRole),
       updatedAt: FieldValue.serverTimestamp(),
       updatedById: request.auth.uid,
       updatedByName: actorProfile.name ?? actorProfile.email,
+      ...(requestedName !== undefined ? { name: requestedName } : {}),
+      ...(requestedArea !== undefined ? { area: requestedArea } : {}),
     },
     { merge: true }
   )

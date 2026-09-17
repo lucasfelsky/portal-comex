@@ -366,6 +366,46 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(deleteDoc(doc(approvedUser('alvo'), 'users/alvo')))
       await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'users/alvo')))
     })
+
+    // Fix admin-user-edit-permission-denied: documenta o invariante em que o
+    // fix se apoia (a rule `isAdminUserFieldsUpdate` NAO muda). O `setDoc`
+    // amplo que o cliente disparava no caminho admin (name/area) e' o que
+    // causava permission-denied quando o doc-alvo divergia da allowlist —
+    // o fix passa a usar SOMENTE o callable `adminUpdateUserClaims` (Admin
+    // SDK, ignora rules) para esse caminho.
+    it('admin setDoc merge amplo (name/area) sobre doc que so tem uid/role eh negado (bug que o fix elimina)', async () => {
+      await seed((db) => setDoc(doc(db, 'users/alvo-legado'), { uid: 'alvo-legado', role: 'user' }))
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'users/alvo-legado'),
+          { name: 'Novo Nome', area: 'Compras' },
+          { merge: true }
+        )
+      )
+    })
+
+    it('admin updateDoc so com a allowlist (role/status/statusTone/updatedAt/updatedById/updatedByName) eh permitido', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'users/alvo-allowlist'), {
+          uid: 'alvo-allowlist',
+          role: 'user',
+          status: 'Pendente',
+          statusTone: 'warn',
+          email: 'alvo-allowlist@sqquimica.com',
+          name: 'Alvo',
+        })
+      )
+      await assertSucceeds(
+        updateDoc(doc(admin('admin-1'), 'users/alvo-allowlist'), {
+          role: 'logistica',
+          status: 'Ativo',
+          statusTone: 'ok',
+          updatedAt: serverTimestamp(),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
   })
 
   describe('processes — create/update por role', () => {

@@ -121,10 +121,11 @@ export async function saveUser(user, actor = null) {
     return normalizedUser
   }
 
-  // S3: em producao, role/status vao via callable para garantir que as custom
-  // claims batam com o que foi persistido. O `setDoc` abaixo grava o espelho
-  // em `users/{uid}` para exibicao. Em modo dev/local, mantemos o setDoc
-  // direto (callable exige emulador).
+  // S3: em producao, role/status (e agora name/area/scopes) vao via callable
+  // para garantir que as custom claims e o espelho em `users/{uid}` batam com
+  // o que foi persistido. O callable e o UNICO escritor no caminho admin —
+  // um `setDoc` cliente aqui poderia divergir da allowlist da rule
+  // `isAdminUserFieldsUpdate` e falhar com permission-denied.
   const updateClaims = await getCallable('adminUpdateUserClaims')
   if (updateClaims) {
     // NAO engole o erro — se as claims nao atualizarem, o usuario fica
@@ -133,14 +134,10 @@ export async function saveUser(user, actor = null) {
       uid: normalizedUser.id,
       role: normalizedUser.role,
       status: normalizedUser.status,
+      name: normalizedUser.name,
+      area: normalizedUser.area,
     })
   }
-
-  await setDoc(
-    doc(firestore, 'users', normalizedUser.id),
-    toFirestorePayload(normalizedUser),
-    { merge: true }
-  )
 
   await recordUserAudit({
     action: 'Usuário atualizado',
