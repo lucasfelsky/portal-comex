@@ -22,6 +22,9 @@ import {
   getEstimatedDeliveryDate,
 } from '../../utils/deliveryForecast'
 import { getCollectionWindows } from '../../utils/collectionWindows'
+import { INCOTERM_OPTIONS } from './operationalOptions'
+import ProcessCargoFields from './ProcessCargoFields'
+import ProcessTransitFields from './ProcessTransitFields'
 
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
@@ -52,7 +55,6 @@ export default function ProcessForm({
   duimpStatusOptions,
   mapaStatusOptions,
   processCategoryOptions,
-  processStatusOptions,
   onDraftChange,
   onSetViewModeList,
   onSave,
@@ -165,6 +167,52 @@ export default function ProcessForm({
           />
         </label>
       ) : null}
+
+      <div className="detail-card detail-card--split">
+        <label className="field">
+          <span>Fornecedor</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draft.supplierName}
+            onChange={(event) => onDraftChange('supplierName', event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Origem</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draft.originLocation}
+            onChange={(event) => onDraftChange('originLocation', event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="detail-card detail-card--split">
+        <label className="field">
+          <span>Incoterm</span>
+          <SelectField
+            className="text-input"
+            value={draft.incoterm}
+            onChange={(event) => onDraftChange('incoterm', event.target.value)}
+          >
+            <option value="">Selecione o Incoterm</option>
+            {INCOTERM_OPTIONS.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </SelectField>
+        </label>
+        <label className="field">
+          <span>Agente de carga</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draft.forwarderName}
+            onChange={(event) => onDraftChange('forwarderName', event.target.value)}
+          />
+        </label>
+      </div>
     </>
   )
 
@@ -237,67 +285,35 @@ export default function ProcessForm({
     </>
   )
 
-  // F17.1a (D-A): status derivado - so' fica editavel manualmente nos 3
-  // estagios pre-chegada, enquanto nao existe sinal de chegada (`berthed`/
-  // `arrived`). `processStatusOptions` aqui e' PRE_ARRIVAL_STATUSES (a page
-  // passa esse valor - ver ProcessesPage.jsx).
-  const hasArrivalSignal =
-    (isMaritimeCategory(draft.category) && draft.berthed) ||
-    (isAirCategory(draft.category) && draft.arrived)
+  // F17.2a (D-3): status derivado - o select manual pre-chegada acabou.
+  // `shippedAt` (passo "Embarque e trânsito") e' quem faz o status avancar
+  // a partir de "Aguardando Embarque".
   const derivedProcessStatus = deriveProcessStatus(draft)
-  const preArrivalValue = processStatusOptions.includes(draft.processStatus)
-    ? draft.processStatus
-    : derivedProcessStatus
 
   const renderStatusStep = () => (
     <>
-      <div className="detail-card detail-card--split">
-        <div className="detail-card detail-card--soft">
-          <span className="detail-label">Status do processo (automático)</span>
-          <span className={getStatusTagClass(derivedProcessStatus)}>
-            {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
-          </span>
-        </div>
-        {!hasArrivalSignal ? (
-          <label className="field">
-            <span>Etapa pré-chegada (manual até o registro da data de embarque)</span>
-            <SelectField
-              className="text-input"
-              value={preArrivalValue}
-              onChange={(event) => onDraftChange('processStatus', event.target.value)}
-            >
-              {processStatusOptions.map((item) => (
-                <option key={item} value={item}>
-                  {getDisplayedProcessStatus(item, draft.category)}
-                </option>
-              ))}
-            </SelectField>
-          </label>
-        ) : null}
+      <div className="detail-card detail-card--soft">
+        <span className="detail-label">Status do processo (automático)</span>
+        <span className={getStatusTagClass(derivedProcessStatus)}>
+          {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
+        </span>
+        <small className="field-hint">
+          Informe a data de embarque (passo Embarque e trânsito) para o status avançar.
+        </small>
       </div>
 
-      <div className="detail-card detail-card--split">
-        <label className="field">
-          <span>Quantidade de containers</span>
-          <input
-            className="text-input"
-            type="number"
-            min="0"
-            value={draft.containerQuantity}
-            onChange={(event) => onDraftChange('containerQuantity', event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Quantidade de pallets</span>
-          <input
-            className="text-input"
-            type="number"
-            min="0"
-            value={draft.palletQuantity}
-            onChange={(event) => onDraftChange('palletQuantity', event.target.value)}
-          />
-        </label>
-      </div>
+      <ProcessCargoFields draft={draft} onDraftChange={onDraftChange} disabled={isSaving} />
+
+      <label className="field">
+        <span>Quantidade de pallets</span>
+        <input
+          className="text-input"
+          type="number"
+          min="0"
+          value={draft.palletQuantity}
+          onChange={(event) => onDraftChange('palletQuantity', event.target.value)}
+        />
+      </label>
 
       <label className="field">
         <span>Observações do processo</span>
@@ -309,6 +325,10 @@ export default function ProcessForm({
         />
       </label>
     </>
+  )
+
+  const renderTransitStep = () => (
+    <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} />
   )
 
   const renderFlowStep = () => (
@@ -670,6 +690,7 @@ export default function ProcessForm({
     { key: 'ident', label: 'Identificação', render: renderIdentificationStep },
     { key: 'dates', label: 'Datas e previsão', render: renderDatesStep },
     { key: 'status', label: 'Status e carga', render: renderStatusStep },
+    { key: 'transit', label: 'Embarque e trânsito', render: renderTransitStep },
     ...(showFlowStep ? [{ key: 'flow', label: 'Fluxo operacional', render: renderFlowStep }] : []),
     { key: 'items', label: 'Itens', render: renderItemsStep },
   ]

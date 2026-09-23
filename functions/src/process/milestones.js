@@ -153,6 +153,18 @@ export function buildEventDocId(eventId, type, processId, updatedAt) {
 // D-4/D-5: tabela de regras. `detect` recebe (before, after) crus e devolve
 // `null` (sem evento) ou `{ value, previousValue, occurredAtField? }`.
 export const MILESTONE_RULES = [
+  // F17.2a (D-9): dispara na transicao !hasValue(shippedAt) -> hasValue.
+  // Legado sem `shippedAt` NAO gera (nao ha transicao detectavel). Editar a
+  // data depois NAO gera evento novo (mesma semantica dos outros).
+  {
+    type: 'shipped',
+    field: 'shippedAt',
+    detect(before, after) {
+      if (hasValue(before?.shippedAt)) return null
+      if (!hasValue(after?.shippedAt)) return null
+      return { value: after.shippedAt, previousValue: '', occurredAtField: after.shippedAt }
+    },
+  },
   {
     type: 'berthed',
     field: 'berthed',

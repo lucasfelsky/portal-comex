@@ -174,3 +174,32 @@ describe('ProcessDetailView — aba "Histórico" (F17.1b)', () => {
     expect(onDetailTabChange).toHaveBeenCalledWith('history')
   })
 })
+
+describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
+  it('FCL: supplierName NÃO aparece com canSeeName=false', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: false,
+      selectedProcess: makeProcess({ category: 'FCL', supplierName: 'Fornecedor Atlas' }),
+    })
+    expect(screen.queryByText('Fornecedor Atlas')).not.toBeInTheDocument()
+  })
+
+  it('FCL: supplierName aparece com canSeeName=true', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: true,
+      selectedProcess: makeProcess({ category: 'FCL', supplierName: 'Fornecedor Atlas' }),
+    })
+    expect(screen.getByText('Fornecedor: Fornecedor Atlas')).toBeInTheDocument()
+  })
+
+  it('CONSOLIDADO: supplierName aparece para ambos (não é categoria restrita)', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: false,
+      selectedProcess: makeProcess({ category: 'CONSOLIDADO', supplierName: 'Fornecedor Delta' }),
+    })
+    expect(screen.getByText('Fornecedor: Fornecedor Delta')).toBeInTheDocument()
+  })
+})

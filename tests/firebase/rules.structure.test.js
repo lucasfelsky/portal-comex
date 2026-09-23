@@ -169,4 +169,33 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/\[\s*['"]Coleta Agendada['"]\s*,\s*['"]Carga recebida['"]\s*\]/)
     })
   })
+
+  describe('F17.2a — identificacao/carga por modal/embarque e transito (D-10)', () => {
+    it('isAdminProcessFields contem os 22 campos novos', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const newFields = [
+        'supplierName', 'originLocation', 'incoterm', 'forwarderName',
+        'unNumber', 'imoClass', 'shippedAt', 'vesselName', 'voyage',
+        'flightNumber', 'masterBl', 'houseBl', 'mawb', 'hawb',
+        'transshipmentPort', 'dangerousGoods', 'transshipment',
+        'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
+        'packagesQuantity', 'containers',
+      ]
+      for (const field of newFields) {
+        expect(body, `campo ${field} nao esta em isAdminProcessFields`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+    })
+
+    it('isAdminProcessFields guarda o shape de containers (list, size <= 40)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/containers\s+is\s+list/)
+      expect(body).toMatch(/containers\.size\(\)\s*<=\s*40/)
+    })
+  })
 })

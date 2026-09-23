@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 32 campos validos', async () => {
+    it('admin cria processo com todos os 59 campos validos (F17.2a)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -518,9 +518,120 @@ describeEmulator('firestore.rules (emulador)', () => {
           dtaStatus: '',
           dtaLoadingScheduledAt: '',
           dtaArrivalAtItajai: '',
+          // F17.2a (D-1/D-10): 22 campos novos.
+          supplierName: 'Fornecedor Atlas',
+          originLocation: 'Hamburgo',
+          incoterm: 'FOB',
+          forwarderName: 'Agente XPTO',
+          unNumber: '',
+          imoClass: '',
+          shippedAt: '',
+          vesselName: '',
+          voyage: '',
+          flightNumber: '',
+          masterBl: '',
+          houseBl: '',
+          mawb: '',
+          hawb: '',
+          transshipmentPort: '',
+          dangerousGoods: false,
+          transshipment: false,
+          grossWeightKg: 0,
+          volumeM3: 0,
+          chargeableWeightKg: 0,
+          packagesQuantity: 0,
+          containers: [],
           updatedById: 'admin-1',
           updatedByName: 'Admin',
           updatedAt: new Date(),
+        })
+      )
+    })
+
+    // F17.2a (D-10): admin atualiza shippedAt/containers/masterBl (embarque
+    // e transito) - continua succeeds.
+    it('admin atualiza shippedAt + containers (2 itens) + masterBl', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p15'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p15'), {
+          shippedAt: '2026-09-20',
+          masterBl: 'MBL-123',
+          containers: [
+            { id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC' },
+            { id: 'CNT-2', number: 'CSQU3054384', seal: 'LACRE-2', type: '40DC' },
+          ],
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          updatedAt: new Date(),
+        })
+      )
+    })
+
+    it('admin NAO cria processo com containers acima do limite (41)', async () => {
+      const containers = Array.from({ length: 41 }, (_, idx) => ({
+        id: `CNT-${idx + 1}`,
+        number: '',
+        seal: '',
+        type: '',
+      }))
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p16'), {
+          name: 'P',
+          category: 'FCL',
+          containers,
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com containers como string', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p17'), {
+          name: 'P',
+          category: 'FCL',
+          containers: 'x',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza shippedAt', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p18'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p18'), {
+          shippedAt: '2026-09-20',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza containers', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p19'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p19'), {
+          containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '' }],
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza supplierName', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p20'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p20'), {
+          supplierName: 'Fornecedor X',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
         })
       )
     })

@@ -14,6 +14,7 @@ function buildActionErrorMessage(prefix, error) {
 }
 
 const EVENT_LABELS = {
+  shipped: () => 'Embarque realizado',
   berthed: () => 'Atracação confirmada',
   arrived: () => 'Chegada confirmada',
   cargoPresence: () => 'Presença de carga informada',
