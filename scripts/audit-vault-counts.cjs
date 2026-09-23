@@ -368,9 +368,15 @@ function audit() {
     // Regex captura só `match /<col>/{...}` (curinga) — matches com
     // documento nomeado (ex.: `match /barra/suggestion`) não contam
     // como top-level collection nova.
+    // D-9 (F17.1b): subcolecoes conhecidas — `messages` e `events` sao
+    // aninhadas dentro de `processes/{processId}`, nao top-level. O nome
+    // sozinho nao carrega o path completo (a regex nao olha nesting), entao
+    // mantemos uma lista explicita de nomes de subcolecao pra excluir do
+    // top-level e contar por CONTEUDO (nao so por tamanho).
+    const SUBCOLLECTION_NAMES = new Set(['messages', 'events'])
     const matches = Array.from(rules.matchAll(/match\s+\/([a-zA-Z][a-zA-Z0-9_]*)\/\{[a-zA-Z]+\}/g)).map((m) => m[1])
-    const topLevel = matches.filter((n) => n !== 'databases' && n !== 'messages').sort()
-    const subLevel = matches.filter((n) => n === 'messages').length > 0 ? 1 : 0
+    const topLevel = matches.filter((n) => n !== 'databases' && !SUBCOLLECTION_NAMES.has(n)).sort()
+    const subLevel = [...new Set(matches.filter((n) => SUBCOLLECTION_NAMES.has(n)))].sort()
     checks++
     if (topLevel.length !== expectedTop) {
       mismatches.push(
@@ -388,18 +394,22 @@ function audit() {
       ok(`firestore.rules top-level = ${topLevel.length}`)
     }
     checks++
-    if (subLevel !== expectedSub) {
+    if (subLevel.length !== expectedSub) {
       mismatches.push(
-        fail(`firestore.rules subcollections: esperado ${expectedSub}, obtido ${subLevel}`)
+        fail(`firestore.rules subcollections: esperado ${expectedSub}, obtido ${subLevel.length}`)
       )
-    } else if (expectedSubList && expectedSubList.length !== subLevel) {
+    } else if (
+      expectedSubList &&
+      JSON.stringify(subLevel) !==
+        JSON.stringify(expectedSubList.map((s) => s.split('/').pop()).sort())
+    ) {
       mismatches.push(
         fail(
-          `firestore.rules subcollections lista: esperado ${expectedSubList.join(',')}, obtido count ${subLevel}`
+          `firestore.rules subcollections lista: esperado ${expectedSubList.join(',')}, obtido ${subLevel.join(',')}`
         )
       )
     } else {
-      ok(`firestore.rules subcollections = ${subLevel}`)
+      ok(`firestore.rules subcollections = ${subLevel.length}`)
     }
   }
 

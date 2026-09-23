@@ -54,6 +54,11 @@ vi.mock('../../src/services/processMessagesRepository', () => ({
   createProcessMessage: (...args) => mockCreateProcessMessage(...args),
   deleteProcessMessage: (...args) => mockDeleteProcessMessage(...args),
 }))
+// F17.1b: defensivo — a pagina renderiza o ProcessDetailView, que agora
+// tem a aba "Histórico" (ProcessHistoryPanel se autocarrega).
+vi.mock('../../src/services/processEventsRepository', () => ({
+  listProcessEvents: vi.fn().mockResolvedValue([]),
+}))
 vi.mock('../../src/services/postReceiptImagesStorage', () => ({
   deletePostReceiptImages: vi.fn().mockResolvedValue(undefined),
   getAddedPostReceiptImages: () => [],

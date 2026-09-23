@@ -1290,6 +1290,80 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('events (subcollection, F17.1b)', () => {
+    beforeEach(async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/p1/events/e1'), {
+          type: 'berthed',
+          field: 'berthed',
+          value: true,
+          previousValue: false,
+          actorId: 'admin-1',
+          actorName: 'Admin',
+          occurredAt: '2026-09-20T10:00:00.000Z',
+          processId: 'p1',
+        })
+      )
+    })
+
+    it('usuario aprovado le', async () => {
+      await assertSucceeds(getDoc(doc(approvedUser('user-1'), 'processes/p1/events/e1')))
+    })
+
+    it('logistica le', async () => {
+      await assertSucceeds(getDoc(doc(logistics('log-1'), 'processes/p1/events/e1')))
+    })
+
+    it('admin le', async () => {
+      await assertSucceeds(getDoc(doc(admin('admin-1'), 'processes/p1/events/e1')))
+    })
+
+    it('anonimo NAO le', async () => {
+      await assertFails(getDoc(doc(anon(), 'processes/p1/events/e1')))
+    })
+
+    it('usuario com status Pendente NAO le', async () => {
+      const db = approvedUser('user-pend', { status: 'Pendente' })
+      await assertFails(getDoc(doc(db, 'processes/p1/events/e1')))
+    })
+
+    it('usuario com email nao corporativo NAO le', async () => {
+      const db = approvedUser('user-gmail', { email: 'alguem@gmail.com' })
+      await assertFails(getDoc(doc(db, 'processes/p1/events/e1')))
+    })
+
+    it('admin NAO cria evento novo (so o trigger, via admin SDK, grava)', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/events/e2'), {
+          type: 'berthed',
+          processId: 'p1',
+        })
+      )
+    })
+
+    it('admin NAO atualiza evento existente', async () => {
+      await assertFails(
+        updateDoc(doc(admin('admin-1'), 'processes/p1/events/e1'), { value: false })
+      )
+    })
+
+    it('admin NAO apaga evento', async () => {
+      await assertFails(deleteDoc(doc(admin('admin-1'), 'processes/p1/events/e1')))
+    })
+
+    it('logistica NAO cria evento', async () => {
+      await assertFails(
+        setDoc(doc(logistics('log-1'), 'processes/p1/events/e2'), { type: 'berthed', processId: 'p1' })
+      )
+    })
+
+    it('usuario aprovado comum NAO cria evento', async () => {
+      await assertFails(
+        setDoc(doc(approvedUser('user-1'), 'processes/p1/events/e2'), { type: 'berthed', processId: 'p1' })
+      )
+    })
+  })
+
   describe('colecoes admin-only (forecastSettings / news / barra)', () => {
     // PR #2 do backlog (auditoria preventiva de drift): harden admin
     // com hasOnly. Cada colecao agora tem allowlist propria.

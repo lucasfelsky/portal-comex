@@ -11,6 +11,7 @@ import {
   EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
   normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildFavoriteProcessUpdatedTitle, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
+import { buildMilestoneEvents } from './milestones.js';
 
 export const createProcessMessageNotifications = onDocumentCreated(
   {
@@ -215,6 +216,49 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
     }
 
     await createNotifications(Array.from(notificationMap.values()))
+  }
+)
+// F17.1b: trigger SEPARADO de `createProcessUpdateNotifications` (D-1) - grava
+// marcos operacionais em `processes/{processId}/events/{eventId}`. Falha de
+// um nao derruba o outro; escrita em subcolecao NAO reaciona este trigger
+// (so reage a `onDocumentUpdated('processes/{processId}')`, o pai).
+export const recordProcessMilestoneEvents = onDocumentUpdated(
+  {
+    document: 'processes/{processId}',
+  },
+  async (event) => {
+    const before = event.data?.before?.data()
+    const after = event.data?.after?.data()
+
+    if (!before || !after) return
+
+    const processId = normalizeString(event.params.processId)
+    const actorUserId = normalizeString(after.updatedById)
+    if (!processId || !actorUserId) return
+
+    const events = buildMilestoneEvents(before, after, {
+      processId,
+      eventId: event.id,
+      eventTime: event.time,
+      repairText: repairTextEncoding,
+    })
+
+    if (events.length === 0) return
+
+    const firestore = getFirestore()
+    const batch = firestore.batch()
+    const eventsCollection = firestore.collection('processes').doc(processId).collection('events')
+
+    for (const { id, data } of events) {
+      batch.set(eventsCollection.doc(id), { ...data, recordedAt: FieldValue.serverTimestamp() })
+    }
+
+    await batch.commit()
+
+    logger.info('Marcos de processo registrados.', {
+      processId,
+      types: events.map((item) => item.data.type),
+    })
   }
 )
 export const sendProcessNotificationEmail = onDocumentCreated(

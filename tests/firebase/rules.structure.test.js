@@ -82,6 +82,18 @@ describe('firestore.rules structure', () => {
       // As regras aninham `match /messages/{messageId} {` dentro de `match /processes/{processId} {`
       expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/messages\/\{messageId\}\s*\{/)
     })
+
+    it('declara a subcollection processes/{pid}/events/{eventId} (F17.1b)', () => {
+      expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/events\/\{eventId\}\s*\{/)
+    })
+
+    it('match /events/{eventId} permite so leitura para aprovados (write: if false)', () => {
+      const match = rules.match(/match\s+\/events\/\{eventId\}\s*\{([\s\S]*?)\n\s{6}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/allow\s+read:\s*if\s+isApprovedUser\s*\(\s*\)/)
+      expect(body).toMatch(/allow\s+create,\s*update,\s*delete:\s*if\s+false/)
+    })
   })
 
   describe('guardas de seguranca', () => {
