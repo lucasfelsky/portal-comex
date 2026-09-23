@@ -1,0 +1,176 @@
+// F17.1a: camada de compatibilidade para o `processStatus` derivado.
+// Funcao pura (sem React, sem firebase) - roda no app E no script de
+// migracao (Node puro). Ver PLAN.md secoes "Decisoes tomadas" (D-A a D-G)
+// e "ADENDO DO ORQUESTRADOR" (AD-1) para o raciocinio completo.
+//
+// D-A: estagios pre-chegada continuam MANUAIS ate o F17.2, restritos aos 3
+// valores de PRE_ARRIVAL_STATUSES. Os ramos de `shippedAt` (linhas 8 e 9 da
+// tabela D-B) sao implementados e testados agora mas ficam dormentes ate o
+// F17.2 (nenhum doc tem `shippedAt` ainda).
+
+import {
+  normalizeComparableText,
+  isCdUnloadingOrReceivedStatus,
+  mapaAllowsCollectionStatus,
+  processStatusOptions,
+} from './processStatus.js'
+import { isMaritimeCategory, isAirCategory } from './processCategories.js'
+import { getCollectionWindows } from '../../utils/collectionWindows.js'
+
+export const PRE_ARRIVAL_STATUSES = ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação']
+
+function hasValue(value) {
+  if (value == null) return false
+  if (typeof value === 'string') return value.trim() !== ''
+  if (typeof value === 'object' && typeof value.toDate === 'function') return true
+  return Boolean(value)
+}
+
+function normalizeDuimpCanonical(value) {
+  return normalizeComparableText(value).trim()
+}
+
+function isDuimpParametrizada(process) {
+  return normalizeDuimpCanonical(process?.duimpStatus) === 'parametrizada'
+}
+
+// Linha 5 da tabela D-B: NUNCA usar `!== 'Aguardando registro da DUIMP'`
+// (vazio tambem seria "diferente" e daria falso positivo).
+function isDuimpRegisteredWaitingParam(process) {
+  const normalized = normalizeDuimpCanonical(process?.duimpStatus)
+  return (
+    normalized === 'aguardando parametrizacao da duimp' ||
+    normalized === 'registrada, aguardando parametrizacao'
+  )
+}
+
+// AD-1: desembaraco concluido. `clearanceCompletedAt` preenchido OU,
+// enquanto nao existir, duimp parametrizada + canal Verde (comportamento
+// legado). Exportada para reuso no gate de coleta (sanitize/form/filtro).
+export function isCustomsCleared(process) {
+  if (hasValue(process?.clearanceCompletedAt)) return true
+  return (
+    isDuimpParametrizada(process) &&
+    normalizeComparableText(process?.parameterizationChannel).trim() === 'verde'
+  )
+}
+
+function areLicensesCleared(process) {
+  const licenses = Array.isArray(process?.licenses) ? process.licenses : []
+
+  if (licenses.length > 0) {
+    return licenses.every(
+      (license) => normalizeComparableText(license?.status).trim() === 'deferida'
+    )
+  }
+
+  if (isMaritimeCategory(process?.category)) {
+    return mapaAllowsCollectionStatus(process?.mapaStatus)
+  }
+
+  return true
+}
+
+function hasCollectionWindowScheduled(process) {
+  return getCollectionWindows(process).some((window) => hasValue(window?.scheduledAt))
+}
+
+function hasArrivalSignal(process) {
+  if (isMaritimeCategory(process?.category)) {
+    return hasValue(process?.berthedAt) || process?.berthed === true
+  }
+  if (isAirCategory(process?.category)) {
+    return hasValue(process?.arrivedAt) || process?.arrived === true
+  }
+  return false
+}
+
+function getLocalDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getPreArrivalFallback(process) {
+  const gravado = String(process?.processStatus ?? '').trim()
+
+  if (PRE_ARRIVAL_STATUSES.includes(gravado)) return gravado
+
+  if (processStatusOptions.includes(gravado)) {
+    // Era um status pos-chegada valido (ex.: admin desmarcou `berthed` de um
+    // processo em "Atracação Confirmada") -> volta pra pre-chegada mais
+    // proxima da chegada.
+    return 'Aguardando atracação'
+  }
+
+  return 'Aguardando Embarque'
+}
+
+/**
+ * Deriva o `processStatus` a partir dos campos operacionais do processo
+ * (tabela D-B do PLAN.md). Le campo novo OU o equivalente atual - camada de
+ * compatibilidade, nenhum campo novo existe em producao ainda (exceto
+ * `clearanceCompletedAt`, antecipado pelo AD-1).
+ */
+export function deriveProcessStatus(process, today = new Date()) {
+  if (isCdUnloadingOrReceivedStatus(process?.collectionStatus)) {
+    return 'Carga recebida'
+  }
+
+  const normalizedCollectionStatus = normalizeComparableText(process?.collectionStatus).trim()
+  if (
+    (normalizedCollectionStatus === 'coleta agendada' ||
+      normalizedCollectionStatus === 'carga a caminho do cd') &&
+    hasCollectionWindowScheduled(process)
+  ) {
+    return 'Coleta Agendada'
+  }
+
+  if (isCustomsCleared(process) && areLicensesCleared(process)) {
+    return 'Aguardando agendamento de coleta'
+  }
+
+  if (hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)) {
+    return 'Aguardando desembaraço'
+  }
+
+  if (hasValue(process?.duimpRegisteredAt) || isDuimpRegisteredWaitingParam(process)) {
+    return 'Aguardando parametrização da DUIMP'
+  }
+
+  if (hasValue(process?.cargoPresenceInformedAt) || process?.cargoPresenceInformed === true) {
+    return 'Aguardando registro da DUIMP'
+  }
+
+  if (hasArrivalSignal(process)) {
+    return 'Atracação Confirmada'
+  }
+
+  if (hasValue(process?.shippedAt)) {
+    const eta = String(process?.eta ?? '').slice(0, 10)
+    const todayKey = getLocalDateKey(today)
+    if (eta && eta <= todayKey) {
+      return 'Aguardando atracação'
+    }
+    return 'Embarcou'
+  }
+
+  return getPreArrivalFallback(process)
+}
+
+/**
+ * D-D: `cargoReceivedAt` acompanha a derivacao. Entra `nowIso` quando o
+ * processo passa a ser `Carga recebida` sem data gravada; preserva a data
+ * existente; zera ao sair de `Carga recebida`.
+ */
+export function resolveCargoReceivedAt(derivedStatus, currentReceivedAt, nowIso) {
+  if (derivedStatus !== 'Carga recebida') return ''
+
+  const normalizedCurrent =
+    typeof currentReceivedAt === 'object' && typeof currentReceivedAt?.toDate === 'function'
+      ? currentReceivedAt.toDate().toISOString()
+      : String(currentReceivedAt ?? '').trim()
+
+  return normalizedCurrent || nowIso
+}

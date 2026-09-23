@@ -22,6 +22,11 @@ import {
   shouldPreserveStockCollectionStatus,
 } from '../features/processes/processStatus'
 import { createAuditEvent } from './auditRepository'
+import {
+  deriveProcessStatus,
+  resolveCargoReceivedAt,
+  isCustomsCleared,
+} from '../features/processes/deriveProcessStatus'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
 import {
   getCollectionWindows,
@@ -315,12 +320,21 @@ function sanitizeCustomsFlow(process) {
   const duimpStatus = cargoPresenceInformed ? canonicalizeDuimpStatus(process.duimpStatus) : ''
   const parameterizationChannel =
     duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
+  // AD-1: campo antecipado do F17.3, mesmo padrao de `mapaInspectionScheduledAt`
+  // (datetime-local, sem normalizacao ISO). So relevante com duimp parametrizada.
+  const clearanceCompletedAt =
+    duimpStatus === 'Parametrizada' ? process.clearanceCompletedAt ?? '' : ''
+  const customsCleared = isCustomsCleared({
+    duimpStatus,
+    parameterizationChannel,
+    clearanceCompletedAt,
+  })
   const canReleaseCollection =
     !isMaritimeCategory(process.category) || mapaAllowsCollection(process.mapaStatus)
   const canonicalizedCollectionStatus = canonicalizeCollectionStatus(process.collectionStatus ?? '')
   const normalizedCollectionStatus =
-    parameterizationChannel === 'Verde' && canReleaseCollection ? canonicalizedCollectionStatus : ''
-  const collectionWindows = parameterizationChannel === 'Verde' && canReleaseCollection
+    customsCleared && canReleaseCollection ? canonicalizedCollectionStatus : ''
+  const collectionWindows = customsCleared && canReleaseCollection
     ? getCollectionWindows(process)
     : []
   const collectionScheduledAt = keepsCollectionSchedule(normalizedCollectionStatus)
@@ -331,6 +345,7 @@ function sanitizeCustomsFlow(process) {
     cargoPresenceInformed,
     duimpStatus,
     parameterizationChannel,
+    clearanceCompletedAt,
     collectionStatus: normalizedCollectionStatus,
     collectionWindows,
     collectionScheduledAt,
@@ -361,6 +376,7 @@ function sanitizeOperationalFields(process) {
         cargoPresenceInformed: false,
         duimpStatus: '',
         parameterizationChannel: '',
+        clearanceCompletedAt: '',
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -409,6 +425,7 @@ function sanitizeOperationalFields(process) {
         cargoPresenceInformed: false,
         duimpStatus: '',
         parameterizationChannel: '',
+        clearanceCompletedAt: '',
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -439,6 +456,7 @@ function sanitizeOperationalFields(process) {
       cargoPresenceInformed: false,
       duimpStatus: '',
       parameterizationChannel: '',
+      clearanceCompletedAt: '',
       collectionStatus: '',
       collectionWindows: [],
       collectionScheduledAt: '',
@@ -466,6 +484,7 @@ function normalizeProcess(rawProcess, fallbackId) {
     cargoPresenceInformed: rawProcess.cargoPresenceInformed,
     duimpStatus: rawProcess.duimpStatus,
     parameterizationChannel: rawProcess.parameterizationChannel,
+    clearanceCompletedAt: rawProcess.clearanceCompletedAt,
     collectionStatus: rawProcess.collectionStatus,
     collectionScheduledAt: rawProcess.collectionScheduledAt,
     collectionWindows: rawProcess.collectionWindows,
@@ -576,6 +595,7 @@ function toFirestorePayload(process) {
     cargoPresenceInformed: Boolean(process.cargoPresenceInformed),
     duimpStatus: String(process.duimpStatus ?? ''),
     parameterizationChannel: String(process.parameterizationChannel ?? ''),
+    clearanceCompletedAt: String(process.clearanceCompletedAt ?? ''),
     collectionStatus: String(process.collectionStatus ?? ''),
     collectionScheduledAt: String(process.collectionScheduledAt ?? ''),
     collectionWindows: serializeCollectionWindowsForFirestore(
@@ -634,18 +654,20 @@ export async function listProcesses() {
 export async function saveProcess(process, actor = null) {
   const normalizedProcess = normalizeProcess(process, process.id || `PROC-${Date.now()}`)
   const now = new Date().toISOString()
+  // F17.1a (D-C): a derivacao roda so na escrita, sobre o processo ja
+  // normalizado/sanitizado. `normalizeProcessStatus` continua aplicado por
+  // cima como guarda (garante que o valor gravado pertence a
+  // `processStatusOptions`).
+  const derivedStatus = deriveProcessStatus(normalizedProcess)
   const nextProcess = {
     ...normalizedProcess,
     id: String(normalizedProcess.id ?? '').trim() || `PROC-${Date.now()}`,
     processNumber:
       normalizedProcess.category === 'CONSOLIDADO' ? '' : normalizedProcess.processNumber,
     etaOriginal: normalizedProcess.etaOriginal || normalizedProcess.eta,
-    processStatus: normalizeProcessStatus(
-      normalizedProcess.processStatus,
-      normalizedProcess.duimpStatus
-    ),
+    processStatus: normalizeProcessStatus(derivedStatus, normalizedProcess.duimpStatus),
     dtaStatus: canonicalizeDtaStatus(normalizedProcess.dtaStatus),
-    cargoReceivedAt: normalizeIsoDateTime(normalizedProcess.cargoReceivedAt),
+    cargoReceivedAt: resolveCargoReceivedAt(derivedStatus, normalizedProcess.cargoReceivedAt, now),
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,
@@ -683,7 +705,12 @@ export async function saveProcess(process, actor = null) {
   return nextProcess
 }
 
-export async function saveProcessCollectionStatus(processId, collectionStatus, actor = null) {
+export async function saveProcessCollectionStatus(
+  processId,
+  collectionStatus,
+  actor = null,
+  currentProcess = null
+) {
   const normalizedId = String(processId ?? '').trim()
   const normalizedStatus = String(collectionStatus ?? '').trim()
   const now = new Date().toISOString()
@@ -711,15 +738,30 @@ export async function saveProcessCollectionStatus(processId, collectionStatus, a
       throw new Error('Processo não encontrado para atualizar o status de coleta.')
     }
 
-    const currentProcess = currentProcesses[existingIndex]
+    const existingProcess = currentProcesses[existingIndex]
 
-    if (!currentProcess.collectionScheduledAt || !keepsCollectionSchedule(currentProcess.collectionStatus)) {
+    if (!existingProcess.collectionScheduledAt || !keepsCollectionSchedule(existingProcess.collectionStatus)) {
       throw new Error('O status de coleta só pode ser atualizado após a coleta agendada.')
     }
 
+    // F17.1a (D-C): deriva `processStatus`/`cargoReceivedAt` sobre o
+    // processo com o `collectionStatus` novo aplicado. So grava quando o
+    // derivado for um dos 2 valores que a logistica pode gravar (D-F) - caso
+    // contrario (dado inconsistente) mantem so o `collectionStatus`.
+    const base = currentProcess ?? existingProcess
+    const derived = deriveProcessStatus({ ...base, collectionStatus: normalizedStatus })
+    const derivedFields =
+      derived === 'Coleta Agendada' || derived === 'Carga recebida'
+        ? {
+            processStatus: derived,
+            cargoReceivedAt: resolveCargoReceivedAt(derived, base.cargoReceivedAt, now),
+          }
+        : {}
+
     const nextProcess = {
-      ...currentProcess,
+      ...existingProcess,
       collectionStatus: normalizedStatus,
+      ...derivedFields,
       updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
       updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
       updatedAt: now,
@@ -735,12 +777,27 @@ export async function saveProcessCollectionStatus(processId, collectionStatus, a
     return nextProcess
   }
 
-  await updateDoc(doc(firestore, 'processes', normalizedId), {
+  const updatePayload = {
     collectionStatus: normalizedStatus,
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: serverTimestamp(),
-  })
+  }
+
+  let derivedFields = {}
+  if (currentProcess) {
+    const derived = deriveProcessStatus({ ...currentProcess, collectionStatus: normalizedStatus })
+    if (derived === 'Coleta Agendada' || derived === 'Carga recebida') {
+      derivedFields = {
+        processStatus: derived,
+        cargoReceivedAt: resolveCargoReceivedAt(derived, currentProcess.cargoReceivedAt, now),
+      }
+      updatePayload.processStatus = derivedFields.processStatus
+      updatePayload.cargoReceivedAt = derivedFields.cargoReceivedAt
+    }
+  }
+
+  await updateDoc(doc(firestore, 'processes', normalizedId), updatePayload)
 
   await recordProcessAudit({
     action: 'Status de coleta atualizado',
@@ -751,6 +808,7 @@ export async function saveProcessCollectionStatus(processId, collectionStatus, a
   return {
     id: normalizedId,
     collectionStatus: normalizedStatus,
+    ...derivedFields,
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,

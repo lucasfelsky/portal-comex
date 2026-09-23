@@ -145,6 +145,7 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     status === 'atracação confirmada' ||
     status === 'aguardando registro da duimp' ||
     status === 'aguardando parametrização da duimp' ||
+    status === 'aguardando desembaraço' ||
     status === 'aguardando agendamento de coleta'
   ) {
     return {

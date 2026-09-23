@@ -5,7 +5,7 @@
 // `currentStage` é o índice do estágio ATIVO; tudo antes conta como
 // concluído. `isComplete` = carga recebida → a timeline inteira preenche.
 
-import { canonicalizeProcessStatus } from './processStatus'
+import { canonicalizeProcessStatus } from './processStatus.js'
 
 export const PROCESS_STAGES = ['Embarque', 'Trânsito', 'Chegada', 'Liberação', 'Entrega']
 
@@ -16,6 +16,7 @@ const STAGE_BY_STATUS = {
   'Atracação Confirmada': 2,
   'Aguardando registro da DUIMP': 3,
   'Aguardando parametrização da DUIMP': 3,
+  'Aguardando desembaraço': 3,
   'Aguardando agendamento de coleta': 4,
   'Coleta Agendada': 4,
   'Carga recebida': 4,

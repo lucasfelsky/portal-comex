@@ -93,6 +93,10 @@ service cloud.firestore {
       return status in [
         'Aguardando agendamento de coleta',
         'Coleta Agendada',
+        // F17.1: fecha lacuna herdada do F17.0 - logistica nao grava o
+        // legado via API (o app so canonicaliza 'Aguardando agendamento'
+        // pra 'Aguardando agendamento de coleta' na LEITURA).
+        'Aguardando agendamento',
       ];
     }
 
@@ -161,6 +165,9 @@ service cloud.firestore {
         'processNotes', 'carrierName', 'warehouseDeliveryDateOverride', 'postReceiptNotes',
         'postReceiptImages', 'cargoReceivedAt', 'items', 'berthed', 'arrived',
         'cargoPresenceInformed', 'duimpStatus', 'parameterizationChannel',
+        // AD-1 (antecipacao do F17.3): so admin grava. Datetime-local,
+        // mesmo padrao de mapaInspectionScheduledAt.
+        'clearanceCompletedAt',
         'collectionStatus', 'collectionScheduledAt', 'collectionWindows',
         'mapaStatus', 'mapaInspectionScheduledAt', 'dtaStatus',
         'dtaLoadingScheduledAt', 'dtaArrivalAtItajai', 'updatedById',
@@ -232,15 +239,24 @@ service cloud.firestore {
       );
     }
 
+    // F17.1a (D-F): a logistica passa a gravar tambem `processStatus` (so
+    // 'Coleta Agendada' ou 'Carga recebida' - os 2 valores canonicos que o
+    // repositorio deriva pra ela, ver deriveProcessStatus.js) e
+    // `cargoReceivedAt` (D-D). A checagem de VALOR de `processStatus` e'
+    // uma allowlist positiva, mas e' a fronteira de permissao D4 do spec
+    // (nao vocabulario que evolui como `collectionStatus`), e os 2 valores
+    // sao constantes canonicas gravadas por `normalizeProcessStatus`.
     function isLogisticsCollectionStatusUpdate() {
       return hasScheduledCollection()
         && !isPreCollectionStatus(request.resource.data.collectionStatus)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'collectionStatus',
-          'updatedAt',
-          'updatedById',
-          'updatedByName',
-        ]);
+          'collectionStatus', 'processStatus', 'cargoReceivedAt',
+          'updatedAt', 'updatedById', 'updatedByName',
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['processStatus'])
+          || request.resource.data.processStatus in ['Coleta Agendada', 'Carga recebida'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cargoReceivedAt'])
+          || request.resource.data.cargoReceivedAt is string);
     }
 
     function isSelfRegistration() {

@@ -16,6 +16,7 @@ import {
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
+import { deriveProcessStatus, isCustomsCleared } from './deriveProcessStatus'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -236,29 +237,43 @@ export default function ProcessForm({
     </>
   )
 
+  // F17.1a (D-A): status derivado - so' fica editavel manualmente nos 3
+  // estagios pre-chegada, enquanto nao existe sinal de chegada (`berthed`/
+  // `arrived`). `processStatusOptions` aqui e' PRE_ARRIVAL_STATUSES (a page
+  // passa esse valor - ver ProcessesPage.jsx).
+  const hasArrivalSignal =
+    (isMaritimeCategory(draft.category) && draft.berthed) ||
+    (isAirCategory(draft.category) && draft.arrived)
+  const derivedProcessStatus = deriveProcessStatus(draft)
+  const preArrivalValue = processStatusOptions.includes(draft.processStatus)
+    ? draft.processStatus
+    : derivedProcessStatus
+
   const renderStatusStep = () => (
     <>
       <div className="detail-card detail-card--split">
-        <label className="field">
-          <span>Status do processo</span>
-          <SelectField
-            className="text-input"
-            value={draft.processStatus}
-            onChange={(event) => onDraftChange('processStatus', event.target.value)}
-          >
-            {processStatusOptions.map((item) => (
-              <option key={item} value={item}>
-                {getDisplayedProcessStatus(item, draft.category)}
-              </option>
-            ))}
-          </SelectField>
-        </label>
         <div className="detail-card detail-card--soft">
-          <span className="detail-label">Leitura rápida</span>
-          <span className={getStatusTagClass(draft.processStatus)}>
-            {getDisplayedProcessStatus(draft.processStatus, draft.category)}
+          <span className="detail-label">Status do processo (automático)</span>
+          <span className={getStatusTagClass(derivedProcessStatus)}>
+            {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
           </span>
         </div>
+        {!hasArrivalSignal ? (
+          <label className="field">
+            <span>Etapa pré-chegada (manual até o registro da data de embarque)</span>
+            <SelectField
+              className="text-input"
+              value={preArrivalValue}
+              onChange={(event) => onDraftChange('processStatus', event.target.value)}
+            >
+              {processStatusOptions.map((item) => (
+                <option key={item} value={item}>
+                  {getDisplayedProcessStatus(item, draft.category)}
+                </option>
+              ))}
+            </SelectField>
+          </label>
+        ) : null}
       </div>
 
       <div className="detail-card detail-card--split">
@@ -381,7 +396,23 @@ export default function ProcessForm({
               </SelectField>
             </label>
           ) : null}
-          {draft.parameterizationChannel === 'Verde' && mapaAllowsCollection(draft.mapaStatus) ? (
+          {draft.duimpStatus === 'Parametrizada' && draft.parameterizationChannel ? (
+            <label className="field">
+              <span>Desembaraço concluído em</span>
+              <input
+                className="text-input"
+                type="datetime-local"
+                value={draft.clearanceCompletedAt}
+                onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
+              />
+              <small className="field-hint">
+                {draft.parameterizationChannel === 'Verde'
+                  ? 'Opcional no canal Verde (libera a coleta sozinho).'
+                  : 'Obrigatório para liberar a coleta neste canal.'}
+              </small>
+            </label>
+          ) : null}
+          {isCustomsCleared(draft) && mapaAllowsCollection(draft.mapaStatus) ? (
             <label className="field">
               <span>Coleta</span>
               <SelectField
@@ -503,7 +534,23 @@ export default function ProcessForm({
               </SelectField>
             </label>
           ) : null}
-          {draft.parameterizationChannel === 'Verde' ? (
+          {draft.duimpStatus === 'Parametrizada' && draft.parameterizationChannel ? (
+            <label className="field">
+              <span>Desembaraço concluído em</span>
+              <input
+                className="text-input"
+                type="datetime-local"
+                value={draft.clearanceCompletedAt}
+                onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
+              />
+              <small className="field-hint">
+                {draft.parameterizationChannel === 'Verde'
+                  ? 'Opcional no canal Verde (libera a coleta sozinho).'
+                  : 'Obrigatório para liberar a coleta neste canal.'}
+              </small>
+            </label>
+          ) : null}
+          {isCustomsCleared(draft) ? (
             <label className="field">
               <span>Coleta</span>
               <SelectField

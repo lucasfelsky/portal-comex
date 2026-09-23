@@ -43,12 +43,13 @@ import {
   normalizeComparableText,
   postCollectionStatusOptions,
   processStatusOptions,
-  shouldPreserveStockCollectionStatus,
 } from '../features/processes/processStatus'
 import {
   isMaritimeCategory,
   isAirCategory,
 } from '../features/processes/processCategories'
+import { isCustomsCleared, PRE_ARRIVAL_STATUSES } from '../features/processes/deriveProcessStatus'
+import { getPendingFields } from '../features/processes/pendingFields'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
@@ -93,6 +94,7 @@ const emptyDraft = () => ({
   cargoPresenceInformed: false,
   duimpStatus: '',
   parameterizationChannel: '',
+  clearanceCompletedAt: '',
   collectionStatus: '',
   collectionWindows: [],
   collectionScheduledAt: '',
@@ -104,21 +106,6 @@ const emptyDraft = () => ({
 })
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
-// PR #15 (2026-07-09): usa data local (nao' UTC) pra evitar bug
-// de timezone. `new Date().toISOString()` sempre usa UTC, e em
-// BRT (UTC-3) o UTC pode estar num dia diferente do local
-// (especialmente 21:00-23:59 BRT, onde UTC ja' e' dia seguinte).
-// Resultado: eta 'YYYY-MM-DD' (que e' local) seria comparado com
-// UTC, gerando falsos positivos/negativos.
-const isEtaReached = (eta) => {
-  if (!eta) return false
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const todayLocal = `${year}-${month}-${day}`
-  return eta <= todayLocal
-}
 
 function formatCargoUnit(quantity, singularLabel, pluralLabel) {
   return `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
@@ -295,6 +282,7 @@ function sanitizeCustoms(draft, incomingWindows = null) {
       ...draft,
       duimpStatus: '',
       parameterizationChannel: '',
+      clearanceCompletedAt: '',
       collectionStatus: '',
       collectionWindows: [],
       collectionScheduledAt: '',
@@ -304,6 +292,7 @@ function sanitizeCustoms(draft, incomingWindows = null) {
     return {
       ...draft,
       parameterizationChannel: '',
+      clearanceCompletedAt: '',
       collectionStatus: '',
       collectionWindows: [],
       collectionScheduledAt: '',
@@ -312,7 +301,10 @@ function sanitizeCustoms(draft, incomingWindows = null) {
   if (isMaritimeCategory(draft.category) && !mapaAllowsCollection(draft.mapaStatus)) {
     return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
-  if (draft.parameterizationChannel !== 'Verde') {
+  // AD-1: Verde continua liberando sozinho (isCustomsCleared cobre o legado
+  // duimp Parametrizada + canal Verde); Amarelo/Vermelho/Cinza so liberam
+  // com `clearanceCompletedAt` preenchido.
+  if (!isCustomsCleared(draft)) {
     return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
   if (!keepsCollectionSchedule(draft.collectionStatus)) {
@@ -366,6 +358,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         cargoPresenceInformed: false,
         duimpStatus: '',
         parameterizationChannel: '',
+        clearanceCompletedAt: '',
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -385,6 +378,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         cargoPresenceInformed: false,
         duimpStatus: '',
         parameterizationChannel: '',
+        clearanceCompletedAt: '',
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -410,6 +404,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     cargoPresenceInformed: false,
     duimpStatus: '',
     parameterizationChannel: '',
+    clearanceCompletedAt: '',
     collectionStatus: '',
     collectionWindows: [],
     collectionScheduledAt: '',
@@ -573,14 +568,15 @@ export default function ProcessesPage() {
             item.cargoPresenceInformed &&
             (!item.duimpStatus || item.duimpStatus !== 'Parametrizada')) ||
           (operationFilter === 'Coleta pendente' &&
-            item.parameterizationChannel === 'Verde' &&
+            isCustomsCleared(item) &&
             (!item.collectionStatus || !keepsCollectionSchedule(item.collectionStatus))) ||
           (operationFilter === 'Coleta agendada' && keepsCollectionSchedule(item.collectionStatus)) ||
           (operationFilter === 'DTA em andamento' &&
             isAirCategory(item.category) &&
             item.arrived &&
             item.dtaStatus &&
-            !isDtaTransitCompleted(item.dtaStatus))
+            !isDtaTransitCompleted(item.dtaStatus)) ||
+          (operationFilter === 'Dados pendentes' && getPendingFields(item).length > 0)
 
         if (!matchesCategory || !matchesEta || !matchesOperation) {
           return false
@@ -680,9 +676,8 @@ export default function ProcessesPage() {
     }
   }, [isPostReceiptGalleryOpen, selectedProcessPostReceiptImages.length])
 
-  const canShowMaritimeFlow =
-    viewMode === 'edit' && isMaritimeCategory(draft.category) && isEtaReached(draft.eta)
-  const canShowAirFlow = viewMode === 'edit' && isAirCategory(draft.category) && isEtaReached(draft.eta)
+  const canShowMaritimeFlow = viewMode === 'edit' && isMaritimeCategory(draft.category)
+  const canShowAirFlow = viewMode === 'edit' && isAirCategory(draft.category)
   const relatedActiveProcesses = useMemo(() => {
     if (!selectedItemName) return []
 
@@ -1037,22 +1032,10 @@ export default function ProcessesPage() {
       } else {
         payload.etaOriginal = selectedProcess?.etaOriginal || draft.etaOriginal || draft.eta
       }
-      const nextProcessStatus = payload.processStatus
-      const previousProcessStatus = selectedProcess?.processStatus ?? ''
-      if (nextProcessStatus === 'Carga recebida' && previousProcessStatus !== 'Carga recebida') {
-        payload.cargoReceivedAt = new Date().toISOString()
-        // Ao confirmar o recebimento pela primeira vez, avanca o status de
-        // coleta direto pra "Carga disponivel em estoque", pulando os
-        // estagios intermediarios (Conferencia/Etiquetagem, Entrada).
-        payload.collectionStatus = 'Carga disponível em estoque'
-      } else if (nextProcessStatus === 'Carga recebida') {
-        payload.cargoReceivedAt = selectedProcess?.cargoReceivedAt || draft.cargoReceivedAt || ''
-        if (!payload.collectionStatus && shouldPreserveStockCollectionStatus(selectedProcess)) {
-          payload.collectionStatus = selectedProcess.collectionStatus
-        }
-      } else {
-        payload.cargoReceivedAt = ''
-      }
+      // F17.1a: `processStatus`/`cargoReceivedAt` agora sao resolvidos pelo
+      // repositorio (deriveProcessStatus + resolveCargoReceivedAt no
+      // `saveProcess`) - o atalho manual "Carga recebida -> estoque" saiu
+      // daqui de proposito (ver PLAN.md D-B consequencia 3).
       const saved = await saveProcess(payload, profile)
       await refreshProcesses(saved.id)
       setDraft(saved)
@@ -1105,7 +1088,12 @@ export default function ProcessesPage() {
     setIsSaving(true)
     setError('')
     try {
-      await saveProcessCollectionStatus(selectedProcess.id, draft.collectionStatus, profile)
+      await saveProcessCollectionStatus(
+        selectedProcess.id,
+        draft.collectionStatus,
+        profile,
+        selectedProcess
+      )
       const refreshed = await refreshProcesses(selectedProcess.id)
       const saved = refreshed.find((item) => item.id === selectedProcess.id)
       if (saved) setDraft(saved)
@@ -1442,7 +1430,7 @@ export default function ProcessesPage() {
           duimpStatusOptions={duimpStatusOptions}
           mapaStatusOptions={mapaStatusOptions}
           processCategoryOptions={processCategoryOptions}
-          processStatusOptions={processStatusOptions}
+          processStatusOptions={PRE_ARRIVAL_STATUSES}
           onDraftChange={handleDraftChange}
           onSetViewModeList={() => setViewMode('list')}
           onSave={handleSaveProcess}

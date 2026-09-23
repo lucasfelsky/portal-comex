@@ -14,6 +14,7 @@ import {
 } from './processStatus'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
+import { getPendingFields } from './pendingFields'
 
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -64,6 +65,8 @@ function ProcessRow({
     disabled: !isMobile,
   })
   const hideSchedule = shouldHideProcessCardSchedule(item)
+  // D-E: pendencias so aparecem pro admin (compras/preenche tudo).
+  const pendingFields = isAdmin ? getPendingFields(item) : []
 
   return (
     <div className="process-swipe-row">
@@ -158,6 +161,11 @@ function ProcessRow({
             <span className="inline-badge">
               {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
             </span>
+            {pendingFields.length > 0 ? (
+              <span className="inline-badge inline-badge--warn">
+                Dados pendentes ({pendingFields.length})
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="process-item__aside">
@@ -448,6 +456,7 @@ export default function ProcessListView({
             <option value="DUIMP pendente">DUIMP pendente</option>
             <option value="Coleta pendente">Coleta pendente</option>
             <option value="Coleta agendada">Coleta agendada</option>
+            {isAdmin ? <option value="Dados pendentes">Dados pendentes</option> : null}
           </SelectField>
         </label>
       </div>

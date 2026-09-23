@@ -119,3 +119,24 @@ describe('ProcessDetailView — card "Transportadora" (aba Processo)', () => {
     expect(container.querySelector('textarea')).not.toBeInTheDocument()
   })
 })
+
+// F17.1a (D-E): card "Dados pendentes" na aba "Detalhes gerais", admin-only.
+describe('ProcessDetailView — card "Dados pendentes" (F17.1a)', () => {
+  it('admin ve o card quando ha campos faltando (etd/eta vazios no fixture)', () => {
+    renderDetail({
+      isAdmin: true,
+      detailTab: 'general',
+      selectedProcess: makeProcess(),
+    })
+    expect(screen.getByText('Dados pendentes')).toBeInTheDocument()
+  })
+
+  it('user/logistica (isAdmin false) NAO ve o card mesmo com campos faltando', () => {
+    renderDetail({
+      isAdmin: false,
+      detailTab: 'general',
+      selectedProcess: makeProcess(),
+    })
+    expect(screen.queryByText('Dados pendentes')).not.toBeInTheDocument()
+  })
+})

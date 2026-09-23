@@ -5,6 +5,10 @@ export const processStatusOptions = [
   'Atracação Confirmada',
   'Aguardando registro da DUIMP',
   'Aguardando parametrização da DUIMP',
+  // F17.1a: status derivado novo - processo com duimp parametrizada mas
+  // ainda sem desembaraco concluido (canal nao-verde, ou verde com MAPA nao
+  // liberado). Ver PLAN.md tabela D-B linha 4.
+  'Aguardando desembaraço',
   'Aguardando agendamento de coleta',
   'Coleta Agendada',
   // Mantemos "Carga recebida" na lista controlada porque a exibição das
@@ -73,6 +77,7 @@ export function canonicalizeProcessStatus(status, duimpStatus = '') {
   if (normalizedStatus === 'aguardando parametrizacao da duimp') {
     return 'Aguardando parametrização da DUIMP'
   }
+  if (normalizedStatus === 'aguardando desembaraco') return 'Aguardando desembaraço'
   if (normalizedStatus === 'aguardando registro e parametrizacao da duimp') {
     if (
       normalizedDuimpStatus === 'registrada, aguardando parametrizacao' ||
@@ -347,6 +352,7 @@ export function getProcessStatusTone(status) {
   if (
     canonicalStatus === 'Aguardando registro da DUIMP' ||
     canonicalStatus === 'Aguardando parametrização da DUIMP' ||
+    canonicalStatus === 'Aguardando desembaraço' ||
     canonicalStatus === 'Aguardando agendamento de coleta'
   ) {
     return 'warn'

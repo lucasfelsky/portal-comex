@@ -5,7 +5,10 @@
 // pode estar num dia diferente do local, gerando classificacao errada
 // de "Atrasado". Fix: usa componentes locais.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { getProcessDerivedStatus } from '../../src/features/processes/processDerivedStatus'
+import {
+  getProcessDerivedStatus,
+  DERIVED_STATUS_PHASES,
+} from '../../src/features/processes/processDerivedStatus'
 
 beforeAll(() => {
   // Congela o relogio em 2026-07-09 14:00 BRT (quinta) = 17:00 UTC.
@@ -103,5 +106,21 @@ describe('getProcessDerivedStatus - isOverdue timezone (PR #15)', () => {
       collectionWindows: [],
     }, nowInBrt)
     expect(result.label).not.toBe('Atrasado')
+  })
+})
+
+// F17.1a: novo status 'Aguardando desembaraço' entra no mesmo bloco de
+// 'Atracação Confirmada'/'Aguardando registro/parametrização da DUIMP' - fase
+// NO_PORTO ("no porto / desembaraço").
+describe('getProcessDerivedStatus - novo status Aguardando desembaraço (F17.1a)', () => {
+  it('processStatus "Aguardando desembaraço" cai na fase NO_PORTO', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-07-09',
+      category: 'FCL',
+      berthed: true,
+      processStatus: 'Aguardando desembaraço',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.NO_PORTO)
   })
 })

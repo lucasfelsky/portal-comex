@@ -281,3 +281,37 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
     expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
   })
 })
+
+// F17.1a (D-A): status derivado read-only + select de etapa pre-chegada.
+describe('ProcessForm — status derivado (F17.1a)', () => {
+  async function openStatusStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+  }
+
+  it('sem berthed (maritimo) mostra o select de etapa pré-chegada com as 3 opções', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({ category: 'FCL', berthed: false, processStatus: 'Aguardando Embarque' }),
+      processStatusOptions: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
+    })
+    await openStatusStep(user)
+    expect(
+      screen.getByText('Etapa pré-chegada (manual até o registro da data de embarque)')
+    ).toBeInTheDocument()
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(3)
+  })
+
+  it('com berthed:true NÃO mostra o select de etapa e a tag mostra "Atracação confirmada"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({ category: 'FCL', berthed: true, processStatus: 'Aguardando Embarque' }),
+      processStatusOptions: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
+    })
+    await openStatusStep(user)
+    expect(
+      screen.queryByText('Etapa pré-chegada (manual até o registro da data de embarque)')
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Atracação confirmada')).toBeInTheDocument()
+  })
+})
