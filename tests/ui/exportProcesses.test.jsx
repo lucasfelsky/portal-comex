@@ -29,7 +29,7 @@ const PROCESS = {
 
 describe('buildProcessesExportRows', () => {
   it('monta a linha com datas pt-BR e status derivado', () => {
-    const rows = buildProcessesExportRows([PROCESS], NOW)
+    const rows = buildProcessesExportRows([PROCESS], NOW, { canSeeName: true })
 
     expect(rows).toHaveLength(1)
     const row = rows[0]
@@ -49,7 +49,7 @@ describe('buildProcessesExportRows', () => {
   })
 
   it('usa a janela de coleta MAIS PRÓXIMA (ordenada), formatada com hora', () => {
-    const rows = buildProcessesExportRows([PROCESS], NOW)
+    const rows = buildProcessesExportRows([PROCESS], NOW, { canSeeName: true })
     expect(rows[0]['Próxima coleta']).toContain('10/07/2026')
     expect(rows[0]['Próxima coleta']).toContain('14:30')
   })
@@ -79,5 +79,39 @@ describe('buildProcessesExportRows', () => {
 describe('buildExportFileName', () => {
   it('nomeia com a data local YYYY-MM-DD', () => {
     expect(buildExportFileName(NOW)).toBe('processos-2026-07-08.xlsx')
+  })
+})
+
+// F17.0 bug 4: o export não pode expor o nome de categoria restrita
+// (FCL/LCL/AEREO) para quem não é admin/logística.
+describe('buildProcessesExportRows — mascaramento de nome (bug 4)', () => {
+  it('FCL sem canSeeName mascara Nome; Processo cai pro PO (não pro nome)', () => {
+    const rows = buildProcessesExportRows([PROCESS], NOW)
+    expect(rows[0].Nome).toBe('')
+    expect(rows[0].Processo).toBe('PO 12345')
+  })
+
+  it('LCL/AEREO sem canSeeName e processNumber vazio -> Processo também vazio (não vaza o nome)', () => {
+    const rows = buildProcessesExportRows(
+      [
+        { ...PROCESS, category: 'LCL', processNumber: '' },
+        { ...PROCESS, category: 'AEREO', processNumber: '' },
+      ],
+      NOW
+    )
+    expect(rows[0].Nome).toBe('')
+    expect(rows[0].Processo).toBe('')
+    expect(rows[1].Nome).toBe('')
+    expect(rows[1].Processo).toBe('')
+  })
+
+  it('CONSOLIDADO sem canSeeName mantém o nome visível (categoria não restrita)', () => {
+    const rows = buildProcessesExportRows([{ ...PROCESS, category: 'CONSOLIDADO' }], NOW)
+    expect(rows[0].Nome).toBe('CON CN PO 12345')
+  })
+
+  it('a chave Nome está presente em todas as linhas (mascarada ou não)', () => {
+    const rows = buildProcessesExportRows([PROCESS, { ...PROCESS, category: 'CONSOLIDADO' }], NOW)
+    rows.forEach((row) => expect(row).toHaveProperty('Nome'))
   })
 })

@@ -20,6 +20,7 @@ import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
 } from '../../utils/deliveryForecast'
+import { getCollectionWindows } from '../../utils/collectionWindows'
 
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
@@ -100,11 +101,7 @@ export default function ProcessForm({
     normalizeComparableText(value) === 'carga a caminho do cd'
 
   const canUsePostCollectionStatuses = (process) =>
-    Boolean(
-      Array.isArray(process?.collectionWindows)
-        ? process.collectionWindows.length
-        : 0 && keepsCollectionSchedule(process?.collectionStatus)
-    )
+    Boolean(getCollectionWindows(process).length && keepsCollectionSchedule(process?.collectionStatus))
 
   const getCollectionStatusOptions = (process) => {
     if (canUsePostCollectionStatuses(process)) return collectionStatusOptions

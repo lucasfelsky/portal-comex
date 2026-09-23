@@ -43,6 +43,7 @@ import {
   normalizeComparableText,
   postCollectionStatusOptions,
   processStatusOptions,
+  shouldPreserveStockCollectionStatus,
 } from '../features/processes/processStatus'
 import {
   isMaritimeCategory,
@@ -1046,6 +1047,9 @@ export default function ProcessesPage() {
         payload.collectionStatus = 'Carga disponível em estoque'
       } else if (nextProcessStatus === 'Carga recebida') {
         payload.cargoReceivedAt = selectedProcess?.cargoReceivedAt || draft.cargoReceivedAt || ''
+        if (!payload.collectionStatus && shouldPreserveStockCollectionStatus(selectedProcess)) {
+          payload.collectionStatus = selectedProcess.collectionStatus
+        }
       } else {
         payload.cargoReceivedAt = ''
       }
@@ -1400,7 +1404,9 @@ export default function ProcessesPage() {
           onExport={async () => {
             setIsExporting(true)
             try {
-              const exportedCount = await exportProcessesToXlsx(filteredProcesses)
+              const exportedCount = await exportProcessesToXlsx(filteredProcesses, new Date(), {
+                canSeeName,
+              })
               toast.success(`Exportados ${exportedCount} processos para Excel.`)
             } catch (error) {
               console.error('Falha ao exportar processos.', error)

@@ -190,3 +190,94 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(screen.queryByText('Transportadora')).not.toBeInTheDocument()
   })
 })
+
+// F17.0 bugs 2 e 3: precedencia de operador em `canUsePostCollectionStatuses`
+// (bug com janela libera pos-coleta mesmo sem status "retentor") e MAPA vazio
+// bloqueando o select de Coleta em maritimo.
+describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
+  function maritimeReadyDraft(overrides = {}) {
+    return makeDraft({
+      category: 'FCL',
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      ...overrides,
+    })
+  }
+
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  }
+
+  it('janela + "Coleta Agendada" mostra a opção de estoque', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      collectionStatusOptions: ['Coleta Agendada', 'Carga disponível em estoque'],
+      draft: maritimeReadyDraft({
+        collectionStatus: 'Coleta Agendada',
+        collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00' }],
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByRole('option', { name: 'Carga disponível em estoque' })).toBeInTheDocument()
+  })
+
+  it('janela + collectionStatus vazio NÃO mostra a opção de estoque (bug antes do fix)', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      collectionStatusOptions: ['Coleta Agendada', 'Carga disponível em estoque'],
+      draft: maritimeReadyDraft({
+        collectionStatus: '',
+        collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00' }],
+      }),
+    })
+    await openFlowStep(user)
+    expect(
+      screen.queryByRole('option', { name: 'Carga disponível em estoque' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('collectionWindows vazio + collectionScheduledAt legado + "Coleta Agendada" mostra a opção de estoque', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      collectionStatusOptions: ['Coleta Agendada', 'Carga disponível em estoque'],
+      draft: maritimeReadyDraft({
+        collectionStatus: 'Coleta Agendada',
+        collectionWindows: [],
+        collectionScheduledAt: '2026-01-01T10:00:00',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByRole('option', { name: 'Carga disponível em estoque' })).toBeInTheDocument()
+  })
+
+  it('mapaStatus vazio renderiza o select de Coleta', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: maritimeReadyDraft({ mapaStatus: '' }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Coleta')).toBeInTheDocument()
+  })
+
+  it('mapaStatus "Aguardando MAPA" NÃO renderiza o select de Coleta', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      mapaStatusOptions: ['Aguardando MAPA', 'Liberado'],
+      draft: maritimeReadyDraft({ mapaStatus: 'Aguardando MAPA' }),
+    })
+    await openFlowStep(user)
+    expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
+  })
+})

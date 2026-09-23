@@ -47,6 +47,7 @@ export function isMapaInspectionScheduledStatus(status) {
 }
 
 export function mapaAllowsCollectionStatus(status) {
+  if (String(status ?? '').trim() === '') return true
   return status === 'Liberado' || status === 'LPCO deferida, MAPA liberado'
 }
 
@@ -154,6 +155,26 @@ export function isProcessInStock(process) {
 // mantemos visivel.
 export function isProcessTrulyFinalized(process) {
   return isProcessInStock(process)
+}
+
+// F17.0 bug 5: o select de `collectionStatus` grava 'Aguardando
+// agendamento', mas `isPreCollectionStatus` (firestore.rules) e
+// `getUnscheduledItemLabel` esperam 'Aguardando agendamento de coleta'.
+// Alias de leitura (nao introduz allowlist positiva - ver comentario de
+// `isCollectionScheduledOrBeyondStatus`): qualquer outro valor passa
+// inalterado.
+export function canonicalizeCollectionStatus(status) {
+  if (normalizeComparableText(status).trim() === 'aguardando agendamento') {
+    return 'Aguardando agendamento de coleta'
+  }
+  return String(status ?? '')
+}
+
+// F17.0 bug 6: sinal para preservar `collectionStatus === 'Carga
+// disponível em estoque'` quando o processo ja foi finalizado (nao deixar
+// o sanitize do fluxo aduaneiro apagar a promocao pra estoque).
+export function shouldPreserveStockCollectionStatus(process) {
+  return isProcessStatusFinalized(process?.processStatus) && isProcessInStock(process)
 }
 
 // PR #6 (2026-07-09): label dinamica pro card "Coleta nao
