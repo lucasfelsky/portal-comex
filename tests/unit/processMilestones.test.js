@@ -26,6 +26,39 @@ function eventsOfType(events, type) {
   return events.filter((event) => event.data.type === type)
 }
 
+describe('buildMilestoneEvents - shipped (F17.2a D-9)', () => {
+  it("'' -> '2026-09-20' gera shipped com occurredAt 03:00:00.000Z e occurredAtSource 'field'", () => {
+    const before = baseMaritime({ shippedAt: '' })
+    const after = baseMaritime({ shippedAt: '2026-09-20' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'shipped')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('2026-09-20')
+    expect(events[0].data.previousValue).toBe('')
+    expect(events[0].data.occurredAt).toBe('2026-09-20T03:00:00.000Z')
+    expect(events[0].data.occurredAtSource).toBe('field')
+  })
+
+  it('data ja preenchida alterada NAO gera evento novo', () => {
+    const before = baseMaritime({ shippedAt: '2026-09-01' })
+    const after = baseMaritime({ shippedAt: '2026-09-20' })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'shipped')).toHaveLength(0)
+  })
+
+  it('sem shippedAt (legado) NAO gera evento', () => {
+    const before = baseMaritime({})
+    const after = baseMaritime({})
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'shipped')).toHaveLength(0)
+  })
+
+  it('save com shippedAt + mudanca de status gera shipped E statusChanged', () => {
+    const before = baseMaritime({ shippedAt: '', processStatus: 'Aguardando Embarque' })
+    const after = baseMaritime({ shippedAt: '2026-09-20', processStatus: 'Embarcou' })
+    const events = buildMilestoneEvents(before, after, { processId: 'p1' })
+    expect(eventsOfType(events, 'shipped')).toHaveLength(1)
+    expect(eventsOfType(events, 'statusChanged')).toHaveLength(1)
+  })
+})
+
 describe('buildMilestoneEvents - tabela D-4', () => {
   it('berthed: transicao false->true em categoria maritima gera evento', () => {
     const before = baseMaritime({ berthed: false })

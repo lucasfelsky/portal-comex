@@ -16,8 +16,12 @@ function completeMaritimeProcess(overrides = {}) {
     eta: '2026-01-10',
     items: [{ commercialName: 'Resina', quantity: 10 }],
     containerQuantity: 1,
+    containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC' }],
     palletQuantity: 0,
     berthed: false,
+    supplierName: 'Fornecedor Atlas',
+    originLocation: 'Hamburgo',
+    incoterm: 'FOB',
     ...overrides,
   }
 }
@@ -44,8 +48,8 @@ describe('getPendingFields - estágio 0', () => {
       getPendingFields(completeMaritimeProcess({ items: [] })).map((f) => f.field)
     ).toContain('items')
     expect(
-      getPendingFields(completeMaritimeProcess({ containerQuantity: 0 })).map((f) => f.field)
-    ).toContain('containerQuantity')
+      getPendingFields(completeMaritimeProcess({ containers: [] })).map((f) => f.id)
+    ).toContain('containers')
   })
 
   it('CONSOLIDADO nao cobra processNumber', () => {
@@ -53,18 +57,145 @@ describe('getPendingFields - estágio 0', () => {
     expect(getPendingFields(process).map((f) => f.field)).not.toContain('processNumber')
   })
 
-  it('AEREO nao cobra containerQuantity', () => {
+  it('AEREO nao cobra containers', () => {
     const process = completeMaritimeProcess({
       category: 'AEREO',
+      containers: [],
       containerQuantity: 0,
       arrived: false,
+      grossWeightKg: 10,
+      chargeableWeightKg: 10,
+      packagesQuantity: 1,
     })
-    expect(getPendingFields(process).map((f) => f.field)).not.toContain('containerQuantity')
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('containers')
   })
 
   it('LCL cobra palletQuantity', () => {
-    const process = completeMaritimeProcess({ category: 'LCL', palletQuantity: 0 })
+    const process = completeMaritimeProcess({
+      category: 'LCL',
+      palletQuantity: 0,
+      grossWeightKg: 10,
+      volumeM3: 1,
+    })
     expect(getPendingFields(process).map((f) => f.field)).toContain('palletQuantity')
+  })
+
+  it('containers sem tipo -> pendencia containerTypes', () => {
+    const process = completeMaritimeProcess({
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('containerTypes')
+  })
+
+  it('LCL sem grossWeightKg/volumeM3 -> pendencias', () => {
+    const process = completeMaritimeProcess({
+      category: 'LCL',
+      palletQuantity: 1,
+      grossWeightKg: 0,
+      volumeM3: 0,
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('grossWeightKg')
+    expect(ids).toContain('volumeM3')
+  })
+
+  it('AEREO sem grossWeightKg/chargeableWeightKg/packagesQuantity -> pendencias', () => {
+    const process = completeMaritimeProcess({
+      category: 'AEREO',
+      containers: [],
+      containerQuantity: 0,
+      arrived: false,
+      grossWeightKg: 0,
+      chargeableWeightKg: 0,
+      packagesQuantity: 0,
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('grossWeightKg')
+    expect(ids).toContain('chargeableWeightKg')
+    expect(ids).toContain('packagesQuantity')
+  })
+
+  it('dangerousGoods true sem unNumber/imoClass -> pendencias', () => {
+    const process = completeMaritimeProcess({ dangerousGoods: true, unNumber: '', imoClass: '' })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('unNumber')
+    expect(ids).toContain('imoClass')
+  })
+
+  it('dangerousGoods false NAO cobra unNumber/imoClass', () => {
+    const process = completeMaritimeProcess({ dangerousGoods: false, unNumber: '', imoClass: '' })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('unNumber')
+    expect(ids).not.toContain('imoClass')
+  })
+
+  it('supplierName/originLocation/incoterm vazios -> pendencias', () => {
+    const process = completeMaritimeProcess({ supplierName: '', originLocation: '', incoterm: '' })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('supplierName')
+    expect(ids).toContain('originLocation')
+    expect(ids).toContain('incoterm')
+  })
+})
+
+describe('getPendingFields - estágio 1 (so aparece com currentStage >= 1)', () => {
+  function shippedMaritimeProcess(overrides = {}) {
+    return completeMaritimeProcess({
+      shippedAt: '2026-01-05',
+      masterBl: 'MBL-1',
+      vesselName: 'Navio Atlas',
+      voyage: 'V001',
+      ...overrides,
+    })
+  }
+
+  it('processo em Aguardando Embarque (estágio 0) NAO cobra shippedAt/masterBl', () => {
+    const process = completeMaritimeProcess({ shippedAt: '', masterBl: '' })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('shippedAt')
+    expect(ids).not.toContain('masterBl')
+  })
+
+  it('processo embarcado (estágio 1) completo -> sem pendencias novas de estagio 1', () => {
+    const process = shippedMaritimeProcess()
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('shippedAt')
+    expect(ids).not.toContain('masterBl')
+    expect(ids).not.toContain('vesselName')
+    expect(ids).not.toContain('voyage')
+  })
+
+  it('processo embarcado sem masterBl (FCL) -> pendencia MBL', () => {
+    const process = shippedMaritimeProcess({ masterBl: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('masterBl')
+  })
+
+  it('LCL/CONSOLIDADO embarcado sem houseBl -> pendencia HBL', () => {
+    const process = shippedMaritimeProcess({ category: 'LCL', masterBl: '', houseBl: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('houseBl')
+  })
+
+  it('AEREO chegado sem mawb/flightNumber -> pendencias', () => {
+    const process = completeMaritimeProcess({
+      category: 'AEREO',
+      containers: [],
+      containerQuantity: 0,
+      shippedAt: '2026-01-05',
+      mawb: '',
+      flightNumber: '',
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('mawb')
+    expect(ids).toContain('flightNumber')
+  })
+
+  it('FCL embarcado com container sem numero/lacre -> pendencias containerNumbers/containerSeals', () => {
+    const process = shippedMaritimeProcess({
+      containers: [{ id: 'CNT-1', number: '', seal: '', type: '40DC' }],
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('containerNumbers')
+    expect(ids).toContain('containerSeals')
   })
 })
 

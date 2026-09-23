@@ -8,7 +8,6 @@ import {
   deriveProcessStatus,
   resolveCargoReceivedAt,
   isCustomsCleared,
-  PRE_ARRIVAL_STATUSES,
 } from '../../src/features/processes/deriveProcessStatus.js'
 
 function baseMaritime(overrides = {}) {
@@ -297,24 +296,47 @@ describe('deriveProcessStatus - linhas 8/9 (shippedAt, dormente ate F17.2)', () 
   })
 })
 
-describe('deriveProcessStatus - linha 10 (fallback D-A pre-chegada)', () => {
-  it('preserva "Atracação Confirmada" gravado quando nao ha sinal -> Aguardando atracação', () => {
+describe('deriveProcessStatus - linhas 8/9/10 (D-3: shippedAt encerra o select manual)', () => {
+  const today = new Date('2026-06-15T12:00:00-03:00')
+
+  it('legado "Embarcou" sem shippedAt + eta passada -> Aguardando atracação', () => {
     expect(
-      deriveProcessStatus(baseMaritime({ processStatus: 'Atracação Confirmada', berthed: false }))
+      deriveProcessStatus(baseMaritime({ processStatus: 'Embarcou', eta: '2026-06-01' }), today)
     ).toBe('Aguardando atracação')
   })
 
-  it('gravado vazio/lixo -> Aguardando Embarque', () => {
+  it('legado "Embarcou" + eta futura -> Embarcou', () => {
+    expect(
+      deriveProcessStatus(baseMaritime({ processStatus: 'Embarcou', eta: '2026-06-20' }), today)
+    ).toBe('Embarcou')
+  })
+
+  it('legado "Aguardando atracação" + eta futura -> Embarcou', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({ processStatus: 'Aguardando atracação', eta: '2026-06-20' }),
+        today
+      )
+    ).toBe('Embarcou')
+  })
+
+  it('legado "Atracação Confirmada" sem sinal de chegada + eta passada -> Aguardando atracação', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({ processStatus: 'Atracação Confirmada', berthed: false, eta: '2026-06-01' }),
+        today
+      )
+    ).toBe('Aguardando atracação')
+  })
+
+  it('gravado "Aguardando Embarque"/vazio/lixo sem shippedAt -> Aguardando Embarque', () => {
+    expect(deriveProcessStatus(baseMaritime({ processStatus: 'Aguardando Embarque' }))).toBe(
+      'Aguardando Embarque'
+    )
     expect(deriveProcessStatus(baseMaritime({ processStatus: '' }))).toBe('Aguardando Embarque')
     expect(deriveProcessStatus(baseMaritime({ processStatus: 'lixo-invalido' }))).toBe(
       'Aguardando Embarque'
     )
-  })
-
-  it('gravado ja e um dos 3 valores de PRE_ARRIVAL_STATUSES -> preserva', () => {
-    PRE_ARRIVAL_STATUSES.forEach((status) => {
-      expect(deriveProcessStatus(baseMaritime({ processStatus: status }))).toBe(status)
-    })
   })
 })
 

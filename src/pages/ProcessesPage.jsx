@@ -48,7 +48,7 @@ import {
   isMaritimeCategory,
   isAirCategory,
 } from '../features/processes/processCategories'
-import { isCustomsCleared, PRE_ARRIVAL_STATUSES } from '../features/processes/deriveProcessStatus'
+import { isCustomsCleared } from '../features/processes/deriveProcessStatus'
 import { getPendingFields } from '../features/processes/pendingFields'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
@@ -103,6 +103,29 @@ const emptyDraft = () => ({
   dtaStatus: '',
   dtaLoadingScheduledAt: '',
   dtaArrivalAtItajai: '',
+  // F17.2a (D-1): identificacao, carga por modal, embarque e transito.
+  supplierName: '',
+  originLocation: '',
+  incoterm: '',
+  forwarderName: '',
+  unNumber: '',
+  imoClass: '',
+  shippedAt: '',
+  vesselName: '',
+  voyage: '',
+  flightNumber: '',
+  masterBl: '',
+  houseBl: '',
+  mawb: '',
+  hawb: '',
+  transshipmentPort: '',
+  dangerousGoods: false,
+  transshipment: false,
+  grossWeightKg: 0,
+  volumeM3: 0,
+  chargeableWeightKg: 0,
+  packagesQuantity: 0,
+  containers: [],
 })
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
@@ -790,6 +813,13 @@ export default function ProcessesPage() {
       if (field === 'collectionWindows') {
         return sanitizeDraft(current, { [field]: value })
       }
+      // F17.2a (D-4): containerQuantity acompanha o tamanho do editor -
+      // remover todos os containers zera a quantidade (a expansao lazy do
+      // repositorio NAO ressuscita, ver D-4).
+      if (field === 'containers') {
+        const nextContainers = Array.isArray(value) ? value : []
+        return { ...current, containers: nextContainers, containerQuantity: nextContainers.length }
+      }
       if (
         [
           'berthed',
@@ -1430,7 +1460,6 @@ export default function ProcessesPage() {
           duimpStatusOptions={duimpStatusOptions}
           mapaStatusOptions={mapaStatusOptions}
           processCategoryOptions={processCategoryOptions}
-          processStatusOptions={PRE_ARRIVAL_STATUSES}
           onDraftChange={handleDraftChange}
           onSetViewModeList={() => setViewMode('list')}
           onSave={handleSaveProcess}

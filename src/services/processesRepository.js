@@ -33,6 +33,14 @@ import {
   normalizeCollectionWindows,
   serializeCollectionWindowsForFirestore,
 } from '../utils/collectionWindows'
+import { normalizeContainers } from '../features/processes/containers'
+import {
+  INCOTERM_OPTIONS,
+  normalizeDecimal,
+  normalizeImoClass,
+  normalizeInteger,
+  normalizeUnNumber,
+} from '../features/processes/operationalOptions'
 
 const STORAGE_KEY = 'sq-comex-processes'
 const RECEIVED_PROCESS_RETENTION_DAYS = 7
@@ -365,6 +373,51 @@ function sanitizeMapaFlow(process) {
   }
 }
 
+function normalizeIncoterm(value) {
+  return INCOTERM_OPTIONS.includes(value) ? value : ''
+}
+
+// F17.2a (D-5): limpeza por categoria dos 22 campos novos, mesmo padrao de
+// `sanitizeMapaFlow`. So' recebe os campos que le - o chamador espalha o
+// resultado por cima do objeto normalizado.
+function sanitizeCargoAndTransitFields(process) {
+  const category = process.category
+  const isMaritime = isMaritimeCategory(category)
+  const isAir = isAirCategory(category)
+  const dangerousGoods = Boolean(process.dangerousGoods)
+  const transshipment = Boolean(process.transshipment)
+
+  return {
+    supplierName: String(process.supplierName ?? '').trim(),
+    originLocation: String(process.originLocation ?? '').trim(),
+    incoterm: normalizeIncoterm(process.incoterm),
+    forwarderName: String(process.forwarderName ?? '').trim(),
+    shippedAt: normalizeIsoDate(process.shippedAt),
+    dangerousGoods,
+    unNumber: dangerousGoods ? normalizeUnNumber(process.unNumber) : '',
+    imoClass: dangerousGoods ? normalizeImoClass(process.imoClass) : '',
+    transshipment,
+    transshipmentPort: transshipment ? String(process.transshipmentPort ?? '').trim() : '',
+    vesselName: isMaritime ? String(process.vesselName ?? '').trim() : '',
+    voyage: isMaritime ? String(process.voyage ?? '').trim() : '',
+    masterBl: isMaritime ? String(process.masterBl ?? '').trim() : '',
+    houseBl: isMaritime ? String(process.houseBl ?? '').trim() : '',
+    flightNumber: isAir ? String(process.flightNumber ?? '').trim() : '',
+    mawb: isAir ? String(process.mawb ?? '').trim() : '',
+    hawb: isAir ? String(process.hawb ?? '').trim() : '',
+    grossWeightKg:
+      category === 'LCL' || isAir ? normalizeDecimal(process.grossWeightKg) : 0,
+    volumeM3: category === 'LCL' ? normalizeDecimal(process.volumeM3) : 0,
+    chargeableWeightKg: isAir ? normalizeDecimal(process.chargeableWeightKg) : 0,
+    packagesQuantity: isAir ? normalizeInteger(process.packagesQuantity) : 0,
+    containers: normalizeContainers(process.containers, {
+      category,
+      containerQuantity: process.containerQuantity,
+      collectionWindows: process.collectionWindows,
+    }),
+  }
+}
+
 function sanitizeOperationalFields(process) {
   if (isMaritimeCategory(process.category)) {
     const berthed = Boolean(process.berthed)
@@ -500,6 +553,43 @@ function normalizeProcess(rawProcess, fallbackId) {
     operationalFields.collectionStatus = postCollectionStatusOptions[2]
   }
 
+  // F17.2a (D-5): limpeza por categoria dos 22 campos novos.
+  const cargoAndTransitFields = sanitizeCargoAndTransitFields({
+    category,
+    dangerousGoods: rawProcess.dangerousGoods,
+    transshipment: rawProcess.transshipment,
+    supplierName: rawProcess.supplierName,
+    originLocation: rawProcess.originLocation,
+    incoterm: rawProcess.incoterm,
+    forwarderName: rawProcess.forwarderName,
+    shippedAt: rawProcess.shippedAt,
+    unNumber: rawProcess.unNumber,
+    imoClass: rawProcess.imoClass,
+    transshipmentPort: rawProcess.transshipmentPort,
+    vesselName: rawProcess.vesselName,
+    voyage: rawProcess.voyage,
+    masterBl: rawProcess.masterBl,
+    houseBl: rawProcess.houseBl,
+    flightNumber: rawProcess.flightNumber,
+    mawb: rawProcess.mawb,
+    hawb: rawProcess.hawb,
+    grossWeightKg: rawProcess.grossWeightKg,
+    volumeM3: rawProcess.volumeM3,
+    chargeableWeightKg: rawProcess.chargeableWeightKg,
+    packagesQuantity: rawProcess.packagesQuantity,
+    containers: rawProcess.containers,
+    containerQuantity: rawProcess.containerQuantity,
+    collectionWindows: rawProcess.collectionWindows,
+  })
+
+  // F17.2a (D-4): FCL/CONSOLIDADO derivam `containerQuantity` do tamanho de
+  // `containers[]` (ja' com a expansao lazy aplicada); LCL/AEREO mantem o
+  // valor manual (nao exibido).
+  const containerQuantity =
+    category === 'FCL' || category === 'CONSOLIDADO'
+      ? cargoAndTransitFields.containers.length
+      : normalizeQuantity(rawProcess.containerQuantity)
+
   return {
     id: resolvedId,
     name: rawProcess.name ?? rawProcess.client ?? '',
@@ -510,10 +600,11 @@ function normalizeProcess(rawProcess, fallbackId) {
     eta,
     etaOriginal: rawProcess.etaOriginal ?? eta,
     processStatus: normalizeProcessStatus(rawProcess.processStatus, operationalFields.duimpStatus),
-    containerQuantity: normalizeQuantity(rawProcess.containerQuantity),
+    containerQuantity,
     palletQuantity: normalizeQuantity(rawProcess.palletQuantity),
     processNotes: String(rawProcess.processNotes ?? '').trim(),
     carrierName: String(rawProcess.carrierName ?? '').trim(),
+    ...cargoAndTransitFields,
     warehouseDeliveryDateOverride: normalizeIsoDate(rawProcess.warehouseDeliveryDateOverride),
     postReceiptNotes: String(rawProcess.postReceiptNotes ?? '').trim(),
     postReceiptImages: normalizePostReceiptImages(rawProcess.postReceiptImages),
@@ -572,16 +663,52 @@ function isExpiredReceivedProcess(process) {
 }
 
 function toFirestorePayload(process) {
+  const category = processCategoryOptions.includes(process.category) ? process.category : 'FCL'
+  // F17.2a (D-5): mesma limpeza por categoria de `normalizeProcess` - o
+  // payload grava os 22 campos SEMPRE (por isso entram todos na allowlist
+  // de create/update).
+  const cargoAndTransitFields = sanitizeCargoAndTransitFields({
+    category,
+    dangerousGoods: process.dangerousGoods,
+    transshipment: process.transshipment,
+    supplierName: process.supplierName,
+    originLocation: process.originLocation,
+    incoterm: process.incoterm,
+    forwarderName: process.forwarderName,
+    shippedAt: process.shippedAt,
+    unNumber: process.unNumber,
+    imoClass: process.imoClass,
+    transshipmentPort: process.transshipmentPort,
+    vesselName: process.vesselName,
+    voyage: process.voyage,
+    masterBl: process.masterBl,
+    houseBl: process.houseBl,
+    flightNumber: process.flightNumber,
+    mawb: process.mawb,
+    hawb: process.hawb,
+    grossWeightKg: process.grossWeightKg,
+    volumeM3: process.volumeM3,
+    chargeableWeightKg: process.chargeableWeightKg,
+    packagesQuantity: process.packagesQuantity,
+    containers: process.containers,
+    containerQuantity: process.containerQuantity,
+    collectionWindows: process.collectionWindows,
+  })
+  const containerQuantity =
+    category === 'FCL' || category === 'CONSOLIDADO'
+      ? cargoAndTransitFields.containers.length
+      : normalizeQuantity(process.containerQuantity)
+
   return {
     name: String(process.name ?? ''),
-    category: processCategoryOptions.includes(process.category) ? process.category : 'FCL',
+    category,
     processNumber: process.category === 'CONSOLIDADO' ? '' : String(process.processNumber ?? ''),
     destination: normalizeDestination(process.destination),
     etd: String(process.etd ?? ''),
     eta: String(process.eta ?? ''),
     etaOriginal: String(process.etaOriginal || process.eta || ''),
     processStatus: normalizeProcessStatus(process.processStatus, process.duimpStatus),
-    containerQuantity: normalizeQuantity(process.containerQuantity),
+    containerQuantity,
     palletQuantity: normalizeQuantity(process.palletQuantity),
     processNotes: String(process.processNotes ?? '').trim(),
     carrierName: String(process.carrierName ?? '').trim(),
@@ -609,6 +736,7 @@ function toFirestorePayload(process) {
     dtaStatus: canonicalizeDtaStatus(process.dtaStatus ?? ''),
     dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? ''),
     dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? ''),
+    ...cargoAndTransitFields,
     updatedById: String(process.updatedById ?? '').trim(),
     updatedByName: String(process.updatedByName ?? '').trim(),
     updatedAt: serverTimestamp(),

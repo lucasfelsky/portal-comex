@@ -15,6 +15,7 @@ import {
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getPendingFields } from './pendingFields'
+import { getContainerSpecialBadges } from './containers'
 
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -161,6 +162,11 @@ function ProcessRow({
             <span className="inline-badge">
               {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
             </span>
+            {getContainerSpecialBadges(item.containers).map((badge) => (
+              <span key={badge} className="inline-badge inline-badge--warn">
+                {badge}
+              </span>
+            ))}
             {pendingFields.length > 0 ? (
               <span className="inline-badge inline-badge--warn">
                 Dados pendentes ({pendingFields.length})

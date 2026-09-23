@@ -235,7 +235,10 @@ describe('F17.1a - derivacao no saveProcess', () => {
     expect(payload.processStatus).toBe('Aguardando desembaraço')
   })
 
-  it('berthed:false + input "Embarcou" preserva "Embarcou"', async () => {
+  it('berthed:false + input "Embarcou" (legado, eta futura) preserva "Embarcou"', async () => {
+    // F17.2a (D-3): legado sem `shippedAt` segue a regra automatica da ETA -
+    // eta futura mantem "Embarcou" (eta vencida regrediria pra "Aguardando
+    // atracação", comportamento aceito da D-3).
     await saveProcess(
       baseMaritimeProcess({
         berthed: false,
@@ -243,6 +246,7 @@ describe('F17.1a - derivacao no saveProcess', () => {
         duimpStatus: '',
         parameterizationChannel: '',
         processStatus: 'Embarcou',
+        eta: '2099-01-01',
       })
     )
 
@@ -324,5 +328,101 @@ describe('F17.1a - derivacao em saveProcessCollectionStatus (logistica)', () => 
     expect(payload.collectionStatus).toBe('Carga a caminho do CD')
     expect(payload.processStatus).toBeUndefined()
     expect(payload.cargoReceivedAt).toBeUndefined()
+  })
+})
+
+describe('F17.2a - containers[]/campos de embarque e transito (D-4/D-5)', () => {
+  it('FCL legado (containerQuantity: 2, sem containers) expande pra CNT-1/CNT-2 e containerQuantity 2', async () => {
+    await saveProcess(baseMaritimeProcess({ category: 'FCL', containerQuantity: 2 }))
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.containers.map((c) => c.id)).toEqual(['CNT-1', 'CNT-2'])
+    expect(payload.containerQuantity).toBe(2)
+  })
+
+  it('FCL com 3 containers e containerQuantity 1 -> containerQuantity vira 3 (deriva do array)', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        category: 'FCL',
+        containerQuantity: 1,
+        containers: [{ number: 'a' }, { number: 'b' }, { number: 'c' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.containers).toHaveLength(3)
+    expect(payload.containerQuantity).toBe(3)
+  })
+
+  it('LCL com containers e mawb -> ambos limpos', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        category: 'LCL',
+        containers: [{ number: 'a' }],
+        mawb: 'MAWB-123',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.containers).toEqual([])
+    expect(payload.mawb).toBe('')
+  })
+
+  it('dangerousGoods:false limpa unNumber/imoClass', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        dangerousGoods: false,
+        unNumber: 'UN 1203',
+        imoClass: '3',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.unNumber).toBe('')
+    expect(payload.imoClass).toBe('')
+  })
+
+  it('dangerousGoods:true preserva unNumber/imoClass normalizados', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        dangerousGoods: true,
+        unNumber: 'UN 1203',
+        imoClass: '3',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.unNumber).toBe('1203')
+    expect(payload.imoClass).toBe('3')
+  })
+
+  it('transshipment:false limpa transshipmentPort', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        transshipment: false,
+        transshipmentPort: 'Singapura',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.transshipmentPort).toBe('')
+  })
+
+  it('payload contem as 22 chaves novas e nenhuma undefined', async () => {
+    await saveProcess(baseMaritimeProcess())
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    const newFields = [
+      'supplierName', 'originLocation', 'incoterm', 'forwarderName', 'unNumber',
+      'imoClass', 'shippedAt', 'vesselName', 'voyage', 'flightNumber', 'masterBl',
+      'houseBl', 'mawb', 'hawb', 'transshipmentPort', 'dangerousGoods',
+      'transshipment', 'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
+      'packagesQuantity', 'containers',
+    ]
+    expect(newFields).toHaveLength(22)
+    newFields.forEach((field) => {
+      expect(payload).toHaveProperty(field)
+      expect(payload[field]).not.toBeUndefined()
+    })
   })
 })

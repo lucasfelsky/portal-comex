@@ -21,6 +21,7 @@ import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { ProcessCargoTransitDetails, ProcessIdentificationDetails } from './ProcessOperationalDetails'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
 // 'detail'), extraída do ProcessesPage. Presentacional — lê só o
@@ -237,6 +238,7 @@ export default function ProcessDetailView({
             <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
             {selectedProcess.processNumber && canShowProcessName(selectedProcess, canSeeName) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
             <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
+            <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} />
             <div className="detail-card">
               <span className="detail-label">ETD / ETA</span>
               <div className="detail-card--split" style={{ marginTop: '8px' }}>
@@ -290,6 +292,7 @@ export default function ProcessDetailView({
                 <p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p>
               </div>
             </div>
+            <ProcessCargoTransitDetails process={selectedProcess} />
             {selectedProcess.processNotes ? (
               <div className="detail-card">
                 <span className="detail-label">Observações do processo</span>

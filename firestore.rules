@@ -136,12 +136,17 @@ service cloud.firestore {
     // (L16: vault desatualizada). Ver Retomada 2026-07-08 § "Auditoria
     // preventiva de drift" § "PR #2 do backlog".
 
-    // processes: 32 campos gravados pelo `toFirestorePayload()`
-    // (src/services/processesRepository.js:540-580). setDoc usado com
+    // processes: 59 campos gravados pelo `toFirestorePayload()`
+    // (src/services/processesRepository.js). setDoc usado com
     // `merge: true` para create E update, entao ambos compartilham a
     // mesma allowlist. `createdById/Name/createdAt` e
     // `customsFlow/mapaFlow/operationalFields` da Colecoes.md NAO sao
     // gravados pelo app (sao campos-fantasma da vault).
+    //
+    // F17.2a (D-10): +22 campos de identificacao/carga por modal/embarque e
+    // transito (containers[], BL/AWB, navio/viagem/voo, transbordo, carga
+    // perigosa, shippedAt). So' admin grava - logistica nao muda
+    // (isLogisticsPostReceiptUpdate/isLogisticsCollectionStatusUpdate).
     function isAdminProcessFields() {
       // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
       // No `update`, `resource.data` existe. Tratamos os 2 casos:
@@ -176,11 +181,25 @@ service cloud.firestore {
         // archiveProcess() em processesRepository.js grava soh esses 3 +
         // updatedById/Name/updatedAt (ja' na lista acima).
         'archived', 'archivedAt', 'archivedBy',
+        // F17.2a (D-1/D-10): identificacao, carga por modal, containers[],
+        // BL/AWB, navio/viagem/voo, transbordo, carga perigosa, shippedAt.
+        'supplierName', 'originLocation', 'incoterm', 'forwarderName',
+        'unNumber', 'imoClass', 'shippedAt', 'vesselName', 'voyage',
+        'flightNumber', 'masterBl', 'houseBl', 'mawb', 'hawb',
+        'transshipmentPort', 'dangerousGoods', 'transshipment',
+        'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
+        'packagesQuantity', 'containers',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (
           request.resource.data.postReceiptImages is list
           && request.resource.data.postReceiptImages.size() <= 10
+        )
+      ) && (
+        !('containers' in request.resource.data)
+        || (
+          request.resource.data.containers is list
+          && request.resource.data.containers.size() <= 40
         )
       );
     }

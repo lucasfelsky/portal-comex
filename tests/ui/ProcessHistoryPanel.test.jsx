@@ -31,10 +31,18 @@ describe('ProcessHistoryPanel', () => {
 
   it('tipo desconhecido usa o fallback "Marco: <type>"', async () => {
     mockListProcessEvents.mockResolvedValue([
-      { id: 'e1', type: 'shipped', value: '', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T10:00:00.000Z' },
+      { id: 'e1', type: 'unknownType', value: '', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T10:00:00.000Z' },
     ])
     render(<ProcessHistoryPanel processId="p1" />)
-    await waitFor(() => expect(screen.getByText('Marco: shipped')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Marco: unknownType')).toBeInTheDocument())
+  })
+
+  it("tipo 'shipped' (F17.2a D-9) usa o label Embarque realizado", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'shipped', value: '2026-09-20', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T03:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() => expect(screen.getByText('Embarque realizado')).toBeInTheDocument())
   })
 
   it('vazio mostra a mensagem de sem retroativos', async () => {

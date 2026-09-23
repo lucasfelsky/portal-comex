@@ -1,12 +1,13 @@
-// F17.1a: camada de compatibilidade para o `processStatus` derivado.
+// F17.1a/F17.2a: camada de compatibilidade para o `processStatus` derivado.
 // Funcao pura (sem React, sem firebase) - roda no app E no script de
-// migracao (Node puro). Ver PLAN.md secoes "Decisoes tomadas" (D-A a D-G)
-// e "ADENDO DO ORQUESTRADOR" (AD-1) para o raciocinio completo.
+// migracao (Node puro). Ver PLAN.md secoes "Decisoes tomadas" (D-A a D-G,
+// D-3 do F17.2a) para o raciocinio completo.
 //
-// D-A: estagios pre-chegada continuam MANUAIS ate o F17.2, restritos aos 3
-// valores de PRE_ARRIVAL_STATUSES. Os ramos de `shippedAt` (linhas 8 e 9 da
-// tabela D-B) sao implementados e testados agora mas ficam dormentes ate o
-// F17.2 (nenhum doc tem `shippedAt` ainda).
+// F17.2a (D-3): `shippedAt` encerra o select manual pre-chegada. Os ramos
+// de `shippedAt` (linhas 8 e 9 da tabela D-B) agora usam `hasShippedSignal`
+// - sinal real (`shippedAt` preenchido) OU legado (processo gravado num
+// status pos-embarque antes do F17.2a, sem `shippedAt`). O fallback final
+// (sem nenhum sinal) e' sempre 'Aguardando Embarque'.
 
 import {
   normalizeComparableText,
@@ -92,19 +93,17 @@ function getLocalDateKey(date) {
   return `${year}-${month}-${day}`
 }
 
-function getPreArrivalFallback(process) {
+// D-3: sinal de embarque real (`shippedAt`) OU legado - processo gravado
+// num status pos-'Aguardando Embarque' antes do F17.2a existir, sem
+// `shippedAt` preenchido (nunca fabricamos a data a partir de `etd`/`eta`).
+function isLegacyShipped(process) {
+  if (hasValue(process?.shippedAt)) return false
   const gravado = String(process?.processStatus ?? '').trim()
+  return processStatusOptions.includes(gravado) && gravado !== 'Aguardando Embarque'
+}
 
-  if (PRE_ARRIVAL_STATUSES.includes(gravado)) return gravado
-
-  if (processStatusOptions.includes(gravado)) {
-    // Era um status pos-chegada valido (ex.: admin desmarcou `berthed` de um
-    // processo em "Atracação Confirmada") -> volta pra pre-chegada mais
-    // proxima da chegada.
-    return 'Aguardando atracação'
-  }
-
-  return 'Aguardando Embarque'
+function hasShippedSignal(process) {
+  return hasValue(process?.shippedAt) || isLegacyShipped(process)
 }
 
 /**
@@ -147,7 +146,7 @@ export function deriveProcessStatus(process, today = new Date()) {
     return 'Atracação Confirmada'
   }
 
-  if (hasValue(process?.shippedAt)) {
+  if (hasShippedSignal(process)) {
     const eta = String(process?.eta ?? '').slice(0, 10)
     const todayKey = getLocalDateKey(today)
     if (eta && eta <= todayKey) {
@@ -156,7 +155,7 @@ export function deriveProcessStatus(process, today = new Date()) {
     return 'Embarcou'
   }
 
-  return getPreArrivalFallback(process)
+  return 'Aguardando Embarque'
 }
 
 /**

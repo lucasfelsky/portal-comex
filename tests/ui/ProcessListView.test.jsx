@@ -269,3 +269,25 @@ describe('ProcessListView — pendências admin-only (F17.1a)', () => {
     expect(screen.queryByText(/Dados pendentes/)).not.toBeInTheDocument()
   })
 })
+
+describe('ProcessListView — badge de contêiner especial (F17.2a D-7)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('contêiner 40RF gera badge "Reefer"', () => {
+    renderView({
+      filteredProcesses: [
+        {
+          ...PROCESSES[0],
+          containers: [{ id: 'CNT-1', number: '', seal: '', type: '40RF' }],
+        },
+      ],
+    })
+    expect(screen.getByText('Reefer')).toBeInTheDocument()
+  })
+
+  it('sem containers especiais NAO mostra badge', () => {
+    renderView({ filteredProcesses: [PROCESSES[0]] })
+    expect(screen.queryByText('Reefer')).not.toBeInTheDocument()
+    expect(screen.queryByText('ISO tank')).not.toBeInTheDocument()
+  })
+})

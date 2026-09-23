@@ -36,6 +36,29 @@ function makeDraft(overrides = {}) {
     dtaLoadingScheduledAt: '',
     dtaArrivalAtItajai: '',
     items: [],
+    // F17.2a (D-1): identificacao, carga por modal, embarque e transito.
+    supplierName: '',
+    originLocation: '',
+    incoterm: '',
+    forwarderName: '',
+    unNumber: '',
+    imoClass: '',
+    shippedAt: '',
+    vesselName: '',
+    voyage: '',
+    flightNumber: '',
+    masterBl: '',
+    houseBl: '',
+    mawb: '',
+    hawb: '',
+    transshipmentPort: '',
+    dangerousGoods: false,
+    transshipment: false,
+    grossWeightKg: 0,
+    volumeM3: 0,
+    chargeableWeightKg: 0,
+    packagesQuantity: 0,
+    containers: [],
     ...overrides,
   }
 }
@@ -57,7 +80,6 @@ function renderForm(props = {}) {
     duimpStatusOptions: ['Registrada', 'Parametrizada'],
     mapaStatusOptions: ['Deferido'],
     processCategoryOptions: ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO'],
-    processStatusOptions: ['Em andamento', 'Finalizado'],
     onDraftChange,
     onSetViewModeList: vi.fn(),
     onSave,
@@ -78,9 +100,9 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     vi.clearAllMocks()
   })
 
-  it('abre no passo 1 (Identificação) de 4 (sem fluxo em create FCL)', () => {
+  it('abre no passo 1 (Identificação) de 5 (sem fluxo em create FCL)', () => {
     renderForm()
-    expect(screen.getByText(/Passo 1 de 4/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 1 de 5/)).toBeInTheDocument()
     expect(screen.getByText('Identificação', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Ex.: Importação Atlas')).toBeInTheDocument()
   })
@@ -94,7 +116,7 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     const user = userEvent.setup()
     renderForm()
     await user.click(screen.getByRole('button', { name: 'Avançar' }))
-    expect(screen.getByText(/Passo 2 de 4/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 2 de 5/)).toBeInTheDocument()
     // ETD/ETA são exclusivos do passo de datas
     expect(screen.getByText('ETD')).toBeInTheDocument()
     expect(screen.getByText('ETA')).toBeInTheDocument()
@@ -106,10 +128,56 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     const user = userEvent.setup()
     renderForm()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
-    expect(screen.getByText(/Passo 4 de 4/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 5 de 5/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar item' })).toBeInTheDocument()
     // No último passo, "Avançar" some
     expect(screen.queryByRole('button', { name: 'Avançar' })).not.toBeInTheDocument()
+  })
+
+  it('passo "Embarque e trânsito" existe em create e dispara onDraftChange("shippedAt", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm()
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque e trânsito' }))
+    expect(screen.getByText('Data de embarque')).toBeInTheDocument()
+    const dateInput = document.querySelector('input[type="date"]')
+    await user.type(dateInput, '2026-09-20')
+    expect(onDraftChange).toHaveBeenCalledWith('shippedAt', expect.any(String))
+  })
+
+  it('FCL mostra "Adicionar contêiner" no passo de status e carga', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ category: 'FCL' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(screen.getByRole('button', { name: 'Adicionar contêiner' })).toBeInTheDocument()
+  })
+
+  it('LCL mostra "Cubagem" no passo de status e carga', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ category: 'LCL' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(screen.getByText('Cubagem (m³)')).toBeInTheDocument()
+  })
+
+  it('número de contêiner com dígito verificador invalido mostra o aviso', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'FCL',
+        containers: [{ id: 'CNT-1', number: 'TGHU1234560', seal: '', type: '' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(
+      screen.getByText('Dígito verificador não confere (esperado: 7).')
+    ).toBeInTheDocument()
+  })
+
+  it('dangerousGoods marcado mostra "Número ONU" e "Classe IMO"', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ dangerousGoods: true }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(screen.getByText('Número ONU')).toBeInTheDocument()
+    expect(screen.getByText('Classe IMO')).toBeInTheDocument()
   })
 
   it('botão Salvar fica disponível em qualquer passo e chama onSave', async () => {
@@ -122,16 +190,16 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
   })
 
-  it('inclui o passo "Fluxo operacional" quando canShowMaritimeFlow (5 passos)', async () => {
+  it('inclui o passo "Fluxo operacional" quando canShowMaritimeFlow (6 passos)', async () => {
     const user = userEvent.setup()
     renderForm({ canShowMaritimeFlow: true })
-    expect(screen.getByText(/Passo 1 de 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 1 de 6/)).toBeInTheDocument()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
     expect(screen.getByText('Pós-atracação')).toBeInTheDocument()
     expect(screen.getByText('Atracou?')).toBeInTheDocument()
   })
 
-  it('NÃO inclui o passo de fluxo em create sem maritime/air (4 passos)', () => {
+  it('NÃO inclui o passo de fluxo em create sem maritime/air (5 passos)', () => {
     renderForm()
     expect(
       within(stepsRow()).queryByRole('tab', { name: 'Fluxo operacional' })
@@ -282,36 +350,33 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
   })
 })
 
-// F17.1a (D-A): status derivado read-only + select de etapa pre-chegada.
-describe('ProcessForm — status derivado (F17.1a)', () => {
+// F17.2a (D-3): status derivado read-only - select de etapa pre-chegada
+// acabou (shippedAt no passo "Embarque e trânsito" e' quem avanca o status).
+describe('ProcessForm — status derivado (F17.2a D-3)', () => {
   async function openStatusStep(user) {
     await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
   }
 
-  it('sem berthed (maritimo) mostra o select de etapa pré-chegada com as 3 opções', async () => {
+  it('NÃO existe mais o select de etapa pré-chegada', async () => {
     const user = userEvent.setup()
     renderForm({
       draft: makeDraft({ category: 'FCL', berthed: false, processStatus: 'Aguardando Embarque' }),
-      processStatusOptions: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
-    })
-    await openStatusStep(user)
-    expect(
-      screen.getByText('Etapa pré-chegada (manual até o registro da data de embarque)')
-    ).toBeInTheDocument()
-    const options = screen.getAllByRole('option')
-    expect(options).toHaveLength(3)
-  })
-
-  it('com berthed:true NÃO mostra o select de etapa e a tag mostra "Atracação confirmada"', async () => {
-    const user = userEvent.setup()
-    renderForm({
-      draft: makeDraft({ category: 'FCL', berthed: true, processStatus: 'Aguardando Embarque' }),
-      processStatusOptions: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
     })
     await openStatusStep(user)
     expect(
       screen.queryByText('Etapa pré-chegada (manual até o registro da data de embarque)')
     ).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Informe a data de embarque (passo Embarque e trânsito) para o status avançar.')
+    ).toBeInTheDocument()
+  })
+
+  it('com berthed:true a tag mostra "Atracação confirmada"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({ category: 'FCL', berthed: true, processStatus: 'Aguardando Embarque' }),
+    })
+    await openStatusStep(user)
     expect(screen.getByText('Atracação confirmada')).toBeInTheDocument()
   })
 })
