@@ -81,6 +81,15 @@ vi.mock('../../src/features/processes/processStatus', () => ({
   isLogisticaEditableCollectionStatus: () => true,
   shouldPreserveStockCollectionStatus: () => false,
 }))
+vi.mock('../../src/features/processes/deriveProcessStatus', () => ({
+  deriveProcessStatus: () => 'Aguardando Embarque',
+  isCustomsCleared: () => false,
+  resolveCargoReceivedAt: () => '',
+  PRE_ARRIVAL_STATUSES: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
+}))
+vi.mock('../../src/features/processes/pendingFields', () => ({
+  getPendingFields: () => [],
+}))
 vi.mock('../../src/features/processes/processStatusView', () => ({
   getChannelToneClass: () => 'tag-blue',
   getStatusTagClass: () => 'tag-ok',

@@ -254,3 +254,18 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
     })
   })
 })
+
+// F17.1a (D-E): badge "Dados pendentes" so' pro admin.
+describe('ProcessListView — pendências admin-only (F17.1a)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('admin ve o badge de dados pendentes quando ha campos faltando', () => {
+    renderView({ isAdmin: true })
+    expect(screen.getAllByText(/Dados pendentes/).length).toBeGreaterThan(0)
+  })
+
+  it('user/logistica (isAdmin false) NAO ve o badge de dados pendentes', () => {
+    renderView({ isAdmin: false })
+    expect(screen.queryByText(/Dados pendentes/)).not.toBeInTheDocument()
+  })
+})

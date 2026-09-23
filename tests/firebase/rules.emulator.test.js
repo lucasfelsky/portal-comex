@@ -930,6 +930,10 @@ describeEmulator('firestore.rules (emulador)', () => {
     for (const preCollectionStatus of [
       'Aguardando agendamento de coleta',
       'Coleta Agendada',
+      // F17.1a: fecha a lacuna herdada do F17.0 - legado que so era
+      // canonicalizado na LEITURA, mas a rule ainda nao bloqueava a
+      // logistica de gravá-lo via API.
+      'Aguardando agendamento',
     ]) {
       it(`logistica NAO volta para status pre-coleta "${preCollectionStatus}"`, async () => {
         await seed((db) =>
@@ -1051,6 +1055,190 @@ describeEmulator('firestore.rules (emulador)', () => {
         updateDoc(doc(db, 'processes/cw-no-sched'), {
           collectionStatus: 'Carga em Conferência/Etiquetagem',
           updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.1a (D-F): a logistica passa a gravar tambem `processStatus`
+    // (so' 'Coleta Agendada' ou 'Carga recebida') e `cargoReceivedAt`.
+    it('logistica grava collectionStatus + processStatus "Carga recebida" + cargoReceivedAt', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-1'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f171-1'), {
+          collectionStatus: 'Veículo no CD para descarga',
+          processStatus: 'Carga recebida',
+          cargoReceivedAt: '2026-07-08T12:00:00.000Z',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica grava collectionStatus + processStatus "Coleta Agendada" + cargoReceivedAt vazio', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-2'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f171-2'), {
+          collectionStatus: 'Carga a caminho do CD',
+          processStatus: 'Coleta Agendada',
+          cargoReceivedAt: '',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    for (const invalidProcessStatus of ['Aguardando agendamento de coleta', 'Embarcou']) {
+      it(`logistica NAO grava processStatus "${invalidProcessStatus}" (fora da allowlist D-F)`, async () => {
+        await seed((db) =>
+          setDoc(doc(db, 'processes/f171-3'), {
+            name: 'P',
+            collectionScheduledAt: '2026-07-08T10:00',
+            collectionStatus: 'Coleta Agendada',
+            updatedById: 'x',
+            updatedByName: 'y',
+          })
+        )
+        const db = logistics('log-1')
+        await assertFails(
+          updateDoc(doc(db, 'processes/f171-3'), {
+            collectionStatus: 'Carga em Conferência/Etiquetagem',
+            processStatus: invalidProcessStatus,
+            updatedAt: 'now',
+            updatedById: 'log-1',
+            updatedByName: 'Logistica',
+          })
+        )
+      })
+    }
+
+    it('logistica NAO grava processStatus "Carga recebida" sem coleta agendada', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-4'), {
+          name: 'P',
+          collectionStatus: 'Coleta Agendada', // sem collectionScheduledAt/collectionWindows
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/f171-4'), {
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          processStatus: 'Carga recebida',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava cargoReceivedAt como numero', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-5'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/f171-5'), {
+          collectionStatus: 'Veículo no CD para descarga',
+          processStatus: 'Carga recebida',
+          cargoReceivedAt: 123,
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava processStatus junto de collectionStatus final pre-coleta', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-6'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/f171-6'), {
+          collectionStatus: 'Coleta Agendada', // tentando voltar atras
+          processStatus: 'Coleta Agendada',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // Documenta que a rule NAO tem enum de status pro admin (so' a
+    // logistica tem allowlist de valor via D-F).
+    it('admin grava processStatus "Aguardando desembaraço"', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/f171-7'), { name: 'Orig' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f171-7'), {
+          processStatus: 'Aguardando desembaraço',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    // AD-1: `clearanceCompletedAt` antecipado do F17.3 - so' admin grava.
+    it('admin grava clearanceCompletedAt', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/f171-ad1-admin'), { name: 'Orig' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f171-ad1-admin'), {
+          clearanceCompletedAt: '2026-08-01T10:00',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO grava clearanceCompletedAt', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f171-ad1-log'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/f171-ad1-log'), {
+          clearanceCompletedAt: '2026-08-01T10:00',
           updatedById: 'log-1',
           updatedByName: 'Logistica',
         })

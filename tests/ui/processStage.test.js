@@ -23,6 +23,7 @@ describe('getProcessStage', () => {
     ['Atracação Confirmada', 2],
     ['Aguardando registro da DUIMP', 3],
     ['Aguardando parametrização da DUIMP', 3],
+    ['Aguardando desembaraço', 3],
     ['Aguardando agendamento de coleta', 4],
     ['Coleta Agendada', 4],
     ['Carga recebida', 4],

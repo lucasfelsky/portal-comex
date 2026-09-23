@@ -20,6 +20,8 @@ vi.mock('../../src/lib/firebase', () => ({
   firestore: {},
 }))
 
+const { mockUpdateDoc } = vi.hoisted(() => ({ mockUpdateDoc: vi.fn() }))
+
 vi.mock('firebase/firestore/lite', () => ({
   collection: vi.fn(),
   doc: (...args) => mockDoc(...args),
@@ -28,7 +30,7 @@ vi.mock('firebase/firestore/lite', () => ({
   query: vi.fn(),
   serverTimestamp: () => 'SERVER_TIMESTAMP',
   setDoc: (...args) => mockSetDoc(...args),
-  updateDoc: vi.fn(),
+  updateDoc: (...args) => mockUpdateDoc(...args),
   deleteDoc: vi.fn(),
 }))
 
@@ -36,12 +38,19 @@ vi.mock('../../src/services/auditRepository', () => ({
   createAuditEvent: (...args) => mockCreateAuditEvent(...args),
 }))
 
-import { saveProcess, listProcesses, dtaStatusOptions, collectionStatusOptions } from '../../src/services/processesRepository'
+import {
+  saveProcess,
+  saveProcessCollectionStatus,
+  listProcesses,
+  dtaStatusOptions,
+  collectionStatusOptions,
+} from '../../src/services/processesRepository'
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockDoc.mockReturnValue({ id: 'fake-doc-ref' })
   mockSetDoc.mockResolvedValue(undefined)
+  mockUpdateDoc.mockResolvedValue(undefined)
   mockGetDocs.mockResolvedValue({ docs: [] })
   mockCreateAuditEvent.mockResolvedValue(undefined)
 })
@@ -197,5 +206,123 @@ describe('bug 6 - promocao para estoque preservada', () => {
 
     const payload = mockSetDoc.mock.calls[0][1]
     expect(payload.collectionStatus).toBe('')
+  })
+})
+
+// F17.1a: `processStatus`/`cargoReceivedAt` derivados no save (D-C).
+describe('F17.1a - derivacao no saveProcess', () => {
+  it('maritimo Verde parametrizado grava "Aguardando agendamento de coleta" mesmo com processStatus "Embarcou" no input', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        processStatus: 'Embarcou',
+        mapaStatus: 'Liberado',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Aguardando agendamento de coleta')
+  })
+
+  it('Amarelo grava "Aguardando desembaraço"', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        parameterizationChannel: 'Amarelo',
+        processStatus: 'Embarcou',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Aguardando desembaraço')
+  })
+
+  it('berthed:false + input "Embarcou" preserva "Embarcou"', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        duimpStatus: '',
+        parameterizationChannel: '',
+        processStatus: 'Embarcou',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Embarcou')
+  })
+
+  it('collectionStatus "Carga disponível em estoque" grava "Carga recebida" e cargoReceivedAt ISO', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        mapaStatus: 'Liberado',
+        collectionStatus: 'Carga disponível em estoque',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Carga recebida')
+    expect(typeof payload.cargoReceivedAt).toBe('string')
+    expect(payload.cargoReceivedAt).not.toBe('')
+  })
+
+  it('cargoReceivedAt existente e preservado', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        mapaStatus: 'Liberado',
+        collectionStatus: 'Carga disponível em estoque',
+        cargoReceivedAt: '2026-01-01T00:00:00.000Z',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.cargoReceivedAt).toBe('2026-01-01T00:00:00.000Z')
+  })
+})
+
+describe('F17.1a - derivacao em saveProcessCollectionStatus (logistica)', () => {
+  it('com currentProcess (janela agendada) avancando pra "Veículo no CD para descarga" grava processStatus "Carga recebida" + cargoReceivedAt', async () => {
+    const currentProcess = {
+      id: 'PROC-LOG-1',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+      cargoReceivedAt: '',
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-LOG-1',
+      'Veículo no CD para descarga',
+      null,
+      currentProcess
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Carga recebida')
+    expect(typeof payload.cargoReceivedAt).toBe('string')
+    expect(payload.cargoReceivedAt).not.toBe('')
+  })
+
+  it('avancando pra "Carga a caminho do CD" grava processStatus "Coleta Agendada"', async () => {
+    const currentProcess = {
+      id: 'PROC-LOG-2',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus('PROC-LOG-2', 'Carga a caminho do CD', null, currentProcess)
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Coleta Agendada')
+  })
+
+  it('sem currentProcess -> payload so com collectionStatus (retrocompat)', async () => {
+    await saveProcessCollectionStatus('PROC-LOG-3', 'Carga a caminho do CD')
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.collectionStatus).toBe('Carga a caminho do CD')
+    expect(payload.processStatus).toBeUndefined()
+    expect(payload.cargoReceivedAt).toBeUndefined()
   })
 })

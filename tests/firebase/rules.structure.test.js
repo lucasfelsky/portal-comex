@@ -137,4 +137,24 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/updatedByName\s*==\s*myName\s*\(\s*\)/)
     })
   })
+
+  describe('F17.1a — status derivado (D-F, D-A)', () => {
+    it('isPreCollectionStatus contem o legado "Aguardando agendamento"', () => {
+      const match = rules.match(/function\s+isPreCollectionStatus\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/['"]Aguardando agendamento['"]/)
+    })
+
+    it('isLogisticsCollectionStatusUpdate usa hasOnly com processStatus/cargoReceivedAt e allowlist de valor', () => {
+      const match = rules.match(
+        /function\s+isLogisticsCollectionStatusUpdate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/
+      )
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/hasOnly/)
+      expect(body).toMatch(/['"]processStatus['"]/)
+      expect(body).toMatch(/['"]cargoReceivedAt['"]/)
+      expect(body).toMatch(/\[\s*['"]Coleta Agendada['"]\s*,\s*['"]Carga recebida['"]\s*\]/)
+    })
+  })
 })

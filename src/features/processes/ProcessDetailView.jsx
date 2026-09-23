@@ -17,6 +17,7 @@ import { getProcessTitle } from './processLabels'
 import Spinner from '../../components/Spinner'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
+import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
@@ -68,6 +69,8 @@ export default function ProcessDetailView({
   onDeleteMessage,
 }) {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  // D-E: pendencias so pro admin.
+  const pendingFields = isAdmin ? getPendingFields(selectedProcess) : []
 
   const getDestinationLabel = (category) =>
     category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -217,6 +220,16 @@ export default function ProcessDetailView({
       <div className="detail-stack tab-panel-spacing">
         {detailTab === 'general' ? (
           <>
+            {isAdmin && pendingFields.length > 0 ? (
+              <div className="detail-card">
+                <span className="detail-label">Dados pendentes</span>
+                <ul>
+                  {pendingFields.map((field) => (
+                    <li key={field.id}>{field.label}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, canSeeName)}</p></div>
             <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
             {selectedProcess.processNumber && canShowProcessName(selectedProcess, canSeeName) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}

@@ -152,6 +152,7 @@
       "cargoReceivedAt",
       "carrierName",
       "category",
+      "clearanceCompletedAt",
       "collectionScheduledAt",
       "collectionStatus",
       "collectionWindows",
@@ -200,7 +201,9 @@
       "updatedByName"
     ],
     "isLogisticsCollectionStatusUpdate": [
+      "cargoReceivedAt",
       "collectionStatus",
+      "processStatus",
       "updatedAt",
       "updatedById",
       "updatedByName"
