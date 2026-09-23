@@ -79,6 +79,7 @@ vi.mock('../../src/features/processes/processStatus', () => ({
   shouldHideProcessStatusBadge: () => false,
   CD_EN_ROUTE_STATUS: 'Carga em rota',
   isLogisticaEditableCollectionStatus: () => true,
+  shouldPreserveStockCollectionStatus: () => false,
 }))
 vi.mock('../../src/features/processes/processStatusView', () => ({
   getChannelToneClass: () => 'tag-blue',
@@ -87,6 +88,7 @@ vi.mock('../../src/features/processes/processStatusView', () => ({
 vi.mock('../../src/features/processes/processLabels', () => ({
   getProcessTitle: (p) => p?.name || 'Processo',
   getProcessSubtitle: (p) => p?.processNumber || '',
+  canShowProcessName: () => true,
 }))
 vi.mock('../../src/features/processes/processCategories', () => ({
   isMaritimeCategory: () => true,

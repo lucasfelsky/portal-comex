@@ -11,12 +11,15 @@ import {
 } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import {
+  canonicalizeCollectionStatus,
   canonicalizeProcessStatus,
   CD_EN_ROUTE_STATUS,
   isLogisticaEditableCollectionStatus,
   isPostCollectionStatus,
+  mapaAllowsCollectionStatus,
   processStatusOptions,
   postCollectionStatusOptions,
+  shouldPreserveStockCollectionStatus,
 } from '../features/processes/processStatus'
 import { createAuditEvent } from './auditRepository'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
@@ -38,7 +41,7 @@ export const duimpStatusOptions = [
 export const channelOptions = ['Verde', 'Amarelo', 'Vermelho', 'Cinza']
 export const collectionStatusOptions = [
   'Aguardando liberação no Terminal',
-  'Aguardando agendamento',
+  'Aguardando agendamento de coleta',
   'Coleta Agendada',
   ...postCollectionStatusOptions,
   CD_EN_ROUTE_STATUS,
@@ -276,7 +279,7 @@ function keepsCollectionSchedule(status) {
 }
 
 function mapaAllowsCollection(status) {
-  return status === 'Liberado' || status === 'LPCO deferida, MAPA liberado'
+  return mapaAllowsCollectionStatus(status)
 }
 
 function normalizeDtaStatus(status) {
@@ -293,10 +296,10 @@ function canonicalizeDtaStatus(status) {
   if (normalizedStatus === 'carregamento programado') return 'Carregamento Programado'
   if (normalizedStatus === 'chegada confirmada') return 'Chegada confirmada'
   if (normalizedStatus === 'concedida, aguardando programacao de carregamento') {
-    return 'Concedida, aguardando programacao de carregamento'
+    return 'Concedida, aguardando programação de carregamento'
   }
   if (normalizedStatus === 'registrada, aguardando concessao pela rfb') {
-    return 'Registrada, aguardando concessao pela RFB'
+    return 'Registrada, aguardando concessão pela RFB'
   }
   if (normalizedStatus === 'aguardando registro') return 'Aguardando registro'
 
@@ -314,8 +317,9 @@ function sanitizeCustomsFlow(process) {
     duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
   const canReleaseCollection =
     !isMaritimeCategory(process.category) || mapaAllowsCollection(process.mapaStatus)
+  const canonicalizedCollectionStatus = canonicalizeCollectionStatus(process.collectionStatus ?? '')
   const normalizedCollectionStatus =
-    parameterizationChannel === 'Verde' && canReleaseCollection ? process.collectionStatus ?? '' : ''
+    parameterizationChannel === 'Verde' && canReleaseCollection ? canonicalizedCollectionStatus : ''
   const collectionWindows = parameterizationChannel === 'Verde' && canReleaseCollection
     ? getCollectionWindows(process)
     : []
@@ -472,6 +476,10 @@ function normalizeProcess(rawProcess, fallbackId) {
     dtaLoadingScheduledAt: rawProcess.dtaLoadingScheduledAt,
     dtaArrivalAtItajai: rawProcess.dtaArrivalAtItajai,
   })
+
+  if (!operationalFields.collectionStatus && shouldPreserveStockCollectionStatus(rawProcess)) {
+    operationalFields.collectionStatus = postCollectionStatusOptions[2]
+  }
 
   return {
     id: resolvedId,

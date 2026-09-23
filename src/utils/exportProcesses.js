@@ -8,6 +8,7 @@
 // I/O via import dinâmico de `xlsx` (mesmo padrão do import de itens no
 // ProcessesPage — a lib só entra no chunk quando alguém usa).
 import { getProcessDerivedStatus } from '../features/processes/processDerivedStatus'
+import { canShowProcessName } from '../features/processes/processLabels'
 import { getCollectionWindows } from './collectionWindows'
 
 function formatDateBr(isoDate) {
@@ -48,21 +49,24 @@ function nextCollectionWindowLabel(process) {
 
 // Datas como TEXTO pt-BR de propósito: evita o serial date do Excel e
 // mantém o arquivo legível sem formatação extra.
-export function buildProcessesExportRows(processes, now = new Date()) {
-  return (Array.isArray(processes) ? processes : []).map((process) => ({
-    Processo: process.processNumber || process.name || '',
-    Nome: process.name || '',
-    Categoria: process.category || '',
-    Destino: process.destination || '',
-    ETD: formatDateBr(process.etd),
-    ETA: formatDateBr(process.eta),
-    'Status do processo': process.processStatus || '',
-    'Status derivado': getProcessDerivedStatus(process, now).label,
-    'Status de coleta': process.collectionStatus || '',
-    'Próxima coleta': nextCollectionWindowLabel(process),
-    Containers: process.containerQuantity ?? '',
-    Pallets: process.palletQuantity ?? '',
-  }))
+export function buildProcessesExportRows(processes, now = new Date(), { canSeeName = false } = {}) {
+  return (Array.isArray(processes) ? processes : []).map((process) => {
+    const showName = canShowProcessName(process, canSeeName)
+    return {
+      Processo: process.processNumber || (showName ? process.name || '' : ''),
+      Nome: showName ? process.name || '' : '',
+      Categoria: process.category || '',
+      Destino: process.destination || '',
+      ETD: formatDateBr(process.etd),
+      ETA: formatDateBr(process.eta),
+      'Status do processo': process.processStatus || '',
+      'Status derivado': getProcessDerivedStatus(process, now).label,
+      'Status de coleta': process.collectionStatus || '',
+      'Próxima coleta': nextCollectionWindowLabel(process),
+      Containers: process.containerQuantity ?? '',
+      Pallets: process.palletQuantity ?? '',
+    }
+  })
 }
 
 export function buildExportFileName(now = new Date()) {
@@ -72,8 +76,8 @@ export function buildExportFileName(now = new Date()) {
   return `processos-${year}-${month}-${day}.xlsx`
 }
 
-export async function exportProcessesToXlsx(processes, now = new Date()) {
-  const rows = buildProcessesExportRows(processes, now)
+export async function exportProcessesToXlsx(processes, now = new Date(), options = {}) {
+  const rows = buildProcessesExportRows(processes, now, options)
   const { utils, writeFile } = await import('xlsx')
   const worksheet = utils.json_to_sheet(rows)
   // Larguras aproximadas pra abrir legível sem ajuste manual.
