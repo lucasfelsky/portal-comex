@@ -388,6 +388,12 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isAdmin();
       }
+
+      // F17.1b: gravada SO pelo trigger recordProcessMilestoneEvents (admin SDK ignora rules)
+      match /events/{eventId} {
+        allow read: if isApprovedUser();
+        allow create, update, delete: if false;
+      }
     }
 
     match /notifications/{notificationId} {

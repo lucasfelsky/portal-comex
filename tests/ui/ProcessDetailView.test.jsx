@@ -3,8 +3,13 @@
 // visível a partir de "Coleta Agendada" (inclusive) em diante — usa
 // `isCollectionScheduledOrBeyondStatus` (módulo REAL, sem mock).
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
+
+const mockListProcessEvents = vi.fn().mockResolvedValue([])
+vi.mock('../../src/services/processEventsRepository', () => ({
+  listProcessEvents: (...args) => mockListProcessEvents(...args),
+}))
 
 function makeProcess(overrides = {}) {
   return {
@@ -138,5 +143,34 @@ describe('ProcessDetailView — card "Dados pendentes" (F17.1a)', () => {
       selectedProcess: makeProcess(),
     })
     expect(screen.queryByText('Dados pendentes')).not.toBeInTheDocument()
+  })
+})
+
+// F17.1b: aba "Histórico" — painel autocarregado via listProcessEvents.
+describe('ProcessDetailView — aba "Histórico" (F17.1b)', () => {
+  it('detailTab="history" renderiza o painel e chama listProcessEvents(selectedProcess.id)', async () => {
+    renderDetail({
+      detailTab: 'history',
+      selectedProcess: makeProcess({ id: 'p-history' }),
+    })
+    await waitFor(() => expect(mockListProcessEvents).toHaveBeenCalledWith('p-history'))
+    expect(screen.getByText('Histórico de marcos')).toBeInTheDocument()
+  })
+
+  it('a opção/botão "Histórico" aparece para isAdmin true', () => {
+    renderDetail({ isAdmin: true })
+    expect(screen.getByRole('button', { name: 'Histórico' })).toBeInTheDocument()
+  })
+
+  it('a opção/botão "Histórico" aparece para isAdmin false', () => {
+    renderDetail({ isAdmin: false })
+    expect(screen.getByRole('button', { name: 'Histórico' })).toBeInTheDocument()
+  })
+
+  it('clicar no botão "Histórico" chama onDetailTabChange("history")', () => {
+    const onDetailTabChange = vi.fn()
+    renderDetail({ onDetailTabChange })
+    screen.getByRole('button', { name: 'Histórico' }).click()
+    expect(onDetailTabChange).toHaveBeenCalledWith('history')
   })
 })

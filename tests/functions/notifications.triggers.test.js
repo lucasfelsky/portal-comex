@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events'],
       },
     }
     await Promise.all(
@@ -210,6 +210,52 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         expect(doc.title).toBe('Observações pós-recebimento atualizadas')
         expect(doc.actorUserId).toBe('log-1')
       })
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  it(
+    'update por admin grava marcos em events sem duplicar notificacao',
+    async () => {
+      const processId = 'proc-upd-events'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Update Events',
+        processNumber: 'PO-1005',
+        category: 'FCL',
+        berthed: false,
+        processStatus: 'Aguardando atracação',
+      })
+
+      await processRef.update({
+        berthed: true,
+        processStatus: 'Atracação Confirmada',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Um',
+      })
+
+      // Poll na subcolecao ate >= 2 docs (berthed + statusChanged).
+      const deadline = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      let eventDocs = []
+      while (Date.now() < deadline) {
+        const snapshot = await processRef.collection('events').get()
+        eventDocs = snapshot.docs.map((item) => item.data())
+        if (eventDocs.length >= 2) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+
+      const types = eventDocs.map((item) => item.type).sort()
+      expect(types).toEqual(['berthed', 'statusChanged'])
+      eventDocs.forEach((item) => {
+        expect(item.actorId).toBe('admin-1')
+      })
+
+      // Marcos NAO duplicam notificacao: continua exatamente 1
+      // favorite_process_updated (o trigger de notificacao nao mudou).
+      const notificationDocs = await waitForNotifications(processId, 1)
+      const updated = notificationDocs.filter((doc) => doc.type === 'favorite_process_updated')
+      expect(updated).toHaveLength(1)
+      expect(updated[0].recipientUserId).toBe('fav-1')
     },
     TRIGGER_TIMEOUT_MS
   )

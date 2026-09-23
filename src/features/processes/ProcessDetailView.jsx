@@ -19,6 +19,7 @@ import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from '
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
+import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
@@ -205,6 +206,7 @@ export default function ProcessDetailView({
           <option value="process">Processo</option>
           <option value="items">Itens</option>
           <option value="messages">Mensagens</option>
+          <option value="history">Histórico</option>
           {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
         </select>
       </div>
@@ -214,6 +216,7 @@ export default function ProcessDetailView({
         <button type="button" className={`tab-button${detailTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('process')}>Processo</button>
         <button type="button" className={`tab-button${detailTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('items')}>Itens</button>
         <button type="button" className={`tab-button${detailTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
+        <button type="button" className={`tab-button${detailTab === 'history' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('history')}>Histórico</button>
         {detailTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
       </div>
 
@@ -488,6 +491,10 @@ export default function ProcessDetailView({
             deletingMessageId={deletingMessageId}
             onDeleteMessage={onDeleteMessage}
           />
+        ) : null}
+
+        {detailTab === 'history' ? (
+          <ProcessHistoryPanel processId={selectedProcess.id} />
         ) : null}
 
         {isAdmin ? (
