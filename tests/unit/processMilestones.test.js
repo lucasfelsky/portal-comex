@@ -13,6 +13,18 @@ import {
 } from '../../functions/src/process/milestones.js'
 import { isCustomsCleared } from '../../src/features/processes/deriveProcessStatus.js'
 import { mapaAllowsCollectionStatus } from '../../src/features/processes/processStatus.js'
+import {
+  isLicenseDeferredMirror,
+  mapLegacyMapaStatusMirror,
+  getComparableLicensesMirror,
+  LICENSE_STATUS_OPTIONS as LICENSE_STATUS_OPTIONS_MIRROR,
+} from '../../functions/src/core/licenses.js'
+import {
+  isLicenseDeferred,
+  mapLegacyMapaStatus,
+  normalizeLicenses,
+  getEffectiveLicenses,
+} from '../../src/features/processes/licenses.js'
 
 function baseMaritime(overrides = {}) {
   return { category: 'FCL', updatedById: 'u-1', updatedByName: 'Ana', ...overrides }
@@ -209,6 +221,69 @@ describe('buildMilestoneEvents - tabela D-4', () => {
     expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'licenseDeferred')).toHaveLength(0)
   })
 
+  it('licenseDeferred: licenses [] -> [ANVISA Deferida] gera 1 evento multi-orgao (D-8)', () => {
+    const before = baseMaritime({ licenses: [] })
+    const after = baseMaritime({
+      licenses: [{ id: 'lic-1', agency: 'ANVISA', status: 'Deferida', deferredAt: '2026-09-20' }],
+    })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'licenseDeferred')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('ANVISA')
+    expect(events[0].data.field).toBe('licenses')
+    expect(events[0].data.previousValue).toBe('')
+  })
+
+  it('licenseDeferred: 2 licencas deferidas no mesmo save geram 2 eventos com ids de doc distintos (idSuffix)', () => {
+    const before = baseMaritime({
+      licenses: [
+        { id: 'a', agency: 'ANVISA', status: 'Em análise' },
+        { id: 'b', agency: 'IBAMA', status: 'Em análise' },
+      ],
+    })
+    const after = baseMaritime({
+      licenses: [
+        { id: 'a', agency: 'ANVISA', status: 'Deferida' },
+        { id: 'b', agency: 'IBAMA', status: 'Deferida' },
+      ],
+    })
+    const events = eventsOfType(
+      buildMilestoneEvents(before, after, { processId: 'p1', eventId: 'e3' }),
+      'licenseDeferred'
+    )
+    expect(events).toHaveLength(2)
+    const ids = events.map((event) => event.id).sort()
+    expect(ids).toEqual(['e3_licenseDeferred_a', 'e3_licenseDeferred_b'])
+    const agencies = events.map((event) => event.data.value).sort()
+    expect(agencies).toEqual(['ANVISA', 'IBAMA'])
+  })
+
+  it('licenseDeferred: Deferida -> Deferida (mesmo id) NAO gera evento novo', () => {
+    const before = baseMaritime({
+      licenses: [{ id: 'a', agency: 'ANVISA', status: 'Deferida', deferredAt: '2026-09-01' }],
+    })
+    const after = baseMaritime({
+      licenses: [{ id: 'a', agency: 'ANVISA', status: 'Deferida', deferredAt: '2026-09-01' }],
+    })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'licenseDeferred')).toHaveLength(0)
+  })
+
+  it('licenseDeferred (rollout legado): "" -> mapaStatus "Liberado" gera 1 evento "MAPA" (hosting antigo)', () => {
+    const before = baseMaritime({ mapaStatus: '' })
+    const after = baseMaritime({ mapaStatus: 'Liberado' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'licenseDeferred')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('MAPA')
+  })
+
+  it('licenseDeferred (rollout D-3): mapaStatus "Liberado" -> licenses [LIC-MAPA Deferida] + mapaStatus "" NAO gera (ja deferida via compat)', () => {
+    const before = baseMaritime({ mapaStatus: 'Liberado' })
+    const after = baseMaritime({
+      mapaStatus: '',
+      licenses: [{ id: 'LIC-MAPA', agency: 'MAPA', status: 'Deferida' }],
+    })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'licenseDeferred')).toHaveLength(0)
+  })
+
   it('collectionScheduled: value vem de collectionWindows[0].scheduledAt', () => {
     const before = baseMaritime({ collectionStatus: 'Aguardando agendamento de coleta' })
     const after = baseMaritime({
@@ -379,6 +454,87 @@ describe('paridade functions/ x src/ (D-4 nota)', () => {
         continue
       }
       expect(isMapaReleasedMirror(status)).toBe(mapaAllowsCollectionStatus(status))
+    }
+  })
+})
+
+describe('paridade functions/core/licenses.js x src/features/processes/licenses.js (D-8)', () => {
+  it('isLicenseDeferredMirror === isLicenseDeferred para os 8 status + variantes de acento/caixa/vazio', () => {
+    const values = [...LICENSE_STATUS_OPTIONS_MIRROR, 'deferida', ' DEFERIDA ', '', 'Liberado']
+    for (const value of values) {
+      expect(isLicenseDeferredMirror(value)).toBe(isLicenseDeferred(value))
+    }
+  })
+
+  // Lista literal dos 6 valores conhecidos de `mapaStatusOptions`
+  // (`src/services/processesRepository.js:56-63`) + 1 desconhecido.
+  const mapaStatusValues = [
+    'Aguardando MAPA',
+    'Liberado',
+    'Selecionado para Vistoria',
+    'Vistoria agendada, aguardando realização',
+    'Vistoria realizada, aguardando deferimento da LPCO',
+    'LPCO deferida, MAPA liberado',
+    'Valor desconhecido inventado',
+  ]
+
+  it('mapLegacyMapaStatusMirror === mapLegacyMapaStatus (status + known) para os 6 valores conhecidos + desconhecido', () => {
+    for (const value of mapaStatusValues) {
+      expect(mapLegacyMapaStatusMirror(value)).toEqual(mapLegacyMapaStatus(value))
+    }
+  })
+
+  it('getComparableLicensesMirror(p) === normalizeLicenses(getEffectiveLicenses(p)) numa matriz >= 10 docs', () => {
+    const docs = [
+      // Legado maritimo conhecido (6 valores de mapaStatusValues, sem `licenses`).
+      ...mapaStatusValues.map((mapaStatus) => ({ category: 'FCL', mapaStatus })),
+      // `licenses: []` autoritativo com `mapaStatus` legado preenchido - nunca
+      // ressuscita o MAPA (D-3).
+      { category: 'FCL', mapaStatus: 'Liberado', licenses: [] },
+      // AEREO com `mapaStatus` preenchido - nao e maritimo, `getEffectiveLicenses`
+      // ignora o MAPA legado (retorna []).
+      { category: 'AEREO', mapaStatus: 'Liberado' },
+      // Sem `mapaStatus` nem `licenses` (categoria maritima) -> [].
+      { category: 'LCL', mapaStatus: '' },
+      // Acentos/caixa em orgao e status.
+      {
+        category: 'FCL',
+        licenses: [{ id: 'x1', agency: 'anvisa', status: '  DEFERIDA  ', deferredAt: '2026-09-20' }],
+      },
+      // Orgao/status desconhecidos -> caem no fallback ('Outro'/'Aguardando registro').
+      {
+        category: 'FCL',
+        licenses: [{ id: 'x2', agency: 'Orgao Fantasma', status: 'Status Fantasma' }],
+      },
+      // Teto de 10 licencas (11 no raw -> 10 no comparavel).
+      {
+        category: 'CONSOLIDADO',
+        licenses: Array.from({ length: 11 }, (_, i) => ({ id: `lic-${i}`, agency: 'IBAMA', status: 'Em análise' })),
+      },
+      // Data fora do status esperado - `deferredAt` sem status `Deferida` e
+      // `inspectionScheduledAt` sem status de vistoria/deferimento sao limpos.
+      {
+        category: 'FCL',
+        licenses: [
+          {
+            id: 'x3',
+            agency: 'MAPA',
+            status: 'Em análise',
+            deferredAt: '2026-09-20',
+            inspectionScheduledAt: '2026-09-01T10:00',
+          },
+        ],
+      },
+      // Sem `id` (deterministico por indice) e sem categoria.
+      { category: undefined, licenses: [{ agency: 'MAPA', status: 'Aguardando registro' }] },
+    ]
+
+    expect(docs.length).toBeGreaterThanOrEqual(10)
+
+    for (const doc of docs) {
+      expect(JSON.stringify(getComparableLicensesMirror(doc))).toBe(
+        JSON.stringify(normalizeLicenses(getEffectiveLicenses(doc)))
+      )
     }
   })
 })
