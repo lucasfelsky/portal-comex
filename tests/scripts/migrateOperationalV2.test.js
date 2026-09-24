@@ -8,6 +8,7 @@ import {
   planProcessStatusMigration,
   planMapaToLicensesMigration,
   planArrivalDatesMigration,
+  planDuimpDatesMigration,
   planOperationalMigration,
   MIGRATION_STEPS,
   toFirestoreFieldValue,
@@ -235,10 +236,11 @@ describe('planMapaToLicensesMigration', () => {
 })
 
 describe('MIGRATION_STEPS', () => {
-  it("ids na ordem ['mapaToLicenses', 'arrivalDates', 'recalcProcessStatus']", () => {
+  it("ids na ordem ['mapaToLicenses', 'arrivalDates', 'duimpDates', 'recalcProcessStatus']", () => {
     expect(MIGRATION_STEPS.map((s) => s.id)).toEqual([
       'mapaToLicenses',
       'arrivalDates',
+      'duimpDates',
       'recalcProcessStatus',
     ])
   })
@@ -312,6 +314,114 @@ describe('planArrivalDatesMigration', () => {
     expect(secondPlan[0].type).toBe('unchanged')
     expect(secondPlan[0].changes).toBeNull()
   })
+
+  // F17.3b (D-10): regressao do achado do reviewer do F17.3a - doc com
+  // chegada aproximada E presenca sem data nao pode perder o 2o motivo.
+  it('FCL berthed:true + eta valido + presenca sem data -> berthedAt-approx COM reviewReasons da presenca', () => {
+    const plan = planArrivalDatesMigration([
+      {
+        id: 'P8',
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '',
+        eta: '2026-09-20',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '',
+      },
+    ])
+    expect(plan[0].type).toBe('berthedAt-approx')
+    expect(plan[0].changes.berthedAt).toBe('2026-09-20T00:00')
+    expect(plan[0].reviewReasons).toEqual(['cargoPresenceInformed=true sem cargoPresenceInformedAt'])
+  })
+
+  it('FCL berthed:true SEM eta + presenca sem data -> needs-review com 2 motivos', () => {
+    const plan = planArrivalDatesMigration([
+      {
+        id: 'P9',
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '',
+        eta: '',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '',
+      },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].changes).toBeNull()
+    expect(plan[0].reviewReasons).toHaveLength(2)
+  })
+})
+
+// F17.3b (D-10): SO RELATORIO - `changes` sempre null.
+describe('planDuimpDatesMigration', () => {
+  it('legado Parametrizada + Verde sem datas -> needs-review, 3 motivos, changes null', () => {
+    const plan = planDuimpDatesMigration([
+      {
+        id: 'P1',
+        category: 'FCL',
+        processStatus: 'Aguardando agendamento de coleta',
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        clearanceCompletedAt: '',
+      },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].reviewReasons).toHaveLength(3)
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('"Aguardando parametrização da DUIMP" sem data -> 1 motivo', () => {
+    const plan = planDuimpDatesMigration([
+      {
+        id: 'P2',
+        category: 'FCL',
+        processStatus: 'Aguardando parametrização da DUIMP',
+        duimpStatus: 'Aguardando parametrização da DUIMP',
+      },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].reviewReasons).toHaveLength(1)
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('ja com as datas -> unchanged', () => {
+    const plan = planDuimpDatesMigration([
+      {
+        id: 'P3',
+        category: 'FCL',
+        processStatus: 'Aguardando agendamento de coleta',
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        duimpRegisteredAt: '2026-09-19T10:00',
+        parameterizedAt: '2026-09-20T10:00',
+        clearanceCompletedAt: '2026-09-22T10:00',
+      },
+    ])
+    expect(plan[0].type).toBe('unchanged')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('processStatus "Carga recebida" -> unchanged (historico, sem revisao)', () => {
+    const plan = planDuimpDatesMigration([
+      {
+        id: 'P4',
+        category: 'FCL',
+        processStatus: 'Carga recebida',
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+      },
+    ])
+    expect(plan[0].type).toBe('unchanged')
+    expect(plan[0].reason).toBe('carga recebida - historico, sem revisao')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('changes SEMPRE null (nunca escreve)', () => {
+    const plan = planDuimpDatesMigration([
+      { id: 'P5', category: 'FCL', processStatus: 'x', duimpStatus: 'Parametrizada' },
+    ])
+    expect(plan[0].changes).toBeNull()
+  })
 })
 
 describe('planOperationalMigration (D-11)', () => {
@@ -362,6 +472,31 @@ describe('planOperationalMigration (D-11)', () => {
     ])
     for (const doc of plan) {
       if (doc.changes) expect(doc.changes.updatedById).toBe('')
+    }
+  })
+
+  // F17.3b (D-10): `steps[]` carrega `reviewReasons` de qualquer passo.
+  it('propaga reviewReasons nos steps (duimpDates needs-review)', () => {
+    const plan = planOperationalMigration([
+      {
+        id: 'P5',
+        category: 'FCL',
+        processStatus: 'Aguardando agendamento de coleta',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        clearanceCompletedAt: '',
+      },
+    ])
+    const doc = plan.find((item) => item.id === 'P5')
+    const duimpStep = doc.steps.find((step) => step.stepId === 'duimpDates')
+    expect(duimpStep.type).toBe('needs-review')
+    expect(duimpStep.reviewReasons.length).toBeGreaterThan(0)
+    // SO relatorio - nunca entra no PATCH (`changes: null` do passo).
+    if (doc.changes) {
+      expect(doc.changes).not.toHaveProperty('duimpRegisteredAt')
+      expect(doc.changes).not.toHaveProperty('parameterizedAt')
     }
   })
 

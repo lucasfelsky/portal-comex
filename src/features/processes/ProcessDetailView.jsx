@@ -10,7 +10,7 @@ import {
   isCollectionScheduledOrBeyondStatus,
   isProcessStatusFinalized,
 } from './processStatus'
-import { getChannelToneClass, getStatusTagClass } from './processStatusView'
+import { getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
 import { getCollectionWindowLabel } from './containers'
 import { getProcessPurchaseOrders } from './purchaseOrders'
@@ -27,6 +27,7 @@ import {
   ProcessLicensesDetails,
   ProcessArrivalDetails,
   ProcessFreeTimeDetails,
+  ProcessCustomsDetails,
 } from './ProcessOperationalDetails'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
@@ -335,15 +336,7 @@ export default function ProcessDetailView({
             <ProcessLicensesDetails process={selectedProcess} />
             <ProcessArrivalDetails process={selectedProcess} />
             <ProcessFreeTimeDetails process={selectedProcess} />
-            {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? (
-              <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}>
-                <span className="detail-label">DUIMP</span>
-                <div className="detail-stack detail-stack--compact">
-                  <p>Status: {selectedProcess.duimpStatus}</p>
-                  {selectedProcess.parameterizationChannel ? <p>Canal da parametrização: {selectedProcess.parameterizationChannel}</p> : null}
-                </div>
-              </div>
-            ) : null}
+            <ProcessCustomsDetails process={selectedProcess} />
             {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && (selectedProcess.collectionStatus === 'Coleta Agendada' || selectedProcess.collectionStatus === CD_EN_ROUTE_STATUS) && getCollectionWindows(selectedProcess).length > 0 ? (
               <div className="detail-card">
                 <span className="detail-label">

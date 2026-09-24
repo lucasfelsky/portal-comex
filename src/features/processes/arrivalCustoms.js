@@ -1,13 +1,37 @@
 // F17.3a (D-1): camada pura de compatibilidade para chegada (atracacao
 // maritima / chegada aerea), CE/terminal, free time e presenca de carga.
-// ZERO imports - roda no app, no script de migracao (Node ESM puro) e e'
-// seguro pro mock fechado de `tests/ui/ProcessesPage.test.jsx`. Categorias e
-// texto comparados por literal/normalizacao LOCAL (mesmo padrao de
+// F17.3b (D-1): DUIMP completa (numero + datas de registro/parametrizacao),
+// conferencia/exigencia por canal, pre-preenchimento do desembaraco no
+// Verde. ZERO imports - roda no app, no script de migracao (Node ESM puro) e
+// e' seguro pro mock fechado de `tests/ui/ProcessesPage.test.jsx`. Categorias
+// e texto comparados por literal/normalizacao LOCAL (mesmo padrao de
 // `./licenses.js`, D-1 do F17.2b). Ver PLAN.md secao "Decisoes tomadas" D-1.
 
 export const FREE_TIME_CATEGORIES = ['FCL', 'CONSOLIDADO']
 export const CE_HOUSE_CATEGORIES = ['LCL', 'CONSOLIDADO']
 export const APPROX_DATE_FIELDS = ['berthedAt', 'arrivedAt']
+
+export const DUIMP_STATUS_WAITING_REGISTRATION = 'Aguardando registro da DUIMP'
+export const DUIMP_STATUS_WAITING_PARAMETERIZATION = 'Aguardando parametrização da DUIMP'
+export const DUIMP_STATUS_PARAMETERIZED = 'Parametrizada'
+export const CUSTOMS_INSPECTION_CHANNELS = ['Amarelo', 'Vermelho']
+export const CUSTOMS_REQUIREMENT_CHANNELS = ['Amarelo', 'Vermelho', 'Cinza']
+export const CUSTOMS_DATE_FIELDS = ['duimpRegisteredAt', 'parameterizedAt']
+
+// F17.3b (D-1): objeto congelado usado em TODOS os ramos de "limpa tudo" da
+// pagina e do repositorio no lugar do trio literal
+// `duimpStatus`/`parameterizationChannel`/`clearanceCompletedAt`.
+export const EMPTY_CUSTOMS_CLEARANCE_FIELDS = Object.freeze({
+  duimpStatus: '',
+  parameterizationChannel: '',
+  clearanceCompletedAt: '',
+  duimpNumber: '',
+  duimpRegisteredAt: '',
+  parameterizedAt: '',
+  customsInspectionScheduledAt: '',
+  customsRequirement: false,
+  customsRequirementNotes: '',
+})
 
 function isMaritimeCategoryLocal(category) {
   return category === 'FCL' || category === 'LCL' || category === 'CONSOLIDADO'
@@ -87,6 +111,160 @@ export function hasArrivalSignal(process) {
 
 export function hasCargoPresenceSignal(process) {
   return hasDateValue(process?.cargoPresenceInformedAt) || process?.cargoPresenceInformed === true
+}
+
+// F17.3b (D-1): normalizacao de texto LOCAL (mesmo padrao de
+// `normalizeComparableText` de `./processStatus.js`, mas sem import - este
+// arquivo continua ZERO imports).
+function normalizeComparableLocal(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+// F17.3b (D-1): mesmo vocabulario da (agora removida) `canonicalizeDuimpStatus`
+// de `processesRepository.js`. `duimpStatus` gravado ->
+// 1 (aguardando registro) / 2 (aguardando parametrizacao) / 3 (parametrizada)
+// / 0 (vazio ou desconhecido).
+export function getLegacyDuimpLevel(duimpStatus) {
+  const normalized = normalizeComparableLocal(duimpStatus)
+  if (normalized === 'aguardando registro' || normalized === 'aguardando registro da duimp') return 1
+  if (
+    normalized === 'registrada, aguardando parametrizacao' ||
+    normalized === 'aguardando parametrizacao da duimp'
+  ) {
+    return 2
+  }
+  if (normalized === 'parametrizada') return 3
+  return 0
+}
+
+// F17.3b (D-1): nivel pelas DATAS (fonte nova) + presenca de carga (nivel 1,
+// mesma semantica do legado "aguardando registro").
+export function getDateDuimpLevel(process) {
+  if (hasDateValue(process?.parameterizedAt)) return 3
+  if (hasDateValue(process?.duimpRegisteredAt)) return 2
+  if (hasCargoPresenceSignal(process)) return 1
+  return 0
+}
+
+// F17.3b (D-1): maior dos dois niveis - data OU legado, o que estiver mais
+// avancado vence (compat com doc antigo sem as datas novas).
+export function getEffectiveDuimpLevel(process) {
+  return Math.max(getDateDuimpLevel(process), getLegacyDuimpLevel(process?.duimpStatus))
+}
+
+export function hasDuimpRegistrationSignal(process) {
+  return getEffectiveDuimpLevel(process) >= 2
+}
+
+export function hasParameterizationSignal(process) {
+  return getEffectiveDuimpLevel(process) >= 3
+}
+
+export function isLegacyDuimpRegisteredWithoutDate(process) {
+  return getLegacyDuimpLevel(process?.duimpStatus) >= 2 && !hasDateValue(process?.duimpRegisteredAt)
+}
+
+export function isLegacyParameterizedWithoutDate(process) {
+  return getLegacyDuimpLevel(process?.duimpStatus) === 3 && !hasDateValue(process?.parameterizedAt)
+}
+
+// F17.3b (D-1): `duimpStatus` DERIVADO das datas (com fallback pro legado,
+// salvo `ignoreLegacy`). Presenca de carga sozinha NUNCA vira "Aguardando
+// registro" (evita notificacao espuria no 1o save - ver D-8 do PLAN.md).
+export function deriveDuimpStatus(process, { ignoreLegacy = false } = {}) {
+  const level = ignoreLegacy ? getDateDuimpLevel(process) : getEffectiveDuimpLevel(process)
+
+  if (level === 3) return DUIMP_STATUS_PARAMETERIZED
+  if (level === 2) return DUIMP_STATUS_WAITING_PARAMETERIZATION
+  if (!ignoreLegacy && getLegacyDuimpLevel(process?.duimpStatus) === 1) {
+    return DUIMP_STATUS_WAITING_REGISTRATION
+  }
+  return ''
+}
+
+// F17.3b (D-1): limpeza/derivacao dos 9 campos de liberacao (DUIMP + canal +
+// conferencia + exigencia + desembaraco) - mesmo padrao de
+// `sanitizeArrivalFields`. So' recebe os campos que le; o chamador espalha o
+// resultado por cima do objeto normalizado.
+export function sanitizeCustomsClearanceFields(process, { trimText = true } = {}) {
+  if (!hasCargoPresenceSignal(process)) {
+    return { ...EMPTY_CUSTOMS_CLEARANCE_FIELDS }
+  }
+
+  const duimpNumberRaw = String(process?.duimpNumber ?? '')
+  const duimpNumber = trimText ? duimpNumberRaw.trim() : duimpNumberRaw
+  const duimpRegisteredAt = normalizeDateTimeLocal(process?.duimpRegisteredAt)
+  const parameterizedAt = normalizeDateTimeLocal(process?.parameterizedAt)
+  const duimpStatus = deriveDuimpStatus({ ...process, duimpRegisteredAt, parameterizedAt })
+  const level3 = duimpStatus === DUIMP_STATUS_PARAMETERIZED
+  const parameterizationChannel = level3 ? String(process?.parameterizationChannel ?? '') : ''
+  const clearanceCompletedAt = level3 ? String(process?.clearanceCompletedAt ?? '') : ''
+  const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(parameterizationChannel)
+  const isRequirementChannel = CUSTOMS_REQUIREMENT_CHANNELS.includes(parameterizationChannel)
+  const customsInspectionScheduledAt =
+    level3 && isInspectionChannel ? normalizeDateTimeLocal(process?.customsInspectionScheduledAt) : ''
+  const customsRequirement = level3 && isRequirementChannel && process?.customsRequirement === true
+  const isCinza = parameterizationChannel === 'Cinza'
+  const showRequirementNotes = level3 && (isCinza || (isInspectionChannel && customsRequirement))
+  const customsRequirementNotesRaw = String(process?.customsRequirementNotes ?? '')
+  const customsRequirementNotes = showRequirementNotes
+    ? trimText
+      ? customsRequirementNotesRaw.trim()
+      : customsRequirementNotesRaw
+    : ''
+
+  return {
+    duimpNumber,
+    duimpRegisteredAt,
+    parameterizedAt,
+    duimpStatus,
+    parameterizationChannel,
+    clearanceCompletedAt,
+    customsInspectionScheduledAt,
+    customsRequirement,
+    customsRequirementNotes,
+  }
+}
+
+// F17.3b (D-1): edicao de `duimpRegisteredAt`/`parameterizedAt`/
+// `parameterizationChannel` no draft - recalcula `duimpStatus` pelas datas
+// (descarta o legado ao limpar uma data) e pre-preenche o desembaraco no
+// Verde (D-4).
+export function applyCustomsEdit(draft, field, value) {
+  if (field === 'duimpRegisteredAt' || field === 'parameterizedAt') {
+    const next = { ...draft, [field]: value }
+    next.duimpStatus = deriveDuimpStatus(next, { ignoreLegacy: !hasDateValue(value) })
+
+    if (field === 'parameterizedAt' && draft?.parameterizationChannel === 'Verde') {
+      if (!hasDateValue(draft?.clearanceCompletedAt) || draft?.clearanceCompletedAt === draft?.parameterizedAt) {
+        next.clearanceCompletedAt = value
+      }
+    }
+
+    return next
+  }
+
+  if (field === 'parameterizationChannel') {
+    const next = { ...draft, parameterizationChannel: value }
+
+    if (value === 'Verde' && !hasDateValue(draft?.clearanceCompletedAt) && hasDateValue(draft?.parameterizedAt)) {
+      next.clearanceCompletedAt = draft.parameterizedAt
+    } else if (
+      draft?.parameterizationChannel === 'Verde' &&
+      value !== 'Verde' &&
+      draft?.clearanceCompletedAt === draft?.parameterizedAt
+    ) {
+      next.clearanceCompletedAt = ''
+    }
+
+    return next
+  }
+
+  return { ...draft, [field]: value }
 }
 
 export function isLegacyArrivalWithoutDate(process) {

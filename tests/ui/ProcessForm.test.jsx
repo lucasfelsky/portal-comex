@@ -29,6 +29,14 @@ function makeDraft(overrides = {}) {
     arrived: false,
     duimpStatus: '',
     parameterizationChannel: '',
+    // F17.3b (D-11/D-12): DUIMP completa (numero + datas), conferencia,
+    // exigencia.
+    duimpNumber: '',
+    duimpRegisteredAt: '',
+    parameterizedAt: '',
+    customsInspectionScheduledAt: '',
+    customsRequirement: false,
+    customsRequirementNotes: '',
     collectionStatus: '',
     collectionWindows: [],
     dtaStatus: '',
@@ -87,7 +95,6 @@ function renderForm(props = {}) {
     channelOptions: ['Verde', 'Amarelo', 'Vermelho'],
     collectionStatusOptions: ['Coleta Pendente', 'Coleta Agendada'],
     dtaStatusOptions: ['Registrada'],
-    duimpStatusOptions: ['Registrada', 'Parametrizada'],
     processCategoryOptions: ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO'],
     onDraftChange,
     onSetViewModeList: vi.fn(),
@@ -644,5 +651,159 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
     await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
     expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar janela' })).toBeDisabled()
+  })
+})
+
+// F17.3b (D-11): ProcessCustomsFields reescrito - select manual "DUIMP" sai,
+// status derivado das datas.
+describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  }
+
+  it('com presenca aparece Nº da DUIMP e Registro da DUIMP, e NAO aparece o combobox "DUIMP"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Nº da DUIMP')).toBeInTheDocument()
+    expect(screen.getByText('Registro da DUIMP (data e hora)')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'DUIMP' })).not.toBeInTheDocument()
+  })
+
+  it('Parametrização (data e hora) so aparece com sinal de registro', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
+    })
+    await openFlowStep(user)
+    expect(screen.queryByText('Parametrização (data e hora)')).not.toBeInTheDocument()
+  })
+
+  it('Parametrização (data e hora) aparece com registro preenchido', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpRegisteredAt: '2026-09-20T10:00',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Parametrização (data e hora)')).toBeInTheDocument()
+  })
+
+  it('Canal da parametrização NAO aparece so com registro (sem parametrizacao)', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpRegisteredAt: '2026-09-20T10:00',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.queryByText('Canal da parametrização')).not.toBeInTheDocument()
+  })
+
+  it('Canal da parametrização aparece com parametrizacao', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Canal da parametrização')).toBeInTheDocument()
+  })
+
+  it('Amarelo mostra Conferência agendada para e checkbox Exigência?', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Amarelo',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Conferência agendada para')).toBeInTheDocument()
+    expect(screen.getByText('Exigência?')).toBeInTheDocument()
+  })
+
+  it('Cinza mostra Procedimento especial (canal Cinza)', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Cinza',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Procedimento especial (canal Cinza)')).toBeInTheDocument()
+  })
+
+  it('Verde nao mostra Exigência?', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Verde',
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.queryByText('Exigência?')).not.toBeInTheDocument()
+  })
+
+  it('legado Parametrizada sem data mostra o hint "DUIMP parametrizada sem data (registro antigo)"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+      }),
+    })
+    await openFlowStep(user)
+    expect(
+      screen.getByText('DUIMP parametrizada sem data (registro antigo) — informe a data e hora.')
+    ).toBeInTheDocument()
+  })
+
+  it('digitar em Registro da DUIMP chama onDraftChange("duimpRegisteredAt", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
+    })
+    await openFlowStep(user)
+    const label = screen.getByText('Registro da DUIMP (data e hora)').closest('label')
+    const input = within(label).getByDisplayValue('')
+    await user.type(input, '2026-09-20T10:00')
+    expect(onDraftChange).toHaveBeenCalledWith('duimpRegisteredAt', expect.any(String))
   })
 })

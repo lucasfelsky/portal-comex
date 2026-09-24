@@ -217,6 +217,10 @@ service cloud.firestore {
         'berthedAt', 'arrivedAt', 'ceMercante', 'ceHouse', 'terminalName',
         'freeTimeDays', 'demurrageDailyRateUsd', 'cargoPresenceInformedAt',
         'migratedApproxFields',
+        // F17.3b: DUIMP completa, conferencia, exigencia.
+        'duimpNumber', 'duimpRegisteredAt', 'parameterizedAt',
+        'customsInspectionScheduledAt', 'customsRequirement',
+        'customsRequirementNotes',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (

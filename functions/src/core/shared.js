@@ -332,6 +332,15 @@ function sanitizeProcessForComparison(process) {
     demurrageDailyRateUsd: normalizeOptionalNumber(process.demurrageDailyRateUsd),
     duimpStatus: normalizeString(process.duimpStatus),
     parameterizationChannel: normalizeString(process.parameterizationChannel),
+    // F17.3b (D-8): DUIMP completa + conferencia/exigencia. Doc legado sem
+    // as 6 chaves x 1o save com ''/false -> JSON identico -> sem notificacao
+    // espuria.
+    duimpNumber: normalizeString(process.duimpNumber),
+    duimpRegisteredAt: normalizeString(process.duimpRegisteredAt),
+    parameterizedAt: normalizeString(process.parameterizedAt),
+    customsInspectionScheduledAt: normalizeString(process.customsInspectionScheduledAt),
+    customsRequirement: Boolean(process.customsRequirement),
+    customsRequirementNotes: normalizeString(process.customsRequirementNotes),
     collectionStatus: normalizeString(process.collectionStatus),
     collectionScheduledAt: normalizeString(process.collectionScheduledAt),
     collectionWindows: Array.isArray(process.collectionWindows)

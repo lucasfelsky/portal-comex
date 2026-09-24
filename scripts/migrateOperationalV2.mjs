@@ -1,11 +1,12 @@
-// F17.1a/F17.2b/F17.3a: migracao do `processStatus` legado pro derivado
-// (deriveProcessStatus) + migracao de `mapaStatus` legado pro `licenses[]`
-// multi-orgao (F17.2b D-11) + migracao de `berthed`/`arrived` sem data pro
-// `berthedAt`/`arrivedAt` aproximado (F17.3a D-3). `MIGRATION_STEPS` tem 3
-// passos EM SEQUENCIA (`mapaToLicenses` -> `arrivalDates` ->
-// `recalcProcessStatus` - cada passo le as `changes` do anterior ja
-// aplicadas em memoria). `containers[]` ja migrou via F17.2a (nao precisou
-// de passo, so' de expansao lazy na leitura).
+// F17.1a/F17.2b/F17.3a/F17.3b: migracao do `processStatus` legado pro
+// derivado (deriveProcessStatus) + migracao de `mapaStatus` legado pro
+// `licenses[]` multi-orgao (F17.2b D-11) + migracao de `berthed`/`arrived`
+// sem data pro `berthedAt`/`arrivedAt` aproximado (F17.3a D-3) + relatorio de
+// DUIMP legada sem data (F17.3b D-10, `duimpDates` - NUNCA escreve).
+// `MIGRATION_STEPS` tem 4 passos EM SEQUENCIA (`mapaToLicenses` ->
+// `arrivalDates` -> `duimpDates` -> `recalcProcessStatus` - cada passo le as
+// `changes` do anterior ja aplicadas em memoria). `containers[]` ja migrou
+// via F17.2a (nao precisou de passo, so' de expansao lazy na leitura).
 //
 // Uso:
 //   node scripts/migrateOperationalV2.mjs          # dry-run (default), le e imprime, nao escreve
@@ -24,6 +25,11 @@ import { pathToFileURL } from 'node:url'
 import { deriveProcessStatus, resolveCargoReceivedAt } from '../src/features/processes/deriveProcessStatus.js'
 import { getProcessStage } from '../src/features/processes/processStage.js'
 import { buildLegacyMapaLicense, mapLegacyMapaStatus } from '../src/features/processes/licenses.js'
+import {
+  getLegacyDuimpLevel,
+  isLegacyDuimpRegisteredWithoutDate,
+  isLegacyParameterizedWithoutDate,
+} from '../src/features/processes/arrivalCustoms.js'
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
@@ -327,6 +333,12 @@ function isAirCategoryForMigration(category) {
  * de carga (`cargoPresenceInformed` sem `cargoPresenceInformedAt`) NUNCA
  * ganha data inventada - so' `needs-review` (A1: seria a data-base do free
  * time). Nunca rebaixa (so' ACRESCENTA campos).
+ *
+ * F17.3b (D-10): correcao do achado do reviewer do F17.3a - antes o
+ * `needs-review` da presenca so entrava se `type === 'unchanged'`, entao um
+ * doc com chegada aproximada (ou chegada `needs-review`) E presenca sem data
+ * perdia o 2o motivo no relatorio. Agora acumula `reviewReasons[]` (um por
+ * motivo) e `reasons[]` (todos os motivos, incluindo o de aproximacao).
  */
 export function planArrivalDatesMigration(processes) {
   return (Array.isArray(processes) ? processes : []).map((doc) => {
@@ -335,8 +347,9 @@ export function planArrivalDatesMigration(processes) {
     const migratedApproxFields = Array.isArray(doc?.migratedApproxFields)
       ? [...doc.migratedApproxFields]
       : []
-    let type = 'unchanged'
-    let reason = 'sem sinal legado pendente'
+    const reasons = []
+    const reviewReasons = []
+    let approxType = null
 
     function planArrivalDate(boolField, dateField) {
       if (doc?.[boolField] !== true || hasValue(doc?.[dateField])) return
@@ -345,12 +358,13 @@ export function planArrivalDatesMigration(processes) {
         changes[dateField] = `${eta}T00:00`
         if (!migratedApproxFields.includes(dateField)) migratedApproxFields.push(dateField)
         changes.migratedApproxFields = migratedApproxFields
-        type = `${dateField}-approx`
-        reason = `${boolField}=true sem ${dateField}, migrado a partir do eta (aproximado)`
+        approxType = `${dateField}-approx`
+        reasons.push(`${boolField}=true sem ${dateField}, migrado a partir do eta (aproximado)`)
         return
       }
-      type = 'needs-review'
-      reason = `${boolField}=true sem ${dateField} e sem eta valido`
+      const reviewReason = `${boolField}=true sem ${dateField} e sem eta valido`
+      reviewReasons.push(reviewReason)
+      reasons.push(reviewReason)
     }
 
     if (isMaritimeCategoryForMigration(category)) {
@@ -359,19 +373,19 @@ export function planArrivalDatesMigration(processes) {
       planArrivalDate('arrived', 'arrivedAt')
     }
 
-    if (
-      doc?.cargoPresenceInformed === true &&
-      !hasValue(doc?.cargoPresenceInformedAt) &&
-      type === 'unchanged'
-    ) {
-      type = 'needs-review'
-      reason = 'cargoPresenceInformed=true sem cargoPresenceInformedAt'
+    if (doc?.cargoPresenceInformed === true && !hasValue(doc?.cargoPresenceInformedAt)) {
+      const reviewReason = 'cargoPresenceInformed=true sem cargoPresenceInformedAt'
+      reviewReasons.push(reviewReason)
+      reasons.push(reviewReason)
     }
 
     if (Object.keys(changes).length > 0) {
       changes.updatedById = ''
       changes.updatedByName = MIGRATION_ACTOR_NAME
     }
+
+    const type = approxType ?? (reviewReasons.length > 0 ? 'needs-review' : 'unchanged')
+    const reason = reasons.length > 0 ? reasons.join('; ') : 'sem sinal legado pendente'
 
     return {
       id: doc?.id ?? '',
@@ -380,18 +394,70 @@ export function planArrivalDatesMigration(processes) {
       after: changes.berthedAt ?? changes.arrivedAt ?? '',
       type,
       reason,
+      reviewReasons,
       changes: Object.keys(changes).length > 0 ? changes : null,
     }
   })
 }
 
-// F17.2b/F17.3a (D-11/D-3): passos EM SEQUENCIA - `mapaToLicenses` primeiro
-// (suas `changes` entram no doc em memoria), depois `arrivalDates`, e por
-// ultimo `recalcProcessStatus` (ja le `licenses[]`/`berthedAt`/`arrivedAt`
-// como fonte autoritativa).
+/**
+ * F17.3b (D-10): plano puro (sem I/O) - SO RELATORIO, nunca escreve
+ * (`changes: null` sempre). Nao inventa `duimpRegisteredAt`/`parameterizedAt`/
+ * `clearanceCompletedAt` a partir de `eta`/`updatedAt` - essas datas
+ * alimentam o lead time presenca->desembaraco (F17.6) e o alerta
+ * "parametrizada sem desembaraco" (F17.5); data falsa contaminaria os dois.
+ * Processo ja `Carga recebida` e' historico - nao entra em revisao.
+ */
+export function planDuimpDatesMigration(processes) {
+  return (Array.isArray(processes) ? processes : []).map((doc) => {
+    const category = doc?.category ?? ''
+    const base = { id: doc?.id ?? '', category, before: '', after: '' }
+
+    if (String(doc?.processStatus ?? '').trim() === 'Carga recebida') {
+      return {
+        ...base,
+        type: 'unchanged',
+        reason: 'carga recebida - historico, sem revisao',
+        reviewReasons: [],
+        changes: null,
+      }
+    }
+
+    const reviewReasons = []
+
+    if (isLegacyDuimpRegisteredWithoutDate(doc)) {
+      reviewReasons.push(`duimpStatus="${doc?.duimpStatus ?? ''}" sem duimpRegisteredAt`)
+    }
+    if (isLegacyParameterizedWithoutDate(doc)) {
+      reviewReasons.push('duimpStatus=Parametrizada sem parameterizedAt')
+    }
+    if (
+      getLegacyDuimpLevel(doc?.duimpStatus) === 3 &&
+      String(doc?.parameterizationChannel ?? '').trim() === 'Verde' &&
+      !hasValue(doc?.clearanceCompletedAt)
+    ) {
+      reviewReasons.push('Parametrizada + Verde sem clearanceCompletedAt (desembaraco sem data real)')
+    }
+
+    return {
+      ...base,
+      type: reviewReasons.length > 0 ? 'needs-review' : 'unchanged',
+      reason: reviewReasons.length > 0 ? reviewReasons.join('; ') : 'sem sinal legado pendente',
+      reviewReasons,
+      changes: null,
+    }
+  })
+}
+
+// F17.2b/F17.3a/F17.3b (D-11/D-3/D-10): passos EM SEQUENCIA - `mapaToLicenses`
+// primeiro (suas `changes` entram no doc em memoria), depois `arrivalDates`,
+// depois `duimpDates` (so' relatorio, nunca escreve), e por ultimo
+// `recalcProcessStatus` (ja le `licenses[]`/`berthedAt`/`arrivedAt` como
+// fonte autoritativa).
 export const MIGRATION_STEPS = [
   { id: 'mapaToLicenses', plan: planMapaToLicensesMigration },
   { id: 'arrivalDates', plan: planArrivalDatesMigration },
+  { id: 'duimpDates', plan: planDuimpDatesMigration },
   { id: 'recalcProcessStatus', plan: planProcessStatusMigration },
 ]
 
@@ -423,6 +489,8 @@ export function planOperationalMigration(processes, { nowIso } = {}) {
         reason: stepResult.reason,
         before: stepResult.before,
         after: stepResult.after,
+        // F17.3b (D-10): compat com os passos que nao preenchem o campo.
+        reviewReasons: stepResult.reviewReasons ?? (stepResult.type === 'needs-review' ? [stepResult.reason] : []),
       })
 
       if (stepResult.changes) {
@@ -508,6 +576,16 @@ function printReport(plan) {
     for (const [type, count] of Object.entries(totals)) {
       console.log(`    ${type}: ${count}`)
     }
+    // F17.3b (D-10): total de MOTIVOS de revisao do passo (pode ser > que
+    // `needs-review` acima quando um doc `<dateField>-approx` tambem carrega
+    // um motivo de revisao, ex.: presenca sem data).
+    const reviewReasonsCount = plan.reduce((total, doc) => {
+      const step = doc.steps.find((item) => item.stepId === stepId)
+      return total + (step?.reviewReasons?.length ?? 0)
+    }, 0)
+    if (reviewReasonsCount > 0) {
+      console.log(`    needs-review (motivos): ${reviewReasonsCount}`)
+    }
   }
 
   console.log('\nid | categoria | campos do PATCH')
@@ -516,15 +594,21 @@ function printReport(plan) {
     console.log(`${doc.id} | ${doc.category} | ${Object.keys(doc.changes).join(', ')}`)
   }
 
+  // F17.3b (D-10): itera `reviewReasons` de QUALQUER passo (nao so'
+  // `type === 'needs-review'`) - 1 linha por motivo.
   const needsReview = plan.flatMap((doc) =>
-    doc.steps
-      .filter((step) => step.type === 'needs-review')
-      .map((step) => ({ id: doc.id, ...step }))
+    doc.steps.flatMap((step) =>
+      (step.reviewReasons ?? []).map((reviewReason) => ({
+        id: doc.id,
+        stepId: step.stepId,
+        reviewReason,
+      }))
+    )
   )
   if (needsReview.length > 0) {
     console.log('\nPrecisam de revisao humana (nenhuma escrita proposta pelo passo):')
     for (const item of needsReview) {
-      console.log(`  - ${item.id} (${item.stepId}): ${item.reason}`)
+      console.log(`  - ${item.id} (${item.stepId}): ${item.reviewReason}`)
     }
   }
 }

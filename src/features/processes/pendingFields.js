@@ -4,7 +4,6 @@
 
 import { deriveProcessStatus } from './deriveProcessStatus.js'
 import { getProcessStage } from './processStage.js'
-import { normalizeComparableText } from './processStatus.js'
 import { isMaritimeCategory } from './processCategories.js'
 import { getCollectionWindows } from '../../utils/collectionWindows.js'
 import { getEffectiveLicenses } from './licenses.js'
@@ -12,7 +11,16 @@ import {
   MIN_CONSOLIDATED_PURCHASE_ORDERS,
   getProcessPurchaseOrders,
 } from './purchaseOrders.js'
-import { CE_HOUSE_CATEGORIES, FREE_TIME_CATEGORIES, isApproxDate } from './arrivalCustoms.js'
+import {
+  CE_HOUSE_CATEGORIES,
+  CUSTOMS_INSPECTION_CHANNELS,
+  FREE_TIME_CATEGORIES,
+  hasDuimpRegistrationSignal,
+  hasParameterizationSignal,
+  isApproxDate,
+  isLegacyDuimpRegisteredWithoutDate,
+  isLegacyParameterizedWithoutDate,
+} from './arrivalCustoms.js'
 
 function hasText(value) {
   return String(value ?? '').trim() !== ''
@@ -23,12 +31,6 @@ function hasValidItems(process) {
     Array.isArray(process?.items) &&
     process.items.some((item) => hasText(item?.commercialName) && Number(item?.quantity) > 0)
   )
-}
-
-function isDuimpParametrizadaNaoVerde(process) {
-  const duimp = normalizeComparableText(process?.duimpStatus).trim()
-  const channel = normalizeComparableText(process?.parameterizationChannel).trim()
-  return duimp === 'parametrizada' && channel !== 'verde'
 }
 
 function hasContainerWithout(process, field) {
@@ -282,14 +284,72 @@ export const PENDING_FIELD_RULES = [
         (license) => license?.status === 'Deferida' && !hasText(license?.deferredAt)
       ),
   },
+  // F17.3b (D-6): DUIMP completa - numero, datas de registro/parametrizacao
+  // (legado sem data), canal, conferencia (Amarelo/Vermelho) e procedimento
+  // especial (Cinza). Guarda "derivado != Carga recebida": processo
+  // historico ja recebido nao ganha ruido (spec, secao Migracao).
   {
-    // AD-1: desembaraco concluido cobrado so quando a duimp ja parametrizou
-    // e o canal nao e Verde (Verde continua liberando sozinho).
+    id: 'duimpNumber',
+    field: 'duimpNumber',
+    label: 'Nº da DUIMP',
+    stage: 3,
+    when: (p) => hasDuimpRegistrationSignal(p),
+    isMissing: (p) => !hasText(p?.duimpNumber),
+  },
+  {
+    id: 'duimpRegisteredAt',
+    field: 'duimpRegisteredAt',
+    label: 'Data do registro da DUIMP',
+    stage: 3,
+    when: (p) => isLegacyDuimpRegisteredWithoutDate(p) && deriveProcessStatus(p) !== 'Carga recebida',
+    isMissing: () => true,
+  },
+  {
+    id: 'parameterizedAt',
+    field: 'parameterizedAt',
+    label: 'Data da parametrização',
+    stage: 3,
+    when: (p) => isLegacyParameterizedWithoutDate(p) && deriveProcessStatus(p) !== 'Carga recebida',
+    isMissing: () => true,
+  },
+  {
+    id: 'parameterizationChannel',
+    field: 'parameterizationChannel',
+    label: 'Canal da parametrização',
+    stage: 3,
+    when: (p) => hasParameterizationSignal(p),
+    isMissing: (p) => !hasText(p?.parameterizationChannel),
+  },
+  {
+    id: 'customsInspectionScheduledAt',
+    field: 'customsInspectionScheduledAt',
+    label: 'Data da conferência aduaneira',
+    stage: 3,
+    when: (p) =>
+      hasParameterizationSignal(p) && CUSTOMS_INSPECTION_CHANNELS.includes(p?.parameterizationChannel),
+    isMissing: (p) => !hasText(p?.customsInspectionScheduledAt),
+  },
+  {
+    id: 'customsRequirementNotes',
+    field: 'customsRequirementNotes',
+    label: 'Procedimento especial (canal Cinza)',
+    stage: 3,
+    when: (p) => hasParameterizationSignal(p) && p?.parameterizationChannel === 'Cinza',
+    isMissing: (p) => !hasText(p?.customsRequirementNotes),
+  },
+  {
+    // AD-1/F17.3b: desembaraco concluido cobrado quando a duimp ja
+    // parametrizou e o canal esta preenchido - exceto Verde ja recebido
+    // (spec, secao Migracao: "Parametrizada + Verde -> clearanceCompletedAt
+    // = null + pendencia", mas processo historico ja recebido nao pede).
     id: 'clearanceCompletedAt',
     field: 'clearanceCompletedAt',
     label: 'Data do desembaraço',
     stage: 3,
-    when: (p) => isDuimpParametrizadaNaoVerde(p),
+    when: (p) =>
+      hasParameterizationSignal(p) &&
+      hasText(p?.parameterizationChannel) &&
+      (p?.parameterizationChannel !== 'Verde' || deriveProcessStatus(p) !== 'Carga recebida'),
     isMissing: (p) => !hasText(p?.clearanceCompletedAt),
   },
   {

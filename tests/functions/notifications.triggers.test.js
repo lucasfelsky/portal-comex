@@ -301,6 +301,48 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
     TRIGGER_TIMEOUT_MS
   )
 
+  // F17.3b (D-7): `parameterizedAt` preenchido + canal gera o marco
+  // `parameterized` com `occurredAtSource: 'field'`.
+  it(
+    'update com parameterizedAt + canal gera evento parameterized com occurredAtSource "field"',
+    async () => {
+      const processId = 'proc-upd-parameterized'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Update Parameterized',
+        processNumber: 'PO-1007',
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizationChannel: '',
+        processStatus: 'Aguardando registro da DUIMP',
+      })
+
+      await processRef.update({
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Verde',
+        processStatus: 'Aguardando agendamento de coleta',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Um',
+      })
+
+      const deadline = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      let eventDocs = []
+      while (Date.now() < deadline) {
+        const snapshot = await processRef.collection('events').where('type', '==', 'parameterized').get()
+        eventDocs = snapshot.docs.map((item) => item.data())
+        if (eventDocs.length >= 1) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+
+      expect(eventDocs).toHaveLength(1)
+      expect(eventDocs[0].field).toBe('parameterizedAt')
+      expect(eventDocs[0].value).toBe('Verde')
+      expect(eventDocs[0].occurredAtSource).toBe('field')
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
   // F17.2b (D-10): `licenses[]` entra na comparacao de update - o aviso que
   // hoje sai com MAPA nao pode se perder.
   it(

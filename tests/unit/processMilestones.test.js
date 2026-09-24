@@ -12,11 +12,15 @@ import {
   isMapaReleasedMirror,
   hasArrivalSignalMirror,
   hasCargoPresenceSignalMirror,
+  hasDuimpRegistrationSignalMirror,
+  hasParameterizationSignalMirror,
 } from '../../functions/src/process/milestones.js'
 import { isCustomsCleared } from '../../src/features/processes/deriveProcessStatus.js'
 import {
   hasArrivalSignal,
   hasCargoPresenceSignal,
+  hasDuimpRegistrationSignal,
+  hasParameterizationSignal,
 } from '../../src/features/processes/arrivalCustoms.js'
 import { mapaAllowsCollectionStatus } from '../../src/features/processes/processStatus.js'
 import {
@@ -167,6 +171,50 @@ describe('buildMilestoneEvents - tabela D-4', () => {
     const before = baseMaritime({ duimpStatus: 'Parametrizada', parameterizationChannel: '' })
     const after = baseMaritime({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Verde' })
     expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'parameterized')).toHaveLength(1)
+  })
+
+  // F17.3b (D-7): marcos com data real (`duimpRegisteredAt`/`parameterizedAt`).
+  it('duimpRegisteredAt "" -> preenchido (FCL, presenca) gera duimpRegistered com occurredAt real', () => {
+    const before = baseMaritime({ cargoPresenceInformed: true, duimpRegisteredAt: '' })
+    const after = baseMaritime({ cargoPresenceInformed: true, duimpRegisteredAt: '2026-09-20T10:00', duimpNumber: 'DU-1' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'duimpRegistered')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.field).toBe('duimpRegisteredAt')
+    expect(events[0].data.occurredAt).toBe('2026-09-20T13:00:00.000Z')
+    expect(events[0].data.occurredAtSource).toBe('field')
+    expect(events[0].data.value).toBe('DU-1')
+  })
+
+  it('before legado "Aguardando parametrização da DUIMP" sem data + after com duimpRegisteredAt NAO gera', () => {
+    const before = baseMaritime({ duimpStatus: 'Aguardando parametrização da DUIMP' })
+    const after = baseMaritime({
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-20T10:00',
+    })
+    expect(
+      eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'duimpRegistered')
+    ).toHaveLength(0)
+  })
+
+  it('parameterizedAt + canal gera parameterized com occurredAtSource field', () => {
+    const before = baseMaritime({ parameterizationChannel: '' })
+    const after = baseMaritime({ parameterizedAt: '2026-09-20T10:00', parameterizationChannel: 'Verde' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'parameterized')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.field).toBe('parameterizedAt')
+    expect(events[0].data.occurredAtSource).toBe('field')
+  })
+
+  it('before legado Parametrizada+canal + after com parameterizedAt NAO gera', () => {
+    const before = baseMaritime({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Verde' })
+    const after = baseMaritime({
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      parameterizedAt: '2026-09-20T10:00',
+    })
+    expect(
+      eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'parameterized')
+    ).toHaveLength(0)
   })
 
   it('cleared: Amarelo + clearanceCompletedAt preenchido usa o campo como occurredAt (field)', () => {
@@ -457,13 +505,17 @@ describe('paridade functions/ x src/ (D-4 nota)', () => {
   const duimpValues = ['', 'Aguardando registro da DUIMP', 'Aguardando parametrização da DUIMP', 'Parametrizada']
   const channelValues = ['', 'Verde', 'Amarelo', 'Vermelho', 'Cinza']
   const clearanceValues = ['', '2026-09-20T10:00']
+  // F17.3b (D-3/D-7): `parameterizedAt` (data nova) tambem entra na matriz.
+  const parameterizedValues = ['', '2026-09-20T10:00']
 
   it('isCustomsClearedMirror === isCustomsCleared para toda a matriz', () => {
     for (const duimpStatus of duimpValues) {
       for (const parameterizationChannel of channelValues) {
         for (const clearanceCompletedAt of clearanceValues) {
-          const process = { duimpStatus, parameterizationChannel, clearanceCompletedAt }
-          expect(isCustomsClearedMirror(process)).toBe(isCustomsCleared(process))
+          for (const parameterizedAt of parameterizedValues) {
+            const process = { duimpStatus, parameterizationChannel, clearanceCompletedAt, parameterizedAt }
+            expect(isCustomsClearedMirror(process)).toBe(isCustomsCleared(process))
+          }
         }
       }
     }
@@ -522,6 +574,37 @@ describe('paridade functions/ x src/features/processes/arrivalCustoms.js (F17.3a
       for (const cargoPresenceInformedAt of dateValues) {
         const process = { cargoPresenceInformed, cargoPresenceInformedAt }
         expect(hasCargoPresenceSignalMirror(process)).toBe(hasCargoPresenceSignal(process))
+      }
+    }
+  })
+
+  // F17.3b (D-7): paridade dos espelhos de sinal DUIMP (data OU legado).
+  const duimpStatusValues = [
+    '',
+    'aguardando registro',
+    'Registrada, aguardando parametrização',
+    'Aguardando parametrização da DUIMP',
+    'Parametrizada',
+  ]
+
+  it('hasDuimpRegistrationSignalMirror === hasDuimpRegistrationSignal (5 duimpStatus x data)', () => {
+    for (const duimpStatus of duimpStatusValues) {
+      for (const duimpRegisteredAt of dateValues) {
+        for (const parameterizedAt of dateValues) {
+          const process = { duimpStatus, duimpRegisteredAt, parameterizedAt, cargoPresenceInformed: true }
+          expect(hasDuimpRegistrationSignalMirror(process)).toBe(hasDuimpRegistrationSignal(process))
+        }
+      }
+    }
+  })
+
+  it('hasParameterizationSignalMirror === hasParameterizationSignal (5 duimpStatus x data)', () => {
+    for (const duimpStatus of duimpStatusValues) {
+      for (const duimpRegisteredAt of dateValues) {
+        for (const parameterizedAt of dateValues) {
+          const process = { duimpStatus, duimpRegisteredAt, parameterizedAt, cargoPresenceInformed: true }
+          expect(hasParameterizationSignalMirror(process)).toBe(hasParameterizationSignal(process))
+        }
       }
     }
   })

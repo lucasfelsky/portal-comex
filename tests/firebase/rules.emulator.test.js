@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 70 campos validos (F17.2a/F17.2b/F17.2c/F17.3a)', async () => {
+    it('admin cria processo com todos os 76 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -555,6 +555,13 @@ describeEmulator('firestore.rules (emulador)', () => {
           demurrageDailyRateUsd: 0,
           cargoPresenceInformedAt: '',
           migratedApproxFields: [],
+          // F17.3b: DUIMP completa, conferencia, exigencia (6 campos novos).
+          duimpNumber: '',
+          duimpRegisteredAt: '',
+          parameterizedAt: '',
+          customsInspectionScheduledAt: '',
+          customsRequirement: false,
+          customsRequirementNotes: '',
           updatedById: 'admin-1',
           updatedByName: 'Admin',
           updatedAt: new Date(),
@@ -631,6 +638,57 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(
         updateDoc(doc(db, 'processes/p29'), {
           freeTimeDays: 7,
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.3b (D-9): DUIMP completa, conferencia, exigencia.
+    it('admin atualiza duimpNumber + parameterizedAt + customsRequirement', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p30'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p30'), {
+          duimpNumber: 'DU-2026-001',
+          parameterizedAt: '2026-09-20T10:00',
+          customsRequirement: true,
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza duimpNumber', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p31'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p31'), {
+          duimpNumber: 'DU-2026-001',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza parameterizedAt', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p32'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p32'), {
+          parameterizedAt: '2026-09-20T10:00',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza customsRequirementNotes', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p33'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p33'), {
+          customsRequirementNotes: 'nota',
           updatedById: 'log-1',
           updatedByName: 'Logistica',
         })

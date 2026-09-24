@@ -1,4 +1,6 @@
 // F17.3a (D-1): cobertura do modulo puro de chegada/CE/free time/presenca.
+// F17.3b (D-1): DUIMP completa (numero + datas), canal, conferencia,
+// exigencia e pre-preenchimento do desembaraco no Verde.
 //
 // @vitest-environment node
 
@@ -7,6 +9,13 @@ import {
   FREE_TIME_CATEGORIES,
   CE_HOUSE_CATEGORIES,
   APPROX_DATE_FIELDS,
+  DUIMP_STATUS_WAITING_REGISTRATION,
+  DUIMP_STATUS_WAITING_PARAMETERIZATION,
+  DUIMP_STATUS_PARAMETERIZED,
+  CUSTOMS_INSPECTION_CHANNELS,
+  CUSTOMS_REQUIREMENT_CHANNELS,
+  CUSTOMS_DATE_FIELDS,
+  EMPTY_CUSTOMS_CLEARANCE_FIELDS,
   normalizeDateTimeLocal,
   normalizeOptionalInteger,
   normalizeOptionalDecimal,
@@ -19,6 +28,16 @@ import {
   applyArrivalDateEdit,
   sanitizeArrivalFields,
   getFreeTimeStatus,
+  getLegacyDuimpLevel,
+  getDateDuimpLevel,
+  getEffectiveDuimpLevel,
+  hasDuimpRegistrationSignal,
+  hasParameterizationSignal,
+  isLegacyDuimpRegisteredWithoutDate,
+  isLegacyParameterizedWithoutDate,
+  deriveDuimpStatus,
+  sanitizeCustomsClearanceFields,
+  applyCustomsEdit,
 } from '../../src/features/processes/arrivalCustoms.js'
 
 describe('constantes', () => {
@@ -301,5 +320,254 @@ describe('getFreeTimeStatus', () => {
     const running = getFreeTimeStatus(process, new Date(2026, 8, 3))
     expect(running.state).toBe('running')
     expect(running.daysRemaining).toBe(5)
+  })
+})
+
+describe('F17.3b: constantes DUIMP', () => {
+  it('status/canais/campos de data', () => {
+    expect(DUIMP_STATUS_WAITING_REGISTRATION).toBe('Aguardando registro da DUIMP')
+    expect(DUIMP_STATUS_WAITING_PARAMETERIZATION).toBe('Aguardando parametrização da DUIMP')
+    expect(DUIMP_STATUS_PARAMETERIZED).toBe('Parametrizada')
+    expect(CUSTOMS_INSPECTION_CHANNELS).toEqual(['Amarelo', 'Vermelho'])
+    expect(CUSTOMS_REQUIREMENT_CHANNELS).toEqual(['Amarelo', 'Vermelho', 'Cinza'])
+    expect(CUSTOMS_DATE_FIELDS).toEqual(['duimpRegisteredAt', 'parameterizedAt'])
+  })
+
+  it('EMPTY_CUSTOMS_CLEARANCE_FIELDS congelado com as 9 chaves', () => {
+    expect(EMPTY_CUSTOMS_CLEARANCE_FIELDS).toEqual({
+      duimpStatus: '',
+      parameterizationChannel: '',
+      clearanceCompletedAt: '',
+      duimpNumber: '',
+      duimpRegisteredAt: '',
+      parameterizedAt: '',
+      customsInspectionScheduledAt: '',
+      customsRequirement: false,
+      customsRequirementNotes: '',
+    })
+    expect(Object.isFrozen(EMPTY_CUSTOMS_CLEARANCE_FIELDS)).toBe(true)
+  })
+})
+
+describe('getLegacyDuimpLevel', () => {
+  it('os 5 valores do vocabulario + sem acento/caixa', () => {
+    expect(getLegacyDuimpLevel('Aguardando registro')).toBe(1)
+    expect(getLegacyDuimpLevel('Aguardando registro da DUIMP')).toBe(1)
+    expect(getLegacyDuimpLevel('Registrada, aguardando parametrização')).toBe(2)
+    expect(getLegacyDuimpLevel('Aguardando parametrização da DUIMP')).toBe(2)
+    expect(getLegacyDuimpLevel('Parametrizada')).toBe(3)
+    expect(getLegacyDuimpLevel('PARAMETRIZADA')).toBe(3)
+    expect(getLegacyDuimpLevel('aguardando registro da duimp')).toBe(1)
+  })
+
+  it('desconhecido/vazio -> 0', () => {
+    expect(getLegacyDuimpLevel('')).toBe(0)
+    expect(getLegacyDuimpLevel(undefined)).toBe(0)
+    expect(getLegacyDuimpLevel('lixo')).toBe(0)
+  })
+})
+
+describe('getEffectiveDuimpLevel', () => {
+  it('data vence legado menor', () => {
+    const process = { duimpStatus: 'Aguardando registro', parameterizedAt: '2026-09-20T10:00' }
+    expect(getEffectiveDuimpLevel(process)).toBe(3)
+  })
+
+  it('legado vence data menor', () => {
+    const process = { duimpStatus: 'Parametrizada', cargoPresenceInformed: true }
+    expect(getEffectiveDuimpLevel(process)).toBe(3)
+  })
+})
+
+describe('deriveDuimpStatus', () => {
+  it('presenca sozinha -> vazio (nao gera "Aguardando registro" espurio)', () => {
+    expect(deriveDuimpStatus({ cargoPresenceInformed: true })).toBe('')
+  })
+
+  it('legado "Aguardando registro" preservado (sem data nova)', () => {
+    expect(deriveDuimpStatus({ duimpStatus: 'Aguardando registro' })).toBe(
+      DUIMP_STATUS_WAITING_REGISTRATION
+    )
+  })
+
+  it('duimpRegisteredAt -> Aguardando parametrização da DUIMP', () => {
+    expect(deriveDuimpStatus({ duimpRegisteredAt: '2026-09-20T10:00' })).toBe(
+      DUIMP_STATUS_WAITING_PARAMETERIZATION
+    )
+  })
+
+  it('parameterizedAt -> Parametrizada', () => {
+    expect(deriveDuimpStatus({ parameterizedAt: '2026-09-20T10:00' })).toBe(DUIMP_STATUS_PARAMETERIZED)
+  })
+
+  it('ignoreLegacy com legado Parametrizada e so registro -> Aguardando parametrização da DUIMP', () => {
+    const process = { duimpStatus: 'Parametrizada', duimpRegisteredAt: '2026-09-20T10:00' }
+    expect(deriveDuimpStatus(process, { ignoreLegacy: true })).toBe(DUIMP_STATUS_WAITING_PARAMETERIZATION)
+  })
+})
+
+describe('sanitizeCustomsClearanceFields', () => {
+  it('sem presenca -> tudo vazio', () => {
+    expect(sanitizeCustomsClearanceFields({})).toEqual(EMPTY_CUSTOMS_CLEARANCE_FIELDS)
+  })
+
+  it('Verde zera conferencia/exigencia/notas', () => {
+    const result = sanitizeCustomsClearanceFields({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Verde',
+      customsInspectionScheduledAt: '2026-09-21T10:00',
+      customsRequirement: true,
+      customsRequirementNotes: 'nota',
+    })
+    expect(result.duimpStatus).toBe('Parametrizada')
+    expect(result.parameterizationChannel).toBe('Verde')
+    expect(result.customsInspectionScheduledAt).toBe('')
+    expect(result.customsRequirement).toBe(false)
+    expect(result.customsRequirementNotes).toBe('')
+  })
+
+  it('Amarelo sem check zera notas', () => {
+    const result = sanitizeCustomsClearanceFields({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Amarelo',
+      customsInspectionScheduledAt: '2026-09-21T10:00',
+      customsRequirement: false,
+      customsRequirementNotes: 'nota que nao deveria ficar',
+    })
+    expect(result.customsInspectionScheduledAt).toBe('2026-09-21T10:00')
+    expect(result.customsRequirement).toBe(false)
+    expect(result.customsRequirementNotes).toBe('')
+  })
+
+  it('Amarelo com check preserva a descricao da exigencia', () => {
+    const result = sanitizeCustomsClearanceFields({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Amarelo',
+      customsRequirement: true,
+      customsRequirementNotes: 'exigencia X',
+    })
+    expect(result.customsRequirement).toBe(true)
+    expect(result.customsRequirementNotes).toBe('exigencia X')
+  })
+
+  it('Cinza preserva notas mesmo sem exigencia marcada', () => {
+    const result = sanitizeCustomsClearanceFields({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Cinza',
+      customsRequirement: false,
+      customsRequirementNotes: 'procedimento especial',
+    })
+    expect(result.customsRequirementNotes).toBe('procedimento especial')
+  })
+
+  it('trimText: false preserva espaco final (draft em edicao)', () => {
+    const result = sanitizeCustomsClearanceFields(
+      {
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Cinza',
+        duimpNumber: 'DU-1 ',
+        customsRequirementNotes: 'nota ',
+      },
+      { trimText: false }
+    )
+    expect(result.duimpNumber).toBe('DU-1 ')
+    expect(result.customsRequirementNotes).toBe('nota ')
+  })
+})
+
+describe('applyCustomsEdit', () => {
+  it('limpar parameterizedAt de legado Parametrizada com registro -> Aguardando parametrização da DUIMP', () => {
+    const draft = {
+      duimpStatus: 'Parametrizada',
+      duimpRegisteredAt: '2026-09-19T10:00',
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Verde',
+    }
+    const next = applyCustomsEdit(draft, 'parameterizedAt', '')
+    expect(next.duimpStatus).toBe(DUIMP_STATUS_WAITING_PARAMETERIZATION)
+    // canal so' e' zerado depois do sanitize (sanitizeCustomsClearanceFields),
+    // nao dentro do applyCustomsEdit.
+    const sanitized = sanitizeCustomsClearanceFields(next)
+    expect(sanitized.parameterizationChannel).toBe('')
+  })
+
+  it('parameterizedAt com Verde e desembaraco vazio -> pre-preenche', () => {
+    const draft = { parameterizationChannel: 'Verde', clearanceCompletedAt: '' }
+    const next = applyCustomsEdit(draft, 'parameterizedAt', '2026-09-20T10:00')
+    expect(next.clearanceCompletedAt).toBe('2026-09-20T10:00')
+  })
+
+  it('desembaraco editado manualmente != parametrizacao nao e sobrescrito', () => {
+    const draft = {
+      parameterizationChannel: 'Verde',
+      parameterizedAt: '2026-09-20T10:00',
+      clearanceCompletedAt: '2026-09-22T10:00',
+    }
+    const next = applyCustomsEdit(draft, 'parameterizedAt', '2026-09-21T10:00')
+    expect(next.clearanceCompletedAt).toBe('2026-09-22T10:00')
+  })
+
+  it('canal Verde -> Amarelo com desembaraco = parametrizacao -> limpa', () => {
+    const draft = {
+      parameterizationChannel: 'Verde',
+      parameterizedAt: '2026-09-20T10:00',
+      clearanceCompletedAt: '2026-09-20T10:00',
+    }
+    const next = applyCustomsEdit(draft, 'parameterizationChannel', 'Amarelo')
+    expect(next.clearanceCompletedAt).toBe('')
+  })
+
+  it('canal -> Verde com desembaraco vazio e parametrizacao preenchida -> pre-preenche', () => {
+    const draft = { parameterizationChannel: 'Amarelo', parameterizedAt: '2026-09-20T10:00', clearanceCompletedAt: '' }
+    const next = applyCustomsEdit(draft, 'parameterizationChannel', 'Verde')
+    expect(next.clearanceCompletedAt).toBe('2026-09-20T10:00')
+  })
+
+  it('campo fora da lista so grava o valor', () => {
+    expect(applyCustomsEdit({ duimpNumber: '' }, 'duimpNumber', 'DU-1')).toEqual({ duimpNumber: 'DU-1' })
+  })
+})
+
+describe('hasDuimpRegistrationSignal / hasParameterizationSignal', () => {
+  it('nivel efetivo >= 2 / >= 3', () => {
+    expect(hasDuimpRegistrationSignal({ duimpRegisteredAt: '2026-09-20T10:00' })).toBe(true)
+    expect(hasDuimpRegistrationSignal({ cargoPresenceInformed: true })).toBe(false)
+    expect(hasParameterizationSignal({ parameterizedAt: '2026-09-20T10:00' })).toBe(true)
+    expect(hasParameterizationSignal({ duimpRegisteredAt: '2026-09-20T10:00' })).toBe(false)
+  })
+})
+
+describe('isLegacyDuimpRegisteredWithoutDate / isLegacyParameterizedWithoutDate', () => {
+  it('legado sem data nova -> true', () => {
+    expect(isLegacyDuimpRegisteredWithoutDate({ duimpStatus: 'Aguardando parametrização da DUIMP' })).toBe(
+      true
+    )
+    expect(isLegacyParameterizedWithoutDate({ duimpStatus: 'Parametrizada' })).toBe(true)
+  })
+
+  it('com data nova -> false', () => {
+    expect(
+      isLegacyDuimpRegisteredWithoutDate({
+        duimpStatus: 'Aguardando parametrização da DUIMP',
+        duimpRegisteredAt: '2026-09-20T10:00',
+      })
+    ).toBe(false)
+    expect(
+      isLegacyParameterizedWithoutDate({ duimpStatus: 'Parametrizada', parameterizedAt: '2026-09-20T10:00' })
+    ).toBe(false)
+  })
+})
+
+describe('getDateDuimpLevel', () => {
+  it('parameterizedAt > duimpRegisteredAt > presenca > 0', () => {
+    expect(getDateDuimpLevel({ parameterizedAt: '2026-09-20T10:00' })).toBe(3)
+    expect(getDateDuimpLevel({ duimpRegisteredAt: '2026-09-20T10:00' })).toBe(2)
+    expect(getDateDuimpLevel({ cargoPresenceInformed: true })).toBe(1)
+    expect(getDateDuimpLevel({})).toBe(0)
   })
 })
