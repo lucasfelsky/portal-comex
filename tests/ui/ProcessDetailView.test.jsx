@@ -226,13 +226,14 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
     expect(screen.getByText('Fornecedor: Fornecedor Atlas')).toBeInTheDocument()
   })
 
-  it('CONSOLIDADO: supplierName aparece para ambos (não é categoria restrita)', () => {
+  it('CONSOLIDADO: nunca mostra "Fornecedor:" de processo, mesmo com supplierName legado populado (Q1)', () => {
     renderDetail({
       detailTab: 'general',
-      canSeeName: false,
+      canSeeName: true,
       selectedProcess: makeProcess({ category: 'CONSOLIDADO', supplierName: 'Fornecedor Delta' }),
     })
-    expect(screen.getByText('Fornecedor: Fornecedor Delta')).toBeInTheDocument()
+    expect(screen.queryByText(/^Fornecedor: /)).not.toBeInTheDocument()
+    expect(screen.queryByText('Fornecedor Delta')).not.toBeInTheDocument()
   })
 })
 
