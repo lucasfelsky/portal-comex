@@ -9,9 +9,10 @@ import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import {
   EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildFavoriteProcessUpdatedTitle, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
+  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
 import { buildMilestoneEvents } from './milestones.js';
+import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 
 export const createProcessMessageNotifications = onDocumentCreated(
   {
@@ -168,6 +169,37 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
         title,
         body,
         targetTab: 'messages',
+      })
+    }
+
+    // F17.4a (D-8): notificacao quando a LOGISTICA muda `collectionStatus`
+    // (admins + favoritos). Sem e-mail (categoria `processos` automatica via
+    // `prefCategoryForType`). first-wins de `maybeAddNotification` evita
+    // duplicidade com o ramo de post-recebimento abaixo (a logistica nao
+    // grava `collectionStatus` e `postReceiptNotes` no mesmo write).
+    if (actorRole === 'logistica' && hasCollectionStatusChangedMirror(before.collectionStatus, after.collectionStatus)) {
+      const activeAdmins = await listActiveAdminUsers()
+      const favoriteUsers = await listActiveFavoriteUsers(processId)
+      const statusLabel = getDisplayedCollectionStatusMirror(after.collectionStatus)
+
+      activeAdmins.forEach((adminUser) => {
+        const processLabel = buildRecipientProcessLabel(process, normalizeString(adminUser.role))
+        maybeAddNotification(
+          adminUser,
+          'collection_status_updated',
+          'Status de coleta atualizado',
+          buildCollectionStatusNotificationBody(processLabel, actorName, statusLabel)
+        )
+      })
+
+      favoriteUsers.forEach((favoriteUser) => {
+        const processLabel = buildRecipientProcessLabel(process, normalizeString(favoriteUser.role))
+        maybeAddNotification(
+          favoriteUser,
+          'collection_status_updated',
+          'Status de coleta atualizado',
+          buildCollectionStatusNotificationBody(processLabel, actorName, statusLabel)
+        )
       })
     }
 

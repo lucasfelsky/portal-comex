@@ -9,6 +9,7 @@ import {
   planMapaToLicensesMigration,
   planArrivalDatesMigration,
   planDuimpDatesMigration,
+  planCollectionStatusA5Migration,
   planOperationalMigration,
   MIGRATION_STEPS,
   toFirestoreFieldValue,
@@ -236,13 +237,69 @@ describe('planMapaToLicensesMigration', () => {
 })
 
 describe('MIGRATION_STEPS', () => {
-  it("ids na ordem ['mapaToLicenses', 'arrivalDates', 'duimpDates', 'recalcProcessStatus']", () => {
+  it("ids na ordem ['mapaToLicenses', 'arrivalDates', 'duimpDates', 'collectionStatusA5', 'recalcProcessStatus']", () => {
     expect(MIGRATION_STEPS.map((s) => s.id)).toEqual([
       'mapaToLicenses',
       'arrivalDates',
       'duimpDates',
+      'collectionStatusA5',
       'recalcProcessStatus',
     ])
+  })
+})
+
+// F17.4a (D-10): fusao do vocabulario de `collectionStatus` (A5).
+describe('planCollectionStatusA5Migration', () => {
+  it('legado "Carga recebida" -> collection-status-a5, changes com o valor fundido', () => {
+    const plan = planCollectionStatusA5Migration([
+      { id: 'P1', category: 'FCL', collectionStatus: 'Carga recebida' },
+    ])
+    expect(plan[0].type).toBe('collection-status-a5')
+    expect(plan[0].changes).toEqual({
+      collectionStatus: 'Carga recebida, em conferência',
+      updatedById: '',
+      updatedByName: 'Migração F17.1',
+    })
+  })
+
+  it('legado "Carga em Conferência/Etiquetagem" (sem acento tambem) -> collection-status-a5', () => {
+    const planComAcento = planCollectionStatusA5Migration([
+      { id: 'P2', category: 'FCL', collectionStatus: 'Carga em Conferência/Etiquetagem' },
+    ])
+    expect(planComAcento[0].type).toBe('collection-status-a5')
+    expect(planComAcento[0].changes.collectionStatus).toBe('Carga recebida, em conferência')
+
+    const planSemAcento = planCollectionStatusA5Migration([
+      { id: 'P3', category: 'FCL', collectionStatus: 'Carga em Conferencia/Etiquetagem' },
+    ])
+    expect(planSemAcento[0].type).toBe('collection-status-a5')
+    expect(planSemAcento[0].changes.collectionStatus).toBe('Carga recebida, em conferência')
+  })
+
+  it('"Aguardando liberação no Terminal" -> needs-review, changes null', () => {
+    const plan = planCollectionStatusA5Migration([
+      { id: 'P4', category: 'FCL', collectionStatus: 'Aguardando liberação no Terminal' },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('"Carga disponível em estoque" e vazio -> unchanged, changes null', () => {
+    const plan = planCollectionStatusA5Migration([
+      { id: 'P5', category: 'FCL', collectionStatus: 'Carga disponível em estoque' },
+      { id: 'P6', category: 'FCL', collectionStatus: '' },
+    ])
+    expect(plan[0].type).toBe('unchanged')
+    expect(plan[0].changes).toBeNull()
+    expect(plan[1].type).toBe('unchanged')
+    expect(plan[1].changes).toBeNull()
+  })
+
+  it('updatedById vazio em toda change do passo', () => {
+    const plan = planCollectionStatusA5Migration([
+      { id: 'P7', category: 'FCL', collectionStatus: 'Carga recebida' },
+    ])
+    expect(plan[0].changes.updatedById).toBe('')
   })
 })
 
@@ -519,6 +576,33 @@ describe('planOperationalMigration (D-11)', () => {
     for (const doc of secondPlan) {
       expect(doc.changes).toBeNull()
     }
+  })
+
+  // F17.4a (D-10): o passo `collectionStatusA5` roda ANTES de
+  // `recalcProcessStatus` - doc ja "Carga recebida" (processStatus) com
+  // collectionStatus legado ganha so o fundido; recalc fica unchanged.
+  it('doc "Carga recebida" com collectionStatus legado -> so o passo collectionStatusA5 muda', () => {
+    const plan = planOperationalMigration([
+      {
+        id: 'P6',
+        category: 'FCL',
+        processStatus: 'Carga recebida',
+        collectionStatus: 'Carga recebida',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        mapaStatus: 'Liberado',
+      },
+    ])
+    const doc = plan.find((item) => item.id === 'P6')
+    const a5Step = doc.steps.find((step) => step.stepId === 'collectionStatusA5')
+    const recalcStep = doc.steps.find((step) => step.stepId === 'recalcProcessStatus')
+
+    expect(a5Step.type).toBe('collection-status-a5')
+    expect(recalcStep.type).toBe('unchanged')
+    expect(doc.changes.collectionStatus).toBe('Carga recebida, em conferência')
+    expect(doc.changes.updatedById).toBe('')
   })
 })
 

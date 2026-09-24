@@ -112,6 +112,12 @@ export default function NotificationsPage() {
         >
           Pós-recebimento
         </TabButton>
+        <TabButton
+          active={notificationFilter === 'collection_status_updated'}
+          onClick={() => setNotificationFilter('collection_status_updated')}
+        >
+          Coleta
+        </TabButton>
       </div>
 
       <div className="notifications__list">

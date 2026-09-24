@@ -47,6 +47,10 @@ describe('getUnscheduledItemLabel', () => {
     expect(
       getUnscheduledItemLabel({ collectionStatus: 'Carga recebida' })
     ).toBe('Carga em processamento no CD')
+    // F17.4a (A5): valor novo fundido tambem cai em "em processamento no CD".
+    expect(
+      getUnscheduledItemLabel({ collectionStatus: 'Carga recebida, em conferência' })
+    ).toBe('Carga em processamento no CD')
   })
 
   it('pre-coleta sem janela: retorna "Coleta ainda não agendada"', () => {

@@ -2,11 +2,13 @@
 // derivado (deriveProcessStatus) + migracao de `mapaStatus` legado pro
 // `licenses[]` multi-orgao (F17.2b D-11) + migracao de `berthed`/`arrived`
 // sem data pro `berthedAt`/`arrivedAt` aproximado (F17.3a D-3) + relatorio de
-// DUIMP legada sem data (F17.3b D-10, `duimpDates` - NUNCA escreve).
-// `MIGRATION_STEPS` tem 4 passos EM SEQUENCIA (`mapaToLicenses` ->
-// `arrivalDates` -> `duimpDates` -> `recalcProcessStatus` - cada passo le as
-// `changes` do anterior ja aplicadas em memoria). `containers[]` ja migrou
-// via F17.2a (nao precisou de passo, so' de expansao lazy na leitura).
+// DUIMP legada sem data (F17.3b D-10, `duimpDates` - NUNCA escreve) + fusao
+// do vocabulario de `collectionStatus` (F17.4a D-10, `collectionStatusA5`).
+// `MIGRATION_STEPS` tem 5 passos EM SEQUENCIA (`mapaToLicenses` ->
+// `arrivalDates` -> `duimpDates` -> `collectionStatusA5` ->
+// `recalcProcessStatus` - cada passo le as `changes` do anterior ja
+// aplicadas em memoria). `containers[]` ja migrou via F17.2a (nao precisou
+// de passo, so' de expansao lazy na leitura).
 //
 // Uso:
 //   node scripts/migrateOperationalV2.mjs          # dry-run (default), le e imprime, nao escreve
@@ -30,6 +32,10 @@ import {
   isLegacyDuimpRegisteredWithoutDate,
   isLegacyParameterizedWithoutDate,
 } from '../src/features/processes/arrivalCustoms.js'
+import {
+  canonicalizeCollectionStatus,
+  normalizeComparableText,
+} from '../src/features/processes/processStatus.js'
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
@@ -449,15 +455,64 @@ export function planDuimpDatesMigration(processes) {
   })
 }
 
-// F17.2b/F17.3a/F17.3b (D-11/D-3/D-10): passos EM SEQUENCIA - `mapaToLicenses`
+/**
+ * F17.4a (D-10): plano puro (sem I/O) de migracao do `collectionStatus`
+ * legado ('Carga recebida' / 'Carga em Conferência/Etiquetagem', com ou sem
+ * acento) pro valor fundido (A5) 'Carga recebida, em conferência'. Nunca
+ * rebaixa - os 2 legados e o novo derivam o mesmo `processStatus` ('Carga
+ * recebida'), entao a fusao e' dentro da mesma etapa. `'Aguardando liberação
+ * no Terminal'` (D-3) vira `needs-review` (sem escrita) - nao ha destino
+ * canonico seguro. Nao toca `processStatus`.
+ */
+export function planCollectionStatusA5Migration(processes) {
+  return (Array.isArray(processes) ? processes : []).map((doc) => {
+    const category = doc?.category ?? ''
+    const collectionStatus = String(doc?.collectionStatus ?? '')
+    const normalizedStatus = normalizeComparableText(collectionStatus).trim()
+    const base = { id: doc?.id ?? '', category, before: collectionStatus, after: collectionStatus }
+
+    if (
+      normalizedStatus === 'carga recebida' ||
+      normalizedStatus === 'carga em conferencia/etiquetagem'
+    ) {
+      const canonicalStatus = canonicalizeCollectionStatus(collectionStatus)
+      return {
+        ...base,
+        after: canonicalStatus,
+        type: 'collection-status-a5',
+        reason: 'collectionStatus legado fundido em "Carga recebida, em conferência" (A5)',
+        changes: {
+          collectionStatus: canonicalStatus,
+          updatedById: '',
+          updatedByName: MIGRATION_ACTOR_NAME,
+        },
+      }
+    }
+
+    if (normalizedStatus === 'aguardando liberacao no terminal') {
+      return {
+        ...base,
+        type: 'needs-review',
+        reason: '"Aguardando liberação no Terminal" saiu da lista do app (F17.4a D-3) - sem destino canonico seguro, requer revisao manual',
+        changes: null,
+      }
+    }
+
+    return { ...base, type: 'unchanged', reason: 'sem sinal legado pendente', changes: null }
+  })
+}
+
+// F17.2b/F17.3a/F17.3b/F17.4a (D-11/D-3/D-10/D-10): passos EM SEQUENCIA - `mapaToLicenses`
 // primeiro (suas `changes` entram no doc em memoria), depois `arrivalDates`,
-// depois `duimpDates` (so' relatorio, nunca escreve), e por ultimo
-// `recalcProcessStatus` (ja le `licenses[]`/`berthedAt`/`arrivedAt` como
-// fonte autoritativa).
+// depois `duimpDates` (so' relatorio, nunca escreve), depois
+// `collectionStatusA5` (fusao do vocabulario de coleta, F17.4a D-10), e por
+// ultimo `recalcProcessStatus` (ja le `licenses[]`/`berthedAt`/`arrivedAt`
+// como fonte autoritativa).
 export const MIGRATION_STEPS = [
   { id: 'mapaToLicenses', plan: planMapaToLicensesMigration },
   { id: 'arrivalDates', plan: planArrivalDatesMigration },
   { id: 'duimpDates', plan: planDuimpDatesMigration },
+  { id: 'collectionStatusA5', plan: planCollectionStatusA5Migration },
   { id: 'recalcProcessStatus', plan: planProcessStatusMigration },
 ]
 

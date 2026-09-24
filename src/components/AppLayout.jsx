@@ -405,6 +405,7 @@ export default function AppLayout() {
               <option value="process_question_answered">Respostas</option>
               <option value="favorite_process_message">Favoritos</option>
               <option value="post_receipt_notes_updated">Pós-recebimento</option>
+              <option value="collection_status_updated">Coleta</option>
             </select>
             <button
               type="button"

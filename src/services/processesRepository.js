@@ -71,13 +71,11 @@ export const duimpStatusOptions = [
 ]
 export const channelOptions = ['Verde', 'Amarelo', 'Vermelho', 'Cinza']
 export const collectionStatusOptions = [
-  'Aguardando liberação no Terminal',
   'Aguardando agendamento de coleta',
   'Coleta Agendada',
-  ...postCollectionStatusOptions,
   CD_EN_ROUTE_STATUS,
   'Veículo no CD para descarga',
-  'Carga recebida',
+  ...postCollectionStatusOptions,
 ]
 export const mapaStatusOptions = [
   'Aguardando MAPA',
@@ -929,7 +927,7 @@ export async function saveProcessCollectionStatus(
   currentProcess = null
 ) {
   const normalizedId = String(processId ?? '').trim()
-  const normalizedStatus = String(collectionStatus ?? '').trim()
+  const normalizedStatus = canonicalizeCollectionStatus(String(collectionStatus ?? '').trim())
   const now = new Date().toISOString()
 
   if (!normalizedId) {

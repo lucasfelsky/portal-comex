@@ -265,6 +265,7 @@ const COLLECTION_SCHEDULED_OR_BEYOND = new Set([
   'carga a caminho do cd',
   'carga recebida',
   'carga em conferencia/etiquetagem',
+  'carga recebida, em conferencia',
   'carga em processo de entrada',
   'carga disponivel em estoque',
 ])

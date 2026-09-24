@@ -780,3 +780,160 @@ describe('createProcessUpdateNotifications', () => {
     })
   })
 })
+
+// F17.4a (D-8): notificacao `collection_status_updated` quando a LOGISTICA
+// muda `collectionStatus` (admins + favoritos).
+describe('F17.4a - collection_status_updated (D-8)', () => {
+  it('(a) logistica "Coleta Agendada" -> "Carga a caminho do CD": admin + favorito recebem, body cita o status novo', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Coleta Agendada' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga a caminho do CD',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(2)
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    expect(payloads.every((p) => p.type === 'collection_status_updated')).toBe(true)
+    expect(payloads.map((p) => p.recipientUserId).sort()).toEqual(['admin-1', 'fan-1'])
+    expect(payloads.every((p) => p.body.includes('Carga a caminho do CD'))).toBe(true)
+  })
+
+  it('(b) logistica "Carga recebida" -> "Carga recebida, em conferência" (mesmo canonico): NADA', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga recebida' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('(c) logistica altera so postReceiptNotes: so post_receipt_notes_updated, sem collection_status_updated', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga recebida, em conferência', postReceiptNotes: '' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      postReceiptNotes: 'Carga descarregada com sucesso',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types.every((t) => t === 'post_receipt_notes_updated')).toBe(true)
+    expect(types).not.toContain('collection_status_updated')
+  })
+
+  it('(d) admin muda collectionStatus: nenhum collection_status_updated (so favorite_process_updated)', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Coleta Agendada' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga a caminho do CD',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types).not.toContain('collection_status_updated')
+  })
+
+  it('(e) admin, before "Carga em Conferência/Etiquetagem" x after "Carga recebida, em conferência" e resto igual: NAO notifica', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga em Conferência/Etiquetagem' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('(f) favorito == ator: nao recebe', async () => {
+    const LOGISTICA_FAVORITER = {
+      id: 'logi-1',
+      name: 'Logi da Silva',
+      email: 'logi@sqquimica.com',
+      role: 'logistica',
+      status: 'Ativo',
+      favoriteProcessIds: [PROCESS_ID],
+    }
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_FAVORITER },
+        { id: 'admin-1', data: ADMIN_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Coleta Agendada' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga a caminho do CD',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    const recipients = mockBatch.set.mock.calls.map(([, payload]) => payload.recipientUserId)
+    expect(recipients).not.toContain('logi-1')
+  })
+
+  it('(g) body com "Veículo no CD para descarga" exibe "Carga sendo descarregada"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga a caminho do CD' }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Veículo no CD para descarga',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    expect(payloads.every((p) => p.body.includes('Carga sendo descarregada'))).toBe(true)
+  })
+})

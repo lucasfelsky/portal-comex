@@ -1429,6 +1429,9 @@ describeEmulator('firestore.rules (emulador)', () => {
       // canonicalizado na LEITURA, mas a rule ainda nao bloqueava a
       // logistica de gravá-lo via API.
       'Aguardando agendamento',
+      // F17.4a (D-3): 'Aguardando liberação no Terminal' saiu da lista do
+      // app e entrou como pre-coleta na rule.
+      'Aguardando liberação no Terminal',
     ]) {
       it(`logistica NAO volta para status pre-coleta "${preCollectionStatus}"`, async () => {
         await seed((db) =>
@@ -1572,6 +1575,51 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertSucceeds(
         updateDoc(doc(db, 'processes/f171-1'), {
           collectionStatus: 'Veículo no CD para descarga',
+          processStatus: 'Carga recebida',
+          cargoReceivedAt: '2026-07-08T12:00:00.000Z',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.4a (A5): valor fundido novo - admin grava com sucesso.
+    it('admin grava collectionStatus "Carga recebida, em conferência"', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f174a-admin'), {
+          name: 'P',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f174a-admin'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          updatedAt: 'now',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    // F17.4a (A5): valor fundido novo - logistica grava com sucesso.
+    it('logistica grava collectionStatus "Carga recebida, em conferência" + processStatus "Carga recebida" + cargoReceivedAt', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/f174a-1'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-08T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/f174a-1'), {
+          collectionStatus: 'Carga recebida, em conferência',
           processStatus: 'Carga recebida',
           cargoReceivedAt: '2026-07-08T12:00:00.000Z',
           updatedAt: 'now',

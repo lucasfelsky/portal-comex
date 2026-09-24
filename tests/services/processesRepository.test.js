@@ -150,6 +150,30 @@ describe('bug 5 - vocabulario da coleta', () => {
     expect(collectionStatusOptions).not.toContain('Aguardando agendamento')
   })
 
+  // F17.4a (A5): ordem exata fundindo "Carga recebida" +
+  // "Carga em Conferência/Etiquetagem" em "Carga recebida, em conferência";
+  // "Carga recebida" e "Aguardando liberação no Terminal" saem da lista.
+  it('F17.4a - collectionStatusOptions segue a ordem A5, sem "Carga recebida" nem Terminal', () => {
+    expect(collectionStatusOptions).toEqual([
+      'Aguardando agendamento de coleta',
+      'Coleta Agendada',
+      'Carga a caminho do CD',
+      'Veículo no CD para descarga',
+      'Carga recebida, em conferência',
+      'Carga em processo de Entrada',
+      'Carga disponível em estoque',
+    ])
+    expect(collectionStatusOptions).not.toContain('Carga recebida')
+    expect(collectionStatusOptions).not.toContain('Aguardando liberação no Terminal')
+  })
+
+  it('F17.4a - saveProcessCollectionStatus com "Carga recebida" (legado) grava o canonico fundido', async () => {
+    await saveProcessCollectionStatus('PROC-A5-1', 'Carga recebida')
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.collectionStatus).toBe('Carga recebida, em conferência')
+  })
+
   it('save com valor legado grava o canonico', async () => {
     await saveProcess(
       baseMaritimeProcess({
@@ -160,6 +184,42 @@ describe('bug 5 - vocabulario da coleta', () => {
 
     const payload = mockSetDoc.mock.calls[0][1]
     expect(payload.collectionStatus).toBe('Aguardando agendamento de coleta')
+  })
+
+  it('F17.4a - listProcesses canonicaliza collectionStatus "Carga recebida" (legado) na leitura', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-LEGACY-A5',
+          data: () =>
+            baseMaritimeProcess({
+              mapaStatus: 'Liberado',
+              collectionStatus: 'Carga recebida',
+            }),
+        },
+      ],
+    })
+
+    const items = await listProcesses()
+    expect(items[0].collectionStatus).toBe('Carga recebida, em conferência')
+  })
+
+  it('F17.4a - listProcesses canonicaliza collectionStatus "Carga em Conferência/Etiquetagem" (legado) na leitura', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-LEGACY-A5-2',
+          data: () =>
+            baseMaritimeProcess({
+              mapaStatus: 'Liberado',
+              collectionStatus: 'Carga em Conferência/Etiquetagem',
+            }),
+        },
+      ],
+    })
+
+    const items = await listProcesses()
+    expect(items[0].collectionStatus).toBe('Carga recebida, em conferência')
   })
 
   it('listProcesses canonicaliza doc legado na leitura', async () => {
