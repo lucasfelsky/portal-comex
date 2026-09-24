@@ -7,8 +7,12 @@ import {
   CONTAINER_TYPE_OPTIONS,
   MAX_CONTAINERS,
   createEmptyContainer,
+  getCollectionWindowLabel,
   getContainerNumberWarning,
+  getContainerOptionLabel,
   getContainerSpecialBadges,
+  isOrphanCollectionWindow,
+  linkCollectionWindowsToContainers,
   normalizeContainerNumber,
   normalizeContainers,
   validateContainerNumber,
@@ -146,5 +150,108 @@ describe('createEmptyContainer', () => {
 describe('CONTAINER_TYPE_OPTIONS', () => {
   it('tem os 10 tipos da D-2', () => {
     expect(CONTAINER_TYPE_OPTIONS).toHaveLength(10)
+  })
+})
+
+// F17.2c (D-6): janelas de coleta x containers.
+describe('linkCollectionWindowsToContainers (D-6)', () => {
+  const containers = [{ id: 'CNT-1' }, { id: 'CNT-2' }]
+
+  it('categoria fora de FCL/CONSOLIDADO -> containerId "" em toda janela', () => {
+    const result = linkCollectionWindowsToContainers(
+      [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1 }],
+      containers,
+      'LCL'
+    )
+    expect(result[0].containerId).toBe('')
+  })
+
+  it('containerId existente e achado -> sincroniza containerNumber (indice + 1)', () => {
+    const result = linkCollectionWindowsToContainers(
+      [{ id: 'W1', containerId: 'CNT-2', containerNumber: 9 }],
+      containers,
+      'FCL'
+    )
+    expect(result[0].containerNumber).toBe(2)
+    expect(result[0].containerId).toBe('CNT-2')
+  })
+
+  it('containerId existente e NAO achado -> janela orfa preservada intacta', () => {
+    const window = { id: 'W1', containerId: 'CNT-REMOVIDO', containerNumber: 1 }
+    const result = linkCollectionWindowsToContainers([window], containers, 'FCL')
+    expect(result[0]).toEqual(window)
+  })
+
+  it('containerId vazio -> backfill pelo containerNumber legado', () => {
+    const result = linkCollectionWindowsToContainers(
+      [{ id: 'W1', containerNumber: 2 }],
+      containers,
+      'CONSOLIDADO'
+    )
+    expect(result[0].containerId).toBe('CNT-2')
+    expect(result[0].containerNumber).toBe(2)
+  })
+
+  it('containerId vazio e containerNumber sem correspondente -> intacta', () => {
+    const window = { id: 'W1', containerNumber: 9 }
+    const result = linkCollectionWindowsToContainers([window], containers, 'FCL')
+    expect(result[0]).toEqual(window)
+  })
+
+  it('nao-array -> []', () => {
+    expect(linkCollectionWindowsToContainers(undefined, containers, 'FCL')).toEqual([])
+  })
+})
+
+describe('isOrphanCollectionWindow (D-6)', () => {
+  const containers = [{ id: 'CNT-1' }]
+
+  it('containerId presente mas nao encontrado -> orfa', () => {
+    expect(isOrphanCollectionWindow({ containerId: 'CNT-9' }, containers)).toBe(true)
+  })
+
+  it('containerId presente e encontrado -> nao orfa', () => {
+    expect(isOrphanCollectionWindow({ containerId: 'CNT-1' }, containers)).toBe(false)
+  })
+
+  it('sem containerId -> nao orfa', () => {
+    expect(isOrphanCollectionWindow({ containerId: '' }, containers)).toBe(false)
+  })
+})
+
+describe('getContainerOptionLabel (D-6)', () => {
+  it('numero do container quando presente', () => {
+    expect(getContainerOptionLabel({ number: 'CSQU3054383' }, 0)).toBe('CSQU3054383')
+  })
+
+  it('fallback "Contêiner n" quando sem numero', () => {
+    expect(getContainerOptionLabel({ number: '' }, 2)).toBe('Contêiner 3')
+  })
+})
+
+describe('getCollectionWindowLabel (D-6)', () => {
+  const containers = [{ id: 'CNT-1', number: 'CSQU3054383' }]
+
+  it('FCL/CONSOLIDADO com container achado -> rotulo do container', () => {
+    expect(
+      getCollectionWindowLabel({ containerId: 'CNT-1' }, { category: 'FCL', containers })
+    ).toBe('CSQU3054383')
+  })
+
+  it('containerId orfao -> "Contêiner removido"', () => {
+    expect(
+      getCollectionWindowLabel({ containerId: 'CNT-9' }, { category: 'CONSOLIDADO', containers })
+    ).toBe('Contêiner removido')
+  })
+
+  it('sem containerId (legado) -> "Contêiner N"', () => {
+    expect(
+      getCollectionWindowLabel({ containerNumber: 3 }, { category: 'FCL', containers: [] })
+    ).toBe('Contêiner 3')
+  })
+
+  it('LCL/AEREO -> "Janela de coleta"', () => {
+    expect(getCollectionWindowLabel({}, { category: 'LCL', containers })).toBe('Janela de coleta')
+    expect(getCollectionWindowLabel({}, { category: 'AEREO', containers })).toBe('Janela de coleta')
   })
 })

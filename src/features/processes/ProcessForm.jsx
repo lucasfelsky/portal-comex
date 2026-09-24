@@ -24,6 +24,8 @@ import { INCOTERM_OPTIONS } from './operationalOptions'
 import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
 import LicensesEditor from './LicensesEditor'
+import PurchaseOrdersEditor from './PurchaseOrdersEditor'
+import { getProcessPurchaseOrders } from './purchaseOrders'
 
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
@@ -163,7 +165,13 @@ export default function ProcessForm({
             placeholder="Número do processo"
           />
         </label>
-      ) : null}
+      ) : (
+        <PurchaseOrdersEditor
+          value={draft.purchaseOrders}
+          onChange={(value) => onDraftChange('purchaseOrders', value)}
+          disabled={isSaving}
+        />
+      )}
 
       <div className="detail-card detail-card--split">
         <label className="field">
@@ -423,7 +431,8 @@ export default function ProcessForm({
           {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
             <CollectionWindowsEditor
               value={draft.collectionWindows}
-              maxContainers={Math.max(draft.containerQuantity || 1, 1)}
+              category={draft.category}
+              containers={draft.containers}
               onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
               disabled={isSaving}
             />
@@ -561,7 +570,8 @@ export default function ProcessForm({
           {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
             <CollectionWindowsEditor
               value={draft.collectionWindows}
-              maxContainers={Math.max(draft.containerQuantity || 1, 1)}
+              category={draft.category}
+              containers={draft.containers}
               onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
               disabled={isSaving}
             />
@@ -590,6 +600,8 @@ export default function ProcessForm({
       ) : null}
     </>
   )
+
+  const consolidatedPurchaseOrders = getProcessPurchaseOrders(draft)
 
   const renderItemsStep = () => (
     <div className="detail-card">
@@ -646,6 +658,25 @@ export default function ProcessForm({
                 Remover item
               </button>
             </div>
+            {draft.category === 'CONSOLIDADO' ? (
+              <label className="field">
+                <span>PO</span>
+                {consolidatedPurchaseOrders.length > 0 ? (
+                  <SelectField
+                    className="text-input"
+                    value={item.poNumber ?? ''}
+                    onChange={(event) => onItemChange(item.id, 'poNumber', event.target.value)}
+                  >
+                    <option value="">Selecione a PO</option>
+                    {consolidatedPurchaseOrders.map((po) => (
+                      <option key={po} value={po}>{po}</option>
+                    ))}
+                  </SelectField>
+                ) : (
+                  <small className="field-hint">Cadastre as POs no passo Identificação.</small>
+                )}
+              </label>
+            ) : null}
           </div>
         ))}
       </div>

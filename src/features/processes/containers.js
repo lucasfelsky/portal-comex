@@ -161,6 +161,71 @@ export function normalizeContainers(
   return Array.from({ length: count }, (_, index) => createEmptyContainer(`CNT-${index + 1}`))
 }
 
+// F17.2c (D-6): rotulo de opcao do select "Contêiner" (`CollectionWindowsEditor`).
+export function getContainerOptionLabel(container, index) {
+  return container?.number || `Contêiner ${index + 1}`
+}
+
+/**
+ * F17.2c (D-6): liga `collectionWindows[].containerId` a `containers[]`
+ * (FCL/CONSOLIDADO). Categoria fora de FCL/CONSOLIDADO -> `containerId: ''`
+ * em toda janela. Em FCL/CONSOLIDADO: `containerId` existente e achado ->
+ * sincroniza `containerNumber` (indice + 1); `containerId` existente e NAO
+ * achado -> janela orfa preservada intacta; `containerId` vazio -> backfill
+ * pelo `containerNumber` legado (se existir container correspondente).
+ */
+export function linkCollectionWindowsToContainers(windows, containers, category) {
+  const list = Array.isArray(windows) ? windows : []
+  const containerList = Array.isArray(containers) ? containers : []
+
+  if (!isFclOrConsolidado(category)) {
+    return list.map((window) => ({ ...window, containerId: '' }))
+  }
+
+  return list.map((window) => {
+    const containerId = typeof window?.containerId === 'string' ? window.containerId : ''
+
+    if (containerId) {
+      const index = containerList.findIndex((container) => container.id === containerId)
+      if (index === -1) return window
+      return { ...window, containerNumber: index + 1 }
+    }
+
+    const legacyIndex = Number(window?.containerNumber) - 1
+    const legacyContainer = containerList[legacyIndex]
+    if (legacyContainer) {
+      return { ...window, containerId: legacyContainer.id }
+    }
+
+    return window
+  })
+}
+
+export function isOrphanCollectionWindow(window, containers) {
+  const containerList = Array.isArray(containers) ? containers : []
+  return Boolean(window?.containerId) && !containerList.some((c) => c.id === window.containerId)
+}
+
+/**
+ * F17.2c (D-6): rotulo de exibicao (leitura) de uma janela de coleta.
+ * FCL/CONSOLIDADO: container achado -> numero/rotulo do container; orfa ->
+ * "Contêiner removido"; sem `containerId` -> "Contêiner N" (legado). Demais
+ * categorias -> "Janela de coleta".
+ */
+export function getCollectionWindowLabel(window, { category, containers } = {}) {
+  if (!isFclOrConsolidado(category)) return 'Janela de coleta'
+
+  const containerList = Array.isArray(containers) ? containers : []
+
+  if (window?.containerId) {
+    const index = containerList.findIndex((container) => container.id === window.containerId)
+    if (index === -1) return 'Contêiner removido'
+    return getContainerOptionLabel(containerList[index], index)
+  }
+
+  return `Contêiner ${window?.containerNumber}`
+}
+
 // D-2/D-7: badges especiais distintos, ordem fixa (Reefer, ISO tank).
 export function getContainerSpecialBadges(containers) {
   const types = new Set((Array.isArray(containers) ? containers : []).map((container) => container?.type))

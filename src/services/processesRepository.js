@@ -33,7 +33,11 @@ import {
   normalizeCollectionWindows,
   serializeCollectionWindowsForFirestore,
 } from '../utils/collectionWindows'
-import { normalizeContainers } from '../features/processes/containers'
+import { normalizeContainers, linkCollectionWindowsToContainers } from '../features/processes/containers'
+import {
+  getProcessPurchaseOrders,
+  normalizeItemPoNumber,
+} from '../features/processes/purchaseOrders'
 import {
   INCOTERM_OPTIONS,
   normalizeDecimal,
@@ -78,18 +82,27 @@ export const dtaStatusOptions = [
   'Trânsito concluído',
 ]
 
-function normalizeProcessItems(items) {
+// F17.2c (D-3): `poNumber` so' entra na chave do item no CONSOLIDADO (senao
+// o resumo de notificacao `JSON.stringify(items)` acusaria "itens vinculados
+// atualizados" espurio no 1o save de todo processo).
+function normalizeProcessItems(items, { category = '', purchaseOrders = [] } = {}) {
   if (!Array.isArray(items)) return []
 
   return items
-    .map((item) => ({
-      id:
-        typeof item?.id === 'string' && item.id.trim()
-          ? item.id.trim()
-          : `ITEM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      commercialName: String(item?.commercialName ?? item?.name ?? '').trim(),
-      quantity: Number.isFinite(Number(item?.quantity)) ? Number(item.quantity) : 0,
-    }))
+    .map((item) => {
+      const base = {
+        id:
+          typeof item?.id === 'string' && item.id.trim()
+            ? item.id.trim()
+            : `ITEM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        commercialName: String(item?.commercialName ?? item?.name ?? '').trim(),
+        quantity: Number.isFinite(Number(item?.quantity)) ? Number(item.quantity) : 0,
+      }
+      if (category === 'CONSOLIDADO') {
+        base.poNumber = normalizeItemPoNumber(item?.poNumber, purchaseOrders)
+      }
+      return base
+    })
     .filter((item) => item.commercialName || item.quantity > 0)
 }
 
@@ -507,6 +520,9 @@ function normalizeProcess(rawProcess, fallbackId) {
     : 'FCL'
   const processNumber =
     category === 'CONSOLIDADO' ? '' : rawProcess.processNumber ?? rawProcess.code ?? ''
+  // F17.2c (D-3): le o `processNumber` CRU (antes do '' forcado acima) - o
+  // fallback de compat de leitura do D-1 precisa dele.
+  const purchaseOrders = getProcessPurchaseOrders({ ...rawProcess, category })
   const eta = rawProcess.eta ?? ''
   // F17.2b (D-3): `licenses[]` e' AUTORITATIVO (compat de leitura MAPA por 1
   // release via `getEffectiveLicenses`) - normalizado ANTES do gate de
@@ -563,6 +579,14 @@ function normalizeProcess(rawProcess, fallbackId) {
     collectionWindows: rawProcess.collectionWindows,
   })
 
+  // F17.2c (D-6): liga `collectionWindows[].containerId` a `containers[]`
+  // ja' normalizado (sincroniza/backfill/preserva orfa).
+  const collectionWindows = linkCollectionWindowsToContainers(
+    operationalFields.collectionWindows,
+    cargoAndTransitFields.containers,
+    category
+  )
+
   // F17.2a (D-4): FCL/CONSOLIDADO derivam `containerQuantity` do tamanho de
   // `containers[]` (ja' com a expansao lazy aplicada); LCL/AEREO mantem o
   // valor manual (nao exibido).
@@ -590,8 +614,10 @@ function normalizeProcess(rawProcess, fallbackId) {
     postReceiptNotes: String(rawProcess.postReceiptNotes ?? '').trim(),
     postReceiptImages: normalizePostReceiptImages(rawProcess.postReceiptImages),
     cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
-    items: normalizeProcessItems(rawProcess.items),
+    items: normalizeProcessItems(rawProcess.items, { category, purchaseOrders }),
     ...operationalFields,
+    collectionWindows,
+    purchaseOrders,
     licenses,
     // F17.2b (D-3): aposentados - gravados vazios em toda categoria, mantidos
     // so' pela compat de leitura de 1 release (`getEffectiveLicenses`).
@@ -684,11 +710,15 @@ function toFirestorePayload(process) {
     category === 'FCL' || category === 'CONSOLIDADO'
       ? cargoAndTransitFields.containers.length
       : normalizeQuantity(process.containerQuantity)
+  // F17.2c (D-3): payload FIXO (lista vazia fora do CONSOLIDADO) - por isso
+  // a allowlist/guarda (D-8).
+  const purchaseOrders = getProcessPurchaseOrders({ ...process, category })
 
   return {
     name: String(process.name ?? ''),
     category,
     processNumber: process.category === 'CONSOLIDADO' ? '' : String(process.processNumber ?? ''),
+    purchaseOrders,
     destination: normalizeDestination(process.destination),
     etd: String(process.etd ?? ''),
     eta: String(process.eta ?? ''),
@@ -702,7 +732,7 @@ function toFirestorePayload(process) {
     postReceiptNotes: String(process.postReceiptNotes ?? '').trim(),
     postReceiptImages: normalizePostReceiptImages(process.postReceiptImages),
     cargoReceivedAt: normalizeIsoDateTime(process.cargoReceivedAt),
-    items: normalizeProcessItems(process.items),
+    items: normalizeProcessItems(process.items, { category, purchaseOrders }),
     berthed: Boolean(process.berthed),
     arrived: Boolean(process.arrived),
     cargoPresenceInformed: Boolean(process.cargoPresenceInformed),
@@ -1090,8 +1120,9 @@ export async function deleteProcess(processId, actor = null) {
   })
 }
 
-// Busca processos (Sprint 18.0): filtra localmente em name/destination/processNumber/items.
-// Limita a 8 resultados pra nao pesar o command palette.
+// Busca processos (Sprint 18.0): filtra localmente em
+// name/destination/processNumber/purchaseOrders/items. Limita a 8 resultados
+// pra nao pesar o command palette.
 export async function searchProcesses(rawQuery) {
   const q = String(rawQuery ?? '').trim().toLowerCase()
   if (q.length < 2) return []
@@ -1105,6 +1136,7 @@ export async function searchProcesses(rawQuery) {
       process.category ?? '',
       process.channel ?? '',
       process.responsibleName ?? '',
+      ...(Array.isArray(process.purchaseOrders) ? process.purchaseOrders : []),
       ...(Array.isArray(process.items)
         ? process.items.flatMap((item) => [
             item.commercialName ?? '',

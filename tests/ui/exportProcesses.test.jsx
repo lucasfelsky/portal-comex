@@ -115,3 +115,24 @@ describe('buildProcessesExportRows — mascaramento de nome (bug 4)', () => {
     rows.forEach((row) => expect(row).toHaveProperty('Nome'))
   })
 })
+
+// F17.2c (D-10): coluna POs (purchaseOrders[] do CONSOLIDADO).
+describe('buildProcessesExportRows — coluna POs (F17.2c)', () => {
+  it('CONSOLIDADO com purchaseOrders -> "A, B"', () => {
+    const rows = buildProcessesExportRows(
+      [{ ...PROCESS, category: 'CONSOLIDADO', purchaseOrders: ['A', 'B'] }],
+      NOW
+    )
+    expect(rows[0].POs).toBe('A, B')
+  })
+
+  it('FCL -> ""', () => {
+    const rows = buildProcessesExportRows([PROCESS], NOW)
+    expect(rows[0].POs).toBe('')
+  })
+
+  it('processo minimo ({ id: "vazio" }) -> ""', () => {
+    const rows = buildProcessesExportRows([{ id: 'vazio' }], NOW)
+    expect(rows[0].POs).toBe('')
+  })
+})

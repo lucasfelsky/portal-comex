@@ -506,3 +506,108 @@ describe('F17.2b - licenses[] (D-3/D-4)', () => {
     expect(payload.licenses).toHaveLength(10)
   })
 })
+
+// F17.2c (D-3): purchaseOrders[] do CONSOLIDADO + items[].poNumber +
+// collectionWindows[].containerId ligado a containers[].
+function baseConsolidatedProcess(overrides = {}) {
+  return {
+    id: 'PROC-CONS-1',
+    name: 'Consolidado Delta',
+    category: 'CONSOLIDADO',
+    destination: 'Rotterdam',
+    etd: '2026-01-01',
+    eta: '2026-01-10',
+    ...overrides,
+  }
+}
+
+describe('F17.2c - purchaseOrders[]/items[].poNumber/collectionWindows[].containerId', () => {
+  it('CONSOLIDADO grava purchaseOrders normalizado e processNumber ""', async () => {
+    await saveProcess(baseConsolidatedProcess({ purchaseOrders: [' PO-A ', 'po-a', 'PO-B'] }))
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.purchaseOrders).toEqual(['PO-A', 'PO-B'])
+    expect(payload.processNumber).toBe('')
+  })
+
+  it('FCL grava purchaseOrders: [] e itens SEM a chave poNumber', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        purchaseOrders: ['PO-A'],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: 'PO-A' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.purchaseOrders).toEqual([])
+    expect(payload.items[0]).not.toHaveProperty('poNumber')
+  })
+
+  it('item do CONSOLIDADO com PO fora da lista grava poNumber ""', async () => {
+    await saveProcess(
+      baseConsolidatedProcess({
+        purchaseOrders: ['PO-A', 'PO-B'],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: 'PO-Z' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.items[0].poNumber).toBe('')
+  })
+
+  it('item do CONSOLIDADO com PO valida preserva poNumber', async () => {
+    await saveProcess(
+      baseConsolidatedProcess({
+        purchaseOrders: ['PO-A', 'PO-B'],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: 'PO-B' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.items[0].poNumber).toBe('PO-B')
+  })
+
+  it('janela FCL legada (containerNumber, sem containerId) ganha containerId do container correspondente', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        category: 'FCL',
+        containers: [{ number: 'a' }, { number: 'b' }],
+        collectionWindows: [{ id: 'W1', containerNumber: 2, scheduledAt: '2026-01-01T10:00:00' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.collectionWindows[0].containerId).toBe('CNT-2')
+  })
+
+  it('janela LCL grava containerId ""', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        category: 'LCL',
+        collectionWindows: [{ id: 'W1', containerNumber: 1, scheduledAt: '2026-01-01T10:00:00' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.collectionWindows[0].containerId).toBe('')
+  })
+
+  it('leitura de CONSOLIDADO com processNumber cru vira purchaseOrders: [valor]', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-CONS-LEGACY',
+          data: () => ({
+            id: 'PROC-CONS-LEGACY',
+            name: 'Consolidado legado',
+            category: 'CONSOLIDADO',
+            processNumber: '9999',
+          }),
+        },
+      ],
+    })
+
+    const items = await listProcesses()
+    expect(items[0].purchaseOrders).toEqual(['9999'])
+  })
+})

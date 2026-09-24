@@ -350,4 +350,102 @@ describe('createProcessUpdateNotifications', () => {
       expect(mockBatch.set).toHaveBeenCalledTimes(1)
     })
   })
+
+  // F17.2c (D-9): `purchaseOrders[]`/`items[].poNumber` entram na
+  // comparacao; `collectionWindows[].containerId` NAO entra (backfill nao
+  // pode disparar aviso espurio).
+  describe('F17.2c - purchaseOrders/poNumber/containerId', () => {
+    const CONSOLIDATED_BASE = { ...PROCESS_BASE, category: 'CONSOLIDADO', name: 'Consolidado X' }
+
+    it('mudar so purchaseOrders -> favorito recebe "POs do consolidado atualizadas"', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...CONSOLIDATED_BASE, purchaseOrders: ['PO-A'] }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: ['PO-A', 'PO-B'],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+      expect(payload.body).toContain('POs do consolidado atualizadas')
+    })
+
+    it('before sem purchaseOrders / after purchaseOrders: [] -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...CONSOLIDATED_BASE }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('mudar so items[0].poNumber -> notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: ['PO-A', 'PO-B'],
+        items: [{ commercialName: 'Item', quantity: 1, poNumber: '' }],
+      }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: ['PO-A', 'PO-B'],
+        items: [{ commercialName: 'Item', quantity: 1, poNumber: 'PO-A' }],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    })
+
+    it('mudar so collectionWindows[0].containerId (mesmo containerNumber) -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = {
+        ...PROCESS_BASE,
+        collectionWindows: [{ id: 'W1', containerNumber: 1, scheduledAt: '2026-01-01T10:00:00.000Z', notes: '' }],
+      }
+      const after = {
+        ...PROCESS_BASE,
+        collectionWindows: [
+          {
+            id: 'W1',
+            containerNumber: 1,
+            containerId: 'CNT-1',
+            scheduledAt: '2026-01-01T10:00:00.000Z',
+            notes: '',
+          },
+        ],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+  })
 })

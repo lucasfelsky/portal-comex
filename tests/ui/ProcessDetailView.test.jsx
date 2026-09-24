@@ -225,3 +225,33 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
     expect(screen.getByText('Fornecedor: Fornecedor Delta')).toBeInTheDocument()
   })
 })
+
+// F17.2c (D-10): card "POs consolidadas" + PO por item na aba Itens.
+describe('ProcessDetailView — POs do consolidado (F17.2c)', () => {
+  it('CONSOLIDADO com purchaseOrders renderiza o card "POs consolidadas"', () => {
+    renderDetail({
+      detailTab: 'general',
+      selectedProcess: makeProcess({ category: 'CONSOLIDADO', purchaseOrders: ['PO-A', 'PO-B'] }),
+    })
+    expect(screen.getByText('POs consolidadas')).toBeInTheDocument()
+    expect(screen.getByText('PO-A, PO-B')).toBeInTheDocument()
+  })
+
+  it('FCL nao renderiza o card "POs consolidadas"', () => {
+    renderDetail({
+      detailTab: 'general',
+      selectedProcess: makeProcess({ category: 'FCL' }),
+    })
+    expect(screen.queryByText('POs consolidadas')).not.toBeInTheDocument()
+  })
+
+  it('aba Itens do CONSOLIDADO mostra a PO do item', () => {
+    renderDetail({
+      detailTab: 'items',
+      selectedProcess: makeProcess({ category: 'CONSOLIDADO' }),
+      visibleProcessItems: [{ id: 'i1', commercialName: 'Item A', quantity: 1, poNumber: 'PO-A' }],
+    })
+    expect(screen.getByText('PO:')).toBeInTheDocument()
+    expect(screen.getByText('PO-A')).toBeInTheDocument()
+  })
+})

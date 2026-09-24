@@ -136,7 +136,7 @@ service cloud.firestore {
     // (L16: vault desatualizada). Ver Retomada 2026-07-08 § "Auditoria
     // preventiva de drift" § "PR #2 do backlog".
 
-    // processes: 60 campos gravados pelo `toFirestorePayload()`
+    // processes: 61 campos gravados pelo `toFirestorePayload()`
     // (src/services/processesRepository.js). setDoc usado com
     // `merge: true` para create E update, entao ambos compartilham a
     // mesma allowlist. `createdById/Name/createdAt` e
@@ -153,6 +153,12 @@ service cloud.firestore {
     // `mapaStatus`/`mapaInspectionScheduledAt` FICAM na allowlist nesta
     // release (o payload ainda grava `''` neles - compat de leitura de 1
     // release, D-3); remocao na release seguinte.
+    //
+    // F17.2c: +1 campo `purchaseOrders` (POs do CONSOLIDADO, guarda `is
+    // list` + `size() <= 50`, mesmo estilo de `containers`/`licenses`).
+    // `items[].poNumber`/`collectionWindows[].containerId` nao exigem
+    // mudanca de rule (sem validacao de shape de `items`/`collectionWindows`
+    // hoje).
     function isAdminProcessFields() {
       // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
       // No `update`, `resource.data` existe. Tratamos os 2 casos:
@@ -197,6 +203,8 @@ service cloud.firestore {
         'packagesQuantity', 'containers',
         // F17.2b (D-1..D-3): anuencias multi-orgao.
         'licenses',
+        // F17.2c: POs do consolidado.
+        'purchaseOrders',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (
@@ -214,6 +222,12 @@ service cloud.firestore {
         || (
           request.resource.data.licenses is list
           && request.resource.data.licenses.size() <= 10
+        )
+      ) && (
+        !('purchaseOrders' in request.resource.data)
+        || (
+          request.resource.data.purchaseOrders is list
+          && request.resource.data.purchaseOrders.size() <= 50
         )
       );
     }

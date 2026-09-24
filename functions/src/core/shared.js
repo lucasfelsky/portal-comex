@@ -63,6 +63,11 @@ function normalizeEmail(value) {
   return normalizeString(value).toLowerCase()
 }
 
+// F17.2c (D-9): compara `purchaseOrders[]` (POs do CONSOLIDADO) na leitura.
+function normalizePurchaseOrderList(value) {
+  return Array.isArray(value) ? value.map(normalizeString).filter(Boolean) : []
+}
+
 function normalizeList(items) {
   return Array.isArray(items) ? items.filter(Boolean) : []
 }
@@ -269,6 +274,14 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     changes.push('anuências atualizadas')
   }
 
+  // F17.2c (D-9): POs do consolidado (`purchaseOrders[]`).
+  if (
+    JSON.stringify(normalizePurchaseOrderList(previousProcess?.purchaseOrders)) !==
+    JSON.stringify(normalizePurchaseOrderList(nextProcess?.purchaseOrders))
+  ) {
+    changes.push('POs do consolidado atualizadas')
+  }
+
   if (changes.length === 0) {
     return 'dados do processo atualizados.'
   }
@@ -317,10 +330,13 @@ function sanitizeProcessForComparison(process) {
     dtaStatus: normalizeString(process.dtaStatus),
     dtaLoadingScheduledAt: normalizeString(process.dtaLoadingScheduledAt),
     dtaArrivalAtItajai: normalizeString(process.dtaArrivalAtItajai),
+    // F17.2c (D-9): POs do consolidado.
+    purchaseOrders: normalizePurchaseOrderList(process.purchaseOrders),
     items: Array.isArray(process.items)
       ? process.items.map((item) => ({
           commercialName: normalizeString(item?.commercialName),
           quantity: Number(item?.quantity ?? 0),
+          poNumber: normalizeString(item?.poNumber),
         }))
       : [],
   }

@@ -46,7 +46,8 @@ export default function CollectionStatusEditView({
         </div>
         <CollectionWindowsEditor
           value={process.collectionWindows}
-          maxContainers={Math.max(process.containerQuantity || 1, 1)}
+          category={process.category}
+          containers={process.containers}
           onChange={() => {}}
           disabled
         />
