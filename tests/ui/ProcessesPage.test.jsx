@@ -255,3 +255,60 @@ describe('ProcessesPage (listagem)', () => {
     expect(screen.getAllByText(/PO 67890/).length).toBeGreaterThan(0)
   })
 })
+
+// F17.2d-2 (Q6/Q1, D-6): busca da pagina nao vaza referencia/fornecedor de
+// PO do CONSOLIDADO para role `user`.
+describe('ProcessesPage — busca por PO do CONSOLIDADO mascarada (F17.2d-2)', () => {
+  const CONSOLIDATED_PROCESS = {
+    id: 'p-cons',
+    name: 'Consolidado Delta',
+    processNumber: '',
+    category: 'CONSOLIDADO',
+    status: 'Em Andamento',
+    collectionStatus: 'Aguardando',
+    channel: 'Maritima',
+    destination: 'Roterda',
+    eta: '2026-07-18',
+    purchaseOrders: [{ po: 'PO-9', reference: 'REF-SECRETA', supplierName: 'ACME' }],
+  }
+
+  beforeEach(() => {
+    mockListProcesses.mockResolvedValue([...PROCESSES, CONSOLIDATED_PROCESS])
+  })
+
+  it('user digitando REF-SECRETA nao encontra o processo', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'REF-SECRETA')
+    await waitFor(() => {
+      expect(screen.queryByText('Consolidado Delta')).not.toBeInTheDocument()
+    })
+  })
+
+  it('admin digitando REF-SECRETA encontra o processo', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'REF-SECRETA')
+    await waitFor(() => {
+      expect(screen.getByText('Consolidado Delta')).toBeInTheDocument()
+    })
+  })
+
+  it('user digitando PO-9 encontra o processo (numero da PO nunca e mascarado)', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'PO-9')
+    await waitFor(() => {
+      expect(screen.getByText('Consolidado Delta')).toBeInTheDocument()
+    })
+  })
+})

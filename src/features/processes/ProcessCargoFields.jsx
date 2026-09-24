@@ -20,6 +20,7 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
           value={draft.containers}
           onChange={(value) => onDraftChange('containers', value)}
           disabled={disabled}
+          collectionWindows={draft.collectionWindows}
         />
       ) : null}
 

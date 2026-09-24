@@ -18,7 +18,7 @@ import React from 'react'
 const mockSearchProcesses = vi.fn()
 
 vi.mock('../../src/services/processesRepository', () => ({
-  searchProcesses: (q) => mockSearchProcesses(q),
+  searchProcesses: (q, opts) => mockSearchProcesses(q, opts),
 }))
 
 import { useGlobalSearch } from '../../src/hooks/useGlobalSearch.js'
@@ -141,6 +141,22 @@ describe('useGlobalSearch', () => {
       expect(lastResult).toHaveLength(1)
     })
     expect(lastResult[0].label).toBe('Importacao Atlas')
+  })
+
+  it('repassa { canSeeName } para searchProcesses', async () => {
+    mockSearchProcesses.mockResolvedValue([])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Probe isAdmin />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+
+    await waitFor(() => {
+      expect(mockSearchProcesses).toHaveBeenCalledWith('atlas', { canSeeName: true })
+    })
   })
 
   it('adiciona query ao recentSearches', async () => {

@@ -627,10 +627,11 @@ describe('ProcessForm — status derivado (F17.2a D-3)', () => {
   })
 })
 
-// F17.2c (D-7/D-10): PurchaseOrdersEditor no passo Identificação, PO por
-// item no passo Itens (CONSOLIDADO), e select de contêiner nas janelas
-// de coleta (FCL/CONSOLIDADO com containers[]).
-describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => {
+// F17.2c/F17.2d-2 (D-7/D-8/D-11): PurchaseOrdersEditor no passo Identificação
+// (agora com Referência/Fornecedor por PO), PO por item no passo Itens
+// (CONSOLIDADO), e 1 row de janela por contêiner (FCL/CONSOLIDADO com
+// containers[]).
+describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)', () => {
   function maritimeReadyDraft(overrides = {}) {
     return makeDraft({
       category: 'FCL',
@@ -651,15 +652,56 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
     const { onDraftChange } = renderForm({ draft: makeDraft({ category: 'CONSOLIDADO' }) })
     await user.type(screen.getByPlaceholderText('Ex.: PO-12345'), 'PO-A')
     await user.click(screen.getByRole('button', { name: 'Adicionar PO' }))
-    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', ['PO-A'])
+    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', [
+      { po: 'PO-A', reference: '', supplierName: '' },
+    ])
   })
 
-  it('passo Itens do CONSOLIDADO mostra o select "PO" com as POs cadastradas', async () => {
+  it('Enter no input "Nova PO" emite o mesmo sem clicar', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ category: 'CONSOLIDADO' }) })
+    await user.type(screen.getByPlaceholderText('Ex.: PO-12345'), 'PO-A{Enter}')
+    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', [
+      { po: 'PO-A', reference: '', supplierName: '' },
+    ])
+  })
+
+  it('Enter no campo "Fornecedor" tambem adiciona a PO', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ category: 'CONSOLIDADO' }) })
+    await user.type(screen.getByPlaceholderText('Ex.: PO-12345'), 'PO-A')
+    const supplierInputs = screen.getAllByLabelText('Fornecedor')
+    await user.type(supplierInputs[0], 'ACME{Enter}')
+    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', [
+      { po: 'PO-A', reference: '', supplierName: 'ACME' },
+    ])
+  })
+
+  it('editar Referência de PO existente emite o objeto atualizado', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      draft: makeDraft({
+        category: 'CONSOLIDADO',
+        purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: '' }],
+      }),
+    })
+    const referenceInputs = screen.getAllByLabelText('Referência')
+    // [0] e' o campo de adicao; [1] e' o da PO ja cadastrada.
+    await user.type(referenceInputs[1], 'R')
+    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', [
+      { po: 'PO-A', reference: 'R', supplierName: '' },
+    ])
+  })
+
+  it('passo Itens do CONSOLIDADO mostra o select "PO" com as POs cadastradas (objetos)', async () => {
     const user = userEvent.setup()
     renderForm({
       draft: makeDraft({
         category: 'CONSOLIDADO',
-        purchaseOrders: ['PO-A', 'PO-B'],
+        purchaseOrders: [
+          { po: 'PO-A', reference: '', supplierName: '' },
+          { po: 'PO-B', reference: '', supplierName: '' },
+        ],
         items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: '' }],
       }),
     })
@@ -681,7 +723,19 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
     expect(screen.getByText('Cadastre as POs no passo Identificação.')).toBeInTheDocument()
   })
 
-  it('FCL com 2 containers + "Coleta Agendada" mostra o select "Contêiner" com as 2 opções', async () => {
+  it('CONSOLIDADO NAO mostra o input "Fornecedor" de nivel-processo no passo Identificação (Q1)', async () => {
+    renderForm({ draft: makeDraft({ category: 'CONSOLIDADO' }) })
+    // "Fornecedor" so' aparece dentro do PurchaseOrdersEditor (rotulo do
+    // proprio editor); nao ha input de fornecedor de nivel-processo.
+    expect(screen.queryByDisplayValue('Fornecedor Atlas')).not.toBeInTheDocument()
+  })
+
+  it('FCL mostra o input "Fornecedor" de nivel-processo', () => {
+    renderForm({ draft: makeDraft({ category: 'FCL', supplierName: 'Fornecedor Atlas' }) })
+    expect(screen.getByDisplayValue('Fornecedor Atlas')).toBeInTheDocument()
+  })
+
+  it('FCL com 2 containers + "Coleta Agendada" mostra 2 rows (uma por contêiner), sem botoes/select de contêiner', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
@@ -693,12 +747,14 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
       }),
     })
     await openFlowStep(user)
-    expect(screen.getByText('Contêiner')).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'CSQU3054383' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'MSCU1234566' })).toBeInTheDocument()
+    expect(screen.getByText('CSQU3054383')).toBeInTheDocument()
+    expect(screen.getByText('MSCU1234566')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Adicionar container' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Adicionar primeira janela' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()
   })
 
-  it('janela com containerId inexistente mostra "Contêiner removido do processo"', async () => {
+  it('janela orfa (containerId de contêiner removido) mostra "Contêiner removido" + botão "Remover"', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
@@ -706,13 +762,17 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
       draft: maritimeReadyDraft({
         collectionStatus: 'Coleta Agendada',
         containers: [{ id: 'CNT-1', number: 'CSQU3054383' }],
-        collectionWindows: [{ id: 'W1', containerId: 'CNT-REMOVIDO', scheduledAt: '' }],
+        collectionWindows: [
+          { id: 'W1', containerId: 'CNT-REMOVIDO', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00' },
+        ],
       }),
     })
     await openFlowStep(user)
+    expect(screen.getByText('Contêiner removido')).toBeInTheDocument()
     expect(
-      screen.getByText('Contêiner removido do processo — selecione outro contêiner para esta janela.')
-    ).toBeInTheDocument()
+      screen.queryByText('Contêiner removido do processo — selecione outro contêiner para esta janela.')
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remover' })).toBeInTheDocument()
   })
 
   it('AEREO/LCL nao mostra campo de contêiner e "Adicionar janela" desabilita com 1 janela', async () => {
@@ -731,6 +791,27 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => 
     await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
     expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar janela' })).toBeDisabled()
+  })
+
+  it('conteiner com janela agendada tem "Remover" desabilitado + hint; sem janela fica habilitado', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'FCL',
+        containers: [
+          { id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '' },
+          { id: 'CNT-2', number: 'MSCU1234566', seal: '', type: '' },
+        ],
+        collectionWindows: [
+          { id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00' },
+        ],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    const removeButtons = screen.getAllByRole('button', { name: 'Remover' })
+    expect(removeButtons[0]).toBeDisabled()
+    expect(removeButtons[1]).not.toBeDisabled()
+    expect(screen.getByText('Contêiner com coleta agendada — só pode ser editado.')).toBeInTheDocument()
   })
 })
 

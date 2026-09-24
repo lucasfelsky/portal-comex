@@ -84,7 +84,10 @@ export function ProcessLicensesDetails({ process }) {
 }
 
 export function ProcessIdentificationDetails({ process, canSeeName }) {
-  const showSupplier = canShowProcessName(process, canSeeName) && process?.supplierName
+  const showSupplier =
+    canShowProcessName(process, canSeeName) &&
+    process?.category !== 'CONSOLIDADO' &&
+    process?.supplierName
   const hasContent =
     showSupplier || process?.originLocation || process?.incoterm || process?.forwarderName
 

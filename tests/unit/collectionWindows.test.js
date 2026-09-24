@@ -89,3 +89,41 @@ describe('fallback collectionScheduledAt intacto (dual schema)', () => {
     expect(windows).toHaveLength(1)
   })
 })
+
+// F17.2d-2 (D-12): comparador estavel - janela sem scheduledAt vai pro fim
+// (nunca NaN); empate preserva ordem de entrada.
+describe('normalizeCollectionWindows - ordenacao estavel (D-12)', () => {
+  it('[vazia, 10h, 09h] -> [09h, 10h, vazia]', () => {
+    const result = normalizeCollectionWindows([
+      { id: 'W-vazia', containerNumber: 1, scheduledAt: '' },
+      { id: 'W-10h', containerNumber: 2, scheduledAt: '2026-01-01T10:00:00' },
+      { id: 'W-09h', containerNumber: 3, scheduledAt: '2026-01-01T09:00:00' },
+    ])
+    expect(result.map((w) => w.id)).toEqual(['W-09h', 'W-10h', 'W-vazia'])
+  })
+
+  it('empate de horario preserva ordem de entrada', () => {
+    const result = normalizeCollectionWindows([
+      { id: 'W-A', containerNumber: 1, scheduledAt: '2026-01-01T10:00:00' },
+      { id: 'W-B', containerNumber: 2, scheduledAt: '2026-01-01T10:00:00' },
+    ])
+    expect(result.map((w) => w.id)).toEqual(['W-A', 'W-B'])
+  })
+
+  it('todas vazias preservam ordem de entrada', () => {
+    const result = normalizeCollectionWindows([
+      { id: 'W-A', containerNumber: 1, scheduledAt: '' },
+      { id: 'W-B', containerNumber: 2, scheduledAt: '' },
+    ])
+    expect(result.map((w) => w.id)).toEqual(['W-A', 'W-B'])
+  })
+
+  it('addCollectionWindow tambem empurra vazia pro fim', () => {
+    const existing = normalizeCollectionWindows([
+      { id: 'W-10h', containerNumber: 1, scheduledAt: '2026-01-01T10:00:00' },
+    ])
+    const result = addCollectionWindow(existing, { containerNumber: 2, scheduledAt: '' })
+    expect(result[0].scheduledAt).toBe(existing[0].scheduledAt)
+    expect(result[1].scheduledAt).toBe('')
+  })
+})

@@ -13,7 +13,11 @@ import {
 import { getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
 import { getCollectionWindowLabel } from './containers'
-import { getProcessPurchaseOrders } from './purchaseOrders'
+import {
+  canSeePurchaseOrderDetails,
+  formatPurchaseOrderLine,
+  getProcessPurchaseOrders,
+} from './purchaseOrders'
 import { getItemDangerousGoodsLabel } from './operationalOptions'
 import Spinner from '../../components/Spinner'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
@@ -245,7 +249,13 @@ export default function ProcessDetailView({
             {selectedProcess.category === 'CONSOLIDADO' && getProcessPurchaseOrders(selectedProcess).length > 0 ? (
               <div className="detail-card">
                 <span className="detail-label">POs consolidadas</span>
-                <p>{getProcessPurchaseOrders(selectedProcess).join(', ')}</p>
+                <ul className="detail-stack detail-stack--compact">
+                  {getProcessPurchaseOrders(selectedProcess).map((order) => (
+                    <li key={order.po}>
+                      {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
             <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>

@@ -226,13 +226,14 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
     expect(screen.getByText('Fornecedor: Fornecedor Atlas')).toBeInTheDocument()
   })
 
-  it('CONSOLIDADO: supplierName aparece para ambos (não é categoria restrita)', () => {
+  it('CONSOLIDADO: nunca mostra "Fornecedor:" de processo, mesmo com supplierName legado populado (Q1)', () => {
     renderDetail({
       detailTab: 'general',
-      canSeeName: false,
+      canSeeName: true,
       selectedProcess: makeProcess({ category: 'CONSOLIDADO', supplierName: 'Fornecedor Delta' }),
     })
-    expect(screen.getByText('Fornecedor: Fornecedor Delta')).toBeInTheDocument()
+    expect(screen.queryByText(/^Fornecedor: /)).not.toBeInTheDocument()
+    expect(screen.queryByText('Fornecedor Delta')).not.toBeInTheDocument()
   })
 })
 
@@ -320,15 +321,19 @@ describe('ProcessDetailView — card "Free time" (F17.3a)', () => {
   })
 })
 
-// F17.2c (D-10): card "POs consolidadas" + PO por item na aba Itens.
-describe('ProcessDetailView — POs do consolidado (F17.2c)', () => {
-  it('CONSOLIDADO com purchaseOrders renderiza o card "POs consolidadas"', () => {
+// F17.2c/F17.2d-2 (D-10/D-6): card "POs consolidadas" + PO por item na aba
+// Itens. F17.2d-2 (Q6/Q1): PO virou objeto { po, reference, supplierName },
+// mascarado por `canSeeName` (`canSeePurchaseOrderDetails`).
+describe('ProcessDetailView — POs do consolidado (F17.2c/F17.2d-2)', () => {
+  it('CONSOLIDADO com purchaseOrders (strings legadas) renderiza o card "POs consolidadas"', () => {
     renderDetail({
       detailTab: 'general',
+      canSeeName: true,
       selectedProcess: makeProcess({ category: 'CONSOLIDADO', purchaseOrders: ['PO-A', 'PO-B'] }),
     })
     expect(screen.getByText('POs consolidadas')).toBeInTheDocument()
-    expect(screen.getByText('PO-A, PO-B')).toBeInTheDocument()
+    expect(screen.getByText('PO-A')).toBeInTheDocument()
+    expect(screen.getByText('PO-B')).toBeInTheDocument()
   })
 
   it('FCL nao renderiza o card "POs consolidadas"', () => {
@@ -347,6 +352,45 @@ describe('ProcessDetailView — POs do consolidado (F17.2c)', () => {
     })
     expect(screen.getByText('PO:')).toBeInTheDocument()
     expect(screen.getByText('PO-A')).toBeInTheDocument()
+  })
+
+  it('canSeeName: true mostra PO + Ref. + Fornecedor', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: true,
+      selectedProcess: makeProcess({
+        category: 'CONSOLIDADO',
+        purchaseOrders: [{ po: 'PO-A', reference: 'R1', supplierName: 'ACME' }],
+      }),
+    })
+    expect(screen.getByText('PO-A · Ref.: R1 · Fornecedor: ACME')).toBeInTheDocument()
+  })
+
+  it('canSeeName: false mostra so o PO (referencia/fornecedor ausentes)', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: false,
+      selectedProcess: makeProcess({
+        category: 'CONSOLIDADO',
+        purchaseOrders: [{ po: 'PO-A', reference: 'R1', supplierName: 'ACME' }],
+      }),
+    })
+    expect(screen.getByText('PO-A')).toBeInTheDocument()
+    expect(screen.queryByText(/ACME/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/R1/)).not.toBeInTheDocument()
+  })
+
+  it('CONSOLIDADO nao mostra "Fornecedor:" de processo (Q1)', () => {
+    renderDetail({
+      detailTab: 'general',
+      canSeeName: true,
+      selectedProcess: makeProcess({
+        category: 'CONSOLIDADO',
+        supplierName: '',
+        purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: 'ACME' }],
+      }),
+    })
+    expect(screen.queryByText(/^Fornecedor: /)).not.toBeInTheDocument()
   })
 })
 

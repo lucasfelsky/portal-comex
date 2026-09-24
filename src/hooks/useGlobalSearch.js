@@ -68,7 +68,7 @@ export function useGlobalSearch(canSeeName) {
 
       pushRecent(trimmed)
 
-      const processResults = await searchProcesses(trimmed).catch(() => [])
+      const processResults = await searchProcesses(trimmed, { canSeeName }).catch(() => [])
 
       return processResults.slice(0, 8).map((process) => {
         const destination = process.destination ? ` · ${process.destination}` : ''

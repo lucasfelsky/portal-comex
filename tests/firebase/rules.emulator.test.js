@@ -807,6 +807,87 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    // F17.2d-2 (D-2, Q6): purchaseOrders vira objetos { po, reference, supplierName }.
+    it('admin atualiza purchaseOrders com objetos { po, reference, supplierName }', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p30'), { name: 'Orig', category: 'CONSOLIDADO' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p30'), {
+          purchaseOrders: [
+            { po: 'PO-A', reference: 'REF-1', supplierName: 'ACME' },
+            { po: 'PO-B', reference: '', supplierName: '' },
+          ],
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com 51 objetos purchaseOrders', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p31'), {
+          name: 'P',
+          purchaseOrders: Array.from({ length: 51 }, (_, index) => ({
+            po: `PO-${index + 1}`,
+            reference: '',
+            supplierName: '',
+          })),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza purchaseOrders de objetos', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p32'), { name: 'Orig', category: 'CONSOLIDADO' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p32'), {
+          purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: '' }],
+        })
+      )
+    })
+
+    // F17.2d-2 (D-11, Q7): logistica avanca collectionStatus num processo com
+    // 2 janelas por container (uma por containerId), ordenadas por horario.
+    it('logistica avanca com 2 janelas por container (containerId, ordenadas por horario)', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/p33'), {
+          name: 'P',
+          category: 'FCL',
+          collectionWindows: [
+            {
+              id: 'WIN-1',
+              containerNumber: 1,
+              containerId: 'CNT-1',
+              scheduledAt: '2026-07-08T09:00:00.000Z',
+              notes: '',
+            },
+            {
+              id: 'WIN-2',
+              containerNumber: 2,
+              containerId: 'CNT-2',
+              scheduledAt: '2026-07-08T10:00:00.000Z',
+              notes: '',
+            },
+          ],
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p33'), {
+          collectionStatus: 'Carga disponível em estoque',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
     // F17.2c (D-8): `containerId` nas janelas nao quebra `hasScheduledCollection`
     // (sem validacao de shape de `collectionWindows`).
     it('logistica avanca collectionStatus num processo cujas janelas tem containerId', async () => {

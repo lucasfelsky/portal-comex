@@ -1,17 +1,23 @@
 import { useState } from 'react'
-import { MAX_PURCHASE_ORDERS, normalizePurchaseOrders } from './purchaseOrders'
+import { MAX_PURCHASE_ORDERS, getPurchaseOrderNumbers, normalizePurchaseOrders } from './purchaseOrders'
 
-// F17.2c (D-10): editor de `purchaseOrders[]` (POs do CONSOLIDADO) - lista
-// com "Remover" por PO + campo "Nova PO"/"Adicionar PO" (desabilitado com
-// input vazio, PO repetida - case-insensitive - ou teto de 50). Sem edicao
-// in-place (rename fora de escopo, F17.2c). So' importa de `./purchaseOrders`
-// (mesma regra de import de `LicensesEditor.jsx`).
+// F17.2d-2 (D-7): editor de `purchaseOrders[]` (POs do CONSOLIDADO) - cada
+// PO agora e' um objeto `{ po, reference, supplierName }`. Linha de adicao
+// com "Nova PO"/"Referência"/"Fornecedor" + "Adicionar PO" (desabilitado com
+// PO vazia, repetida - case-insensitive - ou teto de 50); Enter em qualquer
+// um dos 3 campos tambem adiciona. Lista com "Referência"/"Fornecedor"
+// editaveis in-place (rename de `po` fora de escopo) + "Remover" por `po`.
+// Emite a lista CRUA (a pagina normaliza com `trimText: false`). So' importa
+// de `./purchaseOrders` (mesma regra de import de `LicensesEditor.jsx`).
 export default function PurchaseOrdersEditor({ value, onChange, disabled = false }) {
   const purchaseOrders = Array.isArray(value) ? value : []
-  const [draftValue, setDraftValue] = useState('')
+  const [draftPo, setDraftPo] = useState('')
+  const [draftReference, setDraftReference] = useState('')
+  const [draftSupplierName, setDraftSupplierName] = useState('')
 
-  const trimmedDraft = draftValue.trim()
-  const isDuplicate = purchaseOrders.some(
+  const trimmedDraft = draftPo.trim()
+  const existingNumbers = getPurchaseOrderNumbers(purchaseOrders)
+  const isDuplicate = existingNumbers.some(
     (po) => po.toLowerCase() === trimmedDraft.toLowerCase()
   )
   const canAdd =
@@ -19,12 +25,41 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
 
   function handleAdd() {
     if (!canAdd) return
-    onChange(normalizePurchaseOrders([...purchaseOrders, trimmedDraft]))
-    setDraftValue('')
+    onChange(
+      normalizePurchaseOrders(
+        [
+          ...purchaseOrders,
+          { po: trimmedDraft, reference: draftReference, supplierName: draftSupplierName },
+        ],
+        { trimText: false }
+      )
+    )
+    setDraftPo('')
+    setDraftReference('')
+    setDraftSupplierName('')
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handleAdd()
+    }
+  }
+
+  function handleFieldChange(po, field, fieldValue) {
+    onChange(
+      purchaseOrders.map((order) =>
+        (typeof order === 'string' ? order : order?.po) === po
+          ? { po, reference: order?.reference ?? '', supplierName: order?.supplierName ?? '', [field]: fieldValue }
+          : order
+      )
+    )
   }
 
   function handleRemove(po) {
-    onChange(purchaseOrders.filter((item) => item !== po))
+    onChange(
+      purchaseOrders.filter((order) => (typeof order === 'string' ? order : order?.po) !== po)
+    )
   }
 
   return (
@@ -48,9 +83,33 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
           <input
             className="text-input"
             type="text"
-            value={draftValue}
-            onChange={(event) => setDraftValue(event.target.value)}
+            value={draftPo}
+            onChange={(event) => setDraftPo(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Ex.: PO-12345"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Referência</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draftReference}
+            onChange={(event) => setDraftReference(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ex.: referência do processo"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Fornecedor</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draftSupplierName}
+            onChange={(event) => setDraftSupplierName(event.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={disabled}
           />
         </label>
@@ -71,21 +130,46 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
         </div>
       ) : (
         <ul className="collection-windows-editor__list">
-          {purchaseOrders.map((po) => (
-            <li key={po} className="collection-windows-editor__item">
-              <div className="collection-windows-editor__row">
-                <span>{po}</span>
-                <button
-                  type="button"
-                  className="ghost-button collection-windows-editor__remove"
-                  onClick={() => handleRemove(po)}
-                  disabled={disabled}
-                >
-                  Remover
-                </button>
-              </div>
-            </li>
-          ))}
+          {purchaseOrders.map((order) => {
+            const po = typeof order === 'string' ? order : order?.po
+            const reference = typeof order === 'string' ? '' : order?.reference ?? ''
+            const supplierName = typeof order === 'string' ? '' : order?.supplierName ?? ''
+            return (
+              <li key={po} className="collection-windows-editor__item">
+                <div className="collection-windows-editor__row">
+                  <span>{po}</span>
+                  <label className="field">
+                    <span>Referência</span>
+                    <input
+                      className="text-input"
+                      type="text"
+                      value={reference}
+                      onChange={(event) => handleFieldChange(po, 'reference', event.target.value)}
+                      disabled={disabled}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Fornecedor</span>
+                    <input
+                      className="text-input"
+                      type="text"
+                      value={supplierName}
+                      onChange={(event) => handleFieldChange(po, 'supplierName', event.target.value)}
+                      disabled={disabled}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="ghost-button collection-windows-editor__remove"
+                    onClick={() => handleRemove(po)}
+                    disabled={disabled}
+                  >
+                    Remover
+                  </button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

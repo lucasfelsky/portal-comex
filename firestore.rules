@@ -160,6 +160,12 @@ service cloud.firestore {
     // mudanca de rule (sem validacao de shape de `items`/`collectionWindows`
     // hoje).
     //
+    // F17.2d-2 (D-2, Q6): elementos de `purchaseOrders` viram maps
+    // `{ po, reference, supplierName }`; guarda continua `is list` +
+    // `size() <= 50` (sem validacao por elemento - rules nao iteram lista;
+    // checar `[0] is map` quebraria doc legado de strings salvo por cliente
+    // PWA em cache antes do deploy). Allowlist inalterada (77 campos).
+    //
     // F17.3a (D-9): +9 campos de chegada com data (`berthedAt`/`arrivedAt`),
     // CE/terminal (`ceMercante`/`ceHouse`/`terminalName`), free time
     // (`freeTimeDays`/`demurrageDailyRateUsd`), presenca de carga com data

@@ -14,6 +14,19 @@ function generateWindowId() {
   return `WIN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+// F17.2d-2 (D-12): comparador estavel - janela sem `scheduledAt` vai pro
+// FIM (nao gera NaN, que deixaria a ordem indefinida e poderia derrubar
+// `hasScheduledCollection`, que so' olha `collectionWindows[0]`). Empate de
+// horario preserva a ordem de entrada (`Array.prototype.sort` e' estavel).
+function compareScheduledAt(left, right) {
+  const leftEmpty = !left?.scheduledAt
+  const rightEmpty = !right?.scheduledAt
+  if (leftEmpty && rightEmpty) return 0
+  if (leftEmpty) return 1
+  if (rightEmpty) return -1
+  return new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()
+}
+
 export function normalizeCollectionWindow(rawWindow, fallbackIndex = 0) {
   if (!rawWindow || typeof rawWindow !== 'object') return null
 
@@ -52,9 +65,7 @@ export function normalizeCollectionWindows(rawWindows, { legacyScheduledAt = '',
     .filter(Boolean)
 
   if (normalizedFromArray.length > 0) {
-    return normalizedFromArray.sort(
-      (left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()
-    )
+    return normalizedFromArray.sort(compareScheduledAt)
   }
 
   const legacyValue = normalizeIsoDateTime(legacyScheduledAt)
@@ -118,9 +129,7 @@ export function addCollectionWindow(windows, partial = {}) {
   if (!window) return nextWindows
 
   nextWindows.push(window)
-  return nextWindows.sort(
-    (left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()
-  )
+  return nextWindows.sort(compareScheduledAt)
 }
 
 export function removeCollectionWindow(windows, windowId) {

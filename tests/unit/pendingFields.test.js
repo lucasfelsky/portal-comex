@@ -570,3 +570,50 @@ describe('getPendingFields - purchaseOrders/itemPoNumber (F17.2c)', () => {
     expect(getPendingFields(process).map((f) => f.id)).not.toContain('itemPoNumber')
   })
 })
+
+// F17.2d-2 (D-4/D-9, Q1): fornecedor sai do nivel-processo no CONSOLIDADO -
+// passa a ser cobrado POR PO (`purchaseOrderSupplier`).
+describe('getPendingFields - fornecedor por PO no CONSOLIDADO (F17.2d-2)', () => {
+  it('CONSOLIDADO sem supplierName de processo NAO gera pendencia supplierName', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      supplierName: '',
+      purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: 'ACME' }, { po: 'PO-B', reference: '', supplierName: 'ACME' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('supplierName')
+  })
+
+  it('FCL continua cobrando supplierName', () => {
+    const process = completeMaritimeProcess({ category: 'FCL', supplierName: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('supplierName')
+  })
+
+  it('CONSOLIDADO com PO sem fornecedor -> pendencia purchaseOrderSupplier', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: '' }, { po: 'PO-B', reference: '', supplierName: 'ACME' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('purchaseOrderSupplier')
+  })
+
+  it('CONSOLIDADO com todas as POs com fornecedor -> sem pendencia purchaseOrderSupplier', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: 'ACME' }, { po: 'PO-B', reference: '', supplierName: 'BETA' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('purchaseOrderSupplier')
+  })
+
+  it('lista de strings legadas sem fornecedor de processo -> gera purchaseOrderSupplier', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      supplierName: '',
+      purchaseOrders: ['PO-A', 'PO-B'],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('purchaseOrderSupplier')
+  })
+})

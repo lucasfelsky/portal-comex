@@ -11,6 +11,8 @@ import {
   getContainerNumberWarning,
   getContainerOptionLabel,
   getContainerSpecialBadges,
+  getContainerWindowRows,
+  isContainerRemovalLocked,
   isOrphanCollectionWindow,
   linkCollectionWindowsToContainers,
   normalizeContainerNumber,
@@ -253,5 +255,74 @@ describe('getCollectionWindowLabel (D-6)', () => {
   it('LCL/AEREO -> "Janela de coleta"', () => {
     expect(getCollectionWindowLabel({}, { category: 'LCL', containers })).toBe('Janela de coleta')
     expect(getCollectionWindowLabel({}, { category: 'AEREO', containers })).toBe('Janela de coleta')
+  })
+})
+
+// F17.2d-2 (D-10, Q7): 1 row por container + extraWindows.
+describe('getContainerWindowRows (D-10)', () => {
+  const containers = [{ id: 'CNT-1' }, { id: 'CNT-2' }]
+
+  it('ordem de containers[]; container sem janela -> window: null', () => {
+    const { rows } = getContainerWindowRows([], containers)
+    expect(rows.map((row) => row.container.id)).toEqual(['CNT-1', 'CNT-2'])
+    expect(rows.every((row) => row.window === null)).toBe(true)
+  })
+
+  it('janela achada por containerId entra na row correspondente', () => {
+    const window = { id: 'W1', containerId: 'CNT-2', scheduledAt: '2026-01-01T10:00:00' }
+    const { rows, extraWindows } = getContainerWindowRows([window], containers)
+    expect(rows[0].window).toBeNull()
+    expect(rows[1].window).toEqual(window)
+    expect(extraWindows).toEqual([])
+  })
+
+  it('janela orfa (containerId de container removido) -> extraWindows', () => {
+    const window = { id: 'W1', containerId: 'CNT-REMOVIDO', scheduledAt: '' }
+    const { rows, extraWindows } = getContainerWindowRows([window], containers)
+    expect(rows.every((row) => row.window === null)).toBe(true)
+    expect(extraWindows).toEqual([window])
+  })
+
+  it('2a janela do mesmo container -> extraWindows', () => {
+    const window1 = { id: 'W1', containerId: 'CNT-1', scheduledAt: '' }
+    const window2 = { id: 'W2', containerId: 'CNT-1', scheduledAt: '' }
+    const { rows, extraWindows } = getContainerWindowRows([window1, window2], containers)
+    expect(rows[0].window).toEqual(window1)
+    expect(extraWindows).toEqual([window2])
+  })
+
+  it('janela sem containerId -> extraWindows', () => {
+    const window = { id: 'W1', containerId: '', scheduledAt: '' }
+    const { extraWindows } = getContainerWindowRows([window], containers)
+    expect(extraWindows).toEqual([window])
+  })
+})
+
+describe('isContainerRemovalLocked (D-10, Q8)', () => {
+  it('janela agendada (scheduledAt nao-vazio) -> true', () => {
+    expect(
+      isContainerRemovalLocked('CNT-1', [
+        { containerId: 'CNT-1', scheduledAt: '2026-01-01T10:00:00' },
+      ])
+    ).toBe(true)
+  })
+
+  it('janela sem horario -> false', () => {
+    expect(isContainerRemovalLocked('CNT-1', [{ containerId: 'CNT-1', scheduledAt: '' }])).toBe(
+      false
+    )
+  })
+
+  it('janela de outro container -> false', () => {
+    expect(
+      isContainerRemovalLocked('CNT-1', [
+        { containerId: 'CNT-2', scheduledAt: '2026-01-01T10:00:00' },
+      ])
+    ).toBe(false)
+  })
+
+  it('sem janelas -> false', () => {
+    expect(isContainerRemovalLocked('CNT-1', [])).toBe(false)
+    expect(isContainerRemovalLocked('CNT-1', undefined)).toBe(false)
   })
 })

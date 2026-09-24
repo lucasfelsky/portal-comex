@@ -226,6 +226,41 @@ export function getCollectionWindowLabel(window, { category, containers } = {}) 
   return `Contêiner ${window?.containerNumber}`
 }
 
+// F17.2d-2 (D-10, Q7): 1 row por container (ordem de `containers[]`) +
+// `extraWindows` (janelas nao atribuidas a uma row - orfas de container
+// removido, sem `containerId`, ou 2a+ janela do mesmo container).
+export function getContainerWindowRows(windows, containers) {
+  const windowList = Array.isArray(windows) ? windows : []
+  const containerList = Array.isArray(containers) ? containers : []
+
+  const usedIndexes = new Set()
+  const rows = containerList.map((container, index) => {
+    const windowIndex = windowList.findIndex(
+      (window, idx) => window?.containerId === container.id && !usedIndexes.has(idx)
+    )
+    if (windowIndex !== -1) usedIndexes.add(windowIndex)
+    return {
+      container,
+      index,
+      label: getContainerOptionLabel(container, index),
+      window: windowIndex !== -1 ? windowList[windowIndex] : null,
+    }
+  })
+
+  const extraWindows = windowList.filter((_, idx) => !usedIndexes.has(idx))
+
+  return { rows, extraWindows }
+}
+
+// F17.2d-2 (D-10, Q8): trava de remocao - container com janela AGENDADA
+// (scheduledAt nao-vazio) nao pode ser removido.
+export function isContainerRemovalLocked(containerId, windows) {
+  const windowList = Array.isArray(windows) ? windows : []
+  return windowList.some(
+    (window) => window?.containerId === containerId && String(window?.scheduledAt ?? '').trim() !== ''
+  )
+}
+
 // D-2/D-7: badges especiais distintos, ordem fixa (Reefer, ISO tank).
 export function getContainerSpecialBadges(containers) {
   const types = new Set((Array.isArray(containers) ? containers : []).map((container) => container?.type))
