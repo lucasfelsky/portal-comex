@@ -30,6 +30,10 @@ export function normalizeCollectionWindow(rawWindow, fallbackIndex = 0) {
   const normalized = {
     id,
     containerNumber,
+    // F17.2c (D-5): vinculo com `containers[].id` (dual schema - preservado
+    // mesmo em LCL/AEREO onde nao e' usado, so' fica ''; serializado no
+    // Firestore).
+    containerId: typeof rawWindow.containerId === 'string' ? rawWindow.containerId.trim() : '',
     scheduledAt: normalizeIsoDateTime(rawWindow.scheduledAt),
     notes: typeof rawWindow.notes === 'string' ? rawWindow.notes.trim() : '',
   }
@@ -88,11 +92,12 @@ export function hasActiveCollectionSchedule(process) {
   return getCollectionWindows(process).length > 0
 }
 
-export function createCollectionWindow({ containerNumber, scheduledAt, notes } = {}) {
+export function createCollectionWindow({ containerNumber, containerId, scheduledAt, notes } = {}) {
   return normalizeCollectionWindow(
     {
       id: generateWindowId(),
       containerNumber,
+      containerId: containerId ?? '',
       scheduledAt: scheduledAt ?? '',
       notes: notes ?? '',
     },
@@ -105,6 +110,7 @@ export function addCollectionWindow(windows, partial = {}) {
   const index = nextWindows.length
   const window = createCollectionWindow({
     containerNumber: partial.containerNumber ?? index + 1,
+    containerId: partial.containerId ?? '',
     scheduledAt: partial.scheduledAt ?? '',
     notes: partial.notes ?? '',
   })
@@ -131,6 +137,7 @@ export function serializeCollectionWindowsForFirestore(windows) {
   return normalizeCollectionWindows(windows).map((window) => ({
     id: window.id,
     containerNumber: window.containerNumber,
+    containerId: window.containerId,
     scheduledAt: window.scheduledAt,
     notes: window.notes,
   }))

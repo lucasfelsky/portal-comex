@@ -13,6 +13,8 @@ import {
 } from './processStatus'
 import { getChannelToneClass, getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
+import { getCollectionWindowLabel } from './containers'
+import { getProcessPurchaseOrders } from './purchaseOrders'
 import Spinner from '../../components/Spinner'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
@@ -239,6 +241,12 @@ export default function ProcessDetailView({
             <div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, canSeeName)}</p></div>
             <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
             {selectedProcess.processNumber && canShowProcessName(selectedProcess, canSeeName) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
+            {selectedProcess.category === 'CONSOLIDADO' && getProcessPurchaseOrders(selectedProcess).length > 0 ? (
+              <div className="detail-card">
+                <span className="detail-label">POs consolidadas</span>
+                <p>{getProcessPurchaseOrders(selectedProcess).join(', ')}</p>
+              </div>
+            ) : null}
             <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
             <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} />
             <div className="detail-card">
@@ -354,12 +362,21 @@ export default function ProcessDetailView({
             ) : null}
             {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && (selectedProcess.collectionStatus === 'Coleta Agendada' || selectedProcess.collectionStatus === CD_EN_ROUTE_STATUS) && getCollectionWindows(selectedProcess).length > 0 ? (
               <div className="detail-card">
-                <span className="detail-label">Janelas de coleta por container</span>
+                <span className="detail-label">
+                  {selectedProcess.category === 'FCL' || selectedProcess.category === 'CONSOLIDADO'
+                    ? 'Janelas de coleta por container'
+                    : 'Janela de coleta'}
+                </span>
                 <ul className="process-detail-collection-windows">
                   {getCollectionWindows(selectedProcess).map((window) => (
                     <li key={window.id} className="collection-window-card collection-window-card--detail">
                       <div>
-                        <span className="detail-label">Container {window.containerNumber}</span>
+                        <span className="detail-label">
+                          {getCollectionWindowLabel(window, {
+                            category: selectedProcess.category,
+                            containers: selectedProcess.containers,
+                          })}
+                        </span>
                         <p>{formatDateTime(window.scheduledAt)}</p>
                         {window.notes ? <small className="field-hint">{window.notes}</small> : null}
                       </div>
@@ -419,6 +436,12 @@ export default function ProcessDetailView({
                       <span className="detail-label">Quantidade:</span>
                       <strong>{item.quantity}</strong>
                     </div>
+                    {selectedProcess.category === 'CONSOLIDADO' && item.poNumber ? (
+                      <div className="process-item-display">
+                        <span className="detail-label">PO:</span>
+                        <strong>{item.poNumber}</strong>
+                      </div>
+                    ) : null}
                   </button>
                 ))
               ) : (

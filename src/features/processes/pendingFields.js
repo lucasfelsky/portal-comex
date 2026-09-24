@@ -8,6 +8,10 @@ import { normalizeComparableText } from './processStatus.js'
 import { isMaritimeCategory } from './processCategories.js'
 import { getCollectionWindows } from '../../utils/collectionWindows.js'
 import { getEffectiveLicenses } from './licenses.js'
+import {
+  MIN_CONSOLIDATED_PURCHASE_ORDERS,
+  getProcessPurchaseOrders,
+} from './purchaseOrders.js'
 
 function hasText(value) {
   return String(value ?? '').trim() !== ''
@@ -54,6 +58,27 @@ export const PENDING_FIELD_RULES = [
     stage: 0,
     when: (p) => p?.category !== 'CONSOLIDADO',
     isMissing: (p) => !hasText(p?.processNumber),
+  },
+  // F17.2c (D-11): POs do consolidado - minimo 2 (aviso, nunca bloqueio).
+  {
+    id: 'purchaseOrders',
+    field: 'purchaseOrders',
+    label: 'POs consolidadas (mín. 2)',
+    stage: 0,
+    categories: ['CONSOLIDADO'],
+    isMissing: (p) => getProcessPurchaseOrders(p).length < MIN_CONSOLIDATED_PURCHASE_ORDERS,
+  },
+  {
+    id: 'itemPoNumber',
+    field: 'items',
+    label: 'PO do item',
+    stage: 0,
+    categories: ['CONSOLIDADO'],
+    when: (p) => hasValidItems(p),
+    isMissing: (p) =>
+      p.items.some(
+        (item) => hasText(item?.commercialName) && Number(item?.quantity) > 0 && !hasText(item?.poNumber)
+      ),
   },
   { id: 'etd', field: 'etd', label: 'ETD', stage: 0, isMissing: (p) => !hasText(p?.etd) },
   { id: 'eta', field: 'eta', label: 'ETA', stage: 0, isMissing: (p) => !hasText(p?.eta) },

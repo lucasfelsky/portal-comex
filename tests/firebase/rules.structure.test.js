@@ -223,4 +223,21 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/['"]mapaInspectionScheduledAt['"]/)
     })
   })
+
+  describe('F17.2c - purchaseOrders (D-8)', () => {
+    it('isAdminProcessFields contem "purchaseOrders"', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/['"]purchaseOrders['"]/)
+    })
+
+    it('isAdminProcessFields guarda o shape de purchaseOrders (list, size <= 50)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/purchaseOrders\s+is\s+list/)
+      expect(body).toMatch(/purchaseOrders\.size\(\)\s*<=\s*50/)
+    })
+  })
 })

@@ -77,13 +77,28 @@ describe('getProcessSubtitle', () => {
     expect(getProcessSubtitle(process, true)).toBe('PO: 1234')
   })
 
-  it('categoria CONSOLIDADO -> sempre ""', () => {
-    const process = { category: 'CONSOLIDADO', name: 'Consolidado X', processNumber: '9999' }
+  it('categoria CONSOLIDADO sem POs -> ""', () => {
+    const process = {
+      category: 'CONSOLIDADO',
+      name: 'Consolidado X',
+      processNumber: '9999',
+      purchaseOrders: [],
+    }
     expect(getProcessSubtitle(process, true)).toBe('')
   })
 
   it('caso normal (categoria nao-restrita, nao-CONSOLIDADO) -> "PO: <n>"', () => {
     const process = { category: 'FOB', name: 'Importação Soda', processNumber: '5678' }
     expect(getProcessSubtitle(process, false)).toBe('PO: 5678')
+  })
+
+  // F17.2c (D-10): CONSOLIDADO mostra o resumo de purchaseOrders[].
+  it('categoria CONSOLIDADO com 3 POs -> "POs: A, B (+1)"', () => {
+    const process = {
+      category: 'CONSOLIDADO',
+      name: 'Consolidado X',
+      purchaseOrders: ['A', 'B', 'C'],
+    }
+    expect(getProcessSubtitle(process, true)).toBe('POs: A, B (+1)')
   })
 })

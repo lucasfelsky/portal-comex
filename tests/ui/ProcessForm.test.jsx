@@ -455,3 +455,110 @@ describe('ProcessForm — status derivado (F17.2a D-3)', () => {
     expect(screen.getByText('Atracação confirmada')).toBeInTheDocument()
   })
 })
+
+// F17.2c (D-7/D-10): PurchaseOrdersEditor no passo Identificação, PO por
+// item no passo Itens (CONSOLIDADO), e select de contêiner nas janelas
+// de coleta (FCL/CONSOLIDADO com containers[]).
+describe('ProcessForm — purchaseOrders/janelas por container (F17.2c)', () => {
+  function maritimeReadyDraft(overrides = {}) {
+    return makeDraft({
+      category: 'FCL',
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      ...overrides,
+    })
+  }
+
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  }
+
+  it('CONSOLIDADO mostra "Adicionar PO" e adicionar dispara onDraftChange("purchaseOrders", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ category: 'CONSOLIDADO' }) })
+    await user.type(screen.getByPlaceholderText('Ex.: PO-12345'), 'PO-A')
+    await user.click(screen.getByRole('button', { name: 'Adicionar PO' }))
+    expect(onDraftChange).toHaveBeenCalledWith('purchaseOrders', ['PO-A'])
+  })
+
+  it('passo Itens do CONSOLIDADO mostra o select "PO" com as POs cadastradas', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'CONSOLIDADO',
+        purchaseOrders: ['PO-A', 'PO-B'],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: '' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    expect(screen.getByRole('option', { name: 'PO-A' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PO-B' })).toBeInTheDocument()
+  })
+
+  it('passo Itens do CONSOLIDADO sem POs mostra o hint de cadastro', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'CONSOLIDADO',
+        purchaseOrders: [],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1 }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    expect(screen.getByText('Cadastre as POs no passo Identificação.')).toBeInTheDocument()
+  })
+
+  it('FCL com 2 containers + "Coleta Agendada" mostra o select "Contêiner" com as 2 opções', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: maritimeReadyDraft({
+        collectionStatus: 'Coleta Agendada',
+        containers: [{ id: 'CNT-1', number: 'CSQU3054383' }, { id: 'CNT-2', number: 'MSCU1234566' }],
+        collectionWindows: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '' }],
+      }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Contêiner')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'CSQU3054383' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'MSCU1234566' })).toBeInTheDocument()
+  })
+
+  it('janela com containerId inexistente mostra "Contêiner removido do processo"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: maritimeReadyDraft({
+        collectionStatus: 'Coleta Agendada',
+        containers: [{ id: 'CNT-1', number: 'CSQU3054383' }],
+        collectionWindows: [{ id: 'W1', containerId: 'CNT-REMOVIDO', scheduledAt: '' }],
+      }),
+    })
+    await openFlowStep(user)
+    expect(
+      screen.getByText('Contêiner removido do processo — selecione outro contêiner para esta janela.')
+    ).toBeInTheDocument()
+  })
+
+  it('AEREO/LCL nao mostra campo de contêiner e "Adicionar janela" desabilita com 1 janela', async () => {
+    const user = userEvent.setup()
+    const draft = makeDraft({
+      category: 'AEREO',
+      arrived: true,
+      dtaStatus: 'Trânsito concluído',
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ id: 'W1', scheduledAt: '' }],
+    })
+    renderForm({ viewMode: 'edit', canShowAirFlow: true, draft })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Adicionar janela' })).toBeDisabled()
+  })
+})

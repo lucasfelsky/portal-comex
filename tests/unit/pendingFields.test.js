@@ -277,3 +277,57 @@ describe('getPendingFields - regra de estagio futuro nao aparece', () => {
     expect(getPendingFields(process).map((f) => f.field)).not.toContain('clearanceCompletedAt')
   })
 })
+
+// F17.2c (D-11): POs do consolidado + PO por item.
+describe('getPendingFields - purchaseOrders/itemPoNumber (F17.2c)', () => {
+  it('CONSOLIDADO com 1 PO -> pendencia purchaseOrders', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: ['PO-A'],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('purchaseOrders')
+  })
+
+  it('CONSOLIDADO com 2 POs -> sem pendencia purchaseOrders', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: ['PO-A', 'PO-B'],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('purchaseOrders')
+  })
+
+  it('FCL nunca cobra purchaseOrders', () => {
+    const process = completeMaritimeProcess({ category: 'FCL' })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('purchaseOrders')
+  })
+
+  it('CONSOLIDADO com item sem poNumber -> pendencia itemPoNumber', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: ['PO-A', 'PO-B'],
+      items: [{ commercialName: 'Item', quantity: 1, poNumber: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('itemPoNumber')
+  })
+
+  it('CONSOLIDADO com todos os itens com poNumber -> sem pendencia itemPoNumber', () => {
+    const process = completeMaritimeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: ['PO-A', 'PO-B'],
+      items: [{ commercialName: 'Item', quantity: 1, poNumber: 'PO-A' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('itemPoNumber')
+  })
+
+  it('FCL nunca cobra itemPoNumber mesmo sem poNumber no item', () => {
+    const process = completeMaritimeProcess({
+      category: 'FCL',
+      items: [{ commercialName: 'Item', quantity: 1 }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('itemPoNumber')
+  })
+})

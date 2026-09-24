@@ -193,6 +193,7 @@
       "processNotes",
       "processNumber",
       "processStatus",
+      "purchaseOrders",
       "shippedAt",
       "supplierName",
       "transshipment",

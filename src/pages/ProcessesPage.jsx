@@ -50,6 +50,10 @@ import { getPendingFields } from '../features/processes/pendingFields'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
+  clearRemovedPurchaseOrderLinks,
+  normalizePurchaseOrders,
+} from '../features/processes/purchaseOrders'
+import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
 } from '../utils/deliveryForecast'
@@ -96,6 +100,7 @@ const emptyDraft = () => ({
   collectionWindows: [],
   collectionScheduledAt: '',
   licenses: [],
+  purchaseOrders: [],
   dtaStatus: '',
   dtaLoadingScheduledAt: '',
   dtaArrivalAtItajai: '',
@@ -217,6 +222,11 @@ function sanitizeProcessItems(items) {
           : `ITEM-${Date.now()}-${index}`,
       commercialName: String(item?.commercialName ?? '').trim(),
       quantity: Math.max(0, Number(item?.quantity) || 0),
+      // F17.2c (D-4): preserva `poNumber` bruto - a filtragem por
+      // categoria/lista de POs valida e' do repositorio (D-3).
+      ...(typeof item?.poNumber === 'string' && item.poNumber.trim()
+        ? { poNumber: String(item.poNumber).trim() }
+        : {}),
     }))
     .filter((item) => item.commercialName || item.quantity > 0)
 }
@@ -592,6 +602,8 @@ export default function ProcessesPage() {
           item.etd,
           item.processStatus,
           item.collectionStatus,
+          ...(item.purchaseOrders ?? []),
+          ...(item.items ?? []).map((processItem) => processItem?.poNumber ?? ''),
         ]
           .join(' ')
           .toLowerCase()
@@ -784,6 +796,16 @@ export default function ProcessesPage() {
       }
       if (field === 'collectionWindows') {
         return sanitizeDraft(current, { [field]: value })
+      }
+      // F17.2c (D-4): remover uma PO limpa o vinculo dos itens que a
+      // usavam (`clearRemovedPurchaseOrderLinks`).
+      if (field === 'purchaseOrders') {
+        const nextPurchaseOrders = normalizePurchaseOrders(value)
+        return {
+          ...current,
+          purchaseOrders: nextPurchaseOrders,
+          items: clearRemovedPurchaseOrderLinks(current.items ?? [], nextPurchaseOrders),
+        }
       }
       // F17.2a (D-4): containerQuantity acompanha o tamanho do editor -
       // remover todos os containers zera a quantidade (a expansao lazy do

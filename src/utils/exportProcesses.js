@@ -9,6 +9,7 @@
 // ProcessesPage — a lib só entra no chunk quando alguém usa).
 import { getProcessDerivedStatus } from '../features/processes/processDerivedStatus'
 import { canShowProcessName } from '../features/processes/processLabels'
+import { getProcessPurchaseOrders } from '../features/processes/purchaseOrders'
 import { getCollectionWindows } from './collectionWindows'
 
 function formatDateBr(isoDate) {
@@ -55,6 +56,7 @@ export function buildProcessesExportRows(processes, now = new Date(), { canSeeNa
     return {
       Processo: process.processNumber || (showName ? process.name || '' : ''),
       Nome: showName ? process.name || '' : '',
+      POs: getProcessPurchaseOrders(process).join(', '),
       Categoria: process.category || '',
       Destino: process.destination || '',
       ETD: formatDateBr(process.etd),
@@ -84,6 +86,7 @@ export async function exportProcessesToXlsx(processes, now = new Date(), options
   worksheet['!cols'] = [
     { wch: 16 },
     { wch: 28 },
+    { wch: 24 },
     { wch: 12 },
     { wch: 14 },
     { wch: 11 },

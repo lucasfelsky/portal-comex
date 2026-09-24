@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 60 campos validos (F17.2a/F17.2b)', async () => {
+    it('admin cria processo com todos os 61 campos validos (F17.2a/F17.2b/F17.2c)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -543,6 +543,8 @@ describeEmulator('firestore.rules (emulador)', () => {
           containers: [],
           // F17.2b (D-1/D-12): campo novo.
           licenses: [],
+          // F17.2c: campo novo.
+          purchaseOrders: [],
           updatedById: 'admin-1',
           updatedByName: 'Admin',
           updatedAt: new Date(),
@@ -609,6 +611,84 @@ describeEmulator('firestore.rules (emulador)', () => {
           mapaInspectionScheduledAt: '',
           updatedById: 'admin-1',
           updatedByName: 'Admin',
+        })
+      )
+    })
+
+    // F17.2c (D-8): casos de `purchaseOrders[]`.
+    it('admin atualiza purchaseOrders com 2 POs', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p25'), { name: 'Orig', category: 'CONSOLIDADO' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p25'), {
+          purchaseOrders: ['PO-A', 'PO-B'],
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com 51 purchaseOrders', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p26'), {
+          name: 'P',
+          purchaseOrders: Array.from({ length: 51 }, (_, index) => `PO-${index + 1}`),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com purchaseOrders fora do shape (nao-list)', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p27'), {
+          name: 'P',
+          purchaseOrders: 'x',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza purchaseOrders', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p28'), { name: 'Orig', category: 'CONSOLIDADO' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p28'), {
+          purchaseOrders: ['PO-A'],
+        })
+      )
+    })
+
+    // F17.2c (D-8): `containerId` nas janelas nao quebra `hasScheduledCollection`
+    // (sem validacao de shape de `collectionWindows`).
+    it('logistica avanca collectionStatus num processo cujas janelas tem containerId', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/p29'), {
+          name: 'P',
+          collectionWindows: [
+            {
+              id: 'WIN-1',
+              containerNumber: 1,
+              containerId: 'CNT-1',
+              scheduledAt: '2026-07-08T10:00:00.000Z',
+              notes: '',
+            },
+          ],
+          collectionStatus: 'Carga em Conferência/Etiquetagem',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p29'), {
+          collectionStatus: 'Carga disponível em estoque',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
         })
       )
     })
