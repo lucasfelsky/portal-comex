@@ -363,6 +363,96 @@ describe('createProcessUpdateNotifications', () => {
     })
   })
 
+  // F17.3b (D-8): DUIMP completa (numero + datas), conferencia, exigencia.
+  describe('F17.3b - DUIMP completa (D-8)', () => {
+    it('before legado sem as 6 chaves x after com "" /false -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE }
+      const after = {
+        ...PROCESS_BASE,
+        duimpNumber: '',
+        duimpRegisteredAt: '',
+        parameterizedAt: '',
+        customsInspectionScheduledAt: '',
+        customsRequirement: false,
+        customsRequirementNotes: '',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('legado duimpStatus "Parametrizada" x mesmo valor + 6 chaves vazias -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, duimpStatus: 'Parametrizada' }
+      const after = {
+        ...PROCESS_BASE,
+        duimpStatus: 'Parametrizada',
+        duimpNumber: '',
+        duimpRegisteredAt: '',
+        parameterizedAt: '',
+        customsInspectionScheduledAt: '',
+        customsRequirement: false,
+        customsRequirementNotes: '',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('mudar so duimpNumber -> notifica favorito', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, duimpNumber: '' }
+      const after = {
+        ...PROCESS_BASE,
+        duimpNumber: 'DU-2026-001',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+    })
+
+    it('customsRequirement false -> true -> notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, customsRequirement: false }
+      const after = {
+        ...PROCESS_BASE,
+        customsRequirement: true,
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+    })
+  })
+
   // F17.2b (D-10): `licenses[]` entra na comparacao - o aviso que hoje sai
   // com MAPA nao pode se perder.
   describe('F17.2b - anuencias (D-10)', () => {

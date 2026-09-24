@@ -55,7 +55,6 @@ export default function ProcessForm({
   channelOptions,
   collectionStatusOptions,
   dtaStatusOptions,
-  duimpStatusOptions,
   processCategoryOptions,
   onDraftChange,
   onSetViewModeList,
@@ -359,7 +358,6 @@ export default function ProcessForm({
         <ProcessCustomsFields
           draft={draft}
           onDraftChange={onDraftChange}
-          duimpStatusOptions={duimpStatusOptions}
           channelOptions={channelOptions}
         />
       ) : null}

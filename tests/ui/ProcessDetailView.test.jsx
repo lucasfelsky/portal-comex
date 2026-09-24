@@ -349,3 +349,75 @@ describe('ProcessDetailView — POs do consolidado (F17.2c)', () => {
     expect(screen.getByText('PO-A')).toBeInTheDocument()
   })
 })
+
+// F17.3b (D-14): card "DUIMP" completo (numero + datas + canal +
+// conferencia + exigencia/procedimento especial + desembaraco).
+describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
+  it('numero + registro + parametrizacao formatados', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpNumber: 'DU-2026-001',
+        duimpRegisteredAt: '2026-09-19T10:00',
+        parameterizedAt: '2026-09-20T11:00',
+        parameterizationChannel: 'Verde',
+        duimpStatus: 'Parametrizada',
+      }),
+    })
+    expect(screen.getByText('Nº da DUIMP: DU-2026-001')).toBeInTheDocument()
+    expect(screen.getByText(/Registro:/)).toBeInTheDocument()
+    expect(screen.getByText(/Parametrização:/)).toBeInTheDocument()
+  })
+
+  it('legado sem data mostra "Registro: sem data (registro antigo)"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Aguardando parametrização da DUIMP',
+      }),
+    })
+    expect(screen.getByText('Registro: sem data (registro antigo)')).toBeInTheDocument()
+  })
+
+  it('canal Cinza mostra "Procedimento especial:"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Cinza',
+        duimpStatus: 'Parametrizada',
+        customsRequirementNotes: 'procedimento especial X',
+      }),
+    })
+    expect(screen.getByText('Procedimento especial: procedimento especial X')).toBeInTheDocument()
+  })
+
+  it('canal Vermelho mostra "Conferência agendada para:"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        berthed: true,
+        cargoPresenceInformed: true,
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Vermelho',
+        duimpStatus: 'Parametrizada',
+        customsInspectionScheduledAt: '2026-09-21T09:00',
+      }),
+    })
+    expect(screen.getByText(/Conferência agendada para:/)).toBeInTheDocument()
+  })
+
+  it('sem nenhum dado DUIMP o card nao renderiza', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess(),
+    })
+    expect(screen.queryByText('DUIMP')).not.toBeInTheDocument()
+  })
+})

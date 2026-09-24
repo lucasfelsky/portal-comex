@@ -415,6 +415,17 @@ describe('isCustomsCleared (AD-1)', () => {
       isCustomsCleared({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Amarelo' })
     ).toBe(false)
   })
+
+  // F17.3b (D-3): `parameterizedAt` (data nova) tambem vale como sinal de
+  // parametrizacao no canal Verde, mesma semantica do legado.
+  it('parameterizedAt (data nova) + canal Verde -> true', () => {
+    expect(
+      isCustomsCleared({
+        parameterizedAt: '2026-09-20T10:00',
+        parameterizationChannel: 'Verde',
+      })
+    ).toBe(true)
+  })
 })
 
 describe('resolveCargoReceivedAt (D-D)', () => {

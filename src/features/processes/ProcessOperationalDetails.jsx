@@ -9,17 +9,22 @@ import {
   hasCargoPresenceSignal,
   hasDateValue,
   getFreeTimeStatus,
+  CUSTOMS_INSPECTION_CHANNELS,
+  isLegacyDuimpRegisteredWithoutDate,
+  isLegacyParameterizedWithoutDate,
 } from './arrivalCustoms'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
+import { getChannelToneClass } from './processStatusView'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
 // processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
 // F17.3a (D-12): leitura de chegada com data/CE/terminal/free time
 // (`ProcessArrivalDetails`/`ProcessFreeTimeDetails`).
-// Regra de import (D-11/D-12): so' `./containers`, `./operationalOptions`,
+// F17.3b (D-14): card "DUIMP" completo (`ProcessCustomsDetails`).
+// Regra de import (D-11/D-12/D-14): so' `./containers`, `./operationalOptions`,
 // `./processLabels` (so' `canShowProcessName`), `./licenses`,
 // `../../utils/dateFormat` (so' `formatDateTime`), `./arrivalCustoms`,
-// `./processCategories`.
+// `./processCategories`, `./processStatusView` (so' `getChannelToneClass`).
 //
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
@@ -310,6 +315,62 @@ export function ProcessFreeTimeDetails({ process }) {
               process.demurrageDailyRateUsd
             )}
           </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+// F17.3b (D-14): card "DUIMP" (numero, registro, parametrizacao, canal,
+// conferencia, exigencia/procedimento especial, desembaraco). So' renderiza
+// se maritimo/aereo e ha algum dado preenchido. Visivel a todos os
+// aprovados (nenhum campo identifica o processo; mascara de nome intocada).
+export function ProcessCustomsDetails({ process }) {
+  const isMaritime = isMaritimeCategory(process?.category)
+  const isAir = isAirCategory(process?.category)
+  if (!isMaritime && !isAir) return null
+
+  const hasContent =
+    process?.duimpStatus ||
+    process?.duimpNumber ||
+    process?.duimpRegisteredAt ||
+    process?.parameterizedAt ||
+    process?.clearanceCompletedAt
+
+  if (!hasContent) return null
+
+  const channel = process?.parameterizationChannel
+  const isCinza = channel === 'Cinza'
+  const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(channel)
+
+  return (
+    <div className={`detail-card ${getChannelToneClass(channel)}`.trim()}>
+      <span className="detail-label">DUIMP</span>
+      <div className="detail-stack detail-stack--compact">
+        {process?.duimpStatus ? <p>Status: {process.duimpStatus}</p> : null}
+        {process?.duimpNumber ? <p>Nº da DUIMP: {process.duimpNumber}</p> : null}
+        {isLegacyDuimpRegisteredWithoutDate(process) ? (
+          <p>Registro: sem data (registro antigo)</p>
+        ) : process?.duimpRegisteredAt ? (
+          <p>Registro: {formatDateTime(process.duimpRegisteredAt)}</p>
+        ) : null}
+        {isLegacyParameterizedWithoutDate(process) ? (
+          <p>Parametrização: sem data (registro antigo)</p>
+        ) : process?.parameterizedAt ? (
+          <p>Parametrização: {formatDateTime(process.parameterizedAt)}</p>
+        ) : null}
+        {channel ? <p>Canal da parametrização: {channel}</p> : null}
+        {isInspectionChannel && process?.customsInspectionScheduledAt ? (
+          <p>Conferência agendada para: {formatDateTime(process.customsInspectionScheduledAt)}</p>
+        ) : null}
+        {process?.customsRequirement && !isCinza ? (
+          <p>Exigência: {process?.customsRequirementNotes || 'Sim'}</p>
+        ) : null}
+        {isCinza && process?.customsRequirementNotes ? (
+          <p>Procedimento especial: {process.customsRequirementNotes}</p>
+        ) : null}
+        {process?.clearanceCompletedAt ? (
+          <p>Desembaraço concluído em: {formatDateTime(process.clearanceCompletedAt)}</p>
         ) : null}
       </div>
     </div>

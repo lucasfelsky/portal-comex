@@ -701,3 +701,101 @@ describe('F17.3a - chegada com data / CE / free time / presenca', () => {
     expect(payload.cargoPresenceInformedAt).toBe('2026-01-11T08:00')
   })
 })
+
+// F17.3b (D-13): DUIMP completa (numero + datas), canal, conferencia,
+// exigencia e desembaraco (payload FIXO das 6 chaves novas).
+describe('F17.3b - DUIMP completa (payload)', () => {
+  it('(a) FCL com presenca + duimpRegisteredAt -> duimpStatus/processStatus "Aguardando parametrização da DUIMP"', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        duimpStatus: '',
+        parameterizationChannel: '',
+        duimpRegisteredAt: '2026-01-10T10:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpStatus).toBe('Aguardando parametrização da DUIMP')
+    expect(payload.processStatus).toBe('Aguardando parametrização da DUIMP')
+  })
+
+  it('(b) + parameterizedAt + Amarelo -> duimpStatus Parametrizada, processStatus "Aguardando desembaraço"', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        duimpStatus: '',
+        parameterizationChannel: 'Amarelo',
+        duimpRegisteredAt: '2026-01-10T10:00',
+        parameterizedAt: '2026-01-11T10:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpStatus).toBe('Parametrizada')
+    expect(payload.processStatus).toBe('Aguardando desembaraço')
+  })
+
+  it('(c) legado Parametrizada + Verde sem datas -> continua Parametrizada, 6 chaves novas gravadas vazias/false', async () => {
+    await saveProcess(baseMaritimeProcess())
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpStatus).toBe('Parametrizada')
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(payload.parameterizedAt).toBe('')
+    expect(payload.customsInspectionScheduledAt).toBe('')
+    expect(payload.customsRequirement).toBe(false)
+    expect(payload.customsRequirementNotes).toBe('')
+  })
+
+  it('(d) Verde com customsRequirement true + notas -> payload false/vazio (Verde nao pede exigencia)', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        parameterizedAt: '2026-01-11T10:00',
+        customsRequirement: true,
+        customsRequirementNotes: 'nota indevida',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.customsRequirement).toBe(false)
+    expect(payload.customsRequirementNotes).toBe('')
+  })
+
+  it('(e) Cinza com notas -> preservadas (trim)', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        parameterizationChannel: 'Cinza',
+        parameterizedAt: '2026-01-11T10:00',
+        customsRequirementNotes: '  procedimento especial  ',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.customsRequirementNotes).toBe('procedimento especial')
+  })
+
+  it('(f) sem presenca -> as 6 chaves vazias e duimpNumber vazio', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        duimpNumber: 'DU-1',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(payload.parameterizedAt).toBe('')
+    expect(payload.customsInspectionScheduledAt).toBe('')
+    expect(payload.customsRequirement).toBe(false)
+    expect(payload.customsRequirementNotes).toBe('')
+  })
+
+  it('(g) payload SEMPRE contem as 6 chaves novas', async () => {
+    await saveProcess(baseAirProcess())
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload).toHaveProperty('duimpNumber')
+    expect(payload).toHaveProperty('duimpRegisteredAt')
+    expect(payload).toHaveProperty('parameterizedAt')
+    expect(payload).toHaveProperty('customsInspectionScheduledAt')
+    expect(payload).toHaveProperty('customsRequirement')
+    expect(payload).toHaveProperty('customsRequirementNotes')
+  })
+})

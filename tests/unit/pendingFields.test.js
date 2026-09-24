@@ -266,7 +266,10 @@ describe('getPendingFields - regra de estagio futuro nao aparece', () => {
     expect(getPendingFields(process).map((f) => f.field)).toContain('clearanceCompletedAt')
   })
 
-  it('clearanceCompletedAt NAO aparece no canal Verde', () => {
+  // F17.3b (D-6): mudanca intencional (spec, secao Migracao: "Parametrizada
+  // + Verde -> clearanceCompletedAt = null + pendencia") - legado Verde sem
+  // data de desembaraco, ainda nao recebido, passa a pedir a data real.
+  it('clearanceCompletedAt aparece no Verde legado sem data enquanto nao recebido (spec Migracao)', () => {
     const process = completeMaritimeProcess({
       berthed: true,
       cargoPresenceInformed: true,
@@ -274,7 +277,103 @@ describe('getPendingFields - regra de estagio futuro nao aparece', () => {
       parameterizationChannel: 'Verde',
       clearanceCompletedAt: '',
     })
+    expect(getPendingFields(process).map((f) => f.field)).toContain('clearanceCompletedAt')
+  })
+
+  it('clearanceCompletedAt NAO aparece no Verde apos Carga recebida', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      clearanceCompletedAt: '',
+      collectionStatus: 'Carga recebida',
+    })
     expect(getPendingFields(process).map((f) => f.field)).not.toContain('clearanceCompletedAt')
+  })
+})
+
+// F17.3b (D-6): DUIMP completa - numero, datas de registro/parametrizacao
+// (legado sem data), canal, conferencia (Amarelo/Vermelho) e procedimento
+// especial (Cinza).
+describe('getPendingFields - DUIMP completa (F17.3b)', () => {
+  it('duimpNumber aparece com sinal de registro e falta o texto', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpRegisteredAt: '2026-09-20T10:00',
+      duimpNumber: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('duimpNumber')
+  })
+
+  it('legado Parametrizada sem datas e nao recebido -> duimpRegisteredAt + parameterizedAt', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      clearanceCompletedAt: '2026-09-22T10:00',
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('duimpRegisteredAt')
+    expect(ids).toContain('parameterizedAt')
+  })
+
+  it('legado Parametrizada sem datas, mas recebido -> nenhuma das duas', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      collectionStatus: 'Carga recebida',
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('duimpRegisteredAt')
+    expect(ids).not.toContain('parameterizedAt')
+  })
+
+  it('parameterizationChannel aparece com sinal de parametrizacao sem canal', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('parameterizationChannel')
+  })
+
+  it('Vermelho sem conferencia -> customsInspectionScheduledAt', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Vermelho',
+      customsInspectionScheduledAt: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('customsInspectionScheduledAt')
+  })
+
+  it('Cinza sem notas -> customsRequirementNotes', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Cinza',
+      customsRequirementNotes: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('customsRequirementNotes')
+  })
+
+  it('canal Amarelo NAO pede customsRequirementNotes (so' + " Cinza)", () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Amarelo',
+      customsInspectionScheduledAt: '2026-09-21T10:00',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('customsRequirementNotes')
   })
 })
 

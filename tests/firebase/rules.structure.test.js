@@ -266,4 +266,22 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/migratedApproxFields\.size\(\)\s*<=\s*10/)
     })
   })
+
+  describe('F17.3b — DUIMP completa/conferencia/exigencia (D-9)', () => {
+    it('isAdminProcessFields contem as 6 chaves novas', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const newFields = [
+        'duimpNumber', 'duimpRegisteredAt', 'parameterizedAt',
+        'customsInspectionScheduledAt', 'customsRequirement',
+        'customsRequirementNotes',
+      ]
+      for (const field of newFields) {
+        expect(body, `campo ${field} nao esta em isAdminProcessFields`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+    })
+  })
 })

@@ -20,7 +20,6 @@ import {
   collectionStatusOptions,
   deleteProcess,
   dtaStatusOptions,
-  duimpStatusOptions,
   listProcesses,
   processCategoryOptions,
   saveProcessCollectionStatus,
@@ -49,8 +48,12 @@ import { isCollectionReleased } from '../features/processes/deriveProcessStatus'
 import { getPendingFields } from '../features/processes/pendingFields'
 import {
   applyArrivalDateEdit,
+  applyCustomsEdit,
+  EMPTY_CUSTOMS_CLEARANCE_FIELDS,
   hasArrivalSignal,
   hasCargoPresenceSignal,
+  hasParameterizationSignal,
+  sanitizeCustomsClearanceFields,
 } from '../features/processes/arrivalCustoms'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
@@ -101,6 +104,13 @@ const emptyDraft = () => ({
   duimpStatus: '',
   parameterizationChannel: '',
   clearanceCompletedAt: '',
+  // F17.3b (D-12): DUIMP completa (numero + datas), conferencia, exigencia.
+  duimpNumber: '',
+  duimpRegisteredAt: '',
+  parameterizedAt: '',
+  customsInspectionScheduledAt: '',
+  customsRequirement: false,
+  customsRequirementNotes: '',
   collectionStatus: '',
   collectionWindows: [],
   collectionScheduledAt: '',
@@ -318,37 +328,32 @@ function sanitizeCustoms(draft, incomingWindows = null) {
     return {
       ...draft,
       cargoPresenceInformedAt: '',
-      duimpStatus: '',
-      parameterizationChannel: '',
-      clearanceCompletedAt: '',
+      ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
       collectionStatus: '',
       collectionWindows: [],
       collectionScheduledAt: '',
     }
   }
-  if (draft.duimpStatus !== 'Parametrizada') {
-    return {
-      ...draft,
-      parameterizationChannel: '',
-      clearanceCompletedAt: '',
-      collectionStatus: '',
-      collectionWindows: [],
-      collectionScheduledAt: '',
-    }
+  // F17.3b (D-12): DUIMP completa (numero + datas), canal, conferencia,
+  // exigencia e desembaraco (pre-preenchido no Verde) derivados a partir das
+  // datas/legado (`sanitizeCustomsClearanceFields`).
+  const next = { ...draft, ...sanitizeCustomsClearanceFields(draft, { trimText: false }) }
+  if (!hasParameterizationSignal(next)) {
+    return { ...next, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
   // F17.2b (D-4/D-5): gate unico - desembaraco concluido (AD-1) E todas as
   // anuencias (`licenses[]`, com compat MAPA) deferidas. Bloqueia tambem o
   // AEREO (mudanca intencional do spec D5).
-  if (!isCollectionReleased(draft)) {
-    return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
+  if (!isCollectionReleased(next)) {
+    return { ...next, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
-  if (!keepsCollectionSchedule(draft.collectionStatus)) {
-    return { ...draft, collectionWindows: [], collectionScheduledAt: '' }
+  if (!keepsCollectionSchedule(next.collectionStatus)) {
+    return { ...next, collectionWindows: [], collectionScheduledAt: '' }
   }
   if (incomingWindows !== null) {
-    return { ...draft, collectionWindows: incomingWindows }
+    return { ...next, collectionWindows: incomingWindows }
   }
-  return draft
+  return next
 }
 
 function sanitizeDraft(currentDraft, overrides = {}) {
@@ -382,9 +387,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         ...next,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        duimpStatus: '',
-        parameterizationChannel: '',
-        clearanceCompletedAt: '',
+        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -403,9 +406,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         dtaArrivalAtItajai: '',
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        duimpStatus: '',
-        parameterizationChannel: '',
-        clearanceCompletedAt: '',
+        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -433,9 +434,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     dtaArrivalAtItajai: '',
     cargoPresenceInformed: false,
     cargoPresenceInformedAt: '',
-    duimpStatus: '',
-    parameterizationChannel: '',
-    clearanceCompletedAt: '',
+    ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
     collectionStatus: '',
     collectionWindows: [],
     collectionScheduledAt: '',
@@ -845,13 +844,19 @@ export default function ProcessesPage() {
       if (['berthedAt', 'arrivedAt', 'cargoPresenceInformedAt'].includes(field)) {
         return sanitizeDraft(applyArrivalDateEdit(current, field, value))
       }
+      // F17.3b (D-12): editar registro/parametrizacao/canal passa por
+      // `applyCustomsEdit` (recalcula `duimpStatus` pelas datas e
+      // pre-preenche o desembaraco no Verde) antes da cascata.
+      if (['duimpRegisteredAt', 'parameterizedAt', 'parameterizationChannel'].includes(field)) {
+        return sanitizeDraft(applyCustomsEdit(current, field, value))
+      }
       if (
         [
           'berthed',
           'arrived',
           'cargoPresenceInformed',
           'duimpStatus',
-          'parameterizationChannel',
+          'customsRequirement',
           'collectionStatus',
           'collectionScheduledAt',
           'licenses',
@@ -1481,7 +1486,6 @@ export default function ProcessesPage() {
           channelOptions={channelOptions}
           collectionStatusOptions={collectionStatusOptions}
           dtaStatusOptions={dtaStatusOptions}
-          duimpStatusOptions={duimpStatusOptions}
           processCategoryOptions={processCategoryOptions}
           onDraftChange={handleDraftChange}
           onSetViewModeList={() => setViewMode('list')}

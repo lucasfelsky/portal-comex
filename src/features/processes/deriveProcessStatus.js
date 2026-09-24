@@ -46,13 +46,14 @@ function isDuimpRegisteredWaitingParam(process) {
   )
 }
 
-// AD-1: desembaraco concluido. `clearanceCompletedAt` preenchido OU,
-// enquanto nao existir, duimp parametrizada + canal Verde (comportamento
-// legado). Exportada para reuso no gate de coleta (sanitize/form/filtro).
+// AD-1/F17.3b (D-3): desembaraco concluido. `clearanceCompletedAt`
+// preenchido OU, enquanto nao existir, `parameterizedAt` (data nova) OU
+// duimp parametrizada (legado) + canal Verde. Exportada para reuso no gate
+// de coleta (sanitize/form/filtro).
 export function isCustomsCleared(process) {
   if (hasValue(process?.clearanceCompletedAt)) return true
   return (
-    isDuimpParametrizada(process) &&
+    (hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)) &&
     normalizeComparableText(process?.parameterizationChannel).trim() === 'verde'
   )
 }

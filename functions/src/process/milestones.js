@@ -1,15 +1,18 @@
-// F17.1b/F17.2b: regras puras de marcos operacionais (historico de eventos).
+// F17.1b/F17.2b/F17.3b: regras puras de marcos operacionais (historico de
+// eventos).
 //
 // Este arquivo continua proibido de importar `../core/shared.js` (carrega
 // `defineSecret`/`nodemailer` no load) - fica puro e testavel no Node sem
 // mocks. Importa `../core/licenses.js` (tambem puro, D-8). Espelha (sem
-// importar) trechos de `src/features/processes/deriveProcessStatus.js` e
-// `src/features/processes/processStatus.js` porque `functions/` nao pode
-// importar de `src/` (o deploy empacota so `functions/`). O teste de
+// importar) trechos de `src/features/processes/deriveProcessStatus.js`,
+// `src/features/processes/processStatus.js` e
+// `src/features/processes/arrivalCustoms.js` (F17.3b D-7) porque `functions/`
+// nao pode importar de `src/` (o deploy empacota so `functions/`). O teste de
 // paridade (`tests/unit/processMilestones.test.js`) compara os dois lados.
 //
-// Ver PLAN.md secoes D-4 a D-6 (F17.1b) e D-8 (F17.2b, `licenseDeferred`
-// multi-orgao) para a tabela de regras e o formato do documento gravado.
+// Ver PLAN.md secoes D-4 a D-6 (F17.1b), D-8 (F17.2b, `licenseDeferred`
+// multi-orgao) e D-3/D-7 (F17.3b, DUIMP completa com marcos de data real)
+// para a tabela de regras e o formato do documento gravado.
 
 import { getComparableLicensesMirror, isLicenseDeferredMirror } from '../core/licenses.js'
 
@@ -68,11 +71,26 @@ function isDuimpRegisteredOrParametrized(duimpStatus) {
   )
 }
 
-// Espelho de `isCustomsCleared` (deriveProcessStatus.js:50-56, AD-1).
+// F17.3b (D-7): espelhos de `hasDuimpRegistrationSignal`/
+// `hasParameterizationSignal` (`src/features/processes/arrivalCustoms.js`) -
+// sem importar de `src/`. Teste de paridade no passo 8.
+export function hasDuimpRegistrationSignalMirror(process) {
+  return (
+    hasValue(process?.duimpRegisteredAt) ||
+    hasValue(process?.parameterizedAt) ||
+    isDuimpRegisteredOrParametrized(process?.duimpStatus)
+  )
+}
+
+export function hasParameterizationSignalMirror(process) {
+  return hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)
+}
+
+// Espelho de `isCustomsCleared` (deriveProcessStatus.js:50-56, AD-1/F17.3b D-3).
 export function isCustomsClearedMirror(process) {
   if (hasValue(process?.clearanceCompletedAt)) return true
   return (
-    isDuimpParametrizada(process) &&
+    (hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)) &&
     normalizeComparable(process?.parameterizationChannel) === 'verde'
   )
 }
@@ -223,27 +241,39 @@ export const MILESTONE_RULES = [
       return { value: dateValue ?? true, previousValue: false, occurredAtField: dateValue }
     },
   },
+  // F17.3b (D-7): dispara na transicao sinal-antes `false` -> sinal-depois
+  // `true` (data OU legado, `hasDuimpRegistrationSignalMirror`). `value`
+  // prefere o numero da DUIMP (novo); `previousValue` mantem `duimpStatus`
+  // (asserts existentes de `tests/unit/processMilestones.test.js`).
   {
     type: 'duimpRegistered',
-    field: 'duimpStatus',
+    field: 'duimpRegisteredAt',
     detect(before, after) {
-      if (isDuimpRegisteredOrParametrized(before?.duimpStatus)) return null
-      if (!isDuimpRegisteredOrParametrized(after?.duimpStatus)) return null
-      return { value: after?.duimpStatus ?? '', previousValue: before?.duimpStatus ?? '' }
+      if (hasDuimpRegistrationSignalMirror(before)) return null
+      if (!hasDuimpRegistrationSignalMirror(after)) return null
+      return {
+        value: after?.duimpNumber || after?.duimpStatus || '',
+        previousValue: before?.duimpStatus ?? '',
+        occurredAtField: hasValue(after?.duimpRegisteredAt) ? after.duimpRegisteredAt : null,
+      }
     },
   },
+  // F17.3b (D-7): `hasParameterizationSignalMirror` (data OU legado) +
+  // canal preenchido - legado ja parametrizado+canal salvo com as datas
+  // novas NAO gera evento duplicado.
   {
     type: 'parameterized',
-    field: 'parameterizationChannel',
+    field: 'parameterizedAt',
     detect(before, after) {
       const wasParametrized =
-        isDuimpParametrizada(before) && hasValue(before?.parameterizationChannel)
+        hasParameterizationSignalMirror(before) && hasValue(before?.parameterizationChannel)
       const isParametrized =
-        isDuimpParametrizada(after) && hasValue(after?.parameterizationChannel)
+        hasParameterizationSignalMirror(after) && hasValue(after?.parameterizationChannel)
       if (wasParametrized || !isParametrized) return null
       return {
         value: after?.parameterizationChannel ?? '',
         previousValue: before?.parameterizationChannel ?? '',
+        occurredAtField: hasValue(after?.parameterizedAt) ? after.parameterizedAt : null,
       }
     },
   },

@@ -28,11 +28,13 @@ import {
 } from '../features/processes/deriveProcessStatus'
 import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
 import {
+  EMPTY_CUSTOMS_CLEARANCE_FIELDS,
   hasArrivalSignal,
   hasCargoPresenceSignal,
   normalizeDateTimeLocal,
   normalizeMigratedApproxFields,
   sanitizeArrivalFields,
+  sanitizeCustomsClearanceFields,
 } from '../features/processes/arrivalCustoms'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
 import {
@@ -139,40 +141,11 @@ function normalizeIsoDate(value) {
   return date.toISOString().slice(0, 10)
 }
 
-function normalizeComparableText(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-}
-
 function normalizeProcessStatus(status, duimpStatus = '') {
   const canonicalStatus = canonicalizeProcessStatus(status, duimpStatus)
   return processStatusOptions.includes(canonicalStatus)
     ? canonicalStatus
     : processStatusOptions[0]
-}
-
-function canonicalizeDuimpStatus(status) {
-  const normalizedStatus = normalizeComparableText(status)
-
-  if (!normalizedStatus) return ''
-  if (
-    normalizedStatus === 'aguardando registro' ||
-    normalizedStatus === 'aguardando registro da duimp'
-  ) {
-    return 'Aguardando registro da DUIMP'
-  }
-  if (
-    normalizedStatus === 'registrada, aguardando parametrizacao' ||
-    normalizedStatus === 'aguardando parametrizacao da duimp'
-  ) {
-    return 'Aguardando parametrização da DUIMP'
-  }
-  if (normalizedStatus === 'parametrizada') return 'Parametrizada'
-
-  return ''
 }
 
 const processSeed = [
@@ -351,18 +324,17 @@ function sanitizeCustomsFlow(process) {
   const cargoPresenceInformedAt = cargoPresenceInformed
     ? normalizeDateTimeLocal(process.cargoPresenceInformedAt)
     : ''
-  const duimpStatus = cargoPresenceInformed ? canonicalizeDuimpStatus(process.duimpStatus) : ''
-  const parameterizationChannel =
-    duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
-  // AD-1: campo antecipado do F17.3, mesmo padrao de `mapaInspectionScheduledAt`
-  // (datetime-local, sem normalizacao ISO). So relevante com duimp parametrizada.
-  const clearanceCompletedAt =
-    duimpStatus === 'Parametrizada' ? process.clearanceCompletedAt ?? '' : ''
+  // F17.3b (D-13): DUIMP completa (numero + datas), canal, conferencia,
+  // exigencia e desembaraco (pre-preenchido no draft, D-4) - tudo derivado
+  // por `sanitizeCustomsClearanceFields`.
+  const customs = sanitizeCustomsClearanceFields({
+    ...process,
+    cargoPresenceInformed,
+    cargoPresenceInformedAt,
+  })
   const released = isCollectionReleased({
     category: process.category,
-    duimpStatus,
-    parameterizationChannel,
-    clearanceCompletedAt,
+    ...customs,
     licenses: process.licenses,
   })
   const canonicalizedCollectionStatus = canonicalizeCollectionStatus(process.collectionStatus ?? '')
@@ -375,9 +347,7 @@ function sanitizeCustomsFlow(process) {
   return {
     cargoPresenceInformed,
     cargoPresenceInformedAt,
-    duimpStatus,
-    parameterizationChannel,
-    clearanceCompletedAt,
+    ...customs,
     collectionStatus: normalizedCollectionStatus,
     collectionWindows,
     collectionScheduledAt,
@@ -445,9 +415,7 @@ function sanitizeOperationalFields(process) {
         arrived: false,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        duimpStatus: '',
-        parameterizationChannel: '',
-        clearanceCompletedAt: '',
+        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -488,9 +456,7 @@ function sanitizeOperationalFields(process) {
         arrived: false,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        duimpStatus: '',
-        parameterizationChannel: '',
-        clearanceCompletedAt: '',
+        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -519,9 +485,7 @@ function sanitizeOperationalFields(process) {
     arrived: false,
     cargoPresenceInformed: false,
     cargoPresenceInformedAt: '',
-    duimpStatus: '',
-    parameterizationChannel: '',
-    clearanceCompletedAt: '',
+    ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
     collectionStatus: '',
     collectionWindows: [],
     collectionScheduledAt: '',
@@ -558,6 +522,13 @@ function normalizeProcess(rawProcess, fallbackId) {
     duimpStatus: rawProcess.duimpStatus,
     parameterizationChannel: rawProcess.parameterizationChannel,
     clearanceCompletedAt: rawProcess.clearanceCompletedAt,
+    // F17.3b (D-13): DUIMP completa (numero + datas), conferencia, exigencia.
+    duimpNumber: rawProcess.duimpNumber,
+    duimpRegisteredAt: rawProcess.duimpRegisteredAt,
+    parameterizedAt: rawProcess.parameterizedAt,
+    customsInspectionScheduledAt: rawProcess.customsInspectionScheduledAt,
+    customsRequirement: rawProcess.customsRequirement,
+    customsRequirementNotes: rawProcess.customsRequirementNotes,
     collectionStatus: rawProcess.collectionStatus,
     collectionScheduledAt: rawProcess.collectionScheduledAt,
     collectionWindows: rawProcess.collectionWindows,
@@ -792,6 +763,14 @@ function toFirestorePayload(process) {
     duimpStatus: String(process.duimpStatus ?? ''),
     parameterizationChannel: String(process.parameterizationChannel ?? ''),
     clearanceCompletedAt: String(process.clearanceCompletedAt ?? ''),
+    // F17.3b (D-13): payload FIXO das 6 chaves novas - por isso a allowlist
+    // (D-9).
+    duimpNumber: String(process.duimpNumber ?? '').trim(),
+    duimpRegisteredAt: normalizeDateTimeLocal(process.duimpRegisteredAt),
+    parameterizedAt: normalizeDateTimeLocal(process.parameterizedAt),
+    customsInspectionScheduledAt: normalizeDateTimeLocal(process.customsInspectionScheduledAt),
+    customsRequirement: Boolean(process.customsRequirement),
+    customsRequirementNotes: String(process.customsRequirementNotes ?? '').trim(),
     collectionStatus: String(process.collectionStatus ?? ''),
     collectionScheduledAt: String(process.collectionScheduledAt ?? ''),
     collectionWindows: serializeCollectionWindowsForFirestore(
