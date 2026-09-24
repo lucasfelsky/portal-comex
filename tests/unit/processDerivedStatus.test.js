@@ -124,3 +124,29 @@ describe('getProcessDerivedStatus - novo status Aguardando desembaraço (F17.1a)
     expect(result.phase).toBe(DERIVED_STATUS_PHASES.NO_PORTO)
   })
 })
+
+// F17.4a (D-6): valor novo + os 2 legados fundidos caem na mesma fase
+// POS_RECEBIMENTO (via isCdUnloadingOrReceivedStatus, D-1).
+describe('getProcessDerivedStatus - collectionStatus fundido (F17.4a)', () => {
+  it('collectionStatus "Carga recebida, em conferência" cai na fase POS_RECEBIMENTO', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-07-09',
+      category: 'FCL',
+      berthed: true,
+      collectionStatus: 'Carga recebida, em conferência',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+  })
+
+  it('collectionStatus legado "Carga em Conferência/Etiquetagem" tambem cai na fase POS_RECEBIMENTO', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-07-09',
+      category: 'FCL',
+      berthed: true,
+      collectionStatus: 'Carga em Conferência/Etiquetagem',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+  })
+})

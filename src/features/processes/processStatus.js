@@ -18,7 +18,7 @@ export const processStatusOptions = [
 ]
 
 export const postCollectionStatusOptions = [
-  'Carga em Conferência/Etiquetagem',
+  'Carga recebida, em conferência',
   'Carga em processo de Entrada',
   'Carga disponível em estoque',
 ]
@@ -117,12 +117,12 @@ export function getDisplayedProcessStatus(status, category) {
 }
 
 const COLLECTION_STATUS_DISPLAY_LABELS = {
-  'Carga em Conferência/Etiquetagem': 'Carga em conferência/etiquetagem',
   'Carga em processo de Entrada': 'Carga em processo de entrada',
 }
 
 export function getDisplayedCollectionStatus(status) {
-  const normalizedStatus = normalizeComparableText(status)
+  const canonicalStatus = canonicalizeCollectionStatus(status)
+  const normalizedStatus = normalizeComparableText(canonicalStatus)
 
   if (
     normalizedStatus === 'veiculo no cd para descarga' ||
@@ -132,9 +132,11 @@ export function getDisplayedCollectionStatus(status) {
   }
 
   if (normalizedStatus === 'carga a caminho do cd') return CD_EN_ROUTE_STATUS
-  if (normalizedStatus === 'carga recebida') return 'Carga recebida'
+  if (normalizedStatus === 'carga recebida, em conferencia') {
+    return 'Carga recebida, em conferência'
+  }
 
-  const trimmed = String(status ?? '').trim()
+  const trimmed = String(canonicalStatus ?? '').trim()
   return COLLECTION_STATUS_DISPLAY_LABELS[trimmed] || trimmed
 }
 
@@ -169,8 +171,18 @@ export function isProcessTrulyFinalized(process) {
 // `isCollectionScheduledOrBeyondStatus`): qualquer outro valor passa
 // inalterado.
 export function canonicalizeCollectionStatus(status) {
-  if (normalizeComparableText(status).trim() === 'aguardando agendamento') {
+  const normalizedStatus = normalizeComparableText(status).trim()
+  if (normalizedStatus === 'aguardando agendamento') {
     return 'Aguardando agendamento de coleta'
+  }
+  // F17.4a: fusao de 'Carga recebida' + 'Carga em Conferência/Etiquetagem'
+  // em 'Carga recebida, em conferência' (A5). Alias de leitura dos 2
+  // valores legados - nao introduz allowlist positiva.
+  if (
+    normalizedStatus === 'carga recebida' ||
+    normalizedStatus === 'carga em conferencia/etiquetagem'
+  ) {
+    return 'Carga recebida, em conferência'
   }
   return String(status ?? '')
 }
@@ -236,7 +248,7 @@ export function getUnscheduledItemLabel(process) {
   // diz "Carga a caminho do CD" e o notes dizia
   // "Coleta ainda nao agendada". Aqui corrigimos
   // olhando tambem a `collectionWindows`.
-  const normalized = normalizeComparableText(process?.collectionStatus)
+  const normalized = normalizeComparableText(canonicalizeCollectionStatus(process?.collectionStatus))
 
   // Sinais de "em rota" — espelham isCdEnRouteStatus +
   // getProcessDerivedStatus fase EM_ROTA (janela passada).
@@ -259,6 +271,7 @@ export function getUnscheduledItemLabel(process) {
   // descarga, recebida, em entrada.
   if (
     normalized === 'carga em conferencia/etiquetagem' ||
+    normalized === 'carga recebida, em conferencia' ||
     normalized === 'carga em processo de entrada' ||
     normalized === 'carga sendo descarregada no cd' ||
     normalized === 'carga recebida'
@@ -283,6 +296,7 @@ export function isCdUnloadingOrReceivedStatus(status) {
   return (
     normalizedStatus === 'veiculo no cd para descarga' ||
     normalizedStatus === 'carga em conferencia/etiquetagem' ||
+    normalizedStatus === 'carga recebida, em conferencia' ||
     normalizedStatus === 'carga em processo de entrada' ||
     normalizedStatus === 'carga disponivel em estoque' ||
     normalizedStatus === 'carga sendo descarregada no cd' ||
@@ -291,7 +305,7 @@ export function isCdUnloadingOrReceivedStatus(status) {
 }
 
 export function isPostCollectionStatus(status) {
-  const normalizedStatus = normalizeComparableText(status)
+  const normalizedStatus = normalizeComparableText(canonicalizeCollectionStatus(status))
 
   return postCollectionStatusOptions.some(
     (item) => normalizeComparableText(item) === normalizedStatus

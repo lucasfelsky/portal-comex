@@ -97,6 +97,11 @@ service cloud.firestore {
         // legado via API (o app so canonicaliza 'Aguardando agendamento'
         // pra 'Aguardando agendamento de coleta' na LEITURA).
         'Aguardando agendamento',
+        // F17.4a (D-3): 'Aguardando liberação no Terminal' saiu da lista do
+        // app (semanticamente morto - so aparecia apos o desembaraco, onde
+        // ja nao faz sentido); entra aqui como pre-coleta pra logistica nao
+        // conseguir gravar via API.
+        'Aguardando liberação no Terminal',
       ];
     }
 

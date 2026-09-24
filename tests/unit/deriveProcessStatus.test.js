@@ -46,6 +46,20 @@ describe('deriveProcessStatus - linha 1 (Carga recebida)', () => {
       )
     ).toBe('Carga recebida')
   })
+
+  // F17.4a (A5): valor novo + os 2 legados fundidos derivam "Carga
+  // recebida" igual (ver D-6 do PLAN.md).
+  it('F17.4a - collectionStatus novo e os 2 legados derivam "Carga recebida"', () => {
+    expect(
+      deriveProcessStatus(baseMaritime({ collectionStatus: 'Carga recebida, em conferência' }))
+    ).toBe('Carga recebida')
+    expect(deriveProcessStatus(baseMaritime({ collectionStatus: 'Carga recebida' }))).toBe(
+      'Carga recebida'
+    )
+    expect(
+      deriveProcessStatus(baseMaritime({ collectionStatus: 'Carga em Conferência/Etiquetagem' }))
+    ).toBe('Carga recebida')
+  })
 })
 
 describe('deriveProcessStatus - linha 2 (Coleta Agendada)', () => {

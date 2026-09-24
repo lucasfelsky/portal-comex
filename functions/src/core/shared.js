@@ -8,6 +8,10 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import { getComparableLicensesMirror } from './licenses.js';
+import {
+  canonicalizeCollectionStatusMirror,
+  getDisplayedCollectionStatusMirror,
+} from './collectionStatus.js';
 
 const EMAIL_NOTIFICATION_TYPES = new Set([
   'process_question_created',
@@ -226,6 +230,11 @@ function buildPostReceiptNotesNotificationBody(processLabel, actorName) {
   return `${actorName} registrou observações pós-recebimento da carga em ${processLabel}.`
 }
 
+// F17.4a (D-8): notificacao quando a LOGISTICA muda o `collectionStatus`.
+function buildCollectionStatusNotificationBody(processLabel, actorName, statusLabel) {
+  return `${actorName} atualizou o status de coleta de ${processLabel} para ${statusLabel}.`
+}
+
 function buildFavoriteProcessUpdatedTitle(processLabel) {
   return `Processo atualizado: ${processLabel}`
 }
@@ -349,7 +358,10 @@ function sanitizeProcessForComparison(process) {
     customsInspectionScheduledAt: normalizeString(process.customsInspectionScheduledAt),
     customsRequirement: Boolean(process.customsRequirement),
     customsRequirementNotes: normalizeString(process.customsRequirementNotes),
-    collectionStatus: normalizeString(process.collectionStatus),
+    // F17.4a (D-7): canonicaliza pelo mirror - legado `Carga recebida`/`Carga
+    // em Conferência/Etiquetagem` x 1o save com o valor novo (`Carga
+    // recebida, em conferência`) NAO gera `favorite_process_updated` espurio.
+    collectionStatus: canonicalizeCollectionStatusMirror(process.collectionStatus),
     collectionScheduledAt: normalizeString(process.collectionScheduledAt),
     collectionWindows: Array.isArray(process.collectionWindows)
       ? process.collectionWindows.map((window) => ({
@@ -708,6 +720,6 @@ export {
   EMAIL_NOTIFICATION_TYPES, ALLOWED_ROLES, ALLOWED_STATUSES, RESTRICTED_PROCESS_CATEGORIES, ROLE_PERMISSIONS_MAP, BRAND_COLORS,
   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL, MOJIBAKE_PATTERN, MOJIBAKE_GLOBAL_PATTERN,
   normalizeString, normalizeEmail, normalizeList, normalizeTimestamp, isCorporateEmail, isActiveStatus, countMojibakeMarkers, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName,
-  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildFavoriteProcessUpdatedTitle, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
+  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
   getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, recordAuditEvent, assertActiveAdmin, assertApprovedCaller, prefCategoryForType, shouldNotify, createNotifications, sendPushForEntries, deleteNotificationsForRecipient
 };

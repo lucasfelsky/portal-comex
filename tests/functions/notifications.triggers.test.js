@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status'],
       },
     }
     await Promise.all(
@@ -209,6 +209,38 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
       postReceipt.forEach((doc) => {
         expect(doc.title).toBe('Observações pós-recebimento atualizadas')
         expect(doc.actorUserId).toBe('log-1')
+      })
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  it(
+    'F17.4a (D-8) - logistica muda collectionStatus notifica admins + favoritos (collection_status_updated)',
+    async () => {
+      const processId = 'proc-collection-status'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Coleta',
+        processNumber: 'PO-1005',
+        category: 'FCL',
+        collectionStatus: 'Coleta Agendada',
+      })
+
+      await processRef.update({
+        collectionStatus: 'Carga a caminho do CD',
+        updatedById: 'log-1',
+        updatedByName: 'Logistica Um',
+      })
+
+      const docs = await waitForNotifications(processId, 2)
+      const statusUpdated = docs.filter((doc) => doc.type === 'collection_status_updated')
+      const recipients = statusUpdated.map((doc) => doc.recipientUserId).sort()
+
+      expect(recipients).toEqual(['admin-1', 'fav-1'])
+      statusUpdated.forEach((doc) => {
+        expect(doc.title).toBe('Status de coleta atualizado')
+        expect(doc.actorUserId).toBe('log-1')
+        expect(doc.body).toContain('Carga a caminho do CD')
       })
     },
     TRIGGER_TIMEOUT_MS

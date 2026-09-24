@@ -251,4 +251,15 @@ describe('getEstimatedDeliveryDate — override manual x "coleta agendada em dia
       '2026-08-20'
     )
   })
+
+  // F17.4a (A5): valor novo fundido tambem ignora o override manual.
+  it('IGNORA o override em "Carga recebida, em conferência"', () => {
+    const process = {
+      ...NAVEGANTES_SCHEDULED,
+      collectionStatus: 'Carga recebida, em conferência',
+    }
+    expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).not.toBe(
+      '2026-08-20'
+    )
+  })
 })

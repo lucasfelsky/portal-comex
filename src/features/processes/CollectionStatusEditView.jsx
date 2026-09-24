@@ -60,10 +60,14 @@ export default function CollectionStatusEditView({
           >
             <option value="">Selecione o status</option>
             <optgroup label="Em rota">
-              <option value={CD_EN_ROUTE_STATUS}>{getDisplayedCollectionStatus(CD_EN_ROUTE_STATUS)}</option>
+              {[CD_EN_ROUTE_STATUS, 'Veículo no CD para descarga'].map((item) => (
+                <option key={item} value={item}>
+                  {getDisplayedCollectionStatus(item)}
+                </option>
+              ))}
             </optgroup>
-            <optgroup label="Pós-recebimento">
-              {[...postCollectionStatusOptions, 'Veículo no CD para descarga', 'Carga recebida'].map((item) => (
+            <optgroup label="Recebimento">
+              {postCollectionStatusOptions.map((item) => (
                 <option key={item} value={item}>
                   {getDisplayedCollectionStatus(item)}
                 </option>

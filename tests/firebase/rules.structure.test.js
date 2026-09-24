@@ -157,6 +157,14 @@ describe('firestore.rules structure', () => {
       expect(match[1]).toMatch(/['"]Aguardando agendamento['"]/)
     })
 
+    // F17.4a (D-3): 'Aguardando liberação no Terminal' saiu da lista do app
+    // e entrou como pre-coleta na rule.
+    it('isPreCollectionStatus contem "Aguardando liberação no Terminal" (F17.4a)', () => {
+      const match = rules.match(/function\s+isPreCollectionStatus\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/['"]Aguardando liberação no Terminal['"]/)
+    })
+
     it('isLogisticsCollectionStatusUpdate usa hasOnly com processStatus/cargoReceivedAt e allowlist de valor', () => {
       const match = rules.match(
         /function\s+isLogisticsCollectionStatusUpdate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/
