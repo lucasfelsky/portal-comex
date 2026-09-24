@@ -43,6 +43,16 @@ function makeProcess(overrides = {}) {
     dtaStatus: '',
     dtaLoadingScheduledAt: '',
     dtaArrivalAtItajai: '',
+    // F17.3a (D-1): chegada com data, CE/terminal, free time, presenca.
+    berthedAt: '',
+    arrivedAt: '',
+    cargoPresenceInformedAt: '',
+    ceMercante: '',
+    ceHouse: '',
+    terminalName: '',
+    freeTimeDays: null,
+    demurrageDailyRateUsd: null,
+    migratedApproxFields: [],
     ...overrides,
   }
 }
@@ -223,6 +233,90 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
       selectedProcess: makeProcess({ category: 'CONSOLIDADO', supplierName: 'Fornecedor Delta' }),
     })
     expect(screen.getByText('Fornecedor: Fornecedor Delta')).toBeInTheDocument()
+  })
+})
+
+// F17.3a (D-12): card "Chegada" + card "Free time".
+describe('ProcessDetailView — card "Chegada" (F17.3a)', () => {
+  it('atracação com data aproximada mostra "(aprox.)"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '2026-09-20T10:00',
+        migratedApproxFields: ['berthedAt'],
+      }),
+    })
+    expect(screen.getByText(/Atracação:/)).toBeInTheDocument()
+    expect(screen.getByText(/\(aprox\.\)/)).toBeInTheDocument()
+  })
+
+  it('legado berthed sem data mostra "Confirmada (sem data)"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ category: 'FCL', berthed: true, berthedAt: '' }),
+    })
+    expect(screen.getByText(/Confirmada \(sem data\)/)).toBeInTheDocument()
+  })
+
+  it('sem sinal de chegada nao renderiza o card "Chegada"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ category: 'FCL' }),
+    })
+    // "Chegada" tambem aparece como rotulo da timeline (F16.5) - filtra so
+    // o card (`span.detail-label`).
+    expect(screen.queryByText('Chegada', { selector: 'span.detail-label' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — card "Free time" (F17.3a)', () => {
+  it('waiting-presence mostra "inicia na presença de carga"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '2026-09-20T10:00',
+        freeTimeDays: 7,
+      }),
+    })
+    expect(screen.getByText(/inicia na presença de carga/)).toBeInTheDocument()
+  })
+
+  it('prazo vencido mostra badge de aviso (datas relativas a hoje)', () => {
+    const today = new Date()
+    const presenceDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 10)
+    const presenceIso = `${presenceDate.getFullYear()}-${String(presenceDate.getMonth() + 1).padStart(2, '0')}-${String(presenceDate.getDate()).padStart(2, '0')}T10:00`
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '2026-09-20T10:00',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: presenceIso,
+        freeTimeDays: 5,
+      }),
+    })
+    expect(screen.getByText(/vencido há/)).toBeInTheDocument()
+  })
+
+  it('freeTimeDays nao informado (null) nao renderiza o card', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ category: 'FCL', freeTimeDays: null }),
+    })
+    expect(screen.queryByText('Free time')).not.toBeInTheDocument()
+  })
+
+  it('LCL nunca renderiza o card Free time', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ category: 'LCL', freeTimeDays: 5 }),
+    })
+    expect(screen.queryByText('Free time')).not.toBeInTheDocument()
   })
 })
 

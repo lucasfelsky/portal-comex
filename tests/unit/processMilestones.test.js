@@ -10,8 +10,14 @@ import {
   toIsoOccurredAt,
   isCustomsClearedMirror,
   isMapaReleasedMirror,
+  hasArrivalSignalMirror,
+  hasCargoPresenceSignalMirror,
 } from '../../functions/src/process/milestones.js'
 import { isCustomsCleared } from '../../src/features/processes/deriveProcessStatus.js'
+import {
+  hasArrivalSignal,
+  hasCargoPresenceSignal,
+} from '../../src/features/processes/arrivalCustoms.js'
 import { mapaAllowsCollectionStatus } from '../../src/features/processes/processStatus.js'
 import {
   isLicenseDeferredMirror,
@@ -193,6 +199,38 @@ describe('buildMilestoneEvents - tabela D-4', () => {
     const before = baseMaritime({ clearanceCompletedAt: '2026-09-01T10:00' })
     const after = baseMaritime({ clearanceCompletedAt: '2026-09-02T10:00' })
     expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'cleared')).toHaveLength(0)
+  })
+
+  // F17.3a (D-7): sinal compat de chegada/presenca com data real.
+  it("berthedAt '' -> '2026-09-20T10:00' (FCL) gera berthed com occurredAt BRT, occurredAtSource 'field' e field 'berthedAt'", () => {
+    const before = baseMaritime({ berthed: false, berthedAt: '' })
+    const after = baseMaritime({ berthed: true, berthedAt: '2026-09-20T10:00' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'berthed')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.field).toBe('berthedAt')
+    expect(events[0].data.value).toBe('2026-09-20T10:00')
+    expect(events[0].data.occurredAt).toBe('2026-09-20T13:00:00.000Z')
+    expect(events[0].data.occurredAtSource).toBe('field')
+  })
+
+  it('before berthed:true sem data + after com berthedAt NAO gera (sinal ja existia)', () => {
+    const before = baseMaritime({ berthed: true, berthedAt: '' })
+    const after = baseMaritime({ berthed: true, berthedAt: '2026-09-20T10:00' })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'berthed')).toHaveLength(0)
+  })
+
+  it('before arrived:true sem data + after com arrivedAt NAO gera', () => {
+    const before = baseAir({ arrived: true, arrivedAt: '' })
+    const after = baseAir({ arrived: true, arrivedAt: '2026-09-20T10:00' })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'arrived')).toHaveLength(0)
+  })
+
+  it('before cargoPresenceInformed:true sem data + after com cargoPresenceInformedAt NAO gera', () => {
+    const before = baseMaritime({ cargoPresenceInformed: true, cargoPresenceInformedAt: '' })
+    const after = baseMaritime({ cargoPresenceInformed: true, cargoPresenceInformedAt: '2026-09-20T10:00' })
+    expect(
+      eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'cargoPresence')
+    ).toHaveLength(0)
   })
 
   it('licenseDeferred: "" -> Liberado gera evento', () => {
@@ -454,6 +492,37 @@ describe('paridade functions/ x src/ (D-4 nota)', () => {
         continue
       }
       expect(isMapaReleasedMirror(status)).toBe(mapaAllowsCollectionStatus(status))
+    }
+  })
+})
+
+// F17.3a (D-7): paridade dos espelhos de sinal contra `arrivalCustoms.js`.
+describe('paridade functions/ x src/features/processes/arrivalCustoms.js (F17.3a D-7)', () => {
+  const categories = ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']
+  const boolValues = [true, false]
+  const dateValues = ['', '2026-09-20T10:00']
+
+  it('hasArrivalSignalMirror === hasArrivalSignal numa matriz (4 categorias x bool x data)', () => {
+    for (const category of categories) {
+      for (const berthed of boolValues) {
+        for (const arrived of boolValues) {
+          for (const berthedAt of dateValues) {
+            for (const arrivedAt of dateValues) {
+              const process = { category, berthed, arrived, berthedAt, arrivedAt }
+              expect(hasArrivalSignalMirror(process)).toBe(hasArrivalSignal(process))
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('hasCargoPresenceSignalMirror === hasCargoPresenceSignal (bool x data)', () => {
+    for (const cargoPresenceInformed of boolValues) {
+      for (const cargoPresenceInformedAt of dateValues) {
+        const process = { cargoPresenceInformed, cargoPresenceInformedAt }
+        expect(hasCargoPresenceSignalMirror(process)).toBe(hasCargoPresenceSignal(process))
+      }
     }
   })
 })

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   planProcessStatusMigration,
   planMapaToLicensesMigration,
+  planArrivalDatesMigration,
   planOperationalMigration,
   MIGRATION_STEPS,
   toFirestoreFieldValue,
@@ -234,8 +235,82 @@ describe('planMapaToLicensesMigration', () => {
 })
 
 describe('MIGRATION_STEPS', () => {
-  it("ids na ordem ['mapaToLicenses', 'recalcProcessStatus']", () => {
-    expect(MIGRATION_STEPS.map((s) => s.id)).toEqual(['mapaToLicenses', 'recalcProcessStatus'])
+  it("ids na ordem ['mapaToLicenses', 'arrivalDates', 'recalcProcessStatus']", () => {
+    expect(MIGRATION_STEPS.map((s) => s.id)).toEqual([
+      'mapaToLicenses',
+      'arrivalDates',
+      'recalcProcessStatus',
+    ])
+  })
+})
+
+// F17.3a (D-3): `berthed`/`arrived` legado sem data -> `berthedAt`/`arrivedAt`
+// aproximado (a partir do `eta`); presenca de carga NUNCA ganha data
+// inventada.
+describe('planArrivalDatesMigration', () => {
+  it('FCL berthed:true + eta valido -> berthedAt aproximado + marcador', () => {
+    const plan = planArrivalDatesMigration([
+      { id: 'P1', category: 'FCL', berthed: true, berthedAt: '', eta: '2026-09-20' },
+    ])
+    expect(plan[0].type).toBe('berthedAt-approx')
+    expect(plan[0].changes.berthedAt).toBe('2026-09-20T00:00')
+    expect(plan[0].changes.migratedApproxFields).toEqual(['berthedAt'])
+    expect(plan[0].changes.updatedById).toBe('')
+    expect(plan[0].changes.updatedByName).toBe('Migração F17.1')
+  })
+
+  it('FCL berthed:true sem eta valido -> needs-review, sem changes', () => {
+    const plan = planArrivalDatesMigration([
+      { id: 'P2', category: 'FCL', berthed: true, berthedAt: '', eta: '' },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('AEREO arrived:true + eta valido -> arrivedAt aproximado', () => {
+    const plan = planArrivalDatesMigration([
+      { id: 'P3', category: 'AEREO', arrived: true, arrivedAt: '', eta: '2026-09-22' },
+    ])
+    expect(plan[0].type).toBe('arrivedAt-approx')
+    expect(plan[0].changes.arrivedAt).toBe('2026-09-22T00:00')
+  })
+
+  it('cargoPresenceInformed:true sem cargoPresenceInformedAt -> needs-review, changes: null', () => {
+    const plan = planArrivalDatesMigration([
+      {
+        id: 'P4',
+        category: 'FCL',
+        berthed: true,
+        berthedAt: '2026-09-20T10:00',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '',
+      },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('ja com berthedAt -> unchanged', () => {
+    const plan = planArrivalDatesMigration([
+      { id: 'P5', category: 'FCL', berthed: true, berthedAt: '2026-09-20T10:00' },
+    ])
+    expect(plan[0].type).toBe('unchanged')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('berthed:true em AEREO -> unchanged (campo errado pra categoria)', () => {
+    const plan = planArrivalDatesMigration([{ id: 'P6', category: 'AEREO', berthed: true, eta: '2026-09-20' }])
+    expect(plan[0].type).toBe('unchanged')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('idempotente: 2a execucao sobre o resultado aplicado -> unchanged', () => {
+    const initial = [{ id: 'P7', category: 'FCL', berthed: true, berthedAt: '', eta: '2026-09-20' }]
+    const firstPlan = planArrivalDatesMigration(initial)
+    const applied = { ...initial[0], ...firstPlan[0].changes }
+    const secondPlan = planArrivalDatesMigration([applied])
+    expect(secondPlan[0].type).toBe('unchanged')
+    expect(secondPlan[0].changes).toBeNull()
   })
 })
 

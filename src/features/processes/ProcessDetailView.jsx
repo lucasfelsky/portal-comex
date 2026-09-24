@@ -8,7 +8,6 @@ import {
   getDisplayedCollectionStatus,
   getQuickReadProcessStatus,
   isCollectionScheduledOrBeyondStatus,
-  isDtaTransitCompletedStatus,
   isProcessStatusFinalized,
 } from './processStatus'
 import { getChannelToneClass, getStatusTagClass } from './processStatusView'
@@ -26,6 +25,8 @@ import {
   ProcessCargoTransitDetails,
   ProcessIdentificationDetails,
   ProcessLicensesDetails,
+  ProcessArrivalDetails,
+  ProcessFreeTimeDetails,
 } from './ProcessOperationalDetails'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
@@ -112,8 +113,6 @@ export default function ProcessDetailView({
       String(process?.postReceiptNotes ?? '').trim() ||
         (Array.isArray(process?.postReceiptImages) ? process.postReceiptImages : []).length > 0
     )
-
-  const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
 
   return (
     <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}>
@@ -334,23 +333,8 @@ export default function ProcessDetailView({
               </div>
             ) : null}
             <ProcessLicensesDetails process={selectedProcess} />
-            {isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? (
-              <div className="detail-card">
-                <span className="detail-label">Andamento após chegada</span>
-                <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p>
-              </div>
-            ) : null}
-            {isAirCategory(selectedProcess.category) && selectedProcess.arrived ? (
-              <div className="detail-card">
-                <span className="detail-label">Pós-chegada</span>
-                <div className="detail-stack detail-stack--compact">
-                  {selectedProcess.dtaStatus ? <p>DTA: {selectedProcess.dtaStatus}</p> : null}
-                  {selectedProcess.dtaLoadingScheduledAt ? <p>Carregamento DTA: {formatDateTime(selectedProcess.dtaLoadingScheduledAt)}</p> : null}
-                  {selectedProcess.dtaArrivalAtItajai ? <p>Chegada prevista em Itajaí: {formatDateTime(selectedProcess.dtaArrivalAtItajai)}</p> : null}
-                  {isDtaTransitCompleted(selectedProcess.dtaStatus) ? <p>Presença de carga informada: {selectedProcess.cargoPresenceInformed ? 'Sim' : 'Não'}</p> : null}
-                </div>
-              </div>
-            ) : null}
+            <ProcessArrivalDetails process={selectedProcess} />
+            <ProcessFreeTimeDetails process={selectedProcess} />
             {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.duimpStatus ? (
               <div className={`detail-card ${getChannelToneClass(selectedProcess.parameterizationChannel)}`.trim()}>
                 <span className="detail-label">DUIMP</span>

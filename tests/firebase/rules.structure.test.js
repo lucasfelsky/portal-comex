@@ -240,4 +240,30 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/purchaseOrders\.size\(\)\s*<=\s*50/)
     })
   })
+
+  describe('F17.3a — chegada com data/CE/free time/presenca de carga (D-9)', () => {
+    it('isAdminProcessFields contem as 9 chaves novas', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const newFields = [
+        'berthedAt', 'arrivedAt', 'ceMercante', 'ceHouse', 'terminalName',
+        'freeTimeDays', 'demurrageDailyRateUsd', 'cargoPresenceInformedAt',
+        'migratedApproxFields',
+      ]
+      for (const field of newFields) {
+        expect(body, `campo ${field} nao esta em isAdminProcessFields`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+    })
+
+    it('isAdminProcessFields guarda o shape de migratedApproxFields (list, size <= 10)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/migratedApproxFields\s+is\s+list/)
+      expect(body).toMatch(/migratedApproxFields\.size\(\)\s*<=\s*10/)
+    })
+  })
 })

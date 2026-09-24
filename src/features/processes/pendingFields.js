@@ -12,6 +12,7 @@ import {
   MIN_CONSOLIDATED_PURCHASE_ORDERS,
   getProcessPurchaseOrders,
 } from './purchaseOrders.js'
+import { CE_HOUSE_CATEGORIES, FREE_TIME_CATEGORIES, isApproxDate } from './arrivalCustoms.js'
 
 function hasText(value) {
   return String(value ?? '').trim() !== ''
@@ -298,6 +299,67 @@ export const PENDING_FIELD_RULES = [
     stage: 4,
     when: (p) => getCollectionWindows(p).some((window) => hasText(window?.scheduledAt)),
     isMissing: (p) => !hasText(p?.carrierName),
+  },
+  // F17.3a (D-6): Etapa 3 (chegada/CE/terminal/free time) + presenca de
+  // carga (stage 3). Datas aproximadas (`migratedApproxFields`) NAO geram
+  // pendencia - `isApproxDate` cobre o gate.
+  {
+    id: 'ceMercante',
+    field: 'ceMercante',
+    label: 'CE Mercante',
+    stage: 2,
+    when: (p) => isMaritimeCategory(p?.category),
+    isMissing: (p) => !hasText(p?.ceMercante),
+  },
+  {
+    id: 'ceHouse',
+    field: 'ceHouse',
+    label: 'CE house',
+    stage: 2,
+    categories: CE_HOUSE_CATEGORIES,
+    isMissing: (p) => !hasText(p?.ceHouse),
+  },
+  {
+    id: 'terminalName',
+    field: 'terminalName',
+    label: 'Terminal / armazém',
+    stage: 2,
+    when: (p) => isMaritimeCategory(p?.category),
+    isMissing: (p) => !hasText(p?.terminalName),
+  },
+  {
+    id: 'freeTimeDays',
+    field: 'freeTimeDays',
+    label: 'Free time (dias)',
+    stage: 2,
+    categories: FREE_TIME_CATEGORIES,
+    isMissing: (p) => p?.freeTimeDays == null,
+  },
+  {
+    id: 'berthedAt',
+    field: 'berthedAt',
+    label: 'Data da atracação',
+    stage: 2,
+    when: (p) => isMaritimeCategory(p?.category) && p?.berthed === true,
+    isMissing: (p) => !hasText(p?.berthedAt) && !isApproxDate(p, 'berthedAt'),
+  },
+  {
+    id: 'arrivedAt',
+    field: 'arrivedAt',
+    label: 'Data da chegada',
+    stage: 2,
+    categories: ['AEREO'],
+    when: (p) => p?.arrived === true,
+    isMissing: (p) => !hasText(p?.arrivedAt) && !isApproxDate(p, 'arrivedAt'),
+  },
+  {
+    id: 'cargoPresenceInformedAt',
+    field: 'cargoPresenceInformedAt',
+    label: 'Data da presença de carga',
+    stage: 3,
+    categories: FREE_TIME_CATEGORIES,
+    when: (p) => p?.cargoPresenceInformed === true,
+    isMissing: (p) => !hasText(p?.cargoPresenceInformedAt),
   },
 ]
 

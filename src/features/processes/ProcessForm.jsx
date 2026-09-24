@@ -7,14 +7,13 @@ import {
   getDisplayedCollectionStatus,
   getDisplayedProcessStatus,
   isCollectionScheduledOrBeyondStatus,
-  isDtaLoadingScheduledStatus,
-  isDtaTransitCompletedStatus,
   postCollectionStatusOptions,
   normalizeComparableText,
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { deriveProcessStatus, isCollectionReleased } from './deriveProcessStatus'
+import { hasCargoPresenceSignal } from './arrivalCustoms'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -23,6 +22,8 @@ import { getCollectionWindows } from '../../utils/collectionWindows'
 import { INCOTERM_OPTIONS } from './operationalOptions'
 import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
+import ProcessArrivalFields from './ProcessArrivalFields'
+import ProcessCustomsFields from './ProcessCustomsFields'
 import LicensesEditor from './LicensesEditor'
 import PurchaseOrdersEditor from './PurchaseOrdersEditor'
 import { getProcessPurchaseOrders } from './purchaseOrders'
@@ -79,9 +80,6 @@ export default function ProcessForm({
   const getAutomaticEstimatedDeliveryLabel = (process) =>
     formatDate(getAutomaticEstimatedDeliveryDate(process))
   const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
-
-  const isDtaLoadingScheduled = (status) => isDtaLoadingScheduledStatus(status)
-  const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
 
   const keepsCollectionSchedule = (status) => {
     const normalizedStatus = normalizeComparableText(status)
@@ -342,246 +340,62 @@ export default function ProcessForm({
     <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} />
   )
 
+  // F17.3a (D-10): "Chegada" (atracacao/chegada com data, CE/terminal/free
+  // time, presenca de carga) extraida pra `ProcessArrivalFields`; DUIMP/
+  // canal/desembaraco extraidos pra `ProcessCustomsFields` (JSX movido, sem
+  // mudanca de comportamento). Bloco de coleta ficava DUPLICADO
+  // (maritimo/aereo) - agora aparece uma unica vez.
   const renderFlowStep = () => (
     <>
-      {canShowMaritimeFlow ? (
-        <div className="detail-card">
-          <span className="detail-label">Pós-atracação</span>
-          <div className="checkbox-grid">
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={draft.berthed}
-                onChange={(event) => onDraftChange('berthed', event.target.checked)}
-              />
-              <span>Atracou?</span>
-            </label>
-            {draft.berthed ? (
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={draft.cargoPresenceInformed}
-                  onChange={(event) => onDraftChange('cargoPresenceInformed', event.target.checked)}
-                />
-                <span>Presença de carga informada?</span>
-              </label>
-            ) : null}
-          </div>
-          {draft.cargoPresenceInformed ? (
-            <label className="field">
-              <span>DUIMP</span>
-              <SelectField
-                className="text-input"
-                value={draft.duimpStatus}
-                onChange={(event) => onDraftChange('duimpStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                {duimpStatusOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {draft.duimpStatus === 'Parametrizada' ? (
-            <label className="field">
-              <span>Canal da parametrização</span>
-              <SelectField
-                className="text-input"
-                value={draft.parameterizationChannel}
-                onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
-              >
-                <option value="">Selecione o canal</option>
-                {channelOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {draft.duimpStatus === 'Parametrizada' && draft.parameterizationChannel ? (
-            <label className="field">
-              <span>Desembaraço concluído em</span>
-              <input
-                className="text-input"
-                type="datetime-local"
-                value={draft.clearanceCompletedAt}
-                onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
-              />
-              <small className="field-hint">
-                {draft.parameterizationChannel === 'Verde'
-                  ? 'Opcional no canal Verde (libera a coleta sozinho).'
-                  : 'Obrigatório para liberar a coleta neste canal.'}
-              </small>
-            </label>
-          ) : null}
-          {isCollectionReleased(draft) ? (
-            <label className="field">
-              <span>Coleta</span>
-              <SelectField
-                className="text-input"
-                value={draft.collectionStatus}
-                onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                {getCollectionStatusOptions(draft).map((item) => (
-                  <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
-            <CollectionWindowsEditor
-              value={draft.collectionWindows}
-              category={draft.category}
-              containers={draft.containers}
-              onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
-              disabled={isSaving}
-            />
-          ) : null}
-          {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? (
-            <div className="detail-card">
-              <span className="detail-label">Coleta</span>
-              <p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p>
-            </div>
-          ) : null}
-        </div>
+      {canShowMaritimeFlow || canShowAirFlow ? (
+        <ProcessArrivalFields
+          draft={draft}
+          onDraftChange={onDraftChange}
+          dtaStatusOptions={dtaStatusOptions}
+        />
       ) : null}
 
-      {canShowAirFlow ? (
+      {(canShowMaritimeFlow || canShowAirFlow) && hasCargoPresenceSignal(draft) ? (
+        <ProcessCustomsFields
+          draft={draft}
+          onDraftChange={onDraftChange}
+          duimpStatusOptions={duimpStatusOptions}
+          channelOptions={channelOptions}
+        />
+      ) : null}
+
+      {(canShowMaritimeFlow || canShowAirFlow) && isCollectionReleased(draft) ? (
+        <label className="field">
+          <span>Coleta</span>
+          <SelectField
+            className="text-input"
+            value={draft.collectionStatus}
+            onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
+          >
+            <option value="">Selecione o status</option>
+            {getCollectionStatusOptions(draft).map((item) => (
+              <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
+            ))}
+          </SelectField>
+        </label>
+      ) : null}
+      {(canShowMaritimeFlow || canShowAirFlow) &&
+      (shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus)) ? (
+        <CollectionWindowsEditor
+          value={draft.collectionWindows}
+          category={draft.category}
+          containers={draft.containers}
+          onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
+          disabled={isSaving}
+        />
+      ) : null}
+      {(canShowMaritimeFlow || canShowAirFlow) &&
+      draft.collectionStatus &&
+      keepsCollectionSchedule(draft.collectionStatus) &&
+      !shouldEditCollectionSchedule(draft.collectionStatus) ? (
         <div className="detail-card">
-          <span className="detail-label">Pós-chegada</span>
-          <div className="checkbox-grid">
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={draft.arrived}
-                onChange={(event) => onDraftChange('arrived', event.target.checked)}
-              />
-              <span>Chegou?</span>
-            </label>
-          </div>
-          {draft.arrived ? (
-            <label className="field">
-              <span>DTA</span>
-              <SelectField
-                className="text-input"
-                value={draft.dtaStatus}
-                onChange={(event) => onDraftChange('dtaStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                {dtaStatusOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {isDtaLoadingScheduled(draft.dtaStatus) ? (
-            <div className="detail-card detail-card--split">
-              <label className="field">
-                <span>Previsão do carregamento da DTA</span>
-                <input
-                  className="text-input"
-                  type="datetime-local"
-                  value={draft.dtaLoadingScheduledAt}
-                  onChange={(event) => onDraftChange('dtaLoadingScheduledAt', event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Previsão de chegada em Itajaí</span>
-                <input
-                  className="text-input"
-                  type="datetime-local"
-                  value={draft.dtaArrivalAtItajai}
-                  onChange={(event) => onDraftChange('dtaArrivalAtItajai', event.target.value)}
-                />
-              </label>
-            </div>
-          ) : null}
-          {isDtaTransitCompleted(draft.dtaStatus) ? (
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={draft.cargoPresenceInformed}
-                onChange={(event) => onDraftChange('cargoPresenceInformed', event.target.checked)}
-              />
-              <span>Presença de carga informada?</span>
-            </label>
-          ) : null}
-          {draft.cargoPresenceInformed ? (
-            <label className="field">
-              <span>DUIMP</span>
-              <SelectField
-                className="text-input"
-                value={draft.duimpStatus}
-                onChange={(event) => onDraftChange('duimpStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                {duimpStatusOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {draft.duimpStatus === 'Parametrizada' ? (
-            <label className="field">
-              <span>Canal da parametrização</span>
-              <SelectField
-                className="text-input"
-                value={draft.parameterizationChannel}
-                onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
-              >
-                <option value="">Selecione o canal</option>
-                {channelOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {draft.duimpStatus === 'Parametrizada' && draft.parameterizationChannel ? (
-            <label className="field">
-              <span>Desembaraço concluído em</span>
-              <input
-                className="text-input"
-                type="datetime-local"
-                value={draft.clearanceCompletedAt}
-                onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
-              />
-              <small className="field-hint">
-                {draft.parameterizationChannel === 'Verde'
-                  ? 'Opcional no canal Verde (libera a coleta sozinho).'
-                  : 'Obrigatório para liberar a coleta neste canal.'}
-              </small>
-            </label>
-          ) : null}
-          {isCollectionReleased(draft) ? (
-            <label className="field">
-              <span>Coleta</span>
-              <SelectField
-                className="text-input"
-                value={draft.collectionStatus}
-                onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
-              >
-                <option value="">Selecione o status</option>
-                {getCollectionStatusOptions(draft).map((item) => (
-                  <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
-                ))}
-              </SelectField>
-            </label>
-          ) : null}
-          {shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus) ? (
-            <CollectionWindowsEditor
-              value={draft.collectionWindows}
-              category={draft.category}
-              containers={draft.containers}
-              onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
-              disabled={isSaving}
-            />
-          ) : null}
-          {draft.collectionStatus && keepsCollectionSchedule(draft.collectionStatus) && !shouldEditCollectionSchedule(draft.collectionStatus) ? (
-            <div className="detail-card">
-              <span className="detail-label">Coleta</span>
-              <p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p>
-            </div>
-          ) : null}
+          <span className="detail-label">Coleta</span>
+          <p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p>
         </div>
       ) : null}
 

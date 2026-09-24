@@ -278,6 +278,112 @@ describe('getPendingFields - regra de estagio futuro nao aparece', () => {
   })
 })
 
+// F17.3a (D-6): CE/terminal/free time (stage 2) + presenca de carga (stage 3).
+describe('getPendingFields - chegada/CE/free time/presenca (F17.3a)', () => {
+  function shippedMaritimeProcess(overrides = {}) {
+    return completeMaritimeProcess({
+      shippedAt: '2026-01-05',
+      masterBl: 'MBL-1',
+      vesselName: 'Navio Atlas',
+      voyage: 'V001',
+      ...overrides,
+    })
+  }
+
+  function arrivedMaritimeProcess(overrides = {}) {
+    return shippedMaritimeProcess({
+      berthed: true,
+      berthedAt: '2026-01-10T10:00',
+      ...overrides,
+    })
+  }
+
+  it('maritimo sem ceMercante -> pendencia (a partir da atracação confirmada)', () => {
+    const process = arrivedMaritimeProcess({ ceMercante: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('ceMercante')
+  })
+
+  it('ceMercante preenchido -> sem pendencia', () => {
+    const process = arrivedMaritimeProcess({ ceMercante: 'CE-1' })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('ceMercante')
+  })
+
+  it('LCL/CONSOLIDADO sem ceHouse -> pendencia; FCL nunca cobra ceHouse', () => {
+    const lcl = arrivedMaritimeProcess({ category: 'LCL', ceHouse: '', masterBl: '', houseBl: 'HBL-1' })
+    expect(getPendingFields(lcl).map((f) => f.id)).toContain('ceHouse')
+    const fcl = arrivedMaritimeProcess({ ceHouse: '' })
+    expect(getPendingFields(fcl).map((f) => f.id)).not.toContain('ceHouse')
+  })
+
+  it('maritimo sem terminalName -> pendencia', () => {
+    const process = arrivedMaritimeProcess({ terminalName: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('terminalName')
+  })
+
+  it('FCL/CONSOLIDADO sem freeTimeDays (null) -> pendencia; freeTimeDays 0 NAO e pendencia', () => {
+    const semFreeTime = arrivedMaritimeProcess({ freeTimeDays: null })
+    expect(getPendingFields(semFreeTime).map((f) => f.id)).toContain('freeTimeDays')
+    const zeroFreeTime = arrivedMaritimeProcess({ freeTimeDays: 0 })
+    expect(getPendingFields(zeroFreeTime).map((f) => f.id)).not.toContain('freeTimeDays')
+  })
+
+  it('LCL nunca cobra freeTimeDays', () => {
+    const process = arrivedMaritimeProcess({ category: 'LCL', freeTimeDays: null, masterBl: '', houseBl: 'HBL-1' })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('freeTimeDays')
+  })
+
+  it('maritimo berthed=true sem berthedAt -> pendencia; com data preenchida some', () => {
+    const semData = shippedMaritimeProcess({ berthed: true, berthedAt: '' })
+    expect(getPendingFields(semData).map((f) => f.id)).toContain('berthedAt')
+    const comData = shippedMaritimeProcess({ berthed: true, berthedAt: '2026-01-10T10:00' })
+    expect(getPendingFields(comData).map((f) => f.id)).not.toContain('berthedAt')
+  })
+
+  it('data aproximada (migratedApproxFields) NAO gera pendencia', () => {
+    const process = shippedMaritimeProcess({
+      berthed: true,
+      berthedAt: '',
+      migratedApproxFields: ['berthedAt'],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('berthedAt')
+  })
+
+  it('AEREO arrived=true sem arrivedAt -> pendencia', () => {
+    const process = completeMaritimeProcess({
+      category: 'AEREO',
+      containers: [],
+      containerQuantity: 0,
+      shippedAt: '2026-01-05',
+      mawb: 'MAWB-1',
+      flightNumber: 'FL-1',
+      arrived: true,
+      arrivedAt: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('arrivedAt')
+  })
+
+  it('cargoPresenceInformedAt: FCL/CONSOLIDADO com sinal e sem data -> pendencia; LCL NAO cobra', () => {
+    const fcl = shippedMaritimeProcess({
+      berthed: true,
+      berthedAt: '2026-01-10T10:00',
+      cargoPresenceInformed: true,
+      cargoPresenceInformedAt: '',
+    })
+    expect(getPendingFields(fcl).map((f) => f.id)).toContain('cargoPresenceInformedAt')
+
+    const lcl = shippedMaritimeProcess({
+      category: 'LCL',
+      masterBl: '',
+      houseBl: 'HBL-1',
+      berthed: true,
+      berthedAt: '2026-01-10T10:00',
+      cargoPresenceInformed: true,
+      cargoPresenceInformedAt: '',
+    })
+    expect(getPendingFields(lcl).map((f) => f.id)).not.toContain('cargoPresenceInformedAt')
+  })
+})
+
 // F17.2c (D-11): POs do consolidado + PO por item.
 describe('getPendingFields - purchaseOrders/itemPoNumber (F17.2c)', () => {
   it('CONSOLIDADO com 1 PO -> pendencia purchaseOrders', () => {

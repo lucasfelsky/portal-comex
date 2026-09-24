@@ -316,6 +316,14 @@ describe('deriveProcessStatus - linha 7 (Atracação Confirmada)', () => {
   it('maritimo NAO reage a "arrived" (sinal errado pra categoria)', () => {
     expect(deriveProcessStatus(baseMaritime({ arrived: true }))).not.toBe('Atracação Confirmada')
   })
+
+  // F17.3a (D-15): `berthedAt` preenchido vence mesmo com `berthed: false`
+  // gravado (dual-write inconsistente vindo de doc antigo).
+  it('berthedAt preenchido + berthed: false (dual-write inconsistente) -> Atracação Confirmada', () => {
+    expect(
+      deriveProcessStatus(baseMaritime({ berthedAt: '2026-09-20T10:00', berthed: false }))
+    ).toBe('Atracação Confirmada')
+  })
 })
 
 describe('deriveProcessStatus - linhas 8/9 (shippedAt, dormente ate F17.2)', () => {

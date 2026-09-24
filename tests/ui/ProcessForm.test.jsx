@@ -58,6 +58,17 @@ function makeDraft(overrides = {}) {
     chargeableWeightKg: 0,
     packagesQuantity: 0,
     containers: [],
+    // F17.3a (D-1): chegada com data, CE/terminal/free time, presenca de
+    // carga com data, marcador de aproximacao.
+    berthedAt: '',
+    arrivedAt: '',
+    cargoPresenceInformedAt: '',
+    ceMercante: '',
+    ceHouse: '',
+    terminalName: '',
+    freeTimeDays: '',
+    demurrageDailyRateUsd: '',
+    migratedApproxFields: [],
     ...overrides,
   }
 }
@@ -193,8 +204,8 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     renderForm({ canShowMaritimeFlow: true })
     expect(screen.getByText(/Passo 1 de 6/)).toBeInTheDocument()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
-    expect(screen.getByText('Pós-atracação')).toBeInTheDocument()
-    expect(screen.getByText('Atracou?')).toBeInTheDocument()
+    expect(screen.getByText('Chegada')).toBeInTheDocument()
+    expect(screen.getByText('Atracação (data e hora)')).toBeInTheDocument()
   })
 
   it('NÃO inclui o passo de fluxo em create sem maritime/air (5 passos)', () => {
@@ -269,6 +280,79 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     })
     await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
     expect(screen.queryByText('Transportadora')).not.toBeInTheDocument()
+  })
+})
+
+// F17.3a (D-11): "Chegada" com data - substitui os checkboxes "Atracou?"/
+// "Chegou?" (D-10).
+describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  }
+
+  it('AEREO mostra "Chegada (data e hora)"', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowAirFlow: true, draft: makeDraft({ category: 'AEREO' }) })
+    await openFlowStep(user)
+    expect(screen.getByText('Chegada (data e hora)')).toBeInTheDocument()
+  })
+
+  it('sem sinal de chegada NAO mostra "Presença de carga (data e hora)"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: false }),
+    })
+    await openFlowStep(user)
+    expect(screen.queryByText('Presença de carga (data e hora)')).not.toBeInTheDocument()
+  })
+
+  it('com sinal de chegada (berthed) mostra "Presença de carga (data e hora)"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true }),
+    })
+    await openFlowStep(user)
+    expect(screen.getByText('Presença de carga (data e hora)')).toBeInTheDocument()
+  })
+
+  it('FCL mostra "Free time (dias)" no passo de fluxo', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'FCL' }) })
+    await openFlowStep(user)
+    expect(screen.getByText('Free time (dias)')).toBeInTheDocument()
+  })
+
+  it('LCL NAO mostra "Free time (dias)" no passo de fluxo', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'LCL' }) })
+    await openFlowStep(user)
+    expect(screen.queryByText('Free time (dias)')).not.toBeInTheDocument()
+  })
+
+  it('hint de data aproximada aparece com migratedApproxFields: ["berthedAt"]', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true, migratedApproxFields: ['berthedAt'] }),
+    })
+    await openFlowStep(user)
+    expect(
+      screen.getByText('Data aproximada (migrada do ETA) — confirme a data real.')
+    ).toBeInTheDocument()
+  })
+
+  it('digitar a data de atracação dispara onDraftChange("berthedAt", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL' }),
+    })
+    await openFlowStep(user)
+    const dateInput = document.querySelector('input[type="datetime-local"]')
+    await user.type(dateInput, '2026-09-20T10:00')
+    expect(onDraftChange).toHaveBeenCalledWith('berthedAt', expect.any(String))
   })
 })
 

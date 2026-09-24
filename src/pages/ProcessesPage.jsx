@@ -47,6 +47,11 @@ import {
 } from '../features/processes/processCategories'
 import { isCollectionReleased } from '../features/processes/deriveProcessStatus'
 import { getPendingFields } from '../features/processes/pendingFields'
+import {
+  applyArrivalDateEdit,
+  hasArrivalSignal,
+  hasCargoPresenceSignal,
+} from '../features/processes/arrivalCustoms'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
@@ -99,6 +104,17 @@ const emptyDraft = () => ({
   collectionStatus: '',
   collectionWindows: [],
   collectionScheduledAt: '',
+  // F17.3a (D-13): chegada com data, CE/terminal, free time, presenca de
+  // carga com data, marcador de aproximacao (migracao).
+  berthedAt: '',
+  arrivedAt: '',
+  cargoPresenceInformedAt: '',
+  ceMercante: '',
+  ceHouse: '',
+  terminalName: '',
+  freeTimeDays: '',
+  demurrageDailyRateUsd: '',
+  migratedApproxFields: [],
   licenses: [],
   purchaseOrders: [],
   dtaStatus: '',
@@ -298,9 +314,10 @@ function extractItemsFromWorksheet(file) {
 }
 
 function sanitizeCustoms(draft, incomingWindows = null) {
-  if (!draft.cargoPresenceInformed) {
+  if (!hasCargoPresenceSignal(draft)) {
     return {
       ...draft,
+      cargoPresenceInformedAt: '',
       duimpStatus: '',
       parameterizationChannel: '',
       clearanceCompletedAt: '',
@@ -355,14 +372,16 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     const next = {
       ...draft,
       arrived: false,
+      arrivedAt: '',
       dtaStatus: '',
       dtaLoadingScheduledAt: '',
       dtaArrivalAtItajai: '',
     }
-    if (!next.berthed) {
+    if (!hasArrivalSignal(next)) {
       return {
         ...next,
         cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '',
         duimpStatus: '',
         parameterizationChannel: '',
         clearanceCompletedAt: '',
@@ -375,14 +394,15 @@ function sanitizeDraft(currentDraft, overrides = {}) {
   }
 
   if (isAirCategory(draft.category)) {
-    const next = { ...draft, berthed: false }
-    if (!next.arrived) {
+    const next = { ...draft, berthed: false, berthedAt: '' }
+    if (!hasArrivalSignal(next)) {
       return {
         ...next,
         dtaStatus: '',
         dtaLoadingScheduledAt: '',
         dtaArrivalAtItajai: '',
         cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '',
         duimpStatus: '',
         parameterizationChannel: '',
         clearanceCompletedAt: '',
@@ -395,7 +415,10 @@ function sanitizeDraft(currentDraft, overrides = {}) {
       next.dtaLoadingScheduledAt = ''
       next.dtaArrivalAtItajai = ''
     }
-    if (!isDtaTransitCompleted(next.dtaStatus)) next.cargoPresenceInformed = false
+    if (!isDtaTransitCompleted(next.dtaStatus)) {
+      next.cargoPresenceInformed = false
+      next.cargoPresenceInformedAt = ''
+    }
     return sanitizeCustoms(next, incomingWindows)
   }
 
@@ -403,10 +426,13 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     ...draft,
     berthed: false,
     arrived: false,
+    berthedAt: '',
+    arrivedAt: '',
     dtaStatus: '',
     dtaLoadingScheduledAt: '',
     dtaArrivalAtItajai: '',
     cargoPresenceInformed: false,
+    cargoPresenceInformedAt: '',
     duimpStatus: '',
     parameterizationChannel: '',
     clearanceCompletedAt: '',
@@ -813,6 +839,11 @@ export default function ProcessesPage() {
       if (field === 'containers') {
         const nextContainers = Array.isArray(value) ? value : []
         return { ...current, containers: nextContainers, containerQuantity: nextContainers.length }
+      }
+      // F17.3a (D-13): editar a data espelha o bool legado (`applyArrivalDateEdit`)
+      // e passa pela cascata (limpar a data zera presenca/DUIMP/coleta).
+      if (['berthedAt', 'arrivedAt', 'cargoPresenceInformedAt'].includes(field)) {
+        return sanitizeDraft(applyArrivalDateEdit(current, field, value))
       }
       if (
         [

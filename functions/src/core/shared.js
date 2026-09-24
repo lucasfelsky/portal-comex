@@ -80,6 +80,14 @@ function normalizeTimestamp(value) {
   return normalizeString(value)
 }
 
+// F17.3a (D-8): `freeTimeDays`/`demurrageDailyRateUsd` - `null`/`undefined`/
+// `''`/NaN vira `null` (nao informado), senao `Number` (0 e' valor valido).
+function normalizeOptionalNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function isCorporateEmail(email) {
   return normalizeEmail(email).endsWith('@sqquimica.com')
 }
@@ -313,7 +321,15 @@ function sanitizeProcessForComparison(process) {
     cargoReceivedAt: normalizeTimestamp(process.cargoReceivedAt),
     berthed: Boolean(process.berthed),
     arrived: Boolean(process.arrived),
+    berthedAt: normalizeString(process.berthedAt),
+    arrivedAt: normalizeString(process.arrivedAt),
     cargoPresenceInformed: Boolean(process.cargoPresenceInformed),
+    cargoPresenceInformedAt: normalizeString(process.cargoPresenceInformedAt),
+    ceMercante: normalizeString(process.ceMercante),
+    ceHouse: normalizeString(process.ceHouse),
+    terminalName: normalizeString(process.terminalName),
+    freeTimeDays: normalizeOptionalNumber(process.freeTimeDays),
+    demurrageDailyRateUsd: normalizeOptionalNumber(process.demurrageDailyRateUsd),
     duimpStatus: normalizeString(process.duimpStatus),
     parameterizationChannel: normalizeString(process.parameterizationChannel),
     collectionStatus: normalizeString(process.collectionStatus),

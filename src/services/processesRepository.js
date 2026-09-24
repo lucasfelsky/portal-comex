@@ -27,6 +27,13 @@ import {
   isCollectionReleased,
 } from '../features/processes/deriveProcessStatus'
 import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
+import {
+  hasArrivalSignal,
+  hasCargoPresenceSignal,
+  normalizeDateTimeLocal,
+  normalizeMigratedApproxFields,
+  sanitizeArrivalFields,
+} from '../features/processes/arrivalCustoms'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
 import {
   getCollectionWindows,
@@ -337,7 +344,13 @@ function normalizeDestination(value) {
 // a checagem privada de MAPA. `process.licenses` chega aqui JA normalizado
 // (D-3, `normalizeProcess`/`toFirestorePayload` normalizam antes de chamar).
 function sanitizeCustomsFlow(process) {
-  const cargoPresenceInformed = Boolean(process.cargoPresenceInformed)
+  // F17.3a (D-14): sinal compat (data OU bool legado) em vez de so' o bool -
+  // doc com `cargoPresenceInformedAt` preenchido e `cargoPresenceInformed`
+  // ausente/false (drift) continua reconhecido.
+  const cargoPresenceInformed = hasCargoPresenceSignal(process)
+  const cargoPresenceInformedAt = cargoPresenceInformed
+    ? normalizeDateTimeLocal(process.cargoPresenceInformedAt)
+    : ''
   const duimpStatus = cargoPresenceInformed ? canonicalizeDuimpStatus(process.duimpStatus) : ''
   const parameterizationChannel =
     duimpStatus === 'Parametrizada' ? process.parameterizationChannel ?? '' : ''
@@ -361,6 +374,7 @@ function sanitizeCustomsFlow(process) {
 
   return {
     cargoPresenceInformed,
+    cargoPresenceInformedAt,
     duimpStatus,
     parameterizationChannel,
     clearanceCompletedAt,
@@ -421,13 +435,16 @@ function sanitizeCargoAndTransitFields(process) {
 // de coleta usa `process.licenses` (JA normalizado pelo chamador).
 function sanitizeOperationalFields(process) {
   if (isMaritimeCategory(process.category)) {
-    const berthed = Boolean(process.berthed)
+    // F17.3a (D-14): sinal compat (`berthedAt` OU `berthed` legado) em vez
+    // do bool isolado.
+    const berthed = hasArrivalSignal(process)
 
     if (!berthed) {
       return {
         berthed: false,
         arrived: false,
         cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '',
         duimpStatus: '',
         parameterizationChannel: '',
         clearanceCompletedAt: '',
@@ -451,7 +468,7 @@ function sanitizeOperationalFields(process) {
   }
 
   if (isAirCategory(process.category)) {
-    const arrived = Boolean(process.arrived)
+    const arrived = hasArrivalSignal(process)
     const dtaStatus = arrived ? canonicalizeDtaStatus(process.dtaStatus ?? '') : ''
     const dtaLoadingScheduledAt =
       normalizeDtaStatus(dtaStatus) === 'carregamento programado'
@@ -461,16 +478,16 @@ function sanitizeOperationalFields(process) {
       normalizeDtaStatus(dtaStatus) === 'carregamento programado'
         ? process.dtaArrivalAtItajai ?? ''
         : ''
-    const cargoPresenceInformed =
-      normalizeDtaStatus(dtaStatus) === 'transito concluido'
-        ? Boolean(process.cargoPresenceInformed)
-        : false
+    // F17.3a (D-5): presenca de carga no AEREO continua bloqueada ate a DTA
+    // registrar "Trânsito concluído" - vale pro bool E pra data.
+    const isTransitCompleted = normalizeDtaStatus(dtaStatus) === 'transito concluido'
 
     if (!arrived) {
       return {
         berthed: false,
         arrived: false,
         cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '',
         duimpStatus: '',
         parameterizationChannel: '',
         clearanceCompletedAt: '',
@@ -491,7 +508,8 @@ function sanitizeOperationalFields(process) {
       dtaArrivalAtItajai,
       ...sanitizeCustomsFlow({
         ...process,
-        cargoPresenceInformed,
+        cargoPresenceInformed: isTransitCompleted ? process.cargoPresenceInformed : false,
+        cargoPresenceInformedAt: isTransitCompleted ? process.cargoPresenceInformedAt : '',
       }),
     }
   }
@@ -500,6 +518,7 @@ function sanitizeOperationalFields(process) {
     berthed: false,
     arrived: false,
     cargoPresenceInformed: false,
+    cargoPresenceInformedAt: '',
     duimpStatus: '',
     parameterizationChannel: '',
     clearanceCompletedAt: '',
@@ -532,7 +551,10 @@ function normalizeProcess(rawProcess, fallbackId) {
     category,
     berthed: rawProcess.berthed,
     arrived: rawProcess.arrived,
+    berthedAt: rawProcess.berthedAt,
+    arrivedAt: rawProcess.arrivedAt,
     cargoPresenceInformed: rawProcess.cargoPresenceInformed,
+    cargoPresenceInformedAt: rawProcess.cargoPresenceInformedAt,
     duimpStatus: rawProcess.duimpStatus,
     parameterizationChannel: rawProcess.parameterizationChannel,
     clearanceCompletedAt: rawProcess.clearanceCompletedAt,
@@ -549,6 +571,22 @@ function normalizeProcess(rawProcess, fallbackId) {
   if (!operationalFields.collectionStatus && shouldPreserveStockCollectionStatus(rawProcess)) {
     operationalFields.collectionStatus = postCollectionStatusOptions[2]
   }
+
+  // F17.3a (D-14): CE/terminal/free time/marcador de aproximacao - FORA da
+  // cascata de coleta (D-5), calculados a partir dos campos crus.
+  const arrivalFields = sanitizeArrivalFields({
+    category,
+    berthedAt: rawProcess.berthedAt,
+    arrivedAt: rawProcess.arrivedAt,
+    berthed: rawProcess.berthed,
+    arrived: rawProcess.arrived,
+    ceMercante: rawProcess.ceMercante,
+    ceHouse: rawProcess.ceHouse,
+    terminalName: rawProcess.terminalName,
+    freeTimeDays: rawProcess.freeTimeDays,
+    demurrageDailyRateUsd: rawProcess.demurrageDailyRateUsd,
+    migratedApproxFields: rawProcess.migratedApproxFields,
+  })
 
   // F17.2a (D-5): limpeza por categoria dos 22 campos novos.
   const cargoAndTransitFields = sanitizeCargoAndTransitFields({
@@ -616,6 +654,8 @@ function normalizeProcess(rawProcess, fallbackId) {
     cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
     items: normalizeProcessItems(rawProcess.items, { category, purchaseOrders }),
     ...operationalFields,
+    ...arrivalFields,
+    migratedApproxFields: normalizeMigratedApproxFields(rawProcess.migratedApproxFields, arrivalFields),
     collectionWindows,
     purchaseOrders,
     licenses,
@@ -713,6 +753,10 @@ function toFirestorePayload(process) {
   // F17.2c (D-3): payload FIXO (lista vazia fora do CONSOLIDADO) - por isso
   // a allowlist/guarda (D-8).
   const purchaseOrders = getProcessPurchaseOrders({ ...process, category })
+  // F17.3a (D-14): payload FIXO das 9 chaves novas - por isso a allowlist
+  // (D-9). `process` aqui ja' e' o `nextProcess` normalizado (via
+  // `normalizeProcess`, chamado em `saveProcess`).
+  const arrivalFields = sanitizeArrivalFields(process)
 
   return {
     name: String(process.name ?? ''),
@@ -735,7 +779,16 @@ function toFirestorePayload(process) {
     items: normalizeProcessItems(process.items, { category, purchaseOrders }),
     berthed: Boolean(process.berthed),
     arrived: Boolean(process.arrived),
+    berthedAt: arrivalFields.berthedAt,
+    arrivedAt: arrivalFields.arrivedAt,
+    ceMercante: arrivalFields.ceMercante,
+    ceHouse: arrivalFields.ceHouse,
+    terminalName: arrivalFields.terminalName,
+    freeTimeDays: arrivalFields.freeTimeDays,
+    demurrageDailyRateUsd: arrivalFields.demurrageDailyRateUsd,
+    migratedApproxFields: arrivalFields.migratedApproxFields,
     cargoPresenceInformed: Boolean(process.cargoPresenceInformed),
+    cargoPresenceInformedAt: normalizeDateTimeLocal(process.cargoPresenceInformedAt),
     duimpStatus: String(process.duimpStatus ?? ''),
     parameterizationChannel: String(process.parameterizationChannel ?? ''),
     clearanceCompletedAt: String(process.clearanceCompletedAt ?? ''),

@@ -3,12 +3,23 @@ import { getImoClassLabel } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
 import { getEffectiveLicenses } from './licenses'
 import { formatDateTime } from '../../utils/dateFormat'
+import {
+  isApproxDate,
+  hasArrivalSignal,
+  hasCargoPresenceSignal,
+  hasDateValue,
+  getFreeTimeStatus,
+} from './arrivalCustoms'
+import { isMaritimeCategory, isAirCategory } from './processCategories'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
 // processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
-// Regra de import (D-11): so' `./containers`, `./operationalOptions`,
+// F17.3a (D-12): leitura de chegada com data/CE/terminal/free time
+// (`ProcessArrivalDetails`/`ProcessFreeTimeDetails`).
+// Regra de import (D-11/D-12): so' `./containers`, `./operationalOptions`,
 // `./processLabels` (so' `canShowProcessName`), `./licenses`,
-// `../../utils/dateFormat` (so' `formatDateTime`).
+// `../../utils/dateFormat` (so' `formatDateTime`), `./arrivalCustoms`,
+// `./processCategories`.
 //
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
@@ -185,5 +196,122 @@ export function ProcessCargoTransitDetails({ process }) {
         </div>
       ) : null}
     </>
+  )
+}
+
+// F17.3a (D-12): card "Chegada" - atracacao/chegada com data (aprox. quando
+// migrada), CE/terminal, DTA (aereo) e presenca de carga com data. So'
+// renderiza se ha algum dado (visivel a todos os aprovados).
+export function ProcessArrivalDetails({ process }) {
+  const isMaritime = isMaritimeCategory(process?.category)
+  const isAir = isAirCategory(process?.category)
+  if (!isMaritime && !isAir) return null
+
+  const hasArrival = hasArrivalSignal(process)
+  const hasPresence = hasCargoPresenceSignal(process)
+  const arrivalField = isMaritime ? 'berthedAt' : 'arrivedAt'
+  const arrivalValue = isMaritime ? process?.berthedAt : process?.arrivedAt
+  const isApprox = isApproxDate(process, arrivalField)
+
+  const hasDtaContent =
+    isAir && (process?.dtaStatus || process?.dtaLoadingScheduledAt || process?.dtaArrivalAtItajai)
+
+  const hasContent =
+    hasArrival || process?.ceMercante || process?.ceHouse || process?.terminalName || hasDtaContent
+
+  if (!hasContent) return null
+
+  return (
+    <div className="detail-card">
+      <span className="detail-label">Chegada</span>
+      <div className="detail-stack detail-stack--compact">
+        {hasArrival ? (
+          <p>
+            {isMaritime ? 'Atracação:' : 'Chegada:'}{' '}
+            {hasDateValue(arrivalValue)
+              ? `${formatDateTime(arrivalValue)}${isApprox ? ' (aprox.)' : ''}`
+              : 'Confirmada (sem data)'}
+          </p>
+        ) : null}
+        {process?.ceMercante ? <p>CE Mercante: {process.ceMercante}</p> : null}
+        {process?.ceHouse ? <p>CE house: {process.ceHouse}</p> : null}
+        {process?.terminalName ? <p>Terminal / armazém: {process.terminalName}</p> : null}
+        {isAir && process?.dtaStatus ? <p>DTA: {process.dtaStatus}</p> : null}
+        {isAir && process?.dtaLoadingScheduledAt ? (
+          <p>Carregamento DTA: {formatDateTime(process.dtaLoadingScheduledAt)}</p>
+        ) : null}
+        {isAir && process?.dtaArrivalAtItajai ? (
+          <p>Chegada prevista em Itajaí: {formatDateTime(process.dtaArrivalAtItajai)}</p>
+        ) : null}
+        {hasArrival ? (
+          <p>
+            Presença de carga:{' '}
+            {hasPresence
+              ? hasDateValue(process?.cargoPresenceInformedAt)
+                ? formatDateTime(process.cargoPresenceInformedAt)
+                : 'Informada (sem data)'
+              : 'Pendente'}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+// F17.3a (D-12): card "Free time" (FCL/CONSOLIDADO) - prazo de devolucao do
+// vazio (A1: conta da presenca de carga).
+export function ProcessFreeTimeDetails({ process }) {
+  const status = getFreeTimeStatus(process)
+  if (!status || status.state === 'not-informed') return null
+
+  function formatDeadline(value) {
+    if (!value) return ''
+    const date = new Date(`${value}T00:00:00`)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+  }
+
+  let content = null
+  let toneClass = ''
+
+  if (status.state === 'waiting-presence') {
+    content = `${process.freeTimeDays} dias · inicia na presença de carga`
+  } else if (status.state === 'presence-without-date') {
+    content = `${process.freeTimeDays} dias · informe a data da presença de carga para calcular o prazo`
+  } else if (status.state === 'closed') {
+    content = 'Vazios devolvidos'
+  } else {
+    const deadlineLabel = formatDeadline(status.deadlineKey)
+    if (status.state === 'running') {
+      content = `Devolução do vazio até ${deadlineLabel} · faltam ${status.daysRemaining} dia(s)`
+      toneClass = status.daysRemaining <= 5 ? 'inline-badge--warn' : ''
+    } else if (status.state === 'due-today') {
+      content = `Devolução do vazio até ${deadlineLabel} · vence hoje`
+      toneClass = 'inline-badge--warn'
+    } else if (status.state === 'overdue') {
+      content = `Devolução do vazio até ${deadlineLabel} · vencido há ${Math.abs(status.daysRemaining)} dia(s)`
+      toneClass = 'inline-badge--danger'
+    }
+  }
+
+  return (
+    <div className="detail-card">
+      <span className="detail-label">Free time</span>
+      <div className="detail-stack detail-stack--compact">
+        {toneClass ? (
+          <p><span className={`inline-badge ${toneClass}`}>{content}</span></p>
+        ) : (
+          <p>{content}</p>
+        )}
+        {process?.demurrageDailyRateUsd != null ? (
+          <p>
+            Diária de demurrage:{' '}
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' }).format(
+              process.demurrageDailyRateUsd
+            )}
+          </p>
+        ) : null}
+      </div>
+    </div>
   )
 }
