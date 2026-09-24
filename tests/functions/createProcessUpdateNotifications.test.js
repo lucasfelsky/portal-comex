@@ -276,6 +276,93 @@ describe('createProcessUpdateNotifications', () => {
     expect(recipients).toEqual(['admin-1'])
   })
 
+  // F17.3a (D-8): chegada/CE/terminal/free time entram na comparacao.
+  describe('F17.3a - chegada/CE/terminal/free time (D-8)', () => {
+    it('before legado sem as 8 chaves x after com "" /null + migratedApproxFields: [] -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE }
+      const after = {
+        ...PROCESS_BASE,
+        berthedAt: '',
+        arrivedAt: '',
+        cargoPresenceInformedAt: '',
+        ceMercante: '',
+        ceHouse: '',
+        terminalName: '',
+        freeTimeDays: null,
+        demurrageDailyRateUsd: null,
+        migratedApproxFields: [],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('mudar so ceMercante -> notifica favorito', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, ceMercante: '' }
+      const after = {
+        ...PROCESS_BASE,
+        ceMercante: 'CE-1',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+    })
+
+    it('mudar so migratedApproxFields -> NAO notifica (marcador tecnico)', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, migratedApproxFields: [] }
+      const after = {
+        ...PROCESS_BASE,
+        migratedApproxFields: ['berthedAt'],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it("freeTimeDays null -> 7 -> notifica", async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, freeTimeDays: null }
+      const after = {
+        ...PROCESS_BASE,
+        freeTimeDays: 7,
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+    })
+  })
+
   // F17.2b (D-10): `licenses[]` entra na comparacao - o aviso que hoje sai
   // com MAPA nao pode se perder.
   describe('F17.2b - anuencias (D-10)', () => {

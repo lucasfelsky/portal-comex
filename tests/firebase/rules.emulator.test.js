@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 61 campos validos (F17.2a/F17.2b/F17.2c)', async () => {
+    it('admin cria processo com todos os 70 campos validos (F17.2a/F17.2b/F17.2c/F17.3a)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -545,9 +545,94 @@ describeEmulator('firestore.rules (emulador)', () => {
           licenses: [],
           // F17.2c: campo novo.
           purchaseOrders: [],
+          // F17.3a (D-9): 9 campos novos.
+          berthedAt: '',
+          arrivedAt: '',
+          ceMercante: '',
+          ceHouse: '',
+          terminalName: '',
+          freeTimeDays: 0,
+          demurrageDailyRateUsd: 0,
+          cargoPresenceInformedAt: '',
+          migratedApproxFields: [],
           updatedById: 'admin-1',
           updatedByName: 'Admin',
           updatedAt: new Date(),
+        })
+      )
+    })
+
+    // F17.3a (D-9): chegada com data, CE/terminal, free time, presenca.
+    it('admin atualiza berthedAt + ceMercante + freeTimeDays', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p24'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p24'), {
+          berthedAt: '2026-09-20T10:00',
+          ceMercante: 'CE-1',
+          freeTimeDays: 7,
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com 11 migratedApproxFields', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p25'), {
+          name: 'P',
+          migratedApproxFields: Array.from({ length: 11 }, (_, index) => `campo-${index}`),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com migratedApproxFields fora do shape (nao-list)', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p26'), {
+          name: 'P',
+          migratedApproxFields: 'x',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza berthedAt', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p27'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p27'), {
+          berthedAt: '2026-09-20T10:00',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza cargoPresenceInformedAt', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p28'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p28'), {
+          cargoPresenceInformedAt: '2026-09-20T10:00',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza freeTimeDays', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p29'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p29'), {
+          freeTimeDays: 7,
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
         })
       )
     })

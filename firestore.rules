@@ -159,6 +159,13 @@ service cloud.firestore {
     // `items[].poNumber`/`collectionWindows[].containerId` nao exigem
     // mudanca de rule (sem validacao de shape de `items`/`collectionWindows`
     // hoje).
+    //
+    // F17.3a (D-9): +9 campos de chegada com data (`berthedAt`/`arrivedAt`),
+    // CE/terminal (`ceMercante`/`ceHouse`/`terminalName`), free time
+    // (`freeTimeDays`/`demurrageDailyRateUsd`), presenca de carga com data
+    // (`cargoPresenceInformedAt`) e o marcador de migracao aproximada
+    // (`migratedApproxFields`, guarda `is list` + `size() <= 10`). Logistica
+    // INTOCADA (isLogisticsCollectionStatusUpdate/isLogisticsPostReceiptUpdate).
     function isAdminProcessFields() {
       // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
       // No `update`, `resource.data` existe. Tratamos os 2 casos:
@@ -205,6 +212,11 @@ service cloud.firestore {
         'licenses',
         // F17.2c: POs do consolidado.
         'purchaseOrders',
+        // F17.3a (D-9): chegada com data, CE/terminal, free time, presenca
+        // de carga com data, marcador de migracao aproximada.
+        'berthedAt', 'arrivedAt', 'ceMercante', 'ceHouse', 'terminalName',
+        'freeTimeDays', 'demurrageDailyRateUsd', 'cargoPresenceInformedAt',
+        'migratedApproxFields',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (
@@ -228,6 +240,12 @@ service cloud.firestore {
         || (
           request.resource.data.purchaseOrders is list
           && request.resource.data.purchaseOrders.size() <= 50
+        )
+      ) && (
+        !('migratedApproxFields' in request.resource.data)
+        || (
+          request.resource.data.migratedApproxFields is list
+          && request.resource.data.migratedApproxFields.size() <= 10
         )
       );
     }

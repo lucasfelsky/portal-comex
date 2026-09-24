@@ -36,6 +36,24 @@ function isAirCategory(category) {
   return category === 'AEREO'
 }
 
+// F17.3a (D-7): espelhos de `hasArrivalSignal`/`hasCargoPresenceSignal`
+// (`src/features/processes/arrivalCustoms.js`) - sem importar de `src/`
+// (deploy so empacota `functions/`). Teste de paridade em
+// `tests/unit/processMilestones.test.js`.
+export function hasArrivalSignalMirror(process) {
+  if (isMaritimeCategory(process?.category)) {
+    return hasValue(process?.berthedAt) || process?.berthed === true
+  }
+  if (isAirCategory(process?.category)) {
+    return hasValue(process?.arrivedAt) || process?.arrived === true
+  }
+  return false
+}
+
+export function hasCargoPresenceSignalMirror(process) {
+  return hasValue(process?.cargoPresenceInformedAt) || process?.cargoPresenceInformed === true
+}
+
 // Espelho de `isDuimpParametrizada` (deriveProcessStatus.js).
 function isDuimpParametrizada(process) {
   return normalizeComparable(process?.duimpStatus) === 'parametrizada'
@@ -167,33 +185,42 @@ export const MILESTONE_RULES = [
       return { value: after.shippedAt, previousValue: '', occurredAtField: after.shippedAt }
     },
   },
+  // F17.3a (D-7): sinal compat (`berthedAt` OU `berthed` legado) em vez do
+  // bool isolado; `field` passa a ser a data. `value`/`occurredAtField` = a
+  // data quando houver, senao `true` (legado sem data - compat, mesma regra
+  // do bool). `previousValue` continua `false` (transicao sinal-antes
+  // `false` -> sinal-depois `true` - o "antes" desta regra sempre parte de
+  // "sem sinal").
   {
     type: 'berthed',
-    field: 'berthed',
+    field: 'berthedAt',
     detect(before, after) {
       if (!isMaritimeCategory(after?.category)) return null
-      if (before?.berthed === true) return null
-      if (after?.berthed !== true) return null
-      return { value: true, previousValue: false }
+      if (hasArrivalSignalMirror(before)) return null
+      if (!hasArrivalSignalMirror(after)) return null
+      const dateValue = hasValue(after?.berthedAt) ? after.berthedAt : null
+      return { value: dateValue ?? true, previousValue: false, occurredAtField: dateValue }
     },
   },
   {
     type: 'arrived',
-    field: 'arrived',
+    field: 'arrivedAt',
     detect(before, after) {
       if (!isAirCategory(after?.category)) return null
-      if (before?.arrived === true) return null
-      if (after?.arrived !== true) return null
-      return { value: true, previousValue: false }
+      if (hasArrivalSignalMirror(before)) return null
+      if (!hasArrivalSignalMirror(after)) return null
+      const dateValue = hasValue(after?.arrivedAt) ? after.arrivedAt : null
+      return { value: dateValue ?? true, previousValue: false, occurredAtField: dateValue }
     },
   },
   {
     type: 'cargoPresence',
-    field: 'cargoPresenceInformed',
+    field: 'cargoPresenceInformedAt',
     detect(before, after) {
-      if (before?.cargoPresenceInformed === true) return null
-      if (after?.cargoPresenceInformed !== true) return null
-      return { value: true, previousValue: false }
+      if (hasCargoPresenceSignalMirror(before)) return null
+      if (!hasCargoPresenceSignalMirror(after)) return null
+      const dateValue = hasValue(after?.cargoPresenceInformedAt) ? after.cargoPresenceInformedAt : null
+      return { value: dateValue ?? true, previousValue: false, occurredAtField: dateValue }
     },
   },
   {

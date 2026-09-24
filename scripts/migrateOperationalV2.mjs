@@ -1,9 +1,11 @@
-// F17.1a/F17.2b: migracao do `processStatus` legado pro derivado
+// F17.1a/F17.2b/F17.3a: migracao do `processStatus` legado pro derivado
 // (deriveProcessStatus) + migracao de `mapaStatus` legado pro `licenses[]`
-// multi-orgao (F17.2b D-11). `MIGRATION_STEPS` tem hoje 2 passos EM SEQUENCIA
-// (`mapaToLicenses` primeiro - suas `changes` entram no doc antes do 2o passo
-// recalcular `processStatus`) - `berthedAt`, `containers[]` ja migraram via
-// F17.2a (nao precisaram de passo, so' de expansao lazy na leitura).
+// multi-orgao (F17.2b D-11) + migracao de `berthed`/`arrived` sem data pro
+// `berthedAt`/`arrivedAt` aproximado (F17.3a D-3). `MIGRATION_STEPS` tem 3
+// passos EM SEQUENCIA (`mapaToLicenses` -> `arrivalDates` ->
+// `recalcProcessStatus` - cada passo le as `changes` do anterior ja
+// aplicadas em memoria). `containers[]` ja migrou via F17.2a (nao precisou
+// de passo, so' de expansao lazy na leitura).
 //
 // Uso:
 //   node scripts/migrateOperationalV2.mjs          # dry-run (default), le e imprime, nao escreve
@@ -314,11 +316,82 @@ export function planMapaToLicensesMigration(processes) {
   })
 }
 
-// F17.2b (D-11): passos EM SEQUENCIA - `mapaToLicenses` primeiro (suas
-// `changes` entram no doc em memoria antes de `recalcProcessStatus` rodar
-// `deriveProcessStatus`, que ja le `licenses[]` como fonte autoritativa).
+function isAirCategoryForMigration(category) {
+  return category === 'AEREO'
+}
+
+/**
+ * F17.3a (D-3): plano puro (sem I/O) de migracao de `berthed`/`arrived`
+ * legado sem data pro `berthedAt`/`arrivedAt` aproximado (marcado em
+ * `migratedApproxFields`), a partir do `eta` (`YYYY-MM-DD` valido). Presenca
+ * de carga (`cargoPresenceInformed` sem `cargoPresenceInformedAt`) NUNCA
+ * ganha data inventada - so' `needs-review` (A1: seria a data-base do free
+ * time). Nunca rebaixa (so' ACRESCENTA campos).
+ */
+export function planArrivalDatesMigration(processes) {
+  return (Array.isArray(processes) ? processes : []).map((doc) => {
+    const category = doc?.category ?? ''
+    const changes = {}
+    const migratedApproxFields = Array.isArray(doc?.migratedApproxFields)
+      ? [...doc.migratedApproxFields]
+      : []
+    let type = 'unchanged'
+    let reason = 'sem sinal legado pendente'
+
+    function planArrivalDate(boolField, dateField) {
+      if (doc?.[boolField] !== true || hasValue(doc?.[dateField])) return
+      const eta = String(doc?.eta ?? '').slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(eta)) {
+        changes[dateField] = `${eta}T00:00`
+        if (!migratedApproxFields.includes(dateField)) migratedApproxFields.push(dateField)
+        changes.migratedApproxFields = migratedApproxFields
+        type = `${dateField}-approx`
+        reason = `${boolField}=true sem ${dateField}, migrado a partir do eta (aproximado)`
+        return
+      }
+      type = 'needs-review'
+      reason = `${boolField}=true sem ${dateField} e sem eta valido`
+    }
+
+    if (isMaritimeCategoryForMigration(category)) {
+      planArrivalDate('berthed', 'berthedAt')
+    } else if (isAirCategoryForMigration(category)) {
+      planArrivalDate('arrived', 'arrivedAt')
+    }
+
+    if (
+      doc?.cargoPresenceInformed === true &&
+      !hasValue(doc?.cargoPresenceInformedAt) &&
+      type === 'unchanged'
+    ) {
+      type = 'needs-review'
+      reason = 'cargoPresenceInformed=true sem cargoPresenceInformedAt'
+    }
+
+    if (Object.keys(changes).length > 0) {
+      changes.updatedById = ''
+      changes.updatedByName = MIGRATION_ACTOR_NAME
+    }
+
+    return {
+      id: doc?.id ?? '',
+      category,
+      before: '',
+      after: changes.berthedAt ?? changes.arrivedAt ?? '',
+      type,
+      reason,
+      changes: Object.keys(changes).length > 0 ? changes : null,
+    }
+  })
+}
+
+// F17.2b/F17.3a (D-11/D-3): passos EM SEQUENCIA - `mapaToLicenses` primeiro
+// (suas `changes` entram no doc em memoria), depois `arrivalDates`, e por
+// ultimo `recalcProcessStatus` (ja le `licenses[]`/`berthedAt`/`arrivedAt`
+// como fonte autoritativa).
 export const MIGRATION_STEPS = [
   { id: 'mapaToLicenses', plan: planMapaToLicensesMigration },
+  { id: 'arrivalDates', plan: planArrivalDatesMigration },
   { id: 'recalcProcessStatus', plan: planProcessStatusMigration },
 ]
 

@@ -260,6 +260,47 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
     TRIGGER_TIMEOUT_MS
   )
 
+  // F17.3a (D-7): `berthedAt` preenchido (sinal via DATA, nao so' o bool)
+  // gera o marco `berthed` com `occurredAtSource: 'field'`.
+  it(
+    'update com berthedAt preenchido gera evento berthed com occurredAtSource "field"',
+    async () => {
+      const processId = 'proc-upd-arrival'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Update Arrival',
+        processNumber: 'PO-1006',
+        category: 'FCL',
+        berthed: false,
+        berthedAt: '',
+        processStatus: 'Aguardando atracação',
+      })
+
+      await processRef.update({
+        berthed: true,
+        berthedAt: '2026-09-20T10:00',
+        processStatus: 'Atracação Confirmada',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Um',
+      })
+
+      const deadline = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      let eventDocs = []
+      while (Date.now() < deadline) {
+        const snapshot = await processRef.collection('events').where('type', '==', 'berthed').get()
+        eventDocs = snapshot.docs.map((item) => item.data())
+        if (eventDocs.length >= 1) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+
+      expect(eventDocs).toHaveLength(1)
+      expect(eventDocs[0].field).toBe('berthedAt')
+      expect(eventDocs[0].value).toBe('2026-09-20T10:00')
+      expect(eventDocs[0].occurredAtSource).toBe('field')
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
   // F17.2b (D-10): `licenses[]` entra na comparacao de update - o aviso que
   // hoje sai com MAPA nao pode se perder.
   it(

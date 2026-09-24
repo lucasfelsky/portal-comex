@@ -611,3 +611,93 @@ describe('F17.2c - purchaseOrders[]/items[].poNumber/collectionWindows[].contain
     expect(items[0].purchaseOrders).toEqual(['9999'])
   })
 })
+
+// F17.3a (D-14): chegada com data, CE/terminal/free time, presenca de carga.
+describe('F17.3a - chegada com data / CE / free time / presenca', () => {
+  it('(a) FCL salva berthedAt -> payload/retorno com berthed: true', async () => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({ berthed: false, berthedAt: '2026-01-10T10:00' })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.berthed).toBe(true)
+    expect(payload.berthedAt).toBe('2026-01-10T10:00')
+    expect(saved.berthed).toBe(true)
+  })
+
+  it('(b) limpar berthedAt de doc sem bool legado -> berthed: false e cascata zera cargoPresenceInformedAt/duimpStatus', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        berthedAt: '',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '2026-01-11T08:00',
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.berthed).toBe(false)
+    expect(payload.cargoPresenceInformedAt).toBe('')
+    expect(payload.cargoPresenceInformed).toBe(false)
+    expect(payload.duimpStatus).toBe('')
+  })
+
+  it('(c) legado berthed: true sem berthedAt -> continua true', async () => {
+    const saved = await saveProcess(baseMaritimeProcess({ berthed: true, berthedAt: undefined }))
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.berthed).toBe(true)
+    expect(payload.berthedAt).toBe('')
+    expect(saved.berthed).toBe(true)
+  })
+
+  it('(d) LCL grava freeTimeDays: null; AEREO grava ceMercante: ""', async () => {
+    await saveProcess(
+      baseMaritimeProcess({ category: 'LCL', processNumber: '', houseBl: 'HBL-1', freeTimeDays: '5' })
+    )
+    const lclPayload = mockSetDoc.mock.calls[0][1]
+    expect(lclPayload.freeTimeDays).toBeNull()
+
+    await saveProcess(baseAirProcess({ ceMercante: 'CE-1' }))
+    const airPayload = mockSetDoc.mock.calls[1][1]
+    expect(airPayload.ceMercante).toBe('')
+  })
+
+  it("(e) freeTimeDays: '0' -> 0 (valor valido, distinto de nao informado)", async () => {
+    await saveProcess(baseMaritimeProcess({ freeTimeDays: '0' }))
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.freeTimeDays).toBe(0)
+  })
+
+  it('(f) migratedApproxFields: filtra por APPROX_DATE_FIELDS e exige data preenchida', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        berthedAt: '2026-01-10T10:00',
+        migratedApproxFields: ['berthedAt', 'x'],
+      })
+    )
+    const withDatePayload = mockSetDoc.mock.calls[0][1]
+    expect(withDatePayload.migratedApproxFields).toEqual(['berthedAt'])
+
+    await saveProcess(
+      baseMaritimeProcess({ berthed: false, berthedAt: '', migratedApproxFields: ['berthedAt'] })
+    )
+    const withoutDatePayload = mockSetDoc.mock.calls[1][1]
+    expect(withoutDatePayload.migratedApproxFields).toEqual([])
+  })
+
+  it('(g) regressao DTA sem acento: AEREO arrivedAt + "Transito concluido" + presenca -> dtaStatus acentuado e presenca preservada', async () => {
+    await saveProcess(
+      baseAirProcess({
+        arrived: true,
+        arrivedAt: '2026-01-10T10:00',
+        dtaStatus: 'Transito concluido',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '2026-01-11T08:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.dtaStatus).toBe('Trânsito concluído')
+    expect(payload.cargoPresenceInformed).toBe(true)
+    expect(payload.cargoPresenceInformedAt).toBe('2026-01-11T08:00')
+  })
+})

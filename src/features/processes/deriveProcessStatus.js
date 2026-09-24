@@ -15,9 +15,9 @@
 // AEREO incluido).
 
 import { normalizeComparableText, isCdUnloadingOrReceivedStatus, processStatusOptions } from './processStatus.js'
-import { isMaritimeCategory, isAirCategory } from './processCategories.js'
 import { getCollectionWindows } from '../../utils/collectionWindows.js'
 import { areLicensesCleared } from './licenses.js'
+import { hasArrivalSignal, hasCargoPresenceSignal } from './arrivalCustoms.js'
 
 export const PRE_ARRIVAL_STATUSES = ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação']
 
@@ -69,16 +69,6 @@ export function isCollectionReleased(process) {
 
 function hasCollectionWindowScheduled(process) {
   return getCollectionWindows(process).some((window) => hasValue(window?.scheduledAt))
-}
-
-function hasArrivalSignal(process) {
-  if (isMaritimeCategory(process?.category)) {
-    return hasValue(process?.berthedAt) || process?.berthed === true
-  }
-  if (isAirCategory(process?.category)) {
-    return hasValue(process?.arrivedAt) || process?.arrived === true
-  }
-  return false
 }
 
 function getLocalDateKey(date) {
@@ -133,7 +123,7 @@ export function deriveProcessStatus(process, today = new Date()) {
     return 'Aguardando parametrização da DUIMP'
   }
 
-  if (hasValue(process?.cargoPresenceInformedAt) || process?.cargoPresenceInformed === true) {
+  if (hasCargoPresenceSignal(process)) {
     return 'Aguardando registro da DUIMP'
   }
 
