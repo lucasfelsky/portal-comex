@@ -350,6 +350,29 @@ describe('ProcessDetailView — POs do consolidado (F17.2c)', () => {
   })
 })
 
+// F17.2d-1 (D-4, Q4): carga perigosa POR ITEM - badge na aba Itens.
+describe('ProcessDetailView — carga perigosa por item (F17.2d-1)', () => {
+  it('item com dangerousGoods mostra o badge "Carga perigosa"', () => {
+    renderDetail({
+      detailTab: 'items',
+      selectedProcess: makeProcess(),
+      visibleProcessItems: [
+        { id: 'i1', commercialName: 'Resina', quantity: 1, dangerousGoods: true, imoClass: '3', unNumber: '1203' },
+      ],
+    })
+    expect(screen.getByText('Carga perigosa · Classe 3 · ONU 1203')).toBeInTheDocument()
+  })
+
+  it('item sem dangerousGoods NAO mostra o badge', () => {
+    renderDetail({
+      detailTab: 'items',
+      selectedProcess: makeProcess(),
+      visibleProcessItems: [{ id: 'i1', commercialName: 'Resina', quantity: 1 }],
+    })
+    expect(screen.queryByText(/Carga perigosa/)).not.toBeInTheDocument()
+  })
+})
+
 // F17.3b (D-14): card "DUIMP" completo (numero + datas + canal +
 // conferencia + exigencia/procedimento especial + desembaraco).
 describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {

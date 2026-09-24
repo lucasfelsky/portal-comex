@@ -1,23 +1,8 @@
-// F17.2a (D-11): embarque e transito (shippedAt, BL/AWB, navio/viagem/voo,
-// transbordo). Regra de import (D-11): nenhum modulo mockado por
+// F17.2a (D-11): embarque e transito (BL/AWB, navio/viagem/voo, transbordo).
+// F17.2d-1 (D-1, Q5): "Data de embarque" saiu daqui - virou o checkbox
+// "Embarque confirmado" no passo "Datas e previsão" (`shipmentConfirmation.js`,
+// deriva de `shippedAt`). Regra de import: nenhum modulo mockado por
 // tests/ui/ProcessesPage.test.jsx - este arquivo nao precisa de nenhum.
-
-// D-3: aviso inline (nao bloqueia) se shippedAt > hoje local. Mesmo padrao
-// de `getLocalDateKey` (deriveProcessStatus.js:88-93) - PROIBIDO
-// `toISOString()` aqui (bug de fuso, ver suite-standards).
-function getLocalDateKey(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function isFutureLocalDate(value) {
-  const trimmed = String(value ?? '').trim()
-  if (!trimmed) return false
-  return trimmed > getLocalDateKey(new Date())
-}
-
 export default function ProcessTransitFields({ draft, onDraftChange }) {
   const isMaritime =
     draft.category === 'FCL' || draft.category === 'LCL' || draft.category === 'CONSOLIDADO'
@@ -25,21 +10,6 @@ export default function ProcessTransitFields({ draft, onDraftChange }) {
 
   return (
     <>
-      <label className="field">
-        <span>Data de embarque</span>
-        <input
-          className="text-input"
-          type="date"
-          value={draft.shippedAt}
-          onChange={(event) => onDraftChange('shippedAt', event.target.value)}
-        />
-        {isFutureLocalDate(draft.shippedAt) ? (
-          <small className="field-hint">
-            <span className="inline-badge inline-badge--warn">Data de embarque é no futuro.</span>
-          </small>
-        ) : null}
-      </label>
-
       {isMaritime ? (
         <div className="detail-card detail-card--split">
           <label className="field">
@@ -130,15 +100,26 @@ export default function ProcessTransitFields({ draft, onDraftChange }) {
           <span>Esta carga tem transbordo?</span>
         </label>
         {draft.transshipment ? (
-          <label className="field">
-            <span>Porto/aeroporto de transbordo</span>
-            <input
-              className="text-input"
-              type="text"
-              value={draft.transshipmentPort}
-              onChange={(event) => onDraftChange('transshipmentPort', event.target.value)}
-            />
-          </label>
+          <div className="detail-card detail-card--split">
+            <label className="field">
+              <span>Porto/aeroporto de transbordo</span>
+              <input
+                className="text-input"
+                type="text"
+                value={draft.transshipmentPort}
+                onChange={(event) => onDraftChange('transshipmentPort', event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>ETD do transbordo</span>
+              <input
+                className="text-input"
+                type="date"
+                value={draft.transshipmentEtd}
+                onChange={(event) => onDraftChange('transshipmentEtd', event.target.value)}
+              />
+            </label>
+          </div>
         ) : null}
       </div>
     </>

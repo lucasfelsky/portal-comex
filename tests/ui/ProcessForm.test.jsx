@@ -59,6 +59,7 @@ function makeDraft(overrides = {}) {
     mawb: '',
     hawb: '',
     transshipmentPort: '',
+    transshipmentEtd: '',
     dangerousGoods: false,
     transshipment: false,
     grossWeightKg: 0,
@@ -150,14 +151,49 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(screen.queryByRole('button', { name: 'Avançar' })).not.toBeInTheDocument()
   })
 
-  it('passo "Embarque e trânsito" existe em create e dispara onDraftChange("shippedAt", ...)', async () => {
+  // F17.2d-1 (D-1, Q5): "Data de embarque" saiu do passo "Embarque e
+  // trânsito" - virou o checkbox "Embarque confirmado" no passo "Datas e
+  // previsão".
+  it('passo "Embarque e trânsito" NAO tem mais "Data de embarque"', async () => {
     const user = userEvent.setup()
-    const { onDraftChange } = renderForm()
+    renderForm()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque e trânsito' }))
-    expect(screen.getByText('Data de embarque')).toBeInTheDocument()
-    const dateInput = document.querySelector('input[type="date"]')
-    await user.type(dateInput, '2026-09-20')
-    expect(onDraftChange).toHaveBeenCalledWith('shippedAt', expect.any(String))
+    expect(screen.queryByText('Data de embarque')).not.toBeInTheDocument()
+  })
+
+  it('transbordo marcado mostra "ETD do transbordo" e dispara onDraftChange("transshipmentEtd", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ transshipment: true }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque e trânsito' }))
+    expect(screen.getByText('ETD do transbordo')).toBeInTheDocument()
+    const label = screen.getByText('ETD do transbordo').closest('label')
+    const input = within(label).getByDisplayValue('')
+    await user.type(input, '2026-09-20')
+    expect(onDraftChange).toHaveBeenCalledWith('transshipmentEtd', expect.any(String))
+  })
+
+  // F17.2d-1 (D-1/D-2, Q5): checkbox "Embarque confirmado" no passo "Datas
+  // e previsão".
+  it('checkbox "Embarque confirmado" desabilita sem ETD', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ etd: '' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    expect(screen.getByRole('checkbox', { name: 'Embarque confirmado' })).toBeDisabled()
+  })
+
+  it('marcar "Embarque confirmado" dispara onDraftChange("shipmentConfirmed", true)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ etd: '2026-09-18' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Embarque confirmado' }))
+    expect(onDraftChange).toHaveBeenCalledWith('shipmentConfirmed', true)
+  })
+
+  it('divergencia entre shippedAt e ETD mostra "Usar esta data como ETD"', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ etd: '2026-09-18', shippedAt: '2026-09-10' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    expect(screen.getByRole('button', { name: 'Usar esta data como ETD' })).toBeInTheDocument()
   })
 
   it('FCL mostra "Adicionar contêiner" no passo de status e carga', async () => {
@@ -174,6 +210,32 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(screen.getByText('Cubagem (m³)')).toBeInTheDocument()
   })
 
+  // F17.2d-1 (D-7, Q2): cubagem opcional tambem em FCL/CONSOLIDADO.
+  it('FCL mostra "Cubagem (m³)" no passo de status e carga', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ category: 'FCL' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(screen.getByText('Cubagem (m³)')).toBeInTheDocument()
+  })
+
+  // F17.2d-1 (D-4/D-5, Q4): legado de nivel-processo (sem item classificado).
+  it('legado de carga perigosa (sem item classificado) mostra "Descartar classificação do processo"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'FCL',
+        dangerousGoods: true,
+        unNumber: '1203',
+        imoClass: '3',
+        items: [],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    expect(
+      screen.getByRole('button', { name: 'Descartar classificação do processo' })
+    ).toBeInTheDocument()
+  })
+
   it('número de contêiner com dígito verificador invalido mostra o aviso', async () => {
     const user = userEvent.setup()
     renderForm({
@@ -188,12 +250,30 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     ).toBeInTheDocument()
   })
 
-  it('dangerousGoods marcado mostra "Número ONU" e "Classe IMO"', async () => {
+  // F17.2d-1 (D-4, Q4): carga perigosa passou a ser classificada POR ITEM
+  // (no passo Itens, nao mais em Status e carga).
+  it('item com dangerousGoods marcado mostra "Número ONU" e "Classe IMO" no passo Itens', async () => {
     const user = userEvent.setup()
-    renderForm({ draft: makeDraft({ dangerousGoods: true }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    renderForm({
+      draft: makeDraft({
+        items: [{ id: 'i1', commercialName: 'Resina', quantity: 10, dangerousGoods: true }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
     expect(screen.getByText('Número ONU')).toBeInTheDocument()
     expect(screen.getByText('Classe IMO')).toBeInTheDocument()
+  })
+
+  it('checkbox "Carga perigosa (IMO)" do item dispara onItemChange(id, "dangerousGoods", true)', async () => {
+    const user = userEvent.setup()
+    const onItemChange = vi.fn()
+    renderForm({
+      draft: makeDraft({ items: [{ id: 'i1', commercialName: 'Resina', quantity: 10 }] }),
+      onItemChange,
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Carga perigosa (IMO)' }))
+    expect(onItemChange).toHaveBeenCalledWith('i1', 'dangerousGoods', true)
   })
 
   it('botão Salvar fica disponível em qualquer passo e chama onSave', async () => {
@@ -533,7 +613,7 @@ describe('ProcessForm — status derivado (F17.2a D-3)', () => {
       screen.queryByText('Etapa pré-chegada (manual até o registro da data de embarque)')
     ).not.toBeInTheDocument()
     expect(
-      screen.getByText('Informe a data de embarque (passo Embarque e trânsito) para o status avançar.')
+      screen.getByText('Marque "Embarque confirmado" no passo Datas e previsão para o status avançar.')
     ).toBeInTheDocument()
   })
 

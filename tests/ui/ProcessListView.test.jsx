@@ -313,3 +313,26 @@ describe('ProcessListView — badge "Anuência indeferida" (F17.2b)', () => {
     expect(screen.queryByText('Anuência indeferida')).not.toBeInTheDocument()
   })
 })
+
+// F17.2d-1 (D-4, Q4): badge "Carga perigosa" - flag do processo OU algum
+// item classificado.
+describe('ProcessListView — badge "Carga perigosa" (F17.2d-1)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('processo com item dangerousGoods gera o badge "Carga perigosa"', () => {
+    renderView({
+      filteredProcesses: [
+        {
+          ...PROCESSES[0],
+          items: [{ id: 'i1', commercialName: 'Resina', quantity: 1, dangerousGoods: true }],
+        },
+      ],
+    })
+    expect(screen.getByText('Carga perigosa')).toBeInTheDocument()
+  })
+
+  it('sem item/flag de carga perigosa NAO mostra o badge', () => {
+    renderView({ filteredProcesses: [PROCESSES[0]] })
+    expect(screen.queryByText('Carga perigosa')).not.toBeInTheDocument()
+  })
+})

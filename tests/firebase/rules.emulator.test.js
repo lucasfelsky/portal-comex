@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 76 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b)', async () => {
+    it('admin cria processo com todos os 77 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b/F17.2d-1)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -534,6 +534,8 @@ describeEmulator('firestore.rules (emulador)', () => {
           mawb: '',
           hawb: '',
           transshipmentPort: '',
+          // F17.2d-1 (D-8, Q3): ETD do transbordo.
+          transshipmentEtd: '',
           dangerousGoods: false,
           transshipment: false,
           grossWeightKg: 0,
@@ -894,6 +896,19 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(
         updateDoc(doc(db, 'processes/p18'), {
           shippedAt: '2026-09-20',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.2d-1 (D-8, Q3): ETD do transbordo - admin-only, mesma allowlist.
+    it('logistica NAO atualiza transshipmentEtd', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p18b'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p18b'), {
+          transshipmentEtd: '2026-09-20',
           updatedById: 'log-1',
           updatedByName: 'Logistica',
         })

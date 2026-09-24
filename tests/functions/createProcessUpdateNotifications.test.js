@@ -194,6 +194,73 @@ describe('createProcessUpdateNotifications', () => {
     expect(mockBatch.set).not.toHaveBeenCalled()
   })
 
+  // F17.2d-1 (D-6, Q4): carga perigosa POR ITEM - defaults na comparacao
+  // evitam notificacao espuria no 1o save de legado; classificar/alterar um
+  // item notifica.
+  it('legado sem chaves IMO no item x 1o save esparso (sem classificar) -> NAO notifica', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      items: [{ commercialName: 'Resina', quantity: 10 }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      items: [{ commercialName: 'Resina', quantity: 10 }],
+      transshipmentEtd: '',
+      volumeM3: 0,
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('item passa a dangerousGoods/imoClass -> notifica com "itens vinculados atualizados"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      items: [{ commercialName: 'Resina', quantity: 10 }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      items: [{ commercialName: 'Resina', quantity: 10, dangerousGoods: true, imoClass: '3' }],
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('itens vinculados atualizados')
+  })
+
+  it('so a flag dangerousGoods de processo muda (derivacao) -> NAO notifica', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, dangerousGoods: false }
+    const after = {
+      ...PROCESS_BASE,
+      dangerousGoods: true,
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
   it('user comum nao e logistica nem admin -> NAO notifica', async () => {
     setupFirestoreChain({
       users: [

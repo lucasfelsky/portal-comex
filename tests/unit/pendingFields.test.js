@@ -115,18 +115,52 @@ describe('getPendingFields - estágio 0', () => {
     expect(ids).toContain('packagesQuantity')
   })
 
-  it('dangerousGoods true sem unNumber/imoClass -> pendencias', () => {
+  // F17.2d-1 (D-4/D-5, Q4): carga perigosa POR ITEM - a flag legado de
+  // nivel-processo sem item classificado vira `dangerousGoodsPerItem`;
+  // item classificado sem ONU/classe cobra por item (`itemUnNumber`/
+  // `itemImoClass`).
+  it('dangerousGoods true (legado, sem item classificado) -> dangerousGoodsPerItem', () => {
     const process = completeMaritimeProcess({ dangerousGoods: true, unNumber: '', imoClass: '' })
     const ids = getPendingFields(process).map((f) => f.id)
-    expect(ids).toContain('unNumber')
-    expect(ids).toContain('imoClass')
+    expect(ids).toContain('dangerousGoodsPerItem')
   })
 
-  it('dangerousGoods false NAO cobra unNumber/imoClass', () => {
-    const process = completeMaritimeProcess({ dangerousGoods: false, unNumber: '', imoClass: '' })
+  it('dangerousGoods false NAO cobra dangerousGoodsPerItem', () => {
+    const process = completeMaritimeProcess({ dangerousGoods: false })
     const ids = getPendingFields(process).map((f) => f.id)
-    expect(ids).not.toContain('unNumber')
-    expect(ids).not.toContain('imoClass')
+    expect(ids).not.toContain('dangerousGoodsPerItem')
+  })
+
+  it('item classificado completo (ONU/classe preenchidos) -> nenhuma pendencia de IMO', () => {
+    const process = completeMaritimeProcess({
+      items: [
+        { commercialName: 'Resina', quantity: 10, dangerousGoods: true, unNumber: '1203', imoClass: '3' },
+      ],
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('itemUnNumber')
+    expect(ids).not.toContain('itemImoClass')
+    expect(ids).not.toContain('dangerousGoodsPerItem')
+  })
+
+  it('item perigoso sem ONU -> itemUnNumber', () => {
+    const process = completeMaritimeProcess({
+      items: [
+        { commercialName: 'Resina', quantity: 10, dangerousGoods: true, unNumber: '', imoClass: '3' },
+      ],
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('itemUnNumber')
+  })
+
+  it('item perigoso sem classe IMO -> itemImoClass', () => {
+    const process = completeMaritimeProcess({
+      items: [
+        { commercialName: 'Resina', quantity: 10, dangerousGoods: true, unNumber: '1203', imoClass: '' },
+      ],
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toContain('itemImoClass')
   })
 
   it('supplierName/originLocation/incoterm vazios -> pendencias', () => {

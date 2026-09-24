@@ -17,6 +17,7 @@ import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getPendingFields } from './pendingFields'
 import { getContainerSpecialBadges } from './containers'
 import { hasRejectedLicense } from './licenses'
+import { hasDangerousGoods } from './operationalOptions'
 
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -175,6 +176,9 @@ function ProcessRow({
             ) : null}
             {hasRejectedLicense(item) ? (
               <span className="inline-badge inline-badge--danger">Anuência indeferida</span>
+            ) : null}
+            {hasDangerousGoods(item) ? (
+              <span className="inline-badge inline-badge--warn">Carga perigosa</span>
             ) : null}
           </div>
         </div>

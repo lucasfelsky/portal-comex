@@ -799,3 +799,90 @@ describe('F17.3b - DUIMP completa (payload)', () => {
     expect(payload).toHaveProperty('customsRequirementNotes')
   })
 })
+
+// F17.2d-1 (D-7/D-8/D-3..D-6): Q2 cubagem FCL/CONSOLIDADO, Q3 ETD do
+// transbordo, Q4 carga perigosa por item.
+describe('F17.2d-1 - cubagem FCL/CONSOLIDADO, ETD do transbordo, carga perigosa por item', () => {
+  it('FCL grava volumeM3; AEREO zera', async () => {
+    await saveProcess(baseMaritimeProcess({ category: 'FCL', volumeM3: '12,5' }))
+    let payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.volumeM3).toBe(12.5)
+
+    await saveProcess(baseAirProcess({ volumeM3: '12,5' }))
+    payload = mockSetDoc.mock.calls[1][1]
+    expect(payload.volumeM3).toBe(0)
+  })
+
+  it('CONSOLIDADO grava volumeM3', async () => {
+    await saveProcess(baseConsolidatedProcess({ volumeM3: '4' }))
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.volumeM3).toBe(4)
+  })
+
+  it('transshipmentEtd gravado so com transbordo', async () => {
+    await saveProcess(
+      baseMaritimeProcess({ transshipment: true, transshipmentEtd: '2026-09-20' })
+    )
+    let payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.transshipmentEtd).toBe('2026-09-20')
+
+    await saveProcess(
+      baseMaritimeProcess({ transshipment: false, transshipmentEtd: '2026-09-20' })
+    )
+    payload = mockSetDoc.mock.calls[1][1]
+    expect(payload.transshipmentEtd).toBe('')
+  })
+
+  it('item perigoso -> chaves esparsas + processo dangerousGoods: true e trio de processo zerado', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        dangerousGoods: false,
+        unNumber: '',
+        imoClass: '',
+        items: [
+          { id: 'i1', commercialName: 'Resina', quantity: 10, dangerousGoods: true, unNumber: 'UN 1203', imoClass: '3' },
+        ],
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.items[0]).toMatchObject({ dangerousGoods: true, unNumber: '1203', imoClass: '3' })
+    expect(payload.dangerousGoods).toBe(true)
+    expect(payload.unNumber).toBe('')
+    expect(payload.imoClass).toBe('')
+  })
+
+  it('item nao-perigoso NAO ganha chaves de IMO', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        items: [{ id: 'i1', commercialName: 'Resina', quantity: 10 }],
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.items[0]).not.toHaveProperty('dangerousGoods')
+    expect(payload.items[0]).not.toHaveProperty('unNumber')
+    expect(payload.items[0]).not.toHaveProperty('imoClass')
+  })
+
+  it('legado (flag de processo true, nenhum item perigoso) preserva o trio de processo', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        dangerousGoods: true,
+        unNumber: 'UN 1203',
+        imoClass: '3',
+        items: [{ id: 'i1', commercialName: 'Resina', quantity: 10 }],
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.dangerousGoods).toBe(true)
+    expect(payload.unNumber).toBe('1203')
+    expect(payload.imoClass).toBe('3')
+    expect(payload.items[0]).not.toHaveProperty('dangerousGoods')
+  })
+
+  it('payload tem transshipmentEtd definido', async () => {
+    await saveProcess(baseMaritimeProcess())
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload).toHaveProperty('transshipmentEtd')
+    expect(payload.transshipmentEtd).not.toBeUndefined()
+  })
+})

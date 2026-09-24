@@ -357,11 +357,17 @@ function sanitizeProcessForComparison(process) {
     dtaArrivalAtItajai: normalizeString(process.dtaArrivalAtItajai),
     // F17.2c (D-9): POs do consolidado.
     purchaseOrders: normalizePurchaseOrderList(process.purchaseOrders),
+    // F17.2d-1 (D-6, Q4): carga perigosa POR ITEM - default explicito
+    // (`false`/`''`) pra que legado (chaves ausentes) x 1o save (chaves
+    // esparsas, D-3) produzam JSON identico e nao notifiquem espuriamente.
     items: Array.isArray(process.items)
       ? process.items.map((item) => ({
           commercialName: normalizeString(item?.commercialName),
           quantity: Number(item?.quantity ?? 0),
           poNumber: normalizeString(item?.poNumber),
+          dangerousGoods: item?.dangerousGoods === true,
+          unNumber: normalizeString(item?.unNumber),
+          imoClass: normalizeString(item?.imoClass),
         }))
       : [],
   }
