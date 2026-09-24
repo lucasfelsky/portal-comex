@@ -44,9 +44,12 @@ import {
 } from '../utils/collectionWindows'
 import { normalizeContainers, linkCollectionWindowsToContainers } from '../features/processes/containers'
 import {
+  canSeePurchaseOrderDetails,
   getProcessPurchaseOrders,
+  getPurchaseOrderSearchTerms,
   normalizeItemPoNumber,
 } from '../features/processes/purchaseOrders'
+import { isRestrictedCategory } from '../features/processes/processCategories'
 import {
   INCOTERM_OPTIONS,
   itemsHaveDangerousGoods,
@@ -382,7 +385,9 @@ function sanitizeCargoAndTransitFields(process) {
   const transshipment = Boolean(process.transshipment)
 
   return {
-    supplierName: String(process.supplierName ?? '').trim(),
+    // F17.2d-2 (D-4, Q1): fornecedor de nivel-processo sai do CONSOLIDADO -
+    // o fornecedor passa a ser informado POR PO (`purchaseOrders[].supplierName`).
+    supplierName: category === 'CONSOLIDADO' ? '' : String(process.supplierName ?? '').trim(),
     originLocation: String(process.originLocation ?? '').trim(),
     incoterm: normalizeIncoterm(process.incoterm),
     forwarderName: String(process.forwarderName ?? '').trim(),
@@ -1187,20 +1192,27 @@ export async function deleteProcess(processId, actor = null) {
 // Busca processos (Sprint 18.0): filtra localmente em
 // name/destination/processNumber/purchaseOrders/items. Limita a 8 resultados
 // pra nao pesar o command palette.
-export async function searchProcesses(rawQuery) {
+//
+// F17.2d-2 (D-6/AD-1): `canSeeName` mascara o `name` de categoria restrita
+// (`isRestrictedCategory`) e a referencia/fornecedor de cada PO do
+// CONSOLIDADO (`getPurchaseOrderSearchTerms`) - o rotulo ja saia mascarado,
+// mas o MATCH da busca vazava (`user` achava FCL/LCL/AEREO pelo nome).
+export async function searchProcesses(rawQuery, { canSeeName = false } = {}) {
   const q = String(rawQuery ?? '').trim().toLowerCase()
   if (q.length < 2) return []
 
   const all = await listProcesses()
+  const canSeeDetails = canSeePurchaseOrderDetails(canSeeName)
   const matches = all.filter((process) => {
+    const showName = canSeeName || !isRestrictedCategory(process.category)
     const haystack = [
-      process.name ?? '',
+      showName ? process.name ?? '' : '',
       process.destination ?? '',
       process.processNumber ?? '',
       process.category ?? '',
       process.channel ?? '',
       process.responsibleName ?? '',
-      ...(Array.isArray(process.purchaseOrders) ? process.purchaseOrders : []),
+      ...getPurchaseOrderSearchTerms(process.purchaseOrders, canSeeDetails),
       ...(Array.isArray(process.items)
         ? process.items.flatMap((item) => [
             item.commercialName ?? '',

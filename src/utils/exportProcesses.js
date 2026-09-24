@@ -9,7 +9,11 @@
 // ProcessesPage — a lib só entra no chunk quando alguém usa).
 import { getProcessDerivedStatus } from '../features/processes/processDerivedStatus'
 import { canShowProcessName } from '../features/processes/processLabels'
-import { getProcessPurchaseOrders } from '../features/processes/purchaseOrders'
+import {
+  canSeePurchaseOrderDetails,
+  getProcessPurchaseOrders,
+  getPurchaseOrderNumbers,
+} from '../features/processes/purchaseOrders'
 import { getCollectionWindows } from './collectionWindows'
 
 function formatDateBr(isoDate) {
@@ -51,12 +55,22 @@ function nextCollectionWindowLabel(process) {
 // Datas como TEXTO pt-BR de propósito: evita o serial date do Excel e
 // mantém o arquivo legível sem formatação extra.
 export function buildProcessesExportRows(processes, now = new Date(), { canSeeName = false } = {}) {
+  const canSeeDetails = canSeePurchaseOrderDetails(canSeeName)
   return (Array.isArray(processes) ? processes : []).map((process) => {
     const showName = canShowProcessName(process, canSeeName)
+    const purchaseOrders = getProcessPurchaseOrders(process)
+    const references = canSeeDetails
+      ? purchaseOrders.map((order) => order.reference).filter(Boolean)
+      : []
+    const supplierNames = canSeeDetails
+      ? purchaseOrders.map((order) => order.supplierName).filter(Boolean)
+      : []
     return {
       Processo: process.processNumber || (showName ? process.name || '' : ''),
       Nome: showName ? process.name || '' : '',
-      POs: getProcessPurchaseOrders(process).join(', '),
+      POs: getPurchaseOrderNumbers(purchaseOrders).join(', '),
+      'Referências das POs': references.join(', '),
+      'Fornecedores das POs': supplierNames.join(', '),
       Categoria: process.category || '',
       Destino: process.destination || '',
       ETD: formatDateBr(process.etd),
@@ -86,6 +100,9 @@ export async function exportProcessesToXlsx(processes, now = new Date(), options
   worksheet['!cols'] = [
     { wch: 16 },
     { wch: 28 },
+    { wch: 24 },
+    // F17.2d-2 (D-6): "Referências das POs" e "Fornecedores das POs".
+    { wch: 24 },
     { wch: 24 },
     { wch: 12 },
     { wch: 14 },

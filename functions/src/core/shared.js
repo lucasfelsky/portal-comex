@@ -63,9 +63,17 @@ function normalizeEmail(value) {
   return normalizeString(value).toLowerCase()
 }
 
-// F17.2c (D-9): compara `purchaseOrders[]` (POs do CONSOLIDADO) na leitura.
+// F17.2c (D-9) / F17.2d-2 (D-5): compara `purchaseOrders[]` (POs do
+// CONSOLIDADO) na leitura - so' o `po` entra na comparacao (aceita string
+// legada OU objeto `{ po, reference, supplierName }`); mudar so'
+// referencia/fornecedor (dado mascarado) nao pode gerar aviso espurio.
 function normalizePurchaseOrderList(value) {
-  return Array.isArray(value) ? value.map(normalizeString).filter(Boolean) : []
+  return Array.isArray(value)
+    ? value
+        .map((item) => (item && typeof item === 'object' ? item.po : item))
+        .map(normalizeString)
+        .filter(Boolean)
+    : []
 }
 
 function normalizeList(items) {

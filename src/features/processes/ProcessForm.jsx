@@ -27,7 +27,7 @@ import ProcessCustomsFields from './ProcessCustomsFields'
 import ProcessItemDangerousGoodsFields from './ProcessItemDangerousGoodsFields'
 import LicensesEditor from './LicensesEditor'
 import PurchaseOrdersEditor from './PurchaseOrdersEditor'
-import { getProcessPurchaseOrders } from './purchaseOrders'
+import { getProcessPurchaseOrders, getPurchaseOrderNumbers } from './purchaseOrders'
 import {
   hasShipmentDateDivergence,
   isFutureShipment,
@@ -177,15 +177,17 @@ export default function ProcessForm({
       )}
 
       <div className="detail-card detail-card--split">
-        <label className="field">
-          <span>Fornecedor</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.supplierName}
-            onChange={(event) => onDraftChange('supplierName', event.target.value)}
-          />
-        </label>
+        {draft.category !== 'CONSOLIDADO' ? (
+          <label className="field">
+            <span>Fornecedor</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.supplierName}
+              onChange={(event) => onDraftChange('supplierName', event.target.value)}
+            />
+          </label>
+        ) : null}
         <label className="field">
           <span>Origem</span>
           <input
@@ -455,7 +457,7 @@ export default function ProcessForm({
     </>
   )
 
-  const consolidatedPurchaseOrders = getProcessPurchaseOrders(draft)
+  const consolidatedPurchaseOrders = getPurchaseOrderNumbers(getProcessPurchaseOrders(draft))
 
   const renderItemsStep = () => (
     <div className="detail-card">

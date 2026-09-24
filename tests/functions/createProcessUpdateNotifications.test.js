@@ -691,5 +691,92 @@ describe('createProcessUpdateNotifications', () => {
       await handler(makeEvent(before, after))
       expect(mockBatch.set).not.toHaveBeenCalled()
     })
+
+    // F17.2d-2 (D-5, Q6/Q1): objetos {po, reference, supplierName}.
+    it('before strings x after objetos com os mesmos po -> NAO notifica (1o save)', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...CONSOLIDATED_BASE, purchaseOrders: ['PO-A', 'PO-B'] }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [
+          { po: 'PO-A', reference: '', supplierName: 'ACME' },
+          { po: 'PO-B', reference: '', supplierName: 'ACME' },
+        ],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('so reference/supplierName mudam (mesmo po) -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: '' }],
+      }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [{ po: 'PO-A', reference: 'REF-1', supplierName: 'ACME' }],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('PO nova em objetos -> "POs do consolidado atualizadas"', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: '' }],
+      }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        purchaseOrders: [
+          { po: 'PO-A', reference: '', supplierName: '' },
+          { po: 'PO-B', reference: '', supplierName: '' },
+        ],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.body).toContain('POs do consolidado atualizadas')
+    })
+
+    it('supplierName de processo ACME -> "" (Q1) NAO notifica (nao entra na comparacao)', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...CONSOLIDATED_BASE, supplierName: 'ACME' }
+      const after = {
+        ...CONSOLIDATED_BASE,
+        supplierName: '',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
   })
 })

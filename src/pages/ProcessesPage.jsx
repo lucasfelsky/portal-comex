@@ -58,7 +58,9 @@ import {
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import {
+  canSeePurchaseOrderDetails,
   clearRemovedPurchaseOrderLinks,
+  getPurchaseOrderSearchTerms,
   normalizePurchaseOrders,
 } from '../features/processes/purchaseOrders'
 import { applyEtdEdit, applyShipmentConfirmation } from '../features/processes/shipmentConfirmation'
@@ -639,7 +641,7 @@ export default function ProcessesPage() {
           item.etd,
           item.processStatus,
           item.collectionStatus,
-          ...(item.purchaseOrders ?? []),
+          ...getPurchaseOrderSearchTerms(item.purchaseOrders, canSeePurchaseOrderDetails(canSeeName)),
           ...(item.items ?? []).map((processItem) => processItem?.poNumber ?? ''),
         ]
           .join(' ')
@@ -859,7 +861,10 @@ export default function ProcessesPage() {
       // F17.2c (D-4): remover uma PO limpa o vinculo dos itens que a
       // usavam (`clearRemovedPurchaseOrderLinks`).
       if (field === 'purchaseOrders') {
-        const nextPurchaseOrders = normalizePurchaseOrders(value)
+        // F17.2d-2 (D-8): `trimText: false` - o trim acontece so' na
+        // gravacao (senao' o espaco digitado entre palavras em
+        // referencia/fornecedor some a cada tecla).
+        const nextPurchaseOrders = normalizePurchaseOrders(value, { trimText: false })
         return {
           ...current,
           purchaseOrders: nextPurchaseOrders,

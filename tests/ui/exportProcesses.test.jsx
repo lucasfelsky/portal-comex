@@ -116,9 +116,10 @@ describe('buildProcessesExportRows — mascaramento de nome (bug 4)', () => {
   })
 })
 
-// F17.2c (D-10): coluna POs (purchaseOrders[] do CONSOLIDADO).
+// F17.2c/F17.2d-2 (D-10/D-6): coluna POs (purchaseOrders[] do CONSOLIDADO)
+// + colunas "Referências das POs"/"Fornecedores das POs" mascaradas.
 describe('buildProcessesExportRows — coluna POs (F17.2c)', () => {
-  it('CONSOLIDADO com purchaseOrders -> "A, B"', () => {
+  it('CONSOLIDADO com purchaseOrders (strings legadas) -> "A, B"', () => {
     const rows = buildProcessesExportRows(
       [{ ...PROCESS, category: 'CONSOLIDADO', purchaseOrders: ['A', 'B'] }],
       NOW
@@ -134,5 +135,34 @@ describe('buildProcessesExportRows — coluna POs (F17.2c)', () => {
   it('processo minimo ({ id: "vazio" }) -> ""', () => {
     const rows = buildProcessesExportRows([{ id: 'vazio' }], NOW)
     expect(rows[0].POs).toBe('')
+  })
+})
+
+describe('buildProcessesExportRows — colunas Referências/Fornecedores das POs (F17.2d-2)', () => {
+  const CONSOLIDATED = {
+    ...PROCESS,
+    category: 'CONSOLIDADO',
+    purchaseOrders: [
+      { po: 'A', reference: 'REF-A', supplierName: 'ACME' },
+      { po: 'B', reference: '', supplierName: 'BETA' },
+    ],
+  }
+
+  it('canSeeName: true -> colunas preenchidas', () => {
+    const rows = buildProcessesExportRows([CONSOLIDATED], NOW, { canSeeName: true })
+    expect(rows[0]['Referências das POs']).toBe('REF-A')
+    expect(rows[0]['Fornecedores das POs']).toBe('ACME, BETA')
+  })
+
+  it('canSeeName: false -> colunas vazias', () => {
+    const rows = buildProcessesExportRows([CONSOLIDATED], NOW)
+    expect(rows[0]['Referências das POs']).toBe('')
+    expect(rows[0]['Fornecedores das POs']).toBe('')
+  })
+
+  it('a chave esta presente mesmo sem canSeeName/sem POs', () => {
+    const rows = buildProcessesExportRows([PROCESS], NOW)
+    expect(rows[0]).toHaveProperty('Referências das POs', '')
+    expect(rows[0]).toHaveProperty('Fornecedores das POs', '')
   })
 })

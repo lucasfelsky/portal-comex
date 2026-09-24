@@ -42,6 +42,7 @@ import {
   saveProcess,
   saveProcessCollectionStatus,
   listProcesses,
+  searchProcesses,
   dtaStatusOptions,
   collectionStatusOptions,
 } from '../../src/services/processesRepository'
@@ -521,13 +522,38 @@ function baseConsolidatedProcess(overrides = {}) {
   }
 }
 
-describe('F17.2c - purchaseOrders[]/items[].poNumber/collectionWindows[].containerId', () => {
-  it('CONSOLIDADO grava purchaseOrders normalizado e processNumber ""', async () => {
-    await saveProcess(baseConsolidatedProcess({ purchaseOrders: [' PO-A ', 'po-a', 'PO-B'] }))
+describe('F17.2c/F17.2d-2 - purchaseOrders[]/items[].poNumber/collectionWindows[].containerId', () => {
+  it('CONSOLIDADO legado (strings) + supplierName do processo -> payload purchaseOrders com supplierName em cada PO e supplierName do processo ""', async () => {
+    await saveProcess(
+      baseConsolidatedProcess({ purchaseOrders: [' PO-A ', 'po-a', 'PO-B'], supplierName: 'ACME' })
+    )
 
     const payload = mockSetDoc.mock.calls[0][1]
-    expect(payload.purchaseOrders).toEqual(['PO-A', 'PO-B'])
+    expect(payload.purchaseOrders).toEqual([
+      { po: 'PO-A', reference: '', supplierName: 'ACME' },
+      { po: 'PO-B', reference: '', supplierName: 'ACME' },
+    ])
     expect(payload.processNumber).toBe('')
+    expect(payload.supplierName).toBe('')
+  })
+
+  it('CONSOLIDADO com objetos -> preservados (trim)', async () => {
+    await saveProcess(
+      baseConsolidatedProcess({
+        purchaseOrders: [{ po: ' PO-A ', reference: ' REF-1 ', supplierName: ' ACME ' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.purchaseOrders).toEqual([{ po: 'PO-A', reference: 'REF-1', supplierName: 'ACME' }])
+  })
+
+  it('FCL mantem supplierName e purchaseOrders: []', async () => {
+    await saveProcess(baseMaritimeProcess({ supplierName: 'Fornecedor Atlas' }))
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.purchaseOrders).toEqual([])
+    expect(payload.supplierName).toBe('Fornecedor Atlas')
   })
 
   it('FCL grava purchaseOrders: [] e itens SEM a chave poNumber', async () => {
@@ -592,7 +618,7 @@ describe('F17.2c - purchaseOrders[]/items[].poNumber/collectionWindows[].contain
     expect(payload.collectionWindows[0].containerId).toBe('')
   })
 
-  it('leitura de CONSOLIDADO com processNumber cru vira purchaseOrders: [valor]', async () => {
+  it('leitura de CONSOLIDADO com processNumber cru vira purchaseOrders: [{ po: valor, ... }]', async () => {
     mockGetDocs.mockResolvedValue({
       docs: [
         {
@@ -608,7 +634,122 @@ describe('F17.2c - purchaseOrders[]/items[].poNumber/collectionWindows[].contain
     })
 
     const items = await listProcesses()
-    expect(items[0].purchaseOrders).toEqual(['9999'])
+    expect(items[0].purchaseOrders).toEqual([{ po: '9999', reference: '', supplierName: '' }])
+  })
+
+  it('item poNumber valido contra lista de POs em objetos', async () => {
+    await saveProcess(
+      baseConsolidatedProcess({
+        purchaseOrders: [
+          { po: 'PO-A', reference: '', supplierName: '' },
+          { po: 'PO-B', reference: '', supplierName: '' },
+        ],
+        items: [{ id: 'i1', commercialName: 'Item', quantity: 1, poNumber: 'PO-B' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.items[0].poNumber).toBe('PO-B')
+  })
+})
+
+// F17.2d-2 (AD-1): `searchProcesses` mascara `name` de categoria restrita
+// (isRestrictedCategory) e referencia/fornecedor da PO do CONSOLIDADO.
+describe('F17.2d-2 - searchProcesses mascarado (AD-1)', () => {
+  it('sem canSeeName: user NAO acha FCL/LCL/AEREO pelo nome', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-fcl',
+          data: () => ({
+            id: 'p-fcl',
+            name: 'Importacao Secreta',
+            category: 'FCL',
+            processNumber: 'FCL-1',
+          }),
+        },
+      ],
+    })
+
+    const results = await searchProcesses('Secreta')
+    expect(results).toEqual([])
+  })
+
+  it('sem canSeeName: user acha FCL pela PO/codigo (processNumber)', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-fcl',
+          data: () => ({
+            id: 'p-fcl',
+            name: 'Importacao Secreta',
+            category: 'FCL',
+            processNumber: 'FCL-1',
+          }),
+        },
+      ],
+    })
+
+    const results = await searchProcesses('FCL-1')
+    expect(results).toHaveLength(1)
+  })
+
+  it('com canSeeName: admin/logistica acham FCL pelo nome', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-fcl',
+          data: () => ({
+            id: 'p-fcl',
+            name: 'Importacao Secreta',
+            category: 'FCL',
+            processNumber: 'FCL-1',
+          }),
+        },
+      ],
+    })
+
+    const results = await searchProcesses('Secreta', { canSeeName: true })
+    expect(results).toHaveLength(1)
+  })
+
+  it('CONSOLIDADO: sem canSeeName nao acha por referencia/fornecedor da PO, acha pelo numero', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-cons',
+          data: () => ({
+            id: 'p-cons',
+            name: 'Consolidado X',
+            category: 'CONSOLIDADO',
+            purchaseOrders: [{ po: 'PO-9', reference: 'REF-X', supplierName: 'ACME' }],
+          }),
+        },
+      ],
+    })
+
+    expect(await searchProcesses('REF-X')).toEqual([])
+    expect(await searchProcesses('ACME')).toEqual([])
+    expect(await searchProcesses('PO-9')).toHaveLength(1)
+  })
+
+  it('CONSOLIDADO: com canSeeName acha por referencia/fornecedor da PO', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-cons',
+          data: () => ({
+            id: 'p-cons',
+            name: 'Consolidado X',
+            category: 'CONSOLIDADO',
+            purchaseOrders: [{ po: 'PO-9', reference: 'REF-X', supplierName: 'ACME' }],
+          }),
+        },
+      ],
+    })
+
+    expect(await searchProcesses('REF-X', { canSeeName: true })).toHaveLength(1)
+    expect(await searchProcesses('ACME', { canSeeName: true })).toHaveLength(1)
   })
 })
 

@@ -84,6 +84,16 @@ export const PENDING_FIELD_RULES = [
         (item) => hasText(item?.commercialName) && Number(item?.quantity) > 0 && !hasText(item?.poNumber)
       ),
   },
+  // F17.2d-2 (D-9, Q1): fornecedor agora e' informado POR PO do consolidado.
+  {
+    id: 'purchaseOrderSupplier',
+    field: 'purchaseOrders',
+    label: 'Fornecedor da PO',
+    stage: 0,
+    categories: ['CONSOLIDADO'],
+    when: (p) => getProcessPurchaseOrders(p).length > 0,
+    isMissing: (p) => getProcessPurchaseOrders(p).some((order) => !hasText(order?.supplierName)),
+  },
   { id: 'etd', field: 'etd', label: 'ETD', stage: 0, isMissing: (p) => !hasText(p?.etd) },
   { id: 'eta', field: 'eta', label: 'ETA', stage: 0, isMissing: (p) => !hasText(p?.eta) },
   {
@@ -125,6 +135,9 @@ export const PENDING_FIELD_RULES = [
     field: 'supplierName',
     label: 'Fornecedor',
     stage: 0,
+    // F17.2d-2 (D-4, Q1): CONSOLIDADO nao tem fornecedor de nivel-processo -
+    // o fornecedor e' informado POR PO (ver pendencia `purchaseOrderSupplier`).
+    when: (p) => p?.category !== 'CONSOLIDADO',
     isMissing: (p) => !hasText(p?.supplierName),
   },
   {

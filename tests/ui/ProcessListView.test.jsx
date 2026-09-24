@@ -336,3 +336,32 @@ describe('ProcessListView — badge "Carga perigosa" (F17.2d-1)', () => {
     expect(screen.queryByText('Carga perigosa')).not.toBeInTheDocument()
   })
 })
+
+// F17.2d-2 (Q6/Q1): card CONSOLIDADO com POs objeto so mostra os numeros
+// (getProcessSubtitle -> formatPurchaseOrdersSummary) - referencia/fornecedor
+// nunca aparecem no card, admin ou nao.
+describe('ProcessListView — card CONSOLIDADO nao vaza referencia/fornecedor da PO (F17.2d-2)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  const CONSOLIDATED = {
+    ...PROCESSES[0],
+    id: 'p-cons',
+    category: 'CONSOLIDADO',
+    processNumber: '',
+    purchaseOrders: [{ po: 'PO-A', reference: 'REF-SECRETA', supplierName: 'ACME' }],
+  }
+
+  it('user (isAdmin false): mostra "POs: PO-A", nao mostra REF-SECRETA/ACME', () => {
+    renderView({ filteredProcesses: [CONSOLIDATED], isAdmin: false })
+    expect(screen.getByText('PO: PO-A')).toBeInTheDocument()
+    expect(screen.queryByText(/REF-SECRETA/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ACME/)).not.toBeInTheDocument()
+  })
+
+  it('admin: mostra "POs: PO-A", nao mostra REF-SECRETA/ACME', () => {
+    renderView({ filteredProcesses: [CONSOLIDATED], isAdmin: true })
+    expect(screen.getByText('PO: PO-A')).toBeInTheDocument()
+    expect(screen.queryByText(/REF-SECRETA/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ACME/)).not.toBeInTheDocument()
+  })
+})

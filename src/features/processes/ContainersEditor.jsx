@@ -4,17 +4,21 @@ import {
   MAX_CONTAINERS,
   createEmptyContainer,
   getContainerNumberWarning,
+  isContainerRemovalLocked,
 } from './containers'
 
 // F17.2a (D-11): editor de containers[] - lista editavel (tipo, numero +
 // aviso ISO 6346, lacre, remover) + botao "Adicionar contêiner" (desabilita
 // no teto de 40). So' importa de `./containers` e `SelectField` (D-11 -
 // tests/ui/ProcessesPage.test.jsx mocka modulos com lista fechada).
+// F17.2d-2 (D-13, Q8): "Remover" trava quando o contêiner tem coleta
+// AGENDADA (`isContainerRemovalLocked`) - numero/lacre/tipo continuam
+// editaveis.
 function generateContainerId() {
   return `CNT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export default function ContainersEditor({ value, onChange, disabled = false }) {
+export default function ContainersEditor({ value, onChange, disabled = false, collectionWindows = [] }) {
   const containers = Array.isArray(value) ? value : []
   const canAddMore = containers.length < MAX_CONTAINERS
 
@@ -58,6 +62,7 @@ export default function ContainersEditor({ value, onChange, disabled = false }) 
         <ul className="collection-windows-editor__list">
           {containers.map((container) => {
             const warning = getContainerNumberWarning(container.number)
+            const removalLocked = isContainerRemovalLocked(container.id, collectionWindows)
             return (
               <li key={container.id} className="collection-windows-editor__item">
                 <div className="collection-windows-editor__row">
@@ -107,11 +112,16 @@ export default function ContainersEditor({ value, onChange, disabled = false }) 
                     type="button"
                     className="ghost-button collection-windows-editor__remove"
                     onClick={() => handleRemove(container.id)}
-                    disabled={disabled}
+                    disabled={disabled || removalLocked}
                   >
                     Remover
                   </button>
                 </div>
+                {removalLocked ? (
+                  <small className="field-hint">
+                    Contêiner com coleta agendada — só pode ser editado.
+                  </small>
+                ) : null}
               </li>
             )
           })}
