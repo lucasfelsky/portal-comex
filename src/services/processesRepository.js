@@ -16,7 +16,6 @@ import {
   CD_EN_ROUTE_STATUS,
   isLogisticaEditableCollectionStatus,
   isPostCollectionStatus,
-  mapaAllowsCollectionStatus,
   processStatusOptions,
   postCollectionStatusOptions,
   shouldPreserveStockCollectionStatus,
@@ -25,8 +24,9 @@ import { createAuditEvent } from './auditRepository'
 import {
   deriveProcessStatus,
   resolveCargoReceivedAt,
-  isCustomsCleared,
+  isCollectionReleased,
 } from '../features/processes/deriveProcessStatus'
+import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
 import { normalizePostReceiptImages } from '../utils/postReceiptImages'
 import {
   getCollectionWindows,
@@ -291,10 +291,6 @@ function keepsCollectionSchedule(status) {
   )
 }
 
-function mapaAllowsCollection(status) {
-  return mapaAllowsCollectionStatus(status)
-}
-
 function normalizeDtaStatus(status) {
   return String(status ?? '')
     .normalize('NFD')
@@ -323,6 +319,10 @@ function normalizeDestination(value) {
   return String(value ?? '').trim().toUpperCase()
 }
 
+// F17.2b (D-4): o gate de coleta usa `isCollectionReleased` (desembaraco +
+// TODAS as anuencias deferidas, `licenses[]` via `./licenses.js`) - substitui
+// a checagem privada de MAPA. `process.licenses` chega aqui JA normalizado
+// (D-3, `normalizeProcess`/`toFirestorePayload` normalizam antes de chamar).
 function sanitizeCustomsFlow(process) {
   const cargoPresenceInformed = Boolean(process.cargoPresenceInformed)
   const duimpStatus = cargoPresenceInformed ? canonicalizeDuimpStatus(process.duimpStatus) : ''
@@ -332,19 +332,16 @@ function sanitizeCustomsFlow(process) {
   // (datetime-local, sem normalizacao ISO). So relevante com duimp parametrizada.
   const clearanceCompletedAt =
     duimpStatus === 'Parametrizada' ? process.clearanceCompletedAt ?? '' : ''
-  const customsCleared = isCustomsCleared({
+  const released = isCollectionReleased({
+    category: process.category,
     duimpStatus,
     parameterizationChannel,
     clearanceCompletedAt,
+    licenses: process.licenses,
   })
-  const canReleaseCollection =
-    !isMaritimeCategory(process.category) || mapaAllowsCollection(process.mapaStatus)
   const canonicalizedCollectionStatus = canonicalizeCollectionStatus(process.collectionStatus ?? '')
-  const normalizedCollectionStatus =
-    customsCleared && canReleaseCollection ? canonicalizedCollectionStatus : ''
-  const collectionWindows = customsCleared && canReleaseCollection
-    ? getCollectionWindows(process)
-    : []
+  const normalizedCollectionStatus = released ? canonicalizedCollectionStatus : ''
+  const collectionWindows = released ? getCollectionWindows(process) : []
   const collectionScheduledAt = keepsCollectionSchedule(normalizedCollectionStatus)
     ? process.collectionScheduledAt ?? ''
     : ''
@@ -357,19 +354,6 @@ function sanitizeCustomsFlow(process) {
     collectionStatus: normalizedCollectionStatus,
     collectionWindows,
     collectionScheduledAt,
-  }
-}
-
-function sanitizeMapaFlow(process) {
-  const mapaStatus = isMaritimeCategory(process.category) ? process.mapaStatus ?? '' : ''
-  const mapaInspectionScheduledAt =
-    mapaStatus === 'Vistoria agendada, aguardando realização'
-      ? process.mapaInspectionScheduledAt ?? ''
-      : ''
-
-  return {
-    mapaStatus,
-    mapaInspectionScheduledAt,
   }
 }
 
@@ -418,6 +402,10 @@ function sanitizeCargoAndTransitFields(process) {
   }
 }
 
+// F17.2b (D-3): `mapaStatus`/`mapaInspectionScheduledAt` nao sao mais
+// propagados por esta funcao (aposentados - gravados vazios em toda
+// categoria, `normalizeProcess`/`toFirestorePayload` cuidam disso). O gate
+// de coleta usa `process.licenses` (JA normalizado pelo chamador).
 function sanitizeOperationalFields(process) {
   if (isMaritimeCategory(process.category)) {
     const berthed = Boolean(process.berthed)
@@ -433,11 +421,6 @@ function sanitizeOperationalFields(process) {
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
-        mapaStatus: process.mapaStatus ?? '',
-        mapaInspectionScheduledAt:
-          process.mapaStatus === 'Vistoria agendada, aguardando realização'
-            ? process.mapaInspectionScheduledAt ?? ''
-            : '',
         dtaStatus: '',
         dtaLoadingScheduledAt: '',
         dtaArrivalAtItajai: '',
@@ -450,7 +433,6 @@ function sanitizeOperationalFields(process) {
       dtaStatus: '',
       dtaLoadingScheduledAt: '',
       dtaArrivalAtItajai: '',
-      ...sanitizeMapaFlow(process),
       ...sanitizeCustomsFlow(process),
     }
   }
@@ -482,8 +464,6 @@ function sanitizeOperationalFields(process) {
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
-        mapaStatus: '',
-        mapaInspectionScheduledAt: '',
         dtaStatus: '',
         dtaLoadingScheduledAt: '',
         dtaArrivalAtItajai: '',
@@ -506,18 +486,16 @@ function sanitizeOperationalFields(process) {
   return {
     berthed: false,
     arrived: false,
-      cargoPresenceInformed: false,
-      duimpStatus: '',
-      parameterizationChannel: '',
-      clearanceCompletedAt: '',
-      collectionStatus: '',
-      collectionWindows: [],
-      collectionScheduledAt: '',
-      mapaStatus: '',
-      mapaInspectionScheduledAt: '',
-      dtaStatus: '',
-      dtaLoadingScheduledAt: '',
-      dtaArrivalAtItajai: '',
+    cargoPresenceInformed: false,
+    duimpStatus: '',
+    parameterizationChannel: '',
+    clearanceCompletedAt: '',
+    collectionStatus: '',
+    collectionWindows: [],
+    collectionScheduledAt: '',
+    dtaStatus: '',
+    dtaLoadingScheduledAt: '',
+    dtaArrivalAtItajai: '',
   }
 }
 
@@ -530,6 +508,10 @@ function normalizeProcess(rawProcess, fallbackId) {
   const processNumber =
     category === 'CONSOLIDADO' ? '' : rawProcess.processNumber ?? rawProcess.code ?? ''
   const eta = rawProcess.eta ?? ''
+  // F17.2b (D-3): `licenses[]` e' AUTORITATIVO (compat de leitura MAPA por 1
+  // release via `getEffectiveLicenses`) - normalizado ANTES do gate de
+  // coleta (`sanitizeCustomsFlow`, dentro de `sanitizeOperationalFields`).
+  const licenses = normalizeLicenses(getEffectiveLicenses(rawProcess))
   const operationalFields = sanitizeOperationalFields({
     category,
     berthed: rawProcess.berthed,
@@ -542,8 +524,7 @@ function normalizeProcess(rawProcess, fallbackId) {
     collectionScheduledAt: rawProcess.collectionScheduledAt,
     collectionWindows: rawProcess.collectionWindows,
     containerQuantity: rawProcess.containerQuantity,
-    mapaStatus: rawProcess.mapaStatus,
-    mapaInspectionScheduledAt: rawProcess.mapaInspectionScheduledAt,
+    licenses,
     dtaStatus: rawProcess.dtaStatus,
     dtaLoadingScheduledAt: rawProcess.dtaLoadingScheduledAt,
     dtaArrivalAtItajai: rawProcess.dtaArrivalAtItajai,
@@ -611,6 +592,11 @@ function normalizeProcess(rawProcess, fallbackId) {
     cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
     items: normalizeProcessItems(rawProcess.items),
     ...operationalFields,
+    licenses,
+    // F17.2b (D-3): aposentados - gravados vazios em toda categoria, mantidos
+    // so' pela compat de leitura de 1 release (`getEffectiveLicenses`).
+    mapaStatus: '',
+    mapaInspectionScheduledAt: '',
     // F16.8 (swipe-to-arquivar, admin-only): aditivo — processos sem o
     // campo (todo o histórico anterior) normalizam pra archived:false.
     archived: Boolean(rawProcess.archived),
@@ -731,8 +717,12 @@ function toFirestorePayload(process) {
         containerQuantity: process.containerQuantity,
       })
     ),
-    mapaStatus: String(process.mapaStatus ?? ''),
-    mapaInspectionScheduledAt: String(process.mapaInspectionScheduledAt ?? ''),
+    // F17.2b (D-3): `licenses[]` e' o payload autoritativo. `mapaStatus`/
+    // `mapaInspectionScheduledAt` continuam gravados vazios nesta release
+    // (allowlist/leitura ainda os esperam - D-12; remocao na release seguinte).
+    licenses: normalizeLicenses(getEffectiveLicenses(process)),
+    mapaStatus: '',
+    mapaInspectionScheduledAt: '',
     dtaStatus: canonicalizeDtaStatus(process.dtaStatus ?? ''),
     dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? ''),
     dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? ''),

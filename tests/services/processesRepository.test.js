@@ -426,3 +426,83 @@ describe('F17.2a - containers[]/campos de embarque e transito (D-4/D-5)', () => 
     })
   })
 })
+
+// F17.2b (D-3/D-4): `licenses[]` multi-orgao substitui MAPA (compat de
+// leitura 1 release) - gate de coleta unico `isCollectionReleased`.
+describe('F17.2b - licenses[] (D-3/D-4)', () => {
+  it('leitura de doc legado "Vistoria agendada, aguardando realização" + data vira licenses[0] LIC-MAPA/Vistoria agendada e mapaStatus ""', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-LEGACY-2',
+          data: () =>
+            baseMaritimeProcess({
+              mapaStatus: 'Vistoria agendada, aguardando realização',
+              mapaInspectionScheduledAt: '2026-09-20T10:00',
+            }),
+        },
+      ],
+    })
+
+    const items = await listProcesses()
+    expect(items[0].licenses).toHaveLength(1)
+    expect(items[0].licenses[0].id).toBe('LIC-MAPA')
+    expect(items[0].licenses[0].status).toBe('Vistoria agendada')
+    expect(items[0].licenses[0].inspectionScheduledAt).toBe('2026-09-20T10:00')
+    expect(items[0].mapaStatus).toBe('')
+  })
+
+  it('payload do save contem licenses + mapaStatus "" + mapaInspectionScheduledAt "" e nenhuma chave undefined', async () => {
+    await saveProcess(baseMaritimeProcess({ mapaStatus: 'Liberado' }))
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(Array.isArray(payload.licenses)).toBe(true)
+    expect(payload.mapaStatus).toBe('')
+    expect(payload.mapaInspectionScheduledAt).toBe('')
+    expect(payload.licenses).not.toBeUndefined()
+  })
+
+  it('AEREO com licenses [Em análise] zera collectionStatus (bloqueia a coleta - D5)', async () => {
+    await saveProcess(
+      baseAirProcess({
+        dtaStatus: 'Trânsito concluído',
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        collectionStatus: 'Coleta Agendada',
+        licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.collectionStatus).toBe('')
+  })
+
+  it('AEREO com licenses [Deferida] preserva a coleta', async () => {
+    await saveProcess(
+      baseAirProcess({
+        dtaStatus: 'Trânsito concluído',
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        collectionStatus: 'Coleta Agendada',
+        licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Deferida' }],
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.collectionStatus).toBe('Coleta Agendada')
+  })
+
+  it('11 licencas -> 10 no payload (teto MAX_LICENSES)', async () => {
+    const licenses = Array.from({ length: 11 }, (_, index) => ({
+      id: `LIC-${index + 1}`,
+      agency: 'MAPA',
+      status: 'Aguardando registro',
+    }))
+    await saveProcess(baseMaritimeProcess({ licenses }))
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.licenses).toHaveLength(10)
+  })
+})

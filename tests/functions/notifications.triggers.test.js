@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses'],
       },
     }
     await Promise.all(
@@ -256,6 +256,36 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
       const updated = notificationDocs.filter((doc) => doc.type === 'favorite_process_updated')
       expect(updated).toHaveLength(1)
       expect(updated[0].recipientUserId).toBe('fav-1')
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F17.2b (D-10): `licenses[]` entra na comparacao de update - o aviso que
+  // hoje sai com MAPA nao pode se perder.
+  it(
+    'update de licenses por admin notifica favoritos com "anuências atualizadas"',
+    async () => {
+      const processId = 'proc-upd-licenses'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Update Licenses',
+        processNumber: 'PO-1006',
+        category: 'FCL',
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Em análise' }],
+      })
+
+      await processRef.update({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida' }],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Um',
+      })
+
+      const docs = await waitForNotifications(processId, 1)
+      const updated = docs.filter((doc) => doc.type === 'favorite_process_updated')
+
+      expect(updated).toHaveLength(1)
+      expect(updated[0].recipientUserId).toBe('fav-1')
+      expect(updated[0].body).toContain('anuências atualizadas')
     },
     TRIGGER_TIMEOUT_MS
   )

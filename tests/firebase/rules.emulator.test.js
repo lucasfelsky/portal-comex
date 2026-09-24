@@ -485,7 +485,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 59 campos validos (F17.2a)', async () => {
+    it('admin cria processo com todos os 60 campos validos (F17.2a/F17.2b)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -541,9 +541,74 @@ describeEmulator('firestore.rules (emulador)', () => {
           chargeableWeightKg: 0,
           packagesQuantity: 0,
           containers: [],
+          // F17.2b (D-1/D-12): campo novo.
+          licenses: [],
           updatedById: 'admin-1',
           updatedByName: 'Admin',
           updatedAt: new Date(),
+        })
+      )
+    })
+
+    // F17.2b (D-12): casos de `licenses[]`.
+    it('admin atualiza licenses (2 itens)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p20'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p20'), {
+          licenses: [
+            { id: 'LIC-1', agency: 'MAPA', lpcoNumber: '', status: 'Em análise', inspectionScheduledAt: '', deferredAt: '', notes: '' },
+            { id: 'LIC-2', agency: 'ANVISA', lpcoNumber: '', status: 'Aguardando registro', inspectionScheduledAt: '', deferredAt: '', notes: '' },
+          ],
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com 11 licenses', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p21'), {
+          name: 'P',
+          licenses: Array.from({ length: 11 }, (_, index) => ({ id: `LIC-${index + 1}` })),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO cria processo com licenses fora do shape (nao-list)', async () => {
+      const db = admin('admin-1')
+      await assertFails(
+        setDoc(doc(db, 'processes/p22'), {
+          name: 'P',
+          licenses: 'x',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('logistica NAO atualiza licenses', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p23'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p23'), {
+          licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida' }],
+        })
+      )
+    })
+
+    it('admin grava mapaStatus vazio (compat de 1 release)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p24'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/p24'), {
+          mapaStatus: '',
+          mapaInspectionScheduledAt: '',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
         })
       )
     })

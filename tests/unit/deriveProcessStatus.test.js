@@ -8,6 +8,7 @@ import {
   deriveProcessStatus,
   resolveCargoReceivedAt,
   isCustomsCleared,
+  isCollectionReleased,
 } from '../../src/features/processes/deriveProcessStatus.js'
 
 function baseMaritime(overrides = {}) {
@@ -186,6 +187,56 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
         })
       )
     ).toBe('Aguardando agendamento de coleta')
+  })
+
+  // F17.2b (D-4): `licenses: []` (array vazio, autoritativo) libera mesmo
+  // com `mapaStatus` legado preenchido - a compat MAPA so' entra em jogo
+  // quando `licenses` NAO e' array.
+  it('licenses: [] (autoritativo) libera mesmo com mapaStatus "Aguardando MAPA"', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({
+          duimpStatus: 'Parametrizada',
+          parameterizationChannel: 'Verde',
+          licenses: [],
+          mapaStatus: 'Aguardando MAPA',
+        })
+      )
+    ).toBe('Aguardando agendamento de coleta')
+  })
+
+  it('sem licenses (compat MAPA) + mapaStatus "Aguardando MAPA" bloqueia', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({
+          duimpStatus: 'Parametrizada',
+          parameterizationChannel: 'Verde',
+          mapaStatus: 'Aguardando MAPA',
+        })
+      )
+    ).toBe('Aguardando desembaraço')
+  })
+
+  it('licenses com "Indeferida" bloqueia a linha 3', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({
+          duimpStatus: 'Parametrizada',
+          parameterizationChannel: 'Verde',
+          licenses: [{ status: 'Indeferida' }],
+        })
+      )
+    ).toBe('Aguardando desembaraço')
+  })
+
+  it('isCollectionReleased exportada e consistente com a derivacao', () => {
+    const process = baseMaritime({
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      licenses: [{ status: 'Deferida' }],
+    })
+    expect(isCollectionReleased(process)).toBe(true)
+    expect(deriveProcessStatus(process)).toBe('Aguardando agendamento de coleta')
   })
 })
 

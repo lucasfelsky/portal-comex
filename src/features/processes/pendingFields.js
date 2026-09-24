@@ -4,9 +4,10 @@
 
 import { deriveProcessStatus } from './deriveProcessStatus.js'
 import { getProcessStage } from './processStage.js'
-import { normalizeComparableText, isMapaInspectionScheduledStatus } from './processStatus.js'
+import { normalizeComparableText } from './processStatus.js'
 import { isMaritimeCategory } from './processCategories.js'
 import { getCollectionWindows } from '../../utils/collectionWindows.js'
+import { getEffectiveLicenses } from './licenses.js'
 
 function hasText(value) {
   return String(value ?? '').trim() !== ''
@@ -230,13 +231,30 @@ export const PENDING_FIELD_RULES = [
     categories: ['FCL', 'CONSOLIDADO'],
     isMissing: (p) => hasContainerWithout(p, 'seal'),
   },
+  // F17.2b (D-7): substitui a pendencia antiga de MAPA - le `licenses[]`
+  // (com compat de leitura, `getEffectiveLicenses`), TODAS as categorias.
+  // Stage 0 (nao a etapa do processo): o gatilho e' o status explicito da
+  // anuencia - com stage 3 a pendencia ficaria invisivel enquanto a
+  // vistoria/deferimento acontece antes da chegada.
   {
-    id: 'mapaInspectionScheduledAt',
-    field: 'mapaInspectionScheduledAt',
-    label: 'Data da vistoria MAPA',
-    stage: 3,
-    when: (p) => isMaritimeCategory(p?.category) && isMapaInspectionScheduledStatus(p?.mapaStatus),
-    isMissing: (p) => !hasText(p?.mapaInspectionScheduledAt),
+    id: 'licenseInspectionDate',
+    field: 'licenses',
+    label: 'Data da vistoria da anuência',
+    stage: 0,
+    isMissing: (p) =>
+      getEffectiveLicenses(p).some(
+        (license) => license?.status === 'Vistoria agendada' && !hasText(license?.inspectionScheduledAt)
+      ),
+  },
+  {
+    id: 'licenseDeferredDate',
+    field: 'licenses',
+    label: 'Data do deferimento da anuência',
+    stage: 0,
+    isMissing: (p) =>
+      getEffectiveLicenses(p).some(
+        (license) => license?.status === 'Deferida' && !hasText(license?.deferredAt)
+      ),
   },
   {
     // AD-1: desembaraco concluido cobrado so quando a duimp ja parametrizou

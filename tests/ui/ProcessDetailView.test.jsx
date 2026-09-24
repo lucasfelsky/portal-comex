@@ -39,8 +39,7 @@ function makeProcess(overrides = {}) {
     collectionStatus: '',
     collectionWindows: [],
     collectionScheduledAt: '',
-    mapaStatus: '',
-    mapaInspectionScheduledAt: '',
+    licenses: [],
     dtaStatus: '',
     dtaLoadingScheduledAt: '',
     dtaArrivalAtItajai: '',
@@ -172,6 +171,29 @@ describe('ProcessDetailView — aba "Histórico" (F17.1b)', () => {
     renderDetail({ onDetailTabChange })
     screen.getByRole('button', { name: 'Histórico' }).click()
     expect(onDetailTabChange).toHaveBeenCalledWith('history')
+  })
+})
+
+// F17.2b (D-6): card "Anuências" - substitui o card MAPA legado.
+describe('ProcessDetailView — card "Anuências" (F17.2b)', () => {
+  it('licença MAPA Deferida renderiza o card com "MAPA" e "Deferida"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', lpcoNumber: '', status: 'Deferida', inspectionScheduledAt: '', deferredAt: '', notes: '' }],
+      }),
+    })
+    expect(screen.getByText('Anuências')).toBeInTheDocument()
+    expect(screen.getByText(/MAPA/)).toBeInTheDocument()
+    expect(screen.getByText(/Deferida/)).toBeInTheDocument()
+  })
+
+  it('sem licenças o card não existe', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ licenses: [] }),
+    })
+    expect(screen.queryByText('Anuências')).not.toBeInTheDocument()
   })
 })
 

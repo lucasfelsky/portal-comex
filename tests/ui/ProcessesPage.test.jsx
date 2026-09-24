@@ -89,6 +89,7 @@ vi.mock('../../src/features/processes/processStatus', () => ({
 vi.mock('../../src/features/processes/deriveProcessStatus', () => ({
   deriveProcessStatus: () => 'Aguardando Embarque',
   isCustomsCleared: () => false,
+  isCollectionReleased: () => false,
   resolveCargoReceivedAt: () => '',
   PRE_ARRIVAL_STATUSES: ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação'],
 }))

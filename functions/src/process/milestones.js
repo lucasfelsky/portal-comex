@@ -1,15 +1,17 @@
-// F17.1b: regras puras de marcos operacionais (historico de eventos).
+// F17.1b/F17.2b: regras puras de marcos operacionais (historico de eventos).
 //
-// Este arquivo NAO importa nada (nem `../core/shared.js`, que carrega
+// Este arquivo continua proibido de importar `../core/shared.js` (carrega
 // `defineSecret`/`nodemailer` no load) - fica puro e testavel no Node sem
-// mocks. Espelha (sem importar) trechos de `src/features/processes/
-// deriveProcessStatus.js` e `src/features/processes/processStatus.js`
-// porque `functions/` nao pode importar de `src/` (o deploy empacota so
-// `functions/`). O teste de paridade (`tests/unit/processMilestones.test.js`)
-// compara os dois lados.
+// mocks. Importa `../core/licenses.js` (tambem puro, D-8). Espelha (sem
+// importar) trechos de `src/features/processes/deriveProcessStatus.js` e
+// `src/features/processes/processStatus.js` porque `functions/` nao pode
+// importar de `src/` (o deploy empacota so `functions/`). O teste de
+// paridade (`tests/unit/processMilestones.test.js`) compara os dois lados.
 //
-// Ver PLAN.md secoes D-4 a D-6 para a tabela de regras e o formato do
-// documento gravado.
+// Ver PLAN.md secoes D-4 a D-6 (F17.1b) e D-8 (F17.2b, `licenseDeferred`
+// multi-orgao) para a tabela de regras e o formato do documento gravado.
+
+import { getComparableLicensesMirror, isLicenseDeferredMirror } from '../core/licenses.js'
 
 function normalizeComparable(value) {
   return String(value ?? '')
@@ -235,12 +237,30 @@ export const MILESTONE_RULES = [
     },
   },
   {
+    // F17.2b (D-8): multi-orgao - compara `licenses[]` por `id` (via
+    // `getComparableLicensesMirror`, que ja aplica a compat de leitura
+    // MAPA - D-3). Um evento por licenca recem-deferida no mesmo save
+    // (`idSuffix` evita colisao de doc id).
     type: 'licenseDeferred',
-    field: 'mapaStatus',
+    field: 'licenses',
     detect(before, after) {
-      if (isMapaReleasedMirror(before?.mapaStatus)) return null
-      if (!isMapaReleasedMirror(after?.mapaStatus)) return null
-      return { value: 'MAPA', previousValue: before?.mapaStatus ?? '' }
+      const beforeLicenses = getComparableLicensesMirror(before)
+      const afterLicenses = getComparableLicensesMirror(after)
+
+      const events = []
+      for (const license of afterLicenses) {
+        if (!isLicenseDeferredMirror(license.status)) continue
+        const beforeLicense = beforeLicenses.find((item) => item.id === license.id)
+        if (beforeLicense && isLicenseDeferredMirror(beforeLicense.status)) continue
+
+        events.push({
+          value: license.agency,
+          previousValue: beforeLicense?.status ?? '',
+          occurredAtField: license.deferredAt || null,
+          idSuffix: license.id,
+        })
+      }
+      return events
     },
   },
   {
@@ -292,35 +312,46 @@ export function buildMilestoneEvents(before, after, { processId, eventId, eventT
   const events = []
 
   for (const rule of MILESTONE_RULES) {
-    const detected = rule.detect(before, after)
-    if (!detected) continue
+    const detectedResult = rule.detect(before, after)
+    if (!detectedResult) continue
 
-    const { occurredAt, occurredAtSource } = toIsoOccurredAt({
-      fieldValue: detected.occurredAtField ?? undefined,
-      updatedAt: after?.updatedAt,
-      eventTime,
-    })
+    // F17.2b (D-8): `detect` pode devolver um unico objeto (regras
+    // legadas) ou um array (licenseDeferred multi-orgao - 0..N licencas
+    // recem-deferidas no mesmo save).
+    const detectedList = Array.isArray(detectedResult) ? detectedResult : [detectedResult]
 
-    const data = {
-      type: rule.type,
-      field: rule.field,
-      value: toComparableValue(detected.value) ?? '',
-      previousValue: toComparableValue(detected.previousValue) ?? '',
-      actorId,
-      actorName,
-      occurredAt,
-      occurredAtSource,
-      processId,
+    for (const detected of detectedList) {
+      const { occurredAt, occurredAtSource } = toIsoOccurredAt({
+        fieldValue: detected.occurredAtField ?? undefined,
+        updatedAt: after?.updatedAt,
+        eventTime,
+      })
+
+      const data = {
+        type: rule.type,
+        field: rule.field,
+        value: toComparableValue(detected.value) ?? '',
+        previousValue: toComparableValue(detected.previousValue) ?? '',
+        actorId,
+        actorName,
+        occurredAt,
+        occurredAtSource,
+        processId,
+      }
+
+      for (const key of Object.keys(data)) {
+        if (data[key] === undefined) data[key] = ''
+      }
+
+      // `idSuffix` (D-8) evita colisao quando o mesmo `rule.type` gera mais
+      // de um evento no mesmo save (2 licencas deferidas juntas).
+      const eventType = detected.idSuffix ? `${rule.type}_${detected.idSuffix}` : rule.type
+
+      events.push({
+        id: buildEventDocId(eventId, eventType, processId, after?.updatedAt),
+        data,
+      })
     }
-
-    for (const key of Object.keys(data)) {
-      if (data[key] === undefined) data[key] = ''
-    }
-
-    events.push({
-      id: buildEventDocId(eventId, rule.type, processId, after?.updatedAt),
-      data,
-    })
   }
 
   return events

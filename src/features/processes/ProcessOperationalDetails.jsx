@@ -1,10 +1,14 @@
 import { getContainerSpecialBadges } from './containers'
 import { getImoClassLabel } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
+import { getEffectiveLicenses } from './licenses'
+import { formatDateTime } from '../../utils/dateFormat'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
-// processo. Regra de import (D-11): so' `./containers`,
-// `./operationalOptions`, `./processLabels` (so' `canShowProcessName`).
+// processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
+// Regra de import (D-11): so' `./containers`, `./operationalOptions`,
+// `./processLabels` (so' `canShowProcessName`), `./licenses`,
+// `../../utils/dateFormat` (so' `formatDateTime`).
 //
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
@@ -14,6 +18,48 @@ function formatDate(value) {
   const date = new Date(`${value}T00:00:00`)
   if (Number.isNaN(date.getTime())) return String(value)
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+}
+
+// F17.2b (D-6): mesmo padrao de `formatDate`, mas pra `deferredAt`
+// (`YYYY-MM-DD` puro) - NUNCA `new Date(value)` direto (fuso).
+function formatDeferredAt(value) {
+  return formatDate(value)
+}
+
+// F17.2b (D-6): card "Anuências" - so' quando ha' anuencia efetiva (leitura
+// visivel a todos os aprovados, anuencia nao identifica o processo).
+export function ProcessLicensesDetails({ process }) {
+  const licenses = getEffectiveLicenses(process)
+
+  if (licenses.length === 0) return null
+
+  return (
+    <div className="detail-card">
+      <span className="detail-label">Anuências</span>
+      <ul className="detail-stack detail-stack--compact">
+        {licenses.map((license) => (
+          <li key={license.id}>
+            <p>
+              {[license.agency, license.lpcoNumber ? `LPCO ${license.lpcoNumber}` : null, license.status]
+                .filter(Boolean)
+                .join(' · ')}
+              {license.status === 'Indeferida' ? (
+                <>
+                  {' '}
+                  <span className="inline-badge inline-badge--danger">Indeferida</span>
+                </>
+              ) : null}
+            </p>
+            {license.inspectionScheduledAt ? (
+              <p>Vistoria agendada: {formatDateTime(license.inspectionScheduledAt)}</p>
+            ) : null}
+            {license.deferredAt ? <p>Deferida em: {formatDeferredAt(license.deferredAt)}</p> : null}
+            {license.notes ? <p>{license.notes}</p> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export function ProcessIdentificationDetails({ process, canSeeName }) {

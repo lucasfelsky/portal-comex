@@ -218,14 +218,41 @@ describe('getPendingFields - regra de estagio futuro nao aparece', () => {
     expect(getPendingFields(process).map((f) => f.field)).toContain('carrierName')
   })
 
-  it('mapaInspectionScheduledAt aparece so quando maritimo e vistoria agendada', () => {
+  // F17.2b (D-7): substitui a pendencia antiga de MAPA - le `licenses[]`
+  // (stage 0, TODAS as categorias, inclusive doc legado via compat MAPA).
+  it('licenseInspectionDate aparece com licenca "Vistoria agendada" sem data (stage 0)', () => {
     const process = completeMaritimeProcess({
-      berthed: true,
-      cargoPresenceInformed: true,
+      berthed: false,
+      licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Vistoria agendada', inspectionScheduledAt: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('licenseInspectionDate')
+  })
+
+  it('licenseInspectionDate NAO aparece com data preenchida', () => {
+    const process = completeMaritimeProcess({
+      licenses: [
+        { id: 'LIC-1', agency: 'MAPA', status: 'Vistoria agendada', inspectionScheduledAt: '2026-09-20T10:00' },
+      ],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('licenseInspectionDate')
+  })
+
+  it('licenseDeferredDate aparece com licenca "Deferida" sem deferredAt (AEREO incluido)', () => {
+    const process = completeMaritimeProcess({
+      category: 'AEREO',
+      containers: [],
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Deferida', deferredAt: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('licenseDeferredDate')
+  })
+
+  it('doc legado MAPA "Vistoria agendada, aguardando realização" sem data dispara licenseInspectionDate', () => {
+    const process = completeMaritimeProcess({
+      berthed: false,
       mapaStatus: 'Vistoria agendada, aguardando realização',
       mapaInspectionScheduledAt: '',
     })
-    expect(getPendingFields(process).map((f) => f.field)).toContain('mapaInspectionScheduledAt')
+    expect(getPendingFields(process).map((f) => f.id)).toContain('licenseInspectionDate')
   })
 
   it('clearanceCompletedAt (AD-1) aparece quando duimp parametrizada e canal nao-Verde', () => {

@@ -22,7 +22,6 @@ import {
   dtaStatusOptions,
   duimpStatusOptions,
   listProcesses,
-  mapaStatusOptions,
   processCategoryOptions,
   saveProcessCollectionStatus,
   saveProcessPostReceiptNotes,
@@ -37,9 +36,7 @@ import {
   isCollectionScheduleRetainingStatus,
   isDtaLoadingScheduledStatus,
   isDtaTransitCompletedStatus,
-  isMapaInspectionScheduledStatus,
   isProcessStatusFinalized,
-  mapaAllowsCollectionStatus,
   normalizeComparableText,
   postCollectionStatusOptions,
   processStatusOptions,
@@ -48,7 +45,7 @@ import {
   isMaritimeCategory,
   isAirCategory,
 } from '../features/processes/processCategories'
-import { isCustomsCleared } from '../features/processes/deriveProcessStatus'
+import { isCollectionReleased } from '../features/processes/deriveProcessStatus'
 import { getPendingFields } from '../features/processes/pendingFields'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
@@ -98,8 +95,7 @@ const emptyDraft = () => ({
   collectionStatus: '',
   collectionWindows: [],
   collectionScheduledAt: '',
-  mapaStatus: '',
-  mapaInspectionScheduledAt: '',
+  licenses: [],
   dtaStatus: '',
   dtaLoadingScheduledAt: '',
   dtaArrivalAtItajai: '',
@@ -200,14 +196,6 @@ function getCollectionStatusOptions(process) {
       !postCollectionStatusOptions.includes(item) &&
       normalizeComparableText(item) !== 'carga a caminho do cd'
   )
-}
-
-function shouldEditMapaInspection(status) {
-  return isMapaInspectionScheduledStatus(status)
-}
-
-function mapaAllowsCollection(status) {
-  return mapaAllowsCollectionStatus(status)
 }
 
 function isDtaLoadingScheduled(status) {
@@ -321,13 +309,10 @@ function sanitizeCustoms(draft, incomingWindows = null) {
       collectionScheduledAt: '',
     }
   }
-  if (isMaritimeCategory(draft.category) && !mapaAllowsCollection(draft.mapaStatus)) {
-    return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
-  }
-  // AD-1: Verde continua liberando sozinho (isCustomsCleared cobre o legado
-  // duimp Parametrizada + canal Verde); Amarelo/Vermelho/Cinza so liberam
-  // com `clearanceCompletedAt` preenchido.
-  if (!isCustomsCleared(draft)) {
+  // F17.2b (D-4/D-5): gate unico - desembaraco concluido (AD-1) E todas as
+  // anuencias (`licenses[]`, com compat MAPA) deferidas. Bloqueia tambem o
+  // AEREO (mudanca intencional do spec D5).
+  if (!isCollectionReleased(draft)) {
     return { ...draft, collectionStatus: '', collectionWindows: [], collectionScheduledAt: '' }
   }
   if (!keepsCollectionSchedule(draft.collectionStatus)) {
@@ -339,18 +324,8 @@ function sanitizeCustoms(draft, incomingWindows = null) {
   return draft
 }
 
-function sanitizeMapa(draft) {
-  if (draft.category !== 'FCL' && draft.category !== 'LCL' && draft.category !== 'CONSOLIDADO') {
-    return { ...draft, mapaStatus: '', mapaInspectionScheduledAt: '' }
-  }
-  if (draft.mapaStatus !== 'Vistoria agendada, aguardando realização') {
-    return { ...draft, mapaInspectionScheduledAt: '' }
-  }
-  return draft
-}
-
 function sanitizeDraft(currentDraft, overrides = {}) {
-  const mergedDraft = {
+  const draft = {
     ...currentDraft,
     ...overrides,
     containerQuantity: Math.max(
@@ -365,7 +340,6 @@ function sanitizeDraft(currentDraft, overrides = {}) {
   const incomingWindows = Array.isArray(overrides.collectionWindows)
     ? overrides.collectionWindows
     : null
-  const draft = sanitizeMapa(mergedDraft)
 
   if (isMaritimeCategory(draft.category)) {
     const next = {
@@ -391,7 +365,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
   }
 
   if (isAirCategory(draft.category)) {
-    const next = { ...draft, berthed: false, mapaStatus: '', mapaInspectionScheduledAt: '' }
+    const next = { ...draft, berthed: false }
     if (!next.arrived) {
       return {
         ...next,
@@ -419,8 +393,6 @@ function sanitizeDraft(currentDraft, overrides = {}) {
     ...draft,
     berthed: false,
     arrived: false,
-    mapaStatus: '',
-    mapaInspectionScheduledAt: '',
     dtaStatus: '',
     dtaLoadingScheduledAt: '',
     dtaArrivalAtItajai: '',
@@ -591,7 +563,7 @@ export default function ProcessesPage() {
             item.cargoPresenceInformed &&
             (!item.duimpStatus || item.duimpStatus !== 'Parametrizada')) ||
           (operationFilter === 'Coleta pendente' &&
-            isCustomsCleared(item) &&
+            isCollectionReleased(item) &&
             (!item.collectionStatus || !keepsCollectionSchedule(item.collectionStatus))) ||
           (operationFilter === 'Coleta agendada' && keepsCollectionSchedule(item.collectionStatus)) ||
           (operationFilter === 'DTA em andamento' &&
@@ -829,8 +801,7 @@ export default function ProcessesPage() {
           'parameterizationChannel',
           'collectionStatus',
           'collectionScheduledAt',
-          'mapaStatus',
-          'mapaInspectionScheduledAt',
+          'licenses',
           'dtaStatus',
           'dtaLoadingScheduledAt',
           'dtaArrivalAtItajai',
@@ -1458,7 +1429,6 @@ export default function ProcessesPage() {
           collectionStatusOptions={collectionStatusOptions}
           dtaStatusOptions={dtaStatusOptions}
           duimpStatusOptions={duimpStatusOptions}
-          mapaStatusOptions={mapaStatusOptions}
           processCategoryOptions={processCategoryOptions}
           onDraftChange={handleDraftChange}
           onSetViewModeList={() => setViewMode('list')}

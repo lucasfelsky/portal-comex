@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
 import { repairTextEncoding } from '../utils/textEncoding'
+import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
 
 const STORAGE_KEY = 'sq-comex-notifications'
 const NOTIFICATIONS_CHANGED_EVENT = 'sq-comex-notifications-changed'
@@ -193,6 +194,13 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     changes.push('itens vinculados atualizados')
   }
 
+  if (
+    JSON.stringify(normalizeLicenses(getEffectiveLicenses(previousProcess))) !==
+    JSON.stringify(normalizeLicenses(getEffectiveLicenses(nextProcess)))
+  ) {
+    changes.push('anuências atualizadas')
+  }
+
   if (changes.length === 0) {
     return 'dados do processo atualizados.'
   }
@@ -229,8 +237,7 @@ function sanitizeProcessForComparison(process) {
     parameterizationChannel: String(process.parameterizationChannel ?? '').trim(),
     collectionStatus: String(process.collectionStatus ?? '').trim(),
     collectionScheduledAt: String(process.collectionScheduledAt ?? '').trim(),
-    mapaStatus: String(process.mapaStatus ?? '').trim(),
-    mapaInspectionScheduledAt: String(process.mapaInspectionScheduledAt ?? '').trim(),
+    licenses: normalizeLicenses(getEffectiveLicenses(process)),
     dtaStatus: String(process.dtaStatus ?? '').trim(),
     dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? '').trim(),
     dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? '').trim(),
