@@ -291,3 +291,25 @@ describe('ProcessListView — badge de contêiner especial (F17.2a D-7)', () => 
     expect(screen.queryByText('ISO tank')).not.toBeInTheDocument()
   })
 })
+
+// F17.2b (D-6): badge vermelho no card quando alguma anuência foi indeferida.
+describe('ProcessListView — badge "Anuência indeferida" (F17.2b)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('licença Indeferida gera o badge "Anuência indeferida"', () => {
+    renderView({
+      filteredProcesses: [
+        {
+          ...PROCESSES[0],
+          licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
+        },
+      ],
+    })
+    expect(screen.getByText('Anuência indeferida')).toBeInTheDocument()
+  })
+
+  it('sem licença indeferida NAO mostra o badge', () => {
+    renderView({ filteredProcesses: [PROCESSES[0]] })
+    expect(screen.queryByText('Anuência indeferida')).not.toBeInTheDocument()
+  })
+})

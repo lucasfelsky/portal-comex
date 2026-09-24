@@ -275,4 +275,79 @@ describe('createProcessUpdateNotifications', () => {
     const recipients = mockBatch.set.mock.calls.map(([, p]) => p.recipientUserId)
     expect(recipients).toEqual(['admin-1'])
   })
+
+  // F17.2b (D-10): `licenses[]` entra na comparacao - o aviso que hoje sai
+  // com MAPA nao pode se perder.
+  describe('F17.2b - anuencias (D-10)', () => {
+    it('admin muda so licenses (status atualizado) -> favorito recebe "anuências atualizadas"', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = {
+        ...PROCESS_BASE,
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Em análise' }],
+      }
+      const after = {
+        ...PROCESS_BASE,
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida' }],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+      const [, payload] = mockBatch.set.mock.calls[0]
+      expect(payload.type).toBe('favorite_process_updated')
+      expect(payload.body).toContain('anuências atualizadas')
+    })
+
+    it('before mapaStatus Liberado / after mapaStatus "" + licenses [LIC-MAPA Deferida] (equivalentes) -> NAO notifica', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, mapaStatus: 'Liberado' }
+      const after = {
+        ...PROCESS_BASE,
+        mapaStatus: '',
+        licenses: [
+          {
+            id: 'LIC-MAPA',
+            agency: 'MAPA',
+            lpcoNumber: '',
+            status: 'Deferida',
+            inspectionScheduledAt: '',
+            deferredAt: '',
+            notes: '',
+          },
+        ],
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).not.toHaveBeenCalled()
+    })
+
+    it('before mapaStatus "" / after mapaStatus "Aguardando MAPA" sem licenses -> notifica (rollout hosting antigo)', async () => {
+      setupFirestoreChain({
+        users: [
+          { id: 'admin-1', data: ADMIN_USER },
+          { id: 'fan-1', data: FAVORITER_USER },
+        ],
+      })
+      const before = { ...PROCESS_BASE, mapaStatus: '' }
+      const after = {
+        ...PROCESS_BASE,
+        mapaStatus: 'Aguardando MAPA',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Root',
+      }
+      await handler(makeEvent(before, after))
+      expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    })
+  })
 })

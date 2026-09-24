@@ -4,7 +4,14 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
-import { planProcessStatusMigration } from '../../scripts/migrateOperationalV2.mjs'
+import {
+  planProcessStatusMigration,
+  planMapaToLicensesMigration,
+  planOperationalMigration,
+  MIGRATION_STEPS,
+  toFirestoreFieldValue,
+  fromFirestoreValue,
+} from '../../scripts/migrateOperationalV2.mjs'
 
 function findStep(plan, id) {
   return plan.find((step) => step.id === id)
@@ -175,5 +182,155 @@ describe('planProcessStatusMigration', () => {
         expect(step.changes.updatedById).toBe('')
       }
     }
+  })
+})
+
+// F17.2b (D-11): `planMapaToLicensesMigration` - mapaStatus legado -> licenses[].
+describe('planMapaToLicensesMigration', () => {
+  const mapaStatusCases = [
+    ['Aguardando MAPA', 'Em análise'],
+    ['Selecionado para Vistoria', 'Selecionada para vistoria'],
+    ['Vistoria agendada, aguardando realização', 'Vistoria agendada'],
+    ['Vistoria realizada, aguardando deferimento da LPCO', 'Vistoria realizada'],
+    ['Liberado', 'Deferida'],
+    ['LPCO deferida, MAPA liberado', 'Deferida'],
+  ]
+
+  it.each(mapaStatusCases)('%s -> mapa-to-licenses com status %s', (mapaStatus, expectedStatus) => {
+    const plan = planMapaToLicensesMigration([{ id: 'P1', category: 'FCL', mapaStatus }])
+    expect(plan[0].type).toBe('mapa-to-licenses')
+    expect(plan[0].changes.licenses[0].status).toBe(expectedStatus)
+    expect(plan[0].changes.licenses[0].id).toBe('LIC-MAPA')
+    expect(plan[0].changes.updatedById).toBe('')
+  })
+
+  it('valor desconhecido -> needs-review, sem changes', () => {
+    const plan = planMapaToLicensesMigration([
+      { id: 'P2', category: 'FCL', mapaStatus: 'valor-nunca-visto' },
+    ])
+    expect(plan[0].type).toBe('needs-review')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('AEREO com mapaStatus preenchido -> skipped', () => {
+    const plan = planMapaToLicensesMigration([
+      { id: 'P3', category: 'AEREO', mapaStatus: 'Liberado' },
+    ])
+    expect(plan[0].type).toBe('skipped')
+    expect(plan[0].changes).toBeNull()
+  })
+
+  it('doc com licenses[] -> unchanged', () => {
+    const plan = planMapaToLicensesMigration([
+      { id: 'P4', category: 'FCL', mapaStatus: 'Liberado', licenses: [] },
+    ])
+    expect(plan[0].type).toBe('unchanged')
+  })
+
+  it('mapaStatus vazio -> unchanged', () => {
+    const plan = planMapaToLicensesMigration([{ id: 'P5', category: 'FCL', mapaStatus: '' }])
+    expect(plan[0].type).toBe('unchanged')
+  })
+})
+
+describe('MIGRATION_STEPS', () => {
+  it("ids na ordem ['mapaToLicenses', 'recalcProcessStatus']", () => {
+    expect(MIGRATION_STEPS.map((s) => s.id)).toEqual(['mapaToLicenses', 'recalcProcessStatus'])
+  })
+})
+
+describe('planOperationalMigration (D-11)', () => {
+  it('doc maritimo Verde + mapaStatus Liberado -> 1 PATCH com licenses E processStatus recalculado', () => {
+    const plan = planOperationalMigration([
+      {
+        id: 'P1',
+        category: 'FCL',
+        processStatus: 'Aguardando parametrização da DUIMP',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        mapaStatus: 'Liberado',
+      },
+    ])
+    const doc = plan.find((item) => item.id === 'P1')
+    expect(doc.changes.licenses[0].status).toBe('Deferida')
+    expect(doc.changes.processStatus).toBe('Aguardando agendamento de coleta')
+  })
+
+  it('doc cuja derivacao rebaixaria etapa -> passo 2 needs-review, PATCH so com as changes do passo 1', () => {
+    const plan = planOperationalMigration([
+      {
+        id: 'P2',
+        category: 'FCL',
+        processStatus: 'Coleta Agendada',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Amarelo',
+        mapaStatus: 'Liberado',
+      },
+    ])
+    const doc = plan.find((item) => item.id === 'P2')
+    const recalcStep = doc.steps.find((step) => step.stepId === 'recalcProcessStatus')
+    expect(recalcStep.type).toBe('needs-review')
+    expect(doc.changes).toEqual({
+      licenses: [expect.objectContaining({ id: 'LIC-MAPA', status: 'Deferida' })],
+      updatedById: '',
+      updatedByName: 'Migração F17.1',
+    })
+  })
+
+  it('toda escrita tem updatedById vazio', () => {
+    const plan = planOperationalMigration([
+      { id: 'P3', category: 'FCL', processStatus: 'Aguardando atracação', berthed: true, mapaStatus: 'Liberado' },
+    ])
+    for (const doc of plan) {
+      if (doc.changes) expect(doc.changes.updatedById).toBe('')
+    }
+  })
+
+  it('segunda passada sobre o resultado aplicado -> nenhum changes', () => {
+    const initial = [
+      {
+        id: 'P4',
+        category: 'FCL',
+        processStatus: 'Aguardando parametrização da DUIMP',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        mapaStatus: 'Liberado',
+      },
+    ]
+    const firstPlan = planOperationalMigration(initial)
+    const applied = initial.map((doc, index) => ({ ...doc, ...(firstPlan[index].changes ?? {}) }))
+    const secondPlan = planOperationalMigration(applied)
+    for (const doc of secondPlan) {
+      expect(doc.changes).toBeNull()
+    }
+  })
+})
+
+describe('toFirestoreFieldValue / fromFirestoreValue (D-11)', () => {
+  it('array de objetos -> arrayValue.values[].mapValue.fields', () => {
+    const value = toFirestoreFieldValue([{ id: 'LIC-1', status: 'Deferida' }])
+    expect(value.arrayValue.values[0].mapValue.fields.id).toEqual({ stringValue: 'LIC-1' })
+    expect(value.arrayValue.values[0].mapValue.fields.status).toEqual({ stringValue: 'Deferida' })
+  })
+
+  it('array vazio -> { arrayValue: {} }', () => {
+    expect(toFirestoreFieldValue([])).toEqual({ arrayValue: {} })
+  })
+
+  it('ida-e-volta preserva o valor original', () => {
+    const original = [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida', ok: true, count: 2 }]
+    const roundTripped = fromFirestoreValue(toFirestoreFieldValue(original))
+    expect(roundTripped).toEqual(original)
+  })
+
+  it('null/undefined -> nullValue', () => {
+    expect(toFirestoreFieldValue(null)).toEqual({ nullValue: null })
+    expect(toFirestoreFieldValue(undefined)).toEqual({ nullValue: null })
   })
 })

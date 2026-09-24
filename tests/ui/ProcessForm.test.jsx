@@ -23,8 +23,7 @@ function makeDraft(overrides = {}) {
     palletQuantity: 0,
     processNotes: '',
     carrierName: '',
-    mapaStatus: '',
-    mapaInspectionScheduledAt: '',
+    licenses: [],
     berthed: false,
     cargoPresenceInformed: false,
     arrived: false,
@@ -78,7 +77,6 @@ function renderForm(props = {}) {
     collectionStatusOptions: ['Coleta Pendente', 'Coleta Agendada'],
     dtaStatusOptions: ['Registrada'],
     duimpStatusOptions: ['Registrada', 'Parametrizada'],
-    mapaStatusOptions: ['Deferido'],
     processCategoryOptions: ['FCL', 'LCL', 'AEREO', 'CONSOLIDADO'],
     onDraftChange,
     onSetViewModeList: vi.fn(),
@@ -228,13 +226,28 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(saveBtn).toBeDisabled()
   })
 
-  it('edit marítimo inclui fluxo mesmo sem canShowMaritimeFlow (passo MAPA)', async () => {
+  // F17.2b (D-5): a anuencia MAPA saiu do passo "Fluxo operacional" (agora
+  // vive em "Status e carga", via `LicensesEditor`).
+  it('edit marítimo NÃO tem mais "MAPA" no passo de fluxo', async () => {
     const user = userEvent.setup()
-    renderForm({ viewMode: 'edit', draft: makeDraft({ category: 'FCL' }) })
-    const flowTab = within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' })
-    await user.click(flowTab)
-    expect(screen.getByText('MAPA')).toBeInTheDocument()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL' }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    expect(screen.queryByText('MAPA')).not.toBeInTheDocument()
   })
+
+  it.each([['FCL'], ['AEREO']])(
+    '"Status e carga" tem "Adicionar anuência" em create %s',
+    async (category) => {
+      const user = userEvent.setup()
+      renderForm({ draft: makeDraft({ category }) })
+      await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+      expect(screen.getByRole('button', { name: 'Adicionar anuência' })).toBeInTheDocument()
+    }
+  )
 
   it('coleta agendada mostra "Transportadora" no passo de fluxo e dispara onDraftChange', async () => {
     const user = userEvent.setup()
@@ -326,27 +339,89 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
     expect(screen.getByRole('option', { name: 'Carga disponível em estoque' })).toBeInTheDocument()
   })
 
-  it('mapaStatus vazio renderiza o select de Coleta', async () => {
+  // F17.2b (D-4): o gate de coleta agora usa `licenses[]` (multi-orgao, com
+  // compat de leitura MAPA) em vez do `mapaStatus` isolado.
+  it('licenses: [] renderiza o select de Coleta', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
       canShowMaritimeFlow: true,
-      draft: maritimeReadyDraft({ mapaStatus: '' }),
+      draft: maritimeReadyDraft({ licenses: [] }),
     })
     await openFlowStep(user)
     expect(screen.getByText('Coleta')).toBeInTheDocument()
   })
 
-  it('mapaStatus "Aguardando MAPA" NÃO renderiza o select de Coleta', async () => {
+  it('licenses com anuência "Em análise" NÃO renderiza o select de Coleta', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
       canShowMaritimeFlow: true,
-      mapaStatusOptions: ['Aguardando MAPA', 'Liberado'],
-      draft: maritimeReadyDraft({ mapaStatus: 'Aguardando MAPA' }),
+      draft: maritimeReadyDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Em análise' }],
+      }),
     })
     await openFlowStep(user)
     expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
+  })
+
+  // F17.2b (D5 do spec): AEREO agora tambem e' bloqueado por anuencia nao
+  // deferida (antes so' maritimo tinha MAPA).
+  it('AEREO com anuência "Em análise" NÃO renderiza o select de Coleta', async () => {
+    const user = userEvent.setup()
+    const draft = makeDraft({
+      category: 'AEREO',
+      arrived: true,
+      dtaStatus: 'Trânsito concluído',
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+    })
+    renderForm({ viewMode: 'edit', canShowAirFlow: true, draft })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
+  })
+})
+
+// F17.2b (D-5): editor de anuencias no passo "Status e carga".
+describe('ProcessForm — LicensesEditor (F17.2b)', () => {
+  async function openStatusStepFor(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+  }
+
+  it('status "Vistoria agendada" mostra "Vistoria agendada para"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Vistoria agendada', inspectionScheduledAt: '' }],
+      }),
+    })
+    await openStatusStepFor(user)
+    expect(screen.getByText('Vistoria agendada para')).toBeInTheDocument()
+  })
+
+  it('status "Indeferida" mostra o badge "Indeferida"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
+      }),
+    })
+    await openStatusStepFor(user)
+    expect(screen.getByText('Indeferida', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('botão "Adicionar anuência" desabilita com 10 anuências', async () => {
+    const user = userEvent.setup()
+    const licenses = Array.from({ length: 10 }, (_, index) => ({
+      id: `LIC-${index + 1}`,
+      agency: 'MAPA',
+      status: 'Aguardando registro',
+    }))
+    renderForm({ draft: makeDraft({ licenses }) })
+    await openStatusStepFor(user)
+    expect(screen.getByRole('button', { name: 'Adicionar anuência' })).toBeDisabled()
   })
 })
 

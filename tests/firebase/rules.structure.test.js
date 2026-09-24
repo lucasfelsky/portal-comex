@@ -198,4 +198,29 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/containers\.size\(\)\s*<=\s*40/)
     })
   })
+
+  describe('F17.2b — anuencias licenses[] (D-12)', () => {
+    it('isAdminProcessFields contem "licenses"', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/['"]licenses['"]/)
+    })
+
+    it('isAdminProcessFields guarda o shape de licenses (list, size <= 10)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/licenses\s+is\s+list/)
+      expect(body).toMatch(/licenses\.size\(\)\s*<=\s*10/)
+    })
+
+    it('mapaStatus/mapaInspectionScheduledAt AINDA presentes (compat de 1 release)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/['"]mapaStatus['"]/)
+      expect(body).toMatch(/['"]mapaInspectionScheduledAt['"]/)
+    })
+  })
 })

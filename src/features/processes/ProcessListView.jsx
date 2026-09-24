@@ -16,6 +16,7 @@ import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from '
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getPendingFields } from './pendingFields'
 import { getContainerSpecialBadges } from './containers'
+import { hasRejectedLicense } from './licenses'
 
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -171,6 +172,9 @@ function ProcessRow({
               <span className="inline-badge inline-badge--warn">
                 Dados pendentes ({pendingFields.length})
               </span>
+            ) : null}
+            {hasRejectedLicense(item) ? (
+              <span className="inline-badge inline-badge--danger">Anuência indeferida</span>
             ) : null}
           </div>
         </div>

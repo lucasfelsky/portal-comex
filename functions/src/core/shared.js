@@ -7,6 +7,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
+import { getComparableLicensesMirror } from './licenses.js';
 
 const EMAIL_NOTIFICATION_TYPES = new Set([
   'process_question_created',
@@ -261,6 +262,13 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     changes.push('itens vinculados atualizados')
   }
 
+  if (
+    JSON.stringify(getComparableLicensesMirror(previousProcess)) !==
+    JSON.stringify(getComparableLicensesMirror(nextProcess))
+  ) {
+    changes.push('anuências atualizadas')
+  }
+
   if (changes.length === 0) {
     return 'dados do processo atualizados.'
   }
@@ -305,8 +313,7 @@ function sanitizeProcessForComparison(process) {
           notes: normalizeString(window?.notes),
         }))
       : [],
-    mapaStatus: normalizeString(process.mapaStatus),
-    mapaInspectionScheduledAt: normalizeString(process.mapaInspectionScheduledAt),
+    licenses: getComparableLicensesMirror(process),
     dtaStatus: normalizeString(process.dtaStatus),
     dtaLoadingScheduledAt: normalizeString(process.dtaLoadingScheduledAt),
     dtaArrivalAtItajai: normalizeString(process.dtaArrivalAtItajai),

@@ -9,14 +9,12 @@ import {
   isCollectionScheduledOrBeyondStatus,
   isDtaLoadingScheduledStatus,
   isDtaTransitCompletedStatus,
-  isMapaInspectionScheduledStatus,
-  mapaAllowsCollectionStatus,
   postCollectionStatusOptions,
   normalizeComparableText,
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
-import { deriveProcessStatus, isCustomsCleared } from './deriveProcessStatus'
+import { deriveProcessStatus, isCollectionReleased } from './deriveProcessStatus'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -25,6 +23,7 @@ import { getCollectionWindows } from '../../utils/collectionWindows'
 import { INCOTERM_OPTIONS } from './operationalOptions'
 import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
+import LicensesEditor from './LicensesEditor'
 
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
@@ -37,9 +36,10 @@ import ProcessTransitFields from './ProcessTransitFields'
 // touch). Os campos são exatamente os mesmos de antes — só reagrupados em
 // passos (Identificação / Datas e previsão / Status e carga / Fluxo
 // operacional / Itens). O passo "Fluxo operacional" só aparece quando há
-// algo a mostrar (MAPA no edit marítimo, ou os fluxos pós-atracação/
-// pós-chegada). Os chips de passo são clicáveis (pular direto — útil no
-// edit), e o botão Salvar fica sempre disponível (não prende o usuário no
+// algo a mostrar (os fluxos pós-atracação/pós-chegada - F17.2b: as
+// anuências saíram daqui, ver "Status e carga"/`LicensesEditor`). Os chips
+// de passo são clicáveis (pular direto — útil no edit), e o botão Salvar
+// fica sempre disponível (não prende o usuário no
 // fim do wizard). O estado do passo é interno; o page não precisa saber.
 export default function ProcessForm({
   viewMode,
@@ -53,7 +53,6 @@ export default function ProcessForm({
   collectionStatusOptions,
   dtaStatusOptions,
   duimpStatusOptions,
-  mapaStatusOptions,
   processCategoryOptions,
   onDraftChange,
   onSetViewModeList,
@@ -79,10 +78,8 @@ export default function ProcessForm({
     formatDate(getAutomaticEstimatedDeliveryDate(process))
   const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
 
-  const shouldEditMapaInspection = (status) => isMapaInspectionScheduledStatus(status)
   const isDtaLoadingScheduled = (status) => isDtaLoadingScheduledStatus(status)
   const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
-  const mapaAllowsCollection = (status) => mapaAllowsCollectionStatus(status)
 
   const keepsCollectionSchedule = (status) => {
     const normalizedStatus = normalizeComparableText(status)
@@ -304,6 +301,12 @@ export default function ProcessForm({
 
       <ProcessCargoFields draft={draft} onDraftChange={onDraftChange} disabled={isSaving} />
 
+      <LicensesEditor
+        value={draft.licenses}
+        onChange={(value) => onDraftChange('licenses', value)}
+        disabled={isSaving}
+      />
+
       <label className="field">
         <span>Quantidade de pallets</span>
         <input
@@ -333,36 +336,6 @@ export default function ProcessForm({
 
   const renderFlowStep = () => (
     <>
-      {viewMode === 'edit' && isMaritimeCategory(draft.category) ? (
-        <div className="detail-card">
-          <span className="detail-label">MAPA</span>
-          <label className="field">
-            <span>Status</span>
-            <SelectField
-              className="text-input"
-              value={draft.mapaStatus}
-              onChange={(event) => onDraftChange('mapaStatus', event.target.value)}
-            >
-              <option value="">Selecione o status</option>
-              {mapaStatusOptions.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </SelectField>
-          </label>
-          {shouldEditMapaInspection(draft.mapaStatus) ? (
-            <label className="field">
-              <span>Vistoria agendada para</span>
-              <input
-                className="text-input"
-                type="datetime-local"
-                value={draft.mapaInspectionScheduledAt}
-                onChange={(event) => onDraftChange('mapaInspectionScheduledAt', event.target.value)}
-              />
-            </label>
-          ) : null}
-        </div>
-      ) : null}
-
       {canShowMaritimeFlow ? (
         <div className="detail-card">
           <span className="detail-label">Pós-atracação</span>
@@ -432,7 +405,7 @@ export default function ProcessForm({
               </small>
             </label>
           ) : null}
-          {isCustomsCleared(draft) && mapaAllowsCollection(draft.mapaStatus) ? (
+          {isCollectionReleased(draft) ? (
             <label className="field">
               <span>Coleta</span>
               <SelectField
@@ -570,7 +543,7 @@ export default function ProcessForm({
               </small>
             </label>
           ) : null}
-          {isCustomsCleared(draft) ? (
+          {isCollectionReleased(draft) ? (
             <label className="field">
               <span>Coleta</span>
               <SelectField

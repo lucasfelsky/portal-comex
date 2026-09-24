@@ -1,22 +1,23 @@
-// F17.1a/F17.2a: camada de compatibilidade para o `processStatus` derivado.
-// Funcao pura (sem React, sem firebase) - roda no app E no script de
-// migracao (Node puro). Ver PLAN.md secoes "Decisoes tomadas" (D-A a D-G,
-// D-3 do F17.2a) para o raciocinio completo.
+// F17.1a/F17.2a/F17.2b: camada de compatibilidade para o `processStatus`
+// derivado. Funcao pura (sem React, sem firebase) - roda no app E no script
+// de migracao (Node puro). Ver PLAN.md secoes "Decisoes tomadas" (D-A a D-G,
+// D-3 do F17.2a; D-4 do F17.2b) para o raciocinio completo.
 //
 // F17.2a (D-3): `shippedAt` encerra o select manual pre-chegada. Os ramos
 // de `shippedAt` (linhas 8 e 9 da tabela D-B) agora usam `hasShippedSignal`
 // - sinal real (`shippedAt` preenchido) OU legado (processo gravado num
 // status pos-embarque antes do F17.2a, sem `shippedAt`). O fallback final
 // (sem nenhum sinal) e' sempre 'Aguardando Embarque'.
+//
+// F17.2b (D-4): o gate de coleta (linha 3 da derivacao) usa `licenses[]`
+// multi-orgao (`isCollectionReleased`) em vez da checagem privada de MAPA -
+// `areLicensesCleared` mora agora em `./licenses.js` (fonte unica,
+// AEREO incluido).
 
-import {
-  normalizeComparableText,
-  isCdUnloadingOrReceivedStatus,
-  mapaAllowsCollectionStatus,
-  processStatusOptions,
-} from './processStatus.js'
+import { normalizeComparableText, isCdUnloadingOrReceivedStatus, processStatusOptions } from './processStatus.js'
 import { isMaritimeCategory, isAirCategory } from './processCategories.js'
 import { getCollectionWindows } from '../../utils/collectionWindows.js'
+import { areLicensesCleared } from './licenses.js'
 
 export const PRE_ARRIVAL_STATUSES = ['Aguardando Embarque', 'Embarcou', 'Aguardando atracação']
 
@@ -56,20 +57,14 @@ export function isCustomsCleared(process) {
   )
 }
 
-function areLicensesCleared(process) {
-  const licenses = Array.isArray(process?.licenses) ? process.licenses : []
-
-  if (licenses.length > 0) {
-    return licenses.every(
-      (license) => normalizeComparableText(license?.status).trim() === 'deferida'
-    )
-  }
-
-  if (isMaritimeCategory(process?.category)) {
-    return mapaAllowsCollectionStatus(process?.mapaStatus)
-  }
-
-  return true
+/**
+ * D-4: gate de coleta - unifica desembaraco concluido + todas as anuencias
+ * deferidas (`./licenses.js`, com compat de leitura MAPA - D-3). Exportada
+ * pro reuso no gate de coleta (sanitize/form/filtro) - AGORA tambem
+ * bloqueia AEREO (mudanca intencional do spec D5).
+ */
+export function isCollectionReleased(process) {
+  return isCustomsCleared(process) && areLicensesCleared(process)
 }
 
 function hasCollectionWindowScheduled(process) {
@@ -126,7 +121,7 @@ export function deriveProcessStatus(process, today = new Date()) {
     return 'Coleta Agendada'
   }
 
-  if (isCustomsCleared(process) && areLicensesCleared(process)) {
+  if (isCollectionReleased(process)) {
     return 'Aguardando agendamento de coleta'
   }
 

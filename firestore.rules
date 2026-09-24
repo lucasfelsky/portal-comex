@@ -136,7 +136,7 @@ service cloud.firestore {
     // (L16: vault desatualizada). Ver Retomada 2026-07-08 § "Auditoria
     // preventiva de drift" § "PR #2 do backlog".
 
-    // processes: 59 campos gravados pelo `toFirestorePayload()`
+    // processes: 60 campos gravados pelo `toFirestorePayload()`
     // (src/services/processesRepository.js). setDoc usado com
     // `merge: true` para create E update, entao ambos compartilham a
     // mesma allowlist. `createdById/Name/createdAt` e
@@ -147,6 +147,12 @@ service cloud.firestore {
     // transito (containers[], BL/AWB, navio/viagem/voo, transbordo, carga
     // perigosa, shippedAt). So' admin grava - logistica nao muda
     // (isLogisticsPostReceiptUpdate/isLogisticsCollectionStatusUpdate).
+    //
+    // F17.2b (D-12): +1 campo `licenses` (anuencias multi-orgao, guarda
+    // `is list` + `size() <= 10`, mesmo estilo de `containers`).
+    // `mapaStatus`/`mapaInspectionScheduledAt` FICAM na allowlist nesta
+    // release (o payload ainda grava `''` neles - compat de leitura de 1
+    // release, D-3); remocao na release seguinte.
     function isAdminProcessFields() {
       // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
       // No `update`, `resource.data` existe. Tratamos os 2 casos:
@@ -189,6 +195,8 @@ service cloud.firestore {
         'transshipmentPort', 'dangerousGoods', 'transshipment',
         'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
         'packagesQuantity', 'containers',
+        // F17.2b (D-1..D-3): anuencias multi-orgao.
+        'licenses',
       ]) && (
         !('postReceiptImages' in request.resource.data)
         || (
@@ -200,6 +208,12 @@ service cloud.firestore {
         || (
           request.resource.data.containers is list
           && request.resource.data.containers.size() <= 40
+        )
+      ) && (
+        !('licenses' in request.resource.data)
+        || (
+          request.resource.data.licenses is list
+          && request.resource.data.licenses.size() <= 10
         )
       );
     }

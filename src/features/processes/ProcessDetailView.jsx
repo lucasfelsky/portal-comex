@@ -9,7 +9,6 @@ import {
   getQuickReadProcessStatus,
   isCollectionScheduledOrBeyondStatus,
   isDtaTransitCompletedStatus,
-  isMapaInspectionScheduledStatus,
   isProcessStatusFinalized,
 } from './processStatus'
 import { getChannelToneClass, getStatusTagClass } from './processStatusView'
@@ -21,7 +20,11 @@ import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ConfirmDialog from '../../components/ConfirmDialog'
-import { ProcessCargoTransitDetails, ProcessIdentificationDetails } from './ProcessOperationalDetails'
+import {
+  ProcessCargoTransitDetails,
+  ProcessIdentificationDetails,
+  ProcessLicensesDetails,
+} from './ProcessOperationalDetails'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
 // 'detail'), extraída do ProcessesPage. Presentacional — lê só o
@@ -108,7 +111,6 @@ export default function ProcessDetailView({
         (Array.isArray(process?.postReceiptImages) ? process.postReceiptImages : []).length > 0
     )
 
-  const shouldEditMapaInspection = (status) => isMapaInspectionScheduledStatus(status)
   const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
 
   return (
@@ -323,17 +325,7 @@ export default function ProcessDetailView({
                 ) : null}
               </div>
             ) : null}
-            {isMaritimeCategory(selectedProcess.category) && selectedProcess.mapaStatus ? (
-              <div className="detail-card">
-                <span className="detail-label">MAPA</span>
-                <div className="detail-stack detail-stack--compact">
-                  <p>Status: {selectedProcess.mapaStatus}</p>
-                  {shouldEditMapaInspection(selectedProcess.mapaStatus) && selectedProcess.mapaInspectionScheduledAt ? (
-                    <p>Vistoria agendada: {formatDateTime(selectedProcess.mapaInspectionScheduledAt)}</p>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
+            <ProcessLicensesDetails process={selectedProcess} />
             {isMaritimeCategory(selectedProcess.category) && selectedProcess.berthed ? (
               <div className="detail-card">
                 <span className="detail-label">Andamento após chegada</span>

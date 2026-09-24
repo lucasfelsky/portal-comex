@@ -10,7 +10,6 @@ import {
   getStatusTagClass,
   isCollectionScheduleRetainingStatus as keepsCollectionSchedule,
   isDtaTransitCompletedStatus,
-  isMapaInspectionScheduledStatus as shouldShowMapaInspection,
   shouldHideProcessCardSchedule,
   shouldHideProcessStatusBadge,
 } from '../features/processes/processStatusView'
@@ -34,6 +33,7 @@ import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
+import { getEffectiveLicenses } from '../features/processes/licenses'
 
 function formatTimestamp(value) {
   if (!value) return 'Agora'
@@ -324,14 +324,13 @@ export default function DashboardPage() {
                           <span className="detail-label">Pós-atracação</span>
                           <p>Presença de carga: {item.cargoPresenceInformed ? 'Informada' : 'Pendente'}</p>
                         </div>
-                        {item.mapaStatus ? (
+                        {getEffectiveLicenses(item).length > 0 ? (
                           <div className="dashboard-process-inline__row">
-                            <span className="detail-label">MAPA</span>
+                            <span className="detail-label">Anuências</span>
                             <p>
-                              {item.mapaStatus}
-                              {shouldShowMapaInspection(item.mapaStatus) && item.mapaInspectionScheduledAt
-                                ? ` · Vistoria: ${formatDateTime(item.mapaInspectionScheduledAt)}`
-                                : ''}
+                              {getEffectiveLicenses(item)
+                                .map((license) => `${license.agency} — ${license.status}`)
+                                .join(' · ')}
                             </p>
                           </div>
                         ) : null}
