@@ -11,6 +11,7 @@ import {
   MIN_CONSOLIDATED_PURCHASE_ORDERS,
   getProcessPurchaseOrders,
 } from './purchaseOrders.js'
+import { isLegacyProcessDangerousGoods } from './operationalOptions.js'
 import {
   CE_HOUSE_CATEGORIES,
   CUSTOMS_INSPECTION_CHANNELS,
@@ -172,26 +173,41 @@ export const PENDING_FIELD_RULES = [
     categories: ['AEREO'],
     isMissing: (p) => !(Number(p?.packagesQuantity) > 0),
   },
+  // F17.2d-1 (D-4/D-5, Q4): carga perigosa passou a ser classificada POR
+  // ITEM - substitui as regras antigas de nivel-processo (`unNumber`/
+  // `imoClass`). Processo legado (flag true, nenhum item classificado)
+  // vira pendencia dedicada; item classificado sem ONU/classe cobra por
+  // item.
   {
-    id: 'unNumber',
-    field: 'unNumber',
-    label: 'Número ONU',
+    id: 'dangerousGoodsPerItem',
+    field: 'dangerousGoods',
+    label: 'Classificar carga perigosa por item',
     stage: 0,
-    when: (p) => p?.dangerousGoods === true,
-    isMissing: (p) => !hasText(p?.unNumber),
+    when: (p) => isLegacyProcessDangerousGoods(p),
+    isMissing: () => true,
   },
   {
-    id: 'imoClass',
-    field: 'imoClass',
-    label: 'Classe IMO',
+    id: 'itemUnNumber',
+    field: 'items',
+    label: 'Número ONU do item',
     stage: 0,
-    when: (p) => p?.dangerousGoods === true,
-    isMissing: (p) => !hasText(p?.imoClass),
+    isMissing: (p) =>
+      Array.isArray(p?.items) &&
+      p.items.some((item) => item?.dangerousGoods === true && !hasText(item?.unNumber)),
+  },
+  {
+    id: 'itemImoClass',
+    field: 'items',
+    label: 'Classe IMO do item',
+    stage: 0,
+    isMissing: (p) =>
+      Array.isArray(p?.items) &&
+      p.items.some((item) => item?.dangerousGoods === true && !hasText(item?.imoClass)),
   },
   {
     id: 'shippedAt',
     field: 'shippedAt',
-    label: 'Data de embarque',
+    label: 'Embarque confirmado',
     stage: 1,
     isMissing: (p) => !hasText(p?.shippedAt),
   },

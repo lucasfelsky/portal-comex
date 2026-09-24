@@ -208,6 +208,8 @@ service cloud.firestore {
         'transshipmentPort', 'dangerousGoods', 'transshipment',
         'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
         'packagesQuantity', 'containers',
+        // F17.2d-1 (D-8, Q3): ETD do transbordo.
+        'transshipmentEtd',
         // F17.2b (D-1..D-3): anuencias multi-orgao.
         'licenses',
         // F17.2c: POs do consolidado.

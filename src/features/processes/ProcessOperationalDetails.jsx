@@ -1,5 +1,10 @@
 import { getContainerSpecialBadges } from './containers'
-import { getImoClassLabel } from './operationalOptions'
+import {
+  getImoClassLabel,
+  getItemDangerousGoodsLabel,
+  hasDangerousGoods,
+  isLegacyProcessDangerousGoods,
+} from './operationalOptions'
 import { canShowProcessName } from './processLabels'
 import { getEffectiveLicenses } from './licenses'
 import { formatDateTime } from '../../utils/dateFormat'
@@ -168,12 +173,28 @@ export function ProcessCargoTransitDetails({ process }) {
         </div>
       ) : null}
 
-      {process?.dangerousGoods ? (
+      {hasDangerousGoods(process) ? (
         <div className="detail-card">
           <span className="detail-label">Carga perigosa</span>
           <div className="detail-stack detail-stack--compact">
-            {process?.unNumber ? <p>Número ONU: {process.unNumber}</p> : null}
-            {process?.imoClass ? <p>Classe IMO: {getImoClassLabel(process.imoClass)}</p> : null}
+            {(Array.isArray(process?.items) ? process.items : [])
+              .filter((item) => item?.dangerousGoods === true)
+              .map((item) => (
+                <p key={item.id}>
+                  {item.commercialName || 'Item sem nome'}: {getItemDangerousGoodsLabel(item)}
+                </p>
+              ))}
+            {isLegacyProcessDangerousGoods(process) ? (
+              <p>
+                Cadastro antigo do processo:{' '}
+                {[
+                  process?.unNumber ? `ONU ${process.unNumber}` : null,
+                  process?.imoClass ? `Classe ${getImoClassLabel(process.imoClass)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'sem número ONU/classe registrados'}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -197,7 +218,10 @@ export function ProcessCargoTransitDetails({ process }) {
       {process?.transshipment ? (
         <div className="detail-card">
           <span className="detail-label">Transbordo</span>
-          <p>{process?.transshipmentPort ? `Sim — ${process.transshipmentPort}` : 'Sim'}</p>
+          <p>
+            {process?.transshipmentPort ? `Sim — ${process.transshipmentPort}` : 'Sim'}
+            {process?.transshipmentEtd ? ` · ETD ${formatDate(process.transshipmentEtd)}` : ''}
+          </p>
         </div>
       ) : null}
     </>

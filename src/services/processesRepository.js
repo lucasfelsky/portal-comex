@@ -49,9 +49,11 @@ import {
 } from '../features/processes/purchaseOrders'
 import {
   INCOTERM_OPTIONS,
+  itemsHaveDangerousGoods,
   normalizeDecimal,
   normalizeImoClass,
   normalizeInteger,
+  normalizeItemDangerousGoods,
   normalizeUnNumber,
 } from '../features/processes/operationalOptions'
 
@@ -110,6 +112,9 @@ function normalizeProcessItems(items, { category = '', purchaseOrders = [] } = {
       if (category === 'CONSOLIDADO') {
         base.poNumber = normalizeItemPoNumber(item?.poNumber, purchaseOrders)
       }
+      // F17.2d-1 (D-3): carga perigosa POR ITEM - chaves esparsas (so' item
+      // classificado ganha dangerousGoods/unNumber/imoClass).
+      Object.assign(base, normalizeItemDangerousGoods(item))
       return base
     })
     .filter((item) => item.commercialName || item.quantity > 0)
@@ -361,11 +366,19 @@ function normalizeIncoterm(value) {
 // F17.2a (D-5): limpeza por categoria dos 22 campos novos, mesmo padrao de
 // `sanitizeMapaFlow`. So' recebe os campos que le - o chamador espalha o
 // resultado por cima do objeto normalizado.
+// F17.2d-1 (D-5/D-7/D-8): carga perigosa POR ITEM deriva a flag/trio de
+// processo (`itemsHaveDangerousGoods` chega ja calculado pelo chamador, com
+// os itens normalizados - nao recalcular aqui pra nao gerar ids novos);
+// legado de nivel-processo so' e' preservado enquanto nenhum item foi
+// classificado. `transshipmentEtd` so' com transbordo. `volumeM3` passa a
+// aceitar tambem FCL/CONSOLIDADO (cubagem opcional).
 function sanitizeCargoAndTransitFields(process) {
   const category = process.category
   const isMaritime = isMaritimeCategory(category)
   const isAir = isAirCategory(category)
-  const dangerousGoods = Boolean(process.dangerousGoods)
+  const itemDangerous = Boolean(process.itemsHaveDangerousGoods)
+  const legacyDangerous = !itemDangerous && Boolean(process.dangerousGoods)
+  const dangerousGoods = itemDangerous || legacyDangerous
   const transshipment = Boolean(process.transshipment)
 
   return {
@@ -375,10 +388,11 @@ function sanitizeCargoAndTransitFields(process) {
     forwarderName: String(process.forwarderName ?? '').trim(),
     shippedAt: normalizeIsoDate(process.shippedAt),
     dangerousGoods,
-    unNumber: dangerousGoods ? normalizeUnNumber(process.unNumber) : '',
-    imoClass: dangerousGoods ? normalizeImoClass(process.imoClass) : '',
+    unNumber: legacyDangerous ? normalizeUnNumber(process.unNumber) : '',
+    imoClass: legacyDangerous ? normalizeImoClass(process.imoClass) : '',
     transshipment,
     transshipmentPort: transshipment ? String(process.transshipmentPort ?? '').trim() : '',
+    transshipmentEtd: transshipment ? normalizeIsoDate(process.transshipmentEtd) : '',
     vesselName: isMaritime ? String(process.vesselName ?? '').trim() : '',
     voyage: isMaritime ? String(process.voyage ?? '').trim() : '',
     masterBl: isMaritime ? String(process.masterBl ?? '').trim() : '',
@@ -388,7 +402,10 @@ function sanitizeCargoAndTransitFields(process) {
     hawb: isAir ? String(process.hawb ?? '').trim() : '',
     grossWeightKg:
       category === 'LCL' || isAir ? normalizeDecimal(process.grossWeightKg) : 0,
-    volumeM3: category === 'LCL' ? normalizeDecimal(process.volumeM3) : 0,
+    volumeM3:
+      category === 'LCL' || category === 'FCL' || category === 'CONSOLIDADO'
+        ? normalizeDecimal(process.volumeM3)
+        : 0,
     chargeableWeightKg: isAir ? normalizeDecimal(process.chargeableWeightKg) : 0,
     packagesQuantity: isAir ? normalizeInteger(process.packagesQuantity) : 0,
     containers: normalizeContainers(process.containers, {
@@ -559,11 +576,19 @@ function normalizeProcess(rawProcess, fallbackId) {
     migratedApproxFields: rawProcess.migratedApproxFields,
   })
 
+  // F17.2d-1 (D-4/D-5): itens normalizados UMA vez so' (ids aleatorios -
+  // chamar `normalizeProcessItems` 2x geraria "itens vinculados
+  // atualizados" espurio); reutilizados em `items` (l.626) e na derivacao
+  // da flag de carga perigosa do processo.
+  const items = normalizeProcessItems(rawProcess.items, { category, purchaseOrders })
+
   // F17.2a (D-5): limpeza por categoria dos 22 campos novos.
   const cargoAndTransitFields = sanitizeCargoAndTransitFields({
     category,
     dangerousGoods: rawProcess.dangerousGoods,
+    itemsHaveDangerousGoods: itemsHaveDangerousGoods(items),
     transshipment: rawProcess.transshipment,
+    transshipmentEtd: rawProcess.transshipmentEtd,
     supplierName: rawProcess.supplierName,
     originLocation: rawProcess.originLocation,
     incoterm: rawProcess.incoterm,
@@ -623,7 +648,7 @@ function normalizeProcess(rawProcess, fallbackId) {
     postReceiptNotes: String(rawProcess.postReceiptNotes ?? '').trim(),
     postReceiptImages: normalizePostReceiptImages(rawProcess.postReceiptImages),
     cargoReceivedAt: normalizeIsoDateTime(rawProcess.cargoReceivedAt),
-    items: normalizeProcessItems(rawProcess.items, { category, purchaseOrders }),
+    items,
     ...operationalFields,
     ...arrivalFields,
     migratedApproxFields: normalizeMigratedApproxFields(rawProcess.migratedApproxFields, arrivalFields),
@@ -687,13 +712,23 @@ function isExpiredReceivedProcess(process) {
 
 function toFirestorePayload(process) {
   const category = processCategoryOptions.includes(process.category) ? process.category : 'FCL'
+  // F17.2c (D-3): payload FIXO (lista vazia fora do CONSOLIDADO) - por isso
+  // a allowlist/guarda (D-8).
+  const purchaseOrders = getProcessPurchaseOrders({ ...process, category })
+  // F17.2d-1 (D-4/D-5): itens normalizados UMA vez so' (ids aleatorios -
+  // chamar `normalizeProcessItems` 2x geraria "itens vinculados
+  // atualizados" espurio); reutilizados abaixo e na derivacao da flag de
+  // carga perigosa do processo.
+  const items = normalizeProcessItems(process.items, { category, purchaseOrders })
   // F17.2a (D-5): mesma limpeza por categoria de `normalizeProcess` - o
   // payload grava os 22 campos SEMPRE (por isso entram todos na allowlist
   // de create/update).
   const cargoAndTransitFields = sanitizeCargoAndTransitFields({
     category,
     dangerousGoods: process.dangerousGoods,
+    itemsHaveDangerousGoods: itemsHaveDangerousGoods(items),
     transshipment: process.transshipment,
+    transshipmentEtd: process.transshipmentEtd,
     supplierName: process.supplierName,
     originLocation: process.originLocation,
     incoterm: process.incoterm,
@@ -721,9 +756,6 @@ function toFirestorePayload(process) {
     category === 'FCL' || category === 'CONSOLIDADO'
       ? cargoAndTransitFields.containers.length
       : normalizeQuantity(process.containerQuantity)
-  // F17.2c (D-3): payload FIXO (lista vazia fora do CONSOLIDADO) - por isso
-  // a allowlist/guarda (D-8).
-  const purchaseOrders = getProcessPurchaseOrders({ ...process, category })
   // F17.3a (D-14): payload FIXO das 9 chaves novas - por isso a allowlist
   // (D-9). `process` aqui ja' e' o `nextProcess` normalizado (via
   // `normalizeProcess`, chamado em `saveProcess`).
@@ -747,7 +779,7 @@ function toFirestorePayload(process) {
     postReceiptNotes: String(process.postReceiptNotes ?? '').trim(),
     postReceiptImages: normalizePostReceiptImages(process.postReceiptImages),
     cargoReceivedAt: normalizeIsoDateTime(process.cargoReceivedAt),
-    items: normalizeProcessItems(process.items, { category, purchaseOrders }),
+    items,
     berthed: Boolean(process.berthed),
     arrived: Boolean(process.arrived),
     berthedAt: arrivalFields.berthedAt,

@@ -60,3 +60,56 @@ export function normalizeInteger(value) {
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
+
+// F17.2d-1 (D-4): carga perigosa POR ITEM (Q4). Chaves ESPARSAS - item
+// nao-perigoso fica sem `dangerousGoods/unNumber/imoClass` (mesma logica de
+// `poNumber` no F17.2c: chaves `false/''` em todo item acusariam "itens
+// vinculados atualizados" espurio no 1o save de todo legado).
+export function normalizeItemDangerousGoods(item) {
+  if (item?.dangerousGoods !== true) return {}
+  return {
+    dangerousGoods: true,
+    unNumber: normalizeUnNumber(item.unNumber),
+    imoClass: normalizeImoClass(item.imoClass),
+  }
+}
+
+export function itemsHaveDangerousGoods(items) {
+  return Array.isArray(items) && items.some((item) => item?.dangerousGoods === true)
+}
+
+export function hasDangerousGoods(process) {
+  return process?.dangerousGoods === true || itemsHaveDangerousGoods(process?.items)
+}
+
+// Legado de nivel-processo: flag true de processo mas nenhum item
+// classificado - vira pendencia "Classificar carga perigosa por item".
+export function isLegacyProcessDangerousGoods(process) {
+  return process?.dangerousGoods === true && !itemsHaveDangerousGoods(process?.items)
+}
+
+// D-5: deriva a flag/trio de processo a partir dos itens (na escrita).
+// Algum item perigoso -> flag deriva dos itens (trio de processo zerado).
+// Nenhum item perigoso, mas o processo TINHA item perigoso antes (a flag
+// era derivada, nao legado) -> zera tambem. Senao (nunca teve item
+// perigoso) -> preserva o trio legado de nivel-processo (compat de leitura).
+export function resolveProcessDangerousGoods(current, nextItems) {
+  if (itemsHaveDangerousGoods(nextItems)) {
+    return { dangerousGoods: true, unNumber: '', imoClass: '' }
+  }
+  if (itemsHaveDangerousGoods(current?.items)) {
+    return { dangerousGoods: false, unNumber: '', imoClass: '' }
+  }
+  return {
+    dangerousGoods: Boolean(current?.dangerousGoods),
+    unNumber: current?.unNumber ?? '',
+    imoClass: current?.imoClass ?? '',
+  }
+}
+
+export function getItemDangerousGoodsLabel(item) {
+  const parts = ['Carga perigosa']
+  if (item?.imoClass) parts.push(`Classe ${item.imoClass}`)
+  if (item?.unNumber) parts.push(`ONU ${item.unNumber}`)
+  return parts.join(' · ')
+}

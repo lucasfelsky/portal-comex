@@ -7,11 +7,17 @@ import {
   IMO_CLASS_OPTIONS,
   INCOTERM_OPTIONS,
   getImoClassLabel,
+  getItemDangerousGoodsLabel,
+  hasDangerousGoods,
+  isLegacyProcessDangerousGoods,
   isValidUnNumber,
+  itemsHaveDangerousGoods,
   normalizeDecimal,
   normalizeImoClass,
   normalizeInteger,
+  normalizeItemDangerousGoods,
   normalizeUnNumber,
+  resolveProcessDangerousGoods,
 } from '../../src/features/processes/operationalOptions.js'
 
 describe('INCOTERM_OPTIONS', () => {
@@ -96,5 +102,96 @@ describe('normalizeInteger', () => {
   it('negativo/NaN -> 0', () => {
     expect(normalizeInteger('-3')).toBe(0)
     expect(normalizeInteger('abc')).toBe(0)
+  })
+})
+
+// F17.2d-1 (D-4, Q4): carga perigosa POR ITEM - chaves esparsas.
+describe('normalizeItemDangerousGoods', () => {
+  it('item nao-perigoso -> objeto vazio (sem chaves)', () => {
+    expect(normalizeItemDangerousGoods({ dangerousGoods: false })).toEqual({})
+    expect(normalizeItemDangerousGoods({})).toEqual({})
+  })
+
+  it('item perigoso -> chaves normalizadas', () => {
+    expect(
+      normalizeItemDangerousGoods({ dangerousGoods: true, unNumber: 'UN 1203', imoClass: '3' })
+    ).toEqual({ dangerousGoods: true, unNumber: '1203', imoClass: '3' })
+  })
+})
+
+describe('itemsHaveDangerousGoods', () => {
+  it('algum item perigoso -> true', () => {
+    expect(itemsHaveDangerousGoods([{ dangerousGoods: true }])).toBe(true)
+  })
+
+  it('nenhum item perigoso/array vazio/nao-array -> false', () => {
+    expect(itemsHaveDangerousGoods([{ dangerousGoods: false }])).toBe(false)
+    expect(itemsHaveDangerousGoods([])).toBe(false)
+    expect(itemsHaveDangerousGoods(undefined)).toBe(false)
+  })
+})
+
+describe('hasDangerousGoods / isLegacyProcessDangerousGoods', () => {
+  it('flag de processo true -> hasDangerousGoods true', () => {
+    expect(hasDangerousGoods({ dangerousGoods: true, items: [] })).toBe(true)
+  })
+
+  it('algum item perigoso -> hasDangerousGoods true', () => {
+    expect(hasDangerousGoods({ dangerousGoods: false, items: [{ dangerousGoods: true }] })).toBe(true)
+  })
+
+  it('legado (flag true, nenhum item perigoso) -> isLegacyProcessDangerousGoods true', () => {
+    expect(isLegacyProcessDangerousGoods({ dangerousGoods: true, items: [] })).toBe(true)
+  })
+
+  it('item ja classificado -> isLegacyProcessDangerousGoods false', () => {
+    expect(
+      isLegacyProcessDangerousGoods({ dangerousGoods: true, items: [{ dangerousGoods: true }] })
+    ).toBe(false)
+  })
+})
+
+describe('resolveProcessDangerousGoods', () => {
+  it('algum item perigoso nos proximos itens -> flag deriva dos itens, trio zerado', () => {
+    expect(
+      resolveProcessDangerousGoods(
+        { dangerousGoods: false, unNumber: '', imoClass: '', items: [] },
+        [{ dangerousGoods: true, unNumber: '1203', imoClass: '3' }]
+      )
+    ).toEqual({ dangerousGoods: true, unNumber: '', imoClass: '' })
+  })
+
+  it('nenhum item perigoso, mas o processo TINHA item perigoso (flag derivada) -> zera', () => {
+    expect(
+      resolveProcessDangerousGoods(
+        { dangerousGoods: true, unNumber: '', imoClass: '', items: [{ dangerousGoods: true }] },
+        []
+      )
+    ).toEqual({ dangerousGoods: false, unNumber: '', imoClass: '' })
+  })
+
+  it('legado (nunca teve item perigoso) -> preserva o trio de processo', () => {
+    expect(
+      resolveProcessDangerousGoods(
+        { dangerousGoods: true, unNumber: 'UN-1', imoClass: '3', items: [] },
+        []
+      )
+    ).toEqual({ dangerousGoods: true, unNumber: 'UN-1', imoClass: '3' })
+  })
+})
+
+describe('getItemDangerousGoodsLabel', () => {
+  it('so classe', () => {
+    expect(getItemDangerousGoodsLabel({ imoClass: '3' })).toBe('Carga perigosa · Classe 3')
+  })
+
+  it('classe e ONU', () => {
+    expect(getItemDangerousGoodsLabel({ imoClass: '3', unNumber: '1203' })).toBe(
+      'Carga perigosa · Classe 3 · ONU 1203'
+    )
+  })
+
+  it('sem classe nem ONU', () => {
+    expect(getItemDangerousGoodsLabel({})).toBe('Carga perigosa')
   })
 })

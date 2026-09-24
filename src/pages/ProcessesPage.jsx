@@ -61,6 +61,8 @@ import {
   clearRemovedPurchaseOrderLinks,
   normalizePurchaseOrders,
 } from '../features/processes/purchaseOrders'
+import { applyEtdEdit, applyShipmentConfirmation } from '../features/processes/shipmentConfirmation'
+import { resolveProcessDangerousGoods } from '../features/processes/operationalOptions'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -146,6 +148,7 @@ const emptyDraft = () => ({
   mawb: '',
   hawb: '',
   transshipmentPort: '',
+  transshipmentEtd: '',
   dangerousGoods: false,
   transshipment: false,
   grossWeightKg: 0,
@@ -252,6 +255,15 @@ function sanitizeProcessItems(items) {
       // categoria/lista de POs valida e' do repositorio (D-3).
       ...(typeof item?.poNumber === 'string' && item.poNumber.trim()
         ? { poNumber: String(item.poNumber).trim() }
+        : {}),
+      // F17.2d-1 (D-3): preserva o cru de carga perigosa POR ITEM - a
+      // normalizacao/allowlist e' do repositorio.
+      ...(item?.dangerousGoods === true
+        ? {
+            dangerousGoods: true,
+            unNumber: String(item.unNumber ?? '').trim(),
+            imoClass: String(item.imoClass ?? ''),
+          }
         : {}),
     }))
     .filter((item) => item.commercialName || item.quantity > 0)
@@ -822,6 +834,28 @@ export default function ProcessesPage() {
       if (field === 'collectionWindows') {
         return sanitizeDraft(current, { [field]: value })
       }
+      // F17.2d-1 (D-1, Q5): "Embarque confirmado" - editar o ETD sincroniza
+      // `shippedAt` so' quando ja' estava sincronizado (`applyEtdEdit`); o
+      // checkbox marca/desmarca copiando/zerando `shippedAt`.
+      if (field === 'etd') {
+        return applyEtdEdit(current, value)
+      }
+      if (field === 'shipmentConfirmed') {
+        return applyShipmentConfirmation(current, Boolean(value))
+      }
+      // F17.2d-1 (D-5, Q4): editar `items` recalcula a flag/trio de carga
+      // perigosa DERIVADA do processo (`resolveProcessDangerousGoods`).
+      if (field === 'items') {
+        return sanitizeDraft(current, {
+          items: value,
+          ...resolveProcessDangerousGoods(current, value),
+        })
+      }
+      // F17.2d-1 (D-5, Q4): "Descartar classificação do processo" (legado
+      // nao-perigoso de fato) - zera o trio manualmente.
+      if (field === 'dangerousGoods' && value === false) {
+        return { ...current, dangerousGoods: false, unNumber: '', imoClass: '' }
+      }
       // F17.2c (D-4): remover uma PO limpa o vinculo dos itens que a
       // usavam (`clearRemovedPurchaseOrderLinks`).
       if (field === 'purchaseOrders') {
@@ -863,7 +897,6 @@ export default function ProcessesPage() {
           'dtaStatus',
           'dtaLoadingScheduledAt',
           'dtaArrivalAtItajai',
-          'items',
         ].includes(field)
       ) {
         return sanitizeDraft(current, { [field]: value })

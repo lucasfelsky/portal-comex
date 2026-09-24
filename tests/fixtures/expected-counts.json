@@ -212,6 +212,7 @@
       "supplierName",
       "terminalName",
       "transshipment",
+      "transshipmentEtd",
       "transshipmentPort",
       "unNumber",
       "updatedAt",

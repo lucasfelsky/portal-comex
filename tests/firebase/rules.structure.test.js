@@ -199,6 +199,14 @@ describe('firestore.rules structure', () => {
     })
   })
 
+  describe('F17.2d-1 — ETD do transbordo (D-8)', () => {
+    it('isAdminProcessFields contem transshipmentEtd', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/['"]transshipmentEtd['"]/)
+    })
+  })
+
   describe('F17.2b — anuencias licenses[] (D-12)', () => {
     it('isAdminProcessFields contem "licenses"', () => {
       const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)

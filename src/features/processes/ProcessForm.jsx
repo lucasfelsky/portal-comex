@@ -24,9 +24,15 @@ import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
 import ProcessArrivalFields from './ProcessArrivalFields'
 import ProcessCustomsFields from './ProcessCustomsFields'
+import ProcessItemDangerousGoodsFields from './ProcessItemDangerousGoodsFields'
 import LicensesEditor from './LicensesEditor'
 import PurchaseOrdersEditor from './PurchaseOrdersEditor'
 import { getProcessPurchaseOrders } from './purchaseOrders'
+import {
+  hasShipmentDateDivergence,
+  isFutureShipment,
+  isShipmentConfirmed,
+} from './shipmentConfirmation'
 
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
@@ -218,18 +224,54 @@ export default function ProcessForm({
     </>
   )
 
+  // F17.2d-1 (D-1/D-2, Q5): "Embarque confirmado" - SEM campo novo, deriva
+  // de `hasText(shippedAt)`. Marcar/desmarcar copia/zera `shippedAt` a
+  // partir do ETD (`shipmentConfirmation.js`).
   const renderDatesStep = () => (
     <>
       <div className="detail-card detail-card--split">
-        <label className="field">
-          <span>ETD</span>
-          <input
-            className="text-input"
-            type="date"
-            value={draft.etd}
-            onChange={(event) => onDraftChange('etd', event.target.value)}
-          />
-        </label>
+        <div className="field">
+          <label className="field">
+            <span>ETD</span>
+            <input
+              className="text-input"
+              type="date"
+              value={draft.etd}
+              onChange={(event) => onDraftChange('etd', event.target.value)}
+            />
+          </label>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={isShipmentConfirmed(draft)}
+              disabled={!draft.etd && !isShipmentConfirmed(draft)}
+              onChange={(event) => onDraftChange('shipmentConfirmed', event.target.checked)}
+            />
+            <span>Embarque confirmado</span>
+          </label>
+          {!draft.etd && !isShipmentConfirmed(draft) ? (
+            <small className="field-hint">Informe o ETD para confirmar o embarque.</small>
+          ) : null}
+          {isFutureShipment(draft) ? (
+            <small className="field-hint">
+              <span className="inline-badge inline-badge--warn">
+                Embarque confirmado com ETD no futuro.
+              </span>
+            </small>
+          ) : null}
+          {hasShipmentDateDivergence(draft) ? (
+            <small className="field-hint">
+              Embarque registrado em {formatDate(draft.shippedAt)} (diferente do ETD).{' '}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => onDraftChange('etd', draft.shippedAt)}
+              >
+                Usar esta data como ETD
+              </button>
+            </small>
+          ) : null}
+        </div>
         <label className="field">
           <span>ETA</span>
           <input
@@ -300,7 +342,7 @@ export default function ProcessForm({
           {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
         </span>
         <small className="field-hint">
-          Informe a data de embarque (passo Embarque e trânsito) para o status avançar.
+          Marque "Embarque confirmado" no passo Datas e previsão para o status avançar.
         </small>
       </div>
 
@@ -489,6 +531,10 @@ export default function ProcessForm({
                 )}
               </label>
             ) : null}
+            <ProcessItemDangerousGoodsFields
+              item={item}
+              onChange={(field, value) => onItemChange(item.id, field, value)}
+            />
           </div>
         ))}
       </div>

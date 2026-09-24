@@ -14,6 +14,7 @@ import { getStatusTagClass } from './processStatusView'
 import { getProcessTitle } from './processLabels'
 import { getCollectionWindowLabel } from './containers'
 import { getProcessPurchaseOrders } from './purchaseOrders'
+import { getItemDangerousGoodsLabel } from './operationalOptions'
 import Spinner from '../../components/Spinner'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
@@ -418,6 +419,11 @@ export default function ProcessDetailView({
                         <span className="detail-label">PO:</span>
                         <strong>{item.poNumber}</strong>
                       </div>
+                    ) : null}
+                    {item.dangerousGoods ? (
+                      <span className="inline-badge inline-badge--warn">
+                        {getItemDangerousGoodsLabel(item)}
+                      </span>
                     ) : null}
                   </button>
                 ))
