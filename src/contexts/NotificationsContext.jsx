@@ -4,6 +4,7 @@ import useAuth from '../hooks/useAuth'
 import { useDoNotDisturb } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
+import { useUnsavedChanges } from './UnsavedChangesContext'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -15,6 +16,7 @@ export const NotificationsContext = createContext(null)
 
 export function NotificationsProvider({ children }) {
   const navigate = useNavigate()
+  const { requestLeave } = useUnsavedChanges()
   const { profile } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [notificationFilter, setNotificationFilter] = useState('all')
@@ -172,19 +174,21 @@ export function NotificationsProvider({ children }) {
     }
     
     if (notification.type === 'support_ticket') {
-      navigate('/admin/suporte')
+      requestLeave(() => navigate('/admin/suporte'))
       return
     }
     if (notification.type === 'support_ticket_resolved' || notification.type === 'support_ticket_reply') {
       window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))
       return
     }
-    navigate('/processos', {
-      state: {
-        selectedProcessId: notification.processId,
-        detailTab: notification.targetTab ?? 'messages',
-      },
-    })
+    requestLeave(() =>
+      navigate('/processos', {
+        state: {
+          selectedProcessId: notification.processId,
+          detailTab: notification.targetTab ?? 'messages',
+        },
+      })
+    )
   }
 
   async function handleMarkAllNotificationsAsRead() {

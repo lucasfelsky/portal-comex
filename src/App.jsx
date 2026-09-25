@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import { NotificationsProvider } from './contexts/NotificationsContext'
+import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext'
 function lazyWithRetry(importPage, pageKey) {
   return lazy(async () => {
     try {
@@ -77,9 +78,11 @@ export default function App() {
         <Route
           element={
             <ProtectedRoute>
-              <NotificationsProvider>
-                <AppLayout />
-              </NotificationsProvider>
+              <UnsavedChangesProvider>
+                <NotificationsProvider>
+                  <AppLayout />
+                </NotificationsProvider>
+              </UnsavedChangesProvider>
             </ProtectedRoute>
           }
         >

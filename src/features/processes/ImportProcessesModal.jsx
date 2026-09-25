@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import { parseProcessesFromWorkbook } from '../../utils/importProcesses'
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 // F11 (backlog 2026-07-12): modal de import de processos em lote. UI que
 // consome o parser puro `parseProcessesFromWorkbook` — pega o arquivo,
@@ -68,7 +69,7 @@ export default function ImportProcessesModal({
       setRowWarnings(warnings)
       setPhase('parsed')
     } catch (error) {
-      setParseError(error?.message ?? 'Não foi possível ler a planilha.')
+      setParseError(buildActionErrorMessage('Não foi possível ler a planilha.', error))
       setPhase('idle')
     } finally {
       // Permite re-selecionar o mesmo arquivo (onChange dispara de novo).
@@ -84,7 +85,7 @@ export default function ImportProcessesModal({
       await onConfirm(toCreate)
       handleClose()
     } catch (error) {
-      setParseError(error?.message ?? 'Não foi possível importar os processos.')
+      setParseError(buildActionErrorMessage('Não foi possível importar os processos.', error))
       setPhase('parsed')
     }
   }

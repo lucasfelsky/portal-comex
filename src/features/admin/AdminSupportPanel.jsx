@@ -20,6 +20,7 @@ import {
   listAllSupportTickets,
   updateSupportTicket,
 } from '../../services/supportTicketsRepository'
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 // Aba de suporte — visão administrativa (backlog 2026-07-10; v2 em 2026-07-11).
 // Admin visualiza os chamados abertos pelos usuários (mensagem + prints +
@@ -56,11 +57,6 @@ const PRIORITY_LABELS = {
   3: '3 · Média',
   4: '4 · Alta',
   5: '5 · Máxima',
-}
-
-function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
 }
 
 function formatTicketDate(isoDate) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { listProcessEvents } from '../../services/processEventsRepository'
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 // F17.1b: painel autocarregado da aba "Histórico" (D-8). Carrega sozinho via
 // `listProcessEvents(processId)` - padrao `isMounted` guard replicado (nao
@@ -8,10 +9,6 @@ import { listProcessEvents } from '../../services/processEventsRepository'
 // `processStatus.js` (o `tests/ui/ProcessesPage.test.jsx` mocka esse
 // modulo inteiro - import novo quebraria com "No export defined on the
 // mock"); labels ficam neste arquivo.
-function buildActionErrorMessage(prefix, error) {
-  const details = [error?.code, error?.message].filter(Boolean).join(' | ')
-  return details ? `${prefix} (${details})` : prefix
-}
 
 const EVENT_LABELS = {
   shipped: () => 'Embarque realizado',

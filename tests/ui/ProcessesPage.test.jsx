@@ -22,6 +22,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
+import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
 
 const mockUseAuth = vi.fn()
 const mockListProcesses = vi.fn()
@@ -66,6 +67,7 @@ vi.mock('../../src/services/postReceiptImagesStorage', () => ({
   resolvePostReceiptImagesForSave: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('../../src/features/processes/processStatus', () => ({
+  canonicalizeProcessStatus: (s) => s,
   getDisplayedCollectionStatus: (s) => s,
   getDisplayedProcessStatus: (s) => s,
   getProcessStatusTone: () => 'ok',
@@ -160,11 +162,13 @@ const PROCESSES = [
 function renderPage({ initialEntries = ['/processos'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <ToastProvider>
-        <Routes>
-          <Route path="/processos" element={<ProcessesPage />} />
-        </Routes>
-      </ToastProvider>
+      <UnsavedChangesProvider>
+        <ToastProvider>
+          <Routes>
+            <Route path="/processos" element={<ProcessesPage />} />
+          </Routes>
+        </ToastProvider>
+      </UnsavedChangesProvider>
     </MemoryRouter>
   )
 }
@@ -200,7 +204,7 @@ describe('ProcessesPage (listagem)', () => {
     mockListProcesses.mockRejectedValueOnce(new Error('boom'))
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('boom')).toBeInTheDocument()
+      expect(screen.getByText(/boom/)).toBeInTheDocument()
     })
   })
 
@@ -310,5 +314,119 @@ describe('ProcessesPage — busca por PO do CONSOLIDADO mascarada (F17.2d-2)', (
     await waitFor(() => {
       expect(screen.getByText('Consolidado Delta')).toBeInTheDocument()
     })
+  })
+})
+
+// UX-3a: guarda de alteracoes nao salvas no criar/editar processo.
+describe('ProcessesPage — guarda de alteracoes nao salvas (UX-3a)', () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+  })
+
+  it('(a) "Novo processo" -> "Voltar para lista" sem digitar volta a lista sem dialogo', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    expect(screen.getByRole('heading', { name: 'Criar processo' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Criar processo' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('(b) digitar em "Nome do processo" -> "Voltar para lista" abre dialogo; "Continuar editando" mantem o valor', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    const nameInput = screen.getByLabelText('Nome do processo')
+    await user.type(nameInput, 'Importação Nova')
+
+    await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Descartar alterações?')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continuar editando' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('heading', { name: 'Criar processo' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Nome do processo')).toHaveValue('Importação Nova')
+  })
+
+  it('(c) "Descartar alterações" volta a lista', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await user.type(screen.getByLabelText('Nome do processo'), 'Importação Nova')
+    await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Descartar alterações' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Criar processo' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('(d) abrir edicao de processo existente sem mexer -> "Voltar para lista" sem dialogo', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    const firstCard = container.querySelector('.process-item--button')
+    await user.click(firstCard)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Editar processo' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Editar processo' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Editar processo' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('(e) salvar com sucesso limpa a guarda (sem dialogo na proxima edicao sem mexer)', async () => {
+    const user = userEvent.setup()
+    mockSaveProcess.mockResolvedValue({ ...PROCESSES[0], name: 'PO 12345 - Editado' })
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    const firstCard = container.querySelector('.process-item--button')
+    await user.click(firstCard)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Editar processo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+
+    const nameInput = screen.getByLabelText('Nome do processo')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'PO 12345 - Editado')
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Editar processo' })).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Editar processo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 })

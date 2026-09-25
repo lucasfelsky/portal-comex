@@ -75,11 +75,12 @@ describe('ProcessHistoryPanel', () => {
     ).toBeInTheDocument()
   })
 
-  it('erro mostra alerta com o code', async () => {
+  it('erro mostra alerta com mensagem amigavel (sem o code cru)', async () => {
     mockListProcessEvents.mockRejectedValue({ code: 'permission-denied', message: 'nope' })
     render(<ProcessHistoryPanel processId="p1" />)
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(screen.getByRole('alert')).toHaveTextContent('permission-denied')
+    expect(screen.getByRole('alert')).toHaveTextContent('Você não tem permissão')
+    expect(screen.getByRole('alert')).not.toHaveTextContent('permission-denied')
   })
 
   it('botao "Atualizar" chama listProcessEvents de novo', async () => {

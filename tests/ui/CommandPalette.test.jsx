@@ -17,6 +17,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
 import { MemoryRouter, useNavigate } from 'react-router-dom'
 import CommandPalette, { useCommandPalette } from '../../src/components/CommandPalette.jsx'
+import {
+  UnsavedChangesProvider,
+  useUnsavedChangesGuard,
+} from '../../src/contexts/UnsavedChangesContext.jsx'
 
 function renderWithRouter(ui) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
@@ -257,5 +261,30 @@ describe('CommandPalette searcher', () => {
     await new Promise((resolve) => setTimeout(resolve, 240))
 
     expect(screen.getByText(/Nenhum resultado para/i)).toBeInTheDocument()
+  })
+})
+
+// UX-3a: com guarda de alteracoes nao salvas ativa, executar um comando
+// com "to" precisa passar pelo dialogo de confirmacao antes de navegar.
+describe('CommandPalette com UnsavedChangesProvider (UX-3a)', () => {
+  function DirtyGuard() {
+    useUnsavedChangesGuard(true)
+    return null
+  }
+
+  it('comando com "to" abre o dialogo de confirmacao quando ha rascunho sujo', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <UnsavedChangesProvider>
+          <DirtyGuard />
+          <CommandPalette open={true} commands={COMMANDS} />
+        </UnsavedChangesProvider>
+      </MemoryRouter>
+    )
+
+    fireEvent.click(screen.getByText('Noticias'))
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(screen.getByText('Descartar alterações?')).toBeInTheDocument()
   })
 })
