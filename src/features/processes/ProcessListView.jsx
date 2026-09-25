@@ -269,6 +269,22 @@ export default function ProcessListView({
   // F16.8: swipe-to-favoritar — só uma linha revelada por vez.
   const [openSwipeId, setOpenSwipeId] = useState(null)
 
+  // UX-4 (A7): painel de filtros inline no mobile — recolhido por padrão,
+  // reaproveita o mesmo markup do painel desktop (sem duplicar filtros).
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false)
+  const activeFilterCount =
+    (categoryFilter !== 'Todos' ? 1 : 0) +
+    (etaStartDate || etaEndDate ? 1 : 0) +
+    (operationFilter !== 'Todos' ? 1 : 0)
+
+  // UX-4 (A7): "Arquivados (n)" no desktop, admin-only — alternância no
+  // toolbar (aria-pressed), não seção no fim da lista (a lista desktop é
+  // `process-list--scroll`, uma seção no fim ficaria escondida atrás de
+  // dezenas de linhas).
+  const [showArchived, setShowArchived] = useState(false)
+  const canManageArchived = isAdmin && typeof onArchiveProcess === 'function'
+  const isShowingArchived = canManageArchived && showArchived && archivedProcesses.length > 0
+
   // F16.4: no mobile (≤720px) a tela de Chegadas ganha a linguagem do
   // protótipo — busca em pill, segmented Todos/Marítimo/Aéreo (filtro de
   // exibição client-side, além dos filtros do painel) e seções Em
@@ -376,6 +392,16 @@ export default function ProcessListView({
             >
               {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
             </button>
+            {canManageArchived && archivedProcesses.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-button process-list__archived-toggle"
+                aria-pressed={isShowingArchived}
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                Arquivados ({archivedProcesses.length})
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -393,30 +419,44 @@ export default function ProcessListView({
             aria-label="Buscar processo"
           />
         </label>
-        <div className="chegadas-segmented" aria-label="Filtrar por modal">
-          {[
-            { key: 'all', label: 'Todos' },
-            { key: 'sea', label: 'Marítimo' },
-            { key: 'air', label: 'Aéreo' },
-          ].map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-pressed={mobileCategory === option.key}
-              className={`chegadas-segmented__item${mobileCategory === option.key ? ' chegadas-segmented__item--on' : ''}`}
-              onClick={() => setMobileCategory(option.key)}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="chegadas-mobilebar__row">
+          <div className="chegadas-segmented" aria-label="Filtrar por modal">
+            {[
+              { key: 'all', label: 'Todos' },
+              { key: 'sea', label: 'Marítimo' },
+              { key: 'air', label: 'Aéreo' },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={mobileCategory === option.key}
+                className={`chegadas-segmented__item${mobileCategory === option.key ? ' chegadas-segmented__item--on' : ''}`}
+                onClick={() => setMobileCategory(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="ghost-button chegadas-filters-toggle"
+            aria-expanded={isFilterPanelOpen}
+            aria-controls="chegadas-filters-panel"
+            onClick={() => setIsFilterPanelOpen((v) => !v)}
+          >
+            {activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : 'Filtros'}
+          </button>
         </div>
       </div>
 
-      <div className="process-filters process-filters--panel">
+      <div
+        id="chegadas-filters-panel"
+        className={`process-filters process-filters--panel${isFilterPanelOpen ? ' process-filters--panel--open' : ''}`}
+      >
         <label className="field">
           <span>Buscar processo</span>
           <input
-            className="text-input"
+            className="text-input process-filters__search"
             type="text"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
@@ -446,6 +486,7 @@ export default function ProcessListView({
               type="date"
               value={etaStartDate}
               onChange={(event) => onEtaStartDateChange(event.target.value)}
+              aria-label="ETA de"
             />
             <input
               className="text-input"
@@ -453,6 +494,7 @@ export default function ProcessListView({
               value={etaEndDate}
               min={etaStartDate || undefined}
               onChange={(event) => onEtaEndDateChange(event.target.value)}
+              aria-label="ETA até"
             />
           </div>
         </div>
@@ -567,6 +609,11 @@ export default function ProcessListView({
               ) : null}
             </>
           )
+        ) : isShowingArchived ? (
+          <>
+            <div className="process-list__section-label">Arquivados</div>
+            {archivedProcesses.map(renderArchivedRow)}
+          </>
         ) : shownProcesses.length === 0 ? (
           <div className="empty-state" role="status">
             <strong>Nenhum processo encontrado</strong>

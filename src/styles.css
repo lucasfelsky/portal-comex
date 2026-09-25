@@ -8490,9 +8490,24 @@ body {
     min-height: 40px;
   }
 
-  /* Painel de filtros completo e chips → desktop-only. */
-  .process-list-card .process-filters--panel,
-  .process-list-card .filter-chips-row {
+  /* UX-4 (A7): painel de filtros completo agora expande/recolhe no mobile
+     via o botão "Filtros (n)" — só some quando fechado. Os chips de filtros
+     ativos passam a aparecer no mobile também (o JSX já só os renderiza
+     quando há filtro ativo). */
+  .process-list-card .process-filters--panel:not(.process-filters--panel--open) {
+    display: none;
+  }
+
+  .process-list-card .process-filters--panel--open {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 10px;
+  }
+
+  .process-list-card .process-filters__search {
+    display: none;
+  }
+
+  .process-list-card .process-list__archived-toggle {
     display: none;
   }
 
@@ -8500,6 +8515,21 @@ body {
     display: grid;
     gap: 10px;
     margin-bottom: 10px;
+  }
+
+  .chegadas-mobilebar__row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .chegadas-mobilebar__row .chegadas-segmented {
+    flex: 1;
+  }
+
+  .chegadas-filters-toggle {
+    flex-shrink: 0;
+    min-height: 36px;
   }
 
   .chegadas-search {
@@ -8573,6 +8603,19 @@ body {
 
   .process-list-card .process-list__section-label:first-child {
     padding-top: 2px;
+  }
+}
+
+/* UX-4 (A7): "Arquivados (n)" no desktop — reusa o label de seção do
+   mobile (F16.4), que hoje só tem tipografia no bloco mobile acima. */
+@media (min-width: 721px) {
+  .process-list-card .process-list__section-label {
+    font-size: var(--fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    padding: 2px 2px 8px;
   }
 }
 
