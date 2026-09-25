@@ -1107,3 +1107,131 @@ describe('F17.4b - receipt_divergence_reported (B-6)', () => {
     expect(mockBatch.set).not.toHaveBeenCalled()
   })
 })
+
+// F17.5a (A-7): notificacao `license_rejected` (admins, COM e-mail) na
+// TRANSICAO de uma anuencia para `Indeferida` (L33).
+describe('F17.5a - license_rejected (A-7)', () => {
+  const ADMIN_1 = { id: 'admin-1', name: 'Admin Um', email: 'admin1@sqquimica.com', role: 'admin', status: 'Ativo' }
+  const ADMIN_2 = { id: 'admin-2', name: 'Admin Dois', email: 'admin2@sqquimica.com', role: 'admin', status: 'Ativo' }
+
+  it('(a) admin-2 muda LIC-1 ANVISA "Em análise" -> "Indeferida": admin-1 recebe, ator nao', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_1 },
+        { id: 'admin-2', data: ADMIN_2 },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+      updatedById: 'admin-2',
+      updatedByName: 'Admin Dois',
+    }
+    await handler(makeEvent(before, after))
+
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    const licenseRejected = payloads.filter((p) => p.type === 'license_rejected')
+    expect(licenseRejected).toHaveLength(1)
+    expect(licenseRejected[0].recipientUserId).toBe('admin-1')
+    expect(licenseRejected[0].body).toContain('ANVISA')
+    expect(licenseRejected[0].body).toContain('indeferida')
+    expect(payloads.some((p) => p.recipientUserId === 'admin-2')).toBe(false)
+  })
+
+  it('(b) favorito nao-admin no mesmo write recebe favorite_process_updated (nao license_rejected)', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_1 },
+        { id: 'admin-2', data: ADMIN_2 },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+      updatedById: 'admin-2',
+      updatedByName: 'Admin Dois',
+    }
+    await handler(makeEvent(before, after))
+
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    const favoriteNotification = payloads.find((p) => p.recipientUserId === 'fan-1')
+    expect(favoriteNotification).toBeTruthy()
+    expect(favoriteNotification.type).toBe('favorite_process_updated')
+  })
+
+  it('(c) re-salvar com "Indeferida" -> "Indeferida" + outra mudanca: nenhum license_rejected', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_1 },
+        { id: 'admin-2', data: ADMIN_2 },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+      eta: '2026-10-01',
+      updatedById: 'admin-2',
+      updatedByName: 'Admin Dois',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types).not.toContain('license_rejected')
+  })
+
+  it('(d) legado MAPA (mapaStatus, sem licenses) -> licenses "Deferida": nenhum license_rejected', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_1 },
+        { id: 'admin-2', data: ADMIN_2 },
+      ],
+    })
+    const before = { ...PROCESS_BASE, mapaStatus: 'Aguardando MAPA' }
+    const after = {
+      ...PROCESS_BASE,
+      mapaStatus: 'Liberado',
+      updatedById: 'admin-2',
+      updatedByName: 'Admin Dois',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types).not.toContain('license_rejected')
+  })
+
+  it('(e) ator logistica com licenses diferente: nenhum license_rejected (so admin edita licenses)', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_1 },
+        { id: 'logi-1', data: LOGISTICA_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types).not.toContain('license_rejected')
+  })
+})

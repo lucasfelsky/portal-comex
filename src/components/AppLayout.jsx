@@ -407,6 +407,8 @@ export default function AppLayout() {
               <option value="post_receipt_notes_updated">Pós-recebimento</option>
               <option value="collection_status_updated">Coleta</option>
               <option value="receipt_divergence_reported">Divergências</option>
+              <option value="license_rejected">Anuências</option>
+              <option value="process_daily_alerts">Alertas</option>
             </select>
             <button
               type="button"

@@ -139,6 +139,22 @@ export function isLicenseRejectedMirror(status) {
   return normalizeComparableText(status) === 'indeferida'
 }
 
+// F17.5a (A-7): licencas que ENTRARAM em `Indeferida` neste save (por `id`).
+// Compat MAPA legado nunca produz `Indeferida`
+// (`mapLegacyMapaStatusMirror` so mapeia pra `Deferida`/`Em análise`/etc) -
+// sem espuria. Re-salvar com a licenca ja `Indeferida` (par de mesmo `id`
+// tambem `Indeferida`) NAO conta de novo.
+export function getNewlyRejectedLicensesMirror(before, after) {
+  const beforeLicenses = getComparableLicensesMirror(before)
+  const afterLicenses = getComparableLicensesMirror(after)
+
+  return afterLicenses.filter((license) => {
+    if (!isLicenseRejectedMirror(license.status)) return false
+    const beforeLicense = beforeLicenses.find((item) => item.id === license.id)
+    return !beforeLicense || !isLicenseRejectedMirror(beforeLicense.status)
+  })
+}
+
 /**
  * D-8: shape/ordem de chaves identicos a
  * `normalizeLicenses(getEffectiveLicenses(process))` do lado `src/`.

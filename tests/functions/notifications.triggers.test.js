@@ -440,4 +440,120 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
     },
     TRIGGER_TIMEOUT_MS
   )
+
+  // F17.5a (A-7): anuencia INDEFERIDA notifica os demais admins (nao o
+  // ator). admin-2 e' semeado por este proprio teste (ator).
+  it(
+    'F17.5a (A-7) - anuencia Indeferida notifica os demais admins (license_rejected)',
+    async () => {
+      await db.collection('users').doc('admin-2').set({
+        role: 'admin',
+        status: 'Ativo',
+        email: 'admin2@sqquimica.com',
+        name: 'Admin Dois',
+      })
+
+      const processId = 'proc-license-rejected'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Anuencia Indeferida',
+        processNumber: 'PO-1008',
+        category: 'FCL',
+        licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
+      })
+
+      await processRef.update({
+        licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }],
+        updatedById: 'admin-2',
+        updatedByName: 'Admin Dois',
+      })
+
+      const docs = await waitForNotifications(processId, 1)
+      const byRecipient = new Map(docs.map((doc) => [doc.recipientUserId, doc]))
+
+      const adminOneNotification = byRecipient.get('admin-1')
+      expect(adminOneNotification).toBeTruthy()
+      expect(adminOneNotification.type).toBe('license_rejected')
+
+      expect(byRecipient.has('admin-2')).toBe(false)
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F17.5a (A-3): resumo diario de alertas operacionais. `runDailyProcessAlerts`
+  // e' chamado direto (o emulador de Functions carrega `sendDailyProcessAlerts`
+  // mas nao dispara agendamentos - sem Pub/Sub/Scheduler emulado).
+  it(
+    'F17.5a (A-3) - resumo diario ignora arquivados/recebidos e e idempotente',
+    async () => {
+      const { runDailyProcessAlerts } = await import('../../functions/src/process/dailyAlerts.js')
+      const { getSaoPauloDateKey, addDaysToKey } = await import(
+        '../../functions/src/process/operationalAlerts.js'
+      )
+
+      const todayKey = getSaoPauloDateKey(new Date())
+      const presenceKey = addDaysToKey(todayKey, -5)
+
+      await db.collection('processes').doc('proc-alert-ft').set({
+        name: 'Processo Alerta FT',
+        processNumber: 'PO-1009',
+        category: 'FCL',
+        freeTimeDays: 7,
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: `${presenceKey}T08:00`,
+        processStatus: 'Aguardando registro da DUIMP',
+      })
+      await db.collection('processes').doc('proc-alert-arch').set({
+        name: 'Processo Arquivado FT',
+        processNumber: 'PO-1010',
+        category: 'FCL',
+        freeTimeDays: 7,
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: `${presenceKey}T08:00`,
+        processStatus: 'Aguardando registro da DUIMP',
+        archived: true,
+      })
+      await db.collection('processes').doc('proc-alert-recv').set({
+        name: 'Processo Recebido FT',
+        processNumber: 'PO-1011',
+        category: 'FCL',
+        freeTimeDays: 7,
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: `${presenceKey}T08:00`,
+        processStatus: 'Carga recebida',
+      })
+
+      await runDailyProcessAlerts({ firestore: db })
+      await runDailyProcessAlerts({ firestore: db })
+
+      const notificationId = `daily_alerts_${todayKey}_admin-1`
+      const notificationSnapshot = await db.collection('notifications').doc(notificationId).get()
+      expect(notificationSnapshot.exists).toBe(true)
+      const body = notificationSnapshot.data().body
+      expect(body).toContain('Processo Alerta FT')
+      expect(body).not.toContain('Arquivado')
+      expect(body).not.toContain('Recebido')
+
+      const querySnapshot = await db
+        .collection('notifications')
+        .where('recipientUserId', '==', 'admin-1')
+        .get()
+      const dailyAlertDocs = querySnapshot.docs.filter(
+        (docSnapshot) => docSnapshot.data().type === 'process_daily_alerts'
+      )
+      expect(dailyAlertDocs).toHaveLength(1)
+
+      const blockedSnapshot = await db
+        .collection('notifications')
+        .doc(`daily_alerts_${todayKey}_admin-bloqueado`)
+        .get()
+      expect(blockedSnapshot.exists).toBe(false)
+      const externalSnapshot = await db
+        .collection('notifications')
+        .doc(`daily_alerts_${todayKey}_admin-externo`)
+        .get()
+      expect(externalSnapshot.exists).toBe(false)
+    },
+    TRIGGER_TIMEOUT_MS
+  )
 })

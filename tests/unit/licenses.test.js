@@ -228,3 +228,59 @@ describe('createEmptyLicense', () => {
     })
   })
 })
+
+// F17.5a (A-7): `getNewlyRejectedLicensesMirror` (espelho puro em
+// `functions/src/core/licenses.js`) - notificacao `license_rejected` (L33).
+describe('getNewlyRejectedLicensesMirror (functions mirror, A-7)', () => {
+  it('"Em análise" -> "Indeferida" = 1', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = { licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }] }
+    const after = { licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }] }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(1)
+  })
+
+  it('"Indeferida" -> "Indeferida" = 0 (re-salvar nao conta de novo)', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = { licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }] }
+    const after = { licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }] }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(0)
+  })
+
+  it('licenca nova ja "Indeferida" = 1', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = { licenses: [] }
+    const after = { licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' }] }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(1)
+  })
+
+  it('2 licencas indeferidas no mesmo save = 2', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = {
+      licenses: [
+        { id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' },
+        { id: 'LIC-2', agency: 'MAPA', status: 'Em análise' },
+      ],
+    }
+    const after = {
+      licenses: [
+        { id: 'LIC-1', agency: 'ANVISA', status: 'Indeferida' },
+        { id: 'LIC-2', agency: 'MAPA', status: 'Indeferida' },
+      ],
+    }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(2)
+  })
+
+  it('MAPA legado (mapaStatus sem licenses) -> licenses com "Deferida" = 0', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = { category: 'FCL', mapaStatus: 'Aguardando MAPA' }
+    const after = { category: 'FCL', mapaStatus: 'Liberado' }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(0)
+  })
+
+  it('before sem licencas e after [] = 0', async () => {
+    const { getNewlyRejectedLicensesMirror } = await import('../../functions/src/core/licenses.js')
+    const before = {}
+    const after = { licenses: [] }
+    expect(getNewlyRejectedLicensesMirror(before, after)).toHaveLength(0)
+  })
+})
