@@ -9,6 +9,8 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // "Descartar classificação do processo"). Regra de import (D-11): so'
 // `./containers` (via ContainersEditor), `./operationalOptions` - categoria
 // comparada por string literal (sem importar `processCategories.js`).
+// UX-6b-1: grupo "Medidas" (`.form-grid.form-grid--numeric`) recebe tambem a
+// "Quantidade de pallets", movida de ProcessForm.jsx.
 export default function ProcessCargoFields({ draft, onDraftChange, disabled = false, errors = {} }) {
   const isFclOrConsolidado = draft.category === 'FCL' || draft.category === 'CONSOLIDADO'
   const isLcl = draft.category === 'LCL'
@@ -26,136 +28,152 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
         />
       ) : null}
 
-      {isFclOrConsolidado ? (
-        <label className="field">
-          <span>Cubagem (m³)</span>
-          <input
-            className="text-input"
-            type="number"
-            min="0"
-            step="0.01"
-            value={draft.volumeM3}
-            onChange={(event) => onDraftChange('volumeM3', event.target.value)}
-            {...getFieldA11yProps('process-field-volumeM3', errors.volumeM3)}
-          />
-          {errors.volumeM3 ? (
-            <small className="field-error" id={getFieldErrorId('process-field-volumeM3')} aria-hidden="true">
-              {errors.volumeM3}
-            </small>
+      <div className="form-group">
+        <h4 className="form-group__title">Medidas</h4>
+        <div className="form-grid form-grid--numeric">
+          {isFclOrConsolidado ? (
+            <label className="field">
+              <span>Cubagem (m³)</span>
+              <input
+                className="text-input"
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.volumeM3}
+                onChange={(event) => onDraftChange('volumeM3', event.target.value)}
+                {...getFieldA11yProps('process-field-volumeM3', errors.volumeM3)}
+              />
+              {errors.volumeM3 ? (
+                <small className="field-error" id={getFieldErrorId('process-field-volumeM3')} aria-hidden="true">
+                  {errors.volumeM3}
+                </small>
+              ) : null}
+            </label>
           ) : null}
-        </label>
-      ) : null}
 
-      {isLcl ? (
-        <div className="detail-card detail-card--split">
+          {isLcl ? (
+            <>
+              <label className="field">
+                <span>Peso bruto (kg)</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={draft.grossWeightKg}
+                  onChange={(event) => onDraftChange('grossWeightKg', event.target.value)}
+                  {...getFieldA11yProps('process-field-grossWeightKg', errors.grossWeightKg)}
+                />
+                {errors.grossWeightKg ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-grossWeightKg')}
+                    aria-hidden="true"
+                  >
+                    {errors.grossWeightKg}
+                  </small>
+                ) : null}
+              </label>
+              <label className="field">
+                <span>Cubagem (m³)</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={draft.volumeM3}
+                  onChange={(event) => onDraftChange('volumeM3', event.target.value)}
+                  {...getFieldA11yProps('process-field-volumeM3', errors.volumeM3)}
+                />
+                {errors.volumeM3 ? (
+                  <small className="field-error" id={getFieldErrorId('process-field-volumeM3')} aria-hidden="true">
+                    {errors.volumeM3}
+                  </small>
+                ) : null}
+              </label>
+            </>
+          ) : null}
+
+          {isAereo ? (
+            <>
+              <label className="field">
+                <span>Peso bruto (kg)</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={draft.grossWeightKg}
+                  onChange={(event) => onDraftChange('grossWeightKg', event.target.value)}
+                  {...getFieldA11yProps('process-field-grossWeightKg', errors.grossWeightKg)}
+                />
+                {errors.grossWeightKg ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-grossWeightKg')}
+                    aria-hidden="true"
+                  >
+                    {errors.grossWeightKg}
+                  </small>
+                ) : null}
+              </label>
+              <label className="field">
+                <span>Peso taxado (kg)</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={draft.chargeableWeightKg}
+                  onChange={(event) => onDraftChange('chargeableWeightKg', event.target.value)}
+                  {...getFieldA11yProps('process-field-chargeableWeightKg', errors.chargeableWeightKg)}
+                />
+                {errors.chargeableWeightKg ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-chargeableWeightKg')}
+                    aria-hidden="true"
+                  >
+                    {errors.chargeableWeightKg}
+                  </small>
+                ) : null}
+              </label>
+              <label className="field">
+                <span>Volumes</span>
+                <input
+                  className="text-input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={draft.packagesQuantity}
+                  onChange={(event) => onDraftChange('packagesQuantity', event.target.value)}
+                  {...getFieldA11yProps('process-field-packagesQuantity', errors.packagesQuantity)}
+                />
+                {errors.packagesQuantity ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-packagesQuantity')}
+                    aria-hidden="true"
+                  >
+                    {errors.packagesQuantity}
+                  </small>
+                ) : null}
+              </label>
+            </>
+          ) : null}
+
           <label className="field">
-            <span>Peso bruto (kg)</span>
+            <span>Quantidade de pallets</span>
             <input
               className="text-input"
               type="number"
               min="0"
-              step="0.01"
-              value={draft.grossWeightKg}
-              onChange={(event) => onDraftChange('grossWeightKg', event.target.value)}
-              {...getFieldA11yProps('process-field-grossWeightKg', errors.grossWeightKg)}
+              value={draft.palletQuantity}
+              onChange={(event) => onDraftChange('palletQuantity', event.target.value)}
             />
-            {errors.grossWeightKg ? (
-              <small
-                className="field-error"
-                id={getFieldErrorId('process-field-grossWeightKg')}
-                aria-hidden="true"
-              >
-                {errors.grossWeightKg}
-              </small>
-            ) : null}
-          </label>
-          <label className="field">
-            <span>Cubagem (m³)</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.volumeM3}
-              onChange={(event) => onDraftChange('volumeM3', event.target.value)}
-              {...getFieldA11yProps('process-field-volumeM3', errors.volumeM3)}
-            />
-            {errors.volumeM3 ? (
-              <small className="field-error" id={getFieldErrorId('process-field-volumeM3')} aria-hidden="true">
-                {errors.volumeM3}
-              </small>
-            ) : null}
           </label>
         </div>
-      ) : null}
-
-      {isAereo ? (
-        <div className="detail-card detail-card--split">
-          <label className="field">
-            <span>Peso bruto (kg)</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.grossWeightKg}
-              onChange={(event) => onDraftChange('grossWeightKg', event.target.value)}
-              {...getFieldA11yProps('process-field-grossWeightKg', errors.grossWeightKg)}
-            />
-            {errors.grossWeightKg ? (
-              <small
-                className="field-error"
-                id={getFieldErrorId('process-field-grossWeightKg')}
-                aria-hidden="true"
-              >
-                {errors.grossWeightKg}
-              </small>
-            ) : null}
-          </label>
-          <label className="field">
-            <span>Peso taxado (kg)</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.chargeableWeightKg}
-              onChange={(event) => onDraftChange('chargeableWeightKg', event.target.value)}
-              {...getFieldA11yProps('process-field-chargeableWeightKg', errors.chargeableWeightKg)}
-            />
-            {errors.chargeableWeightKg ? (
-              <small
-                className="field-error"
-                id={getFieldErrorId('process-field-chargeableWeightKg')}
-                aria-hidden="true"
-              >
-                {errors.chargeableWeightKg}
-              </small>
-            ) : null}
-          </label>
-          <label className="field">
-            <span>Volumes</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="1"
-              value={draft.packagesQuantity}
-              onChange={(event) => onDraftChange('packagesQuantity', event.target.value)}
-              {...getFieldA11yProps('process-field-packagesQuantity', errors.packagesQuantity)}
-            />
-            {errors.packagesQuantity ? (
-              <small
-                className="field-error"
-                id={getFieldErrorId('process-field-packagesQuantity')}
-                aria-hidden="true"
-              >
-                {errors.packagesQuantity}
-              </small>
-            ) : null}
-          </label>
-        </div>
-      ) : null}
+      </div>
 
       {isLegacyProcessDangerousGoods(draft) ? (
         <div className="detail-card">

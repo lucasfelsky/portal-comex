@@ -251,10 +251,31 @@ describe('validateProcessDraft — tetos de lista (D3)', () => {
 })
 
 describe('firstKey — segue a ordem dos passos', () => {
-  it('erro em "dates" (etd) vem antes de erro em "status" (volumeM3)', () => {
+  it('erro em "shipment" (etd) vem antes de erro em "cargo" (volumeM3)', () => {
     const draft = baseDraft({ category: 'FCL', etd: '1999-01-01', volumeM3: '-1' })
     const { firstKey } = validateProcessDraft(draft)
     expect(firstKey).toBe('etd')
+  })
+
+  it('erro em "shipment" (transshipmentEtd) vem antes de erro em "cargo" (volumeM3)', () => {
+    const draft = baseDraft({
+      category: 'FCL',
+      transshipment: true,
+      transshipmentEtd: '1999-01-01',
+      volumeM3: '-1',
+    })
+    const { firstKey } = validateProcessDraft(draft)
+    expect(firstKey).toBe('transshipmentEtd')
+  })
+
+  it('erro em "cargo" (volumeM3) vem antes de erro em "arrival" (warehouseDeliveryDateOverride)', () => {
+    const draft = baseDraft({
+      category: 'FCL',
+      warehouseDeliveryDateOverride: '1999-01-01',
+      volumeM3: '-1',
+    })
+    const { firstKey } = validateProcessDraft(draft)
+    expect(firstKey).toBe('volumeM3')
   })
 
   it('sem erro nenhum -> firstKey null', () => {
@@ -262,23 +283,44 @@ describe('firstKey — segue a ordem dos passos', () => {
     expect(firstKey).toBeNull()
     expect(errors).toEqual({})
   })
+
+  it('draft com erros em 4 passos gera o mesmo conjunto de chaves e mensagens', () => {
+    const draft = baseDraft({
+      category: 'FCL',
+      incoterm: 'XYZ',
+      etd: '1999-01-01',
+      volumeM3: '-1',
+      berthedAt: '1999-01-01',
+      items: [{ id: 'ITEM-1', commercialName: 'X', quantity: -2 }],
+    })
+    const { errors, firstKey } = validateProcessDraft(draft)
+    expect(Object.keys(errors).sort()).toEqual(
+      ['berthedAt', 'etd', 'incoterm', 'items.ITEM-1.quantity', 'volumeM3'].sort()
+    )
+    expect(errors.incoterm).toMatch(/não está na lista/)
+    expect(errors.etd).toMatch(/entre 2000 e 2100/)
+    expect(errors.volumeM3).toMatch(/maior ou igual a zero/)
+    expect(errors.berthedAt).toMatch(/entre 2000 e 2100/)
+    expect(errors['items.ITEM-1.quantity']).toMatch(/maior ou igual a zero/)
+    expect(firstKey).toBe('incoterm')
+  })
 })
 
 describe('getProcessFieldStep', () => {
   it.each([
     ['incoterm', 'ident'],
     ['purchaseOrders', 'ident'],
-    ['etd', 'dates'],
-    ['eta', 'dates'],
-    ['warehouseDeliveryDateOverride', 'dates'],
-    ['containers', 'status'],
-    ['licenses', 'status'],
-    ['volumeM3', 'status'],
-    ['licenses.LIC-1.deferredAt', 'status'],
-    ['transshipmentEtd', 'transit'],
-    ['berthedAt', 'flow'],
-    ['containers.CNT-1.returnedAt', 'flow'],
-    ['collectionWindows.WIN-1.scheduledAt', 'flow'],
+    ['etd', 'shipment'],
+    ['eta', 'shipment'],
+    ['transshipmentEtd', 'shipment'],
+    ['containers', 'cargo'],
+    ['volumeM3', 'cargo'],
+    ['licenses', 'arrival'],
+    ['warehouseDeliveryDateOverride', 'arrival'],
+    ['licenses.LIC-1.deferredAt', 'arrival'],
+    ['berthedAt', 'arrival'],
+    ['containers.CNT-1.returnedAt', 'collection'],
+    ['collectionWindows.WIN-1.scheduledAt', 'collection'],
     ['items.ITEM-1.quantity', 'items'],
   ])('%s -> %s', (key, step) => {
     expect(getProcessFieldStep(key)).toBe(step)

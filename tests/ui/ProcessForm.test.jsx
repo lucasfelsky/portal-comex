@@ -1,7 +1,11 @@
 // C11 (auditoria mobile F14): ProcessForm virou wizard de etapas. Estes
 // testes cobrem a MECÂNICA do wizard (passos, progresso, navegação, chips
-// clicáveis, passo de fluxo condicional, salvar sempre disponível) — os
-// campos em si são os mesmos do form antigo, só reagrupados.
+// clicáveis, salvar sempre disponível) — os campos em si são os mesmos do
+// form antigo, só reagrupados.
+//
+// UX-6b-1: os passos viraram 6 FIXOS (Identificação / Embarque / Carga /
+// Chegada e liberação / Coleta / Itens), na mesma ordem em create e em
+// edit — o antigo passo condicional "Fluxo operacional" saiu.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -112,14 +116,14 @@ function renderForm(props = {}) {
 
 const stepsRow = () => screen.getByLabelText('Etapas do cadastro')
 
-describe('ProcessForm — wizard de etapas (C11)', () => {
+describe('ProcessForm — wizard de etapas (C11 / UX-6b-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('abre no passo 1 (Identificação) de 5 (sem fluxo em create FCL)', () => {
+  it('abre no passo 1 (Identificação) de 6', () => {
     renderForm()
-    expect(screen.getByText(/Passo 1 de 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 1 de 6/)).toBeInTheDocument()
     expect(screen.getByText('Identificação', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Ex.: Importação Atlas')).toBeInTheDocument()
   })
@@ -129,12 +133,12 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(screen.getByRole('button', { name: 'Voltar' })).toBeDisabled()
   })
 
-  it('"Avançar" vai pro passo 2 (Datas e previsão)', async () => {
+  it('"Avançar" vai pro passo 2 (Embarque)', async () => {
     const user = userEvent.setup()
     renderForm()
     await user.click(screen.getByRole('button', { name: 'Avançar' }))
-    expect(screen.getByText(/Passo 2 de 5/)).toBeInTheDocument()
-    // ETD/ETA são exclusivos do passo de datas
+    expect(screen.getByText(/Passo 2 de 6/)).toBeInTheDocument()
+    // ETD/ETA são exclusivos do passo de embarque
     expect(screen.getByText('ETD')).toBeInTheDocument()
     expect(screen.getByText('ETA')).toBeInTheDocument()
     // Voltar agora habilitado
@@ -145,26 +149,25 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     const user = userEvent.setup()
     renderForm()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
-    expect(screen.getByText(/Passo 5 de 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 6 de 6/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar item' })).toBeInTheDocument()
     // No último passo, "Avançar" some
     expect(screen.queryByRole('button', { name: 'Avançar' })).not.toBeInTheDocument()
   })
 
-  // F17.2d-1 (D-1, Q5): "Data de embarque" saiu do passo "Embarque e
-  // trânsito" - virou o checkbox "Embarque confirmado" no passo "Datas e
-  // previsão".
-  it('passo "Embarque e trânsito" NAO tem mais "Data de embarque"', async () => {
+  // F17.2d-1 (D-1, Q5): "Data de embarque" saiu do passo "Embarque" - virou
+  // o checkbox "Embarque confirmado".
+  it('passo "Embarque" NAO tem "Data de embarque"', async () => {
     const user = userEvent.setup()
     renderForm()
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque e trânsito' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     expect(screen.queryByText('Data de embarque')).not.toBeInTheDocument()
   })
 
   it('transbordo marcado mostra "ETD do transbordo" e dispara onDraftChange("transshipmentEtd", ...)', async () => {
     const user = userEvent.setup()
     const { onDraftChange } = renderForm({ draft: makeDraft({ transshipment: true }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque e trânsito' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     expect(screen.getByText('ETD do transbordo')).toBeInTheDocument()
     const label = screen.getByText('ETD do transbordo').closest('label')
     const input = within(label).getByDisplayValue('')
@@ -172,19 +175,19 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(onDraftChange).toHaveBeenCalledWith('transshipmentEtd', expect.any(String))
   })
 
-  // F17.2d-1 (D-1/D-2, Q5): checkbox "Embarque confirmado" no passo "Datas
-  // e previsão".
+  // F17.2d-1 (D-1/D-2, Q5): checkbox "Embarque confirmado" no passo
+  // "Embarque".
   it('checkbox "Embarque confirmado" desabilita sem ETD', async () => {
     const user = userEvent.setup()
     renderForm({ draft: makeDraft({ etd: '' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     expect(screen.getByRole('checkbox', { name: 'Embarque confirmado' })).toBeDisabled()
   })
 
   it('marcar "Embarque confirmado" dispara onDraftChange("shipmentConfirmed", true)', async () => {
     const user = userEvent.setup()
     const { onDraftChange } = renderForm({ draft: makeDraft({ etd: '2026-09-18' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     await user.click(screen.getByRole('checkbox', { name: 'Embarque confirmado' }))
     expect(onDraftChange).toHaveBeenCalledWith('shipmentConfirmed', true)
   })
@@ -192,29 +195,29 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
   it('divergencia entre shippedAt e ETD mostra "Usar esta data como ETD"', async () => {
     const user = userEvent.setup()
     renderForm({ draft: makeDraft({ etd: '2026-09-18', shippedAt: '2026-09-10' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Datas e previsão' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     expect(screen.getByRole('button', { name: 'Usar esta data como ETD' })).toBeInTheDocument()
   })
 
-  it('FCL mostra "Adicionar contêiner" no passo de status e carga', async () => {
+  it('FCL mostra "Adicionar contêiner" no passo Carga', async () => {
     const user = userEvent.setup()
     renderForm({ draft: makeDraft({ category: 'FCL' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     expect(screen.getByRole('button', { name: 'Adicionar contêiner' })).toBeInTheDocument()
   })
 
-  it('LCL mostra "Cubagem" no passo de status e carga', async () => {
+  it('LCL mostra "Cubagem" no passo Carga', async () => {
     const user = userEvent.setup()
     renderForm({ draft: makeDraft({ category: 'LCL' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     expect(screen.getByText('Cubagem (m³)')).toBeInTheDocument()
   })
 
   // F17.2d-1 (D-7, Q2): cubagem opcional tambem em FCL/CONSOLIDADO.
-  it('FCL mostra "Cubagem (m³)" no passo de status e carga', async () => {
+  it('FCL mostra "Cubagem (m³)" no passo Carga', async () => {
     const user = userEvent.setup()
     renderForm({ draft: makeDraft({ category: 'FCL' }) })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     expect(screen.getByText('Cubagem (m³)')).toBeInTheDocument()
   })
 
@@ -230,7 +233,7 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
         items: [],
       }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     expect(
       screen.getByRole('button', { name: 'Descartar classificação do processo' })
     ).toBeInTheDocument()
@@ -244,14 +247,14 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
         containers: [{ id: 'CNT-1', number: 'TGHU1234560', seal: '', type: '' }],
       }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     expect(
       screen.getByText('Dígito verificador não confere (esperado: 7).')
     ).toBeInTheDocument()
   })
 
   // F17.2d-1 (D-4, Q4): carga perigosa passou a ser classificada POR ITEM
-  // (no passo Itens, nao mais em Status e carga).
+  // (no passo Itens, nao mais em Carga).
   it('item com dangerousGoods marcado mostra "Número ONU" e "Classe IMO" no passo Itens', async () => {
     const user = userEvent.setup()
     renderForm({
@@ -286,20 +289,22 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
   })
 
-  it('inclui o passo "Fluxo operacional" quando canShowMaritimeFlow (6 passos)', async () => {
+  it('passo "Chegada e liberação" mostra Chegada/Atracação quando canShowMaritimeFlow', async () => {
     const user = userEvent.setup()
     renderForm({ canShowMaritimeFlow: true })
     expect(screen.getByText(/Passo 1 de 6/)).toBeInTheDocument()
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
     expect(screen.getByText('Chegada')).toBeInTheDocument()
     expect(screen.getByText('Atracação (data e hora)')).toBeInTheDocument()
   })
 
-  it('NÃO inclui o passo de fluxo em create sem maritime/air (5 passos)', () => {
+  it('create sempre tem 6 passos, com os 6 rótulos fixos (D1)', () => {
     renderForm()
-    expect(
-      within(stepsRow()).queryByRole('tab', { name: 'Fluxo operacional' })
-    ).not.toBeInTheDocument()
+    expect(screen.getByText(/Passo 1 de 6/)).toBeInTheDocument()
+    const labels = ['Identificação', 'Embarque', 'Carga', 'Chegada e liberação', 'Coleta', 'Itens']
+    labels.forEach((label) => {
+      expect(within(stepsRow()).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument()
+    })
   })
 
   it('CONSOLIDADO esconde o campo "Código do processo"', () => {
@@ -324,63 +329,63 @@ describe('ProcessForm — wizard de etapas (C11)', () => {
     expect(saveBtn).toBeDisabled()
   })
 
-  // F17.2b (D-5): a anuencia MAPA saiu do passo "Fluxo operacional" (agora
-  // vive em "Status e carga", via `LicensesEditor`).
-  it('edit marítimo NÃO tem mais "MAPA" no passo de fluxo', async () => {
+  // F17.2b (D-5): a anuencia MAPA saiu do passo de fluxo (agora vive em
+  // "Chegada e liberação", via `LicensesEditor`).
+  it('edit marítimo NÃO tem mais "MAPA" no passo "Chegada e liberação"', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL' }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
     expect(screen.queryByText('MAPA')).not.toBeInTheDocument()
   })
 
   it.each([['FCL'], ['AEREO']])(
-    '"Status e carga" tem "Adicionar anuência" em create %s',
+    '"Chegada e liberação" tem "Adicionar anuência" em create %s',
     async (category) => {
       const user = userEvent.setup()
       renderForm({ draft: makeDraft({ category }) })
-      await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+      await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
       expect(screen.getByRole('button', { name: 'Adicionar anuência' })).toBeInTheDocument()
     }
   )
 
-  it('coleta agendada mostra "Transportadora" no passo de fluxo e dispara onDraftChange', async () => {
+  it('coleta agendada mostra "Transportadora" no passo Coleta e dispara onDraftChange', async () => {
     const user = userEvent.setup()
     const { onDraftChange } = renderForm({
       canShowMaritimeFlow: true,
       draft: makeDraft({ collectionStatus: 'Coleta Agendada' }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
     expect(screen.getByText('Transportadora')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Transportadora'), 'X')
     expect(onDraftChange).toHaveBeenCalledWith('carrierName', expect.any(String))
   })
 
-  it('sem coleta agendada NÃO mostra "Transportadora" no passo de fluxo', async () => {
+  it('sem coleta agendada NÃO mostra "Transportadora" no passo Coleta', async () => {
     const user = userEvent.setup()
     renderForm({
       canShowMaritimeFlow: true,
       draft: makeDraft({ collectionStatus: '' }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
     expect(screen.queryByText('Transportadora')).not.toBeInTheDocument()
   })
 })
 
 // F17.3a (D-11): "Chegada" com data - substitui os checkboxes "Atracou?"/
-// "Chegou?" (D-10).
+// "Chegou?" (D-10). UX-6b-1: vive no passo "Chegada e liberação".
 describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  async function openArrivalStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
   }
 
   it('AEREO mostra "Chegada (data e hora)"', async () => {
     const user = userEvent.setup()
     renderForm({ canShowAirFlow: true, draft: makeDraft({ category: 'AEREO' }) })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Chegada (data e hora)')).toBeInTheDocument()
   })
 
@@ -390,7 +395,7 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: false }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.queryByText('Presença de carga (data e hora)')).not.toBeInTheDocument()
   })
 
@@ -400,21 +405,21 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: true }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Presença de carga (data e hora)')).toBeInTheDocument()
   })
 
-  it('FCL mostra "Free time (dias)" no passo de fluxo', async () => {
+  it('FCL mostra "Free time (dias)" no passo "Chegada e liberação"', async () => {
     const user = userEvent.setup()
     renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'FCL' }) })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Free time (dias)')).toBeInTheDocument()
   })
 
-  it('LCL NAO mostra "Free time (dias)" no passo de fluxo', async () => {
+  it('LCL NAO mostra "Free time (dias)" no passo "Chegada e liberação"', async () => {
     const user = userEvent.setup()
     renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'LCL' }) })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.queryByText('Free time (dias)')).not.toBeInTheDocument()
   })
 
@@ -424,7 +429,7 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: true, migratedApproxFields: ['berthedAt'] }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(
       screen.getByText('Data aproximada (migrada do ETA) — confirme a data real.')
     ).toBeInTheDocument()
@@ -436,7 +441,7 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL' }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     const dateInput = document.querySelector('input[type="datetime-local"]')
     await user.type(dateInput, '2026-09-20T10:00')
     expect(onDraftChange).toHaveBeenCalledWith('berthedAt', expect.any(String))
@@ -445,8 +450,9 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
 
 // F17.0 bugs 2 e 3: precedencia de operador em `canUsePostCollectionStatuses`
 // (bug com janela libera pos-coleta mesmo sem status "retentor") e MAPA vazio
-// bloqueando o select de Coleta em maritimo.
-describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
+// bloqueando o select de Coleta em maritimo. UX-6b-1: o select/leitura de
+// Coleta vive no passo "Coleta".
+describe('ProcessForm — bugs 2 e 3 (passo Coleta)', () => {
   function maritimeReadyDraft(overrides = {}) {
     return makeDraft({
       category: 'FCL',
@@ -458,8 +464,8 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
     })
   }
 
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  async function openCollectionStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
   }
 
   it('janela + "Coleta Agendada" mostra a opção de estoque', async () => {
@@ -473,7 +479,7 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
         collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00' }],
       }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
     expect(screen.getByRole('option', { name: 'Carga disponível em estoque' })).toBeInTheDocument()
   })
 
@@ -488,7 +494,7 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
         collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00' }],
       }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
     expect(
       screen.queryByRole('option', { name: 'Carga disponível em estoque' })
     ).not.toBeInTheDocument()
@@ -506,7 +512,7 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
         collectionScheduledAt: '2026-01-01T10:00:00',
       }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
     expect(screen.getByRole('option', { name: 'Carga disponível em estoque' })).toBeInTheDocument()
   })
 
@@ -519,8 +525,8 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
       canShowMaritimeFlow: true,
       draft: maritimeReadyDraft({ licenses: [] }),
     })
-    await openFlowStep(user)
-    expect(screen.getByText('Coleta')).toBeInTheDocument()
+    await openCollectionStep(user)
+    expect(screen.getByText('Coleta', { selector: 'span' })).toBeInTheDocument()
   })
 
   it('licenses com anuência "Em análise" NÃO renderiza o select de Coleta', async () => {
@@ -532,8 +538,8 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
         licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Em análise' }],
       }),
     })
-    await openFlowStep(user)
-    expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
+    await openCollectionStep(user)
+    expect(screen.queryByText('Coleta', { selector: 'span' })).not.toBeInTheDocument()
   })
 
   // F17.2b (D5 do spec): AEREO agora tambem e' bloqueado por anuencia nao
@@ -550,13 +556,14 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
       licenses: [{ id: 'LIC-1', agency: 'ANVISA', status: 'Em análise' }],
     })
     renderForm({ viewMode: 'edit', canShowAirFlow: true, draft })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
-    expect(screen.queryByText('Coleta')).not.toBeInTheDocument()
+    await openCollectionStep(user)
+    expect(screen.queryByText('Coleta', { selector: 'span' })).not.toBeInTheDocument()
   })
 })
 
 // F17.4b (B-7, D6): devolucao de vazio - so' admin, so' FCL/CONSOLIDADO
 // apos "Carga recebida" (derivado por `collectionStatus` pos-recebimento).
+// UX-6b-1: vive no passo "Coleta".
 describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
   function receivedDraft(overrides = {}) {
     return makeDraft({
@@ -574,8 +581,8 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
     })
   }
 
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  async function openCollectionStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
   }
 
   it('FCL com 2 conteineres e "Carga recebida" mostra "Devolução do vazio" com 2 inputs de data', async () => {
@@ -585,7 +592,7 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
       canShowMaritimeFlow: true,
       draft: receivedDraft(),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
 
     expect(screen.getByText('Devolução do vazio')).toBeInTheDocument()
     expect(screen.getByLabelText('CSQU3054383')).toBeInTheDocument()
@@ -599,7 +606,7 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
       canShowMaritimeFlow: true,
       draft: receivedDraft(),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
 
     const input = screen.getByLabelText('MSCU1234566')
     await user.type(input, '2026-09-10')
@@ -619,7 +626,7 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
       canShowMaritimeFlow: true,
       draft: receivedDraft({ category: 'LCL', containers: [] }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
 
     expect(screen.queryByText('Devolução do vazio')).not.toBeInTheDocument()
   })
@@ -631,16 +638,16 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
       canShowMaritimeFlow: true,
       draft: receivedDraft({ collectionStatus: 'Coleta Agendada' }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
 
     expect(screen.queryByText('Devolução do vazio')).not.toBeInTheDocument()
   })
 })
 
-// F17.2b (D-5): editor de anuencias no passo "Status e carga".
+// F17.2b (D-5): editor de anuencias, agora no passo "Chegada e liberação".
 describe('ProcessForm — LicensesEditor (F17.2b)', () => {
-  async function openStatusStepFor(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+  async function openArrivalStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
   }
 
   it('status "Vistoria agendada" mostra "Vistoria agendada para"', async () => {
@@ -650,7 +657,7 @@ describe('ProcessForm — LicensesEditor (F17.2b)', () => {
         licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Vistoria agendada', inspectionScheduledAt: '' }],
       }),
     })
-    await openStatusStepFor(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Vistoria agendada para')).toBeInTheDocument()
   })
 
@@ -661,7 +668,7 @@ describe('ProcessForm — LicensesEditor (F17.2b)', () => {
         licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
       }),
     })
-    await openStatusStepFor(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Indeferida', { selector: 'span' })).toBeInTheDocument()
   })
 
@@ -673,38 +680,30 @@ describe('ProcessForm — LicensesEditor (F17.2b)', () => {
       status: 'Aguardando registro',
     }))
     renderForm({ draft: makeDraft({ licenses }) })
-    await openStatusStepFor(user)
+    await openArrivalStep(user)
     expect(screen.getByRole('button', { name: 'Adicionar anuência' })).toBeDisabled()
   })
 })
 
-// F17.2a (D-3): status derivado read-only - select de etapa pre-chegada
-// acabou (shippedAt no passo "Embarque e trânsito" e' quem avanca o status).
-describe('ProcessForm — status derivado (F17.2a D-3)', () => {
-  async function openStatusStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
-  }
-
-  it('NÃO existe mais o select de etapa pré-chegada', async () => {
-    const user = userEvent.setup()
+// F17.2a (D-3): status derivado read-only - o badge vive no cabeçalho do
+// wizard (D5), sempre visível (nao depende de nenhum passo aberto).
+describe('ProcessForm — status derivado (F17.2a D-3 / UX-6b-1 D5)', () => {
+  it('NÃO existe mais o select de etapa pré-chegada nem o hint do card removido', () => {
     renderForm({
       draft: makeDraft({ category: 'FCL', berthed: false, processStatus: 'Aguardando Embarque' }),
     })
-    await openStatusStep(user)
     expect(
       screen.queryByText('Etapa pré-chegada (manual até o registro da data de embarque)')
     ).not.toBeInTheDocument()
     expect(
-      screen.getByText('Marque "Embarque confirmado" no passo Datas e previsão para o status avançar.')
-    ).toBeInTheDocument()
+      screen.queryByText(/Marque "Embarque confirmado" no passo/)
+    ).not.toBeInTheDocument()
   })
 
-  it('com berthed:true a tag mostra "Atracação confirmada"', async () => {
-    const user = userEvent.setup()
+  it('com berthed:true o badge do cabeçalho mostra "Atracação confirmada"', () => {
     renderForm({
       draft: makeDraft({ category: 'FCL', berthed: true, processStatus: 'Aguardando Embarque' }),
     })
-    await openStatusStep(user)
     expect(screen.getByText('Atracação confirmada')).toBeInTheDocument()
   })
 })
@@ -712,7 +711,7 @@ describe('ProcessForm — status derivado (F17.2a D-3)', () => {
 // F17.2c/F17.2d-2 (D-7/D-8/D-11): PurchaseOrdersEditor no passo Identificação
 // (agora com Referência/Fornecedor por PO), PO por item no passo Itens
 // (CONSOLIDADO), e 1 row de janela por contêiner (FCL/CONSOLIDADO com
-// containers[]).
+// containers[]) no passo Coleta.
 describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)', () => {
   function maritimeReadyDraft(overrides = {}) {
     return makeDraft({
@@ -725,8 +724,8 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
     })
   }
 
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  async function openCollectionStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
   }
 
   it('CONSOLIDADO mostra "Adicionar PO" e adicionar dispara onDraftChange("purchaseOrders", ...)', async () => {
@@ -828,7 +827,7 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
         collectionWindows: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '' }],
       }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
     expect(screen.getByText('CSQU3054383')).toBeInTheDocument()
     expect(screen.getByText('MSCU1234566')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Adicionar container' })).not.toBeInTheDocument()
@@ -849,7 +848,7 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
         ],
       }),
     })
-    await openFlowStep(user)
+    await openCollectionStep(user)
     expect(screen.getByText('Contêiner removido')).toBeInTheDocument()
     expect(
       screen.queryByText('Contêiner removido do processo — selecione outro contêiner para esta janela.')
@@ -870,7 +869,7 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
       collectionWindows: [{ id: 'W1', scheduledAt: '' }],
     })
     renderForm({ viewMode: 'edit', canShowAirFlow: true, draft })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+    await openCollectionStep(user)
     expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar janela' })).toBeDisabled()
   })
@@ -889,7 +888,7 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
         ],
       }),
     })
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Status e carga' }))
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
     const removeButtons = screen.getAllByRole('button', { name: 'Remover' })
     expect(removeButtons[0]).toBeDisabled()
     expect(removeButtons[1]).not.toBeDisabled()
@@ -898,10 +897,10 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
 })
 
 // F17.3b (D-11): ProcessCustomsFields reescrito - select manual "DUIMP" sai,
-// status derivado das datas.
+// status derivado das datas. Vive no passo "Chegada e liberação".
 describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  async function openArrivalStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
   }
 
   it('com presenca aparece Nº da DUIMP e Registro da DUIMP, e NAO aparece o combobox "DUIMP"', async () => {
@@ -910,7 +909,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Nº da DUIMP')).toBeInTheDocument()
     expect(screen.getByText('Registro da DUIMP (data e hora)')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'DUIMP' })).not.toBeInTheDocument()
@@ -922,7 +921,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.queryByText('Parametrização (data e hora)')).not.toBeInTheDocument()
   })
 
@@ -937,7 +936,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         duimpRegisteredAt: '2026-09-20T10:00',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Parametrização (data e hora)')).toBeInTheDocument()
   })
 
@@ -952,7 +951,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         duimpRegisteredAt: '2026-09-20T10:00',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.queryByText('Canal da parametrização')).not.toBeInTheDocument()
   })
 
@@ -967,7 +966,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         parameterizedAt: '2026-09-20T10:00',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Canal da parametrização')).toBeInTheDocument()
   })
 
@@ -983,7 +982,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         parameterizationChannel: 'Amarelo',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Conferência agendada para')).toBeInTheDocument()
     expect(screen.getByText('Exigência?')).toBeInTheDocument()
   })
@@ -1000,7 +999,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         parameterizationChannel: 'Cinza',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.getByText('Procedimento especial (canal Cinza)')).toBeInTheDocument()
   })
 
@@ -1016,7 +1015,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         parameterizationChannel: 'Verde',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(screen.queryByText('Exigência?')).not.toBeInTheDocument()
   })
 
@@ -1031,7 +1030,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
         duimpStatus: 'Parametrizada',
       }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     expect(
       screen.getByText('DUIMP parametrizada sem data (registro antigo) — informe a data e hora.')
     ).toBeInTheDocument()
@@ -1043,7 +1042,7 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
       canShowMaritimeFlow: true,
       draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
     const label = screen.getByText('Registro da DUIMP (data e hora)').closest('label')
     const input = within(label).getByDisplayValue('')
     await user.type(input, '2026-09-20T10:00')
@@ -1053,17 +1052,20 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
 
 // UX-3b: validacao inline (erros + avisos + navegacao/foco via focusRequest).
 describe('ProcessForm — validacao inline (UX-3b)', () => {
-  async function openStatusStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: /Status e carga/ }))
-  }
   async function openIdentStep(user) {
     await user.click(within(stepsRow()).getByRole('button', { name: /Identificação/ }))
   }
-  async function openTransitStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: /Embarque e trânsito/ }))
+  async function openShipmentStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /^Embarque/ }))
   }
-  async function openFlowStep(user) {
-    await user.click(within(stepsRow()).getByRole('button', { name: /Fluxo operacional/ }))
+  async function openCargoStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /^Carga/ }))
+  }
+  async function openArrivalStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Chegada e liberação/ }))
+  }
+  async function openCollectionStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /^Coleta/ }))
   }
   async function openItemsStep(user) {
     await user.click(within(stepsRow()).getByRole('button', { name: /Itens/ }))
@@ -1084,7 +1086,7 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
       },
       draft: makeDraft({ licenses }),
     })
-    await openStatusStep(user)
+    await openArrivalStep(user)
 
     const group = document.getElementById('process-field-licenses')
     expect(group).toHaveAttribute('aria-describedby', 'process-field-licenses-error')
@@ -1118,7 +1120,7 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
       fieldErrors: { transshipmentEtd: 'Data inválida: informe um ano entre 2000 e 2100.' },
       draft: makeDraft({ transshipment: true, transshipmentEtd: '1999-01-01' }),
     })
-    await openTransitStep(user)
+    await openShipmentStep(user)
 
     const input = document.getElementById('process-field-transshipmentEtd')
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -1133,7 +1135,7 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
       fieldErrors: { freeTimeDays: 'Informe um número inteiro maior ou igual a zero.' },
       draft: makeDraft({ category: 'FCL', freeTimeDays: '-1' }),
     })
-    await openFlowStep(user)
+    await openArrivalStep(user)
 
     const input = document.getElementById('process-field-freeTimeDays')
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -1167,8 +1169,8 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
     expect(poInput).toHaveAccessibleDescription(/mínimo 2/)
     expect(poInput).not.toHaveAttribute('aria-invalid')
 
-    // aviso ISO 6346 (passo Status e carga, FCL/CONSOLIDADO)
-    await openStatusStep(user)
+    // aviso ISO 6346 (passo Carga, FCL/CONSOLIDADO)
+    await openCargoStep(user)
     const containerNumberInput = screen.getByPlaceholderText('Ex.: CSQU3054383')
     expect(containerNumberInput).toHaveAccessibleDescription(/ISO 6346/)
     expect(containerNumberInput).not.toHaveAttribute('aria-invalid')
@@ -1183,27 +1185,160 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
   it('chip do passo com erro tem nome acessivel "…, contém erro"', () => {
     renderForm({ fieldErrors: { eta: 'erro' } })
     expect(
-      within(stepsRow()).getByRole('button', { name: 'Datas e previsão, contém erro' })
+      within(stepsRow()).getByRole('button', { name: 'Embarque, contém erro' })
     ).toBeInTheDocument()
   })
 
-  it('focusRequest com key do passo "Status e carga" troca o passo e foca o campo', () => {
+  it('focusRequest com key do passo "Carga" troca o passo e foca o campo', () => {
     renderForm({
       fieldErrors: { volumeM3: 'Informe um número maior ou igual a zero.' },
       focusRequest: { key: 'volumeM3', nonce: 1 },
     })
-    expect(screen.getByText(/Passo 3 de 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Passo 3 de 6/)).toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('process-field-volumeM3'))
   })
 
-  it('focusRequest com key de passo ausente foca o resumo', () => {
+  // UX-6b-1: os 6 passos sao sempre fixos - um campo pode nao RENDERIZAR
+  // (ex.: berthedAt sem canShowMaritimeFlow/AirFlow), mas o passo continua
+  // existindo. O foco cai no resumo porque o elemento do campo nao existe.
+  it('focusRequest com campo nao renderizado no passo alvo foca o resumo', () => {
     renderForm({
       canShowMaritimeFlow: false,
       canShowAirFlow: false,
       fieldErrors: { berthedAt: 'Data inválida: informe um ano entre 2000 e 2100.' },
       focusRequest: { key: 'berthedAt', nonce: 1 },
     })
-    // "Fluxo operacional" nao existe nesse draft (showFlowStep false) -> cai no resumo
     expect(document.activeElement).toBe(document.getElementById('process-form-error-summary'))
+  })
+
+  // (i) UX-6b-1 D1: ordem exata dos 6 rotulos.
+  it('ordem dos rotulos dos chips e exatamente a dos 6 passos fixos', () => {
+    renderForm()
+    const buttons = within(stepsRow()).getAllByRole('button')
+    const labels = buttons.map((button) => button.textContent.replace(/^\d+/, '').replace('✓', ''))
+    expect(labels).toEqual([
+      'Identificação',
+      'Embarque',
+      'Carga',
+      'Chegada e liberação',
+      'Coleta',
+      'Itens',
+    ])
+  })
+
+  // (ii) "Embarque confirmado" e ETD no mesmo passo.
+  it('"Embarque confirmado" e o ETD ficam no mesmo passo (Embarque)', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ etd: '2026-09-18' }) })
+    await openShipmentStep(user)
+    expect(screen.getByText('ETD')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Embarque confirmado' })).toBeInTheDocument()
+  })
+
+  // (iii) Previsao manual no passo "Chegada e liberação" (create e edit).
+  it.each([['create'], ['edit']])(
+    'previsao manual de entrega vive no passo "Chegada e liberação" em %s',
+    async (viewMode) => {
+      const user = userEvent.setup()
+      renderForm({ viewMode, draft: makeDraft({ eta: '2026-09-20' }) })
+      await openArrivalStep(user)
+      expect(screen.getByText('Previsão manual de entrega no armazém')).toBeInTheDocument()
+      expect(screen.getByText(/previsão automática \(/)).toBeInTheDocument()
+    }
+  )
+
+  // (iv) "Agente de carga" no passo Embarque, ausente em Identificação.
+  it('"Agente de carga" fica no passo Embarque, ausente em Identificação', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    expect(screen.queryByText('Agente de carga')).not.toBeInTheDocument()
+    await openShipmentStep(user)
+    expect(screen.getByText('Agente de carga')).toBeInTheDocument()
+  })
+
+  // (v) "Quantidade de pallets" no passo Carga.
+  it('"Quantidade de pallets" fica no passo Carga', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await openCargoStep(user)
+    expect(screen.getByText('Quantidade de pallets')).toBeInTheDocument()
+  })
+
+  // (vi) D3: hint corrigido do Free time.
+  it('hint do Free time menciona "presença de carga" (correção factual D3)', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'FCL' }) })
+    await openArrivalStep(user)
+    expect(screen.getByText('O prazo conta a partir da presença de carga.')).toBeInTheDocument()
+  })
+
+  // (vii) Passo Coleta vazio mostra a nota do D1.
+  it('passo Coleta sem conteudo mostra a nota "aparecem aqui depois da liberação"', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await openCollectionStep(user)
+    expect(
+      screen.getByText('Os dados de coleta aparecem aqui depois da liberação da carga.')
+    ).toBeInTheDocument()
+  })
+
+  // (viii) focusRequest com licenses.* e warehouseDeliveryDateOverride
+  // navega para "Chegada e liberação" (D1 STEP_ORDER: licenses/
+  // warehouseDeliveryDateOverride -> 'arrival').
+  it.each([
+    ['licenses.LIC-1.deferredAt'],
+    ['warehouseDeliveryDateOverride'],
+  ])('focusRequest com key "%s" navega ao passo "Chegada e liberação"', (key) => {
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida', deferredAt: '1999-01-01' }] }),
+      fieldErrors: { [key]: 'erro' },
+      focusRequest: { key, nonce: 1 },
+    })
+    expect(
+      within(stepsRow()).getByRole('button', { name: /Chegada e liberação/ })
+    ).toHaveAttribute('aria-current', 'step')
+  })
+
+  // (ix) UX-6b-1 D8: rolagem do stepper ate o chip ativo.
+  it('rola o stepper ate o chip ativo quando a row tem overflow', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    const row = stepsRow()
+    const buttons = within(row).getAllByRole('button')
+
+    Object.defineProperty(row, 'scrollWidth', { value: 900, configurable: true })
+    Object.defineProperty(row, 'clientWidth', { value: 300, configurable: true })
+    row.scrollLeft = 0
+
+    const target = buttons[1]
+    Object.defineProperty(target, 'offsetLeft', { value: 200, configurable: true })
+    Object.defineProperty(target, 'offsetWidth', { value: 80, configurable: true })
+
+    await user.click(screen.getByRole('button', { name: 'Avançar' }))
+
+    expect(row.scrollLeft).toBe(200 - (300 - 80) / 2)
+  })
+
+  it('nao mexe no scrollLeft quando a row nao tem overflow (scrollWidth <= clientWidth)', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    const row = stepsRow()
+
+    Object.defineProperty(row, 'scrollWidth', { value: 300, configurable: true })
+    Object.defineProperty(row, 'clientWidth', { value: 300, configurable: true })
+    row.scrollLeft = 42
+
+    await user.click(screen.getByRole('button', { name: 'Avançar' }))
+
+    expect(row.scrollLeft).toBe(42)
+  })
+
+  // (x) D6: nome acessivel "Voltar para lista", texto visivel "Voltar".
+  it('"Voltar para lista" tem nome acessivel completo e texto visivel "Voltar"', () => {
+    renderForm()
+    const backButton = screen.getByRole('button', { name: 'Voltar para lista' })
+    expect(backButton).toBeInTheDocument()
+    expect(backButton).toHaveTextContent('Voltar')
   })
 })

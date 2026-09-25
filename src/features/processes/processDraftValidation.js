@@ -14,33 +14,33 @@ import { MAX_LICENSES } from './licenses'
 import { MAX_PURCHASE_ORDERS } from './purchaseOrders'
 import { FREE_TIME_CATEGORIES } from './arrivalCustoms'
 
-// Mesma ordem visual dos passos do wizard (`ProcessForm.jsx:564-571`).
-const STEP_ORDER = ['ident', 'dates', 'status', 'transit', 'flow', 'items']
+// Mesma ordem visual dos 6 passos fixos do wizard (UX-6b-1, `ProcessForm.jsx`).
+const STEP_ORDER = ['ident', 'shipment', 'cargo', 'arrival', 'collection', 'items']
 
 const STATIC_FIELD_STEPS = {
   purchaseOrders: 'ident',
   incoterm: 'ident',
-  etd: 'dates',
-  eta: 'dates',
-  warehouseDeliveryDateOverride: 'dates',
-  containers: 'status',
-  licenses: 'status',
-  volumeM3: 'status',
-  grossWeightKg: 'status',
-  chargeableWeightKg: 'status',
-  packagesQuantity: 'status',
-  transshipmentEtd: 'transit',
-  berthedAt: 'flow',
-  arrivedAt: 'flow',
-  dtaLoadingScheduledAt: 'flow',
-  dtaArrivalAtItajai: 'flow',
-  cargoPresenceInformedAt: 'flow',
-  duimpRegisteredAt: 'flow',
-  parameterizedAt: 'flow',
-  customsInspectionScheduledAt: 'flow',
-  clearanceCompletedAt: 'flow',
-  freeTimeDays: 'flow',
-  demurrageDailyRateUsd: 'flow',
+  etd: 'shipment',
+  eta: 'shipment',
+  transshipmentEtd: 'shipment',
+  containers: 'cargo',
+  volumeM3: 'cargo',
+  grossWeightKg: 'cargo',
+  chargeableWeightKg: 'cargo',
+  packagesQuantity: 'cargo',
+  licenses: 'arrival',
+  warehouseDeliveryDateOverride: 'arrival',
+  berthedAt: 'arrival',
+  arrivedAt: 'arrival',
+  dtaLoadingScheduledAt: 'arrival',
+  dtaArrivalAtItajai: 'arrival',
+  cargoPresenceInformedAt: 'arrival',
+  duimpRegisteredAt: 'arrival',
+  parameterizedAt: 'arrival',
+  customsInspectionScheduledAt: 'arrival',
+  clearanceCompletedAt: 'arrival',
+  freeTimeDays: 'arrival',
+  demurrageDailyRateUsd: 'arrival',
 }
 
 const DATE_ERROR_MESSAGE = 'Data inválida: informe um ano entre 2000 e 2100.'
@@ -54,9 +54,9 @@ export function getProcessFieldStep(key) {
   const stringKey = String(key ?? '')
 
   if (stringKey.startsWith('items.')) return 'items'
-  if (stringKey.startsWith('collectionWindows.')) return 'flow'
-  if (stringKey.startsWith('containers.')) return 'flow'
-  if (stringKey.startsWith('licenses.')) return 'status'
+  if (stringKey.startsWith('collectionWindows.')) return 'collection'
+  if (stringKey.startsWith('containers.')) return 'collection'
+  if (stringKey.startsWith('licenses.')) return 'arrival'
 
   return STATIC_FIELD_STEPS[stringKey] ?? 'ident'
 }
@@ -148,12 +148,14 @@ export function validateProcessDraft(draft) {
     setError('incoterm', `Incoterm "${canonicalIncoterm}" não está na lista. Selecione um valor válido.`)
   }
 
-  // ---- dates ----
+  // ---- shipment ----
   checkDate('etd', draft?.etd)
   checkDate('eta', draft?.eta)
-  checkDate('warehouseDeliveryDateOverride', draft?.warehouseDeliveryDateOverride)
+  if (draft?.transshipment === true) {
+    checkDate('transshipmentEtd', draft?.transshipmentEtd)
+  }
 
-  // ---- status ----
+  // ---- cargo ----
   if (
     (category === 'FCL' || category === 'CONSOLIDADO') &&
     Array.isArray(draft?.containers) &&
@@ -177,6 +179,24 @@ export function validateProcessDraft(draft) {
     checkInteger('packagesQuantity', draft?.packagesQuantity)
   }
 
+  // ---- arrival ----
+  checkDate('berthedAt', draft?.berthedAt)
+  checkDate('arrivedAt', draft?.arrivedAt)
+  checkDate('dtaLoadingScheduledAt', draft?.dtaLoadingScheduledAt)
+  checkDate('dtaArrivalAtItajai', draft?.dtaArrivalAtItajai)
+  checkDate('cargoPresenceInformedAt', draft?.cargoPresenceInformedAt)
+  checkDate('warehouseDeliveryDateOverride', draft?.warehouseDeliveryDateOverride)
+
+  if (FREE_TIME_CATEGORIES.includes(category)) {
+    checkInteger('freeTimeDays', draft?.freeTimeDays)
+    checkDecimal('demurrageDailyRateUsd', draft?.demurrageDailyRateUsd)
+  }
+
+  checkDate('duimpRegisteredAt', draft?.duimpRegisteredAt)
+  checkDate('parameterizedAt', draft?.parameterizedAt)
+  checkDate('customsInspectionScheduledAt', draft?.customsInspectionScheduledAt)
+  checkDate('clearanceCompletedAt', draft?.clearanceCompletedAt)
+
   const licenses = Array.isArray(draft?.licenses) ? draft.licenses : []
   if (licenses.length > MAX_LICENSES) {
     const count = licenses.length
@@ -198,28 +218,7 @@ export function validateProcessDraft(draft) {
     }
   })
 
-  // ---- transit ----
-  if (draft?.transshipment === true) {
-    checkDate('transshipmentEtd', draft?.transshipmentEtd)
-  }
-
-  // ---- flow ----
-  checkDate('berthedAt', draft?.berthedAt)
-  checkDate('arrivedAt', draft?.arrivedAt)
-
-  if (FREE_TIME_CATEGORIES.includes(category)) {
-    checkInteger('freeTimeDays', draft?.freeTimeDays)
-    checkDecimal('demurrageDailyRateUsd', draft?.demurrageDailyRateUsd)
-  }
-
-  checkDate('dtaLoadingScheduledAt', draft?.dtaLoadingScheduledAt)
-  checkDate('dtaArrivalAtItajai', draft?.dtaArrivalAtItajai)
-  checkDate('cargoPresenceInformedAt', draft?.cargoPresenceInformedAt)
-  checkDate('duimpRegisteredAt', draft?.duimpRegisteredAt)
-  checkDate('parameterizedAt', draft?.parameterizedAt)
-  checkDate('customsInspectionScheduledAt', draft?.customsInspectionScheduledAt)
-  checkDate('clearanceCompletedAt', draft?.clearanceCompletedAt)
-
+  // ---- collection ----
   const containers = Array.isArray(draft?.containers) ? draft.containers : []
   const collectionWindows = Array.isArray(draft?.collectionWindows) ? draft.collectionWindows : []
   collectionWindows.forEach((window) => {
