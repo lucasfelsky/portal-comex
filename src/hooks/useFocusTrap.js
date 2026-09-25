@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react'
 
 export function useFocusTrap(isOpen, onClose, containerRef) {
   const lastFocusedRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -29,7 +34,7 @@ export function useFocusTrap(isOpen, onClose, containerRef) {
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose?.()
+        onCloseRef.current?.()
         return
       }
       if (event.key !== 'Tab') return
@@ -68,5 +73,5 @@ export function useFocusTrap(isOpen, onClose, containerRef) {
         lastFocusedRef.current.focus()
       }
     }
-  }, [isOpen, onClose, containerRef])
+  }, [isOpen, containerRef])
 }

@@ -305,9 +305,11 @@ export default function WeeklyArrivalsCard({
   processes,
   canSeeName,
   isLoading,
+  loadError = null,
+  onRetry,
   onSelectProcess,
 }) {
-  const { scheduled, unscheduled } = isLoading
+  const { scheduled, unscheduled } = isLoading || loadError
     ? { scheduled: [], unscheduled: [] }
     : getWeeklyArrivalProcesses(processes)
   const total = scheduled.length + unscheduled.length
@@ -329,6 +331,15 @@ export default function WeeklyArrivalsCard({
           <div className="empty-state">
             <strong>Carregando chegadas</strong>
             <p>Buscando processos com chegada prevista para a semana.</p>
+          </div>
+        ) : loadError ? (
+          <div className="error-banner error-banner--retry" role="alert">
+            <span>{loadError}</span>
+            {onRetry ? (
+              <button type="button" className="ghost-button" onClick={onRetry}>
+                Tentar novamente
+              </button>
+            ) : null}
           </div>
         ) : total === 0 ? (
           <div className="empty-state">
