@@ -300,4 +300,51 @@ describe('firestore.rules structure', () => {
       }
     })
   })
+
+  describe('F17.4b — divergencia no recebimento (B-3)', () => {
+    it('isAdminProcessFields contem as 3 chaves novas e chama isValidReceiptDivergence()', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const newFields = ['receiptDivergence', 'receiptDivergenceType', 'receiptDivergenceNotes']
+      for (const field of newFields) {
+        expect(body, `campo ${field} nao esta em isAdminProcessFields`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+      expect(body).toMatch(/isValidReceiptDivergence\(\)/)
+    })
+
+    it('isLogisticsCollectionStatusUpdate contem as 3 chaves novas e chama isValidReceiptDivergence()', () => {
+      const match = rules.match(
+        /function\s+isLogisticsCollectionStatusUpdate\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/
+      )
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const newFields = ['receiptDivergence', 'receiptDivergenceType', 'receiptDivergenceNotes']
+      for (const field of newFields) {
+        expect(body, `campo ${field} nao esta em isLogisticsCollectionStatusUpdate`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+      expect(body).toMatch(/isValidReceiptDivergence\(\)/)
+    })
+
+    it('isLogisticsCollectionStatusUpdate NAO contem "containers"', () => {
+      const match = rules.match(
+        /function\s+isLogisticsCollectionStatusUpdate\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/
+      )
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).not.toMatch(/['"]containers['"]/)
+    })
+
+    it('isValidReceiptDivergence valida o vocabulario fechado e o teto de notas', () => {
+      const match = rules.match(/function\s+isValidReceiptDivergence\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/\[\s*['"]{2},\s*['"]Avaria['"],\s*['"]Falta['"],\s*['"]Sobra['"]\s*\]/)
+      expect(body).toMatch(/size\(\)\s*<=\s*2000/)
+    })
+  })
 })

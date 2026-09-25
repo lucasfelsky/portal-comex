@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence'],
       },
     }
     await Promise.all(
@@ -241,6 +241,42 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         expect(doc.title).toBe('Status de coleta atualizado')
         expect(doc.actorUserId).toBe('log-1')
         expect(doc.body).toContain('Carga a caminho do CD')
+      })
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F17.4b (B-6): logistica reporta divergencia no recebimento notifica
+  // admins + favoritos (receipt_divergence_reported, COM e-mail).
+  it(
+    'F17.4b (B-6) - logistica marca receiptDivergence notifica admins + favoritos (receipt_divergence_reported)',
+    async () => {
+      const processId = 'proc-receipt-divergence'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Divergencia',
+        processNumber: 'PO-1006',
+        category: 'FCL',
+        collectionStatus: 'Carga recebida, em conferência',
+        receiptDivergence: false,
+      })
+
+      await processRef.update({
+        receiptDivergence: true,
+        receiptDivergenceType: 'Avaria',
+        updatedById: 'log-1',
+        updatedByName: 'Logistica Um',
+      })
+
+      const docs = await waitForNotifications(processId, 2)
+      const divergenceReported = docs.filter((doc) => doc.type === 'receipt_divergence_reported')
+      const recipients = divergenceReported.map((doc) => doc.recipientUserId).sort()
+
+      expect(recipients).toEqual(['admin-1', 'fav-1'])
+      divergenceReported.forEach((doc) => {
+        expect(doc.title).toBe('Divergência no recebimento')
+        expect(doc.actorUserId).toBe('log-1')
+        expect(doc.body).toContain('Avaria')
       })
     },
     TRIGGER_TIMEOUT_MS

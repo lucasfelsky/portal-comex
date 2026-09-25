@@ -20,16 +20,21 @@ import {
 } from './arrivalCustoms'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { getChannelToneClass } from './processStatusView'
+import { hasReceiptDivergence } from './receiptDivergence'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
 // processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
 // F17.3a (D-12): leitura de chegada com data/CE/terminal/free time
 // (`ProcessArrivalDetails`/`ProcessFreeTimeDetails`).
 // F17.3b (D-14): card "DUIMP" completo (`ProcessCustomsDetails`).
+// F17.4b (B-4/B-7): card "Divergência no recebimento"
+// (`ProcessReceiptDivergenceDetails`) + "vazio devolvido em dd/mm/aaaa" na
+// lista de contêineres.
 // Regra de import (D-11/D-12/D-14): so' `./containers`, `./operationalOptions`,
 // `./processLabels` (so' `canShowProcessName`), `./licenses`,
 // `../../utils/dateFormat` (so' `formatDateTime`), `./arrivalCustoms`,
-// `./processCategories`, `./processStatusView` (so' `getChannelToneClass`).
+// `./processCategories`, `./processStatusView` (so' `getChannelToneClass`),
+// `./receiptDivergence` (so' `hasReceiptDivergence`).
 //
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
@@ -141,6 +146,7 @@ export function ProcessCargoTransitDetails({ process }) {
               <li key={container.id}>
                 {[container.number || 'Sem número', container.seal || 'sem lacre', container.type || 'sem tipo']
                   .join(' · ')}
+                {container.returnedAt ? ` · vazio devolvido em ${formatDate(container.returnedAt)}` : ''}
               </li>
             ))}
           </ul>
@@ -399,6 +405,27 @@ export function ProcessCustomsDetails({ process }) {
         {process?.clearanceCompletedAt ? (
           <p>Desembaraço concluído em: {formatDateTime(process.clearanceCompletedAt)}</p>
         ) : null}
+      </div>
+    </div>
+  )
+}
+
+// F17.4b (B-4): card "Divergência no recebimento" - visivel a todo aprovado
+// que ve o detalhe (mesma regra das observacoes pos-recebimento; nenhum
+// campo identifica o processo).
+export function ProcessReceiptDivergenceDetails({ process }) {
+  if (!hasReceiptDivergence(process)) return null
+
+  return (
+    <div className="detail-card">
+      <span className="detail-label">Divergência no recebimento</span>
+      <div className="detail-stack detail-stack--compact">
+        <p>
+          <span className="inline-badge inline-badge--danger">
+            {process?.receiptDivergenceType || 'Tipo não informado'}
+          </span>
+        </p>
+        {process?.receiptDivergenceNotes ? <p>{process.receiptDivergenceNotes}</p> : null}
       </div>
     </div>
   )

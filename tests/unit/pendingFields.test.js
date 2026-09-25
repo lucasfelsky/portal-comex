@@ -617,3 +617,79 @@ describe('getPendingFields - fornecedor por PO no CONSOLIDADO (F17.2d-2)', () =>
     expect(getPendingFields(process).map((f) => f.id)).toContain('purchaseOrderSupplier')
   })
 })
+
+// F17.4b (B-5): divergencia no recebimento + devolucao de vazio - aviso,
+// nunca bloqueio (stage 4).
+describe('getPendingFields - divergencia no recebimento / devolucao de vazio (F17.4b)', () => {
+  function receivedFclProcess(overrides = {}) {
+    return completeMaritimeProcess({
+      collectionStatus: 'Carga disponível em estoque',
+      ...overrides,
+    })
+  }
+
+  it('divergencia true sem notas -> pendencia receiptDivergenceNotes', () => {
+    const process = receivedFclProcess({ receiptDivergence: true, receiptDivergenceNotes: '' })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('receiptDivergenceNotes')
+  })
+
+  it('divergencia true sem postReceiptImages -> pendencia receiptDivergencePhoto', () => {
+    const process = receivedFclProcess({ receiptDivergence: true, postReceiptImages: [] })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('receiptDivergencePhoto')
+  })
+
+  it('divergencia true com notas e foto -> nenhuma das duas pendencias', () => {
+    const process = receivedFclProcess({
+      receiptDivergence: true,
+      receiptDivergenceNotes: 'caixa amassada',
+      postReceiptImages: [{ id: 'IMG-1', url: 'https://x' }],
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('receiptDivergenceNotes')
+    expect(ids).not.toContain('receiptDivergencePhoto')
+  })
+
+  it('flag false -> nenhuma das duas pendencias de divergencia', () => {
+    const process = receivedFclProcess({ receiptDivergence: false })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('receiptDivergenceNotes')
+    expect(ids).not.toContain('receiptDivergencePhoto')
+  })
+
+  it('FCL recebido com 1 conteiner sem returnedAt -> pendencia containersReturnedAt', () => {
+    const process = receivedFclProcess({
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC', returnedAt: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('containersReturnedAt')
+  })
+
+  it('FCL recebido com todos os conteineres com returnedAt -> sem pendencia', () => {
+    const process = receivedFclProcess({
+      containers: [
+        { id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC', returnedAt: '2026-09-10' },
+      ],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('containersReturnedAt')
+  })
+
+  it('LCL nunca cobra containersReturnedAt', () => {
+    const process = completeMaritimeProcess({
+      category: 'LCL',
+      containers: [],
+      containerQuantity: 0,
+      palletQuantity: 1,
+      collectionStatus: 'Carga disponível em estoque',
+      houseBl: 'HBL-1',
+      masterBl: '',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('containersReturnedAt')
+  })
+
+  it('FCL em "Coleta Agendada" (nao recebido) -> sem pendencia containersReturnedAt', () => {
+    const process = completeMaritimeProcess({
+      collectionStatus: 'Coleta Agendada',
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC', returnedAt: '' }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('containersReturnedAt')
+  })
+})

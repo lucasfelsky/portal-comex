@@ -15,6 +15,10 @@
 // para a tabela de regras e o formato do documento gravado.
 
 import { getComparableLicensesMirror, isLicenseDeferredMirror } from '../core/licenses.js'
+import {
+  isReceiptDivergenceReportedMirror,
+  normalizeReceiptDivergenceFieldsMirror,
+} from '../core/receiptDivergence.js'
 
 function normalizeComparable(value) {
   return String(value ?? '')
@@ -343,6 +347,48 @@ export const MILESTONE_RULES = [
         previousValue: before?.processStatus ?? '',
         occurredAtField: after?.cargoReceivedAt ?? null,
       }
+    },
+  },
+  // F17.4b (B-8): dispara na TRANSICAO false->true da divergencia no
+  // recebimento (mesma funcao usada pela notificacao - `isReceiptDivergenceReportedMirror`).
+  // Editar tipo/notas depois (flag ja true) NAO gera evento novo.
+  {
+    type: 'divergence',
+    field: 'receiptDivergence',
+    detect(before, after) {
+      if (!isReceiptDivergenceReportedMirror(before, after)) return null
+      return {
+        value: normalizeReceiptDivergenceFieldsMirror(after).receiptDivergenceType,
+        previousValue: '',
+      }
+    },
+  },
+  // F17.4b (B-8): devolucao de vazio - 1 evento por container que GANHOU
+  // `returnedAt` no mesmo save (id deterministico via `idSuffix` = id do
+  // container, evita colisao quando 2+ containers sao devolvidos juntos).
+  // Editar a data depois (container que ja tinha `returnedAt`) NAO gera
+  // evento novo.
+  {
+    type: 'emptyReturned',
+    field: 'containers',
+    detect(before, after) {
+      const afterContainers = Array.isArray(after?.containers) ? after.containers : []
+      const beforeContainers = Array.isArray(before?.containers) ? before.containers : []
+
+      const events = []
+      for (const container of afterContainers) {
+        if (!hasValue(container?.returnedAt)) continue
+        const beforeContainer = beforeContainers.find((item) => item?.id === container?.id)
+        if (beforeContainer && hasValue(beforeContainer?.returnedAt)) continue
+
+        events.push({
+          value: container?.number || container?.id || '',
+          previousValue: '',
+          occurredAtField: container?.returnedAt || null,
+          idSuffix: container?.id,
+        })
+      }
+      return events
     },
   },
   {

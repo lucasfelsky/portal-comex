@@ -1189,7 +1189,12 @@ export default function ProcessesPage() {
         selectedProcess.id,
         draft.collectionStatus,
         profile,
-        selectedProcess
+        selectedProcess,
+        {
+          receiptDivergence: draft.receiptDivergence,
+          receiptDivergenceType: draft.receiptDivergenceType,
+          receiptDivergenceNotes: draft.receiptDivergenceNotes,
+        }
       )
       const refreshed = await refreshProcesses(selectedProcess.id)
       const saved = refreshed.find((item) => item.id === selectedProcess.id)
@@ -1542,7 +1547,13 @@ export default function ProcessesPage() {
           collectionStatus={draft.collectionStatus}
           canSeeName={canSeeName}
           isSaving={isSaving}
+          receiptDivergenceFields={{
+            receiptDivergence: draft.receiptDivergence,
+            receiptDivergenceType: draft.receiptDivergenceType,
+            receiptDivergenceNotes: draft.receiptDivergenceNotes,
+          }}
           onStatusChange={(value) => handleDraftChange('collectionStatus', value)}
+          onDivergenceChange={handleDraftChange}
           onSave={handleSaveCollectionStatus}
           onClose={handleCloseCollectionStatusEditMode}
         />

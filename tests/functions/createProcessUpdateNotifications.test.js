@@ -937,3 +937,173 @@ describe('F17.4a - collection_status_updated (D-8)', () => {
     expect(payloads.every((p) => p.body.includes('Carga sendo descarregada'))).toBe(true)
   })
 })
+
+// F17.4b (B-6): notificacao `receipt_divergence_reported` (admin + favoritos,
+// COM e-mail) na transicao false->true da divergencia no recebimento.
+describe('F17.4b - receipt_divergence_reported (B-6)', () => {
+  it('(a) logistica marca divergencia -> admin + favorito recebem, body contem o tipo', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga recebida, em conferência', receiptDivergence: false }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      receiptDivergence: true,
+      receiptDivergenceType: 'Avaria',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(2)
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    expect(payloads.every((p) => p.type === 'receipt_divergence_reported')).toBe(true)
+    expect(payloads.map((p) => p.recipientUserId).sort()).toEqual(['admin-1', 'fan-1'])
+    expect(payloads.every((p) => p.body.includes('Avaria'))).toBe(true)
+  })
+
+  it('(b) admin marca divergencia -> outro admin + favorito recebem receipt_divergence_reported (nao favorite_process_updated)', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'admin-2', data: { id: 'admin-2', name: 'Admin Dois', email: 'admin2@sqquimica.com', role: 'admin', status: 'Ativo' } },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Carga recebida, em conferência', receiptDivergence: false }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      receiptDivergence: true,
+      receiptDivergenceType: 'Falta',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+
+    const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
+    expect(types.every((t) => t === 'receipt_divergence_reported')).toBe(true)
+    expect(types).not.toContain('favorite_process_updated')
+  })
+
+  it('(c) logistica muda status E marca divergencia no mesmo write: so receipt_divergence_reported por destinatario', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, collectionStatus: 'Coleta Agendada', receiptDivergence: false }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      receiptDivergence: true,
+      receiptDivergenceType: 'Sobra',
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(2)
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    for (const recipientUserId of ['admin-1', 'fan-1']) {
+      const forRecipient = payloads.filter((p) => p.recipientUserId === recipientUserId)
+      expect(forRecipient).toHaveLength(1)
+      expect(forRecipient[0].type).toBe('receipt_divergence_reported')
+    }
+  })
+
+  it('(d) legado sem as chaves x after com false/""/"" e resto igual, ator admin: NENHUMA notificacao', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE }
+    const after = {
+      ...PROCESS_BASE,
+      receiptDivergence: false,
+      receiptDivergenceType: '',
+      receiptDivergenceNotes: '',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('(e) flag ja true, admin muda so as notas: favorite_process_updated com "divergência no recebimento atualizada"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      receiptDivergence: true,
+      receiptDivergenceType: 'Avaria',
+      receiptDivergenceNotes: 'nota antiga',
+    }
+    const after = {
+      ...PROCESS_BASE,
+      receiptDivergence: true,
+      receiptDivergenceType: 'Avaria',
+      receiptDivergenceNotes: 'nota nova',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    expect(payloads).toHaveLength(1)
+    expect(payloads[0].type).toBe('favorite_process_updated')
+    expect(payloads[0].body).toContain('divergência no recebimento atualizada')
+  })
+
+  it('(f) ator = favorito: nao recebe a propria notificacao', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, receiptDivergence: false }
+    const after = {
+      ...PROCESS_BASE,
+      receiptDivergence: true,
+      receiptDivergenceType: 'Avaria',
+      updatedById: 'fan-1',
+      updatedByName: 'Carlos Favorito',
+    }
+    await handler(makeEvent(before, after))
+
+    const recipients = mockBatch.set.mock.calls.map(([, payload]) => payload.recipientUserId)
+    expect(recipients).not.toContain('fan-1')
+  })
+
+  it('(g) mudar so containers[].returnedAt (admin): nenhuma notificacao', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, containers: [{ id: 'CNT-1', returnedAt: '' }] }
+    const after = {
+      ...PROCESS_BASE,
+      containers: [{ id: 'CNT-1', returnedAt: '2026-09-10' }],
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+})

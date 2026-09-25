@@ -33,6 +33,7 @@ import {
   ProcessArrivalDetails,
   ProcessFreeTimeDetails,
   ProcessCustomsDetails,
+  ProcessReceiptDivergenceDetails,
 } from './ProcessOperationalDetails'
 
 // F10.4 (backlog 2026-07-12): tela de detalhe do processo (viewMode
@@ -385,6 +386,7 @@ export default function ProcessDetailView({
                 <p>{selectedProcess.carrierName || '-'}</p>
               </div>
             ) : null}
+            <ProcessReceiptDivergenceDetails process={selectedProcess} />
           </>
         ) : null}
 

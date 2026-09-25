@@ -1,5 +1,6 @@
 import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
+import ReceiptDivergenceFields from './ReceiptDivergenceFields'
 import {
   CD_EN_ROUTE_STATUS,
   getDisplayedCollectionStatus,
@@ -14,12 +15,16 @@ import { getProcessTitle } from './processLabels'
 // 'collection-status-edit'), extraída do ProcessesPage. Presentacional — lê
 // só o campo `collectionStatus` do draft (via prop) e chama callbacks; o
 // estado e os handlers continuam na página. Zero mudança visual/comportamental.
+// F17.4b (B-4): + editor de divergencia no recebimento (logistica E admin),
+// visivel so' quando o status escolhido e' pos-recebimento.
 export default function CollectionStatusEditView({
   process,
   collectionStatus,
   canSeeName,
   isSaving,
+  receiptDivergenceFields,
   onStatusChange,
+  onDivergenceChange,
   onSave,
   onClose,
 }) {
@@ -75,6 +80,16 @@ export default function CollectionStatusEditView({
             </optgroup>
           </SelectField>
         </label>
+        {postCollectionStatusOptions.includes(collectionStatus) ? (
+          <ReceiptDivergenceFields
+            value={receiptDivergenceFields}
+            imagesCount={
+              Array.isArray(process.postReceiptImages) ? process.postReceiptImages.length : 0
+            }
+            onChange={onDivergenceChange}
+            disabled={isSaving}
+          />
+        ) : null}
       </div>
 
       <div className="action-row">

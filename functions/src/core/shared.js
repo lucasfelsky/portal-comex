@@ -12,6 +12,7 @@ import {
   canonicalizeCollectionStatusMirror,
   getDisplayedCollectionStatusMirror,
 } from './collectionStatus.js';
+import { normalizeReceiptDivergenceFieldsMirror } from './receiptDivergence.js';
 
 const EMAIL_NOTIFICATION_TYPES = new Set([
   'process_question_created',
@@ -19,6 +20,7 @@ const EMAIL_NOTIFICATION_TYPES = new Set([
   'favorite_process_message',
   'favorite_process_updated',
   'post_receipt_notes_updated',
+  'receipt_divergence_reported',
 ])
 
 const ALLOWED_ROLES = new Set(['admin', 'user', 'logistica'])
@@ -239,6 +241,11 @@ function buildFavoriteProcessUpdatedTitle(processLabel) {
   return `Processo atualizado: ${processLabel}`
 }
 
+// F17.4b (B-6): notificacao `receipt_divergence_reported` (com e-mail).
+function buildReceiptDivergenceNotificationBody(processLabel, actorName, typeLabel) {
+  return `${actorName} registrou divergência no recebimento${typeLabel ? ` (${typeLabel})` : ''} em ${processLabel}.`
+}
+
 function formatDateLabel(value) {
   if (!value) return '-'
   const date = new Date(`${value}T00:00:00`)
@@ -305,6 +312,16 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     JSON.stringify(normalizePurchaseOrderList(nextProcess?.purchaseOrders))
   ) {
     changes.push('POs do consolidado atualizadas')
+  }
+
+  // F17.4b (B-6): divergencia no recebimento re-editada pelo admin (a
+  // TRANSICAO de false->true gera `receipt_divergence_reported`, nao este
+  // resumo - ver `isReceiptDivergenceReportedMirror` em process/index.js).
+  if (
+    JSON.stringify(normalizeReceiptDivergenceFieldsMirror(previousProcess)) !==
+    JSON.stringify(normalizeReceiptDivergenceFieldsMirror(nextProcess))
+  ) {
+    changes.push('divergência no recebimento atualizada')
   }
 
   if (changes.length === 0) {
@@ -390,6 +407,9 @@ function sanitizeProcessForComparison(process) {
           imoClass: normalizeString(item?.imoClass),
         }))
       : [],
+    // F17.4b (B-6): legado sem as 3 chaves x 1o save com false/''/'' produz
+    // JSON identico - sem `favorite_process_updated` espurio.
+    ...normalizeReceiptDivergenceFieldsMirror(process),
   }
 }
 
@@ -720,6 +740,6 @@ export {
   EMAIL_NOTIFICATION_TYPES, ALLOWED_ROLES, ALLOWED_STATUSES, RESTRICTED_PROCESS_CATEGORIES, ROLE_PERMISSIONS_MAP, BRAND_COLORS,
   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL, MOJIBAKE_PATTERN, MOJIBAKE_GLOBAL_PATTERN,
   normalizeString, normalizeEmail, normalizeList, normalizeTimestamp, isCorporateEmail, isActiveStatus, countMojibakeMarkers, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName,
-  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
+  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
   getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, recordAuditEvent, assertActiveAdmin, assertApprovedCaller, prefCategoryForType, shouldNotify, createNotifications, sendPushForEntries, deleteNotificationsForRecipient
 };

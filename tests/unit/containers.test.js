@@ -115,6 +115,36 @@ describe('normalizeContainers (D-4)', () => {
   })
 })
 
+// F17.4b (B-7, D6): `returnedAt` - data pura YYYY-MM-DD, nunca toISOString().
+describe('normalizeContainers - returnedAt (F17.4b, D6)', () => {
+  it('string "2026-09-10" e\' preservada', () => {
+    const result = normalizeContainers([{ returnedAt: '2026-09-10' }], { category: 'FCL' })
+    expect(result[0].returnedAt).toBe('2026-09-10')
+  })
+
+  it('string "2026-09-10T10:00" corta para "2026-09-10"', () => {
+    const result = normalizeContainers([{ returnedAt: '2026-09-10T10:00' }], { category: 'FCL' })
+    expect(result[0].returnedAt).toBe('2026-09-10')
+  })
+
+  it('Timestamp Firestore (toDate) vira a chave LOCAL, sem virar dia seguinte/anterior', () => {
+    const result = normalizeContainers(
+      [{ returnedAt: { toDate: () => new Date(2026, 8, 10, 23, 30) } }],
+      { category: 'FCL' }
+    )
+    expect(result[0].returnedAt).toBe('2026-09-10')
+  })
+
+  it('lixo/null -> ""', () => {
+    const result = normalizeContainers(
+      [{ returnedAt: 'lixo' }, { returnedAt: null }],
+      { category: 'FCL' }
+    )
+    expect(result[0].returnedAt).toBe('')
+    expect(result[1].returnedAt).toBe('')
+  })
+})
+
 describe('getContainerSpecialBadges', () => {
   it('containers 40RF gera badge Reefer', () => {
     expect(getContainerSpecialBadges([{ type: '40RF' }])).toEqual(['Reefer'])

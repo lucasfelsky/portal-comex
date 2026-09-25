@@ -1365,6 +1365,181 @@ describeEmulator('firestore.rules (emulador)', () => {
       })
     }
 
+    // F17.4b (B-3): divergencia no recebimento - logistica grava os 3
+    // campos validos junto de um status pos-recebimento.
+    it('logistica grava status pos-recebimento + 3 campos de divergencia validos', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div1'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/div1'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          receiptDivergenceNotes: 'caixa amassada',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava receiptDivergenceType fora do vocabulario ("Outro")', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div2'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div2'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Outro',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava receiptDivergence como string ("true")', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div3'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div3'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: 'true',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava receiptDivergenceNotes com 2001 caracteres', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div4'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div4'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          receiptDivergenceNotes: 'x'.repeat(2001),
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava divergencia junto de collectionStatus final pre-coleta', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div5'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div5'), {
+          collectionStatus: 'Coleta Agendada',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.4b (D6): complementa o caso l.999 (`logistica NAO atualiza
+    // containers`) - `containers[].returnedAt` (devolucao de vazio) so' admin,
+    // mesmo junto de um collectionStatus valido.
+    it('logistica NAO grava containers com returnedAt junto de collectionStatus', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div6'), {
+          name: 'P',
+          category: 'FCL',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '', returnedAt: '' }],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div6'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '', returnedAt: '2026-09-10' }],
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.4b (B-3/D6): admin grava os 3 campos validos + containers[0].returnedAt.
+    it('admin grava divergencia valida + containers[0].returnedAt', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div7'), {
+          name: 'P',
+          category: 'FCL',
+          containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '', returnedAt: '' }],
+        })
+      )
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/div7'), {
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          receiptDivergenceNotes: 'nota',
+          containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '', returnedAt: '2026-09-10' }],
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO grava receiptDivergenceType fora do vocabulario ("Outro")', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/div8'), { name: 'P', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div8'), {
+          receiptDivergence: true,
+          receiptDivergenceType: 'Outro',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
     it('logistica NAO avanca pra status que nao e pos-coleta', async () => {
       await seed((db) =>
         setDoc(doc(db, 'processes/cs3'), {

@@ -25,6 +25,9 @@ const EVENT_LABELS = {
   collectionScheduled: (event) =>
     event.value ? `Coleta agendada para ${formatDateTime(event.value)}` : 'Coleta agendada',
   received: () => 'Carga recebida',
+  divergence: (event) =>
+    event.value ? `Divergência no recebimento (${event.value})` : 'Divergência no recebimento',
+  emptyReturned: (event) => `Vazio devolvido (${event.value || '-'})`,
   statusChanged: (event) => `Status: ${event.previousValue || '-'} → ${event.value || '-'}`,
 }
 

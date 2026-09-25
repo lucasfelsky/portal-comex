@@ -138,6 +138,23 @@ describe('sendProcessNotificationEmail', () => {
     expect(args.text).toContain('Veja os detalhes do processo PO 12345')
   })
 
+  it('happy path: receipt_divergence_reported tambem dispara (F17.4b)', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'receipt_divergence_reported',
+        recipientUserId: RECIPIENT_UID,
+        title: 'Divergência no recebimento',
+        body: 'Logi da Silva registrou divergência no recebimento (Avaria) em PO 12345.',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+  })
+
   it('happy path: post_receipt_notes_updated tambem dispara', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

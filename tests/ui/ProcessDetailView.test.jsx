@@ -488,3 +488,41 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
     expect(screen.queryByText('DUIMP')).not.toBeInTheDocument()
   })
 })
+
+// F17.4b (B-4/B-7): card "Divergência no recebimento" + "vazio devolvido em"
+// na lista de contêineres (aba Processo).
+describe('ProcessDetailView — divergência no recebimento / devolução de vazio (F17.4b)', () => {
+  it('receiptDivergence true com tipo "Falta" mostra o card com o tipo', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        receiptDivergence: true,
+        receiptDivergenceType: 'Falta',
+        receiptDivergenceNotes: 'faltaram 2 caixas',
+      }),
+    })
+    expect(screen.getByText('Divergência no recebimento')).toBeInTheDocument()
+    expect(screen.getByText('Falta')).toBeInTheDocument()
+    expect(screen.getByText('faltaram 2 caixas')).toBeInTheDocument()
+  })
+
+  it('receiptDivergence false -> sem o card', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ receiptDivergence: false }),
+    })
+    expect(screen.queryByText('Divergência no recebimento')).not.toBeInTheDocument()
+  })
+
+  it('container com returnedAt mostra "vazio devolvido em 10/09/2026"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        containers: [
+          { id: 'CNT-1', number: 'CSQU3054383', seal: 'L1', type: '40DC', returnedAt: '2026-09-10' },
+        ],
+      }),
+    })
+    expect(screen.getByText(/vazio devolvido em 10\/09\/2026/)).toBeInTheDocument()
+  })
+})

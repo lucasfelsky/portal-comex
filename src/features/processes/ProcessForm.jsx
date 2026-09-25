@@ -13,7 +13,8 @@ import {
 import { getStatusTagClass } from './processStatusView'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { deriveProcessStatus, isCollectionReleased } from './deriveProcessStatus'
-import { hasCargoPresenceSignal } from './arrivalCustoms'
+import { hasCargoPresenceSignal, FREE_TIME_CATEGORIES } from './arrivalCustoms'
+import EmptyReturnFields from './EmptyReturnFields'
 import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
@@ -453,6 +454,16 @@ export default function ProcessForm({
             />
           </label>
         </div>
+      ) : null}
+
+      {FREE_TIME_CATEGORIES.includes(draft.category) &&
+      derivedProcessStatus === 'Carga recebida' &&
+      (draft.containers ?? []).length > 0 ? (
+        <EmptyReturnFields
+          containers={draft.containers}
+          onChange={(value) => onDraftChange('containers', value)}
+          disabled={isSaving}
+        />
       ) : null}
     </>
   )
