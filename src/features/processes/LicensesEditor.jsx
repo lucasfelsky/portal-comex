@@ -5,6 +5,7 @@ import {
   MAX_LICENSES,
   createEmptyLicense,
 } from './licenses'
+import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.2b (D-5): editor de anuencias `licenses[]` - lista editavel (orgao,
 // No LPCO, status, vistoria/deferimento condicionais, observacoes,
@@ -16,9 +17,11 @@ function generateLicenseId() {
   return `LIC-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export default function LicensesEditor({ value, onChange, disabled = false }) {
+export default function LicensesEditor({ value, onChange, disabled = false, errors = {} }) {
   const licenses = Array.isArray(value) ? value : []
   const canAddMore = licenses.length < MAX_LICENSES
+  const groupDomId = 'process-field-licenses'
+  const groupError = errors.licenses
 
   function handleAdd() {
     onChange([...licenses, createEmptyLicense(generateLicenseId())])
@@ -33,13 +36,24 @@ export default function LicensesEditor({ value, onChange, disabled = false }) {
   }
 
   return (
-    <div className="collection-windows-editor">
+    <div
+      className="collection-windows-editor"
+      id={groupError ? groupDomId : undefined}
+      role={groupError ? 'group' : undefined}
+      tabIndex={groupError ? -1 : undefined}
+      aria-describedby={groupError ? getFieldErrorId(groupDomId) : undefined}
+    >
       <div className="collection-windows-editor__header">
         <div>
           <span className="detail-label">
             {licenses.length} anuência{licenses.length === 1 ? '' : 's'}
           </span>
           <p>Cadastre o órgão, número da LPCO e status de cada anuência exigida.</p>
+          {groupError ? (
+            <small className="field-error" id={getFieldErrorId(groupDomId)}>
+              {groupError}
+            </small>
+          ) : null}
         </div>
         <button
           type="button"
@@ -135,7 +149,20 @@ export default function LicensesEditor({ value, onChange, disabled = false }) {
                           handleChange(license.id, { inspectionScheduledAt: event.target.value })
                         }
                         disabled={disabled}
+                        {...getFieldA11yProps(
+                          `process-field-licenses-${license.id}-inspectionScheduledAt`,
+                          errors[`licenses.${license.id}.inspectionScheduledAt`]
+                        )}
                       />
+                      {errors[`licenses.${license.id}.inspectionScheduledAt`] ? (
+                        <small
+                          className="field-error"
+                          id={getFieldErrorId(`process-field-licenses-${license.id}-inspectionScheduledAt`)}
+                          aria-hidden="true"
+                        >
+                          {errors[`licenses.${license.id}.inspectionScheduledAt`]}
+                        </small>
+                      ) : null}
                     </label>
                   </div>
                 ) : null}
@@ -150,7 +177,20 @@ export default function LicensesEditor({ value, onChange, disabled = false }) {
                         value={license.deferredAt}
                         onChange={(event) => handleChange(license.id, { deferredAt: event.target.value })}
                         disabled={disabled}
+                        {...getFieldA11yProps(
+                          `process-field-licenses-${license.id}-deferredAt`,
+                          errors[`licenses.${license.id}.deferredAt`]
+                        )}
                       />
+                      {errors[`licenses.${license.id}.deferredAt`] ? (
+                        <small
+                          className="field-error"
+                          id={getFieldErrorId(`process-field-licenses-${license.id}-deferredAt`)}
+                          aria-hidden="true"
+                        >
+                          {errors[`licenses.${license.id}.deferredAt`]}
+                        </small>
+                      ) : null}
                     </label>
                   </div>
                 ) : null}

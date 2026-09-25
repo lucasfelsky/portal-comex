@@ -25,6 +25,7 @@ import {
   toNewsMediaPreviewUrl,
 } from '../utils/newsMedia'
 import { buildActionErrorMessage } from '../utils/errorMessages'
+import { getFieldA11yProps, getFieldErrorId } from '../utils/fieldErrors'
 
 function createEmptyDraft() {
   return {
@@ -187,6 +188,10 @@ export default function NewsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isProcessingMedia, setIsProcessingMedia] = useState(false)
   const [error, setError] = useState('')
+  // UX-3b (D10): erro de upload de midia (formato/tamanho) vira INLINE no
+  // input correspondente - antes ia pro `.error-banner` compartilhado.
+  const [coverError, setCoverError] = useState('')
+  const [mediaError, setMediaError] = useState('')
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [deleteConfirmError, setDeleteConfirmError] = useState('')
 
@@ -307,6 +312,7 @@ export default function NewsPage() {
   }
 
   async function handleCoverUpload(event) {
+    setCoverError('')
     try {
       const [coverImage] = buildPendingNewsMediaItems(event.target.files, { imagesOnly: true })
 
@@ -318,7 +324,7 @@ export default function NewsPage() {
         coverImageItem: coverImage,
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Não foi possível carregar a capa.', uploadError))
+      setCoverError(buildActionErrorMessage('Não foi possível carregar a capa.', uploadError))
     } finally {
       event.target.value = ''
     }
@@ -326,6 +332,7 @@ export default function NewsPage() {
 
   async function handleMediaUpload(event) {
     setIsProcessingMedia(true)
+    setMediaError('')
 
     try {
       const uploadedMedia = buildPendingNewsMediaItems(event.target.files)
@@ -335,7 +342,7 @@ export default function NewsPage() {
         mediaItems: [...current.mediaItems, ...uploadedMedia],
       }))
     } catch (uploadError) {
-      setError(buildActionErrorMessage('Não foi possível carregar os anexos.', uploadError))
+      setMediaError(buildActionErrorMessage('Não foi possível carregar os anexos.', uploadError))
     } finally {
       setIsProcessingMedia(false)
       event.target.value = ''
@@ -367,6 +374,8 @@ export default function NewsPage() {
   async function handleSaveNews() {
     setIsSaving(true)
     setError('')
+    setCoverError('')
+    setMediaError('')
     const newsId = draft.id || createNewsItemId()
     const actorId = profile?.uid ?? profile?.id ?? ''
     let resolvedCoverImageItem = null
@@ -524,12 +533,36 @@ export default function NewsPage() {
             <div className="detail-card detail-card--split">
               <label className="field">
                 <span>Imagem de capa</span>
-                <input className="text-input" type="file" accept="image/*" onChange={handleCoverUpload} />
+                <input
+                  className="text-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                  {...getFieldA11yProps('news-cover-image', coverError)}
+                />
+                {coverError ? (
+                  <small className="field-error" id={getFieldErrorId('news-cover-image')} aria-hidden="true">
+                    {coverError}
+                  </small>
+                ) : null}
               </label>
               <label className="field">
                 <span>Anexos</span>
-                <input className="text-input" type="file" multiple onChange={handleMediaUpload} />
-                <small className="field-hint">Imagens, PDFs, planilhas e outros arquivos.</small>
+                <input
+                  className="text-input"
+                  type="file"
+                  multiple
+                  onChange={handleMediaUpload}
+                  {...getFieldA11yProps('news-media-items', mediaError, ['news-media-items-hint'])}
+                />
+                {mediaError ? (
+                  <small className="field-error" id={getFieldErrorId('news-media-items')} aria-hidden="true">
+                    {mediaError}
+                  </small>
+                ) : null}
+                <small className="field-hint" id="news-media-items-hint">
+                  Imagens, PDFs, planilhas e outros arquivos.
+                </small>
               </label>
             </div>
 

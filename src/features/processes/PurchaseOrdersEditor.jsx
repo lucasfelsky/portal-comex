@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MAX_PURCHASE_ORDERS, getPurchaseOrderNumbers, normalizePurchaseOrders } from './purchaseOrders'
+import { getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.2d-2 (D-7): editor de `purchaseOrders[]` (POs do CONSOLIDADO) - cada
 // PO agora e' um objeto `{ po, reference, supplierName }`. Linha de adicao
@@ -9,8 +10,11 @@ import { MAX_PURCHASE_ORDERS, getPurchaseOrderNumbers, normalizePurchaseOrders }
 // editaveis in-place (rename de `po` fora de escopo) + "Remover" por `po`.
 // Emite a lista CRUA (a pagina normaliza com `trimText: false`). So' importa
 // de `./purchaseOrders` (mesma regra de import de `LicensesEditor.jsx`).
-export default function PurchaseOrdersEditor({ value, onChange, disabled = false }) {
+export default function PurchaseOrdersEditor({ value, onChange, disabled = false, errors = {} }) {
   const purchaseOrders = Array.isArray(value) ? value : []
+  const groupDomId = 'process-field-purchaseOrders'
+  const groupError = errors.purchaseOrders
+  const minHintId = 'process-field-purchaseOrders-min-hint'
   const [draftPo, setDraftPo] = useState('')
   const [draftReference, setDraftReference] = useState('')
   const [draftSupplierName, setDraftSupplierName] = useState('')
@@ -63,16 +67,27 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
   }
 
   return (
-    <div className="collection-windows-editor">
+    <div
+      className="collection-windows-editor"
+      id={groupError ? groupDomId : undefined}
+      role={groupError ? 'group' : undefined}
+      tabIndex={groupError ? -1 : undefined}
+      aria-describedby={groupError ? getFieldErrorId(groupDomId) : undefined}
+    >
       <div className="collection-windows-editor__header">
         <div>
           <span className="detail-label">
             {purchaseOrders.length} PO{purchaseOrders.length === 1 ? '' : 's'}
           </span>
+          {groupError ? (
+            <small className="field-error" id={getFieldErrorId(groupDomId)}>
+              {groupError}
+            </small>
+          ) : null}
         </div>
       </div>
 
-      <small className="field-hint">
+      <small className="field-hint" id={minHintId}>
         Consolidado: várias POs no mesmo HBL (mínimo 2). Remover uma PO limpa o vínculo dos itens
         que a usavam.
       </small>
@@ -88,6 +103,7 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
             onKeyDown={handleKeyDown}
             placeholder="Ex.: PO-12345"
             disabled={disabled}
+            aria-describedby={minHintId}
           />
         </label>
         <label className="field">

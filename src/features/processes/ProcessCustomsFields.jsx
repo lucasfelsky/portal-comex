@@ -7,6 +7,7 @@ import {
   isLegacyDuimpRegisteredWithoutDate,
   isLegacyParameterizedWithoutDate,
 } from './arrivalCustoms'
+import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.3a (D-10 item 2): DUIMP + canal + "Desembaraço concluído em" - JSX
 // movido de `ProcessForm.jsx` (renderFlowStep, duplicado maritimo/aereo)
@@ -15,7 +16,7 @@ import {
 // (Amarelo/Vermelho), exigencia/procedimento especial (Cinza) e
 // pre-preenchimento do desembaraco no Verde (D-4). O select manual "DUIMP"
 // sai - o status passa a ser derivado das datas (`arrivalCustoms.js`).
-export default function ProcessCustomsFields({ draft, onDraftChange, channelOptions }) {
+export default function ProcessCustomsFields({ draft, onDraftChange, channelOptions, errors = {} }) {
   const hasRegistrationSignal = hasDuimpRegistrationSignal(draft)
   const hasParameterization = hasParameterizationSignal(draft)
   const channel = draft.parameterizationChannel
@@ -44,7 +45,17 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
           type="datetime-local"
           value={draft.duimpRegisteredAt}
           onChange={(event) => onDraftChange('duimpRegisteredAt', event.target.value)}
+          {...getFieldA11yProps('process-field-duimpRegisteredAt', errors.duimpRegisteredAt)}
         />
+        {errors.duimpRegisteredAt ? (
+          <small
+            className="field-error"
+            id={getFieldErrorId('process-field-duimpRegisteredAt')}
+            aria-hidden="true"
+          >
+            {errors.duimpRegisteredAt}
+          </small>
+        ) : null}
         {isLegacyDuimpRegisteredWithoutDate(draft) ? (
           <small className="field-hint">
             DUIMP registrada sem data (registro antigo) — informe a data e hora.
@@ -60,7 +71,17 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
             type="datetime-local"
             value={draft.parameterizedAt}
             onChange={(event) => onDraftChange('parameterizedAt', event.target.value)}
+            {...getFieldA11yProps('process-field-parameterizedAt', errors.parameterizedAt)}
           />
+          {errors.parameterizedAt ? (
+            <small
+              className="field-error"
+              id={getFieldErrorId('process-field-parameterizedAt')}
+              aria-hidden="true"
+            >
+              {errors.parameterizedAt}
+            </small>
+          ) : null}
           {isLegacyParameterizedWithoutDate(draft) ? (
             <small className="field-hint">
               DUIMP parametrizada sem data (registro antigo) — informe a data e hora.
@@ -93,7 +114,17 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
             type="datetime-local"
             value={draft.customsInspectionScheduledAt}
             onChange={(event) => onDraftChange('customsInspectionScheduledAt', event.target.value)}
+            {...getFieldA11yProps('process-field-customsInspectionScheduledAt', errors.customsInspectionScheduledAt)}
           />
+          {errors.customsInspectionScheduledAt ? (
+            <small
+              className="field-error"
+              id={getFieldErrorId('process-field-customsInspectionScheduledAt')}
+              aria-hidden="true"
+            >
+              {errors.customsInspectionScheduledAt}
+            </small>
+          ) : null}
         </label>
       ) : null}
 
@@ -139,7 +170,17 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
             type="datetime-local"
             value={draft.clearanceCompletedAt}
             onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
+            {...getFieldA11yProps('process-field-clearanceCompletedAt', errors.clearanceCompletedAt)}
           />
+          {errors.clearanceCompletedAt ? (
+            <small
+              className="field-error"
+              id={getFieldErrorId('process-field-clearanceCompletedAt')}
+              aria-hidden="true"
+            >
+              {errors.clearanceCompletedAt}
+            </small>
+          ) : null}
           <small className="field-hint">
             {channel === 'Verde'
               ? 'Pré-preenchido com a data da parametrização — ajuste se o desembaraço foi em outra data.'

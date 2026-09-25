@@ -14,6 +14,7 @@ import {
   listMySupportTickets,
 } from '../services/supportTicketsRepository'
 import { buildActionErrorMessage } from '../utils/errorMessages'
+import { getFieldA11yProps, getFieldErrorId, focusField } from '../utils/fieldErrors'
 
 // Evento global disparado pelo AppLayout quando o usuário clica numa
 // notificação `support_ticket_resolved` — abre o modal com "Meus chamados"
@@ -51,6 +52,11 @@ export default function SupportButton() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [myTickets, setMyTickets] = useState([])
   const [isLoadingTickets, setIsLoadingTickets] = useState(false)
+  // UX-3b (D10): mensagem vazia/so-espacos e' erro INLINE (nao chama o
+  // repositorio); > 5 prints tambem vira inline no input de arquivo (era
+  // `toast.error`).
+  const [messageError, setMessageError] = useState('')
+  const [filesError, setFilesError] = useState('')
 
   useEffect(() => {
     if (!isOpen || !profile?.uid) return
@@ -97,9 +103,11 @@ export default function SupportButton() {
     const selectedFiles = Array.from(event.target.files ?? [])
     const nextFiles = [...files, ...selectedFiles].slice(0, SUPPORT_TICKET_MAX_IMAGES)
 
-    if (files.length + selectedFiles.length > SUPPORT_TICKET_MAX_IMAGES) {
-      toast.error(`Anexe no máximo ${SUPPORT_TICKET_MAX_IMAGES} imagens.`)
-    }
+    setFilesError(
+      files.length + selectedFiles.length > SUPPORT_TICKET_MAX_IMAGES
+        ? `Anexe no máximo ${SUPPORT_TICKET_MAX_IMAGES} imagens.`
+        : ''
+    )
 
     setFiles(nextFiles)
 
@@ -115,6 +123,16 @@ export default function SupportButton() {
   async function handleSubmit(event) {
     event.preventDefault()
     if (isSubmitting) return
+
+    // UX-3b (D10): vazio/so-espacos bloqueia ANTES de chamar o repositorio -
+    // `<form noValidate>` tira a bolha nativa do `required`, o erro agora e'
+    // inline (foco no textarea).
+    if (!message.trim()) {
+      setMessageError('Descreva o que aconteceu antes de enviar o chamado.')
+      focusField('support-message')
+      return
+    }
+    setMessageError('')
 
     setIsSubmitting(true)
 
@@ -164,7 +182,7 @@ export default function SupportButton() {
             anexe prints. A equipe administrativa recebe o chamado na hora.
           </p>
 
-          <form className="detail-stack" onSubmit={handleSubmit}>
+          <form className="detail-stack" onSubmit={handleSubmit} noValidate>
             <div className="support-modal__identity">
               <div>
                 <span className="detail-label">Nome</span>
@@ -183,10 +201,18 @@ export default function SupportButton() {
                 rows={5}
                 maxLength={SUPPORT_TICKET_MAX_MESSAGE_LENGTH}
                 value={message}
-                onChange={(event) => setMessage(event.target.value)}
+                onChange={(event) => {
+                  setMessage(event.target.value)
+                  if (messageError) setMessageError('')
+                }}
                 placeholder="Descreva o problema: o que você estava fazendo, o que esperava e o que aconteceu."
-                required
+                {...getFieldA11yProps('support-message', messageError)}
               />
+              {messageError ? (
+                <small className="field-error" id={getFieldErrorId('support-message')} aria-hidden="true">
+                  {messageError}
+                </small>
+              ) : null}
             </label>
 
             <label className="field">
@@ -198,7 +224,13 @@ export default function SupportButton() {
                 multiple
                 onChange={handleSelectFiles}
                 disabled={files.length >= SUPPORT_TICKET_MAX_IMAGES}
+                {...getFieldA11yProps('support-files', filesError)}
               />
+              {filesError ? (
+                <small className="field-error" id={getFieldErrorId('support-files')} aria-hidden="true">
+                  {filesError}
+                </small>
+              ) : null}
             </label>
 
             {files.length > 0 ? (

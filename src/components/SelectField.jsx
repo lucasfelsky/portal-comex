@@ -90,6 +90,8 @@ export default function SelectField({
           className="select-field__trigger"
           aria-haspopup="listbox"
           aria-label={sheetTitle ? `${sheetTitle}: ${currentLabel}` : currentLabel}
+          aria-invalid={rest['aria-invalid']}
+          aria-describedby={rest['aria-describedby']}
           onClick={() => setIsSheetOpen(true)}
         >
           <span className="select-field__trigger-value">{currentLabel}</span>

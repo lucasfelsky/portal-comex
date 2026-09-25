@@ -9,6 +9,7 @@ import {
 } from './arrivalCustoms'
 import { isDtaLoadingScheduledStatus, isDtaTransitCompletedStatus } from './processStatus'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
+import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.3a (D-11): card "Chegada" - atracacao (maritimo) ou chegada (aereo)
 // com DATA, CE/terminal/free time e presenca de carga com data. Substitui os
@@ -16,7 +17,7 @@ import { isMaritimeCategory, isAirCategory } from './processCategories'
 // (D-10). Imports permitidos (D-11): `react` (implicito via JSX), SelectField,
 // `./arrivalCustoms`, `./processStatus` (so' os 2 helpers de DTA), `./processCategories`.
 // Classes existentes apenas - nenhum CSS novo.
-export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions }) {
+export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions, errors = {} }) {
   const isMaritime = isMaritimeCategory(draft.category)
   const isAir = isAirCategory(draft.category)
 
@@ -45,7 +46,13 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
           type="datetime-local"
           value={arrivalValue ?? ''}
           onChange={(event) => onDraftChange(arrivalField, event.target.value)}
+          {...getFieldA11yProps(`process-field-${arrivalField}`, errors[arrivalField])}
         />
+        {errors[arrivalField] ? (
+          <small className="field-error" id={getFieldErrorId(`process-field-${arrivalField}`)} aria-hidden="true">
+            {errors[arrivalField]}
+          </small>
+        ) : null}
         {isApprox ? (
           <small className="field-hint">
             Data aproximada (migrada do ETA) — confirme a data real.
@@ -115,7 +122,13 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               step="1"
               value={draft.freeTimeDays ?? ''}
               onChange={(event) => onDraftChange('freeTimeDays', event.target.value)}
+              {...getFieldA11yProps('process-field-freeTimeDays', errors.freeTimeDays)}
             />
+            {errors.freeTimeDays ? (
+              <small className="field-error" id={getFieldErrorId('process-field-freeTimeDays')} aria-hidden="true">
+                {errors.freeTimeDays}
+              </small>
+            ) : null}
           </label>
           <label className="field">
             <span>Diária de demurrage (USD, opcional)</span>
@@ -126,7 +139,17 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               step="0.01"
               value={draft.demurrageDailyRateUsd ?? ''}
               onChange={(event) => onDraftChange('demurrageDailyRateUsd', event.target.value)}
+              {...getFieldA11yProps('process-field-demurrageDailyRateUsd', errors.demurrageDailyRateUsd)}
             />
+            {errors.demurrageDailyRateUsd ? (
+              <small
+                className="field-error"
+                id={getFieldErrorId('process-field-demurrageDailyRateUsd')}
+                aria-hidden="true"
+              >
+                {errors.demurrageDailyRateUsd}
+              </small>
+            ) : null}
           </label>
         </div>
       ) : null}
@@ -155,7 +178,17 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
                   type="datetime-local"
                   value={draft.dtaLoadingScheduledAt}
                   onChange={(event) => onDraftChange('dtaLoadingScheduledAt', event.target.value)}
+                  {...getFieldA11yProps('process-field-dtaLoadingScheduledAt', errors.dtaLoadingScheduledAt)}
                 />
+                {errors.dtaLoadingScheduledAt ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-dtaLoadingScheduledAt')}
+                    aria-hidden="true"
+                  >
+                    {errors.dtaLoadingScheduledAt}
+                  </small>
+                ) : null}
               </label>
               <label className="field">
                 <span>Previsão de chegada em Itajaí</span>
@@ -164,7 +197,17 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
                   type="datetime-local"
                   value={draft.dtaArrivalAtItajai}
                   onChange={(event) => onDraftChange('dtaArrivalAtItajai', event.target.value)}
+                  {...getFieldA11yProps('process-field-dtaArrivalAtItajai', errors.dtaArrivalAtItajai)}
                 />
+                {errors.dtaArrivalAtItajai ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-dtaArrivalAtItajai')}
+                    aria-hidden="true"
+                  >
+                    {errors.dtaArrivalAtItajai}
+                  </small>
+                ) : null}
               </label>
             </div>
           ) : null}
@@ -179,7 +222,17 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
             type="datetime-local"
             value={draft.cargoPresenceInformedAt ?? ''}
             onChange={(event) => onDraftChange('cargoPresenceInformedAt', event.target.value)}
+            {...getFieldA11yProps('process-field-cargoPresenceInformedAt', errors.cargoPresenceInformedAt)}
           />
+          {errors.cargoPresenceInformedAt ? (
+            <small
+              className="field-error"
+              id={getFieldErrorId('process-field-cargoPresenceInformedAt')}
+              aria-hidden="true"
+            >
+              {errors.cargoPresenceInformedAt}
+            </small>
+          ) : null}
           {showFreeTime ? (
             <small className="field-hint">
               O prazo do free time conta a partir desta data.

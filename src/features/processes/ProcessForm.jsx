@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSwipe } from '../../hooks/useSwipe'
 import Spinner from '../../components/Spinner'
 import SelectField from '../../components/SelectField'
@@ -21,6 +21,8 @@ import {
 } from '../../utils/deliveryForecast'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { INCOTERM_OPTIONS } from './operationalOptions'
+import { getProcessFieldDomId, getProcessFieldStep } from './processDraftValidation'
+import { getFieldA11yProps, getFieldErrorId, focusField } from '../../utils/fieldErrors'
 import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
 import ProcessArrivalFields from './ProcessArrivalFields'
@@ -71,6 +73,8 @@ export default function ProcessForm({
   onItemChange,
   onRemoveItem,
   onClickCapture,
+  fieldErrors = {},
+  focusRequest = null,
 }) {
   const formatDate = (value) => {
     if (!value) return '-'
@@ -174,6 +178,7 @@ export default function ProcessForm({
           value={draft.purchaseOrders}
           onChange={(value) => onDraftChange('purchaseOrders', value)}
           disabled={isSaving}
+          errors={fieldErrors}
         />
       )}
 
@@ -207,12 +212,18 @@ export default function ProcessForm({
             className="text-input"
             value={draft.incoterm}
             onChange={(event) => onDraftChange('incoterm', event.target.value)}
+            {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
           >
             <option value="">Selecione o Incoterm</option>
             {INCOTERM_OPTIONS.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </SelectField>
+          {fieldErrors.incoterm ? (
+            <small className="field-error" id={getFieldErrorId('process-field-incoterm')} aria-hidden="true">
+              {fieldErrors.incoterm}
+            </small>
+          ) : null}
         </label>
         <label className="field">
           <span>Agente de carga</span>
@@ -241,7 +252,13 @@ export default function ProcessForm({
               type="date"
               value={draft.etd}
               onChange={(event) => onDraftChange('etd', event.target.value)}
+              {...getFieldA11yProps('process-field-etd', fieldErrors.etd)}
             />
+            {fieldErrors.etd ? (
+              <small className="field-error" id={getFieldErrorId('process-field-etd')} aria-hidden="true">
+                {fieldErrors.etd}
+              </small>
+            ) : null}
           </label>
           <label className="checkbox-field">
             <input
@@ -282,7 +299,13 @@ export default function ProcessForm({
             type="date"
             value={draft.eta}
             onChange={(event) => onDraftChange('eta', event.target.value)}
+            {...getFieldA11yProps('process-field-eta', fieldErrors.eta)}
           />
+          {fieldErrors.eta ? (
+            <small className="field-error" id={getFieldErrorId('process-field-eta')} aria-hidden="true">
+              {fieldErrors.eta}
+            </small>
+          ) : null}
         </label>
       </div>
 
@@ -306,7 +329,20 @@ export default function ProcessForm({
           onChange={(event) =>
             onDraftChange('warehouseDeliveryDateOverride', event.target.value)
           }
+          {...getFieldA11yProps(
+            'process-field-warehouseDeliveryDateOverride',
+            fieldErrors.warehouseDeliveryDateOverride
+          )}
         />
+        {fieldErrors.warehouseDeliveryDateOverride ? (
+          <small
+            className="field-error"
+            id={getFieldErrorId('process-field-warehouseDeliveryDateOverride')}
+            aria-hidden="true"
+          >
+            {fieldErrors.warehouseDeliveryDateOverride}
+          </small>
+        ) : null}
         <small className="field-hint">
           Campo opcional. Se vazio, o sistema usa a previsão automática.
         </small>
@@ -349,12 +385,18 @@ export default function ProcessForm({
         </small>
       </div>
 
-      <ProcessCargoFields draft={draft} onDraftChange={onDraftChange} disabled={isSaving} />
+      <ProcessCargoFields
+        draft={draft}
+        onDraftChange={onDraftChange}
+        disabled={isSaving}
+        errors={fieldErrors}
+      />
 
       <LicensesEditor
         value={draft.licenses}
         onChange={(value) => onDraftChange('licenses', value)}
         disabled={isSaving}
+        errors={fieldErrors}
       />
 
       <label className="field">
@@ -381,7 +423,7 @@ export default function ProcessForm({
   )
 
   const renderTransitStep = () => (
-    <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} />
+    <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} errors={fieldErrors} />
   )
 
   // F17.3a (D-10): "Chegada" (atracacao/chegada com data, CE/terminal/free
@@ -396,6 +438,7 @@ export default function ProcessForm({
           draft={draft}
           onDraftChange={onDraftChange}
           dtaStatusOptions={dtaStatusOptions}
+          errors={fieldErrors}
         />
       ) : null}
 
@@ -404,6 +447,7 @@ export default function ProcessForm({
           draft={draft}
           onDraftChange={onDraftChange}
           channelOptions={channelOptions}
+          errors={fieldErrors}
         />
       ) : null}
 
@@ -430,6 +474,7 @@ export default function ProcessForm({
           containers={draft.containers}
           onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
           disabled={isSaving}
+          errors={fieldErrors}
         />
       ) : null}
       {(canShowMaritimeFlow || canShowAirFlow) &&
@@ -463,6 +508,7 @@ export default function ProcessForm({
           containers={draft.containers}
           onChange={(value) => onDraftChange('containers', value)}
           disabled={isSaving}
+          errors={fieldErrors}
         />
       ) : null}
     </>
@@ -519,7 +565,20 @@ export default function ProcessForm({
                   min="0"
                   value={item.quantity}
                   onChange={(event) => onItemChange(item.id, 'quantity', event.target.value)}
+                  {...getFieldA11yProps(
+                    `process-field-items-${item.id}-quantity`,
+                    fieldErrors[`items.${item.id}.quantity`]
+                  )}
                 />
+                {fieldErrors[`items.${item.id}.quantity`] ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId(`process-field-items-${item.id}-quantity`)}
+                    aria-hidden="true"
+                  >
+                    {fieldErrors[`items.${item.id}.quantity`]}
+                  </small>
+                ) : null}
               </label>
               <button type="button" className="ghost-button" onClick={() => onRemoveItem(item.id)}>
                 Remover item
@@ -583,6 +642,45 @@ export default function ProcessForm({
   const isFirstStep = currentStep === 0
   const isLastStep = currentStep === steps.length - 1
 
+  // UX-3b (D5): ao clicar em salvar com erro, o page manda `focusRequest`
+  // (key do 1o campo invalido + nonce). Se o passo do campo ja' e' o atual
+  // (ou o campo nao tem passo conhecido nos `steps`), foca direto - nao ha'
+  // render pra esperar. Senao, muda de passo e guarda a key pendente - o
+  // segundo efeito (depende de `currentStep`) foca DEPOIS que o passo novo
+  // renderizou.
+  const pendingFocusRef = useRef(null)
+
+  useEffect(() => {
+    if (!focusRequest?.nonce) return
+    const targetStepKey = getProcessFieldStep(focusRequest.key)
+    const stepIndex = steps.findIndex((stepDef) => stepDef.key === targetStepKey)
+
+    if (stepIndex === -1 || stepIndex === currentStep) {
+      focusField(getProcessFieldDomId(focusRequest.key), 'process-form-error-summary')
+      return
+    }
+
+    // Guarda a key JUNTO com o indice do passo alvo - o efeito abaixo so'
+    // executa o focusField quando `currentStep` alcancar esse indice (o
+    // `setStep` so' aplica no PROXIMO render; focar no mesmo tick acharia o
+    // passo antigo ainda renderizado e cairia erroneamente no resumo).
+    pendingFocusRef.current = { key: focusRequest.key, stepIndex }
+    setStep(stepIndex)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.nonce])
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current
+    if (!pending || pending.stepIndex !== currentStep) return
+    focusField(getProcessFieldDomId(pending.key), 'process-form-error-summary')
+    pendingFocusRef.current = null
+  }, [currentStep])
+
+  const stepHasError = (stepKey) =>
+    Object.keys(fieldErrors).some((key) => getProcessFieldStep(key) === stepKey)
+
+  const errorCount = Object.keys(fieldErrors).length
+
   // F15.3: swipe-back (borda esquerda) volta um passo do wizard; no primeiro
   // passo sai pra lista — espelha o botão "Voltar". Touch-only.
   useSwipe({
@@ -616,23 +714,36 @@ export default function ProcessForm({
         </p>
 
         <div className="tab-row wizard-steps" aria-label="Etapas do cadastro">
-          {steps.map((stepDef, index) => (
-            <button
-              key={stepDef.key}
-              type="button"
-              aria-current={index === currentStep ? 'step' : undefined}
-              className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
-              onClick={() => setStep(index)}
-            >
-              {stepDef.label}
-            </button>
-          ))}
+          {steps.map((stepDef, index) => {
+            const hasError = stepHasError(stepDef.key)
+            return (
+              <button
+                key={stepDef.key}
+                type="button"
+                aria-current={index === currentStep ? 'step' : undefined}
+                aria-label={hasError ? `${stepDef.label}, contém erro` : undefined}
+                className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
+                onClick={() => setStep(index)}
+              >
+                {stepDef.label}
+                {hasError ? <span className="wizard-step__error-dot" aria-hidden="true" /> : null}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       <div className="detail-stack wizard-panel" onClickCapture={onClickCapture}>
         {steps[currentStep].render()}
       </div>
+
+      {errorCount > 0 ? (
+        <p id="process-form-error-summary" className="field-error" role="alert" tabIndex={-1}>
+          {errorCount === 1
+            ? 'Corrija 1 campo destacado antes de salvar.'
+            : `Corrija ${errorCount} campos destacados antes de salvar.`}
+        </p>
+      ) : null}
 
       <div className="wizard-nav">
         <button

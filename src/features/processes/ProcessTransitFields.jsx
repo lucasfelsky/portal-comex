@@ -2,8 +2,11 @@
 // F17.2d-1 (D-1, Q5): "Data de embarque" saiu daqui - virou o checkbox
 // "Embarque confirmado" no passo "Datas e previsão" (`shipmentConfirmation.js`,
 // deriva de `shippedAt`). Regra de import: nenhum modulo mockado por
-// tests/ui/ProcessesPage.test.jsx - este arquivo nao precisa de nenhum.
-export default function ProcessTransitFields({ draft, onDraftChange }) {
+// tests/ui/ProcessesPage.test.jsx - este arquivo so' ganha `../../utils/fieldErrors`
+// (UX-3b, tambem nao mockado).
+import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+
+export default function ProcessTransitFields({ draft, onDraftChange, errors = {} }) {
   const isMaritime =
     draft.category === 'FCL' || draft.category === 'LCL' || draft.category === 'CONSOLIDADO'
   const isAereo = draft.category === 'AEREO'
@@ -117,7 +120,17 @@ export default function ProcessTransitFields({ draft, onDraftChange }) {
                 type="date"
                 value={draft.transshipmentEtd}
                 onChange={(event) => onDraftChange('transshipmentEtd', event.target.value)}
+                {...getFieldA11yProps('process-field-transshipmentEtd', errors.transshipmentEtd)}
               />
+              {errors.transshipmentEtd ? (
+                <small
+                  className="field-error"
+                  id={getFieldErrorId('process-field-transshipmentEtd')}
+                  aria-hidden="true"
+                >
+                  {errors.transshipmentEtd}
+                </small>
+              ) : null}
             </label>
           </div>
         ) : null}

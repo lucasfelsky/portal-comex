@@ -6,6 +6,7 @@ import {
   updateCollectionWindow,
 } from '../../utils/collectionWindows'
 import { getCollectionWindowLabel, getContainerWindowRows } from './containers'
+import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -40,6 +41,7 @@ export default function CollectionWindowsEditor({
   category,
   containers = [],
   disabled = false,
+  errors = {},
 }) {
   const windows = normalizeCollectionWindows(value)
   const linkToContainers = (category === 'FCL' || category === 'CONSOLIDADO') && containers.length > 0
@@ -120,7 +122,22 @@ export default function CollectionWindowsEditor({
                     value={toDatetimeLocal(row.window?.scheduledAt)}
                     onChange={(event) => handleScheduledAtChange(row, event.target.value)}
                     disabled={disabled}
+                    {...(row.window?.id
+                      ? getFieldA11yProps(
+                          `process-field-collectionWindows-${row.window.id}-scheduledAt`,
+                          errors[`collectionWindows.${row.window.id}.scheduledAt`]
+                        )
+                      : {})}
                   />
+                  {row.window?.id && errors[`collectionWindows.${row.window.id}.scheduledAt`] ? (
+                    <small
+                      className="field-error"
+                      id={getFieldErrorId(`process-field-collectionWindows-${row.window.id}-scheduledAt`)}
+                      aria-hidden="true"
+                    >
+                      {errors[`collectionWindows.${row.window.id}.scheduledAt`]}
+                    </small>
+                  ) : null}
                 </label>
               </div>
               <label className="field">
@@ -255,7 +272,20 @@ export default function CollectionWindowsEditor({
                       handleChange(window.id, { scheduledAt: event.target.value })
                     }
                     disabled={disabled}
+                    {...getFieldA11yProps(
+                      `process-field-collectionWindows-${window.id}-scheduledAt`,
+                      errors[`collectionWindows.${window.id}.scheduledAt`]
+                    )}
                   />
+                  {errors[`collectionWindows.${window.id}.scheduledAt`] ? (
+                    <small
+                      className="field-error"
+                      id={getFieldErrorId(`process-field-collectionWindows-${window.id}-scheduledAt`)}
+                      aria-hidden="true"
+                    >
+                      {errors[`collectionWindows.${window.id}.scheduledAt`]}
+                    </small>
+                  ) : null}
                 </label>
                 <button
                   type="button"

@@ -66,6 +66,10 @@ import {
 import { applyEtdEdit, applyShipmentConfirmation } from '../features/processes/shipmentConfirmation'
 import { resolveProcessDangerousGoods } from '../features/processes/operationalOptions'
 import {
+  canonicalizeIncoterm,
+  validateProcessDraft,
+} from '../features/processes/processDraftValidation'
+import {
   getAutomaticEstimatedDeliveryDate,
   getEstimatedDeliveryDate,
 } from '../utils/deliveryForecast'
@@ -371,6 +375,11 @@ function sanitizeDraft(currentDraft, overrides = {}) {
   const draft = {
     ...currentDraft,
     ...overrides,
+    // AD-1: canonicaliza o incoterm (trim + maiusculas) ANTES de validar/
+    // gravar - incoterm legado em caixa baixa/com espaco ('fob', ' Fob ')
+    // nao pode travar o save; so' bloqueia (na validacao) se, depois de
+    // canonicalizado, continuar fora da lista de Incoterms 2020.
+    incoterm: canonicalizeIncoterm(overrides.incoterm ?? currentDraft.incoterm),
     containerQuantity: Math.max(
       0,
       Number(overrides.containerQuantity ?? currentDraft.containerQuantity) || 0
@@ -478,6 +487,17 @@ export default function ProcessesPage() {
     return !areProcessDraftsEquivalent(draft, baselineRef.current)
   }, [draft, viewMode])
   useUnsavedChangesGuard(isDirty)
+
+  // UX-3b (D4): validacao ao vivo so' DEPOIS da 1a tentativa de salvar
+  // (`hasAttemptedSave`) - falso ao entrar em create/edit e apos salvar com
+  // sucesso. Roda sobre o rascunho SANEADO (D2) - a cascata de `sanitizeDraft`
+  // ja zera os campos que o form esconde, entao nao ha erro em campo invisivel.
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false)
+  const [processFocusRequest, setProcessFocusRequest] = useState(null)
+  const processFieldErrors = useMemo(() => {
+    if (!hasAttemptedSave) return {}
+    return validateProcessDraft(sanitizeDraft(draft)).errors
+  }, [hasAttemptedSave, draft])
 
   // F15.3: swipe-back (borda esquerda) volta detalhe→lista e sub-edições→
   // detalhe, imitando o gesto do iOS. Touch-only (desktop não é afetado).
@@ -933,6 +953,8 @@ export default function ProcessesPage() {
     const nextDraft = emptyDraft()
     setDraft(nextDraft)
     baselineRef.current = nextDraft
+    setHasAttemptedSave(false)
+    setProcessFocusRequest(null)
     setViewMode('create')
   }
 
@@ -947,6 +969,8 @@ export default function ProcessesPage() {
     }
     setDraft(nextDraft)
     baselineRef.current = nextDraft
+    setHasAttemptedSave(false)
+    setProcessFocusRequest(null)
     setViewMode('edit')
   }
 
@@ -1133,6 +1157,18 @@ export default function ProcessesPage() {
     setIsSaving(true)
     setError('')
     try {
+      // UX-3b (D2/D4): valida o rascunho SANEADO (sanitizeDraft ja zera
+      // campos que o form esconde) ANTES de sanitizeProcessItems (que
+      // grampeia quantity - esconderia negativo/nao-numerico). Erro
+      // bloqueia o save, liga a validacao ao vivo e manda o form pro 1o
+      // campo invalido (passo + foco).
+      const validation = validateProcessDraft(sanitizeDraft(draft))
+      if (validation.firstKey) {
+        setHasAttemptedSave(true)
+        setProcessFocusRequest({ key: validation.firstKey, nonce: Date.now() })
+        return
+      }
+
       const payload = sanitizeDraft({
         ...draft,
         items: sanitizeProcessItems(draft.items),
@@ -1152,6 +1188,8 @@ export default function ProcessesPage() {
       setDraft(saved)
       setViewMode('detail')
       setDetailTab('general')
+      setHasAttemptedSave(false)
+      setProcessFocusRequest(null)
       } catch (saveError) {
       const message = buildActionErrorMessage('Não foi possível salvar o processo.', saveError)
       setError(message)
@@ -1370,17 +1408,13 @@ export default function ProcessesPage() {
     ])
   }
 
+  // UX-3b (D11): "quantidade" para de ser grampeada NA DIGITACAO (o valor cru
+  // fica visivel pra validacao inline bloquear negativo/nao-numerico);
+  // `sanitizeProcessItems` continua convertendo no save.
   function handleItemChange(itemId, field, value) {
     handleDraftChange(
       'items',
-      (draft.items ?? []).map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              [field]: field === 'quantity' ? Math.max(0, Number(value) || 0) : value,
-            }
-          : item
-      )
+      (draft.items ?? []).map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
     )
   }
 
@@ -1597,6 +1631,8 @@ export default function ProcessesPage() {
           onItemChange={handleItemChange}
           onRemoveItem={handleRemoveItem}
           onClickCapture={handlePostReceiptDetailClick}
+          fieldErrors={processFieldErrors}
+          focusRequest={processFocusRequest}
         />
       ) : null}
 

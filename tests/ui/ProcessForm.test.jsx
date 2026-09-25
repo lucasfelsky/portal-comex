@@ -1050,3 +1050,160 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
     expect(onDraftChange).toHaveBeenCalledWith('duimpRegisteredAt', expect.any(String))
   })
 })
+
+// UX-3b: validacao inline (erros + avisos + navegacao/foco via focusRequest).
+describe('ProcessForm — validacao inline (UX-3b)', () => {
+  async function openStatusStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Status e carga/ }))
+  }
+  async function openIdentStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Identificação/ }))
+  }
+  async function openTransitStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Embarque e trânsito/ }))
+  }
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Fluxo operacional/ }))
+  }
+  async function openItemsStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: /Itens/ }))
+  }
+
+  it('anuencias: teto (11) mostra erro no grupo; data invalida na anuencia "Vistoria agendada" mostra erro no campo', async () => {
+    const user = userEvent.setup()
+    const licenses = Array.from({ length: 11 }, (_, index) => ({
+      id: `LIC-${index + 1}`,
+      agency: 'MAPA',
+      status: 'Aguardando registro',
+    }))
+    licenses[0] = { ...licenses[0], status: 'Vistoria agendada', inspectionScheduledAt: '1999-01-01' }
+    renderForm({
+      fieldErrors: {
+        licenses: 'Máximo de 10 anuências por processo (atual: 11). Remova 1.',
+        'licenses.LIC-1.inspectionScheduledAt': 'Data inválida: informe um ano entre 2000 e 2100.',
+      },
+      draft: makeDraft({ licenses }),
+    })
+    await openStatusStep(user)
+
+    const group = document.getElementById('process-field-licenses')
+    expect(group).toHaveAttribute('aria-describedby', 'process-field-licenses-error')
+    expect(group).toHaveAccessibleDescription(/Máximo de 10/)
+
+    const inspectionInput = document.getElementById('process-field-licenses-LIC-1-inspectionScheduledAt')
+    expect(inspectionInput).toHaveAttribute('aria-invalid', 'true')
+    expect(inspectionInput).toHaveAccessibleDescription(/entre 2000 e 2100/)
+  })
+
+  it('POs: teto (51, CONSOLIDADO) mostra erro no grupo', async () => {
+    const user = userEvent.setup()
+    const purchaseOrders = Array.from({ length: 51 }, (_, index) => ({
+      po: `PO-${index + 1}`,
+      reference: '',
+      supplierName: '',
+    }))
+    renderForm({
+      fieldErrors: { purchaseOrders: 'Máximo de 50 POs por processo (atual: 51). Remova 1.' },
+      draft: makeDraft({ category: 'CONSOLIDADO', purchaseOrders }),
+    })
+    await openIdentStep(user)
+
+    const group = document.getElementById('process-field-purchaseOrders')
+    expect(group).toHaveAccessibleDescription(/Máximo de 50/)
+  })
+
+  it('transbordo: ETD do transbordo invalido mostra aria-invalid/descricao', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      fieldErrors: { transshipmentEtd: 'Data inválida: informe um ano entre 2000 e 2100.' },
+      draft: makeDraft({ transshipment: true, transshipmentEtd: '1999-01-01' }),
+    })
+    await openTransitStep(user)
+
+    const input = document.getElementById('process-field-transshipmentEtd')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveAccessibleDescription(/entre 2000 e 2100/)
+  })
+
+  it('free time (edit FCL, canShowMaritimeFlow): freeTimeDays invalido mostra aria-invalid/descricao', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      fieldErrors: { freeTimeDays: 'Informe um número inteiro maior ou igual a zero.' },
+      draft: makeDraft({ category: 'FCL', freeTimeDays: '-1' }),
+    })
+    await openFlowStep(user)
+
+    const input = document.getElementById('process-field-freeTimeDays')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveAccessibleDescription(/número inteiro/)
+  })
+
+  it('nome acessivel do campo NAO contem o texto do erro (aria-hidden no <small>)', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      fieldErrors: { eta: 'Data inválida: informe um ano entre 2000 e 2100.' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Avançar' }))
+
+    const etaInput = document.getElementById('process-field-eta')
+    expect(etaInput).toHaveAccessibleName('ETA')
+  })
+
+  it('avisos NAO bloqueantes (ISO 6346, ONU, "mínimo 2" das POs) ganham aria-describedby sem aria-invalid', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        category: 'CONSOLIDADO',
+        containers: [{ id: 'CNT-1', number: 'ABC', seal: '', type: '', returnedAt: '' }],
+        items: [{ id: 'ITEM-1', commercialName: 'X', quantity: 1, dangerousGoods: true, unNumber: '12' }],
+      }),
+    })
+
+    // hint "mínimo 2" das POs (passo Identificação, CONSOLIDADO)
+    await openIdentStep(user)
+    const poInput = screen.getByPlaceholderText('Ex.: PO-12345')
+    expect(poInput).toHaveAccessibleDescription(/mínimo 2/)
+    expect(poInput).not.toHaveAttribute('aria-invalid')
+
+    // aviso ISO 6346 (passo Status e carga, FCL/CONSOLIDADO)
+    await openStatusStep(user)
+    const containerNumberInput = screen.getByPlaceholderText('Ex.: CSQU3054383')
+    expect(containerNumberInput).toHaveAccessibleDescription(/ISO 6346/)
+    expect(containerNumberInput).not.toHaveAttribute('aria-invalid')
+
+    // aviso ONU (passo Itens)
+    await openItemsStep(user)
+    const unNumberInput = screen.getByPlaceholderText('Ex.: 1203')
+    expect(unNumberInput).toHaveAccessibleDescription(/4 dígitos/)
+    expect(unNumberInput).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('chip do passo com erro tem nome acessivel "…, contém erro"', () => {
+    renderForm({ fieldErrors: { eta: 'erro' } })
+    expect(
+      within(stepsRow()).getByRole('button', { name: 'Datas e previsão, contém erro' })
+    ).toBeInTheDocument()
+  })
+
+  it('focusRequest com key do passo "Status e carga" troca o passo e foca o campo', () => {
+    renderForm({
+      fieldErrors: { volumeM3: 'Informe um número maior ou igual a zero.' },
+      focusRequest: { key: 'volumeM3', nonce: 1 },
+    })
+    expect(screen.getByText(/Passo 3 de 5/)).toBeInTheDocument()
+    expect(document.activeElement).toBe(document.getElementById('process-field-volumeM3'))
+  })
+
+  it('focusRequest com key de passo ausente foca o resumo', () => {
+    renderForm({
+      canShowMaritimeFlow: false,
+      canShowAirFlow: false,
+      fieldErrors: { berthedAt: 'Data inválida: informe um ano entre 2000 e 2100.' },
+      focusRequest: { key: 'berthedAt', nonce: 1 },
+    })
+    // "Fluxo operacional" nao existe nesse draft (showFlowStep false) -> cai no resumo
+    expect(document.activeElement).toBe(document.getElementById('process-form-error-summary'))
+  })
+})
