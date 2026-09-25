@@ -57,7 +57,17 @@ afterEach(() => {
 
 async function openModal(user) {
   await user.click(screen.getByRole('button', { name: 'Abrir suporte' }))
-  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+  const dialog = await screen.findByRole('dialog')
+
+  // O Modal (src/components/Modal.jsx) agenda o foco inicial num
+  // `window.setTimeout(..., 30)` apos montar (foca o primeiro elemento
+  // focavel, o botao "Fechar"). Se a interacao do teste comecar ANTES
+  // desse timeout disparar, ele pode roubar o foco NO MEIO da digitacao
+  // em runners mais lentos (CI), derrubando caracteres do textarea e
+  // deixando a mensagem vazia — daí `createSupportTicket` nao ser
+  // chamado. Espera o foco inicial assentar dentro do dialog antes de
+  // seguir, em vez de so aumentar timeout.
+  await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
 }
 
 describe('SupportButton — validacao inline (UX-3b)', () => {
