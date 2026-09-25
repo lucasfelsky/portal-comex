@@ -76,13 +76,14 @@
     ]
   },
   "srcUtils": {
-    "count": 12,
+    "count": 13,
     "_list": [
       "activeProcessContext.js",
       "collectionWindows.js",
       "dashboardStats.js",
       "dateFormat.js",
       "deliveryForecast.js",
+      "errorMessages.js",
       "exportProcesses.js",
       "importProcesses.js",
       "newsMedia.js",
@@ -115,11 +116,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 76,
+    "totalFiles": 77,
     "_breakdown": {
       "firebase": 4,
       "functions": 14,
-      "ui": 58
+      "ui": 59
     }
   },
   "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",

@@ -12,6 +12,7 @@ import {
   saveForecastSettings,
 } from '../services/forecastSettingsRepository'
 import { isFirebaseConfigured } from '../lib/firebase'
+import { buildActionErrorMessage } from '../utils/errorMessages'
 
 const HOUR_BOUNDS = { min: 0, max: 23 }
 const BUSINESS_DAY_BOUNDS = { min: 0, max: 30 }
@@ -259,7 +260,7 @@ export default function AdminForecastPage() {
       setDraft(normalizeDraft(saved))
       setFeedback('Regras de previsão atualizadas. A mudança já vale para todos os usuários.')
     } catch (saveError) {
-      setError(`Não foi possível salvar as regras (${saveError?.code ?? saveError?.message ?? saveError}).`)
+      setError(buildActionErrorMessage('Não foi possível salvar as regras.', saveError))
     } finally {
       setIsSaving(false)
     }
@@ -275,9 +276,7 @@ export default function AdminForecastPage() {
       setDraft(normalizeDraft(saved))
       setFeedback('Regras restauradas para o padrão do sistema.')
     } catch (resetError) {
-      setError(
-        `Não foi possível restaurar as regras (${resetError?.code ?? resetError?.message ?? resetError}).`
-      )
+      setError(buildActionErrorMessage('Não foi possível restaurar as regras.', resetError))
     } finally {
       setIsResetting(false)
       setIsResetDialogOpen(false)

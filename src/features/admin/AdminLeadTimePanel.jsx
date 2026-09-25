@@ -14,12 +14,7 @@ import {
   buildLeadTimeReport,
   getTodayKeySaoPaulo,
 } from './leadTimeStats'
-
-// Padrao replicado (nao e' util compartilhado): AdminBarStatusPanel.jsx.
-function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
-}
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 function formatDays(value, unit) {
   const formatted = value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })

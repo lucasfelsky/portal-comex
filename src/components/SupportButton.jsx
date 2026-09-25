@@ -13,6 +13,7 @@ import {
   createSupportTicket,
   listMySupportTickets,
 } from '../services/supportTicketsRepository'
+import { buildActionErrorMessage } from '../utils/errorMessages'
 
 // Evento global disparado pelo AppLayout quando o usuário clica numa
 // notificação `support_ticket_resolved` — abre o modal com "Meus chamados"
@@ -134,7 +135,7 @@ export default function SupportButton() {
       setFiles([])
       toast.success('Chamado enviado. A equipe administrativa foi notificada.')
     } catch (error) {
-      toast.error(error?.message ?? 'Não foi possível enviar o chamado.')
+      toast.error(buildActionErrorMessage('Não foi possível enviar o chamado.', error))
     } finally {
       setIsSubmitting(false)
     }

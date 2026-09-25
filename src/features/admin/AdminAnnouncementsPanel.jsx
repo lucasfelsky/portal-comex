@@ -8,6 +8,7 @@ import {
 } from '../../services/announcementsRepository'
 import useAuth from '../../hooks/useAuth'
 import { isFirebaseConfigured } from '../../lib/firebase'
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 function createEmptyAnnouncementDraft() {
   return {
@@ -28,11 +29,6 @@ function formatTimestamp(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
-}
-
-function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
 }
 
 export default function AdminAnnouncementsPanel() {

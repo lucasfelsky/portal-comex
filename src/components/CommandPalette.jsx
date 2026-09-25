@@ -27,6 +27,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from './Modal'
 import Icon from './Icon'
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 
 const SEARCH_DEBOUNCE_MS = 200
 
@@ -45,6 +46,7 @@ export default function CommandPalette({
   const listRef = useRef(null)
   const navigate = useNavigate()
   const debounceRef = useRef(null)
+  const { requestLeave } = useUnsavedChanges()
 
   // Reseta estado quando a palette abre
   useEffect(() => {
@@ -143,11 +145,13 @@ export default function CommandPalette({
 
   function runCommand(cmd) {
     if (!cmd) return
-    if (cmd.to) {
-      navigate(cmd.to)
-    } else if (cmd.action) {
-      cmd.action()
-    }
+    requestLeave(() => {
+      if (cmd.to) {
+        navigate(cmd.to)
+      } else if (cmd.action) {
+        cmd.action()
+      }
+    })
     onClose?.()
   }
 

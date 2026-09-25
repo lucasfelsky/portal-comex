@@ -82,6 +82,9 @@ import {
   getRemovedPostReceiptImages,
   resolvePostReceiptImagesForSave,
 } from '../services/postReceiptImagesStorage'
+import { buildActionErrorMessage } from '../utils/errorMessages'
+import { useUnsavedChanges, useUnsavedChangesGuard } from '../contexts/UnsavedChangesContext'
+import { areProcessDraftsEquivalent } from '../features/processes/processDraftDirty'
 
 const emptyDraft = () => ({
   id: '',
@@ -168,12 +171,6 @@ function formatCargoUnit(quantity, singularLabel, pluralLabel) {
 
 function getDestinationLabel(category) {
   return category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
-}
-
-function buildActionErrorMessage(prefix, error) {
-  if (error?.code) return `${prefix} (${error.code})`
-  if (error?.message) return error.message
-  return prefix
 }
 
 function formatDate(value) {
@@ -470,6 +467,17 @@ export default function ProcessesPage() {
   const [draft, setDraft] = useState(emptyDraft())
   const [viewMode, setViewMode] = useState('list')
   const [detailTab, setDetailTab] = useState('general')
+
+  // UX-3a (D6): baseline gravada no MESMO objeto passado ao setDraft ao
+  // entrar em create/edit (handleCreateMode/handleEditMode, unicos pontos
+  // que entram nesses viewModes). isDirty compara o draft atual contra ela.
+  const baselineRef = useRef(null)
+  const { requestLeave } = useUnsavedChanges()
+  const isDirty = useMemo(() => {
+    if (viewMode !== 'create' && viewMode !== 'edit') return false
+    return !areProcessDraftsEquivalent(draft, baselineRef.current)
+  }, [draft, viewMode])
+  useUnsavedChangesGuard(isDirty)
 
   // F15.3: swipe-back (borda esquerda) volta detalhe→lista e sub-edições→
   // detalhe, imitando o gesto do iOS. Touch-only (desktop não é afetado).
@@ -922,19 +930,23 @@ export default function ProcessesPage() {
 
   function handleCreateMode() {
     if (!isAdmin) return
-    setDraft(emptyDraft())
+    const nextDraft = emptyDraft()
+    setDraft(nextDraft)
+    baselineRef.current = nextDraft
     setViewMode('create')
   }
 
   function handleEditMode() {
     if (!selectedProcess || !isAdmin) return
-    setDraft({
+    const nextDraft = {
       ...selectedProcess,
       items:
         selectedProcess.items?.length > 0
           ? selectedProcess.items
           : [{ id: `ITEM-${Date.now()}`, commercialName: '', quantity: 0 }],
-    })
+    }
+    setDraft(nextDraft)
+    baselineRef.current = nextDraft
     setViewMode('edit')
   }
 
@@ -1578,7 +1590,7 @@ export default function ProcessesPage() {
           dtaStatusOptions={dtaStatusOptions}
           processCategoryOptions={processCategoryOptions}
           onDraftChange={handleDraftChange}
-          onSetViewModeList={() => setViewMode('list')}
+          onSetViewModeList={() => requestLeave(() => setViewMode('list'))}
           onSave={handleSaveProcess}
           onImportItemsFile={handleImportItemsFile}
           onAddItem={handleAddItem}

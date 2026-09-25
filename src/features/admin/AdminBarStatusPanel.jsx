@@ -9,11 +9,7 @@ import {
 } from '../../services/barStatusRepository'
 import useAuth from '../../hooks/useAuth'
 import { formatRelativeTime } from '../../utils/dateFormat'
-
-function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
-}
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 export default function AdminBarStatusPanel() {
   const { profile } = useAuth()

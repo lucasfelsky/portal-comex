@@ -24,6 +24,7 @@ import {
   revokeNewsMediaPreview,
   toNewsMediaPreviewUrl,
 } from '../utils/newsMedia'
+import { buildActionErrorMessage } from '../utils/errorMessages'
 
 function createEmptyDraft() {
   return {
@@ -76,11 +77,6 @@ function formatTimestamp(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
-}
-
-function buildActionErrorMessage(prefix, error) {
-  const details = [error?.code, error?.message].filter(Boolean).join(' | ')
-  return details ? `${prefix} (${details})` : prefix
 }
 
 function getNewsMediaMetaText(mediaItem) {

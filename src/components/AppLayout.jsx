@@ -15,6 +15,7 @@ import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { canSeeProcessName } from '../features/processes/processLabels'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
 
@@ -78,6 +79,7 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { profile, logout, isEmailVerified } = useAuth()
+  const { requestLeave } = useUnsavedChanges()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [shouldRenderMobileMenu, setShouldRenderMobileMenu] = useState(false)
   const [isMobileMenuClosing, setIsMobileMenuClosing] = useState(false)
@@ -178,9 +180,9 @@ export default function AppLayout() {
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),
-      { id: 'action-logout', label: 'Sair', group: 'Conta', icon: 'logout', action: logout },
+      { id: 'action-logout', label: 'Sair', group: 'Conta', icon: 'logout', action: () => requestLeave(logout) },
     ],
-    [profile?.role]
+    [profile?.role, requestLeave, logout]
   )
 
   const meta = pageMeta[location.pathname] ?? pageMeta[location.pathname.startsWith('/admin') ? '/admin' : '/']
@@ -558,7 +560,7 @@ export default function AppLayout() {
             <button
               type="button"
               className="ghost-button sidebar-logout-button"
-              onClick={logout}
+              onClick={() => requestLeave(logout)}
             >
               <Icon name="logout" size={16} aria-hidden="true" />
               <span>Sair</span>
@@ -643,7 +645,7 @@ export default function AppLayout() {
                   </span>
                 ) : null}
                 <Tooltip label="Encerrar sessão" side="bottom">
-                  <button type="button" className="ghost-button topbar__logout" onClick={logout}>
+                  <button type="button" className="ghost-button topbar__logout" onClick={() => requestLeave(logout)}>
                     <Icon name="logout" size={16} />
                     <span>Sair</span>
                   </button>
@@ -664,7 +666,7 @@ export default function AppLayout() {
                   <button
                     type="button"
                     className="ghost-button"
-                    onClick={() => navigate('/verificar-email')}
+                    onClick={() => requestLeave(() => navigate('/verificar-email'))}
                   >
                     Abrir confirmacao
                   </button>

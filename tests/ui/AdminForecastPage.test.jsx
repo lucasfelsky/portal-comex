@@ -243,7 +243,7 @@ describe('AdminForecastPage', () => {
     renderPage()
     await user.click(screen.getByRole('button', { name: /Salvar altera/i }))
     await waitFor(() => {
-      expect(screen.getByText(/permission-denied/)).toBeInTheDocument()
+      expect(screen.getByText(/Você não tem permissão/)).toBeInTheDocument()
     })
   })
 

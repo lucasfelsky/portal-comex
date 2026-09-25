@@ -22,6 +22,7 @@ import { sendCustomVerificationEmail } from '../../services/authRepository'
 import { createUser, deleteUser, listUsers, saveUser } from '../../services/usersRepository'
 import useAuth from '../../hooks/useAuth'
 import { isFirebaseConfigured } from '../../lib/firebase'
+import { buildActionErrorMessage } from '../../utils/errorMessages'
 
 const statusOptions = ['Todos', 'Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
 
@@ -60,11 +61,6 @@ function createDraftFromUser(user) {
     password: '',
     scopes: user.scopes?.length ? user.scopes : getRolePermissions(user.role),
   }
-}
-
-function buildActionErrorMessage(prefix, error) {
-  const details = error?.code ?? error?.message
-  return details ? `${prefix} (${details})` : prefix
 }
 
 export default function AdminUsersPanel() {
