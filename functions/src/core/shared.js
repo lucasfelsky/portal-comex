@@ -7,7 +7,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
-import { getComparableLicensesMirror } from './licenses.js';
+import { getComparableLicensesMirror, getNewlyRejectedLicensesMirror } from './licenses.js';
 import {
   canonicalizeCollectionStatusMirror,
   getDisplayedCollectionStatusMirror,
@@ -88,6 +88,25 @@ function normalizePurchaseOrderList(value) {
 
 function normalizeList(items) {
   return Array.isArray(items) ? items.filter(Boolean) : []
+}
+
+// F17.5b: comparavel de `containers[]` para `sanitizeProcessForComparison`
+// - mesma normalizacao de `normalizeContainerNumber`
+// (`src/features/processes/containers.js:37-41`); `id`/`returnedAt` FICAM
+// FORA (editar so' `returnedAt` nao pode notificar espuria - caso (g)).
+// Descarta entradas com os 3 campos vazios: containers vazios criados no
+// 1o save de legado (`normalizeContainers`/`createEmptyContainer`) comparam
+// igual a "sem containers".
+function getComparableContainers(process) {
+  const containers = Array.isArray(process?.containers) ? process.containers : []
+
+  return containers
+    .map((container) => ({
+      number: String(container?.number ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      type: normalizeString(container?.type),
+      seal: normalizeString(container?.seal),
+    }))
+    .filter((container) => container.number || container.type || container.seal)
 }
 
 function normalizeTimestamp(value) {
@@ -268,10 +287,27 @@ function formatDateLabel(value) {
   }).format(date)
 }
 
-function buildProcessUpdateSummary(previousProcess, nextProcess) {
+function buildProcessUpdateSummary(previousProcess, nextProcess, milestonePhrases = []) {
   const changes = []
+  const l34Changes = []
+  const normalizedMilestonePhrases = Array.isArray(milestonePhrases) ? milestonePhrases : []
+  const hasMilestonePhrases = normalizedMilestonePhrases.length > 0
+  const hasLicenseDeferredPhrase = normalizedMilestonePhrases.some((phrase) => phrase?.type === 'licenseDeferred')
+  const hasDivergencePhrase = normalizedMilestonePhrases.some((phrase) => phrase?.type === 'divergence')
 
-  if (normalizeString(previousProcess?.processStatus) !== normalizeString(nextProcess?.processStatus)) {
+  // F17.5a (A-7)/F17.5b: anuencias que ENTRARAM em `Indeferida` neste save -
+  // frase dedicada (texto so', nunca valores de licenca no corpo).
+  const rejectedLicenses = getNewlyRejectedLicensesMirror(previousProcess, nextProcess)
+  const rejectedAgencies = [...new Set(rejectedLicenses.map((license) => license.agency))]
+  const rejectedPhrases =
+    rejectedAgencies.length > 0 ? [`anuência ${rejectedAgencies.join(', ')} indeferida`] : []
+
+  // F17.5b: com marco(s) nomeado(s) na frente, o "status alterado para ..."
+  // generico fica redundante (o marco ja diz o que aconteceu).
+  if (
+    !hasMilestonePhrases &&
+    normalizeString(previousProcess?.processStatus) !== normalizeString(nextProcess?.processStatus)
+  ) {
     changes.push(`status alterado para ${normalizeString(nextProcess?.processStatus) || '-'}`)
   }
 
@@ -313,7 +349,11 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     JSON.stringify(getComparableLicensesMirror(previousProcess)) !==
     JSON.stringify(getComparableLicensesMirror(nextProcess))
   ) {
-    changes.push('anuências atualizadas')
+    // F17.5b: suprime o generico quando ja ha frase dedicada (marco
+    // `licenseDeferred` OU indeferimento) - senao duplicaria a informacao.
+    if (!hasLicenseDeferredPhrase && rejectedPhrases.length === 0) {
+      changes.push('anuências atualizadas')
+    }
   }
 
   // F17.2c (D-9): POs do consolidado (`purchaseOrders[]`).
@@ -331,18 +371,73 @@ function buildProcessUpdateSummary(previousProcess, nextProcess) {
     JSON.stringify(normalizeReceiptDivergenceFieldsMirror(previousProcess)) !==
     JSON.stringify(normalizeReceiptDivergenceFieldsMirror(nextProcess))
   ) {
-    changes.push('divergência no recebimento atualizada')
+    // F17.5b: suprime o generico quando ja ha frase dedicada do marco
+    // `divergence`.
+    if (!hasDivergencePhrase) {
+      changes.push('divergência no recebimento atualizada')
+    }
   }
 
-  if (changes.length === 0) {
+  // F17.5b (L34): BL/AWB/navio/viagem/voo/contêineres/data de embarque
+  // passam a notificar. So' texto, NUNCA valores (dado mascarado para role
+  // `user` - `buildRecipientProcessLabel`/`RESTRICTED_PROCESS_CATEGORIES`).
+  if (
+    normalizeString(previousProcess?.masterBl) !== normalizeString(nextProcess?.masterBl) ||
+    normalizeString(previousProcess?.houseBl) !== normalizeString(nextProcess?.houseBl)
+  ) {
+    l34Changes.push('BL atualizado')
+  }
+
+  if (
+    normalizeString(previousProcess?.mawb) !== normalizeString(nextProcess?.mawb) ||
+    normalizeString(previousProcess?.hawb) !== normalizeString(nextProcess?.hawb)
+  ) {
+    l34Changes.push('AWB atualizado')
+  }
+
+  if (
+    normalizeString(previousProcess?.vesselName) !== normalizeString(nextProcess?.vesselName) ||
+    normalizeString(previousProcess?.voyage) !== normalizeString(nextProcess?.voyage)
+  ) {
+    l34Changes.push('navio/viagem atualizados')
+  }
+
+  if (normalizeString(previousProcess?.flightNumber) !== normalizeString(nextProcess?.flightNumber)) {
+    l34Changes.push('voo atualizado')
+  }
+
+  if (
+    JSON.stringify(getComparableContainers(previousProcess)) !==
+    JSON.stringify(getComparableContainers(nextProcess))
+  ) {
+    l34Changes.push('contêineres atualizados')
+  }
+
+  // Data de embarque: so' quando ja havia data ANTES (transicao ''->valor
+  // ja da a frase do marco `shipped` - sem duplicar).
+  if (
+    normalizeString(previousProcess?.shippedAt) !== normalizeString(nextProcess?.shippedAt) &&
+    normalizeString(previousProcess?.shippedAt) !== ''
+  ) {
+    l34Changes.push('data de embarque atualizada')
+  }
+
+  const allChanges = [
+    ...normalizedMilestonePhrases.map((phrase) => phrase.text),
+    ...rejectedPhrases,
+    ...changes,
+    ...l34Changes,
+  ]
+
+  if (allChanges.length === 0) {
     return 'dados do processo atualizados.'
   }
 
-  if (changes.length === 1) {
-    return `${changes[0]}.`
+  if (allChanges.length === 1) {
+    return `${allChanges[0]}.`
   }
 
-  return `${changes.slice(0, 2).join(' e ')}.`
+  return `${allChanges.slice(0, 2).join(' e ')}.`
 }
 
 function sanitizeProcessForComparison(process) {
@@ -385,6 +480,18 @@ function sanitizeProcessForComparison(process) {
     customsInspectionScheduledAt: normalizeString(process.customsInspectionScheduledAt),
     customsRequirement: Boolean(process.customsRequirement),
     customsRequirementNotes: normalizeString(process.customsRequirementNotes),
+    // F17.5b (L34): BL/AWB/navio/viagem/voo/contêineres/data de embarque -
+    // ausente == '' (legado sem as chaves x 1o save com '' produz JSON
+    // identico, sem notificacao espuria).
+    shippedAt: normalizeString(process.shippedAt),
+    masterBl: normalizeString(process.masterBl),
+    houseBl: normalizeString(process.houseBl),
+    mawb: normalizeString(process.mawb),
+    hawb: normalizeString(process.hawb),
+    vesselName: normalizeString(process.vesselName),
+    voyage: normalizeString(process.voyage),
+    flightNumber: normalizeString(process.flightNumber),
+    containers: getComparableContainers(process),
     // F17.4a (D-7): canonicaliza pelo mirror - legado `Carga recebida`/`Carga
     // em Conferência/Etiquetagem` x 1o save com o valor novo (`Carga
     // recebida, em conferência`) NAO gera `favorite_process_updated` espurio.

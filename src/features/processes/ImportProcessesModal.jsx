@@ -23,6 +23,7 @@ export default function ImportProcessesModal({
   const [toCreate, setToCreate] = useState([])
   const [skipped, setSkipped] = useState([])
   const [rowErrors, setRowErrors] = useState([])
+  const [rowWarnings, setRowWarnings] = useState([])
 
   const existingSet =
     existingProcessNumbers instanceof Set
@@ -33,6 +34,7 @@ export default function ImportProcessesModal({
     setToCreate([])
     setSkipped([])
     setRowErrors([])
+    setRowWarnings([])
     setParseError('')
   }
 
@@ -45,7 +47,7 @@ export default function ImportProcessesModal({
     resetPreview()
 
     try {
-      const { validRows, errors } = await parseProcessesFromWorkbook(file)
+      const { validRows, errors, warnings = [] } = await parseProcessesFromWorkbook(file)
 
       // Separa duplicatas (processNumber já existente em produção) das que
       // serão criadas. Linhas sem processNumber (ex.: CONSOLIDADO) nunca
@@ -63,6 +65,7 @@ export default function ImportProcessesModal({
       setToCreate(create)
       setSkipped(dup)
       setRowErrors(errors)
+      setRowWarnings(warnings)
       setPhase('parsed')
     } catch (error) {
       setParseError(error?.message ?? 'Não foi possível ler a planilha.')
@@ -101,7 +104,9 @@ export default function ImportProcessesModal({
         <p className="import-processes__hint">
           Selecione uma planilha (.xlsx, .xls ou .csv). Colunas reconhecidas:{' '}
           <strong>Nome</strong> e <strong>Categoria</strong> (obrigatórias), além de PO, Destino,
-          ETD, ETA, Containers, Pallets, Status e Observações.
+          ETD, ETA, Containers, Pallets, Status, Observações, Fornecedor, Origem, Incoterm, Agente
+          de carga, MBL, HBL, MAWB, HAWB, Navio, Viagem, Voo, Números dos contêineres, Tipos dos
+          contêineres e POs do consolidado.
         </p>
 
         <label className="import-processes__file">
@@ -140,6 +145,11 @@ export default function ImportProcessesModal({
                   {rowErrors.length} com erro
                 </span>
               ) : null}
+              {rowWarnings.length > 0 ? (
+                <span className="inline-badge inline-badge--warn">
+                  {rowWarnings.length} aviso{rowWarnings.length > 1 ? 's' : ''}
+                </span>
+              ) : null}
             </div>
 
             {toCreate.length > 0 ? (
@@ -176,6 +186,19 @@ export default function ImportProcessesModal({
                   {rowErrors.map((rowError, index) => (
                     <li key={`err-${index}`}>
                       Linha {rowError.linha}: {rowError.motivo}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+
+            {rowWarnings.length > 0 ? (
+              <details className="import-processes__group">
+                <summary>Linhas com aviso ({rowWarnings.length})</summary>
+                <ul>
+                  {rowWarnings.map((rowWarning, index) => (
+                    <li key={`warn-${index}`}>
+                      Linha {rowWarning.linha}: {rowWarning.motivo}
                     </li>
                   ))}
                 </ul>

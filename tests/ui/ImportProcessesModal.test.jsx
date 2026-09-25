@@ -152,6 +152,25 @@ describe('ImportProcessesModal', () => {
     expect(screen.queryByText(/a criar/i)).not.toBeInTheDocument()
   })
 
+  // F17.5b: avisos por linha (warnings) - vem separado de errors, nao
+  // impede confirmar.
+  it('avisos do parser aparecem no preview e confirmar segue habilitado', async () => {
+    const user = userEvent.setup()
+    mockParse.mockResolvedValueOnce({
+      validRows: [{ name: 'Ok', category: 'FCL', processNumber: 'FCL-1' }],
+      errors: [],
+      warnings: [{ linha: 2, motivo: 'Dígito verificador não confere (esperado: 3).' }],
+    })
+    renderModal()
+    await user.upload(getFileInput(), makeFile())
+
+    await waitFor(() => {
+      expect(screen.getByText('1 aviso')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Linha 2: Dígito verificador não confere \(esperado: 3\)\./i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Importar 1 processo/i })).toBeEnabled()
+  })
+
   it('confirmar desabilitado quando só há duplicatas/erros (nada a criar)', async () => {
     const user = userEvent.setup()
     mockParse.mockResolvedValueOnce({

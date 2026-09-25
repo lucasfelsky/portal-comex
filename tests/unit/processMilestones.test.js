@@ -14,6 +14,8 @@ import {
   hasCargoPresenceSignalMirror,
   hasDuimpRegistrationSignalMirror,
   hasParameterizationSignalMirror,
+  detectMilestones,
+  buildMilestoneSummaryPhrases,
 } from '../../functions/src/process/milestones.js'
 import { isCustomsCleared } from '../../src/features/processes/deriveProcessStatus.js'
 import {
@@ -760,5 +762,105 @@ describe('paridade functions/core/licenses.js x src/features/processes/licenses.
         JSON.stringify(normalizeLicenses(getEffectiveLicenses(doc)))
       )
     }
+  })
+})
+
+// F17.5b: `detectMilestones` (resumo de notificacao) e' a mesma fonte
+// (MILESTONE_RULES) de `buildMilestoneEvents` (historico) - nunca discordam.
+describe('detectMilestones (F17.5b)', () => {
+  it('paridade com buildMilestoneEvents para 4 fixtures', () => {
+    const fixtures = [
+      // so shippedAt
+      [baseMaritime({ shippedAt: '' }), baseMaritime({ shippedAt: '2026-09-20' })],
+      // atracacao + status
+      [
+        baseMaritime({ berthed: false, processStatus: 'Aguardando atracação' }),
+        baseMaritime({ berthed: true, processStatus: 'Atracação Confirmada' }),
+      ],
+      // 2 licencas deferidas no mesmo save
+      [
+        baseMaritime({
+          licenses: [
+            { id: 'a', agency: 'ANVISA', status: 'Em análise' },
+            { id: 'b', agency: 'IBAMA', status: 'Em análise' },
+          ],
+        }),
+        baseMaritime({
+          licenses: [
+            { id: 'a', agency: 'ANVISA', status: 'Deferida' },
+            { id: 'b', agency: 'IBAMA', status: 'Deferida' },
+          ],
+        }),
+      ],
+      // returnedAt em 2 containers
+      [
+        baseMaritime({
+          containers: [
+            { id: 'CNT-1', returnedAt: '' },
+            { id: 'CNT-2', returnedAt: '' },
+          ],
+        }),
+        baseMaritime({
+          containers: [
+            { id: 'CNT-1', number: 'CSQU3054383', returnedAt: '2026-09-10' },
+            { id: 'CNT-2', number: 'MSCU1234566', returnedAt: '2026-09-10' },
+          ],
+        }),
+      ],
+    ]
+
+    for (const [before, after] of fixtures) {
+      const detectedTypes = detectMilestones(before, after).map((m) => m.type).sort()
+      const eventTypes = buildMilestoneEvents(before, after, { processId: 'p1' })
+        .map((e) => e.data.type)
+        .sort()
+      expect(detectedTypes).toEqual(eventTypes)
+    }
+  })
+})
+
+describe('buildMilestoneSummaryPhrases (F17.5b)', () => {
+  it('texto de cada tipo com frase', () => {
+    const cases = [
+      ['shipped', '', 'embarque confirmado'],
+      ['berthed', true, 'atracação confirmada'],
+      ['arrived', true, 'chegada confirmada'],
+      ['cargoPresence', true, 'presença de carga informada'],
+      ['duimpRegistered', 'DU-1', 'DUIMP registrada'],
+      ['cleared', 'Canal Verde', 'desembaraço concluído'],
+      ['licenseDeferred', 'MAPA', 'anuência MAPA deferida'],
+      ['collectionScheduled', '2026-09-25T09:00', 'coleta agendada'],
+      ['received', '2026-09-21T08:00', 'carga recebida'],
+      ['divergence', 'Avaria', 'divergência no recebimento registrada'],
+    ]
+
+    for (const [type, value, expectedText] of cases) {
+      expect(buildMilestoneSummaryPhrases([{ type, value }])).toEqual([{ type, text: expectedText }])
+    }
+  })
+
+  it('parameterized com canal e sem canal', () => {
+    expect(buildMilestoneSummaryPhrases([{ type: 'parameterized', value: 'Amarelo' }])).toEqual([
+      { type: 'parameterized', text: 'DUIMP parametrizada (canal Amarelo)' },
+    ])
+    expect(buildMilestoneSummaryPhrases([{ type: 'parameterized', value: '' }])).toEqual([
+      { type: 'parameterized', text: 'DUIMP parametrizada' },
+    ])
+  })
+
+  it('emptyReturned e statusChanged NAO tem frase', () => {
+    expect(buildMilestoneSummaryPhrases([{ type: 'emptyReturned', value: 'CNT-1' }])).toEqual([])
+    expect(buildMilestoneSummaryPhrases([{ type: 'statusChanged', value: 'Embarcou' }])).toEqual([])
+  })
+
+  it('2 licenseDeferred (MAPA, ANVISA) no mesmo save -> 2 frases', () => {
+    const milestones = [
+      { type: 'licenseDeferred', value: 'MAPA' },
+      { type: 'licenseDeferred', value: 'ANVISA' },
+    ]
+    expect(buildMilestoneSummaryPhrases(milestones)).toEqual([
+      { type: 'licenseDeferred', text: 'anuência MAPA deferida' },
+      { type: 'licenseDeferred', text: 'anuência ANVISA deferida' },
+    ])
   })
 })
