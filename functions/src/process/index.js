@@ -12,7 +12,7 @@ import {
   EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
   normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
-import { buildMilestoneEvents } from './milestones.js';
+import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';
@@ -296,7 +296,7 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
     }
 
     if (actorRole === 'admin' && hasMeaningfulProcessChanges(before, after)) {
-      const updateSummary = buildProcessUpdateSummary(before, after)
+      const updateSummary = buildProcessUpdateSummary(before, after, buildMilestoneSummaryPhrases(detectMilestones(before, after)))
       const favoriteUsers = await listActiveFavoriteUsers(processId)
 
       favoriteUsers.forEach((favoriteUser) => {

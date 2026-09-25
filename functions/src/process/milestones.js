@@ -459,3 +459,75 @@ export function buildMilestoneEvents(before, after, { processId, eventId, eventT
 
   return events
 }
+
+// F17.5b: deteccao pura de marcos para o RESUMO de notificacao
+// (`buildProcessUpdateSummary`, `shared.js`). Mesma fonte de
+// `buildMilestoneEvents` (MILESTONE_RULES) - notificacao e historico NUNCA
+// discordam. Nao monta documento (sem id/occurredAt/actor) - so' o
+// necessario pra nomear o marco na frase.
+export function detectMilestones(before, after) {
+  const milestones = []
+
+  for (const rule of MILESTONE_RULES) {
+    const detectedResult = rule.detect(before, after)
+    if (!detectedResult) continue
+
+    // Mesmo achatamento de `buildMilestoneEvents` (array/objeto - D-8).
+    const detectedList = Array.isArray(detectedResult) ? detectedResult : [detectedResult]
+
+    for (const detected of detectedList) {
+      milestones.push({ type: rule.type, value: toComparableValue(detected.value) ?? '' })
+    }
+  }
+
+  return milestones
+}
+
+function buildMilestonePhraseText(type, value) {
+  switch (type) {
+    case 'shipped':
+      return 'embarque confirmado'
+    case 'berthed':
+      return 'atracação confirmada'
+    case 'arrived':
+      return 'chegada confirmada'
+    case 'cargoPresence':
+      return 'presença de carga informada'
+    case 'duimpRegistered':
+      return 'DUIMP registrada'
+    case 'parameterized':
+      return value ? `DUIMP parametrizada (canal ${value})` : 'DUIMP parametrizada'
+    case 'cleared':
+      return 'desembaraço concluído'
+    case 'licenseDeferred':
+      return `anuência ${value} deferida`
+    case 'collectionScheduled':
+      return 'coleta agendada'
+    case 'received':
+      return 'carga recebida'
+    case 'divergence':
+      return 'divergência no recebimento registrada'
+    // F17.5b (B-7 do 4b): `emptyReturned` (devolucao de vazio) e
+    // `statusChanged` (status ja tem frase propria no resumo) NAO tem
+    // frase de marco.
+    case 'emptyReturned':
+    case 'statusChanged':
+    default:
+      return ''
+  }
+}
+
+// F17.5b: `[{ type, milestone }] -> [{ type, text }]`, na mesma ordem de
+// `MILESTONE_RULES` (via `detectMilestones`). Sem frase pra
+// `emptyReturned`/`statusChanged`.
+export function buildMilestoneSummaryPhrases(milestones) {
+  const list = Array.isArray(milestones) ? milestones : []
+  const phrases = []
+
+  for (const milestone of list) {
+    const text = buildMilestonePhraseText(milestone?.type, milestone?.value)
+    if (text) phrases.push({ type: milestone.type, text })
+  }
+
+  return phrases
+}

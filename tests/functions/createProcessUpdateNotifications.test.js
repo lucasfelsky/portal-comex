@@ -18,6 +18,7 @@ import {
   setupFirestoreChain,
   getHandler,
 } from '../setup-triggers.js'
+import { normalizeContainers } from '../../src/features/processes/containers.js'
 
 vi.mock('firebase-admin/app', () => mocks.firebaseApp)
 vi.mock('firebase-admin/auth', () => mocks.firebaseAuth)
@@ -523,7 +524,7 @@ describe('createProcessUpdateNotifications', () => {
   // F17.2b (D-10): `licenses[]` entra na comparacao - o aviso que hoje sai
   // com MAPA nao pode se perder.
   describe('F17.2b - anuencias (D-10)', () => {
-    it('admin muda so licenses (status atualizado) -> favorito recebe "anuências atualizadas"', async () => {
+    it('admin muda so licenses (status atualizado para Deferida) -> favorito recebe "anuência MAPA deferida"', async () => {
       setupFirestoreChain({
         users: [
           { id: 'admin-1', data: ADMIN_USER },
@@ -544,7 +545,8 @@ describe('createProcessUpdateNotifications', () => {
       expect(mockBatch.set).toHaveBeenCalledTimes(1)
       const [, payload] = mockBatch.set.mock.calls[0]
       expect(payload.type).toBe('favorite_process_updated')
-      expect(payload.body).toContain('anuências atualizadas')
+      expect(payload.body).toContain('anuência MAPA deferida')
+      expect(payload.body).not.toContain('anuências atualizadas')
     })
 
     it('before mapaStatus Liberado / after mapaStatus "" + licenses [LIC-MAPA Deferida] (equivalentes) -> NAO notifica', async () => {
@@ -1166,6 +1168,7 @@ describe('F17.5a - license_rejected (A-7)', () => {
     const favoriteNotification = payloads.find((p) => p.recipientUserId === 'fan-1')
     expect(favoriteNotification).toBeTruthy()
     expect(favoriteNotification.type).toBe('favorite_process_updated')
+    expect(favoriteNotification.body).toContain('anuência ANVISA indeferida')
   })
 
   it('(c) re-salvar com "Indeferida" -> "Indeferida" + outra mudanca: nenhum license_rejected', async () => {
@@ -1233,5 +1236,200 @@ describe('F17.5a - license_rejected (A-7)', () => {
 
     const types = mockBatch.set.mock.calls.map(([, payload]) => payload.type)
     expect(types).not.toContain('license_rejected')
+  })
+})
+
+// F17.5b: resumo nomeando marcos + L34 (BL/AWB/navio/viagem/voo/containers/
+// shippedAt passam a notificar, so' texto - sem valores no corpo).
+describe('F17.5b - resumo nomeando marcos + L34', () => {
+  it('(a) status Aguardando embarque->Embarcou + shippedAt preenchido -> "embarque confirmado" sem "status alterado"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, processStatus: 'Aguardando embarque', shippedAt: '' }
+    const after = {
+      ...PROCESS_BASE,
+      processStatus: 'Embarcou',
+      shippedAt: '2026-09-10',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('embarque confirmado')
+    expect(payload.body).not.toContain('status alterado')
+  })
+
+  it('(b) so masterBl muda -> "BL atualizado" sem o valor do BL no corpo', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, masterBl: '' }
+    const after = {
+      ...PROCESS_BASE,
+      masterBl: 'MBL-12345',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('BL atualizado')
+    expect(payload.body).not.toContain('MBL-12345')
+  })
+
+  it('(c) AEREO so mawb muda -> "AWB atualizado"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, category: 'AEREO', mawb: '' }
+    const after = {
+      ...PROCESS_BASE,
+      category: 'AEREO',
+      mawb: 'MAWB-1',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('AWB atualizado')
+  })
+
+  it('(d) so vesselName muda -> "navio/viagem atualizados"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, vesselName: '' }
+    const after = {
+      ...PROCESS_BASE,
+      vesselName: 'MSC Rio',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('navio/viagem atualizados')
+  })
+
+  it('(e) AEREO so flightNumber muda -> "voo atualizado"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, category: 'AEREO', flightNumber: '' }
+    const after = {
+      ...PROCESS_BASE,
+      category: 'AEREO',
+      flightNumber: 'LA-800',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('voo atualizado')
+  })
+
+  it('(f) so containers[0].number muda -> "contêineres atualizados" sem o numero no corpo', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, containers: [{ id: 'CNT-1', number: '' }] }
+    const after = {
+      ...PROCESS_BASE,
+      containers: [{ id: 'CNT-1', number: 'MSCU1234567' }],
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('contêineres atualizados')
+    expect(payload.body).not.toContain('MSCU1234567')
+  })
+
+  it('(g) shippedAt preenchido editado -> "data de embarque atualizada"', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, shippedAt: '2026-09-10' }
+    const after = {
+      ...PROCESS_BASE,
+      shippedAt: '2026-09-12',
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [, payload] = mockBatch.set.mock.calls[0]
+    expect(payload.body).toContain('data de embarque atualizada')
+  })
+
+  it('(h) paridade legado: sem chaves L34 x 1o save com as chaves vazias/containers expandidos -> NAO notifica', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, containerQuantity: 2 }
+    const after = {
+      ...PROCESS_BASE,
+      containerQuantity: 2,
+      shippedAt: '',
+      masterBl: '',
+      houseBl: '',
+      mawb: '',
+      hawb: '',
+      vesselName: '',
+      voyage: '',
+      flightNumber: '',
+      containers: normalizeContainers(undefined, { category: 'FCL', containerQuantity: 2 }),
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('(i) containers com numero equivalente (case/formatacao) -> NAO notifica', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, containers: [{ id: 'CNT-1', number: 'mscu 123456-7' }] }
+    const after = {
+      ...PROCESS_BASE,
+      containers: [{ id: 'CNT-1', number: 'MSCU1234567' }],
+      updatedById: 'admin-1',
+      updatedByName: 'Admin Root',
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
   })
 })

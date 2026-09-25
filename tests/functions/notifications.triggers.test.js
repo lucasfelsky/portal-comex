@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence', 'proc-upd-masterbl'],
       },
     }
     await Promise.all(
@@ -414,7 +414,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
   // F17.2b (D-10): `licenses[]` entra na comparacao de update - o aviso que
   // hoje sai com MAPA nao pode se perder.
   it(
-    'update de licenses por admin notifica favoritos com "anuências atualizadas"',
+    'update de licenses por admin (Em análise -> Deferida) notifica favoritos com "anuência MAPA deferida"',
     async () => {
       const processId = 'proc-upd-licenses'
       const processRef = db.collection('processes').doc(processId)
@@ -436,7 +436,38 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
 
       expect(updated).toHaveLength(1)
       expect(updated[0].recipientUserId).toBe('fav-1')
-      expect(updated[0].body).toContain('anuências atualizadas')
+      expect(updated[0].body).toContain('anuência MAPA deferida')
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F17.5b (L34): edicao so' de `masterBl` passa a notificar favoritos com
+  // frase dedicada (sem o valor do BL no corpo).
+  it(
+    'update so de masterBl por admin notifica favoritos com "BL atualizado"',
+    async () => {
+      const processId = 'proc-upd-masterbl'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Update MasterBL',
+        processNumber: 'PO-1012',
+        category: 'FCL',
+        masterBl: '',
+      })
+
+      await processRef.update({
+        masterBl: 'MBL-99887',
+        updatedById: 'admin-1',
+        updatedByName: 'Admin Um',
+      })
+
+      const docs = await waitForNotifications(processId, 1)
+      const updated = docs.filter((doc) => doc.type === 'favorite_process_updated')
+
+      expect(updated).toHaveLength(1)
+      expect(updated[0].recipientUserId).toBe('fav-1')
+      expect(updated[0].body).toContain('BL atualizado')
+      expect(updated[0].body).not.toContain('MBL-99887')
     },
     TRIGGER_TIMEOUT_MS
   )
