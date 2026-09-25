@@ -43,6 +43,7 @@ const PAGE_LABELS = {
   '/admin/comunicados': 'Admin · Comunicados',
   '/admin/barra': 'Admin · Barra do porto',
   '/admin/previsoes': 'Admin · Previsões',
+  '/admin/lead-time': 'Admin · Lead time',
   '/admin/suporte': 'Admin · Suporte',
 }
 

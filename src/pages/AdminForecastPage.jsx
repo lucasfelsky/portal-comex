@@ -403,6 +403,9 @@ export default function AdminForecastPage() {
               <h3>Dias úteis por categoria</h3>
               <p>Aplicados após a ETA quando não há coleta agendada nem rolling customs.</p>
             </div>
+            <Link to="/admin/lead-time" className="ghost-button">
+              Ver lead time real
+            </Link>
           </div>
           <div className="admin-grid admin-grid--quarters">
             {CATEGORY_OPTIONS.map((category) => (

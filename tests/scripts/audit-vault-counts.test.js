@@ -60,7 +60,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/src\/utils\/ count = 12/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 12/)
     expect(result.stdout).toMatch(/firestore\.rules subcollections = 2/)
-    expect(result.stdout).toMatch(/tests\/ total = 75/)
+    expect(result.stdout).toMatch(/tests\/ total = 76/)
   })
 
   describe('detecao de drift', () => {
@@ -157,7 +157,7 @@ describe('audit-vault-counts', () => {
       expect(result.stdout).toMatch(/firestore\.rules isAllowedSelfUserUpdate\(\) = 9 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 80 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isLogisticsCollectionStatusUpdate\(\) = 9 campos/)
-      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 15/)
+      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 16/)
       expect(result.stdout).toMatch(/declaredDependencies = \d+ \(todas instaladas\)/)
       expect(result.stdout).toMatch(
         /src\/services com onSnapshot = 1 \(forecastSettingsRepository\.js\)/

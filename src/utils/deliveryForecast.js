@@ -165,6 +165,31 @@ function addBusinessDays(date, businessDays) {
   return currentDate
 }
 
+// F17.6: inversa de `addBusinessDays` — conta quantos dias uteis `d`
+// (seg-sex, sem feriado nacional) existem no intervalo `start < d <= end`.
+// Se `addBusinessDays(start, N) === end` (end util), `countBusinessDaysBetween`
+// devolve N. Usada pra comparar o lead time REAL (Atracacao/Chegada ->
+// Recebimento) com a previsao por categoria (mesmo calendario).
+export function countBusinessDaysBetween(startKey, endKey) {
+  const start = parseDate(startKey)
+  const end = parseDate(endKey)
+  if (!start || !end) return null
+  if (end < start) return null
+  if (end.getTime() === start.getTime()) return 0
+
+  let currentDate = start
+  let count = 0
+
+  while (currentDate.getTime() < end.getTime()) {
+    currentDate = addDays(currentDate, 1)
+    if (isBusinessDay(currentDate)) {
+      count += 1
+    }
+  }
+
+  return count
+}
+
 function resolveSettings(settings) {
   if (settings && typeof settings === 'object') return settings
   return DEFAULT_FORECAST_SETTINGS

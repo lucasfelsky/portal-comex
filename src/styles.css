@@ -10574,3 +10574,58 @@ body {
     margin-top: 18px;
   }
 }
+
+/* F17.6: painel de lead time por modal x porto (/admin/lead-time). */
+.lead-time-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lead-time-cell__stat {
+  font-size: var(--fs-footnote);
+}
+
+.lead-time-cell__n {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.lead-time-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  margin-top: 4px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-full);
+}
+
+.lead-time-bar__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--primary);
+  border-radius: var(--radius-full);
+}
+
+.lead-time-bar__p80 {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink-soft);
+}
+
+.lead-time-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .lead-time-bar {
+    width: 100%;
+  }
+}
