@@ -255,6 +255,102 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
   })
 })
 
+// UX-4 (A7): painel de filtros inline no mobile com botão "Filtros (n)".
+describe('ProcessListView — painel de filtros inline no mobile (UX-4)', () => {
+  describe('mobile (≤720px)', () => {
+    beforeEach(() => stubMatchMedia(true))
+
+    it('sem filtros, o botão tem nome "Filtros" e aria-expanded="false", painel fechado', () => {
+      const { container } = renderView()
+      const toggle = screen.getByRole('button', { name: 'Filtros' })
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      const panel = container.querySelector('#chegadas-filters-panel')
+      expect(panel).not.toHaveClass('process-filters--panel--open')
+    })
+
+    it('com filtros ativos (busca não conta), o botão mostra "Filtros (3)"', () => {
+      renderView({
+        categoryFilter: 'FCL',
+        etaStartDate: '2026-07-01',
+        operationFilter: 'Coleta pendente',
+        searchTerm: 'x',
+      })
+      expect(screen.getByRole('button', { name: 'Filtros (3)' })).toBeInTheDocument()
+    })
+
+    it('clicar em Filtros abre o painel e o SelectField de etapa fica acessível', async () => {
+      const user = userEvent.setup()
+      const { container } = renderView()
+      const toggle = screen.getByRole('button', { name: 'Filtros' })
+      await user.click(toggle)
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      const panel = container.querySelector('#chegadas-filters-panel')
+      expect(panel).toHaveClass('process-filters--panel--open')
+      expect(screen.getByRole('button', { name: 'Etapa operacional: Todas' })).toBeInTheDocument()
+    })
+
+    it('com filtros ativos, clicar em "Limpar todos" chama onClearAllFilters', async () => {
+      const user = userEvent.setup()
+      const onClearAllFilters = vi.fn()
+      renderView({
+        hasActiveFilters: true,
+        categoryFilter: 'FCL',
+        onClearAllFilters,
+      })
+      await user.click(screen.getByRole('button', { name: 'Limpar todos' }))
+      expect(onClearAllFilters).toHaveBeenCalled()
+    })
+  })
+})
+
+// UX-4 (A7): "Arquivados (n)" no desktop (admin), alternância no toolbar.
+describe('ProcessListView — Arquivados no desktop (UX-4)', () => {
+  describe('desktop (>720px)', () => {
+    beforeEach(() => stubMatchMedia(false))
+
+    it('admin com arquivados: mostra "Arquivados (1)", alterna a lista e Restaurar chama onArchiveProcess', async () => {
+      const user = userEvent.setup()
+      const onArchiveProcess = vi.fn()
+      const { container } = renderView({
+        isAdmin: true,
+        onArchiveProcess,
+        filteredProcesses: PROCESSES.slice(0, 2),
+        archivedProcesses: [PROCESSES[2]],
+      })
+      const toggle = screen.getByRole('button', { name: 'Arquivados (1)' })
+      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+      await user.click(toggle)
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      // lista de ativos some, só o arquivado aparece
+      expect(container.querySelectorAll('.process-item--button')).toHaveLength(1)
+
+      const restoreAction = container.querySelector('.action-icon-button[aria-label="Restaurar processo"]')
+      expect(restoreAction).not.toBeNull()
+      await user.click(restoreAction)
+      expect(onArchiveProcess).toHaveBeenCalledWith('p-sea-done', false)
+    })
+
+    it('isAdmin={false} com arquivados não mostra o botão "Arquivados"', () => {
+      renderView({
+        isAdmin: false,
+        onArchiveProcess: vi.fn(),
+        archivedProcesses: [PROCESSES[2]],
+      })
+      expect(screen.queryByText(/Arquivados/)).not.toBeInTheDocument()
+    })
+
+    it('admin com archivedProcesses=[] não mostra o botão', () => {
+      renderView({
+        isAdmin: true,
+        onArchiveProcess: vi.fn(),
+        archivedProcesses: [],
+      })
+      expect(screen.queryByText(/Arquivados/)).not.toBeInTheDocument()
+    })
+  })
+})
+
 // F17.1a (D-E): badge "Dados pendentes" so' pro admin.
 describe('ProcessListView — pendências admin-only (F17.1a)', () => {
   beforeEach(() => stubMatchMedia(true))

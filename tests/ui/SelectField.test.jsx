@@ -100,4 +100,76 @@ describe('SelectField', () => {
     // fecha após selecionar
     expect(document.querySelector('.action-sheet')).toBeNull()
   })
+
+  // UX-4 (A8): nome acessível derivado do <span> do <label> ancestral.
+  describe('nome acessível derivado do label pai (UX-4)', () => {
+    it('deriva "Categoria: Aéreo" do <span> do label ancestral (sem sheetTitle)', () => {
+      setMatchMedia(true)
+      render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="AEREO" onChange={() => {}}>{OPTS}</SelectField>
+        </label>
+      )
+      expect(screen.getByRole('button', { name: 'Categoria: Aéreo' })).toBeInTheDocument()
+    })
+
+    it('sem valor casando nenhuma option, o nome é só o label pai ("Categoria")', () => {
+      setMatchMedia(true)
+      render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="INEXISTENTE" onChange={() => {}}>{OPTS}</SelectField>
+        </label>
+      )
+      expect(screen.getByRole('button', { name: 'Categoria' })).toBeInTheDocument()
+    })
+
+    it('com value="" casando a option "Selecione", o nome é "Categoria: Selecione"', () => {
+      setMatchMedia(true)
+      render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="" onChange={() => {}}>{OPTS}</SelectField>
+        </label>
+      )
+      expect(screen.getByRole('button', { name: 'Categoria: Selecione' })).toBeInTheDocument()
+    })
+
+    it('ao clicar no gatilho, o ActionSheet abre com o título do label pai', async () => {
+      setMatchMedia(true)
+      const user = userEvent.setup()
+      render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="AEREO" onChange={() => {}}>{OPTS}</SelectField>
+        </label>
+      )
+      await user.click(screen.getByRole('button', { name: 'Categoria: Aéreo' }))
+      expect(screen.getByRole('dialog', { name: 'Categoria' })).toBeInTheDocument()
+      expect(document.querySelector('.action-sheet__title')).toHaveTextContent('Categoria')
+    })
+
+    it('sheetTitle tem precedência sobre o label pai', () => {
+      setMatchMedia(true)
+      render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="AEREO" onChange={() => {}} sheetTitle="Tipo">{OPTS}</SelectField>
+        </label>
+      )
+      expect(screen.getByRole('button', { name: 'Tipo: Aéreo' })).toBeInTheDocument()
+    })
+
+    it('desktop: sem gatilho, nada muda (comportamento já coberto acima)', () => {
+      setMatchMedia(false)
+      const { container } = render(
+        <label>
+          <span>Categoria</span>
+          <SelectField value="AEREO" onChange={() => {}}>{OPTS}</SelectField>
+        </label>
+      )
+      expect(container.querySelector('.select-field__trigger')).toBeNull()
+    })
+  })
 })

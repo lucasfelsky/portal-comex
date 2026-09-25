@@ -1,4 +1,4 @@
-import { Children, isValidElement, useMemo, useState } from 'react'
+import { Children, isValidElement, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ActionSheet from './ActionSheet'
 import { useMobileLayout } from '../hooks/useMobileLayout'
 
@@ -12,6 +12,12 @@ import { useMobileLayout } from '../hooks/useMobileLayout'
 // API = mesma do <select> (value, onChange(event), children <option>).
 // Selecionar no sheet chama onChange com um evento sintético { target:
 // { value } } — compatível com os handlers `event.target.value` existentes.
+//
+// UX-4 (A8): nome acessível do gatilho mobile e título do ActionSheet. A
+// prioridade é `sheetTitle` (explícito) > `aria-label` repassado via `rest`
+// > o texto do <span> filho direto do <label> ancestral (padrão dos 20 usos
+// existentes: `<label className="field"><span>X</span><SelectField/>`).
+// Essa derivação por DOM só roda com o gatilho mobile ativo.
 export default function SelectField({
   value,
   onChange,
@@ -24,11 +30,26 @@ export default function SelectField({
 }) {
   const isMobile = useMobileLayout()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const wrapperRef = useRef(null)
+  const [derivedLabel, setDerivedLabel] = useState('')
 
   // Se forceMobile for true, renderiza o gatilho/action-sheet mesmo que o
   // hook useMobileLayout ainda não tenha detectado a viewport (caso de
   // hidratacao/client hint). O container externo usa CSS para mostrar/esconder.
   const showMobileTrigger = forceMobile || isMobile
+
+  useLayoutEffect(() => {
+    if (!showMobileTrigger) return
+    const label = wrapperRef.current?.closest('label')
+    const span = label
+      ? Array.from(label.children).find(
+          (child) => child.tagName === 'SPAN' && !child.contains(wrapperRef.current)
+        )
+      : null
+    setDerivedLabel(span?.textContent?.trim() || '')
+  }, [showMobileTrigger])
+
+  const fieldLabel = sheetTitle || rest['aria-label'] || derivedLabel
 
   // Extrai as opções dos <option> filhos pra alimentar o sheet. Desce em
   // <optgroup> (CollectionStatusEditView usa grupos), preservando o label do
@@ -70,7 +91,7 @@ export default function SelectField({
   }
 
   return (
-    <span className="select-field">
+    <span className="select-field" ref={wrapperRef}>
       <select
         className={className}
         value={value}
@@ -89,7 +110,7 @@ export default function SelectField({
           type="button"
           className="select-field__trigger"
           aria-haspopup="listbox"
-          aria-label={sheetTitle ? `${sheetTitle}: ${currentLabel}` : currentLabel}
+          aria-label={fieldLabel ? (currentLabel ? `${fieldLabel}: ${currentLabel}` : fieldLabel) : (currentLabel || 'Selecionar opção')}
           aria-invalid={rest['aria-invalid']}
           aria-describedby={rest['aria-describedby']}
           onClick={() => setIsSheetOpen(true)}
@@ -101,7 +122,7 @@ export default function SelectField({
 
       {isSheetOpen ? (
         <ActionSheet
-          title={sheetTitle}
+          title={fieldLabel || undefined}
           options={options}
           value={value}
           onSelect={handleSelect}
