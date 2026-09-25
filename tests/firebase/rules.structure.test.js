@@ -343,8 +343,19 @@ describe('firestore.rules structure', () => {
       const match = rules.match(/function\s+isValidReceiptDivergence\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
-      expect(body).toMatch(/\[\s*['"]{2},\s*['"]Avaria['"],\s*['"]Falta['"],\s*['"]Sobra['"]\s*\]/)
+      expect(body).toMatch(/\[\s*['"]{2},\s*['"]Avaria['"],\s*['"]Falta['"],\s*['"]Sobra['"],\s*['"]Lote['"]\s*\]/)
       expect(body).toMatch(/size\(\)\s*<=\s*2000/)
+    })
+
+    it('isLogisticsCollectionStatusUpdate contem "postReceiptImages" com guarda de shape/tamanho', () => {
+      const match = rules.match(
+        /function\s+isLogisticsCollectionStatusUpdate\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/
+      )
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/['"]postReceiptImages['"]/)
+      expect(body).toMatch(/postReceiptImages\s+is\s+list/)
+      expect(body).toMatch(/postReceiptImages\.size\(\)\s*<=\s*10/)
     })
   })
 })

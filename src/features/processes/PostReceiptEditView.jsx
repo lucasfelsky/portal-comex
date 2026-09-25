@@ -1,10 +1,5 @@
-import {
-  MAX_POST_RECEIPT_IMAGES,
-  MAX_POST_RECEIPT_IMAGE_SIZE_BYTES,
-  formatPostReceiptImageSize,
-  toPostReceiptImagePreviewUrl,
-} from '../../utils/postReceiptImages'
 import { getProcessTitle } from './processLabels'
+import PostReceiptImagesField from './PostReceiptImagesField'
 import { getQuickReadProcessStatus } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
 
@@ -58,47 +53,13 @@ export default function PostReceiptEditView({
             placeholder="Registre observações da carga após o recebimento no CD."
           />
         </label>
-        <label className="field">
-          <span>Imagens do recebimento no CD</span>
-          <input
-            className="text-input"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={onImagesUpload}
-            disabled={
-              isUploadingPostReceiptImages ||
-              draftPostReceiptImages.length >= MAX_POST_RECEIPT_IMAGES
-            }
-          />
-          <small className="field-hint">
-            Anexo opcional. Até {MAX_POST_RECEIPT_IMAGES} imagens de{' '}
-            {formatPostReceiptImageSize(MAX_POST_RECEIPT_IMAGE_SIZE_BYTES)} cada.
-          </small>
-        </label>
-        {draftPostReceiptImages.length > 0 ? (
-          <div className="post-receipt-image-grid">
-            {draftPostReceiptImages.map((image) => (
-              <div key={image.id} className="post-receipt-image-card">
-                <img
-                  src={toPostReceiptImagePreviewUrl(image)}
-                  alt={image.name || 'Imagem do recebimento no CD'}
-                />
-                <div className="post-receipt-image-card__meta">
-                  <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
-                  <span>{formatPostReceiptImageSize(image.size)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => onRemoveImage(image.id)}
-                >
-                  Remover imagem
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <PostReceiptImagesField
+          images={draftPostReceiptImages}
+          isUploading={isUploadingPostReceiptImages}
+          label="Imagens do recebimento no CD"
+          onUpload={onImagesUpload}
+          onRemove={onRemoveImage}
+        />
       </div>
 
       <div className="action-row">

@@ -240,6 +240,12 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
     // `prefCategoryForType`). first-wins de `maybeAddNotification` evita
     // duplicidade com o ramo de post-recebimento abaixo (a logistica nao
     // grava `collectionStatus` e `postReceiptNotes` no mesmo write).
+    // F17.4b-fix: essa afirmacao NAO vale mais para `postReceiptImages` - a
+    // tela de Status de coleta agora grava `collectionStatus` +
+    // `postReceiptImages` (+ divergencia) no MESMO write (D1 do plano). O
+    // first-wins de `maybeAddNotification` continua garantindo 1 notificacao
+    // so' por destinatario (o ramo `receipt_divergence_reported`, quando
+    // aplicavel, vence os ramos abaixo dentro da mesma execucao do trigger).
     if (actorRole === 'logistica' && hasCollectionStatusChangedMirror(before.collectionStatus, after.collectionStatus)) {
       const activeAdmins = await listActiveAdminUsers()
       const favoriteUsers = await listActiveFavoriteUsers(processId)

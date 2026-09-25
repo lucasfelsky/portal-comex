@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence', 'proc-upd-masterbl'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence', 'proc-upd-masterbl', 'proc-receipt-divergence-lote-imgs'],
       },
     }
     await Promise.all(
@@ -278,6 +278,46 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         expect(doc.actorUserId).toBe('log-1')
         expect(doc.body).toContain('Avaria')
       })
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F17.4b-fix (D1): logistica grava collectionStatus + divergencia 'Lote' +
+  // postReceiptImages no MESMO write (tela "Status de coleta") - 1 doc por
+  // destinatario (admin-1, fav-1), tipo receipt_divergence_reported.
+  it(
+    'F17.4b-fix - status + divergencia "Lote" + postReceiptImages no mesmo write: 1 doc por destinatario',
+    async () => {
+      const processId = 'proc-receipt-divergence-lote-imgs'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Divergencia Lote',
+        processNumber: 'PO-1007',
+        category: 'FCL',
+        collectionStatus: 'Coleta Agendada',
+        receiptDivergence: false,
+        postReceiptImages: [],
+      })
+
+      await processRef.update({
+        collectionStatus: 'Carga recebida, em conferência',
+        receiptDivergence: true,
+        receiptDivergenceType: 'Lote',
+        postReceiptImages: [{ id: 'img-1', url: 'https://example.com/img-1.jpg' }],
+        updatedById: 'log-1',
+        updatedByName: 'Logistica Um',
+      })
+
+      const docs = await waitForNotifications(processId, 2)
+      const byRecipient = new Map(docs.map((doc) => [doc.recipientUserId, doc]))
+
+      expect(byRecipient.size).toBe(2)
+      for (const recipientUserId of ['admin-1', 'fav-1']) {
+        const doc = byRecipient.get(recipientUserId)
+        expect(doc).toBeTruthy()
+        expect(doc.type).toBe('receipt_divergence_reported')
+        expect(doc.body).toContain('Lote')
+      }
     },
     TRIGGER_TIMEOUT_MS
   )

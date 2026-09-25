@@ -955,6 +955,7 @@ export default function ProcessesPage() {
     if (!selectedProcess || !canEditCollectionStatus || !canUsePostCollectionStatuses(selectedProcess)) {
       return
     }
+    cleanupPostReceiptImagePreviews(draft.postReceiptImages)
     setDraft({
       ...selectedProcess,
       collectionStatus: postCollectionStatusOptions.includes(selectedProcess.collectionStatus)
@@ -969,6 +970,7 @@ export default function ProcessesPage() {
   }
 
   function handleCloseCollectionStatusEditMode() {
+    cleanupPostReceiptImagePreviews(draft.postReceiptImages)
     setDraft(
       selectedProcess
         ? {
@@ -1184,7 +1186,27 @@ export default function ProcessesPage() {
     if (!canEditCollectionStatus || !selectedProcess) return
     setIsSaving(true)
     setError('')
+
+    const isPostReceiptStatus = postCollectionStatusOptions.includes(draft.collectionStatus)
+    let previousImages = []
+    let normalizedImages = []
+    let saved = false
+
     try {
+      const currentDraftImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
+      previousImages = normalizePostReceiptImages(selectedProcess.postReceiptImages)
+
+      // F17.4b-fix (D1): fotos do recebimento so' entram no upload/payload
+      // quando o status escolhido e' pos-recebimento (mesmo racional da
+      // divergencia - B-2).
+      normalizedImages = isPostReceiptStatus
+        ? await resolvePostReceiptImagesForSave(
+            selectedProcess.id,
+            currentDraftImages,
+            profile?.uid ?? profile?.id ?? ''
+          )
+        : []
+
       await saveProcessCollectionStatus(
         selectedProcess.id,
         draft.collectionStatus,
@@ -1194,14 +1216,37 @@ export default function ProcessesPage() {
           receiptDivergence: draft.receiptDivergence,
           receiptDivergenceType: draft.receiptDivergenceType,
           receiptDivergenceNotes: draft.receiptDivergenceNotes,
-        }
+        },
+        isPostReceiptStatus ? normalizedImages : null
       )
+      saved = true
+
+      if (isPostReceiptStatus) {
+        await deletePostReceiptImages(getRemovedPostReceiptImages(previousImages, normalizedImages)).catch(
+          (deleteError) => {
+            console.error('Falha ao remover imagens antigas do recebimento no CD.', deleteError)
+          }
+        )
+      }
+      cleanupPostReceiptImagePreviews(currentDraftImages)
+
       const refreshed = await refreshProcesses(selectedProcess.id)
-      const saved = refreshed.find((item) => item.id === selectedProcess.id)
-      if (saved) setDraft(saved)
+      const savedProcess = refreshed.find((item) => item.id === selectedProcess.id)
+      if (savedProcess) setDraft(savedProcess)
       setViewMode('detail')
       setDetailTab('process')
     } catch (saveError) {
+      if (normalizedImages.length > 0 && !saved) {
+        await deletePostReceiptImages(getAddedPostReceiptImages(previousImages, normalizedImages)).catch(
+          (cleanupError) => {
+            console.error(
+              'Falha ao limpar imagens novas do recebimento no CD apos erro no salvamento.',
+              cleanupError
+            )
+          }
+        )
+      }
+
       const message = buildActionErrorMessage('Não foi possível salvar o status de coleta.', saveError)
       setError(message)
       toast.error(message)
@@ -1552,10 +1597,14 @@ export default function ProcessesPage() {
             receiptDivergenceType: draft.receiptDivergenceType,
             receiptDivergenceNotes: draft.receiptDivergenceNotes,
           }}
+          draftPostReceiptImages={draftPostReceiptImages}
+          isUploadingPostReceiptImages={isUploadingPostReceiptImages}
           onStatusChange={(value) => handleDraftChange('collectionStatus', value)}
           onDivergenceChange={handleDraftChange}
           onSave={handleSaveCollectionStatus}
           onClose={handleCloseCollectionStatusEditMode}
+          onImagesUpload={handlePostReceiptImagesUpload}
+          onRemoveImage={handleRemovePostReceiptImage}
         />
       ) : null}
 

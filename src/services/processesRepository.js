@@ -931,7 +931,8 @@ export async function saveProcessCollectionStatus(
   collectionStatus,
   actor = null,
   currentProcess = null,
-  receiptDivergenceFields = null
+  receiptDivergenceFields = null,
+  postReceiptImages = null
 ) {
   const normalizedId = String(processId ?? '').trim()
   const normalizedStatus = canonicalizeCollectionStatus(String(collectionStatus ?? '').trim())
@@ -987,11 +988,19 @@ export async function saveProcessCollectionStatus(
         ? normalizeReceiptDivergenceFields(receiptDivergenceFields)
         : {}
 
+    // F17.4b-fix (D1): fotos do recebimento gravadas no MESMO update,
+    // so' quando informadas E o status escolhido e' pos-recebimento.
+    const postReceiptImagesFields =
+      postReceiptImages != null && isPostCollectionStatus(normalizedStatus)
+        ? { postReceiptImages: normalizePostReceiptImages(postReceiptImages) }
+        : {}
+
     const nextProcess = {
       ...existingProcess,
       collectionStatus: normalizedStatus,
       ...derivedFields,
       ...divergenceFields,
+      ...postReceiptImagesFields,
       updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
       updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
       updatedAt: now,
@@ -1035,6 +1044,14 @@ export async function saveProcessCollectionStatus(
       : {}
   Object.assign(updatePayload, divergenceFields)
 
+  // F17.4b-fix (D1): fotos do recebimento gravadas no MESMO update, so'
+  // quando informadas E o status escolhido e' pos-recebimento.
+  const postReceiptImagesFields =
+    postReceiptImages != null && isPostCollectionStatus(normalizedStatus)
+      ? { postReceiptImages: normalizePostReceiptImages(postReceiptImages) }
+      : {}
+  Object.assign(updatePayload, postReceiptImagesFields)
+
   await updateDoc(doc(firestore, 'processes', normalizedId), updatePayload)
 
   await recordProcessAudit({
@@ -1048,6 +1065,7 @@ export async function saveProcessCollectionStatus(
     collectionStatus: normalizedStatus,
     ...derivedFields,
     ...divergenceFields,
+    ...postReceiptImagesFields,
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,

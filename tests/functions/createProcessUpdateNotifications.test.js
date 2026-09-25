@@ -1021,6 +1021,44 @@ describe('F17.4b - receipt_divergence_reported (B-6)', () => {
     }
   })
 
+  // F17.4b-fix: logistica muda status + marca divergencia "Lote" + anexa
+  // postReceiptImages no MESMO write (D1) - exatamente 1 notificacao por
+  // destinatario, todas receipt_divergence_reported.
+  it('(c2) logistica muda status + divergencia "Lote" + postReceiptImages no mesmo write: 1 notificacao por destinatario', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'logi-1', data: LOGISTICA_USER },
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Coleta Agendada',
+      receiptDivergence: false,
+      postReceiptImages: [],
+    }
+    const after = {
+      ...PROCESS_BASE,
+      collectionStatus: 'Carga recebida, em conferência',
+      receiptDivergence: true,
+      receiptDivergenceType: 'Lote',
+      postReceiptImages: [{ id: 'img-1', url: 'https://example.com/img-1.jpg' }],
+      updatedById: 'logi-1',
+      updatedByName: 'Logi da Silva',
+    }
+    await handler(makeEvent(before, after))
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(2)
+    const payloads = mockBatch.set.mock.calls.map(([, payload]) => payload)
+    for (const recipientUserId of ['admin-1', 'fan-1']) {
+      const forRecipient = payloads.filter((p) => p.recipientUserId === recipientUserId)
+      expect(forRecipient).toHaveLength(1)
+      expect(forRecipient[0].type).toBe('receipt_divergence_reported')
+      expect(forRecipient[0].body).toContain('Lote')
+    }
+  })
+
   it('(d) legado sem as chaves x after com false/""/"" e resto igual, ator admin: NENHUMA notificacao', async () => {
     setupFirestoreChain({
       users: [

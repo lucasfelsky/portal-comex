@@ -489,6 +489,100 @@ describe('F17.4b - divergencia no recebimento (normalizeProcess/saveProcess/save
     expect(payload.receiptDivergenceType).toBeUndefined()
     expect(payload.receiptDivergenceNotes).toBeUndefined()
   })
+
+  it('"Lote" e\' preservado como receiptDivergenceType valido', async () => {
+    const currentProcess = {
+      id: 'PROC-DIV-LOTE',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-DIV-LOTE',
+      'Carga disponível em estoque',
+      null,
+      currentProcess,
+      { receiptDivergence: true, receiptDivergenceType: 'Lote', receiptDivergenceNotes: 'lote trocado' }
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.receiptDivergenceType).toBe('Lote')
+  })
+})
+
+// F17.4b-fix: fotos do recebimento gravadas no MESMO update de
+// saveProcessCollectionStatus (D1), so' com status pos-recebimento.
+describe('F17.4b-fix - postReceiptImages em saveProcessCollectionStatus', () => {
+  it('6o argumento com status pos-recebimento grava postReceiptImages normalizadas', async () => {
+    const currentProcess = {
+      id: 'PROC-IMG-1',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-IMG-1',
+      'Carga disponível em estoque',
+      null,
+      currentProcess,
+      null,
+      [{ id: 'img-1', url: 'https://example.com/img-1.jpg', name: 'foto.jpg', mimeType: 'image/jpeg' }]
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.postReceiptImages).toEqual([
+      {
+        id: 'img-1',
+        url: 'https://example.com/img-1.jpg',
+        storagePath: '',
+        name: 'foto.jpg',
+        mimeType: 'image/jpeg',
+        size: null,
+        uploadedAt: '',
+      },
+    ])
+  })
+
+  it('6o argumento com status "Carga a caminho do CD" (pre-recebimento) -> payload SEM postReceiptImages', async () => {
+    const currentProcess = {
+      id: 'PROC-IMG-2',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-IMG-2',
+      'Carga a caminho do CD',
+      null,
+      currentProcess,
+      null,
+      [{ id: 'img-1', url: 'https://example.com/img-1.jpg' }]
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.postReceiptImages).toBeUndefined()
+  })
+
+  it('6o argumento null -> payload SEM postReceiptImages', async () => {
+    const currentProcess = {
+      id: 'PROC-IMG-3',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus('PROC-IMG-3', 'Carga disponível em estoque', null, currentProcess)
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.postReceiptImages).toBeUndefined()
+  })
 })
 
 describe('F17.2a - containers[]/campos de embarque e transito (D-4/D-5)', () => {
