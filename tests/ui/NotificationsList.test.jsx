@@ -357,4 +357,42 @@ describe('NotificationsList', () => {
       expect(onOpen).not.toHaveBeenCalled()
     })
   })
+
+  // UX-6a (item 10): pluralizacao PT-BR ("1 notificação" em vez de
+  // "1 notificações").
+  describe('UX-6a: pluralizacao', () => {
+    it('grupo com 1 item nao lido mostra "1 notificação" e "1 não lida"', () => {
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'R1', count: 1, unreadCount: 1, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      expect(screen.getByText(/1 notificação(?!s)/)).toBeInTheDocument()
+      expect(screen.getByText(/1 não lida(?!s)/)).toBeInTheDocument()
+      expect(screen.queryByText(/1 notificações/)).toBeNull()
+    })
+
+    it('grupo com 2 itens e 1 nao lido mostra "2 notificações" e "1 não lida"', () => {
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'R1', count: 2, unreadCount: 1, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      expect(screen.getByText(/2 notificações/)).toBeInTheDocument()
+      expect(screen.getByText(/1 não lida(?!s)/)).toBeInTheDocument()
+      expect(screen.queryByText(/1 notificações/)).toBeNull()
+    })
+  })
 })

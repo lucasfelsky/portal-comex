@@ -70,6 +70,16 @@ function ProcessRow({
   const hideSchedule = shouldHideProcessCardSchedule(item)
   // D-E: pendencias so aparecem pro admin (compras/preenche tudo).
   const pendingFields = isAdmin ? getPendingFields(item) : []
+  // UX-6a (item 1, D7): ordem de severidade — Anuência indeferida > Carga
+  // perigosa > Dados pendentes > especiais de conteiner. No mobile so' os 2
+  // primeiros ficam visiveis + "+N"; no desktop TODOS continuam visiveis
+  // (CSS-only via .inline-badge--overflow/--more).
+  const alerts = [
+    hasRejectedLicense(item) && { label: 'Anuência indeferida', tone: 'danger' },
+    hasDangerousGoods(item) && { label: 'Carga perigosa', tone: 'warn' },
+    pendingFields.length > 0 && { label: `Dados pendentes (${pendingFields.length})`, tone: 'warn' },
+    ...getContainerSpecialBadges(item.containers).map((badge) => ({ label: badge, tone: 'warn' })),
+  ].filter(Boolean)
 
   return (
     <div className="process-swipe-row">
@@ -156,29 +166,31 @@ function ProcessRow({
                 {item.processStatus}
               </span>
             )}
-            {shouldShowContainerQuantity(item.category) ? (
+            {shouldShowContainerQuantity(item.category) && item.containerQuantity > 0 ? (
               <span className="inline-badge">
                 {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
               </span>
             ) : null}
-            <span className="inline-badge">
-              {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
-            </span>
-            {getContainerSpecialBadges(item.containers).map((badge) => (
-              <span key={badge} className="inline-badge inline-badge--warn">
-                {badge}
+            {item.palletQuantity > 0 ? (
+              <span className="inline-badge">
+                {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
+              </span>
+            ) : null}
+            {alerts.map((alert, index) => (
+              <span
+                key={`${alert.label}-${index}`}
+                className={`inline-badge inline-badge--${alert.tone}${index >= 2 ? ' inline-badge--overflow' : ''}`}
+              >
+                {alert.label}
               </span>
             ))}
-            {pendingFields.length > 0 ? (
-              <span className="inline-badge inline-badge--warn">
-                Dados pendentes ({pendingFields.length})
+            {alerts.length > 2 ? (
+              <span
+                className="inline-badge inline-badge--more"
+                title={`${alerts.length - 2} alerta(s) a mais`}
+              >
+                +{alerts.length - 2}
               </span>
-            ) : null}
-            {hasRejectedLicense(item) ? (
-              <span className="inline-badge inline-badge--danger">Anuência indeferida</span>
-            ) : null}
-            {hasDangerousGoods(item) ? (
-              <span className="inline-badge inline-badge--warn">Carga perigosa</span>
             ) : null}
           </div>
         </div>

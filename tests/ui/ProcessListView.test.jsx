@@ -461,3 +461,67 @@ describe('ProcessListView — card CONSOLIDADO nao vaza referencia/fornecedor da
     expect(screen.queryByText(/ACME/)).not.toBeInTheDocument()
   })
 })
+
+// UX-6a (item 1, D7): ordem de severidade dos alertas + corte "max 2 + +N"
+// no CSS mobile (o jsdom testa a classificacao, o desktop continua com
+// todos via CSS).
+describe('UX-6a: alertas no card', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  const PROCESS_4_ALERTS = {
+    ...PROCESSES[0],
+    licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
+    items: [{ id: 'i1', commercialName: 'Resina', quantity: 1, dangerousGoods: true }],
+    containers: [{ id: 'CNT-1', number: '', seal: '', type: '40RF' }],
+  }
+
+  it('admin: os 4 alertas existem e so os 2 ultimos tem inline-badge--overflow', () => {
+    const { container } = renderView({ isAdmin: true, filteredProcesses: [PROCESS_4_ALERTS] })
+    const chips = container.querySelector('.process-item__chips')
+
+    const rejected = within(chips).getByText('Anuência indeferida')
+    const dangerous = within(chips).getByText('Carga perigosa')
+    const pending = within(chips).getByText(/Dados pendentes/)
+    const reefer = within(chips).getByText('Reefer')
+
+    expect(rejected).not.toHaveClass('inline-badge--overflow')
+    expect(dangerous).not.toHaveClass('inline-badge--overflow')
+    expect(pending).toHaveClass('inline-badge--overflow')
+    expect(reefer).toHaveClass('inline-badge--overflow')
+
+    const more = container.querySelector('.inline-badge--more')
+    expect(more).not.toBeNull()
+    expect(more.textContent).toBe('+2')
+  })
+
+  it('processo com <= 2 alertas nao tem .inline-badge--more', () => {
+    // isAdmin false: pendingFields fica vazio (admin-only), sobrando so'
+    // o alerta de licenca indeferida.
+    const { container } = renderView({
+      isAdmin: false,
+      filteredProcesses: [
+        {
+          ...PROCESSES[0],
+          licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
+        },
+      ],
+    })
+    expect(screen.getByText('Anuência indeferida')).toBeInTheDocument()
+    expect(container.querySelector('.inline-badge--more')).toBeNull()
+  })
+
+  it('palletQuantity: 0 nao renderiza "0 pallet"', () => {
+    renderView({ filteredProcesses: [{ ...PROCESSES[0], palletQuantity: 0 }] })
+    expect(screen.queryByText(/0 pallet/)).not.toBeInTheDocument()
+  })
+
+  it('palletQuantity: 3 renderiza "3 pallets"', () => {
+    const { container } = renderView({
+      filteredProcesses: [{ ...PROCESSES[0], containerQuantity: 0, palletQuantity: 3 }],
+    })
+    const badge = [...container.querySelectorAll('.process-item__chips .inline-badge')].find(
+      (el) => el.textContent === '3 pallets'
+    )
+    expect(badge).toBeTruthy()
+  })
+})

@@ -199,6 +199,14 @@ describe('sanidade da formula WCAG', () => {
   it("#e3f5f0 / #fff = 1.13 (--primary-50 antigo do anel de foco)", () => {
     expect(contrastRatio(parseColor('#e3f5f0'), parseColor('#ffffff'))).toBeCloseTo(1.13, 1)
   })
+
+  it('#071820 / #00ae91 = 6.43 (UX-6a, --on-primary sobre --primary)', () => {
+    expect(contrastRatio(parseColor('#071820'), parseColor('#00ae91'))).toBeCloseTo(6.43, 1)
+  })
+
+  it('#1f0a0a / #f87171 = 6.86 (UX-6a, --on-danger dark sobre --danger dark)', () => {
+    expect(contrastRatio(parseColor('#1f0a0a'), parseColor('#f87171'))).toBeCloseTo(6.86, 1)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -265,6 +273,68 @@ describe.each(Object.entries(themes))('--border-control (%s)', (themeName, theme
 })
 
 // ---------------------------------------------------------------------------
+// (j) UX-6a: --on-primary sobre --primary.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--on-primary (%s)', (themeName, theme) => {
+  it('sobre --primary >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--on-primary', theme, '--primary')
+    expect(ratio, `--on-primary/--primary (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (k) UX-6a (D2): --primary-700 sobre --surface, --surface-alt, --bg e
+// --primary-50 (usos como texto: links de acao, secondary-button hover).
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--primary-700 texto (%s)', (themeName, theme) => {
+  it.each(['--surface', '--surface-alt', '--bg', '--primary-50'])('sobre %s >= 4.5:1', (bgToken) => {
+    const ratio = ratioTokenOverBg('--primary-700', theme, bgToken)
+    expect(ratio, `--primary-700/${bgToken} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (l) UX-6a (D3): --on-danger sobre --danger e --danger-700.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--on-danger (%s)', (themeName, theme) => {
+  it.each(['--danger', '--danger-700'])('sobre %s >= 4.5:1', (bgToken) => {
+    const ratio = ratioTokenOverBg('--on-danger', theme, bgToken)
+    expect(ratio, `--on-danger/${bgToken} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (m) UX-6a (item 12): --warning-700 sobre --warning-50 (ETA atualizada).
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--warning-700 (%s)', (themeName, theme) => {
+  it('sobre --warning-50 >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--warning-700', theme, '--warning-50')
+    expect(ratio, `--warning-700/--warning-50 (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (n) UX-6a (D5): --on-button-primary sobre --button-primary-bg/-hover.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--on-button-primary (%s)', (themeName, theme) => {
+  it.each(['--button-primary-bg', '--button-primary-bg-hover'])('sobre %s >= 4.5:1', (bgToken) => {
+    const ratio = ratioTokenOverBg('--on-button-primary', theme, bgToken)
+    expect(ratio, `--on-button-primary/${bgToken} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (o2) AD-1 (adendo do orquestrador): --on-warn sobre --warning (botao
+// Favoritar do swipe, fundo amarelo/dourado nos 2 temas).
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--on-warn (%s)', (themeName, theme) => {
+  it('sobre --warning >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--on-warn', theme, '--warning')
+    expect(ratio, `--on-warn/--warning (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Guardas estruturais (g, h, i).
 // ---------------------------------------------------------------------------
 describe('guardas estruturais', () => {
@@ -321,5 +391,60 @@ describe('guardas estruturais', () => {
         ).not.toContain('var(--primary-50)')
       }
     }
+  })
+
+  // -------------------------------------------------------------------------
+  // Guardas UX-6a (j-n): tokens novos aplicados nos seletores certos.
+  // -------------------------------------------------------------------------
+  it.each([
+    '.nav__link--active {',
+    '.topbar__avatar {',
+    '.notifications__count {',
+    '.mobile-bottom-nav__badge {',
+    '.command-palette__item:hover .command-palette__item-icon {',
+  ])('(j) "%s" contem var(--on-primary)', (header) => {
+    const { body } = extractBlock(css, header)
+    expect(body).toContain('var(--on-primary)')
+  })
+
+  it('(j2) ".nav__link--active:hover {" nao troca o fundo pra var(--primary-700)', () => {
+    const { body } = extractBlock(css, '.nav__link--active:hover {')
+    expect(body).not.toContain('background: var(--primary-700)')
+  })
+
+  it('(l) ".danger-button {" contem var(--on-danger)', () => {
+    const { body } = extractBlock(css, '.danger-button {')
+    expect(body).toContain('var(--on-danger)')
+  })
+
+  it('(o) ".text-input::placeholder {" usa var(--text-muted) sem opacity', () => {
+    const { body } = extractBlock(css, '.text-input::placeholder {')
+    expect(body).toContain('var(--text-muted)')
+    expect(body).not.toContain('opacity')
+  })
+
+  it.each([
+    '.weekly-arrivals-windows__notes {',
+    '.weekly-arrivals-windows__shift {',
+    '.weekly-arrivals-windows__label {',
+    '.weekly-arrivals-windows__item {',
+  ])('(p) "%s" nao contem mais rgba(15, 23, 42 fixo', (header) => {
+    const { body } = extractBlock(css, header)
+    expect(body).not.toContain('rgba(15, 23, 42')
+  })
+
+  it('(o3) AD-1: ".process-swipe-row__action--favorite {" contem var(--on-warn)', () => {
+    const { body } = extractBlock(css, '.process-swipe-row__action--favorite {')
+    expect(body).toContain('var(--on-warn)')
+  })
+
+  it('(n2) existe ".admin-section .scope-chip--active {" com var(--on-button-primary)', () => {
+    const { body } = extractBlock(css, '.admin-section .scope-chip--active {')
+    expect(body).toContain('var(--on-button-primary)')
+  })
+
+  it('(q) ".field-hint {" contem text-transform: none', () => {
+    const { body } = extractBlock(css, '.field-hint {')
+    expect(body).toContain('text-transform: none')
   })
 })

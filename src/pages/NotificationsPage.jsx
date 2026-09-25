@@ -50,7 +50,7 @@ export default function NotificationsPage() {
             onClick={markAllAsRead}
             disabled={unreadNotifications.length === 0}
           >
-            Marcar todas como Lidas
+            Marcar todas como lidas
           </button>
           <button
             type="button"

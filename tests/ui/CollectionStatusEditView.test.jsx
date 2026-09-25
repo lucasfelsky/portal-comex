@@ -102,6 +102,9 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
 
     renderView({ collectionStatus: 'Carga recebida, em conferência' })
     expect(screen.getByText('Fotos do recebimento')).toBeInTheDocument()
+    // UX-6a (item 9, D8): uploader PT-BR (era o <input type=file> nativo em ingles).
+    expect(screen.getByText('Adicionar imagens')).toBeInTheDocument()
+    expect(document.querySelector('input[type="file"].file-picker__input')).toBeInTheDocument()
   })
 
   it('dica de foto aparece quando draftPostReceiptImages vazio e some com 1 imagem', () => {
