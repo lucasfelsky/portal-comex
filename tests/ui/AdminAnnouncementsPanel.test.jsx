@@ -13,7 +13,7 @@
 //   - Submit desabilitado enquanto submitting
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
@@ -191,13 +191,52 @@ describe('AdminAnnouncementsPanel', () => {
     })
   })
 
-  it('remover: chama removeAnnouncement quando draft.id existe', async () => {
+  it('remover: abre confirmacao e, ao confirmar, chama removeAnnouncement', async () => {
     const user = userEvent.setup()
     renderPanel()
     await waitFor(() => expect(screen.getByText('Manutencao programada')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Remover' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(mockRemoveAnnouncement).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir comunicado' }))
     await waitFor(() => {
       expect(mockRemoveAnnouncement).toHaveBeenCalledWith('a-1', PROFILE)
+    })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('remover: clicar no gatilho nao chama removeAnnouncement', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Manutencao programada')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Remover' }))
+    await screen.findByRole('alertdialog')
+    expect(mockRemoveAnnouncement).not.toHaveBeenCalled()
+  })
+
+  it('remover: Cancelar fecha o dialogo e nao chama removeAnnouncement', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Manutencao programada')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Remover' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(mockRemoveAnnouncement).not.toHaveBeenCalled()
+  })
+
+  it('remover: rejeicao mantem o dialogo aberto com o erro', async () => {
+    const user = userEvent.setup()
+    mockRemoveAnnouncement.mockRejectedValueOnce(new Error('boom'))
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Manutencao programada')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Remover' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir comunicado' }))
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('alertdialog')).getByText(/Não foi possível remover o comunicado/i)
+      ).toBeInTheDocument()
     })
   })
 

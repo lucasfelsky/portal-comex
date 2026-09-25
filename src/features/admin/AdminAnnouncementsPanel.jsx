@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Skeleton from '../../components/Skeleton'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import {
   listAnnouncements,
   removeAnnouncement,
@@ -42,6 +43,8 @@ export default function AdminAnnouncementsPanel() {
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
   const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false)
   const [error, setError] = useState('')
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmError, setDeleteConfirmError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -124,7 +127,7 @@ export default function AdminAnnouncementsPanel() {
     }
   }
 
-  async function handleRemoveAnnouncement(announcementId) {
+  async function handleRemoveAnnouncement(announcementId, onError = setError) {
     setIsSavingAnnouncement(true)
     setError('')
 
@@ -147,8 +150,10 @@ export default function AdminAnnouncementsPanel() {
             : createEmptyAnnouncementDraft()
         )
       }
+      return true
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível remover o comunicado.', saveError))
+      onError(buildActionErrorMessage('Não foi possível remover o comunicado.', saveError))
+      return false
     } finally {
       setIsSavingAnnouncement(false)
     }
@@ -264,7 +269,10 @@ export default function AdminAnnouncementsPanel() {
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={() => handleRemoveAnnouncement(announcementDraft.id)}
+                  onClick={() => {
+                    setDeleteConfirmError('')
+                    setIsDeleteConfirmOpen(true)
+                  }}
                   disabled={isSavingAnnouncement}
                 >
                   Remover
@@ -274,6 +282,30 @@ export default function AdminAnnouncementsPanel() {
           </div>
         </div>
       </article>
+
+      <ConfirmDialog
+        tone="danger"
+        open={isDeleteConfirmOpen}
+        busy={isSavingAnnouncement}
+        error={deleteConfirmError}
+        title={`Excluir comunicado "${
+          announcements.find((item) => item.id === announcementDraft.id)?.title ||
+          announcementDraft.title ||
+          'sem título'
+        }"?`}
+        message="O comunicado deixa de aparecer no painel inicial para todos os usuários. Esta ação não pode ser desfeita."
+        confirmLabel="Excluir comunicado"
+        busyLabel="Excluindo..."
+        onConfirm={async () => {
+          if (await handleRemoveAnnouncement(announcementDraft.id, setDeleteConfirmError)) {
+            setIsDeleteConfirmOpen(false)
+          }
+        }}
+        onCancel={() => {
+          setIsDeleteConfirmOpen(false)
+          setDeleteConfirmError('')
+        }}
+      />
     </>
   )
 }

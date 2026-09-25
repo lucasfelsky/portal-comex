@@ -1474,8 +1474,8 @@ export default function ProcessesPage() {
     }
   }
 
-  async function handleDeleteMessage(message) {
-    if (!isAdmin || !selectedProcess?.id || !message?.id) return
+  async function handleDeleteMessage(message, onError = setMessagesError) {
+    if (!isAdmin || !selectedProcess?.id || !message?.id) return false
 
     setDeletingMessageId(message.id)
     setMessagesError('')
@@ -1483,8 +1483,10 @@ export default function ProcessesPage() {
       await deleteProcessMessage(selectedProcess.id, message.id, profile)
       const refreshedMessages = await listProcessMessages(selectedProcess.id)
       setProcessMessages(refreshedMessages)
+      return true
     } catch (deleteError) {
-      setMessagesError(buildActionErrorMessage('Não foi possível excluir a mensagem.', deleteError))
+      onError(buildActionErrorMessage('Não foi possível excluir a mensagem.', deleteError))
+      return false
     } finally {
       setDeletingMessageId('')
     }

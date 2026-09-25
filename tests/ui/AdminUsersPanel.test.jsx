@@ -17,7 +17,7 @@
 //   - Fila de pendentes: lista usuarios com status Pendente; "0 pendentes" se vazio
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
@@ -319,20 +319,24 @@ describe('AdminUsersPanel', () => {
     expect(lastCall[0].statusTone).toBe('ok')
   })
 
-  it('toggle Bloquear/Ativar no detalhe: alterna entre Ativo e Bloqueado', async () => {
+  it('toggle Bloquear/Ativar no detalhe: abre confirmacao e, ao confirmar, alterna para Bloqueado', async () => {
     const user = userEvent.setup()
     renderPanel()
     await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
     // Maria esta Ativo; botao deve dizer "Bloquear usuário"
     const toggleBtn = screen.getByRole('button', { name: 'Bloquear usuário' })
     await user.click(toggleBtn)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(mockSaveUser).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Bloquear usuário' }))
     await waitFor(() => {
       const lastCall = mockSaveUser.mock.calls[mockSaveUser.mock.calls.length - 1]
       expect(lastCall[0].status).toBe('Bloqueado')
     })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
   })
 
-  it('excluir usuario: chama deleteUser', async () => {
+  it('excluir usuario: abre confirmacao e, ao confirmar, chama deleteUser', async () => {
     const user = userEvent.setup()
     renderPanel()
     await waitFor(() => expect(screen.getAllByText('Carlos Bloq').length).toBeGreaterThan(0))
@@ -344,8 +348,84 @@ describe('AdminUsersPanel', () => {
       expect(screen.getByDisplayValue('carlos@sqquimica.com')).toBeInTheDocument()
     })
     await user.click(screen.getByRole('button', { name: 'Excluir usuário' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(mockDeleteUser).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir usuário' }))
     await waitFor(() => {
       expect(mockDeleteUser).toHaveBeenCalledWith('u-3', PROFILE)
+    })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('confirmacoes: gatilho abre alertdialog com o nome do usuario e nao executa ate confirmar', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Excluir usuário' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(/Maria Souza/)).toBeInTheDocument()
+    expect(mockDeleteUser).not.toHaveBeenCalled()
+  })
+
+  it('confirmacoes: Cancelar fecha o dialogo e nao executa a acao', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Excluir usuário' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(mockDeleteUser).not.toHaveBeenCalled()
+  })
+
+  it('reprovar cadastro: confirmar chama saveUser com status Reprovado', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getAllByText('Joao Pendente').length).toBeGreaterThan(0))
+    const cards = document.querySelectorAll('.invite-card')
+    const joaoCard = Array.from(cards).find((c) => c.textContent.includes('Joao Pendente'))
+    const reprovarBtn = within(joaoCard).getByRole('button', { name: 'Reprovar' })
+    await user.click(reprovarBtn)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(mockSaveUser).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Reprovar cadastro' }))
+    await waitFor(() => {
+      const lastCall = mockSaveUser.mock.calls[mockSaveUser.mock.calls.length - 1]
+      expect(lastCall[0].id).toBe('u-2')
+      expect(lastCall[0].status).toBe('Reprovado')
+    })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('falha ao excluir: dialogo continua aberto com o erro dentro dele', async () => {
+    const user = userEvent.setup()
+    mockDeleteUser.mockRejectedValueOnce(new Error('boom'))
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Excluir usuário' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir usuário' }))
+    await waitFor(() => {
+      expect(within(screen.getByRole('alertdialog')).getByText(/Não foi possível excluir o usuário/i)).toBeInTheDocument()
+    })
+  })
+
+  it('Ativar usuário (Carlos, Bloqueado): chama saveUser direto, sem dialogo', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getAllByText('Carlos Bloq').length).toBeGreaterThan(0))
+    const rows = screen.getAllByText('Carlos Bloq')
+    const row = rows[0].closest('button')
+    await user.click(row)
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('carlos@sqquimica.com')).toBeInTheDocument()
+    })
+    const activateBtn = screen.getByRole('button', { name: 'Ativar usuário' })
+    await user.click(activateBtn)
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      const lastCall = mockSaveUser.mock.calls[mockSaveUser.mock.calls.length - 1]
+      expect(lastCall[0].status).toBe('Ativo')
     })
   })
 

@@ -16,13 +16,14 @@
 //   - News com references: links renderizam no modal
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 const mockUseAuth = vi.fn()
 const mockListNews = vi.fn()
 const mockListExternalNews = vi.fn()
+const mockRemoveNewsItem = vi.fn()
 
 vi.mock('../../src/hooks/useAuth', () => ({
   default: () => mockUseAuth(),
@@ -30,7 +31,7 @@ vi.mock('../../src/hooks/useAuth', () => ({
 vi.mock('../../src/services/newsRepository', () => ({
   listNews: (...args) => mockListNews(...args),
   saveNewsItem: vi.fn(),
-  removeNewsItem: vi.fn(),
+  removeNewsItem: (...args) => mockRemoveNewsItem(...args),
   createNewsItemId: () => 'new-id',
 }))
 vi.mock('../../src/services/externalNewsRepository', () => ({
@@ -102,9 +103,11 @@ beforeEach(() => {
   mockUseAuth.mockReset()
   mockListNews.mockReset()
   mockListExternalNews.mockReset()
+  mockRemoveNewsItem.mockReset()
   mockUseAuth.mockReturnValue({ profile: ADMIN_PROFILE })
   mockListNews.mockResolvedValue(MANUAL_NEWS)
   mockListExternalNews.mockResolvedValue(AUTOMATIC_NEWS)
+  mockRemoveNewsItem.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -294,6 +297,65 @@ describe('NewsPage', () => {
       const links = screen.getAllByRole('link')
       const refLinks = links.filter((l) => l.href.includes('example.com/ref'))
       expect(refLinks.length).toBe(2)
+    })
+  })
+
+  async function openEditorForManualNews(user) {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Manutencao programada sabado')).toBeInTheDocument()
+    })
+    const cards = document.querySelectorAll('.news-card')
+    const manualCard = Array.from(cards).find((c) =>
+      c.textContent.includes('Manutencao programada sabado')
+    )
+    await user.click(within(manualCard).getByRole('button', { name: 'Editar' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Excluir notícia' })).toBeInTheDocument()
+    })
+  }
+
+  it('admin: clicar em "Excluir notícia" abre confirmacao e nao chama removeNewsItem', async () => {
+    const user = userEvent.setup()
+    await openEditorForManualNews(user)
+    await user.click(screen.getByRole('button', { name: 'Excluir notícia' }))
+    await screen.findByRole('alertdialog')
+    expect(mockRemoveNewsItem).not.toHaveBeenCalled()
+  })
+
+  it('excluir notícia: Cancelar fecha o dialogo e nao chama removeNewsItem', async () => {
+    const user = userEvent.setup()
+    await openEditorForManualNews(user)
+    await user.click(screen.getByRole('button', { name: 'Excluir notícia' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(mockRemoveNewsItem).not.toHaveBeenCalled()
+  })
+
+  it('excluir notícia: confirmar dentro do alertdialog chama removeNewsItem', async () => {
+    const user = userEvent.setup()
+    await openEditorForManualNews(user)
+    await user.click(screen.getByRole('button', { name: 'Excluir notícia' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir notícia' }))
+    await waitFor(() => {
+      expect(mockRemoveNewsItem).toHaveBeenCalledTimes(1)
+    })
+    expect(mockRemoveNewsItem.mock.calls[0][0].id).toBe('n-1')
+  })
+
+  it('excluir notícia: rejeicao mantem o dialogo aberto com o erro', async () => {
+    const user = userEvent.setup()
+    mockRemoveNewsItem.mockRejectedValueOnce(new Error('boom'))
+    await openEditorForManualNews(user)
+    await user.click(screen.getByRole('button', { name: 'Excluir notícia' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir notícia' }))
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('alertdialog')).getByText(/Não foi possível remover a notícia/i)
+      ).toBeInTheDocument()
     })
   })
 })

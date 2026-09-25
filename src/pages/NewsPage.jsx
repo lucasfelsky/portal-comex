@@ -4,6 +4,7 @@ import Icon from '../components/Icon'
 import { createNewsItemId, listNews, removeNewsItem, saveNewsItem } from '../services/newsRepository'
 import { listExternalNews } from '../services/externalNewsRepository'
 import Modal from '../components/Modal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Skeleton from '../components/Skeleton'
 import {
   deleteNewsMediaItems,
@@ -190,6 +191,8 @@ export default function NewsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isProcessingMedia, setIsProcessingMedia] = useState(false)
   const [error, setError] = useState('')
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmError, setDeleteConfirmError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -436,8 +439,8 @@ export default function NewsPage() {
     }
   }
 
-  async function handleDeleteNews() {
-    if (!draft.id) return
+  async function handleDeleteNews(onError = setError) {
+    if (!draft.id) return false
 
     setIsSaving(true)
     setError('')
@@ -460,8 +463,10 @@ export default function NewsPage() {
       setDraft(createEmptyDraft())
       setSelectedNewsId(null)
       setViewMode('list')
+      return true
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível remover a notícia.', saveError))
+      onError(buildActionErrorMessage('Não foi possível remover a notícia.', saveError))
+      return false
     } finally {
       setIsSaving(false)
     }
@@ -480,7 +485,15 @@ export default function NewsPage() {
                 Voltar para lista
               </button>
               {draft.id ? (
-                <button type="button" className="ghost-button" onClick={handleDeleteNews} disabled={isSaving}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    setDeleteConfirmError('')
+                    setIsDeleteConfirmOpen(true)
+                  }}
+                  disabled={isSaving}
+                >
                   Excluir notícia
                 </button>
               ) : null}
@@ -574,6 +587,28 @@ export default function NewsPage() {
               {isSaving ? 'Salvando...' : draft.id ? 'Salvar alterações' : 'Publicar notícia'}
             </button>
           </div>
+
+          <ConfirmDialog
+            tone="danger"
+            open={isDeleteConfirmOpen}
+            busy={isSaving}
+            error={deleteConfirmError}
+            title={`Excluir notícia "${
+              newsItems.find((item) => item.id === draft.id)?.title || draft.title || 'sem título'
+            }"?`}
+            message="A notícia, a capa e os anexos serão excluídos para todos os usuários. Esta ação não pode ser desfeita."
+            confirmLabel="Excluir notícia"
+            busyLabel="Excluindo..."
+            onConfirm={async () => {
+              if (await handleDeleteNews(setDeleteConfirmError)) {
+                setIsDeleteConfirmOpen(false)
+              }
+            }}
+            onCancel={() => {
+              setIsDeleteConfirmOpen(false)
+              setDeleteConfirmError('')
+            }}
+          />
         </article>
       ) : null}
 

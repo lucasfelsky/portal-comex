@@ -3,7 +3,8 @@
 // visível a partir de "Coleta Agendada" (inclusive) em diante — usa
 // `isCollectionScheduledOrBeyondStatus` (módulo REAL, sem mock).
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
 
 const mockListProcessEvents = vi.fn().mockResolvedValue([])
@@ -524,5 +525,85 @@ describe('ProcessDetailView — divergência no recebimento / devolução de vaz
       }),
     })
     expect(screen.getByText(/vazio devolvido em 10\/09\/2026/)).toBeInTheDocument()
+  })
+})
+
+// UX-1 (2026-09-25): confirmacao antes de excluir mensagem do processo.
+describe('ProcessDetailView — confirmacao ao excluir mensagem (UX-1)', () => {
+  const MESSAGE = {
+    id: 'm-1',
+    authorName: 'Maria Souza',
+    createdAt: '2026-09-20T10:00:00.000Z',
+    content: 'Dúvida sobre o processo.',
+  }
+
+  it('clicar em "Excluir" abre a confirmacao e nao chama onDeleteMessage', async () => {
+    const user = userEvent.setup()
+    const onDeleteMessage = vi.fn()
+    renderDetail({
+      detailTab: 'messages',
+      isAdmin: true,
+      processMessages: [MESSAGE],
+      onDeleteMessage,
+    })
+    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    await screen.findByRole('alertdialog')
+    expect(onDeleteMessage).not.toHaveBeenCalled()
+  })
+
+  it('Cancelar fecha o dialogo e nao chama onDeleteMessage', async () => {
+    const user = userEvent.setup()
+    const onDeleteMessage = vi.fn()
+    renderDetail({
+      detailTab: 'messages',
+      isAdmin: true,
+      processMessages: [MESSAGE],
+      onDeleteMessage,
+    })
+    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(onDeleteMessage).not.toHaveBeenCalled()
+  })
+
+  it('confirmar chama onDeleteMessage(msg, onError) e fecha quando resolve true', async () => {
+    const user = userEvent.setup()
+    const onDeleteMessage = vi.fn().mockResolvedValue(true)
+    renderDetail({
+      detailTab: 'messages',
+      isAdmin: true,
+      processMessages: [MESSAGE],
+      onDeleteMessage,
+    })
+    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir mensagem' }))
+    await waitFor(() => {
+      expect(onDeleteMessage).toHaveBeenCalledWith(MESSAGE, expect.any(Function))
+    })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('quando onDeleteMessage chama o onError recebido e resolve false, o dialogo continua aberto com o texto', async () => {
+    const user = userEvent.setup()
+    const onDeleteMessage = vi.fn().mockImplementation(async (_message, onError) => {
+      onError('Não foi possível excluir a mensagem.')
+      return false
+    })
+    renderDetail({
+      detailTab: 'messages',
+      isAdmin: true,
+      processMessages: [MESSAGE],
+      onDeleteMessage,
+    })
+    await user.click(screen.getByRole('button', { name: 'Excluir' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir mensagem' }))
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('alertdialog')).getByText('Não foi possível excluir a mensagem.')
+      ).toBeInTheDocument()
+    })
   })
 })

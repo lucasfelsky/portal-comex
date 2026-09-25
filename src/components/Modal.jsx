@@ -32,7 +32,18 @@ import { createPortal } from 'react-dom'
 
 const SWIPE_CLOSE_THRESHOLD = 120
 
-export default function Modal({ open, onClose, title, wide = false, children, ariaLabel, className = '' }) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  wide = false,
+  children,
+  ariaLabel,
+  className = '',
+  role = 'dialog',
+  initialFocusRef = null,
+  ariaDescribedBy,
+}) {
   const modalRef = useRef(null)
   const lastFocusedRef = useRef(null)
   const [shouldRender, setShouldRender] = useState(open)
@@ -77,6 +88,10 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
     }
 
     const initialFocus = window.setTimeout(() => {
+      if (initialFocusRef?.current && !initialFocusRef.current.disabled) {
+        initialFocusRef.current.focus()
+        return
+      }
       const focusables = getFocusableElements()
       if (focusables.length > 0) {
         focusables[0].focus()
@@ -182,9 +197,10 @@ export default function Modal({ open, onClose, title, wide = false, children, ar
         ref={modalRef}
         className={sheetClass}
         style={sheetStyle}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-label={ariaLabel ?? title ?? 'Modal'}
+        aria-describedby={ariaDescribedBy}
         tabIndex={-1}
       >
         <div

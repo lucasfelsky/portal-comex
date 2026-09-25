@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import SelectField from '../../components/SelectField'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 
 // F15.2: iniciais pro avatar da lista mobile (mesma lógica do topbar).
@@ -78,6 +79,8 @@ export default function AdminUsersPanel() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
+  const [pendingConfirm, setPendingConfirm] = useState(null)
+  const [confirmError, setConfirmError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -244,7 +247,7 @@ export default function AdminUsersPanel() {
     }
   }
 
-  async function handleSetUserStatus(user, nextStatus) {
+  async function handleSetUserStatus(user, nextStatus, onError = setError) {
     setIsSavingUser(true)
     setError('')
 
@@ -267,17 +270,19 @@ export default function AdminUsersPanel() {
       if (selectedUserId === user.id) {
         setDraft(createDraftFromUser(updatedUser))
       }
+      return true
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível atualizar o status do usuário.', saveError))
+      onError(buildActionErrorMessage('Não foi possível atualizar o status do usuário.', saveError))
+      return false
     } finally {
       setIsSavingUser(false)
     }
   }
 
-  async function handleDeleteUser(user) {
+  async function handleDeleteUser(user, onError = setError) {
     if (!user?.id || user.id === profile?.uid) {
-      setError('Não é permitido excluir o próprio usuário logado.')
-      return
+      onError('Não é permitido excluir o próprio usuário logado.')
+      return false
     }
 
     setIsSavingUser(true)
@@ -294,10 +299,35 @@ export default function AdminUsersPanel() {
       const nextSelectedUser = refreshedUsers[0] ?? null
       setIsCreating(false)
       setDraft(nextSelectedUser ? createDraftFromUser(nextSelectedUser) : createEmptyDraft())
+      return true
     } catch (saveError) {
-      setError(buildActionErrorMessage('Não foi possível excluir o usuário.', saveError))
+      onError(buildActionErrorMessage('Não foi possível excluir o usuário.', saveError))
+      return false
     } finally {
       setIsSavingUser(false)
+    }
+  }
+
+  function openConfirm(kind, user) {
+    setConfirmError('')
+    setPendingConfirm({ kind, user })
+  }
+
+  function handleCancelConfirm() {
+    setPendingConfirm(null)
+    setConfirmError('')
+  }
+
+  async function handleConfirmAction() {
+    if (!pendingConfirm) return
+    const { kind, user } = pendingConfirm
+    const ok =
+      kind === 'delete'
+        ? await handleDeleteUser(user, setConfirmError)
+        : await handleSetUserStatus(user, kind === 'block' ? 'Bloqueado' : 'Reprovado', setConfirmError)
+
+    if (ok) {
+      setPendingConfirm(null)
     }
   }
 
@@ -342,7 +372,7 @@ export default function AdminUsersPanel() {
                     <button
                       type="button"
                       className="ghost-button"
-                      onClick={() => handleSetUserStatus(user, 'Reprovado')}
+                      onClick={() => openConfirm('reject', user)}
                       disabled={isSavingUser}
                     >
                       Reprovar
@@ -599,10 +629,9 @@ export default function AdminUsersPanel() {
               type="button"
               className="ghost-button"
               onClick={() =>
-                handleSetUserStatus(
-                  selectedUser,
-                  selectedUser.status === 'Ativo' ? 'Bloqueado' : 'Ativo'
-                )
+                selectedUser.status === 'Ativo'
+                  ? openConfirm('block', selectedUser)
+                  : handleSetUserStatus(selectedUser, 'Ativo')
               }
               disabled={isSavingUser}
             >
@@ -613,7 +642,7 @@ export default function AdminUsersPanel() {
             <button
               type="button"
               className="ghost-button"
-              onClick={() => handleDeleteUser(selectedUser)}
+              onClick={() => openConfirm('delete', selectedUser)}
               disabled={isSavingUser || selectedUser.id === profile?.uid}
             >
               Excluir usuário
@@ -621,6 +650,47 @@ export default function AdminUsersPanel() {
           ) : null}
         </div>
       </article>
+
+      <ConfirmDialog
+        tone="danger"
+        open={Boolean(pendingConfirm)}
+        busy={isSavingUser}
+        error={confirmError}
+        title={
+          pendingConfirm?.kind === 'delete'
+            ? `Excluir usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+            : pendingConfirm?.kind === 'block'
+              ? `Bloquear usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+              : pendingConfirm?.kind === 'reject'
+                ? `Reprovar cadastro de ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+                : ''
+        }
+        message={
+          pendingConfirm?.kind === 'delete'
+            ? `A conta de login e o cadastro de ${pendingConfirm.user.email} serão excluídos. Esta ação não pode ser desfeita.`
+            : pendingConfirm?.kind === 'block'
+              ? `${pendingConfirm.user.name || pendingConfirm.user.email} deixará de acessar o portal. Você pode liberar o acesso depois em "Ativar usuário".`
+              : pendingConfirm?.kind === 'reject'
+                ? `O acesso de ${pendingConfirm.user.email} ao portal não será liberado. Você pode ativar o usuário depois pelo detalhe do usuário.`
+                : ''
+        }
+        confirmLabel={
+          pendingConfirm?.kind === 'delete'
+            ? 'Excluir usuário'
+            : pendingConfirm?.kind === 'block'
+              ? 'Bloquear usuário'
+              : 'Reprovar cadastro'
+        }
+        busyLabel={
+          pendingConfirm?.kind === 'delete'
+            ? 'Excluindo...'
+            : pendingConfirm?.kind === 'block'
+              ? 'Bloqueando...'
+              : 'Reprovando...'
+        }
+        onConfirm={handleConfirmAction}
+        onCancel={handleCancelConfirm}
+      />
     </>
   )
 }
