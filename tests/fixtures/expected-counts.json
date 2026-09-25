@@ -248,6 +248,7 @@
     "isLogisticsCollectionStatusUpdate": [
       "cargoReceivedAt",
       "collectionStatus",
+      "postReceiptImages",
       "processStatus",
       "receiptDivergence",
       "receiptDivergenceNotes",

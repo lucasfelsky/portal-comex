@@ -185,7 +185,7 @@ service cloud.firestore {
       return (!('receiptDivergence' in request.resource.data)
         || request.resource.data.receiptDivergence is bool)
         && (!('receiptDivergenceType' in request.resource.data)
-        || request.resource.data.receiptDivergenceType in ['', 'Avaria', 'Falta', 'Sobra'])
+        || request.resource.data.receiptDivergenceType in ['', 'Avaria', 'Falta', 'Sobra', 'Lote'])
         && (!('receiptDivergenceNotes' in request.resource.data)
         || (request.resource.data.receiptDivergenceNotes is string
         && request.resource.data.receiptDivergenceNotes.size() <= 2000));
@@ -354,6 +354,11 @@ service cloud.firestore {
     // gravar quando o status escolhido e' pos-recebimento -
     // isPreCollectionStatus ja' nega a divergencia junto do status final
     // pre-coleta). `containers` continua FORA (so' admin devolve o vazio).
+    // F17.4b-fix: +1 campo `postReceiptImages` (fotos do recebimento
+    // anexadas na propria tela de Status de coleta, mesmo UNICO update da
+    // divergencia - D1); mesma guarda de shape/tamanho de
+    // isLogisticsPostReceiptUpdate (list, max 10). `postReceiptNotes`
+    // continua FORA (D2 - notas gerais so' na tela propria).
     function isLogisticsCollectionStatusUpdate() {
       return hasScheduledCollection()
         && !isPreCollectionStatus(request.resource.data.collectionStatus)
@@ -361,8 +366,14 @@ service cloud.firestore {
           'collectionStatus', 'processStatus', 'cargoReceivedAt',
           'updatedAt', 'updatedById', 'updatedByName',
           'receiptDivergence', 'receiptDivergenceType', 'receiptDivergenceNotes',
+          'postReceiptImages',
         ])
         && isValidReceiptDivergence()
+        && (!('postReceiptImages' in request.resource.data)
+          || (
+            request.resource.data.postReceiptImages is list
+            && request.resource.data.postReceiptImages.size() <= 10
+          ))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['processStatus'])
           || request.resource.data.processStatus in ['Coleta Agendada', 'Carga recebida'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cargoReceivedAt'])

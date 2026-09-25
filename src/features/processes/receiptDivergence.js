@@ -11,7 +11,7 @@
 // Os dados NAO sao apagados so' porque o status de coleta voltou (so' zeram
 // quando a flag `receiptDivergence` e' desmarcada) - ver `saveProcessCollectionStatus`.
 
-export const RECEIPT_DIVERGENCE_TYPES = ['Avaria', 'Falta', 'Sobra']
+export const RECEIPT_DIVERGENCE_TYPES = ['Avaria', 'Falta', 'Sobra', 'Lote']
 export const MAX_RECEIPT_DIVERGENCE_NOTES = 2000
 
 export function normalizeReceiptDivergenceFields(p, { trimText = true } = {}) {

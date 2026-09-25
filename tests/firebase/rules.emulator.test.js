@@ -1540,6 +1540,132 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    // F17.4b-fix: logistica anexa postReceiptImages no MESMO update de
+    // status + divergencia (D1 - 1 write so').
+    it('logistica grava status pos-recebimento + divergencia "Lote" + postReceiptImages num unico update', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div9'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      const images = [
+        { id: 'img-0', url: 'https://example.com/img-0.jpg', name: 'foto-0.jpg', mimeType: 'image/jpeg' },
+        { id: 'img-1', url: 'https://example.com/img-1.jpg', name: 'foto-1.jpg', mimeType: 'image/jpeg' },
+      ]
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/div9'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Lote',
+          receiptDivergenceNotes: 'lote trocado',
+          postReceiptImages: images,
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava 11 postReceiptImages junto do status + divergencia', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div10'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      const images = Array.from({ length: 11 }, (_, idx) => ({
+        id: `img-${idx}`,
+        url: `https://example.com/img-${idx}.jpg`,
+        name: `foto-${idx}.jpg`,
+        mimeType: 'image/jpeg',
+      }))
+      await assertFails(
+        updateDoc(doc(db, 'processes/div10'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          postReceiptImages: images,
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava postReceiptImages como string junto do status + divergencia', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div11'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          postReceiptImages: [],
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div11'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          receiptDivergence: true,
+          receiptDivergenceType: 'Avaria',
+          postReceiptImages: 'nao-eh-list',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    it('logistica NAO grava postReceiptNotes junto do status de coleta', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/div12'), {
+          name: 'P',
+          collectionScheduledAt: '2026-07-01T10:00',
+          collectionStatus: 'Coleta Agendada',
+          postReceiptNotes: '',
+          updatedById: 'x',
+          updatedByName: 'y',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/div12'), {
+          collectionStatus: 'Carga recebida, em conferência',
+          postReceiptNotes: 'nota geral',
+          updatedAt: 'now',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // F17.4b-fix (D6): admin grava o tipo novo 'Lote'.
+    it('admin grava divergencia "Lote"', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/div13'), { name: 'P', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/div13'), {
+          receiptDivergence: true,
+          receiptDivergenceType: 'Lote',
+          receiptDivergenceNotes: 'lote trocado',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
     it('logistica NAO avanca pra status que nao e pos-coleta', async () => {
       await seed((db) =>
         setDoc(doc(db, 'processes/cs3'), {

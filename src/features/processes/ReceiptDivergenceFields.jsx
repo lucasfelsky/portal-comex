@@ -54,7 +54,7 @@ export default function ReceiptDivergenceFields({ value, imagesCount, onChange, 
 
           {imagesCount === 0 ? (
             <small className="field-hint">
-              Anexe ao menos 1 foto em Observações pós-recebimento.
+              Anexe ao menos 1 foto em Fotos do recebimento, abaixo.
             </small>
           ) : null}
         </>

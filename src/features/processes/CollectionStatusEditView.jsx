@@ -1,5 +1,6 @@
 import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
+import PostReceiptImagesField from './PostReceiptImagesField'
 import ReceiptDivergenceFields from './ReceiptDivergenceFields'
 import {
   CD_EN_ROUTE_STATUS,
@@ -17,16 +18,24 @@ import { getProcessTitle } from './processLabels'
 // estado e os handlers continuam na página. Zero mudança visual/comportamental.
 // F17.4b (B-4): + editor de divergencia no recebimento (logistica E admin),
 // visivel so' quando o status escolhido e' pos-recebimento.
+// F17.4b-fix (D3/D5): + uploader de fotos do recebimento (`PostReceiptImagesField`,
+// mesmo componente da tela "Observações pós-recebimento"), visivel na MESMA
+// condicao do editor de divergencia (status escolhido pos-recebimento) - nao
+// exige o checkbox marcado, evita estado oculto.
 export default function CollectionStatusEditView({
   process,
   collectionStatus,
   canSeeName,
   isSaving,
   receiptDivergenceFields,
+  draftPostReceiptImages,
+  isUploadingPostReceiptImages,
   onStatusChange,
   onDivergenceChange,
   onSave,
   onClose,
+  onImagesUpload,
+  onRemoveImage,
 }) {
   return (
     <article className="list-card" style={{ marginTop: '16px' }}>
@@ -81,14 +90,22 @@ export default function CollectionStatusEditView({
           </SelectField>
         </label>
         {postCollectionStatusOptions.includes(collectionStatus) ? (
-          <ReceiptDivergenceFields
-            value={receiptDivergenceFields}
-            imagesCount={
-              Array.isArray(process.postReceiptImages) ? process.postReceiptImages.length : 0
-            }
-            onChange={onDivergenceChange}
-            disabled={isSaving}
-          />
+          <>
+            <ReceiptDivergenceFields
+              value={receiptDivergenceFields}
+              imagesCount={draftPostReceiptImages.length}
+              onChange={onDivergenceChange}
+              disabled={isSaving}
+            />
+            <PostReceiptImagesField
+              images={draftPostReceiptImages}
+              isUploading={isUploadingPostReceiptImages}
+              disabled={isSaving}
+              label="Fotos do recebimento"
+              onUpload={onImagesUpload}
+              onRemove={onRemoveImage}
+            />
+          </>
         ) : null}
       </div>
 
@@ -97,7 +114,11 @@ export default function CollectionStatusEditView({
           type="button"
           className="primary-button"
           onClick={onSave}
-          disabled={isSaving || !isLogisticaEditableCollectionStatus(collectionStatus)}
+          disabled={
+            isSaving ||
+            isUploadingPostReceiptImages ||
+            !isLogisticaEditableCollectionStatus(collectionStatus)
+          }
         >
           {isSaving ? 'Salvando...' : 'Salvar status'}
         </button>

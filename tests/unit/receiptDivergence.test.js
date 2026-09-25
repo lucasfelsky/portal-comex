@@ -79,7 +79,7 @@ describe('paridade B-8 (src x mirror)', () => {
   })
 
   const flags = [true, false, 'true', undefined]
-  const types = ['Avaria', 'Falta', 'Sobra', 'Outro', '', undefined]
+  const types = ['Avaria', 'Falta', 'Sobra', 'Lote', 'Outro', '', undefined]
   const notesValues = ['', '  x  ', 'x'.repeat(2001), undefined]
 
   it('normalizeReceiptDivergenceFieldsMirror === normalizeReceiptDivergenceFields (matriz completa, trimText true)', () => {
