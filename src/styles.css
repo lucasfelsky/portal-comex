@@ -33,6 +33,12 @@
   --primary-700: #008f76;
   --primary-50: #e3f5f0;
   --eta-label-color: #007864;
+  --button-primary-bg: #007864;
+  --button-primary-bg-hover: #006b56;
+  --button-primary-bg-active: #005948;
+  --focus-ring: #007864;
+  --link-color: #007864;
+  --link-color-hover: #006b56;
   --danger: #dc2626;
   --danger-700: #b91c1c;
   --danger-50: #fee2e2;
@@ -48,6 +54,8 @@
   --neutral-50: #eef4f1;
   --border: #dce9e5;
   --border-strong: #b7cdc5;
+  --border-control: #708a82;
+  --border-control-hover: #56706a;
   --bg-tint-1: #eef7f6;
   --bg-tint-2: #e6f1f2;
 
@@ -69,10 +77,13 @@
   /* Tints de texto (intelliQuote).
      C10 (auditoria mobile): --text-subtle e --text-faint foram escurecidos
      para passar WCAG AA (contraste >= 4.5:1 sobre --surface #fff).
-     Antes: 0.52 (~2.7:1) e 0.42 (~2.2:1) — falhavam. Agora: 0.62 e 0.52. */
+     Antes: 0.52 (~2.7:1) e 0.42 (~2.2:1) — falhavam. Agora: 0.62 e 0.52.
+     UX-5: --text-faint media 3,35:1 (pior fundo) com 0.52 — ainda reprovava.
+     Subiu para 0.66 (5,11:1 a 5,46:1). --text-subtle/--text-muted em 0.62
+     ja passavam (4,51:1 a 4,78:1) e ficam travados pelo teste. */
   --text-muted: rgba(31, 28, 24, 0.62);
   --text-subtle: rgba(31, 28, 24, 0.62);
-  --text-faint: rgba(31, 28, 24, 0.52);
+  --text-faint: rgba(31, 28, 24, 0.66);
   --text-mute-strong: rgba(31, 28, 24, 0.68);
 
   /* Fase 1 do redesign: fonte de headings (Bricolage Grotesque, adicionada
@@ -111,8 +122,16 @@ h3 { font-size: var(--fs-headline);    font-weight: 700; }
 h4 { font-size: var(--fs-subhead); font-weight: 700; }
 p  { margin: 0 0 8px; line-height: 1.5; color: var(--ink-soft); }
 
-a { color: var(--primary-700); text-decoration: none; transition: color 140ms ease; }
-a:hover { color: var(--primary); text-decoration: underline; }
+/* UX-5 (D3): cor de link em token dedicado, para nao ficar preso ao
+   fundo de botao (--primary/--primary-700). So os links de texto corrido
+   (sem classe, ex.: referencias de noticia) sublinham por padrao; links
+   de navegacao/menu/botao definem a propria cor e ficam de fora do hover
+   verde (efeito colateral intencional — corrige a.primary-button:hover
+   virando verde por especificidade). */
+a { color: var(--link-color); text-decoration: none; transition: color 140ms ease; }
+a:not([class]) { text-decoration: underline; text-underline-offset: 0.15em; }
+a:hover { text-decoration: underline; }
+a:not([class]):hover { color: var(--link-color-hover); }
 
 /* Links dentro de UI (nav, botoes, cards) nao devem sublinhar no
    hover — o "componente" ja' da feedback visual proprio (background,
@@ -793,7 +812,7 @@ body {
   max-width: 100%;
   min-height: 36px;
   padding: 7px 38px 7px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   background-color: var(--surface);
   color: var(--ink);
@@ -813,13 +832,13 @@ body {
 }
 
 .notifications__filter-select:hover {
-  border-color: var(--border-strong);
+  border-color: var(--border-control-hover);
 }
 
 .notifications__filter-select:focus-visible {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-50);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 @media (max-width: 720px) {
@@ -1020,7 +1039,7 @@ body {
 }
 
 .notifications__item:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 
@@ -1036,7 +1055,7 @@ body {
 }
 
 .notifications__group-toggle:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 
@@ -2067,7 +2086,7 @@ body {
 }
 
 .auth-toggle__item--active {
-  background: var(--primary);
+  background: var(--button-primary-bg);
   color: #ffffff;
   box-shadow: 0 6px 16px rgba(0, 174, 145, 0.24);
 }
@@ -2920,14 +2939,14 @@ body {
 }
 
 .tab-button--active {
-  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
+  background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 174, 145, 0.28);
   transform: scale(1.02);
 }
 
 .tab-button:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -2972,19 +2991,24 @@ body {
 }
 
 .primary-button {
-  background: var(--primary);
+  background: var(--button-primary-bg);
   color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 40, 40, 0.06);
 }
 
 .primary-button:hover:not(:disabled) {
-  background: var(--primary-700);
+  background: var(--button-primary-bg-hover);
+  color: #ffffff;
   box-shadow: 0 2px 6px rgba(0, 174, 145, 0.24);
 }
 
+.primary-button:active:not(:disabled) {
+  background: var(--button-primary-bg-active);
+}
+
 .primary-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--primary-50);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .ghost-button {
@@ -2999,9 +3023,8 @@ body {
 }
 
 .ghost-button:focus-visible {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-50);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .danger-button {
@@ -3016,8 +3039,8 @@ body {
 }
 
 .danger-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--danger-50);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .secondary-button {
@@ -3032,8 +3055,8 @@ body {
 }
 
 .secondary-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--primary-50);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .primary-button:disabled,
@@ -3646,7 +3669,7 @@ body {
 .text-input {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-xs);
   background: var(--surface);
   color: var(--ink);
@@ -3673,12 +3696,12 @@ body {
 }
 
 .text-input:hover:not(:disabled):not(:focus) {
-  border-color: var(--border-strong);
+  border-color: var(--border-control-hover);
 }
 
 .text-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-50);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 .text-input:disabled {
@@ -3695,7 +3718,7 @@ body {
 
 .text-input[aria-invalid='true']:focus,
 .select-field__trigger[aria-invalid='true']:focus {
-  box-shadow: 0 0 0 3px var(--danger-50);
+  box-shadow: 0 0 0 1px var(--danger);
 }
 
 /* Sprint 17.2: date/time inputs estilizados.
@@ -4462,7 +4485,7 @@ body {
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active {
-    background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
+    background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active::before {
@@ -5035,7 +5058,7 @@ body {
     width: 100%;
     min-height: 48px;
     padding: 12px 40px 12px 16px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-control);
     border-radius: var(--radius-md);
     background: var(--surface);
     color: var(--ink);
@@ -5054,7 +5077,8 @@ body {
   .detail-tab-select__native:focus,
   .detail-tab-select__native:focus-visible {
     outline: none;
-    border-color: var(--primary-400);
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
     background-color: var(--surface);
   }
 
@@ -5656,7 +5680,7 @@ body {
 }
 
 .admin-tabs__dropdown-trigger:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -5753,7 +5777,7 @@ body {
 }
 
 .admin-tabs .tab-button--active {
-  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
+  background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
   color: #ffffff;
   box-shadow: var(--shadow-md);
 }
@@ -6065,7 +6089,7 @@ body {
 }
 
 .scope-chip--active {
-  background: linear-gradient(180deg, var(--primary-700) 0%, var(--primary) 100%);
+  background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
   color: #ffffff;
 }
 
@@ -6300,7 +6324,7 @@ body {
 }
 
 .notifications__show-more:hover {
-  background: var(--primary);
+  background: var(--button-primary-bg);
   color: #ffffff;
   transform: translateY(-1px);
 }
@@ -6647,12 +6671,19 @@ body {
   }
 
   .process-detail-toolbar .ghost-button:hover,
+  .process-detail-toolbar .primary-button:hover {
+    background: var(--primary-50);
+    border-color: var(--primary-300);
+    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.08);
+  }
+
   .process-detail-toolbar .ghost-button:focus-visible,
-  .process-detail-toolbar .primary-button:hover,
   .process-detail-toolbar .primary-button:focus-visible {
     background: var(--primary-50);
     border-color: var(--primary-300);
     box-shadow: 0 2px 6px rgba(0, 174, 145, 0.08);
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
   .process-detail-toolbar .ghost-button:active,
@@ -6669,10 +6700,16 @@ body {
     font-weight: 700;
   }
 
-  .process-detail-toolbar__favorite:hover,
+  .process-detail-toolbar__favorite:hover {
+    background: var(--primary-50);
+    border-color: var(--primary-400);
+  }
+
   .process-detail-toolbar__favorite:focus-visible {
     background: var(--primary-50);
     border-color: var(--primary-400);
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
   .process-detail-toolbar__favorite:active {
@@ -7025,7 +7062,7 @@ body {
   padding: 12px 18px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: var(--radius-full);
-  background: var(--primary);
+  background: var(--button-primary-bg);
   color: #ffffff;
   font-weight: 700;
   font-size: var(--fs-subhead);
@@ -7036,7 +7073,7 @@ body {
 
 .support-fab__trigger:hover {
   transform: translateY(-2px);
-  background: var(--primary-strong, var(--primary));
+  background: var(--button-primary-bg-hover);
 }
 
 .support-modal {
@@ -7406,7 +7443,7 @@ body {
   width: 100%;
   min-height: 48px;
   padding: 9px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-xs);
   background: var(--surface);
   color: var(--ink);
@@ -7414,6 +7451,12 @@ body {
   font-size: 16px;
   text-align: left;
   cursor: pointer;
+}
+
+.select-field__trigger:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 .select-field__trigger-value {
@@ -7572,14 +7615,20 @@ body {
     --ink: #eef3f1;
     --ink-soft: #9fb0ac;
 
-    /* --primary mantido igual ao claro: e' fundo de botao/estado ativo com
-       texto branco; clarear pioraria o contraste do texto (branco sobre teal
-       vivo cai pra ~2.2). --primary-700 fica um tom mais claro que no claro
-       so' pra dar contraste a LINKS/acentos sobre fundo escuro. */
+    /* --primary mantido igual ao claro: e' acento (icones/barras/badges).
+       UX-5: o fundo de botao/estado ativo com texto branco agora vem de
+       --button-primary-bg, herdado do :root (D1) — nao redeclarado aqui.
+       --primary-700 fica um tom mais claro que no claro so' pra dar
+       contraste a LINKS/acentos sobre fundo escuro. */
     --primary: #00ae91;
     --primary-700: #14b89a;
     --primary-50: #123029;
     --eta-label-color: #6ed9be;
+    --focus-ring: #14b89a;
+    --link-color: #14b89a;
+    --link-color-hover: #6ed9be;
+    --border-control: #72857f;
+    --border-control-hover: #8a9d98;
     --danger: #f87171;
     --danger-700: #e15b5b;
     --danger-50: #3a1f1f;
@@ -7618,7 +7667,7 @@ body {
     /* Tints de texto: agora sobre --surface escuro (ink claro + alpha). */
     --text-muted: rgba(238, 243, 241, 0.72);
     --text-subtle: rgba(238, 243, 241, 0.60);
-    --text-faint: rgba(238, 243, 241, 0.48);
+    --text-faint: rgba(238, 243, 241, 0.56);
     --text-mute-strong: rgba(238, 243, 241, 0.82);
 
     /* Vidros dark reutilizaveis (substituem os rgba(255,255,255,..) claros). */
@@ -7970,11 +8019,11 @@ body {
     --surface: #ffffff;
     --surface-alt: #e8ecea;
     --ink: #0b1512;
-    --ink-soft: #66736e;
+    --ink-soft: #5d6a65;
     --border: rgba(20, 40, 35, 0.13);
     --text-muted: rgba(11, 21, 18, 0.72);
     --text-subtle: rgba(11, 21, 18, 0.6);
-    --text-faint: rgba(11, 21, 18, 0.48);
+    --text-faint: rgba(11, 21, 18, 0.62);
     --text-mute-strong: rgba(11, 21, 18, 0.82);
   }
 
@@ -7990,7 +8039,7 @@ body {
     --border: rgba(235, 245, 242, 0.14);
     --text-muted: rgba(242, 245, 244, 0.72);
     --text-subtle: rgba(242, 245, 244, 0.6);
-    --text-faint: rgba(242, 245, 244, 0.48);
+    --text-faint: rgba(242, 245, 244, 0.56);
     --text-mute-strong: rgba(242, 245, 244, 0.82);
     --glass-strong: rgba(16, 18, 17, 0.88);
     --glass-grad: linear-gradient(180deg, rgba(27, 31, 30, 0.98), rgba(16, 18, 17, 0.96));
@@ -8560,6 +8609,11 @@ body {
     outline: none;
   }
 
+  .chegadas-search:focus-within {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
   .chegadas-segmented {
     display: flex;
     background: rgba(120, 140, 133, 0.16);
@@ -8960,7 +9014,7 @@ body {
   }
 
   .process-swipe-row__action--restore {
-    background: var(--primary);
+    background: var(--button-primary-bg);
   }
 }
 
@@ -9027,7 +9081,7 @@ body {
     font-size: var(--fs-caption);
     font-weight: 600;
     color: #fff;
-    background: var(--primary);
+    background: var(--button-primary-bg);
     cursor: pointer;
   }
 }
@@ -9088,7 +9142,7 @@ body {
 }
 
 .action-icon-button:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -10048,8 +10102,8 @@ body {
   }
 
   .auth-screen .auth-link-button:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--primary-50);
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
     border-radius: var(--radius-xs);
   }
 
@@ -10458,7 +10512,7 @@ body {
   }
 
   .admin-section .toggle input[type='checkbox']:focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
 
