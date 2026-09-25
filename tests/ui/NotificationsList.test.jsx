@@ -206,4 +206,155 @@ describe('NotificationsList', () => {
       expect(onOpen).not.toHaveBeenCalled()
     })
   })
+
+  // UX-2: estado de erro/loading + notificacoes navegaveis por teclado.
+  describe('UX-2: estados e acessibilidade por teclado', () => {
+    it('loadError + grouped vazio: alerta, sem "Nenhuma notificação", retry chama onRetry', async () => {
+      const onRetry = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <NotificationsList
+          grouped={[]}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+          loadError="Não foi possível carregar as notificações."
+          onRetry={onRetry}
+        />
+      )
+      const alert = screen.getByRole('alert')
+      expect(alert).toHaveTextContent(/Não foi possível carregar as notificações/i)
+      expect(screen.queryByText(/Nenhuma notificação/i)).toBeNull()
+      await user.click(screen.getByRole('button', { name: /Tentar novamente/i }))
+      expect(onRetry).toHaveBeenCalledTimes(1)
+    })
+
+    it('loadError + grupos: banner E itens presentes', () => {
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'Recente 1', count: 1, unreadCount: 1, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+          loadError="Não foi possível carregar as notificações."
+        />
+      )
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText('Recente 1')).toBeInTheDocument()
+    })
+
+    it('isLoading + grouped vazio: sem "Nenhuma notificação", com skeleton', () => {
+      const { container } = render(
+        <NotificationsList
+          grouped={[]}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+          isLoading
+        />
+      )
+      expect(screen.queryByText(/Nenhuma notificação/i)).toBeNull()
+      expect(container.querySelectorAll('.skeleton').length).toBeGreaterThan(0)
+    })
+
+    it('vazio real (sem loading/erro): "Nenhuma notificação"', () => {
+      render(
+        <NotificationsList
+          grouped={[]}
+          onOpenNotification={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      expect(screen.getByText(/Nenhuma notificação/i)).toBeInTheDocument()
+    })
+
+    it('item recente e focavel por teclado e Enter/Espaço chamam onOpenNotification', async () => {
+      const onOpen = vi.fn()
+      const user = userEvent.setup()
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'R1', count: 1, unreadCount: 1, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={onOpen}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      await user.tab()
+      const item = screen.getByRole('button', { name: /Não lida.*R1 item 0/is })
+      expect(item).toHaveFocus()
+      expect(item.getAttribute('aria-label')).toContain('Não lida')
+      expect(item.getAttribute('aria-label')).toContain('R1 item 0')
+
+      await user.keyboard('{Enter}')
+      expect(onOpen).toHaveBeenCalledTimes(1)
+
+      await user.keyboard(' ')
+      expect(onOpen).toHaveBeenCalledTimes(2)
+    })
+
+    it('Anteriores: acordeao abre com toggle por teclado e Enter no item chama onOpenNotification', async () => {
+      const onOpen = vi.fn()
+      const user = userEvent.setup()
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'Antigo 1', count: 1, unreadCount: 0, createdAt: '2025-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={onOpen}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      const toggle = screen.getByRole('button', { name: /Antigo 1/i })
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+      await user.tab()
+      expect(toggle).toHaveFocus()
+      await user.keyboard('{Enter}')
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+      const item = screen.getByRole('button', { name: /Antigo 1 item 0/i })
+      expect(item).toBeInTheDocument()
+      await user.tab()
+      expect(item).toHaveFocus()
+      await user.keyboard('{Enter}')
+      expect(onOpen).toHaveBeenCalledTimes(1)
+      expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1-t1-0' }))
+    })
+
+    it('Desktop: botão "Marcar como lida" existe pra não lida e não pra lida; Enter chama onMarkAsRead sem abrir', async () => {
+      const onMarkAsRead = vi.fn()
+      const onOpen = vi.fn()
+      const user = userEvent.setup()
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'R1', count: 1, unreadCount: 1, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={onOpen}
+          onMarkAsRead={onMarkAsRead}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      const markButton = screen.getByRole('button', { name: /Marcar como lida: R1 item 0/i })
+      expect(markButton).toBeInTheDocument()
+
+      await user.tab()
+      await user.tab()
+      expect(markButton).toHaveFocus()
+      await user.keyboard('{Enter}')
+      expect(onMarkAsRead).toHaveBeenCalledTimes(1)
+      expect(onOpen).not.toHaveBeenCalled()
+    })
+  })
 })

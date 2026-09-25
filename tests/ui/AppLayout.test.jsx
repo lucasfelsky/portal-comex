@@ -9,7 +9,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
 
@@ -34,6 +35,8 @@ import AppLayout from '../../src/components/AppLayout.jsx'
 // mora no main.jsx, entao o wrapper do teste precisa dele tambem.
 import { ToastProvider } from '../../src/components/Toast.jsx'
 import { NotificationsProvider } from '../../src/contexts/NotificationsContext.jsx'
+import NotificationsPage from '../../src/pages/NotificationsPage.jsx'
+import { NOTIFICATIONS_CHANGED_EVENT, listNotifications } from '../../src/services/notificationsRepository.js'
 
 function renderWithRole(role) {
   mockUseAuth.mockReturnValue({
@@ -61,6 +64,8 @@ function renderWithRole(role) {
 
 beforeEach(() => {
   mockUseAuth.mockReset()
+  listNotifications.mockReset()
+  listNotifications.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -190,6 +195,108 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       } finally {
         window.matchMedia = originalMatchMedia
       }
+    })
+  })
+
+  // UX-2: drawer acessivel (role=dialog, foco, Esc) + estado de erro +
+  // regressao do polling que resetava o foco a cada 10s.
+  describe('UX-2: drawer e NotificationsPage', () => {
+    it('painel tem role="dialog" com nome "Central de notificações"', () => {
+      renderWithRole('admin')
+      act(() => {
+        screen.getAllByLabelText('Notificações')[0].click()
+      })
+      const dialog = screen.getByRole('dialog', { name: 'Central de notificações' })
+      expect(dialog).toBeInTheDocument()
+    })
+
+    it('foco entra no painel ao abrir e Esc devolve o foco ao sino', async () => {
+      renderWithRole('admin')
+      const bell = screen.getAllByLabelText('Notificações')[0]
+      const user = userEvent.setup()
+      await user.click(bell)
+
+      await waitFor(() => {
+        const dialog = screen.getByRole('dialog', { name: 'Central de notificações' })
+        expect(dialog.contains(document.activeElement)).toBe(true)
+      })
+
+      await user.keyboard('{Escape}')
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(bell)
+      })
+    })
+
+    it('regressao do polling: evento de mudanca de notificacoes nao rouba o foco do filtro', async () => {
+      renderWithRole('admin')
+      const bell = screen.getAllByLabelText('Notificações')[0]
+      const user = userEvent.setup()
+      await user.click(bell)
+
+      const filterSelect = await screen.findByLabelText('Filtrar notificações por categoria')
+      // Espera o auto-foco inicial do useFocusTrap (30ms) assentar antes de
+      // mover o foco manualmente — senão o timeout pendente rouba o foco
+      // de volta e o teste não isola a regressão do polling.
+      await waitFor(() => {
+        const dialog = screen.getByRole('dialog', { name: 'Central de notificações' })
+        expect(dialog.contains(document.activeElement)).toBe(true)
+      })
+      filterSelect.focus()
+      expect(document.activeElement).toBe(filterSelect)
+
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent(NOTIFICATIONS_CHANGED_EVENT, { detail: { recipientUserIds: [] } })
+        )
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 40))
+
+      expect(document.activeElement).toBe(filterSelect)
+    })
+
+    it('erro no drawer: alerta "Não foi possível carregar as notificações" e retry limpa', async () => {
+      listNotifications.mockRejectedValueOnce(new Error('x'))
+      renderWithRole('admin')
+      const bell = screen.getAllByLabelText('Notificações')[0]
+      const user = userEvent.setup()
+      await user.click(bell)
+
+      expect(await screen.findByText(/Não foi possível carregar as notificações/i)).toBeInTheDocument()
+      expect(screen.queryByText(/Nenhuma notificação/i)).not.toBeInTheDocument()
+
+      listNotifications.mockResolvedValueOnce([])
+      const retryButton = screen.getByRole('button', { name: /Tentar novamente/i })
+      await user.click(retryButton)
+
+      expect(await screen.findByText(/Nenhuma notificação/i)).toBeInTheDocument()
+    })
+
+    it('NotificationsPage: erro mostra alerta + retry recupera', async () => {
+      listNotifications.mockRejectedValueOnce(new Error('x'))
+      mockUseAuth.mockReturnValue({
+        profile: { uid: 'admin-1', name: 'admin User', email: 'admin@sq.com', role: 'admin' },
+        logout: vi.fn(),
+        isEmailVerified: true,
+      })
+
+      render(
+        <MemoryRouter>
+          <NotificationsProvider>
+            <NotificationsPage />
+          </NotificationsProvider>
+        </MemoryRouter>
+      )
+
+      expect(await screen.findByText(/Não foi possível carregar as notificações/i)).toBeInTheDocument()
+
+      listNotifications.mockResolvedValueOnce([])
+      const retryButton = screen.getByRole('button', { name: /Tentar novamente/i })
+      const user = userEvent.setup()
+      await user.click(retryButton)
+
+      expect(await screen.findByText(/Nenhuma notificação/i)).toBeInTheDocument()
     })
   })
 })

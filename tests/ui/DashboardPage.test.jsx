@@ -19,7 +19,7 @@
 // de ProcessesPage.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -483,6 +483,76 @@ describe('DashboardPage', () => {
       // So' aparece pra p-unscheduled (que e' pre-coleta); p-in-transit
       // tem label "Carga em transito para o CD"
       expect(all.length).toBe(1)
+    })
+  })
+
+  // UX-2: estado de erro (nao vazio) + retry + KPIs com skeleton/"—" +
+  // anti-loop de favoritos derivados.
+  describe('UX-2: estado de erro e retry', () => {
+    it('Comunicados: falha mostra alerta e retry recarrega', async () => {
+      mockListAnnouncements.mockRejectedValueOnce(new Error('x'))
+      renderPage()
+      expect(await screen.findByText(/Não foi possível carregar os comunicados/i)).toBeInTheDocument()
+      expect(screen.queryByText(/Nenhum comunicado publicado/i)).not.toBeInTheDocument()
+
+      mockListAnnouncements.mockResolvedValueOnce(ANNOUNCEMENTS)
+      const retryButton = screen.getByRole('button', { name: /Tentar novamente/i })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      await user.click(retryButton)
+
+      expect(await screen.findByText('Comunicado 1')).toBeInTheDocument()
+      expect(mockListAnnouncements).toHaveBeenCalledTimes(2)
+    })
+
+    it('Processos: falha mostra alertas, KPIs em "—" e retry restaura', async () => {
+      mockListProcesses.mockRejectedValueOnce(new Error('x'))
+      renderPage()
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Nenhum processo favoritado/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Nenhuma chegada prevista/i)).not.toBeInTheDocument()
+      })
+      const alerts = await screen.findAllByRole('alert')
+      expect(alerts.length).toBeGreaterThan(0)
+      const statValues = document.querySelectorAll('.stat-card__value')
+      statValues.forEach((el) => expect(el.textContent).toBe('—'))
+
+      mockListProcesses.mockResolvedValueOnce(PROCESSES)
+      const retryButtons = screen.getAllByRole('button', { name: /Tentar novamente/i })
+      await act(async () => {
+        retryButtons[0].click()
+      })
+
+      await waitFor(() => {
+        expect(mockListProcesses).toHaveBeenCalledTimes(2)
+      })
+      expect(await screen.findByRole('heading', { name: /Coleta agendada/i })).toBeInTheDocument()
+    })
+
+    it('Processos pendente: sem KPI "0", com skeleton', () => {
+      mockListProcesses.mockReturnValue(new Promise(() => {}))
+      const { container } = renderPage()
+      const statValues = document.querySelectorAll('.stat-card__value')
+      statValues.forEach((el) => expect(el.textContent).not.toBe('0'))
+      expect(container.querySelectorAll('.skeleton').length).toBeGreaterThan(0)
+    })
+
+    it('Barra rejeitada: "Indisponível" e comunicados/favoritos normais', async () => {
+      mockGetBarStatus.mockRejectedValueOnce(new Error('x'))
+      renderPage()
+      await waitFor(() => {
+        const bar = document.querySelector('.dashboard-bar-card__text')
+        expect(bar.textContent).toBe('Indisponível')
+      })
+      expect(await screen.findByText('Comunicado 1')).toBeInTheDocument()
+      expect(await screen.findByText(/Nenhum processo favoritado/i)).toBeInTheDocument()
+    })
+
+    it('Anti-loop: profile sem favoriteProcessIds so chama listProcesses 1x', async () => {
+      mockUseAuth.mockImplementation(() => ({ profile: { uid: 'u-1', role: 'user' } }))
+      renderPage()
+      expect(await screen.findByText(/Nenhum processo favoritado/i)).toBeInTheDocument()
+      expect(mockListProcesses).toHaveBeenCalledTimes(1)
     })
   })
 

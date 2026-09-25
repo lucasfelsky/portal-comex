@@ -1019,6 +1019,41 @@ body {
   background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06));
 }
 
+.notifications__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.notifications__group-toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notifications__group-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.notifications__group-toggle-icon {
+  transition: transform 160ms ease;
+}
+
+.notifications__group-toggle[aria-expanded='true'] .notifications__group-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.notifications__mark-one {
+  justify-self: end;
+  padding: 6px 10px;
+  font-size: var(--fs-caption);
+}
+
 .notifications__item p,
 .notifications__item span {
   margin: 0;
@@ -1916,6 +1951,18 @@ body {
   background: var(--surface-alt);
   color: var(--danger);
   font-weight: 600;
+}
+
+.error-banner--retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.error-banner--retry .ghost-button {
+  flex: 0 0 auto;
 }
 
 .success-banner {
@@ -8914,6 +8961,10 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .notifications__item.notifications-swipe-row__content {
+    transition: none;
+  }
+
+  .notifications__group-toggle-icon {
     transition: none;
   }
 }

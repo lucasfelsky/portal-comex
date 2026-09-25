@@ -115,56 +115,144 @@ export default function DashboardPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const canSeeName = profile?.role === 'admin' || profile?.role === 'logistica'
-  const favoriteProcessIds = profile?.favoriteProcessIds ?? []
+  const favoriteKey = (profile?.favoriteProcessIds ?? []).join('|')
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)
   const [loadedProcesses, setLoadedProcesses] = useState([])
-  const [favoriteProcesses, setFavoriteProcesses] = useState([])
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(true)
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(true)
+  const [announcementsError, setAnnouncementsError] = useState(null)
+  const [processesError, setProcessesError] = useState(null)
+  const [announcementsReloadKey, setAnnouncementsReloadKey] = useState(0)
+  const [processesReloadKey, setProcessesReloadKey] = useState(0)
 
   const dashboardKpis = useMemo(() => getDashboardKpis(loadedProcesses), [loadedProcesses])
+
+  const favoriteProcesses = useMemo(() => {
+    const ids = new Set(favoriteKey ? favoriteKey.split('|') : [])
+    return loadedProcesses.filter((item) => ids.has(item.id))
+  }, [loadedProcesses, favoriteKey])
 
   function handleSelectProcess(processId) {
     if (!processId) return
     navigate('/processos', { state: { selectedProcessId: processId } })
   }
 
+  function retryAnnouncements() {
+    setAnnouncementsReloadKey((key) => key + 1)
+  }
+
+  function retryProcesses() {
+    setProcessesReloadKey((key) => key + 1)
+  }
+
+  function kpiValue(n) {
+    if (isLoadingProcesses) return <Skeleton width="3ch" height="1em" />
+    if (processesError) return '—'
+    return n
+  }
+
+  function renderLoadError(message, onRetry) {
+    return (
+      <div className="error-banner error-banner--retry" role="alert">
+        <span>{message}</span>
+        {onRetry ? (
+          <button type="button" className="ghost-button" onClick={onRetry}>
+            Tentar novamente
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+
   useEffect(() => {
     let isMounted = true
 
-    async function loadDashboardData() {
+    async function loadBarStatus() {
       try {
-        const [loadedAnnouncements, loadedBarStatus, loadedProcesses] = await Promise.all([
-          listAnnouncements(),
-          getBarStatus(),
-          listProcesses(),
-        ])
-
-        if (!isMounted) return
-
-        setAnnouncements(loadedAnnouncements.slice(0, 3))
-        setBarStatus(loadedBarStatus)
-        setLoadedProcesses(loadedProcesses)
-        setFavoriteProcesses(loadedProcesses.filter((item) => favoriteProcessIds.includes(item.id)))
+        const loadedBarStatus = await getBarStatus()
+        if (isMounted) {
+          setBarStatus(loadedBarStatus)
+        }
+      } catch (error) {
+        console.error('Falha ao carregar a condição da barra.', error)
+        if (isMounted) {
+          setBarStatus(null)
+        }
       } finally {
         if (isMounted) {
-          setIsLoadingAnnouncements(false)
           setIsLoadingBarStatus(false)
-          setIsLoadingProcesses(false)
-          setIsLoadingFavorites(false)
         }
       }
     }
 
-    loadDashboardData()
+    loadBarStatus()
 
     return () => {
       isMounted = false
     }
-  }, [favoriteProcessIds])
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadAnnouncementsData() {
+      setIsLoadingAnnouncements(true)
+      try {
+        const loadedAnnouncements = await listAnnouncements()
+        if (isMounted) {
+          setAnnouncements(loadedAnnouncements.slice(0, 3))
+          setAnnouncementsError(null)
+        }
+      } catch (error) {
+        console.error('Falha ao carregar os comunicados.', error)
+        if (isMounted) {
+          setAnnouncementsError('Não foi possível carregar os comunicados.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingAnnouncements(false)
+        }
+      }
+    }
+
+    loadAnnouncementsData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [announcementsReloadKey])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadProcessesData() {
+      setIsLoadingProcesses(true)
+      try {
+        const loaded = await listProcesses()
+        if (isMounted) {
+          setLoadedProcesses(loaded)
+          setProcessesError(null)
+        }
+      } catch (error) {
+        console.error('Falha ao carregar os processos.', error)
+        if (isMounted) {
+          setProcessesError('Não foi possível carregar os processos.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingProcesses(false)
+        }
+      }
+    }
+
+    loadProcessesData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [processesReloadKey])
 
   return (
     <section className="surface">
@@ -210,10 +298,10 @@ export default function DashboardPage() {
           Deriva de `loadedProcesses` (ja carregado acima) — sem nova
           query/estado/loading. */}
       <div className="dashboard-stat-row">
-        <StatCard label="Chegadas na semana" value={dashboardKpis.chegadasNaSemana} icon="arrivals" />
-        <StatCard label="Em trânsito" value={dashboardKpis.emTransito} icon="ship" />
-        <StatCard label="Aguardando atracação" value={dashboardKpis.aguardandoAtracacao} icon="bell" />
-        <StatCard label="Canal vermelho" value={dashboardKpis.canalVermelho} icon="check" />
+        <StatCard label="Chegadas na semana" value={kpiValue(dashboardKpis.chegadasNaSemana)} icon="arrivals" />
+        <StatCard label="Em trânsito" value={kpiValue(dashboardKpis.emTransito)} icon="ship" />
+        <StatCard label="Aguardando atracação" value={kpiValue(dashboardKpis.aguardandoAtracacao)} icon="bell" />
+        <StatCard label="Canal vermelho" value={kpiValue(dashboardKpis.canalVermelho)} icon="check" />
       </div>
 
       <Stagger>
@@ -230,6 +318,8 @@ export default function DashboardPage() {
               <Skeleton variant="title" />
               <Skeleton variant="subtitle" />
             </Skeleton.Group>
+          ) : announcementsError ? (
+            renderLoadError(announcementsError, retryAnnouncements)
           ) : announcements.length > 0 ? (
             announcements.map((announcement) => (
               <div key={announcement.id} className="announcement-card">
@@ -256,6 +346,8 @@ export default function DashboardPage() {
         processes={loadedProcesses}
         canSeeName={canSeeName}
         isLoading={isLoadingProcesses}
+        loadError={processesError}
+        onRetry={retryProcesses}
         onSelectProcess={handleSelectProcess}
       />
 
@@ -266,11 +358,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="process-list process-list--scroll">
-          {isLoadingFavorites ? (
+          {isLoadingProcesses ? (
             <Skeleton.Group count={3} gap={12}>
               <Skeleton variant="title" />
               <Skeleton variant="subtitle" />
             </Skeleton.Group>
+          ) : processesError ? (
+            renderLoadError(processesError, retryProcesses)
           ) : favoriteProcesses.length > 0 ? (
             favoriteProcesses.map((item) => {
               const showMaritimePostArrival = isMaritimeCategory(item.category) && item.berthed

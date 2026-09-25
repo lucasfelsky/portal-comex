@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useMemo } from 'react'
+import React, { createContext, useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useDoNotDisturb } from '../hooks/useDoNotDisturb'
@@ -19,7 +19,10 @@ export function NotificationsProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [notificationFilter, setNotificationFilter] = useState('all')
   const [isPrefsModalOpen, setIsPrefsModalOpen] = useState(false)
-  
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true)
+  const [notificationsLoadError, setNotificationsLoadError] = useState(null)
+  const loadNotificationsRef = useRef(null)
+
   const dnd = useDoNotDisturb()
   const fcm = useFcm(profile?.uid)
 
@@ -71,21 +74,36 @@ export function NotificationsProvider({ children }) {
   useEffect(() => {
     if (!profile?.uid) {
       setNotifications([])
+      setIsLoadingNotifications(false)
+      setNotificationsLoadError(null)
       return undefined
     }
 
     let isMounted = true
 
-    async function loadNotifications() {
+    async function loadNotifications({ showLoading = false } = {}) {
+      if (showLoading && isMounted) {
+        setIsLoadingNotifications(true)
+      }
       try {
         const loadedNotifications = await listNotifications(profile.uid)
         if (isMounted) {
           setNotifications(loadedNotifications)
+          setNotificationsLoadError(null)
         }
       } catch (error) {
         console.error('Falha ao carregar notificações.', error)
+        if (isMounted) {
+          setNotificationsLoadError('Não foi possível carregar as notificações.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingNotifications(false)
+        }
       }
     }
+
+    loadNotificationsRef.current = () => loadNotifications({ showLoading: true })
 
     function handleNotificationsChanged(event) {
       const affectedRecipients = event?.detail?.recipientUserIds ?? []
@@ -112,6 +130,7 @@ export function NotificationsProvider({ children }) {
 
     return () => {
       isMounted = false
+      loadNotificationsRef.current = null
       window.clearInterval(intervalId)
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged)
       window.removeEventListener('focus', handleWindowFocus)
@@ -185,6 +204,10 @@ export function NotificationsProvider({ children }) {
     }
   }
 
+  function reloadNotifications() {
+    loadNotificationsRef.current?.()
+  }
+
   function formatNotificationDate(value) {
     if (!value) return ''
     const date = new Date(value)
@@ -216,6 +239,9 @@ export function NotificationsProvider({ children }) {
     groupedNotifications,
     notificationFilter,
     setNotificationFilter,
+    isLoadingNotifications,
+    notificationsLoadError,
+    reloadNotifications,
     markAllAsRead: handleMarkAllNotificationsAsRead,
     markOneAsRead: markOneNotificationAsRead,
     handleOpenNotification,

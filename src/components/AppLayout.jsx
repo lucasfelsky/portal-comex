@@ -109,6 +109,9 @@ export default function AppLayout() {
     fcm,
     isPrefsModalOpen,
     setIsPrefsModalOpen,
+    isLoadingNotifications,
+    notificationsLoadError,
+    reloadNotifications,
   } = useContext(NotificationsContext)
 
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false)
@@ -349,10 +352,13 @@ export default function AppLayout() {
           onMouseDown={(event) => event.stopPropagation()}
           onTouchStart={(event) => event.stopPropagation()}
           tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notifications-panel-title"
         >
           <div className="card-heading">
             <div>
-              <strong>Central de notificações</strong>
+              <strong id="notifications-panel-title">Central de notificações</strong>
               <p>
                 {unreadNotifications.length} pendentes
                 {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
@@ -432,6 +438,9 @@ export default function AppLayout() {
               onMarkAsRead={markOneAsRead}
               formatRelative={formatRelativeNotificationTime}
               formatDate={formatNotificationDate}
+              isLoading={isLoadingNotifications}
+              loadError={notificationsLoadError}
+              onRetry={reloadNotifications}
             />
           </div>
         </div>
@@ -445,7 +454,13 @@ export default function AppLayout() {
         <button
           type="button"
           className={`${triggerClassName}${isNotificationPanelOpen ? ' notifications__trigger--active' : ''}`}
-          aria-label="Notificações"
+          aria-label={
+            unreadNotifications.length > 0
+              ? `Notificações, ${unreadNotifications.length} não lidas`
+              : 'Notificações'
+          }
+          aria-expanded={isNotificationPanelOpen}
+          aria-haspopup="dialog"
           onClick={handleToggleNotificationPanel}
         >
           <Icon name="bell" size={19} aria-hidden="true" />

@@ -19,6 +19,9 @@ export default function NotificationsPage() {
     dnd,
     isPrefsModalOpen,
     setIsPrefsModalOpen,
+    isLoadingNotifications,
+    notificationsLoadError,
+    reloadNotifications,
   } = useContext(NotificationsContext)
 
   function formatRemaining(ms) {
@@ -145,6 +148,9 @@ export default function NotificationsPage() {
           onMarkAsRead={markOneAsRead}
           formatRelative={formatRelativeNotificationTime}
           formatDate={formatNotificationDate}
+          isLoading={isLoadingNotifications}
+          loadError={notificationsLoadError}
+          onRetry={reloadNotifications}
         />
       </div>
     </section>
