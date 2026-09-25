@@ -64,6 +64,10 @@ const pageMeta = {
     title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Regras de previsão' }],
   },
+  '/admin/lead-time': {
+    title: 'Centro Administrativo',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Lead time' }],
+  },
   '/admin/suporte': {
     title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Suporte' }],
@@ -166,6 +170,7 @@ export default function AppLayout() {
             { id: 'go-admin-announcements', label: 'Comunicados', group: 'Admin', to: '/admin/comunicados', icon: 'news' },
             { id: 'go-admin-bar', label: 'Barra do porto', group: 'Admin', to: '/admin/barra', icon: 'inbox' },
             { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
+            { id: 'go-admin-lead-time', label: 'Lead time', group: 'Admin', to: '/admin/lead-time', icon: 'sparkle' },
             { id: 'go-admin-support', label: 'Suporte', group: 'Admin', to: '/admin/suporte', icon: 'help', keywords: ['chamado', 'bug', 'ticket'] },
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
           ]

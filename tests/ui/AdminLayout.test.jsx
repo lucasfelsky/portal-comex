@@ -1,6 +1,6 @@
 // Tests do AdminLayout (shell do centro administrativo).
 // Cobre:
-//   - Nav: 5 links (Usuarios, Comunicados, Barra do porto, Previsoes, Suporte)
+//   - Nav: 6 links (Usuarios, Comunicados, Barra do porto, Previsoes, Lead time, Suporte)
 //   - Cada NavLink aponta para a rota correta
 //   - Outlet renderiza children quando rota filha ativa
 //   - NavLink com isActive=true tem classe tab-button--active
@@ -29,6 +29,7 @@ function renderPage({ initialEntries = ['/admin/usuarios'] } = {}) {
           <Route path="comunicados" element={<div data-testid="comunicados-content">Comunicados page</div>} />
           <Route path="barra" element={<div data-testid="barra-content">Barra page</div>} />
           <Route path="previsoes" element={<div data-testid="previsoes-content">Previsoes page</div>} />
+          <Route path="lead-time" element={<div data-testid="lead-time-content">Lead time page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -45,15 +46,16 @@ afterEach(() => {
 })
 
 describe('AdminLayout', () => {
-  it('Nav: 5 links (Usuarios, Comunicados, Barra do porto, Previsoes, Suporte)', () => {
+  it('Nav: 6 links (Usuarios, Comunicados, Barra do porto, Previsoes, Lead time, Suporte)', () => {
     renderPage()
     const links = screen.getAllByRole('link')
-    expect(links).toHaveLength(5)
+    expect(links).toHaveLength(6)
     expect(links[0]).toHaveTextContent('Usuários')
     expect(links[1]).toHaveTextContent('Comunicados')
     expect(links[2]).toHaveTextContent('Barra do porto')
     expect(links[3]).toHaveTextContent('Previsões')
-    expect(links[4]).toHaveTextContent('Suporte')
+    expect(links[4]).toHaveTextContent('Lead time')
+    expect(links[5]).toHaveTextContent('Suporte')
   })
 
   it('cada NavLink aponta para a rota correta', () => {
@@ -63,7 +65,8 @@ describe('AdminLayout', () => {
     expect(links[1]).toHaveAttribute('href', '/admin/comunicados')
     expect(links[2]).toHaveAttribute('href', '/admin/barra')
     expect(links[3]).toHaveAttribute('href', '/admin/previsoes')
-    expect(links[4]).toHaveAttribute('href', '/admin/suporte')
+    expect(links[4]).toHaveAttribute('href', '/admin/lead-time')
+    expect(links[5]).toHaveAttribute('href', '/admin/suporte')
   })
 
   it('Outlet renderiza children quando rota filha ativa', () => {

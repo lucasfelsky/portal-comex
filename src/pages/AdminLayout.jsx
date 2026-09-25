@@ -7,6 +7,7 @@ const sections = [
   { to: '/admin/comunicados', label: 'Comunicados', description: 'Avisos internos da operação' },
   { to: '/admin/barra', label: 'Barra do porto', description: 'Status operacional do canal' },
   { to: '/admin/previsoes', label: 'Previsões', description: 'Regras de entrega e cutoff' },
+  { to: '/admin/lead-time', label: 'Lead time', description: 'Tempo real por modal e porto' },
   { to: '/admin/suporte', label: 'Suporte', description: 'Chamados abertos pelos usuários' },
 ]
 

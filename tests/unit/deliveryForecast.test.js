@@ -13,6 +13,7 @@ import {
   getScheduledCollectionDeliveryShift,
   getEstimatedDeliveryDate,
   getAutomaticEstimatedDeliveryDate,
+  countBusinessDaysBetween,
 } from '../../src/utils/deliveryForecast'
 import { DEFAULT_FORECAST_SETTINGS } from '../../src/utils/deliveryForecast'
 
@@ -261,5 +262,44 @@ describe('getEstimatedDeliveryDate — override manual x "coleta agendada em dia
     expect(getEstimatedDeliveryDate(process, process.category, DEFAULT_FORECAST_SETTINGS)).not.toBe(
       '2026-08-20'
     )
+  })
+})
+
+// F17.6: inversa de addBusinessDays, usada pra comparar lead time real
+// (Atracação/Chegada -> Recebimento) com a previsão (mesmo calendário).
+describe('countBusinessDaysBetween', () => {
+  it('sex -> seg = 1 dia útil', () => {
+    expect(countBusinessDaysBetween('2026-09-25', '2026-09-28')).toBe(1)
+  })
+
+  it('mesma data = 0', () => {
+    expect(countBusinessDaysBetween('2026-09-25', '2026-09-25')).toBe(0)
+  })
+
+  it('pula feriado de segunda (12/10 - Nossa Senhora Aparecida)', () => {
+    expect(countBusinessDaysBetween('2026-10-09', '2026-10-13')).toBe(1)
+  })
+
+  it('pula feriado (02/11 - Finados)', () => {
+    expect(countBusinessDaysBetween('2026-10-30', '2026-11-03')).toBe(1)
+  })
+
+  it('fim antes do início -> null', () => {
+    expect(countBusinessDaysBetween('2026-09-28', '2026-09-25')).toBeNull()
+  })
+
+  it('data inválida -> null', () => {
+    expect(countBusinessDaysBetween('lixo', '2026-09-25')).toBeNull()
+    expect(countBusinessDaysBetween('2026-09-25', '')).toBeNull()
+  })
+
+  it('propriedade inversa de addBusinessDays (via getAutomaticEstimatedDeliveryDate)', () => {
+    const start = '2026-09-21'
+    for (let n = 1; n <= 10; n += 1) {
+      const end = getAutomaticEstimatedDeliveryDate(start, 'FCL', {
+        categoryBusinessDays: { FCL: n },
+      })
+      expect(countBusinessDaysBetween(start, end)).toBe(n)
+    }
   })
 })

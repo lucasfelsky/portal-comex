@@ -4,11 +4,12 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockCollection, mockQuery, mockOrderBy, mockLimit, mockGetDocs } = vi.hoisted(() => ({
+const { mockCollection, mockQuery, mockOrderBy, mockLimit, mockWhere, mockGetDocs } = vi.hoisted(() => ({
   mockCollection: vi.fn(),
   mockQuery: vi.fn(),
   mockOrderBy: vi.fn(),
   mockLimit: vi.fn(),
+  mockWhere: vi.fn(),
   mockGetDocs: vi.fn(),
 }))
 
@@ -26,10 +27,17 @@ vi.mock('firebase/firestore/lite', () => ({
   query: (...args) => mockQuery(...args),
   orderBy: (...args) => mockOrderBy(...args),
   limit: (...args) => mockLimit(...args),
+  where: (...args) => mockWhere(...args),
   getDocs: (...args) => mockGetDocs(...args),
 }))
 
-import { listProcessEvents } from '../../src/services/processEventsRepository'
+import {
+  listProcessEvents,
+  listLeadTimeProcesses,
+  listLeadTimeEvents,
+  loadLeadTimeDataset,
+} from '../../src/services/processEventsRepository'
+import { LEAD_TIME_EVENT_TYPES } from '../../src/features/admin/leadTimeStats'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -37,6 +45,7 @@ beforeEach(() => {
   mockCollection.mockReturnValue('COLLECTION_REF')
   mockOrderBy.mockReturnValue('ORDER_BY')
   mockLimit.mockReturnValue('LIMIT')
+  mockWhere.mockReturnValue('WHERE')
   mockQuery.mockReturnValue('QUERY_REF')
 })
 
@@ -98,5 +107,77 @@ describe('listProcessEvents', () => {
     })
     const result = await listProcessEvents('p1')
     expect(result[0].actorName).toBe('João')
+  })
+})
+
+// F17.6: leitura server-only p/ o painel de lead time.
+describe('listLeadTimeProcesses', () => {
+  it('nao configurado -> []', async () => {
+    firebaseConfigured = false
+    expect(await listLeadTimeProcesses()).toEqual([])
+    expect(mockGetDocs).not.toHaveBeenCalled()
+  })
+
+  it('mapeia archived/destination upper', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p1',
+          data: () => ({ category: 'FCL', destination: ' navegantes - sc ', archived: true }),
+        },
+        {
+          id: 'p2',
+          data: () => ({ category: 'LCL', destination: 'itapoa' }),
+        },
+      ],
+    })
+    const result = await listLeadTimeProcesses()
+    expect(result).toEqual([
+      { id: 'p1', category: 'FCL', destination: 'NAVEGANTES - SC', archived: true },
+      { id: 'p2', category: 'LCL', destination: 'ITAPOA', archived: false },
+    ])
+  })
+})
+
+describe('listLeadTimeEvents', () => {
+  it('sem processId -> []', async () => {
+    expect(await listLeadTimeEvents('')).toEqual([])
+    expect(mockGetDocs).not.toHaveBeenCalled()
+  })
+
+  it('nao configurado -> []', async () => {
+    firebaseConfigured = false
+    expect(await listLeadTimeEvents('p1')).toEqual([])
+    expect(mockGetDocs).not.toHaveBeenCalled()
+  })
+
+  it('chama where(type,in,LEAD_TIME_EVENT_TYPES) e NAO chama orderBy', async () => {
+    mockGetDocs.mockResolvedValue({ docs: [] })
+    await listLeadTimeEvents('p1')
+    expect(mockWhere).toHaveBeenCalledWith('type', 'in', LEAD_TIME_EVENT_TYPES)
+    expect(mockOrderBy).not.toHaveBeenCalled()
+    expect(mockQuery).toHaveBeenCalledWith('COLLECTION_REF', 'WHERE')
+  })
+})
+
+describe('loadLeadTimeDataset', () => {
+  it('pula arquivado e categoria invalida (nao consulta eventos deles)', async () => {
+    mockGetDocs.mockImplementation((queryOrRef) => {
+      if (queryOrRef === 'COLLECTION_REF') {
+        return Promise.resolve({
+          docs: [
+            { id: 'p1', data: () => ({ category: 'FCL', destination: 'ITAPOA', archived: false }) },
+            { id: 'p2', data: () => ({ category: 'FCL', destination: 'ITAPOA', archived: true }) },
+            { id: 'p3', data: () => ({ category: 'OUTRA', destination: 'ITAPOA', archived: false }) },
+          ],
+        })
+      }
+      return Promise.resolve({ docs: [] })
+    })
+
+    const { processes, eventsByProcessId } = await loadLeadTimeDataset()
+
+    expect(processes.map((process) => process.id)).toEqual(['p1'])
+    expect(Object.keys(eventsByProcessId)).toEqual(['p1'])
   })
 })
