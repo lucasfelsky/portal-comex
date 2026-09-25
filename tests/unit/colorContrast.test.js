@@ -324,6 +324,17 @@ describe.each(Object.entries(themes))('--on-button-primary (%s)', (themeName, th
 })
 
 // ---------------------------------------------------------------------------
+// (o2) AD-1 (adendo do orquestrador): --on-warn sobre --warning (botao
+// Favoritar do swipe, fundo amarelo/dourado nos 2 temas).
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--on-warn (%s)', (themeName, theme) => {
+  it('sobre --warning >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--on-warn', theme, '--warning')
+    expect(ratio, `--on-warn/--warning (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Guardas estruturais (g, h, i).
 // ---------------------------------------------------------------------------
 describe('guardas estruturais', () => {
@@ -420,6 +431,11 @@ describe('guardas estruturais', () => {
   ])('(p) "%s" nao contem mais rgba(15, 23, 42 fixo', (header) => {
     const { body } = extractBlock(css, header)
     expect(body).not.toContain('rgba(15, 23, 42')
+  })
+
+  it('(o3) AD-1: ".process-swipe-row__action--favorite {" contem var(--on-warn)', () => {
+    const { body } = extractBlock(css, '.process-swipe-row__action--favorite {')
+    expect(body).toContain('var(--on-warn)')
   })
 
   it('(n2) existe ".admin-section .scope-chip--active {" com var(--on-button-primary)', () => {
