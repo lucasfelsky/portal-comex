@@ -28,9 +28,10 @@ export default function ProcessItemDangerousGoodsFields({ item, onChange }) {
               value={item.unNumber ?? ''}
               onChange={(event) => onChange('unNumber', event.target.value)}
               placeholder="Ex.: 1203"
+              aria-describedby={unNumberInvalid ? `process-field-item-${item.id}-unNumber-hint` : undefined}
             />
             {unNumberInvalid ? (
-              <small className="field-hint">
+              <small className="field-hint" id={`process-field-item-${item.id}-unNumber-hint`}>
                 <span className="inline-badge inline-badge--warn">
                   Número ONU deve ter 4 dígitos.
                 </span>

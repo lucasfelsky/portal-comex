@@ -270,19 +270,41 @@ describe('AdminUsersPanel', () => {
     expect(payloadArg.password).toBeUndefined() // removido antes de save
   })
 
-  it('salvar criar com password < 6: error (nao chama createUser)', async () => {
+  it('salvar criar com password < 6: erro INLINE no campo "Senha" (UX-3b), com foco, sem error-banner', async () => {
     const user = userEvent.setup()
     renderPanel()
     await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Novo usuário' }))
     await user.type(screen.getByPlaceholderText('Nome completo'), 'X')
     await user.type(screen.getByPlaceholderText('email@empresa.com'), 'x@sq.com')
-    await user.type(screen.getByPlaceholderText(/Defina a senha inicial/i), '123')
+    const passwordInput = screen.getByPlaceholderText(/Defina a senha inicial/i)
+    await user.type(passwordInput, '123')
     await user.click(screen.getByRole('button', { name: 'Criar usuário' }))
+
     await waitFor(() => {
       expect(screen.getByText(/pelo menos 6 caracteres/i)).toBeInTheDocument()
     })
     expect(mockCreateUser).not.toHaveBeenCalled()
+    expect(passwordInput).toHaveAttribute('aria-invalid', 'true')
+    expect(document.activeElement).toBe(passwordInput)
+    expect(document.querySelector('.error-banner')).not.toBeInTheDocument()
+  })
+
+  it('editar usuario com senha "123": erro INLINE no campo "Senha", sem chamar saveUser', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    const passwordInput = screen.getByPlaceholderText(/Digite uma nova senha/i)
+    await user.type(passwordInput, '123')
+    await user.click(screen.getByRole('button', { name: /Salvar altera/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/A nova senha deve ter pelo menos 6 caracteres/i)).toBeInTheDocument()
+    })
+    expect(mockSaveUser).not.toHaveBeenCalled()
+    expect(passwordInput).toHaveAttribute('aria-invalid', 'true')
+    expect(document.activeElement).toBe(passwordInput)
+    expect(document.querySelector('.error-banner')).not.toBeInTheDocument()
   })
 
   it('salvar update: chama saveUser com payload', async () => {

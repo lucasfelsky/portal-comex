@@ -17,7 +17,7 @@
 // cobertos isoladamente).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -428,5 +428,166 @@ describe('ProcessesPage — guarda de alteracoes nao salvas (UX-3a)', () => {
     await user.click(screen.getByRole('button', { name: 'Voltar para lista' }))
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+})
+
+// UX-3b: validacao inline bloqueia o salvar com erro no campo, foca o 1o
+// campo invalido navegando ate o passo, e mostra o resumo `role="alert"`.
+describe('ProcessesPage — validacao inline (UX-3b)', () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+  })
+
+  it('(a) data invalida no ETD bloqueia o salvar, foca o campo e mostra o resumo; corrigir libera o save', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await user.click(screen.getByRole('button', { name: 'Datas e previsão' }))
+
+    const etdInput = screen.getByLabelText('ETD')
+    fireEvent.change(etdInput, { target: { value: '1999-12-31' } })
+
+    await user.click(screen.getByRole('button', { name: 'Identificação' }))
+    await user.click(screen.getByRole('button', { name: 'Criar processo' }))
+
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Datas e previsão/ })).toHaveAttribute(
+        'aria-current',
+        'step'
+      )
+    })
+    // Nota: com o erro visivel, `getByLabelText` deixa de casar exatamente
+    // "ETD" (o `<small class="field-error">` fica DENTRO do `<label>`, por
+    // isso o texto do erro entra no calculo do label - D7 usa `aria-hidden`
+    // so' pra remover do NOME acessivel via `aria`, nao do `textContent`
+    // usado pelo matcher de label implicito). Usa o id estavel direto.
+    const etdInputAfter = container.querySelector('#process-field-etd')
+    expect(etdInputAfter).toHaveAttribute('aria-invalid', 'true')
+    expect(etdInputAfter).toHaveAccessibleDescription(/entre 2000 e 2100/)
+    expect(document.activeElement).toBe(etdInputAfter)
+    expect(screen.getByRole('alert')).toHaveTextContent('Corrija 1 campo destacado antes de salvar.')
+
+    fireEvent.change(etdInputAfter, { target: { value: '2026-07-01' } })
+    await waitFor(() => {
+      expect(container.querySelector('#process-field-etd')).not.toHaveAttribute('aria-invalid')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Criar processo' }))
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+  })
+
+  it('(b) cubagem negativa bloqueia, foca a cubagem, passo "Status e carga"', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await user.click(screen.getByRole('button', { name: 'Status e carga' }))
+
+    const volumeInput = screen.getByLabelText('Cubagem (m³)')
+    fireEvent.change(volumeInput, { target: { value: '-1' } })
+
+    await user.click(screen.getByRole('button', { name: 'Criar processo' }))
+
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Status e carga/ })).toHaveAttribute(
+        'aria-current',
+        'step'
+      )
+    })
+    expect(document.activeElement).toBe(container.querySelector('#process-field-volumeM3'))
+  })
+
+  it('(c) quantidade negativa no item bloqueia; input continua mostrando o valor cru (D11)', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await user.click(screen.getByRole('button', { name: 'Itens' }))
+
+    const quantityInput = container.querySelector('.process-item-editor__actions input[type="number"]')
+    fireEvent.change(quantityInput, { target: { value: '-2' } })
+
+    await user.click(screen.getByRole('button', { name: 'Criar processo' }))
+
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(
+        container.querySelector('.process-item-editor__actions input[type="number"]')
+      ).toHaveValue(-2)
+    })
+  })
+
+  it('(d) incoterm fora da lista (mesmo apos canonicalizar - AD-1) bloqueia, foca o select "Incoterm", passo "Identificação"', async () => {
+    mockListProcesses.mockResolvedValue([
+      ...PROCESSES,
+      { ...PROCESSES[0], id: 'p-incoterm', name: 'Processo Incoterm Legado', incoterm: 'XYZ' },
+    ])
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getByText('Processo Incoterm Legado')).toBeInTheDocument())
+
+    await user.click(screen.getByText('Processo Incoterm Legado'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Editar processo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Identificação/ })).toHaveAttribute('aria-current', 'step')
+    })
+    expect(document.activeElement).toBe(container.querySelector('#process-field-incoterm'))
+  })
+
+  it('(e) mais de 40 containers bloqueia, foca o grupo com "Máximo de 40"', async () => {
+    const containers = Array.from({ length: 41 }, (_, index) => ({
+      id: `CNT-${index + 1}`,
+      number: '',
+      seal: '',
+      type: '',
+      returnedAt: '',
+    }))
+    mockListProcesses.mockResolvedValue([
+      ...PROCESSES,
+      { ...PROCESSES[0], id: 'p-containers', name: 'Processo Muitos Containers', containers },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Processo Muitos Containers')).toBeInTheDocument())
+
+    await user.click(screen.getByText('Processo Muitos Containers'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Editar processo' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAccessibleDescription(/Máximo de 40/)
+    })
+  })
+
+  it('(f) aviso ISO 6346 (numero de conteiner invalido) NAO bloqueia o salvar', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await user.click(screen.getByRole('button', { name: 'Status e carga' }))
+    await user.click(screen.getByRole('button', { name: 'Adicionar contêiner' }))
+
+    const numberInput = screen.getByLabelText('Número')
+    fireEvent.change(numberInput, { target: { value: 'ABC' } })
+
+    await user.click(screen.getByRole('button', { name: 'Criar processo' }))
+
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
   })
 })

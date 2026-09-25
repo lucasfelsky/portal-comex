@@ -16,7 +16,7 @@
 //   - News com references: links renderizam no modal
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
@@ -57,6 +57,7 @@ vi.mock('../../src/utils/newsMedia', () => ({
 // Mock defaultNewsCoverImage (asset import)
 vi.mock('../../src/assets/sqquimica.png', () => ({ default: 'data:image/png;base64,default' }))
 
+import { buildPendingNewsMediaItems } from '../../src/utils/newsMedia'
 import NewsPage from '../../src/pages/NewsPage'
 
 const NOW = Date.now()
@@ -357,5 +358,32 @@ describe('NewsPage', () => {
         within(screen.getByRole('alertdialog')).getByText(/Não foi possível remover a notícia/i)
       ).toBeInTheDocument()
     })
+  })
+})
+
+// UX-3b (D10): erro de upload de midia (formato/tamanho) vira inline no
+// input, nao no `.error-banner` compartilhado.
+describe('NewsPage — erro de upload inline (UX-3b)', () => {
+  it('capa invalida: erro aparece no input "Imagem de capa" (aria-invalid + descricao), sem error-banner', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Nova notícia' })).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Nova notícia' }))
+
+    buildPendingNewsMediaItems.mockImplementationOnce(() => {
+      throw new Error('O arquivo "x" não é uma imagem válida.')
+    })
+
+    const coverInput = screen.getByLabelText('Imagem de capa')
+    const file = new File(['x'], 'x.txt', { type: 'text/plain' })
+    fireEvent.change(coverInput, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(coverInput).toHaveAttribute('aria-invalid', 'true')
+    })
+    expect(coverInput).toHaveAccessibleDescription(/não é uma imagem válida/)
+    expect(document.querySelector('.error-banner')).not.toBeInTheDocument()
   })
 })

@@ -3621,6 +3621,15 @@ body {
   line-height: 1.45;
 }
 
+/* UX-3b (D12): erro inline de campo - mesma posicao/tamanho do field-hint. */
+.field-error {
+  margin: 0;
+  color: var(--danger-700);
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .field span,
 .detail-label {
   font-size: var(--fs-footnote);
@@ -3676,6 +3685,17 @@ body {
   background: var(--surface-alt);
   color: var(--ink-soft);
   cursor: not-allowed;
+}
+
+/* UX-3b (D12): campo com erro de validacao inline. */
+.text-input[aria-invalid='true'],
+.select-field__trigger[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.text-input[aria-invalid='true']:focus,
+.select-field__trigger[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--danger-50);
 }
 
 /* Sprint 17.2: date/time inputs estilizados.
@@ -4071,6 +4091,16 @@ body {
 
 .wizard-steps::-webkit-scrollbar {
   display: none;
+}
+
+/* UX-3b (D12): indicador de erro no chip do passo. */
+.wizard-step__error-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 /* Conteúdo do passo: mais respiro entre campos que o detail-stack padrão

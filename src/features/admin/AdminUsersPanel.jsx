@@ -23,6 +23,7 @@ import { createUser, deleteUser, listUsers, saveUser } from '../../services/user
 import useAuth from '../../hooks/useAuth'
 import { isFirebaseConfigured } from '../../lib/firebase'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
+import { getFieldA11yProps, getFieldErrorId, focusField } from '../../utils/fieldErrors'
 
 const statusOptions = ['Todos', 'Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
 
@@ -75,6 +76,7 @@ export default function AdminUsersPanel() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
   const [error, setError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState(null)
   const [confirmError, setConfirmError] = useState('')
 
@@ -150,6 +152,7 @@ export default function AdminUsersPanel() {
     setSelectedUserId(userId)
     setIsCreating(false)
     setIsPasswordVisible(false)
+    setPasswordError('')
   }
 
   function handleCreateMode() {
@@ -157,9 +160,11 @@ export default function AdminUsersPanel() {
     setSelectedUserId(null)
     setDraft(createEmptyDraft())
     setIsPasswordVisible(false)
+    setPasswordError('')
   }
 
   function handleDraftChange(field, value) {
+    if (field === 'password' && passwordError) setPasswordError('')
     setDraft((currentDraft) => {
       if (field === 'role') {
         return {
@@ -183,20 +188,27 @@ export default function AdminUsersPanel() {
   }
 
   async function handleSaveUser() {
+    // UX-3b (D10): senha curta agora e' erro INLINE no campo (foco, sem
+    // `.error-banner`) - antes era `throw` capturado la embaixo e virava
+    // banner generico. Nao chama `setIsSavingUser`/o servico nesse caso.
+    const normalizedPassword = String(draft.password ?? '').trim()
+
+    if (isCreating && normalizedPassword.length < 6) {
+      setPasswordError('Informe uma senha com pelo menos 6 caracteres para criar o usuário.')
+      focusField('admin-user-password')
+      return
+    }
+
+    if (!isCreating && normalizedPassword && normalizedPassword.length < 6) {
+      setPasswordError('A nova senha deve ter pelo menos 6 caracteres.')
+      focusField('admin-user-password')
+      return
+    }
+
     setIsSavingUser(true)
     setError('')
 
     try {
-      const normalizedPassword = String(draft.password ?? '').trim()
-
-      if (isCreating && normalizedPassword.length < 6) {
-        throw new Error('Informe uma senha com pelo menos 6 caracteres para criar o usuario.')
-      }
-
-      if (!isCreating && normalizedPassword && normalizedPassword.length < 6) {
-        throw new Error('A nova senha deve ter pelo menos 6 caracteres.')
-      }
-
       const payload = {
         ...draft,
         scopes: getRolePermissions(draft.role),
@@ -530,7 +542,13 @@ export default function AdminUsersPanel() {
               onClick={() => setIsPasswordVisible(true)}
               placeholder={passwordInputPlaceholder}
               autoComplete="new-password"
+              {...getFieldA11yProps('admin-user-password', passwordError)}
             />
+            {passwordError ? (
+              <small className="field-error" id={getFieldErrorId('admin-user-password')} aria-hidden="true">
+                {passwordError}
+              </small>
+            ) : null}
           </label>
 
           {!isCreating && isFirebaseConfigured ? (

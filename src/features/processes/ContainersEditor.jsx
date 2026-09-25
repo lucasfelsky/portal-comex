@@ -6,6 +6,7 @@ import {
   getContainerNumberWarning,
   isContainerRemovalLocked,
 } from './containers'
+import { getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.2a (D-11): editor de containers[] - lista editavel (tipo, numero +
 // aviso ISO 6346, lacre, remover) + botao "Adicionar contêiner" (desabilita
@@ -18,9 +19,17 @@ function generateContainerId() {
   return `CNT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export default function ContainersEditor({ value, onChange, disabled = false, collectionWindows = [] }) {
+export default function ContainersEditor({
+  value,
+  onChange,
+  disabled = false,
+  collectionWindows = [],
+  errors = {},
+}) {
   const containers = Array.isArray(value) ? value : []
   const canAddMore = containers.length < MAX_CONTAINERS
+  const groupDomId = 'process-field-containers'
+  const groupError = errors.containers
 
   function handleAdd() {
     onChange([...containers, createEmptyContainer(generateContainerId())])
@@ -35,13 +44,24 @@ export default function ContainersEditor({ value, onChange, disabled = false, co
   }
 
   return (
-    <div className="collection-windows-editor">
+    <div
+      className="collection-windows-editor"
+      id={groupError ? groupDomId : undefined}
+      role={groupError ? 'group' : undefined}
+      tabIndex={groupError ? -1 : undefined}
+      aria-describedby={groupError ? getFieldErrorId(groupDomId) : undefined}
+    >
       <div className="collection-windows-editor__header">
         <div>
           <span className="detail-label">
             {containers.length} contêiner{containers.length === 1 ? '' : 'es'}
           </span>
           <p>Cadastre tipo, número (ISO 6346) e lacre de cada contêiner.</p>
+          {groupError ? (
+            <small className="field-error" id={getFieldErrorId(groupDomId)}>
+              {groupError}
+            </small>
+          ) : null}
         </div>
         <button
           type="button"
@@ -63,6 +83,7 @@ export default function ContainersEditor({ value, onChange, disabled = false, co
           {containers.map((container) => {
             const warning = getContainerNumberWarning(container.number)
             const removalLocked = isContainerRemovalLocked(container.id, collectionWindows)
+            const numberHintId = `process-field-containers-${container.id}-number-hint`
             return (
               <li key={container.id} className="collection-windows-editor__item">
                 <div className="collection-windows-editor__row">
@@ -91,9 +112,10 @@ export default function ContainersEditor({ value, onChange, disabled = false, co
                       onChange={(event) => handleChange(container.id, { number: event.target.value })}
                       placeholder="Ex.: CSQU3054383"
                       disabled={disabled}
+                      aria-describedby={warning ? numberHintId : undefined}
                     />
                     {warning ? (
-                      <small className="field-hint">
+                      <small className="field-hint" id={numberHintId}>
                         <span className="inline-badge inline-badge--warn">{warning}</span>
                       </small>
                     ) : null}
