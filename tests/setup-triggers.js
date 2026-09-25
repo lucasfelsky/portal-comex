@@ -122,6 +122,7 @@ export function setupFirestoreChain(collectionMap = {}) {
         set: vi.fn().mockResolvedValue(undefined),
         update: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
+        create: vi.fn().mockResolvedValue(undefined),
         collection: vi.fn(),
       }
     })
@@ -157,6 +158,7 @@ export function setupFirestoreChain(collectionMap = {}) {
             get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
             set: vi.fn().mockResolvedValue(undefined),
             update: vi.fn().mockResolvedValue(undefined),
+            create: vi.fn().mockResolvedValue(undefined),
             collection: vi.fn(),
           }
         }
@@ -164,6 +166,7 @@ export function setupFirestoreChain(collectionMap = {}) {
           id: `auto-${Math.random().toString(36).slice(2, 10)}`,
           get: vi.fn().mockResolvedValue({ exists: true, data: () => ({}) }),
           set: vi.fn().mockResolvedValue(undefined),
+          create: vi.fn().mockResolvedValue(undefined),
         }
       }),
       where: vi.fn((field, op, value) => {

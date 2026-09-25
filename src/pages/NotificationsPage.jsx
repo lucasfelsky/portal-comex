@@ -124,6 +124,18 @@ export default function NotificationsPage() {
         >
           Divergências
         </TabButton>
+        <TabButton
+          active={notificationFilter === 'license_rejected'}
+          onClick={() => setNotificationFilter('license_rejected')}
+        >
+          Anuências
+        </TabButton>
+        <TabButton
+          active={notificationFilter === 'process_daily_alerts'}
+          onClick={() => setNotificationFilter('process_daily_alerts')}
+        >
+          Alertas
+        </TabButton>
       </div>
 
       <div className="notifications__list">

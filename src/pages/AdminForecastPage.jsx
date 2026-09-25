@@ -15,6 +15,7 @@ import { isFirebaseConfigured } from '../lib/firebase'
 
 const HOUR_BOUNDS = { min: 0, max: 23 }
 const BUSINESS_DAY_BOUNDS = { min: 0, max: 30 }
+const ALERT_DAY_BOUNDS = { min: 1, max: 30 }
 
 function buildEmptyDestination() {
   return { match: '', label: '', cutoffHour: 12, cutoffMinute: 0 }
@@ -47,6 +48,11 @@ function normalizeDraft(settings) {
       duimpStatuses: Array.isArray(baseline.rollingCustoms?.duimpStatuses)
         ? baseline.rollingCustoms.duimpStatuses.slice()
         : [],
+    },
+    operationalAlerts: {
+      clearanceOverdueDays: Number.isFinite(Number(baseline.operationalAlerts?.clearanceOverdueDays))
+        ? Number(baseline.operationalAlerts.clearanceOverdueDays)
+        : 3,
     },
   }
 }
@@ -94,6 +100,15 @@ function validateDraft(draft) {
 
   if (draft.rollingCustoms.enabled && draft.rollingCustoms.appliesTo.length === 0) {
     errors.push('Selecione ao menos uma categoria para o rolling customs.')
+  }
+
+  const clearanceOverdueDays = Number(draft.operationalAlerts.clearanceOverdueDays)
+  if (
+    !Number.isFinite(clearanceOverdueDays) ||
+    clearanceOverdueDays < ALERT_DAY_BOUNDS.min ||
+    clearanceOverdueDays > ALERT_DAY_BOUNDS.max
+  ) {
+    errors.push('Dias sem desembaraço para alerta deve estar entre 1 e 30.')
   }
 
   return errors
@@ -219,6 +234,13 @@ export default function AdminForecastPage() {
     setDraft((current) => ({
       ...current,
       rollingCustoms: { ...current.rollingCustoms, businessDaysAfterBerth: value },
+    }))
+  }
+
+  function updateClearanceOverdueDays(value) {
+    setDraft((current) => ({
+      ...current,
+      operationalAlerts: { ...current.operationalAlerts, clearanceOverdueDays: value },
     }))
   }
 
@@ -493,6 +515,32 @@ export default function AdminForecastPage() {
             </div>
           </div>
         </article>
+
+        <article className="list-card">
+          <div className="card-heading">
+            <div>
+              <h3>Alertas operacionais</h3>
+              <p>Resumo diário enviado aos admins às 7h (horário de Brasília).</p>
+            </div>
+          </div>
+          <div className="admin-grid admin-grid--thirds">
+            <label className="field">
+              <span>Dias sem desembaraço após parametrização</span>
+              <input
+                className="text-input"
+                type="number"
+                min={ALERT_DAY_BOUNDS.min}
+                max={ALERT_DAY_BOUNDS.max}
+                value={draft.operationalAlerts.clearanceOverdueDays}
+                onChange={(event) => updateClearanceOverdueDays(event.target.value)}
+              />
+            </label>
+          </div>
+          <p className="field-hint">
+            O resumo também avisa free time a vencer (D-5 e D-2), ETA vencida há mais de 2 dias sem
+            atracação/chegada e coleta de amanhã sem transportadora.
+          </p>
+        </article>
       </div>
 
       <div className="admin-feature-footer">
@@ -529,7 +577,7 @@ export default function AdminForecastPage() {
       <p className="field-hint">
         Quando o documento `forecastSettings/current` ainda não existe no Firestore, o sistema usa o seed
         padrão embutido em <code>DEFAULT_FORECAST_SETTINGS</code> (Navegantes 14h, Itapoá 12h, FCL/CONSOLIDADO
-        5, LCL 7, AEREO 10, rolling 3 dias).
+        5, LCL 7, AEREO 10, rolling 3 dias, alerta de desembaraço 3 dias).
       </p>
 
     <ConfirmDialog

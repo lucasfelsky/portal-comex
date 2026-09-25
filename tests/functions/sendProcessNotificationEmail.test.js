@@ -172,6 +172,40 @@ describe('sendProcessNotificationEmail', () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1)
   })
 
+  it('happy path: license_rejected tambem dispara (F17.5a)', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'license_rejected',
+        recipientUserId: RECIPIENT_UID,
+        title: 'Anuência indeferida',
+        body: 'Admin Root marcou a anuência ANVISA como indeferida em PO 12345.',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+  })
+
+  it('happy path: process_daily_alerts tambem dispara (F17.5a)', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'process_daily_alerts',
+        recipientUserId: RECIPIENT_UID,
+        title: 'Alertas operacionais do dia (1)',
+        body: 'Free time de PO 1 vence em 2 dias (26/09/2026).',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+  })
+
   it('recipientUserId vazio -> ignora', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

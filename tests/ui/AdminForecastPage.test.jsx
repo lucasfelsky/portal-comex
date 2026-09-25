@@ -183,6 +183,44 @@ describe('AdminForecastPage', () => {
     })
   })
 
+  // F17.5a (A-6): card "Alertas operacionais" (SETTINGS sem operationalAlerts
+  // -> default 3, editar e validar).
+  it('F17.5a - card "Alertas operacionais" renderiza input com valor 3 (default)', () => {
+    renderPage()
+    const daysInput = screen.getByLabelText('Dias sem desembaraço após parametrização')
+    expect(daysInput).toHaveValue(3)
+  })
+
+  it('F17.5a - editar clearanceOverdueDays para 7 e salvar envia operationalAlerts.clearanceOverdueDays: 7', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const daysInput = screen.getByLabelText('Dias sem desembaraço após parametrização')
+    await user.clear(daysInput)
+    await user.type(daysInput, '7')
+
+    const saveBtn = screen.getByRole('button', { name: /Salvar altera/i })
+    await user.click(saveBtn)
+
+    await waitFor(() => {
+      expect(mockSaveForecastSettings).toHaveBeenCalledTimes(1)
+    })
+    const [draftArg] = mockSaveForecastSettings.mock.calls[0]
+    expect(Number(draftArg.operationalAlerts.clearanceOverdueDays)).toBe(7)
+  })
+
+  it('F17.5a - clearanceOverdueDays 0 -> erro de validacao e Salvar desabilitado', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const daysInput = screen.getByLabelText('Dias sem desembaraço após parametrização')
+    await user.clear(daysInput)
+    await user.type(daysInput, '0')
+
+    await waitFor(() => {
+      expect(screen.getByText(/Dias sem desembaraço para alerta deve estar entre 1 e 30/i)).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /Salvar altera/i })).toBeDisabled()
+  })
+
   it('salvar: chama saveForecastSettings(draft, profile) e mostra feedback', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -248,7 +286,10 @@ describe('AdminForecastPage', () => {
 
   it('rolling disabled: inputs de dias e chips estao desabilitados', () => {
     renderPage()
-    const daysInput = screen.getByDisplayValue(3) // businessDaysAfterBerth default
+    // businessDaysAfterBerth default (3) - "Alertas operacionais" (F17.5a)
+    // tambem tem valor 3 por default, entao desambigua pelo rotulo.
+    const daysInput = screen.getByLabelText('Dias úteis após atracar')
+    expect(daysInput).toHaveValue(3)
     expect(daysInput).toBeDisabled()
     // botao Adicionar DUIMP status desabilitado
     const addBtn = screen.getByRole('button', { name: 'Adicionar' })
@@ -261,7 +302,7 @@ describe('AdminForecastPage', () => {
     const toggle = container.querySelector('input[type="checkbox"]')
     await user.click(toggle)
     await waitFor(() => {
-      const daysInput = screen.getByDisplayValue(3)
+      const daysInput = screen.getByLabelText('Dias úteis após atracar')
       expect(daysInput).not.toBeDisabled()
     })
   })

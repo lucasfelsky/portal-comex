@@ -4,16 +4,19 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import {
   EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
+  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
 import { buildMilestoneEvents } from './milestones.js';
+import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';
+import { getNewlyRejectedLicensesMirror } from '../core/licenses.js';
 
 export const createProcessMessageNotifications = onDocumentCreated(
   {
@@ -207,6 +210,31 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
       })
     }
 
+    // F17.5a (A-7): notificacao `license_rejected` (admins, COM e-mail) na
+    // TRANSICAO de uma anuencia para `Indeferida` (L33). So' admin edita
+    // `licenses` (rules) -> so' ator admin. First-wins (maybeAddNotification)
+    // sobre `favorite_process_updated` abaixo - admin favorito recebe
+    // `license_rejected`; favoritos nao-admin seguem recebendo
+    // `favorite_process_updated` ("anuências atualizadas").
+    if (actorRole === 'admin') {
+      const rejectedLicenses = getNewlyRejectedLicensesMirror(before, after)
+
+      if (rejectedLicenses.length > 0) {
+        const agenciesLabel = [...new Set(rejectedLicenses.map((license) => license.agency))].join(', ')
+        const activeAdmins = await listActiveAdminUsers()
+
+        activeAdmins.forEach((adminUser) => {
+          const processLabel = buildRecipientProcessLabel(process, normalizeString(adminUser.role))
+          maybeAddNotification(
+            adminUser,
+            'license_rejected',
+            'Anuência indeferida',
+            buildLicenseRejectedNotificationBody(processLabel, actorName, agenciesLabel)
+          )
+        })
+      }
+    }
+
     // F17.4a (D-8): notificacao quando a LOGISTICA muda `collectionStatus`
     // (admins + favoritos). Sem e-mail (categoria `processos` automatica via
     // `prefCategoryForType`). first-wins de `maybeAddNotification` evita
@@ -375,5 +403,24 @@ export const sendProcessNotificationEmail = onDocumentCreated(
       subject: message.subject,
       text: message.text,
     })
+  }
+)
+
+// F17.5a (A-4): job agendado que monta 1 resumo diario por admin (free time
+// D-5/D-2, ETA vencida, parametrizada sem desembaraco, coleta amanha sem
+// transportadora). O emulador de Functions carrega esta function mas nao
+// dispara agendamentos (sem Pub/Sub/Scheduler emulado) - `runDailyProcessAlerts`
+// e' testado direto (`tests/unit/dailyProcessAlerts.test.js` +
+// `tests/functions/notifications.triggers.test.js`).
+export const sendDailyProcessAlerts = onSchedule(
+  {
+    schedule: '0 7 * * *',
+    timeZone: 'America/Sao_Paulo',
+    region: 'us-central1',
+    retryCount: 2,
+  },
+  async () => {
+    const result = await runDailyProcessAlerts()
+    logger.info('Alertas operacionais diarios processados.', result)
   }
 )

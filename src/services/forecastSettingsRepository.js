@@ -52,6 +52,12 @@ export const DEFAULT_FORECAST_SETTINGS = Object.freeze({
     appliesTo: ['FCL', 'CONSOLIDADO'],
     duimpStatuses: ['aguardando registro', 'aguardando registro da duimp'],
   },
+  // F17.5a (A-6): limiar (dias) de "parametrizada sem desembaraço" usado
+  // pelo alerta operacional diario (`sendDailyProcessAlerts`,
+  // `functions/src/process/operationalAlerts.js`).
+  operationalAlerts: {
+    clearanceOverdueDays: 3,
+  },
   updatedAt: null,
   updatedBy: null,
 })
@@ -59,6 +65,7 @@ export const DEFAULT_FORECAST_SETTINGS = Object.freeze({
 const CATEGORY_BUSINESS_DAY_BOUNDS = { min: 0, max: 30 }
 const CUTOFF_HOUR_BOUNDS = { min: 0, max: 23 }
 const CUTOFF_MINUTE_BOUNDS = { min: 0, max: 59 }
+const OPERATIONAL_ALERT_DAY_BOUNDS = { min: 1, max: 30 }
 
 function clampInt(value, { min, max }, fallback) {
   const parsed = Number(value)
@@ -143,6 +150,18 @@ function normalizeRollingCustoms(rawRollingCustoms) {
   }
 }
 
+// F17.5a (A-6): paridade com `normalizeClearanceOverdueDaysMirror`
+// (`functions/src/process/operationalAlerts.js`).
+export function normalizeOperationalAlerts(raw) {
+  return {
+    clearanceOverdueDays: clampInt(
+      raw?.clearanceOverdueDays,
+      OPERATIONAL_ALERT_DAY_BOUNDS,
+      DEFAULT_FORECAST_SETTINGS.operationalAlerts.clearanceOverdueDays
+    ),
+  }
+}
+
 function normalizeText(value) {
   return normalizeString(value)
     .normalize('NFD')
@@ -170,6 +189,7 @@ function normalizeForecastSettings(rawSettings) {
     destinations: destinations.length > 0 ? destinations : DEFAULT_FORECAST_SETTINGS.destinations.slice(),
     categoryBusinessDays: normalizeCategoryBusinessDays(source.categoryBusinessDays),
     rollingCustoms: normalizeRollingCustoms(source.rollingCustoms),
+    operationalAlerts: normalizeOperationalAlerts(source.operationalAlerts),
     updatedAt: normalizeUpdatedAt(source.updatedAt),
     updatedBy: source.updatedBy ?? null,
   }
@@ -259,6 +279,9 @@ function buildPayload(settings) {
       appliesTo: settings.rollingCustoms.appliesTo.slice(),
       duimpStatuses: settings.rollingCustoms.duimpStatuses.slice(),
     },
+    operationalAlerts: {
+      clearanceOverdueDays: settings.operationalAlerts.clearanceOverdueDays,
+    },
   }
 }
 
@@ -326,5 +349,6 @@ export function getDefaultForecastSettings() {
       appliesTo: DEFAULT_FORECAST_SETTINGS.rollingCustoms.appliesTo.slice(),
       duimpStatuses: DEFAULT_FORECAST_SETTINGS.rollingCustoms.duimpStatuses.slice(),
     },
+    operationalAlerts: { ...DEFAULT_FORECAST_SETTINGS.operationalAlerts },
   }
 }

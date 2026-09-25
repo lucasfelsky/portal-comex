@@ -115,10 +115,10 @@
     ]
   },
   "tests": {
-    "totalFiles": 74,
+    "totalFiles": 75,
     "_breakdown": {
       "firebase": 4,
-      "functions": 13,
+      "functions": 14,
       "ui": 57
     }
   },

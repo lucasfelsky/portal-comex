@@ -21,6 +21,10 @@ const EMAIL_NOTIFICATION_TYPES = new Set([
   'favorite_process_updated',
   'post_receipt_notes_updated',
   'receipt_divergence_reported',
+  // F17.5a (A-5): indeferimento e' raro e critico; o resumo diario e' no
+  // maximo 1 e-mail/admin/dia e so' quando ha alerta.
+  'license_rejected',
+  'process_daily_alerts',
 ])
 
 const ALLOWED_ROLES = new Set(['admin', 'user', 'logistica'])
@@ -244,6 +248,12 @@ function buildFavoriteProcessUpdatedTitle(processLabel) {
 // F17.4b (B-6): notificacao `receipt_divergence_reported` (com e-mail).
 function buildReceiptDivergenceNotificationBody(processLabel, actorName, typeLabel) {
   return `${actorName} registrou divergência no recebimento${typeLabel ? ` (${typeLabel})` : ''} em ${processLabel}.`
+}
+
+// F17.5a (A-5/A-7): notificacao `license_rejected` (com e-mail) na TRANSICAO
+// de uma anuencia para `Indeferida`.
+function buildLicenseRejectedNotificationBody(processLabel, actorName, agenciesLabel) {
+  return `${actorName} marcou a anuência ${agenciesLabel} como indeferida em ${processLabel}.`
 }
 
 function formatDateLabel(value) {
@@ -490,8 +500,12 @@ async function getUserProfile(uid) {
   }
 }
 
-async function listActiveAdminUsers() {
-  const snapshot = await getFirestore().collection('users').where('role', '==', 'admin').get()
+// F17.5a (A-5): parametro opcional `firestore` (default `getFirestore()`) -
+// permite o runner (`dailyAlerts.js`) injetar o firestore recebido em
+// `runDailyProcessAlerts({ firestore })`. Chamadas existentes sem argumento
+// ficam identicas.
+async function listActiveAdminUsers(firestore = getFirestore()) {
+  const snapshot = await firestore.collection('users').where('role', '==', 'admin').get()
 
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }))
@@ -740,6 +754,6 @@ export {
   EMAIL_NOTIFICATION_TYPES, ALLOWED_ROLES, ALLOWED_STATUSES, RESTRICTED_PROCESS_CATEGORIES, ROLE_PERMISSIONS_MAP, BRAND_COLORS,
   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL, MOJIBAKE_PATTERN, MOJIBAKE_GLOBAL_PATTERN,
   normalizeString, normalizeEmail, normalizeList, normalizeTimestamp, isCorporateEmail, isActiveStatus, countMojibakeMarkers, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName,
-  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
+  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
   getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, recordAuditEvent, assertActiveAdmin, assertApprovedCaller, prefCategoryForType, shouldNotify, createNotifications, sendPushForEntries, deleteNotificationsForRecipient
 };
