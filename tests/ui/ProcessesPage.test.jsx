@@ -444,7 +444,7 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
     await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
 
     await user.click(screen.getByRole('button', { name: 'Novo processo' }))
-    await user.click(screen.getByRole('button', { name: 'Datas e previsão' }))
+    await user.click(screen.getByRole('button', { name: 'Embarque' }))
 
     const etdInput = screen.getByLabelText('ETD')
     fireEvent.change(etdInput, { target: { value: '1999-12-31' } })
@@ -455,7 +455,7 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
     expect(mockSaveProcess).not.toHaveBeenCalled()
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Datas e previsão/ })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /Embarque/ })).toHaveAttribute(
         'aria-current',
         'step'
       )
@@ -480,13 +480,13 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
     await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
   })
 
-  it('(b) cubagem negativa bloqueia, foca a cubagem, passo "Status e carga"', async () => {
+  it('(b) cubagem negativa bloqueia, foca a cubagem, passo "Carga"', async () => {
     const user = userEvent.setup()
     const { container } = renderPage()
     await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
 
     await user.click(screen.getByRole('button', { name: 'Novo processo' }))
-    await user.click(screen.getByRole('button', { name: 'Status e carga' }))
+    await user.click(screen.getByRole('button', { name: 'Carga' }))
 
     const volumeInput = screen.getByLabelText('Cubagem (m³)')
     fireEvent.change(volumeInput, { target: { value: '-1' } })
@@ -495,7 +495,7 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
 
     expect(mockSaveProcess).not.toHaveBeenCalled()
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Status e carga/ })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /Carga/ })).toHaveAttribute(
         'aria-current',
         'step'
       )
@@ -580,7 +580,7 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
     await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
 
     await user.click(screen.getByRole('button', { name: 'Novo processo' }))
-    await user.click(screen.getByRole('button', { name: 'Status e carga' }))
+    await user.click(screen.getByRole('button', { name: 'Carga' }))
     await user.click(screen.getByRole('button', { name: 'Adicionar contêiner' }))
 
     const numberInput = screen.getByLabelText('Número')

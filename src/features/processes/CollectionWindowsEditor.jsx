@@ -224,7 +224,7 @@ export default function CollectionWindowsEditor({
           <p>Agende o horário previsto de coleta no CD.</p>
           {category === 'FCL' || category === 'CONSOLIDADO' ? (
             <small className="field-hint">
-              Cadastre os contêineres no passo Status e carga para vincular cada janela a um
+              Cadastre os contêineres no passo Carga para vincular cada janela a um
               contêiner.
             </small>
           ) : null}

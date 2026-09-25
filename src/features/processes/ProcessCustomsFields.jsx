@@ -16,6 +16,9 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // (Amarelo/Vermelho), exigencia/procedimento especial (Cinza) e
 // pre-preenchimento do desembaraco no Verde (D-4). O select manual "DUIMP"
 // sai - o status passa a ser derivado das datas (`arrivalCustoms.js`).
+// UX-6b-1: grupo "Liberação (DUIMP)" com os pares Nº|Canal, Registro|
+// Parametrização e Desembaraço|Exigência; conferência e as textareas ficam
+// em linha cheia. As condicoes de exibicao de cada campo NAO mudam.
 export default function ProcessCustomsFields({ draft, onDraftChange, channelOptions, errors = {} }) {
   const hasRegistrationSignal = hasDuimpRegistrationSignal(draft)
   const hasParameterization = hasParameterizationSignal(draft)
@@ -23,86 +26,140 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
   const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(channel)
   const isRequirementChannel = CUSTOMS_REQUIREMENT_CHANNELS.includes(channel)
   const isCinza = channel === 'Cinza'
+  const showClearance = hasParameterization && channel
 
   return (
-    <div className="detail-card">
-      <span className="detail-label">Liberação (DUIMP)</span>
+    <div className="form-group">
+      <h4 className="form-group__title">Liberação (DUIMP)</h4>
 
-      <label className="field">
-        <span>Nº da DUIMP</span>
-        <input
-          className="text-input"
-          type="text"
-          value={draft.duimpNumber}
-          onChange={(event) => onDraftChange('duimpNumber', event.target.value)}
-        />
-      </label>
-
-      <label className="field">
-        <span>Registro da DUIMP (data e hora)</span>
-        <input
-          className="text-input"
-          type="datetime-local"
-          value={draft.duimpRegisteredAt}
-          onChange={(event) => onDraftChange('duimpRegisteredAt', event.target.value)}
-          {...getFieldA11yProps('process-field-duimpRegisteredAt', errors.duimpRegisteredAt)}
-        />
-        {errors.duimpRegisteredAt ? (
-          <small
-            className="field-error"
-            id={getFieldErrorId('process-field-duimpRegisteredAt')}
-            aria-hidden="true"
-          >
-            {errors.duimpRegisteredAt}
-          </small>
-        ) : null}
-        {isLegacyDuimpRegisteredWithoutDate(draft) ? (
-          <small className="field-hint">
-            DUIMP registrada sem data (registro antigo) — informe a data e hora.
-          </small>
-        ) : null}
-      </label>
-
-      {hasRegistrationSignal ? (
+      <div className="form-grid">
         <label className="field">
-          <span>Parametrização (data e hora)</span>
+          <span>Nº da DUIMP</span>
+          <input
+            className="text-input"
+            type="text"
+            value={draft.duimpNumber}
+            onChange={(event) => onDraftChange('duimpNumber', event.target.value)}
+          />
+        </label>
+
+        {hasParameterization ? (
+          <label className="field">
+            <span>Canal da parametrização</span>
+            <SelectField
+              className="text-input"
+              value={draft.parameterizationChannel}
+              onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
+            >
+              <option value="">Selecione o canal</option>
+              {channelOptions.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </SelectField>
+          </label>
+        ) : null}
+      </div>
+
+      <div className="form-grid">
+        <label className="field">
+          <span>Registro da DUIMP (data e hora)</span>
           <input
             className="text-input"
             type="datetime-local"
-            value={draft.parameterizedAt}
-            onChange={(event) => onDraftChange('parameterizedAt', event.target.value)}
-            {...getFieldA11yProps('process-field-parameterizedAt', errors.parameterizedAt)}
+            value={draft.duimpRegisteredAt}
+            onChange={(event) => onDraftChange('duimpRegisteredAt', event.target.value)}
+            {...getFieldA11yProps('process-field-duimpRegisteredAt', errors.duimpRegisteredAt)}
           />
-          {errors.parameterizedAt ? (
+          {errors.duimpRegisteredAt ? (
             <small
               className="field-error"
-              id={getFieldErrorId('process-field-parameterizedAt')}
+              id={getFieldErrorId('process-field-duimpRegisteredAt')}
               aria-hidden="true"
             >
-              {errors.parameterizedAt}
+              {errors.duimpRegisteredAt}
             </small>
           ) : null}
-          {isLegacyParameterizedWithoutDate(draft) ? (
+          {isLegacyDuimpRegisteredWithoutDate(draft) ? (
             <small className="field-hint">
-              DUIMP parametrizada sem data (registro antigo) — informe a data e hora.
+              DUIMP registrada sem data (registro antigo) — informe a data e hora.
             </small>
           ) : null}
         </label>
-      ) : null}
 
-      {hasParameterization ? (
-        <label className="field">
-          <span>Canal da parametrização</span>
-          <SelectField
-            className="text-input"
-            value={draft.parameterizationChannel}
-            onChange={(event) => onDraftChange('parameterizationChannel', event.target.value)}
-          >
-            <option value="">Selecione o canal</option>
-            {channelOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </SelectField>
+        {hasRegistrationSignal ? (
+          <label className="field">
+            <span>Parametrização (data e hora)</span>
+            <input
+              className="text-input"
+              type="datetime-local"
+              value={draft.parameterizedAt}
+              onChange={(event) => onDraftChange('parameterizedAt', event.target.value)}
+              {...getFieldA11yProps('process-field-parameterizedAt', errors.parameterizedAt)}
+            />
+            {errors.parameterizedAt ? (
+              <small
+                className="field-error"
+                id={getFieldErrorId('process-field-parameterizedAt')}
+                aria-hidden="true"
+              >
+                {errors.parameterizedAt}
+              </small>
+            ) : null}
+            {isLegacyParameterizedWithoutDate(draft) ? (
+              <small className="field-hint">
+                DUIMP parametrizada sem data (registro antigo) — informe a data e hora.
+              </small>
+            ) : null}
+          </label>
+        ) : null}
+      </div>
+
+      {showClearance ? (
+        <div className="form-grid">
+          <label className="field">
+            <span>Desembaraço concluído em</span>
+            <input
+              className="text-input"
+              type="datetime-local"
+              value={draft.clearanceCompletedAt}
+              onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
+              {...getFieldA11yProps('process-field-clearanceCompletedAt', errors.clearanceCompletedAt)}
+            />
+            {errors.clearanceCompletedAt ? (
+              <small
+                className="field-error"
+                id={getFieldErrorId('process-field-clearanceCompletedAt')}
+                aria-hidden="true"
+              >
+                {errors.clearanceCompletedAt}
+              </small>
+            ) : null}
+            <small className="field-hint">
+              {channel === 'Verde'
+                ? 'Preenchido com a parametrização. Ajuste se preciso.'
+                : 'Obrigatório para liberar a coleta neste canal.'}
+            </small>
+          </label>
+
+          {isRequirementChannel ? (
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.customsRequirement)}
+                onChange={(event) => onDraftChange('customsRequirement', event.target.checked)}
+              />
+              <span>Exigência?</span>
+            </label>
+          ) : null}
+        </div>
+      ) : isRequirementChannel ? (
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={Boolean(draft.customsRequirement)}
+            onChange={(event) => onDraftChange('customsRequirement', event.target.checked)}
+          />
+          <span>Exigência?</span>
         </label>
       ) : null}
 
@@ -128,17 +185,6 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
         </label>
       ) : null}
 
-      {isRequirementChannel ? (
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={Boolean(draft.customsRequirement)}
-            onChange={(event) => onDraftChange('customsRequirement', event.target.checked)}
-          />
-          <span>Exigência?</span>
-        </label>
-      ) : null}
-
       {isRequirementChannel && draft.customsRequirement && !isCinza ? (
         <label className="field">
           <span>Descrição da exigência</span>
@@ -159,33 +205,6 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
             onChange={(event) => onDraftChange('customsRequirementNotes', event.target.value)}
           />
           <small className="field-hint">Descreva o procedimento especial e, se houver, a exigência.</small>
-        </label>
-      ) : null}
-
-      {hasParameterization && channel ? (
-        <label className="field">
-          <span>Desembaraço concluído em</span>
-          <input
-            className="text-input"
-            type="datetime-local"
-            value={draft.clearanceCompletedAt}
-            onChange={(event) => onDraftChange('clearanceCompletedAt', event.target.value)}
-            {...getFieldA11yProps('process-field-clearanceCompletedAt', errors.clearanceCompletedAt)}
-          />
-          {errors.clearanceCompletedAt ? (
-            <small
-              className="field-error"
-              id={getFieldErrorId('process-field-clearanceCompletedAt')}
-              aria-hidden="true"
-            >
-              {errors.clearanceCompletedAt}
-            </small>
-          ) : null}
-          <small className="field-hint">
-            {channel === 'Verde'
-              ? 'Pré-preenchido com a data da parametrização — ajuste se o desembaraço foi em outra data.'
-              : 'Obrigatório para liberar a coleta neste canal.'}
-          </small>
         </label>
       ) : null}
     </div>

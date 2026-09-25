@@ -11,13 +11,17 @@ import { isDtaLoadingScheduledStatus, isDtaTransitCompletedStatus } from './proc
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
-// F17.3a (D-11): card "Chegada" - atracacao (maritimo) ou chegada (aereo)
+// F17.3a (D-11): "Chegada" - atracacao (maritimo) ou chegada (aereo)
 // com DATA, CE/terminal/free time e presenca de carga com data. Substitui os
 // checkboxes "Atracou?"/"Chegou?" do antigo passo "Fluxo operacional"
 // (D-10). Imports permitidos (D-11): `react` (implicito via JSX), SelectField,
 // `./arrivalCustoms`, `./processStatus` (so' os 2 helpers de DTA), `./processCategories`.
-// Classes existentes apenas - nenhum CSS novo.
-export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions, errors = {} }) {
+// UX-6b-1: grupos "Chegada" (Atracação/Chegada|Terminal, CE Mercante|CE
+// house, DTA, Presença|`extraField`) e "Free time" (hint corrigido, D3),
+// em `.form-group`/`.form-grid`. `extraField` (D4) e' a previsao manual de
+// entrega, renderizada pelo `ProcessForm` como ultima celula do grid junto
+// da Presença.
+export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions, errors = {}, extraField = null }) {
   const isMaritime = isMaritimeCategory(draft.category)
   const isAir = isAirCategory(draft.category)
 
@@ -35,40 +39,66 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
   const isDtaLoadingScheduled = (status) => isDtaLoadingScheduledStatus(status)
   const isDtaTransitCompleted = (status) => isDtaTransitCompletedStatus(status)
 
-  return (
-    <div className="detail-card">
-      <span className="detail-label">Chegada</span>
+  const showPresence = hasArrival && (isMaritime || isDtaTransitCompleted(draft.dtaStatus))
 
-      <label className="field">
-        <span>{isMaritime ? 'Atracação (data e hora)' : 'Chegada (data e hora)'}</span>
-        <input
-          className="text-input"
-          type="datetime-local"
-          value={arrivalValue ?? ''}
-          onChange={(event) => onDraftChange(arrivalField, event.target.value)}
-          {...getFieldA11yProps(`process-field-${arrivalField}`, errors[arrivalField])}
-        />
-        {errors[arrivalField] ? (
-          <small className="field-error" id={getFieldErrorId(`process-field-${arrivalField}`)} aria-hidden="true">
-            {errors[arrivalField]}
-          </small>
-        ) : null}
-        {isApprox ? (
-          <small className="field-hint">
-            Data aproximada (migrada do ETA) — confirme a data real.
-          </small>
-        ) : null}
-        {!isApprox && isLegacyWithoutDate ? (
-          <small className="field-hint">
-            {isMaritime
-              ? 'Atracação marcada sem data (registro antigo) — informe a data e hora.'
-              : 'Chegada marcada sem data (registro antigo) — informe a data e hora.'}
-          </small>
-        ) : null}
-      </label>
+  return (
+    <div className="form-group">
+      <h4 className="form-group__title">Chegada</h4>
+
+      <div className="form-grid">
+        <label className="field">
+          <span>{isMaritime ? 'Atracação (data e hora)' : 'Chegada (data e hora)'}</span>
+          <input
+            className="text-input"
+            type="datetime-local"
+            value={arrivalValue ?? ''}
+            onChange={(event) => onDraftChange(arrivalField, event.target.value)}
+            {...getFieldA11yProps(`process-field-${arrivalField}`, errors[arrivalField])}
+          />
+          {errors[arrivalField] ? (
+            <small className="field-error" id={getFieldErrorId(`process-field-${arrivalField}`)} aria-hidden="true">
+              {errors[arrivalField]}
+            </small>
+          ) : null}
+          {isApprox ? (
+            <small className="field-hint">
+              Data aproximada (migrada do ETA) — confirme a data real.
+            </small>
+          ) : null}
+          {!isApprox && isLegacyWithoutDate ? (
+            <small className="field-hint">
+              {isMaritime
+                ? 'Atracação marcada sem data (registro antigo) — informe a data e hora.'
+                : 'Chegada marcada sem data (registro antigo) — informe a data e hora.'}
+            </small>
+          ) : null}
+        </label>
+
+        {!isMaritime ? (
+          <label className="field">
+            <span>Terminal / armazém (opcional)</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.terminalName ?? ''}
+              onChange={(event) => onDraftChange('terminalName', event.target.value)}
+            />
+          </label>
+        ) : (
+          <label className="field">
+            <span>Terminal / armazém</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.terminalName ?? ''}
+              onChange={(event) => onDraftChange('terminalName', event.target.value)}
+            />
+          </label>
+        )}
+      </div>
 
       {isMaritime ? (
-        <div className="detail-card detail-card--split">
+        <div className="form-grid">
           <label className="field">
             <span>CE Mercante</span>
             <input
@@ -89,68 +119,6 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               />
             </label>
           ) : null}
-          <label className="field">
-            <span>Terminal / armazém</span>
-            <input
-              className="text-input"
-              type="text"
-              value={draft.terminalName ?? ''}
-              onChange={(event) => onDraftChange('terminalName', event.target.value)}
-            />
-          </label>
-        </div>
-      ) : (
-        <label className="field">
-          <span>Terminal / armazém (opcional)</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.terminalName ?? ''}
-            onChange={(event) => onDraftChange('terminalName', event.target.value)}
-          />
-        </label>
-      )}
-
-      {showFreeTime ? (
-        <div className="detail-card detail-card--split">
-          <label className="field">
-            <span>Free time (dias)</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="1"
-              value={draft.freeTimeDays ?? ''}
-              onChange={(event) => onDraftChange('freeTimeDays', event.target.value)}
-              {...getFieldA11yProps('process-field-freeTimeDays', errors.freeTimeDays)}
-            />
-            {errors.freeTimeDays ? (
-              <small className="field-error" id={getFieldErrorId('process-field-freeTimeDays')} aria-hidden="true">
-                {errors.freeTimeDays}
-              </small>
-            ) : null}
-          </label>
-          <label className="field">
-            <span>Diária de demurrage (USD, opcional)</span>
-            <input
-              className="text-input"
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.demurrageDailyRateUsd ?? ''}
-              onChange={(event) => onDraftChange('demurrageDailyRateUsd', event.target.value)}
-              {...getFieldA11yProps('process-field-demurrageDailyRateUsd', errors.demurrageDailyRateUsd)}
-            />
-            {errors.demurrageDailyRateUsd ? (
-              <small
-                className="field-error"
-                id={getFieldErrorId('process-field-demurrageDailyRateUsd')}
-                aria-hidden="true"
-              >
-                {errors.demurrageDailyRateUsd}
-              </small>
-            ) : null}
-          </label>
         </div>
       ) : null}
 
@@ -170,7 +138,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
             </SelectField>
           </label>
           {isDtaLoadingScheduled(draft.dtaStatus) ? (
-            <div className="detail-card detail-card--split">
+            <div className="form-grid">
               <label className="field">
                 <span>Previsão do carregamento da DTA</span>
                 <input
@@ -214,36 +182,88 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
         </>
       ) : null}
 
-      {hasArrival && (isMaritime || isDtaTransitCompleted(draft.dtaStatus)) ? (
-        <label className="field">
-          <span>Presença de carga (data e hora)</span>
-          <input
-            className="text-input"
-            type="datetime-local"
-            value={draft.cargoPresenceInformedAt ?? ''}
-            onChange={(event) => onDraftChange('cargoPresenceInformedAt', event.target.value)}
-            {...getFieldA11yProps('process-field-cargoPresenceInformedAt', errors.cargoPresenceInformedAt)}
-          />
-          {errors.cargoPresenceInformedAt ? (
-            <small
-              className="field-error"
-              id={getFieldErrorId('process-field-cargoPresenceInformedAt')}
-              aria-hidden="true"
-            >
-              {errors.cargoPresenceInformedAt}
-            </small>
+      {showPresence || extraField ? (
+        <div className="form-grid">
+          {showPresence ? (
+            <label className="field">
+              <span>Presença de carga (data e hora)</span>
+              <input
+                className="text-input"
+                type="datetime-local"
+                value={draft.cargoPresenceInformedAt ?? ''}
+                onChange={(event) => onDraftChange('cargoPresenceInformedAt', event.target.value)}
+                {...getFieldA11yProps('process-field-cargoPresenceInformedAt', errors.cargoPresenceInformedAt)}
+              />
+              {errors.cargoPresenceInformedAt ? (
+                <small
+                  className="field-error"
+                  id={getFieldErrorId('process-field-cargoPresenceInformedAt')}
+                  aria-hidden="true"
+                >
+                  {errors.cargoPresenceInformedAt}
+                </small>
+              ) : null}
+              {showFreeTime ? (
+                <small className="field-hint">
+                  O prazo do free time conta a partir desta data.
+                </small>
+              ) : null}
+              {isLegacyPresenceWithoutDate ? (
+                <small className="field-hint">
+                  Presença informada sem data (registro antigo) — informe a data e hora.
+                </small>
+              ) : null}
+            </label>
           ) : null}
-          {showFreeTime ? (
-            <small className="field-hint">
-              O prazo do free time conta a partir desta data.
-            </small>
-          ) : null}
-          {isLegacyPresenceWithoutDate ? (
-            <small className="field-hint">
-              Presença informada sem data (registro antigo) — informe a data e hora.
-            </small>
-          ) : null}
-        </label>
+          {extraField}
+        </div>
+      ) : null}
+
+      {showFreeTime ? (
+        <div className="form-group">
+          <h4 className="form-group__title">Free time</h4>
+          <small className="field-hint">O prazo conta a partir da presença de carga.</small>
+          <div className="form-grid form-grid--numeric">
+            <label className="field">
+              <span>Free time (dias)</span>
+              <input
+                className="text-input"
+                type="number"
+                min="0"
+                step="1"
+                value={draft.freeTimeDays ?? ''}
+                onChange={(event) => onDraftChange('freeTimeDays', event.target.value)}
+                {...getFieldA11yProps('process-field-freeTimeDays', errors.freeTimeDays)}
+              />
+              {errors.freeTimeDays ? (
+                <small className="field-error" id={getFieldErrorId('process-field-freeTimeDays')} aria-hidden="true">
+                  {errors.freeTimeDays}
+                </small>
+              ) : null}
+            </label>
+            <label className="field">
+              <span>Diária de demurrage (USD, opcional)</span>
+              <input
+                className="text-input"
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.demurrageDailyRateUsd ?? ''}
+                onChange={(event) => onDraftChange('demurrageDailyRateUsd', event.target.value)}
+                {...getFieldA11yProps('process-field-demurrageDailyRateUsd', errors.demurrageDailyRateUsd)}
+              />
+              {errors.demurrageDailyRateUsd ? (
+                <small
+                  className="field-error"
+                  id={getFieldErrorId('process-field-demurrageDailyRateUsd')}
+                  aria-hidden="true"
+                >
+                  {errors.demurrageDailyRateUsd}
+                </small>
+              ) : null}
+            </label>
+          </div>
+        </div>
       ) : null}
     </div>
   )

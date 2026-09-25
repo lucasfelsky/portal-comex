@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSwipe } from '../../hooks/useSwipe'
 import Spinner from '../../components/Spinner'
 import SelectField from '../../components/SelectField'
+import Icon from '../../components/Icon'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
 import {
   getDisplayedCollectionStatus,
@@ -11,14 +12,10 @@ import {
   normalizeComparableText,
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
-import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { deriveProcessStatus, isCollectionReleased } from './deriveProcessStatus'
 import { hasCargoPresenceSignal, FREE_TIME_CATEGORIES } from './arrivalCustoms'
 import EmptyReturnFields from './EmptyReturnFields'
-import {
-  getAutomaticEstimatedDeliveryDate,
-  getEstimatedDeliveryDate,
-} from '../../utils/deliveryForecast'
+import { getAutomaticEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { INCOTERM_OPTIONS } from './operationalOptions'
 import { getProcessFieldDomId, getProcessFieldStep } from './processDraftValidation'
@@ -46,13 +43,15 @@ import {
 // C11 (auditoria mobile F14): o formulário virou um WIZARD DE ETAPAS com
 // indicador de progresso, em vez de um scroll único e longo (péssimo no
 // touch). Os campos são exatamente os mesmos de antes — só reagrupados em
-// passos (Identificação / Datas e previsão / Status e carga / Fluxo
-// operacional / Itens). O passo "Fluxo operacional" só aparece quando há
-// algo a mostrar (os fluxos pós-atracação/pós-chegada - F17.2b: as
-// anuências saíram daqui, ver "Status e carga"/`LicensesEditor`). Os chips
-// de passo são clicáveis (pular direto — útil no edit), e o botão Salvar
-// fica sempre disponível (não prende o usuário no
-// fim do wizard). O estado do passo é interno; o page não precisa saber.
+// passos.
+//
+// UX-6b-1: 6 PASSOS FIXOS (Identificação / Embarque / Carga / Chegada e
+// liberação / Coleta / Itens), na mesma ordem em create e em edit — a
+// numeração não muda mais entre modais (o antigo passo "Fluxo operacional"
+// condicional saiu). O cabeçalho ganhou o badge de status derivado (mesma
+// fonte de sempre: `deriveProcessStatus`/`getStatusTagClass`/
+// `getDisplayedProcessStatus`). Os campos continuam os mesmos — só
+// reagrupados/reordenados; nenhuma condição de exibição mudou.
 export default function ProcessForm({
   viewMode,
   draft,
@@ -89,7 +88,6 @@ export default function ProcessForm({
   // o ETA (era a regressão do F10 que ainda vivia aqui).
   const getAutomaticEstimatedDeliveryLabel = (process) =>
     formatDate(getAutomaticEstimatedDeliveryDate(process))
-  const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
 
   const keepsCollectionSchedule = (status) => {
     const normalizedStatus = normalizeComparableText(status)
@@ -137,7 +135,19 @@ export default function ProcessForm({
         />
       </label>
 
-      <div className="detail-card detail-card--split">
+      <div className="form-grid form-grid--3">
+        {draft.category !== 'CONSOLIDADO' ? (
+          <label className="field">
+            <span>Código do processo</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.processNumber}
+              onChange={(event) => onDraftChange('processNumber', event.target.value)}
+              placeholder="Número do processo"
+            />
+          </label>
+        ) : null}
         <label className="field">
           <span>Categoria</span>
           <SelectField
@@ -162,27 +172,7 @@ export default function ProcessForm({
         </label>
       </div>
 
-      {draft.category !== 'CONSOLIDADO' ? (
-        <label className="field">
-          <span>Código do processo</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.processNumber}
-            onChange={(event) => onDraftChange('processNumber', event.target.value)}
-            placeholder="Número do processo"
-          />
-        </label>
-      ) : (
-        <PurchaseOrdersEditor
-          value={draft.purchaseOrders}
-          onChange={(value) => onDraftChange('purchaseOrders', value)}
-          disabled={isSaving}
-          errors={fieldErrors}
-        />
-      )}
-
-      <div className="detail-card detail-card--split">
+      <div className="form-grid">
         {draft.category !== 'CONSOLIDADO' ? (
           <label className="field">
             <span>Fornecedor</span>
@@ -205,121 +195,151 @@ export default function ProcessForm({
         </label>
       </div>
 
-      <div className="detail-card detail-card--split">
-        <label className="field">
-          <span>Incoterm</span>
-          <SelectField
-            className="text-input"
-            value={draft.incoterm}
-            onChange={(event) => onDraftChange('incoterm', event.target.value)}
-            {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
-          >
-            <option value="">Selecione o Incoterm</option>
-            {INCOTERM_OPTIONS.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </SelectField>
-          {fieldErrors.incoterm ? (
-            <small className="field-error" id={getFieldErrorId('process-field-incoterm')} aria-hidden="true">
-              {fieldErrors.incoterm}
-            </small>
-          ) : null}
-        </label>
-        <label className="field">
-          <span>Agente de carga</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.forwarderName}
-            onChange={(event) => onDraftChange('forwarderName', event.target.value)}
-          />
-        </label>
-      </div>
+      <label className="field">
+        <span>Incoterm</span>
+        <SelectField
+          className="text-input"
+          value={draft.incoterm}
+          onChange={(event) => onDraftChange('incoterm', event.target.value)}
+          {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
+        >
+          <option value="">Selecione o Incoterm</option>
+          {INCOTERM_OPTIONS.map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </SelectField>
+        {fieldErrors.incoterm ? (
+          <small className="field-error" id={getFieldErrorId('process-field-incoterm')} aria-hidden="true">
+            {fieldErrors.incoterm}
+          </small>
+        ) : null}
+      </label>
+
+      {draft.category === 'CONSOLIDADO' ? (
+        <PurchaseOrdersEditor
+          value={draft.purchaseOrders}
+          onChange={(value) => onDraftChange('purchaseOrders', value)}
+          disabled={isSaving}
+          errors={fieldErrors}
+        />
+      ) : null}
     </>
   )
 
   // F17.2d-1 (D-1/D-2, Q5): "Embarque confirmado" - SEM campo novo, deriva
   // de `hasText(shippedAt)`. Marcar/desmarcar copia/zera `shippedAt` a
   // partir do ETD (`shipmentConfirmation.js`).
-  const renderDatesStep = () => (
+  const renderShipmentStep = () => (
     <>
-      <div className="detail-card detail-card--split">
-        <div className="field">
-          <label className="field">
-            <span>ETD</span>
-            <input
-              className="text-input"
-              type="date"
-              value={draft.etd}
-              onChange={(event) => onDraftChange('etd', event.target.value)}
-              {...getFieldA11yProps('process-field-etd', fieldErrors.etd)}
-            />
-            {fieldErrors.etd ? (
-              <small className="field-error" id={getFieldErrorId('process-field-etd')} aria-hidden="true">
-                {fieldErrors.etd}
+      <div className="form-group">
+        <h4 className="form-group__title">Datas</h4>
+        <div className="form-grid">
+          <div className="field">
+            <label className="field">
+              <span>ETD</span>
+              <input
+                className="text-input"
+                type="date"
+                value={draft.etd}
+                onChange={(event) => onDraftChange('etd', event.target.value)}
+                {...getFieldA11yProps('process-field-etd', fieldErrors.etd)}
+              />
+              {fieldErrors.etd ? (
+                <small className="field-error" id={getFieldErrorId('process-field-etd')} aria-hidden="true">
+                  {fieldErrors.etd}
+                </small>
+              ) : null}
+            </label>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={isShipmentConfirmed(draft)}
+                disabled={!draft.etd && !isShipmentConfirmed(draft)}
+                onChange={(event) => onDraftChange('shipmentConfirmed', event.target.checked)}
+              />
+              <span>Embarque confirmado</span>
+            </label>
+            {!draft.etd && !isShipmentConfirmed(draft) ? (
+              <small className="field-hint">Informe o ETD para confirmar o embarque.</small>
+            ) : null}
+            {isFutureShipment(draft) ? (
+              <small className="field-hint">
+                <span className="inline-badge inline-badge--warn">
+                  Embarque confirmado com ETD no futuro.
+                </span>
               </small>
             ) : null}
-          </label>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={isShipmentConfirmed(draft)}
-              disabled={!draft.etd && !isShipmentConfirmed(draft)}
-              onChange={(event) => onDraftChange('shipmentConfirmed', event.target.checked)}
-            />
-            <span>Embarque confirmado</span>
-          </label>
-          {!draft.etd && !isShipmentConfirmed(draft) ? (
-            <small className="field-hint">Informe o ETD para confirmar o embarque.</small>
-          ) : null}
-          {isFutureShipment(draft) ? (
-            <small className="field-hint">
-              <span className="inline-badge inline-badge--warn">
-                Embarque confirmado com ETD no futuro.
-              </span>
-            </small>
-          ) : null}
-          {hasShipmentDateDivergence(draft) ? (
-            <small className="field-hint">
-              Embarque registrado em {formatDate(draft.shippedAt)} (diferente do ETD).{' '}
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => onDraftChange('etd', draft.shippedAt)}
-              >
-                Usar esta data como ETD
-              </button>
-            </small>
-          ) : null}
-        </div>
-        <label className="field">
-          <span>ETA</span>
-          <input
-            className="text-input"
-            type="date"
-            value={draft.eta}
-            onChange={(event) => onDraftChange('eta', event.target.value)}
-            {...getFieldA11yProps('process-field-eta', fieldErrors.eta)}
-          />
-          {fieldErrors.eta ? (
-            <small className="field-error" id={getFieldErrorId('process-field-eta')} aria-hidden="true">
-              {fieldErrors.eta}
-            </small>
-          ) : null}
-        </label>
-      </div>
-
-      <div className="detail-card detail-card--split">
-        <div>
-          <span className="detail-label">Previsão automática no armazém</span>
-          <p>{getAutomaticEstimatedDeliveryLabel(draft)}</p>
-        </div>
-        <div>
-          <span className="detail-label">Previsão aplicada</span>
-          <p>{getEstimatedDeliveryLabel(draft)}</p>
+            {hasShipmentDateDivergence(draft) ? (
+              <small className="field-hint">
+                Embarque registrado em {formatDate(draft.shippedAt)} (diferente do ETD).{' '}
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => onDraftChange('etd', draft.shippedAt)}
+                >
+                  Usar esta data como ETD
+                </button>
+              </small>
+            ) : null}
+          </div>
+          <div className="field">
+            <label className="field">
+              <span>ETA</span>
+              <input
+                className="text-input"
+                type="date"
+                value={draft.eta}
+                onChange={(event) => onDraftChange('eta', event.target.value)}
+                {...getFieldA11yProps('process-field-eta', fieldErrors.eta)}
+              />
+              {fieldErrors.eta ? (
+                <small className="field-error" id={getFieldErrorId('process-field-eta')} aria-hidden="true">
+                  {fieldErrors.eta}
+                </small>
+              ) : null}
+            </label>
+            {viewMode === 'edit' && draft.etaOriginal ? (
+              <small className="field-hint">ETA original: {formatDate(draft.etaOriginal)}</small>
+            ) : null}
+          </div>
         </div>
       </div>
 
+      <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} errors={fieldErrors} />
+    </>
+  )
+
+  // F17.2a (D-3): status derivado - o select manual pre-chegada acabou.
+  // `shippedAt` (passo "Embarque") e' quem faz o status avancar a partir de
+  // "Aguardando Embarque".
+  const derivedProcessStatus = deriveProcessStatus(draft)
+
+  const renderCargoStep = () => (
+    <>
+      <ProcessCargoFields
+        draft={draft}
+        onDraftChange={onDraftChange}
+        disabled={isSaving}
+        errors={fieldErrors}
+      />
+
+      <label className="field">
+        <span>Observações do processo</span>
+        <textarea
+          className="text-input text-area"
+          value={draft.processNotes}
+          onChange={(event) => onDraftChange('processNotes', event.target.value)}
+          placeholder="Informações operacionais relevantes do processo."
+        />
+      </label>
+    </>
+  )
+
+  // D4: previsao manual de entrega no armazem - os 2 cards de leitura viram
+  // o hint "Opcional. Vazio = previsão automática (dd/mm/aaaa)." (a data
+  // aplicada e' o proprio valor do input quando preenchido).
+  const renderManualForecastField = () => (
+    <>
       <label className="field">
         <span>Previsão manual de entrega no armazém</span>
         <input
@@ -344,7 +364,7 @@ export default function ProcessForm({
           </small>
         ) : null}
         <small className="field-hint">
-          Campo opcional. Se vazio, o sistema usa a previsão automática.
+          {`Opcional. Vazio = previsão automática (${getAutomaticEstimatedDeliveryLabel(draft)}).`}
         </small>
       </label>
       {draft.warehouseDeliveryDateOverride ? (
@@ -358,80 +378,14 @@ export default function ProcessForm({
           </button>
         </div>
       ) : null}
-
-      {viewMode === 'edit' && draft.etaOriginal ? (
-        <div className="detail-card">
-          <span className="detail-label">ETA original</span>
-          <p>{formatDate(draft.etaOriginal)}</p>
-        </div>
-      ) : null}
     </>
-  )
-
-  // F17.2a (D-3): status derivado - o select manual pre-chegada acabou.
-  // `shippedAt` (passo "Embarque e trânsito") e' quem faz o status avancar
-  // a partir de "Aguardando Embarque".
-  const derivedProcessStatus = deriveProcessStatus(draft)
-
-  const renderStatusStep = () => (
-    <>
-      <div className="detail-card detail-card--soft">
-        <span className="detail-label">Status do processo (automático)</span>
-        <span className={getStatusTagClass(derivedProcessStatus)}>
-          {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
-        </span>
-        <small className="field-hint">
-          Marque "Embarque confirmado" no passo Datas e previsão para o status avançar.
-        </small>
-      </div>
-
-      <ProcessCargoFields
-        draft={draft}
-        onDraftChange={onDraftChange}
-        disabled={isSaving}
-        errors={fieldErrors}
-      />
-
-      <LicensesEditor
-        value={draft.licenses}
-        onChange={(value) => onDraftChange('licenses', value)}
-        disabled={isSaving}
-        errors={fieldErrors}
-      />
-
-      <label className="field">
-        <span>Quantidade de pallets</span>
-        <input
-          className="text-input"
-          type="number"
-          min="0"
-          value={draft.palletQuantity}
-          onChange={(event) => onDraftChange('palletQuantity', event.target.value)}
-        />
-      </label>
-
-      <label className="field">
-        <span>Observações do processo</span>
-        <textarea
-          className="text-input text-area"
-          value={draft.processNotes}
-          onChange={(event) => onDraftChange('processNotes', event.target.value)}
-          placeholder="Informações operacionais relevantes do processo."
-        />
-      </label>
-    </>
-  )
-
-  const renderTransitStep = () => (
-    <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} errors={fieldErrors} />
   )
 
   // F17.3a (D-10): "Chegada" (atracacao/chegada com data, CE/terminal/free
   // time, presenca de carga) extraida pra `ProcessArrivalFields`; DUIMP/
-  // canal/desembaraco extraidos pra `ProcessCustomsFields` (JSX movido, sem
-  // mudanca de comportamento). Bloco de coleta ficava DUPLICADO
-  // (maritimo/aereo) - agora aparece uma unica vez.
-  const renderFlowStep = () => (
+  // canal/desembaraco extraidos pra `ProcessCustomsFields`; anuencias
+  // (`LicensesEditor`) tambem vivem aqui (D1: `licenses` -> passo `arrival`).
+  const renderArrivalStep = () => (
     <>
       {canShowMaritimeFlow || canShowAirFlow ? (
         <ProcessArrivalFields
@@ -439,8 +393,14 @@ export default function ProcessForm({
           onDraftChange={onDraftChange}
           dtaStatusOptions={dtaStatusOptions}
           errors={fieldErrors}
+          extraField={renderManualForecastField()}
         />
-      ) : null}
+      ) : (
+        <div className="form-group">
+          <h4 className="form-group__title">Previsão de entrega</h4>
+          {renderManualForecastField()}
+        </div>
+      )}
 
       {(canShowMaritimeFlow || canShowAirFlow) && hasCargoPresenceSignal(draft) ? (
         <ProcessCustomsFields
@@ -451,7 +411,40 @@ export default function ProcessForm({
         />
       ) : null}
 
-      {(canShowMaritimeFlow || canShowAirFlow) && isCollectionReleased(draft) ? (
+      <div className="form-group">
+        <h4 className="form-group__title">Anuências</h4>
+        <LicensesEditor
+          value={draft.licenses}
+          onChange={(value) => onDraftChange('licenses', value)}
+          disabled={isSaving}
+          errors={fieldErrors}
+        />
+      </div>
+    </>
+  )
+
+  const canShowFlow = canShowMaritimeFlow || canShowAirFlow
+  const showCollectionSelect = canShowFlow && isCollectionReleased(draft)
+  const showCollectionWindows =
+    canShowFlow &&
+    (shouldEditCollectionSchedule(draft.collectionStatus) ||
+      isCdEnRouteStatusForFilter(draft.collectionStatus))
+  const showCollectionReadOnly =
+    canShowFlow &&
+    Boolean(draft.collectionStatus) &&
+    keepsCollectionSchedule(draft.collectionStatus) &&
+    !shouldEditCollectionSchedule(draft.collectionStatus)
+  const showCarrier = isCollectionScheduledOrBeyondStatus(draft.collectionStatus)
+  const showEmptyReturn =
+    FREE_TIME_CATEGORIES.includes(draft.category) &&
+    derivedProcessStatus === 'Carga recebida' &&
+    (draft.containers ?? []).length > 0
+  const hasCollectionContent =
+    showCollectionSelect || showCollectionWindows || showCollectionReadOnly || showCarrier || showEmptyReturn
+
+  const renderCollectionStep = () => (
+    <>
+      {showCollectionSelect ? (
         <label className="field">
           <span>Coleta</span>
           <SelectField
@@ -466,8 +459,7 @@ export default function ProcessForm({
           </SelectField>
         </label>
       ) : null}
-      {(canShowMaritimeFlow || canShowAirFlow) &&
-      (shouldEditCollectionSchedule(draft.collectionStatus) || isCdEnRouteStatusForFilter(draft.collectionStatus)) ? (
+      {showCollectionWindows ? (
         <CollectionWindowsEditor
           value={draft.collectionWindows}
           category={draft.category}
@@ -477,17 +469,14 @@ export default function ProcessForm({
           errors={fieldErrors}
         />
       ) : null}
-      {(canShowMaritimeFlow || canShowAirFlow) &&
-      draft.collectionStatus &&
-      keepsCollectionSchedule(draft.collectionStatus) &&
-      !shouldEditCollectionSchedule(draft.collectionStatus) ? (
+      {showCollectionReadOnly ? (
         <div className="detail-card">
           <span className="detail-label">Coleta</span>
           <p>{getDisplayedCollectionStatus(draft.collectionStatus)}</p>
         </div>
       ) : null}
 
-      {isCollectionScheduledOrBeyondStatus(draft.collectionStatus) ? (
+      {showCarrier ? (
         <div className="detail-card">
           <label className="field">
             <span>Transportadora</span>
@@ -501,15 +490,19 @@ export default function ProcessForm({
         </div>
       ) : null}
 
-      {FREE_TIME_CATEGORIES.includes(draft.category) &&
-      derivedProcessStatus === 'Carga recebida' &&
-      (draft.containers ?? []).length > 0 ? (
+      {showEmptyReturn ? (
         <EmptyReturnFields
           containers={draft.containers}
           onChange={(value) => onDraftChange('containers', value)}
           disabled={isSaving}
           errors={fieldErrors}
         />
+      ) : null}
+
+      {!hasCollectionContent ? (
+        <p className="field-hint">
+          Os dados de coleta aparecem aqui depois da liberação da carga.
+        </p>
       ) : null}
     </>
   )
@@ -613,19 +606,13 @@ export default function ProcessForm({
     </div>
   )
 
-  // O passo "Fluxo operacional" só existe quando há conteúdo condicional a
-  // mostrar (senão o passo ficaria vazio).
-  const showFlowStep =
-    (viewMode === 'edit' && isMaritimeCategory(draft.category)) ||
-    canShowMaritimeFlow ||
-    canShowAirFlow
-
+  // D1: 6 passos fixos - a numeração não muda entre create/edit.
   const steps = [
     { key: 'ident', label: 'Identificação', render: renderIdentificationStep },
-    { key: 'dates', label: 'Datas e previsão', render: renderDatesStep },
-    { key: 'status', label: 'Status e carga', render: renderStatusStep },
-    { key: 'transit', label: 'Embarque e trânsito', render: renderTransitStep },
-    ...(showFlowStep ? [{ key: 'flow', label: 'Fluxo operacional', render: renderFlowStep }] : []),
+    { key: 'shipment', label: 'Embarque', render: renderShipmentStep },
+    { key: 'cargo', label: 'Carga', render: renderCargoStep },
+    { key: 'arrival', label: 'Chegada e liberação', render: renderArrivalStep },
+    { key: 'collection', label: 'Coleta', render: renderCollectionStep },
     { key: 'items', label: 'Itens', render: renderItemsStep },
   ]
 
@@ -636,8 +623,6 @@ export default function ProcessForm({
     setStep(0)
   }, [viewMode, draft?.id])
 
-  // Se a lista de passos encurtar (ex.: trocar categoria remove o passo de
-  // fluxo), mantém o índice dentro dos limites.
   const currentStep = Math.min(step, steps.length - 1)
   const isFirstStep = currentStep === 0
   const isLastStep = currentStep === steps.length - 1
@@ -688,18 +673,38 @@ export default function ProcessForm({
       isFirstStep ? onSetViewModeList() : setStep(Math.max(currentStep - 1, 0)),
   })
 
+  // UX-6b-1 (D8): rola o chip ativo pro centro visivel da row, sem afetar o
+  // scroll vertical da pagina (por isso NAO usa `scrollIntoView`). No jsdom
+  // `scrollWidth`/`clientWidth` sao 0, entao o efeito vira no-op.
+  const stepsRowRef = useRef(null)
+
+  useEffect(() => {
+    const row = stepsRowRef.current
+    if (!row) return
+    if (row.scrollWidth <= row.clientWidth) return
+
+    const active = row.querySelector('[aria-current="step"]')
+    if (!active) return
+
+    row.scrollLeft = active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2
+  }, [currentStep])
+
   return (
-    <article className="list-card view-push" style={{ marginTop: '16px' }}>
-      <div className="card-heading">
-        <div>
-          <h3>{viewMode === 'create' ? 'Criar processo' : 'Editar processo'}</h3>
-        </div>
-        <div className="admin-toolbar">
-          <span className="inline-badge">{draft.category || 'Sem categoria'}</span>
-          <button type="button" className="ghost-button" onClick={onSetViewModeList}>
-            Voltar para lista
-          </button>
-        </div>
+    <article className="list-card view-push process-form" style={{ marginTop: '16px' }}>
+      <div className="card-heading process-form__header">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={onSetViewModeList}
+          aria-label="Voltar para lista"
+        >
+          <Icon name="chevron-left" /> Voltar
+        </button>
+        <h3>{viewMode === 'create' ? 'Criar processo' : 'Editar processo'}</h3>
+        <span className="inline-badge">{draft.category || 'Sem categoria'}</span>
+        <span className={getStatusTagClass(derivedProcessStatus)}>
+          {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
+        </span>
       </div>
 
       <div className="wizard-header">
@@ -713,7 +718,7 @@ export default function ProcessForm({
           Passo {currentStep + 1} de {steps.length}: <strong>{steps[currentStep].label}</strong>
         </p>
 
-        <div className="tab-row wizard-steps" aria-label="Etapas do cadastro">
+        <div className="tab-row wizard-steps" aria-label="Etapas do cadastro" ref={stepsRowRef}>
           {steps.map((stepDef, index) => {
             const hasError = stepHasError(stepDef.key)
             return (
@@ -725,6 +730,9 @@ export default function ProcessForm({
                 className={`tab-button${index === currentStep ? ' tab-button--active' : ''}`}
                 onClick={() => setStep(index)}
               >
+                <span className="wizard-step__num" aria-hidden="true">
+                  {index < currentStep ? '✓' : index + 1}
+                </span>
                 {stepDef.label}
                 {hasError ? <span className="wizard-step__error-dot" aria-hidden="true" /> : null}
               </button>

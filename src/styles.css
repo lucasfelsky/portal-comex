@@ -4210,6 +4210,7 @@ body {
 /* Chips de passo: sem a margin-bottom do .tab-row base (o .wizard-header
    já cuida do espaçamento). No mobile rolam na horizontal sem scrollbar. */
 .wizard-steps {
+  position: relative;
   margin-bottom: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -4228,6 +4229,132 @@ body {
   margin-left: 6px;
   border-radius: 50%;
   background: var(--danger);
+}
+
+/* UX-6b-1 (D7): numero (ou "check" de passo concluido) do chip. */
+.wizard-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tab-button--active .wizard-step__num {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* UX-6b-1: grid unico do ProcessForm - grupos com titulo e pares de campos
+   (substitui o `detail-card`/`detail-card--split` dentro do wizard; a
+   classe `.detail-card--split` global NAO muda, porque o detalhe do
+   processo continua usando-a). */
+.form-group {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.form-group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.form-group__title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink);
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+  padding: 0;
+  background: none;
+}
+
+.form-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-grid__full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .form-grid,
+  .form-grid--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--numeric {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* UX-6b-1: cabecalho do wizard numa linha so' no mobile (o
+     `.card-heading` global vira coluna em telas estreitas). Os 2 badges
+     (categoria/status) truncam com ellipsis pra sempre caber numa linha
+     so' — o botao "Voltar" nao encolhe. */
+  .card-heading.process-form__header {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .process-form__header .ghost-button {
+    width: auto;
+    flex-shrink: 0;
+    min-height: auto;
+    padding: 8px 10px;
+  }
+
+  .process-form__header .inline-badge {
+    flex-shrink: 0;
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .process-form__header .status-tag {
+    flex-shrink: 0;
+    min-width: 0;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .process-form__header h3 {
+    flex-shrink: 1;
+  }
+}
+
+.process-form__header {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.process-form__header h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Conteúdo do passo: mais respiro entre campos que o detail-stack padrão
