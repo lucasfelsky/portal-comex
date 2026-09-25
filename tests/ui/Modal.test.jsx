@@ -248,3 +248,61 @@ describe('Modal focus trap (Sprint 28)', () => {
     expect(document.activeElement).toBe(screen.getByTestId('last'))
   })
 })
+
+// --- UX-1 (2026-09-25): role/initialFocusRef/ariaDescribedBy ---
+
+describe('Modal role/initialFocusRef/ariaDescribedBy (UX-1)', () => {
+  let originalOverflow
+
+  beforeEach(() => {
+    originalOverflow = document.body.style.overflow
+  })
+
+  afterEach(() => {
+    document.body.style.overflow = originalOverflow
+  })
+
+  it('role default continua "dialog"', () => {
+    render(
+      <Modal open={true} onClose={() => {}} title="Default role">
+        <p>conteudo</p>
+      </Modal>
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('role="alertdialog" e aplicado quando informado', () => {
+    render(
+      <Modal open={true} onClose={() => {}} title="Alert role" role="alertdialog">
+        <p>conteudo</p>
+      </Modal>
+    )
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  })
+
+  it('initialFocusRef recebe o foco em vez do botao ×', async () => {
+    function Wrapper() {
+      const cancelRef = React.useRef(null)
+      return (
+        <Modal open={true} onClose={() => {}} title="Focus ref" initialFocusRef={cancelRef}>
+          <button type="button" ref={cancelRef}>Cancelar</button>
+          <button type="button">Confirmar</button>
+        </Modal>
+      )
+    }
+    render(<Wrapper />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar' }))
+  })
+
+  it('aria-describedby e aplicado quando informado', () => {
+    render(
+      <Modal open={true} onClose={() => {}} title="Described" ariaDescribedBy="msg-id">
+        <p id="msg-id">Descricao do dialogo</p>
+      </Modal>
+    )
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-describedby', 'msg-id')
+  })
+})

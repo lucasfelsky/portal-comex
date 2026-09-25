@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 // F10.1 (backlog 2026-07-12): painel de mensagens/dúvidas do processo,
 // extraído do ProcessesPage (god component de 2.164 linhas). Componente
-// puro de apresentação — todo o estado e os handlers continuam na página,
-// passados por props. Zero mudança visual/comportamental.
+// de apresentação — o estado e os handlers de dados continuam na página,
+// passados por props; o painel guarda apenas o estado local do dialogo
+// de confirmação de exclusão de mensagem (UX-1).
 export const MAX_PROCESS_MESSAGES = 20
 
 export default function ProcessMessagesPanel({
@@ -22,6 +25,9 @@ export default function ProcessMessagesPanel({
   deletingMessageId,
   onDeleteMessage,
 }) {
+  const [pendingMessage, setPendingMessage] = useState(null)
+  const [confirmError, setConfirmError] = useState('')
+
   return (
     <div className="detail-card">
       <div className="card-heading process-detail-card-heading">
@@ -50,7 +56,10 @@ export default function ProcessMessagesPanel({
                   <button
                     type="button"
                     className="ghost-button process-message-card__delete"
-                    onClick={() => onDeleteMessage(message)}
+                    onClick={() => {
+                      setConfirmError('')
+                      setPendingMessage(message)
+                    }}
                     disabled={deletingMessageId === message.id}
                   >
                     {deletingMessageId === message.id ? 'Excluindo...' : 'Excluir'}
@@ -100,6 +109,30 @@ export default function ProcessMessagesPanel({
           {isSending ? 'Enviando...' : 'Registrar mensagem'}
         </button>
       </div>
+
+      <ConfirmDialog
+        tone="danger"
+        open={Boolean(pendingMessage)}
+        busy={Boolean(pendingMessage) && deletingMessageId === pendingMessage.id}
+        error={confirmError}
+        title="Excluir mensagem?"
+        message={
+          pendingMessage
+            ? `A mensagem de ${pendingMessage.authorName} (${formatDateTime(pendingMessage.createdAt)}) será excluída do histórico do processo. Esta ação não pode ser desfeita.`
+            : ''
+        }
+        confirmLabel="Excluir mensagem"
+        busyLabel="Excluindo..."
+        onConfirm={async () => {
+          if (await onDeleteMessage(pendingMessage, setConfirmError)) {
+            setPendingMessage(null)
+          }
+        }}
+        onCancel={() => {
+          setPendingMessage(null)
+          setConfirmError('')
+        }}
+      />
     </div>
   )
 }
