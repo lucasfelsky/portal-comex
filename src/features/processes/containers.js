@@ -105,6 +105,28 @@ function normalizeContainerType(value) {
   return CONTAINER_TYPE_VALUES.has(value) ? value : ''
 }
 
+// F17.4b (B-7, D6): data pura `YYYY-MM-DD` - NUNCA `toISOString()` (vira o
+// dia anterior em BRT). String com prefixo `YYYY-MM-DD` -> corta ali;
+// objeto Firestore Timestamp (`toDate()`) -> chave LOCAL (nao UTC); resto
+// (lixo/null) -> ''.
+function normalizeReturnedAt(value) {
+  if (typeof value === 'string') {
+    const match = value.match(/^\d{4}-\d{2}-\d{2}/)
+    return match ? match[0] : ''
+  }
+
+  if (value && typeof value.toDate === 'function') {
+    const date = value.toDate()
+    if (Number.isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  return ''
+}
+
 function normalizeContainerEntry(rawContainer, index) {
   const id =
     typeof rawContainer?.id === 'string' && rawContainer.id.trim()
@@ -116,8 +138,9 @@ function normalizeContainerEntry(rawContainer, index) {
     number: normalizeContainerNumber(rawContainer?.number),
     seal: String(rawContainer?.seal ?? '').trim(),
     type: normalizeContainerType(rawContainer?.type),
-    // D-1: `returnedAt` so' e' PRESERVADO neste PR (editor do F17.4).
-    returnedAt: String(rawContainer?.returnedAt ?? '').trim(),
+    // D-1/F17.4b (D6): `returnedAt` e' data pura `YYYY-MM-DD`, editavel SO
+    // pelo admin (devolucao de vazio).
+    returnedAt: normalizeReturnedAt(rawContainer?.returnedAt),
   }
 }
 

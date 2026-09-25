@@ -43,6 +43,7 @@ import {
   serializeCollectionWindowsForFirestore,
 } from '../utils/collectionWindows'
 import { normalizeContainers, linkCollectionWindowsToContainers } from '../features/processes/containers'
+import { normalizeReceiptDivergenceFields } from '../features/processes/receiptDivergence'
 import {
   canSeePurchaseOrderDetails,
   getProcessPurchaseOrders,
@@ -667,6 +668,8 @@ function normalizeProcess(rawProcess, fallbackId) {
     archived: Boolean(rawProcess.archived),
     archivedAt: normalizeIsoDateTime(rawProcess.archivedAt),
     archivedBy: String(rawProcess.archivedBy ?? '').trim(),
+    // F17.4b (B-2/B-1): divergencia no recebimento (logistica + admin).
+    ...normalizeReceiptDivergenceFields(rawProcess),
     updatedAt: rawProcess.updatedAt ?? new Date().toISOString(),
   }
 }
@@ -824,6 +827,9 @@ function toFirestorePayload(process) {
     dtaLoadingScheduledAt: String(process.dtaLoadingScheduledAt ?? ''),
     dtaArrivalAtItajai: String(process.dtaArrivalAtItajai ?? ''),
     ...cargoAndTransitFields,
+    // F17.4b (B-2/B-1): payload FIXO das 3 chaves - por isso entram na
+    // allowlist admin (B-3). Logistica grava so quando post-recebimento.
+    ...normalizeReceiptDivergenceFields(process),
     updatedById: String(process.updatedById ?? '').trim(),
     updatedByName: String(process.updatedByName ?? '').trim(),
     updatedAt: serverTimestamp(),
@@ -924,7 +930,8 @@ export async function saveProcessCollectionStatus(
   processId,
   collectionStatus,
   actor = null,
-  currentProcess = null
+  currentProcess = null,
+  receiptDivergenceFields = null
 ) {
   const normalizedId = String(processId ?? '').trim()
   const normalizedStatus = canonicalizeCollectionStatus(String(collectionStatus ?? '').trim())
@@ -973,10 +980,18 @@ export async function saveProcessCollectionStatus(
           }
         : {}
 
+    // F17.4b (B-2): divergencia no recebimento so' entra no payload quando
+    // informada E o status escolhido e' pos-recebimento.
+    const divergenceFields =
+      receiptDivergenceFields != null && isPostCollectionStatus(normalizedStatus)
+        ? normalizeReceiptDivergenceFields(receiptDivergenceFields)
+        : {}
+
     const nextProcess = {
       ...existingProcess,
       collectionStatus: normalizedStatus,
       ...derivedFields,
+      ...divergenceFields,
       updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
       updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
       updatedAt: now,
@@ -1012,6 +1027,14 @@ export async function saveProcessCollectionStatus(
     }
   }
 
+  // F17.4b (B-2): divergencia no recebimento so' entra no payload quando
+  // informada E o status escolhido e' pos-recebimento.
+  const divergenceFields =
+    receiptDivergenceFields != null && isPostCollectionStatus(normalizedStatus)
+      ? normalizeReceiptDivergenceFields(receiptDivergenceFields)
+      : {}
+  Object.assign(updatePayload, divergenceFields)
+
   await updateDoc(doc(firestore, 'processes', normalizedId), updatePayload)
 
   await recordProcessAudit({
@@ -1024,6 +1047,7 @@ export async function saveProcessCollectionStatus(
     id: normalizedId,
     collectionStatus: normalizedStatus,
     ...derivedFields,
+    ...divergenceFields,
     updatedById: String(actor?.uid ?? actor?.id ?? '').trim(),
     updatedByName: String(actor?.name ?? actor?.email ?? '').trim(),
     updatedAt: now,

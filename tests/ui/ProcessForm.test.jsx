@@ -555,6 +555,88 @@ describe('ProcessForm — bugs 2 e 3 (fluxo operacional)', () => {
   })
 })
 
+// F17.4b (B-7, D6): devolucao de vazio - so' admin, so' FCL/CONSOLIDADO
+// apos "Carga recebida" (derivado por `collectionStatus` pos-recebimento).
+describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
+  function receivedDraft(overrides = {}) {
+    return makeDraft({
+      category: 'FCL',
+      berthed: true,
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      collectionStatus: 'Carga disponível em estoque',
+      containers: [
+        { id: 'CNT-1', number: 'CSQU3054383', seal: 'L1', type: '40DC', returnedAt: '' },
+        { id: 'CNT-2', number: 'MSCU1234566', seal: 'L2', type: '40DC', returnedAt: '' },
+      ],
+      ...overrides,
+    })
+  }
+
+  async function openFlowStep(user) {
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Fluxo operacional' }))
+  }
+
+  it('FCL com 2 conteineres e "Carga recebida" mostra "Devolução do vazio" com 2 inputs de data', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft(),
+    })
+    await openFlowStep(user)
+
+    expect(screen.getByText('Devolução do vazio')).toBeInTheDocument()
+    expect(screen.getByLabelText('CSQU3054383')).toBeInTheDocument()
+    expect(screen.getByLabelText('MSCU1234566')).toBeInTheDocument()
+  })
+
+  it('editar a data chama onDraftChange("containers", [...]) so no conteiner editado', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft(),
+    })
+    await openFlowStep(user)
+
+    const input = screen.getByLabelText('MSCU1234566')
+    await user.type(input, '2026-09-10')
+
+    expect(onDraftChange).toHaveBeenCalled()
+    const lastCall = onDraftChange.mock.calls.find((call) => call[0] === 'containers')
+    expect(lastCall).toBeTruthy()
+    const nextContainers = lastCall[1]
+    expect(nextContainers.find((c) => c.id === 'CNT-1').returnedAt).toBe('')
+    expect(nextContainers.find((c) => c.id === 'CNT-2').returnedAt).not.toBe('')
+  })
+
+  it('LCL nunca mostra "Devolução do vazio"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft({ category: 'LCL', containers: [] }),
+    })
+    await openFlowStep(user)
+
+    expect(screen.queryByText('Devolução do vazio')).not.toBeInTheDocument()
+  })
+
+  it('FCL em "Coleta Agendada" (nao recebido) -> sem o bloco', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft({ collectionStatus: 'Coleta Agendada' }),
+    })
+    await openFlowStep(user)
+
+    expect(screen.queryByText('Devolução do vazio')).not.toBeInTheDocument()
+  })
+})
+
 // F17.2b (D-5): editor de anuencias no passo "Status e carga".
 describe('ProcessForm — LicensesEditor (F17.2b)', () => {
   async function openStatusStepFor(user) {

@@ -177,6 +177,25 @@ service cloud.firestore {
     // (`cargoPresenceInformedAt`) e o marcador de migracao aproximada
     // (`migratedApproxFields`, guarda `is list` + `size() <= 10`). Logistica
     // INTOCADA (isLogisticsCollectionStatusUpdate/isLogisticsPostReceiptUpdate).
+    //
+    // F17.4b (B-3): valida o ESTADO FINAL da divergencia no recebimento,
+    // campo por campo (cada um so' se presente no doc final) - usada por
+    // isAdminProcessFields E isLogisticsCollectionStatusUpdate.
+    function isValidReceiptDivergence() {
+      return (!('receiptDivergence' in request.resource.data)
+        || request.resource.data.receiptDivergence is bool)
+        && (!('receiptDivergenceType' in request.resource.data)
+        || request.resource.data.receiptDivergenceType in ['', 'Avaria', 'Falta', 'Sobra'])
+        && (!('receiptDivergenceNotes' in request.resource.data)
+        || (request.resource.data.receiptDivergenceNotes is string
+        && request.resource.data.receiptDivergenceNotes.size() <= 2000));
+    }
+
+    // F17.4b: +3 campos de divergencia no recebimento (`receiptDivergence`,
+    // `receiptDivergenceType`, `receiptDivergenceNotes` - validados por
+    // `isValidReceiptDivergence()`); `containers[].returnedAt` (devolucao de
+    // vazio) NAO exige campo novo na allowlist (`containers` ja' esta' aqui,
+    // e a rule nao valida por elemento - mesmo racional de `purchaseOrders`).
     function isAdminProcessFields() {
       // No `create`, `resource.data` e' null e `diff()` lanca NullValueError.
       // No `update`, `resource.data` existe. Tratamos os 2 casos:
@@ -234,7 +253,10 @@ service cloud.firestore {
         'duimpNumber', 'duimpRegisteredAt', 'parameterizedAt',
         'customsInspectionScheduledAt', 'customsRequirement',
         'customsRequirementNotes',
-      ]) && (
+        // F17.4b: divergencia no recebimento (validada por
+        // isValidReceiptDivergence()).
+        'receiptDivergence', 'receiptDivergenceType', 'receiptDivergenceNotes',
+      ]) && isValidReceiptDivergence() && (
         !('postReceiptImages' in request.resource.data)
         || (
           request.resource.data.postReceiptImages is list
@@ -328,13 +350,19 @@ service cloud.firestore {
     // uma allowlist positiva, mas e' a fronteira de permissao D4 do spec
     // (nao vocabulario que evolui como `collectionStatus`), e os 2 valores
     // sao constantes canonicas gravadas por `normalizeProcessStatus`.
+    // F17.4b (B-3): +3 campos de divergencia no recebimento (logistica pode
+    // gravar quando o status escolhido e' pos-recebimento -
+    // isPreCollectionStatus ja' nega a divergencia junto do status final
+    // pre-coleta). `containers` continua FORA (so' admin devolve o vazio).
     function isLogisticsCollectionStatusUpdate() {
       return hasScheduledCollection()
         && !isPreCollectionStatus(request.resource.data.collectionStatus)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'collectionStatus', 'processStatus', 'cargoReceivedAt',
           'updatedAt', 'updatedById', 'updatedByName',
+          'receiptDivergence', 'receiptDivergenceType', 'receiptDivergenceNotes',
         ])
+        && isValidReceiptDivergence()
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['processStatus'])
           || request.resource.data.processStatus in ['Coleta Agendada', 'Carga recebida'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cargoReceivedAt'])

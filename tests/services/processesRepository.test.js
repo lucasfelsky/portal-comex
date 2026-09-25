@@ -392,6 +392,105 @@ describe('F17.1a - derivacao em saveProcessCollectionStatus (logistica)', () => 
   })
 })
 
+// F17.4b (B-2): divergencia no recebimento - `normalizeProcess`/`saveProcess`
+// gravam as 3 chaves SEMPRE; `saveProcessCollectionStatus` so' as inclui no
+// 5o argumento com status pos-recebimento.
+describe('F17.4b - divergencia no recebimento (normalizeProcess/saveProcess/saveProcessCollectionStatus)', () => {
+  it('normalizeProcess de legado sem as chaves -> false/""/""', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-LEGACY-DIV',
+          data: () => baseMaritimeProcess({ mapaStatus: 'Liberado' }),
+        },
+      ],
+    })
+
+    const items = await listProcesses()
+    expect(items[0].receiptDivergence).toBe(false)
+    expect(items[0].receiptDivergenceType).toBe('')
+    expect(items[0].receiptDivergenceNotes).toBe('')
+  })
+
+  it('saveProcess grava as 3 chaves no setDoc', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        receiptDivergence: true,
+        receiptDivergenceType: 'Avaria',
+        receiptDivergenceNotes: 'caixa amassada',
+      })
+    )
+
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.receiptDivergence).toBe(true)
+    expect(payload.receiptDivergenceType).toBe('Avaria')
+    expect(payload.receiptDivergenceNotes).toBe('caixa amassada')
+  })
+
+  it('saveProcessCollectionStatus com status pos-recebimento e 5o argumento grava os 3 normalizados', async () => {
+    const currentProcess = {
+      id: 'PROC-DIV-1',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-DIV-1',
+      'Carga disponível em estoque',
+      null,
+      currentProcess,
+      { receiptDivergence: true, receiptDivergenceType: 'Avaria', receiptDivergenceNotes: ' caixa amassada ' }
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.receiptDivergence).toBe(true)
+    expect(payload.receiptDivergenceType).toBe('Avaria')
+    expect(payload.receiptDivergenceNotes).toBe('caixa amassada')
+  })
+
+  it('mesmo 5o argumento com status pre-recebimento -> payload SEM as chaves', async () => {
+    const currentProcess = {
+      id: 'PROC-DIV-2',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus(
+      'PROC-DIV-2',
+      'Carga a caminho do CD',
+      null,
+      currentProcess,
+      { receiptDivergence: true, receiptDivergenceType: 'Avaria', receiptDivergenceNotes: 'x' }
+    )
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.receiptDivergence).toBeUndefined()
+    expect(payload.receiptDivergenceType).toBeUndefined()
+    expect(payload.receiptDivergenceNotes).toBeUndefined()
+  })
+
+  it('sem 5o argumento -> payload identico ao atual (sem as chaves de divergencia)', async () => {
+    const currentProcess = {
+      id: 'PROC-DIV-3',
+      category: 'FCL',
+      collectionScheduledAt: '2026-01-01T10:00:00.000Z',
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ scheduledAt: '2026-01-01T10:00:00.000Z' }],
+    }
+
+    await saveProcessCollectionStatus('PROC-DIV-3', 'Carga disponível em estoque', null, currentProcess)
+
+    const payload = mockUpdateDoc.mock.calls[0][1]
+    expect(payload.receiptDivergence).toBeUndefined()
+    expect(payload.receiptDivergenceType).toBeUndefined()
+    expect(payload.receiptDivergenceNotes).toBeUndefined()
+  })
+})
+
 describe('F17.2a - containers[]/campos de embarque e transito (D-4/D-5)', () => {
   it('FCL legado (containerQuantity: 2, sem containers) expande pra CNT-1/CNT-2 e containerQuantity 2', async () => {
     await saveProcess(baseMaritimeProcess({ category: 'FCL', containerQuantity: 2 }))

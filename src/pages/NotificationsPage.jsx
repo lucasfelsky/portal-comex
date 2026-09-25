@@ -118,6 +118,12 @@ export default function NotificationsPage() {
         >
           Coleta
         </TabButton>
+        <TabButton
+          active={notificationFilter === 'receipt_divergence_reported'}
+          onClick={() => setNotificationFilter('receipt_divergence_reported')}
+        >
+          Divergências
+        </TabButton>
       </div>
 
       <div className="notifications__list">

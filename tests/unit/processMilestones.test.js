@@ -428,6 +428,78 @@ describe('buildMilestoneEvents - tabela D-4', () => {
     expect(buildMilestoneEvents(before, after, { processId: 'p1' })).toEqual([])
   })
 
+  // F17.4b (B-8): divergencia no recebimento.
+  it('divergence: false -> true gera evento com o tipo', () => {
+    const before = baseMaritime({ receiptDivergence: false })
+    const after = baseMaritime({ receiptDivergence: true, receiptDivergenceType: 'Avaria' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'divergence')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('Avaria')
+  })
+
+  it('divergence: ausente -> true gera evento (legado sem a chave)', () => {
+    const before = baseMaritime({})
+    const after = baseMaritime({ receiptDivergence: true, receiptDivergenceType: 'Falta' })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'divergence')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('Falta')
+  })
+
+  it('divergence: true -> true (so notas novas) NAO gera evento novo', () => {
+    const before = baseMaritime({ receiptDivergence: true, receiptDivergenceType: 'Avaria', receiptDivergenceNotes: 'a' })
+    const after = baseMaritime({ receiptDivergence: true, receiptDivergenceType: 'Avaria', receiptDivergenceNotes: 'b' })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'divergence')).toHaveLength(0)
+  })
+
+  // F17.4b (B-8): devolucao de vazio - 1 evento por container.
+  it('emptyReturned: 2 containers preenchidos no mesmo save geram 2 eventos com ids distintos contendo o id do container', () => {
+    const before = baseMaritime({
+      containers: [
+        { id: 'CNT-1', returnedAt: '' },
+        { id: 'CNT-2', returnedAt: '' },
+      ],
+    })
+    const after = baseMaritime({
+      containers: [
+        { id: 'CNT-1', number: 'CSQU3054383', returnedAt: '2026-09-10' },
+        { id: 'CNT-2', number: 'MSCU1234566', returnedAt: '2026-09-10' },
+      ],
+    })
+    const events = eventsOfType(
+      buildMilestoneEvents(before, after, { processId: 'p1', eventId: 'e9' }),
+      'emptyReturned'
+    )
+    expect(events).toHaveLength(2)
+    const ids = events.map((event) => event.id).sort()
+    expect(ids).toEqual(['e9_emptyReturned_CNT-1', 'e9_emptyReturned_CNT-2'])
+    expect(events.every((event) => event.data.occurredAtSource === 'field')).toBe(true)
+  })
+
+  it('emptyReturned: re-editar a data (container ja devolvido) NAO gera evento novo', () => {
+    const before = baseMaritime({ containers: [{ id: 'CNT-1', returnedAt: '2026-09-10' }] })
+    const after = baseMaritime({ containers: [{ id: 'CNT-1', returnedAt: '2026-09-11' }] })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'emptyReturned')).toHaveLength(0)
+  })
+
+  it('emptyReturned: container novo ja com data gera 1 evento', () => {
+    const before = baseMaritime({ containers: [{ id: 'CNT-1', returnedAt: '' }] })
+    const after = baseMaritime({
+      containers: [
+        { id: 'CNT-1', returnedAt: '' },
+        { id: 'CNT-2', number: 'MSCU1234566', returnedAt: '2026-09-10' },
+      ],
+    })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'emptyReturned')
+    expect(events).toHaveLength(1)
+  })
+
+  it('emptyReturned: before.containers ausente trata como vazio (1 evento)', () => {
+    const before = baseMaritime({})
+    const after = baseMaritime({ containers: [{ id: 'CNT-1', number: 'CSQU3054383', returnedAt: '2026-09-10' }] })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'emptyReturned')
+    expect(events).toHaveLength(1)
+  })
+
   it('occurredAt com updatedAt Timestamp fake', () => {
     const before = baseMaritime({ processStatus: 'Embarcou' })
     const after = baseMaritime({

@@ -9,10 +9,11 @@ import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import {
   EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
+  normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
 import { buildMilestoneEvents } from './milestones.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
+import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';
 
 export const createProcessMessageNotifications = onDocumentCreated(
   {
@@ -169,6 +170,40 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
         title,
         body,
         targetTab: 'messages',
+      })
+    }
+
+    // F17.4b (B-6): notificacao `receipt_divergence_reported` (admin +
+    // favoritos, COM e-mail) na TRANSICAO false->true da divergencia no
+    // recebimento. First-wins (l.158): no mesmo write vence sobre
+    // `collection_status_updated`/`favorite_process_updated`. Ator (admin ou
+    // logistica) nunca recebe (guarda dentro de maybeAddNotification).
+    if (
+      (actorRole === 'admin' || actorRole === 'logistica') &&
+      isReceiptDivergenceReportedMirror(before, after)
+    ) {
+      const activeAdmins = await listActiveAdminUsers()
+      const favoriteUsers = await listActiveFavoriteUsers(processId)
+      const divergenceType = normalizeReceiptDivergenceFieldsMirror(after).receiptDivergenceType
+
+      activeAdmins.forEach((adminUser) => {
+        const processLabel = buildRecipientProcessLabel(process, normalizeString(adminUser.role))
+        maybeAddNotification(
+          adminUser,
+          'receipt_divergence_reported',
+          'Divergência no recebimento',
+          buildReceiptDivergenceNotificationBody(processLabel, actorName, divergenceType)
+        )
+      })
+
+      favoriteUsers.forEach((favoriteUser) => {
+        const processLabel = buildRecipientProcessLabel(process, normalizeString(favoriteUser.role))
+        maybeAddNotification(
+          favoriteUser,
+          'receipt_divergence_reported',
+          'Divergência no recebimento',
+          buildReceiptDivergenceNotificationBody(processLabel, actorName, divergenceType)
+        )
       })
     }
 

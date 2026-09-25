@@ -450,6 +450,34 @@ export const PENDING_FIELD_RULES = [
     when: (p) => p?.cargoPresenceInformed === true,
     isMissing: (p) => !hasText(p?.cargoPresenceInformedAt),
   },
+  // F17.4b (B-5): divergencia no recebimento - aviso, nunca bloqueio.
+  {
+    id: 'receiptDivergenceNotes',
+    field: 'receiptDivergenceNotes',
+    label: 'Descrição da divergência',
+    stage: 4,
+    when: (p) => p?.receiptDivergence === true,
+    isMissing: (p) => !hasText(p?.receiptDivergenceNotes),
+  },
+  {
+    id: 'receiptDivergencePhoto',
+    field: 'postReceiptImages',
+    label: 'Foto da divergência (mín. 1)',
+    stage: 4,
+    when: (p) => p?.receiptDivergence === true,
+    isMissing: (p) => !(Array.isArray(p?.postReceiptImages) && p.postReceiptImages.length > 0),
+  },
+  // F17.4b (B-7, D6): devolucao de vazio - so' cobra apos "Carga recebida"
+  // (FCL/CONSOLIDADO).
+  {
+    id: 'containersReturnedAt',
+    field: 'containers',
+    label: 'Devolução do vazio',
+    stage: 4,
+    categories: FREE_TIME_CATEGORIES,
+    when: (p) => deriveProcessStatus(p) === 'Carga recebida' && (p?.containers ?? []).length > 0,
+    isMissing: (p) => hasContainerWithout(p, 'returnedAt'),
+  },
 ]
 
 export function getPendingFields(process) {

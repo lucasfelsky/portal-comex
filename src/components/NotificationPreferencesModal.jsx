@@ -31,7 +31,7 @@ function isIosNotInstalled() {
 }
 
 export const PREFERENCE_TYPES = [
-  { key: 'processos', label: 'Processos', hint: 'Mensagens, atualizações e pós-recebimento' },
+  { key: 'processos', label: 'Processos', hint: 'Mensagens, atualizações, coleta, pós-recebimento e divergências' },
   { key: 'noticias', label: 'Notícias', hint: 'Publicações manuais e automáticas' },
   { key: 'suporte', label: 'Suporte', hint: 'Chamados abertos e resolvidos' },
 ]

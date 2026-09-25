@@ -45,6 +45,27 @@ describe('ProcessHistoryPanel', () => {
     await waitFor(() => expect(screen.getByText('Embarque realizado')).toBeInTheDocument())
   })
 
+  // F17.4b (B-8): marcos `divergence` e `emptyReturned`.
+  it("tipo 'divergence' usa o label com o tipo entre parenteses", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'divergence', value: 'Avaria', previousValue: '', actorName: 'Logi', occurredAt: '2026-09-20T10:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() =>
+      expect(screen.getByText('Divergência no recebimento (Avaria)')).toBeInTheDocument()
+    )
+  })
+
+  it("tipo 'emptyReturned' usa o label com o numero do container", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'emptyReturned', value: 'ABCU1234567', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T10:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() =>
+      expect(screen.getByText('Vazio devolvido (ABCU1234567)')).toBeInTheDocument()
+    )
+  })
+
   it('vazio mostra a mensagem de sem retroativos', async () => {
     mockListProcessEvents.mockResolvedValue([])
     render(<ProcessHistoryPanel processId="p1" />)
