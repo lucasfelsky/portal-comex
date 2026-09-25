@@ -2,7 +2,7 @@
 // espacos bloqueia com erro no textarea (nao chama o repositorio); mais de
 // 5 prints vira erro inline no input de arquivo (nao mais toast).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import React from 'react'
@@ -60,13 +60,13 @@ async function openModal(user) {
   const dialog = await screen.findByRole('dialog')
 
   // O Modal (src/components/Modal.jsx) agenda o foco inicial num
-  // `window.setTimeout(..., 30)` apos montar (foca o primeiro elemento
-  // focavel, o botao "Fechar"). Se a interacao do teste comecar ANTES
-  // desse timeout disparar, ele pode roubar o foco NO MEIO da digitacao
-  // em runners mais lentos (CI), derrubando caracteres do textarea e
-  // deixando a mensagem vazia — daí `createSupportTicket` nao ser
-  // chamado. Espera o foco inicial assentar dentro do dialog antes de
-  // seguir, em vez de so aumentar timeout.
+  // `window.setTimeout(..., 30)` apos montar. UX-6a (item 7): o foco vai
+  // pro textarea via `initialFocusRef` (era o botao "Fechar" padrao). Se a
+  // interacao do teste comecar ANTES desse timeout disparar, ele pode
+  // roubar o foco NO MEIO da digitacao em runners mais lentos (CI),
+  // derrubando caracteres do textarea e deixando a mensagem vazia — daí
+  // `createSupportTicket` nao ser chamado. Espera o foco inicial assentar
+  // dentro do dialog antes de seguir, em vez de so aumentar timeout.
   await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
 }
 
@@ -120,5 +120,27 @@ describe('SupportButton — validacao inline (UX-3b)', () => {
     await user.click(screen.getByRole('button', { name: 'Enviar chamado' }))
 
     await waitFor(() => expect(mockCreateSupportTicket).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('SupportButton — UX-6a', () => {
+  it('abre com foco no textarea "O que aconteceu?"', async () => {
+    const user = userEvent.setup()
+    renderSupportButton()
+    await openModal(user)
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('O que aconteceu?'))
+    )
+  })
+
+  it('uploader de prints em PT-BR: "Adicionar imagens" e "Nenhuma imagem selecionada"', async () => {
+    const user = userEvent.setup()
+    renderSupportButton()
+    await openModal(user)
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Adicionar imagens')).toBeInTheDocument()
+    expect(within(dialog).getByText('Nenhuma imagem selecionada')).toBeInTheDocument()
   })
 })

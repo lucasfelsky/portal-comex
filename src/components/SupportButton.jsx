@@ -46,6 +46,9 @@ export default function SupportButton() {
   const location = useLocation()
   const toast = useToast()
   const fileInputRef = useRef(null)
+  // UX-6a (item 7): foco inicial do modal vai pro textarea (era o botao
+  // Fechar padrao do Modal).
+  const messageRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [files, setFiles] = useState([])
@@ -175,7 +178,7 @@ export default function SupportButton() {
         </button>
       </div>
 
-      <Modal open={isOpen} onClose={handleClose} title="Suporte" wide>
+      <Modal open={isOpen} onClose={handleClose} title="Suporte" wide initialFocusRef={messageRef}>
         <div className="support-modal">
           <p className="support-modal__lead">
             Encontrou um erro ou comportamento estranho? Descreva o que aconteceu e, se possível,
@@ -197,6 +200,7 @@ export default function SupportButton() {
             <label className="field">
               <span>O que aconteceu?</span>
               <textarea
+                ref={messageRef}
                 className="text-input"
                 rows={5}
                 maxLength={SUPPORT_TICKET_MAX_MESSAGE_LENGTH}
@@ -215,23 +219,41 @@ export default function SupportButton() {
               ) : null}
             </label>
 
-            <label className="field">
-              <span>Prints (opcional, até {SUPPORT_TICKET_MAX_IMAGES} imagens de 5 MB)</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                onChange={handleSelectFiles}
-                disabled={files.length >= SUPPORT_TICKET_MAX_IMAGES}
-                {...getFieldA11yProps('support-files', filesError)}
-              />
+            <div className="field">
+              <span id="support-files-label">
+                Prints (opcional, até {SUPPORT_TICKET_MAX_IMAGES} imagens de 5 MB)
+              </span>
+              <div className="file-picker">
+                <label
+                  className={`ghost-button file-picker__button${
+                    files.length >= SUPPORT_TICKET_MAX_IMAGES ? ' file-picker__button--disabled' : ''
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    className="file-picker__input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    onChange={handleSelectFiles}
+                    disabled={files.length >= SUPPORT_TICKET_MAX_IMAGES}
+                    aria-labelledby="support-files-label"
+                    {...getFieldA11yProps('support-files', filesError, ['support-files-status'])}
+                  />
+                  Adicionar imagens
+                </label>
+                <span className="file-picker__status" id="support-files-status">
+                  {files.length === 0
+                    ? 'Nenhuma imagem selecionada'
+                    : `${files.length} de ${SUPPORT_TICKET_MAX_IMAGES} imagens`}
+                </span>
+              </div>
               {filesError ? (
                 <small className="field-error" id={getFieldErrorId('support-files')} aria-hidden="true">
                   {filesError}
                 </small>
               ) : null}
-            </label>
+            </div>
 
             {files.length > 0 ? (
               <ul className="support-modal__files">

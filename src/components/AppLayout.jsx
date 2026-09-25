@@ -429,7 +429,7 @@ export default function AppLayout() {
               onClick={markAllAsRead}
               disabled={unreadNotifications.length === 0}
             >
-              Marcar todas como Lidas
+              Marcar todas como lidas
             </button>
           </div>
 
@@ -458,7 +458,7 @@ export default function AppLayout() {
           className={`${triggerClassName}${isNotificationPanelOpen ? ' notifications__trigger--active' : ''}`}
           aria-label={
             unreadNotifications.length > 0
-              ? `Notificações, ${unreadNotifications.length} não lidas`
+              ? `Notificações, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
               : 'Notificações'
           }
           aria-expanded={isNotificationPanelOpen}

@@ -402,14 +402,16 @@ export default function DashboardPage() {
                         </span>
                       )}
                       <ProcessDerivedStatusBadge process={item} />
-                      {shouldShowContainerQuantity(item.category) ? (
+                      {shouldShowContainerQuantity(item.category) && item.containerQuantity > 0 ? (
                         <span className="inline-badge">
                           {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
                         </span>
                       ) : null}
-                      <span className="inline-badge">
-                        {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
-                      </span>
+                      {item.palletQuantity > 0 ? (
+                        <span className="inline-badge">
+                          {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
+                        </span>
+                      ) : null}
                     </div>
 
                     {showMaritimePostArrival ? (
@@ -453,7 +455,7 @@ export default function DashboardPage() {
                             {getCollectionWindows(item).map((window) => (
                               <li key={window.id} className="collection-window-card collection-window-card--inline">
                                 <div>
-                                  <span className="detail-label">Container {window.containerNumber}</span>
+                                  <span className="detail-label">Contêiner {window.containerNumber}</span>
                                   <p>{formatDateTime(window.scheduledAt)}</p>
                                 </div>
                               </li>
@@ -514,7 +516,7 @@ export default function DashboardPage() {
                             {getCollectionWindows(item).map((window) => (
                               <li key={window.id} className="collection-window-card collection-window-card--inline">
                                 <div>
-                                  <span className="detail-label">Container {window.containerNumber}</span>
+                                  <span className="detail-label">Contêiner {window.containerNumber}</span>
                                   <p>{formatDateTime(window.scheduledAt)}</p>
                                 </div>
                               </li>
@@ -549,7 +551,7 @@ export default function DashboardPage() {
               illustration="inbox"
               icon="inbox"
               title="Nenhum processo favoritado"
-              message="Marque processos na aba Processos para acompanha-los aqui no dashboard."
+              message="Marque processos na aba Chegadas para acompanhá-los aqui no dashboard."
             />
           )}
         </div>

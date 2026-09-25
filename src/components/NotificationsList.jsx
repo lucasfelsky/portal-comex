@@ -43,6 +43,10 @@ const ITEMS_PER_GROUP = 3
 const OLDER_INITIAL = 4
 const OLDER_STEP = 8
 
+// UX-6a (item 10): pluralizacao PT-BR ("1 notificação" em vez de
+// "1 notificações"). Helper local — nao existe util compartilhado pra isso.
+const formatCount = (n, singular, plural) => `${n} ${n === 1 ? singular : plural}`
+
 function buildNotificationAriaLabel(notification, formatRelative) {
   const parts = [notification.title, notification.body, formatRelative(notification.createdAt)].filter(
     (part) => part !== undefined && part !== null && String(part).trim() !== ''
@@ -157,7 +161,7 @@ function OlderGroup({
       >
         <div>
           <strong>{group.title}</strong>
-          <p>{group.items.length} notificações</p>
+          <p>{formatCount(group.items.length, 'notificação', 'notificações')}</p>
         </div>
         <span>{formatRelative(group.latestCreatedAt)}</span>
         <Icon name="chevron" size={16} className="notifications__group-toggle-icon" aria-hidden="true" />
@@ -262,8 +266,10 @@ export default function NotificationsList({
                 <div>
                   <strong>{group.title}</strong>
                   <p>
-                    {group.items.length} notificações
-                    {group.unreadCount > 0 ? ` • ${group.unreadCount} não lidas` : ''}
+                    {formatCount(group.items.length, 'notificação', 'notificações')}
+                    {group.unreadCount > 0
+                      ? ` • ${formatCount(group.unreadCount, 'não lida', 'não lidas')}`
+                      : ''}
                   </p>
                 </div>
                 <span>{formatRelative(group.latestCreatedAt)}</span>

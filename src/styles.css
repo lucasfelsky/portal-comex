@@ -30,8 +30,27 @@
   --ink: #1f1c18;
   --ink-soft: #4a5560;
   --primary: #00ae91;
-  --primary-700: #008f76;
+  --primary-700: #007864;
   --primary-50: #e3f5f0;
+  /* UX-6a (D1-D3): tokens de texto/icone sobre fundos coloridos, para
+     contraste AA. --on-primary e o navy da sidebar (6,43:1 sobre --primary
+     nos 4 temas, ja que --primary e #00ae91 em todos). --primary-700 escureceu
+     de #008f76 pra #007864 (D2) porque #008f76 reprovava como texto sobre
+     --bg/--surface-alt claros. --on-danger fica branco no claro e navy-escuro
+     no dark (D3), porque #1f0a0a sobre #dc2626 claro reprova (3,93). NAO
+     redeclarar --on-primary no dark nem nos blocos mobile: --primary e igual
+     nos 4 contextos. */
+  --on-primary: #071820;
+  --on-primary-subtle: rgba(7, 24, 32, 0.12);
+  --on-button-primary: #ffffff;
+  --on-danger: #ffffff;
+  --sidebar-pill-active: rgba(255, 255, 255, 0.18);
+  /* AD-1 (adendo do orquestrador): botao Favoritar do swipe tem fundo
+     --warning (amarelo/dourado nos 2 temas) — texto branco reprovava (3,18
+     claro / 2,05 dark). O mesmo navy de --on-primary da 5,70:1 (claro) e
+     8,84:1 (dark), unico em :root porque --warning nao e redeclarado nos
+     blocos mobile. */
+  --on-warn: #071820;
   --eta-label-color: #007864;
   --button-primary-bg: #007864;
   --button-primary-bg-hover: #006b56;
@@ -433,19 +452,19 @@ body {
 
 .nav__link:hover .nav__link-icon {
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
 }
 
 .nav__link--active {
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   border-color: var(--primary-700);
   box-shadow: 0 1px 2px rgba(0, 174, 145, 0.16);
 }
 
 .nav__link--active .nav__link-icon {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  background: var(--on-primary-subtle);
+  color: var(--on-primary);
 }
 
 /* No estado ativo, esconde o subtexto — o label sozinho ja' comunica
@@ -455,9 +474,12 @@ body {
   display: none;
 }
 
+/* UX-6a (D1, armadilha 1): o hover NAO troca mais o fundo pra --primary-700
+   (com --primary-700 mais escuro, --on-primary sobre ele reprovaria: 3,34).
+   O feedback de hover fica so' na borda e na sombra, fundo mantem --primary. */
 .nav__link--active:hover {
-  background: var(--primary-700);
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--on-primary);
   border-color: var(--primary-700);
   box-shadow: 0 2px 6px rgba(0, 174, 145, 0.24);
 }
@@ -712,7 +734,7 @@ body {
   padding: 0 6px;
   border-radius: var(--radius-full);
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   font-size: var(--fs-caption);
   font-weight: 700;
 }
@@ -1134,7 +1156,7 @@ body {
   height: 36px;
   border-radius: 50%;
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   font-size: var(--fs-caption);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1644,7 +1666,7 @@ body {
 .command-palette__item--active .command-palette__item-icon,
 .command-palette__item:hover .command-palette__item-icon {
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
 }
 
 .command-palette__item-label {
@@ -3029,7 +3051,7 @@ body {
 
 .danger-button {
   background: var(--danger);
-  color: #ffffff;
+  color: var(--on-danger);
   box-shadow: 0 1px 2px rgba(200, 93, 44, 0.08);
 }
 
@@ -3109,6 +3131,13 @@ body {
   color: var(--danger-700);
 }
 
+/* UX-6a (item 1, D7): "+N" de alertas cortados no card mobile. Escondido
+   por padrao (desktop mostra todos os alertas); o @media (max-width:720px)
+   reativa. */
+.inline-badge--more {
+  display: none;
+}
+
 /* F11: modal de import de processos em lote. */
 .import-processes {
   display: grid;
@@ -3172,7 +3201,8 @@ body {
 }
 
 .admin-user-list--scroll {
-  max-height: 248px;
+  /* UX-6a (D9ii): 248px cortava o 3o usuario da lista. */
+  max-height: min(64vh, 560px);
   overflow-y: auto;
   padding-right: 6px;
 }
@@ -3230,6 +3260,15 @@ body {
    inteira a estourar. */
 .admin-user-row > div span {
   overflow-wrap: anywhere;
+}
+
+/* UX-6a (item 13): o UID cru ficava em destaque (mesmo peso do resto do
+   texto). Vira monoespacado, discreto e menor -- so' estilo, sem mudar
+   conteudo/busca por ID. */
+.admin-user-row .admin-user-row__uid {
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
 }
 
 .admin-user-row--button:hover {
@@ -3642,6 +3681,10 @@ body {
   color: var(--text-muted);
   font-size: var(--fs-footnote);
   line-height: 1.45;
+  /* UX-6a (D10): small.field-hint herda text-transform:uppercase do <label>
+     global (pai). Correcao pontual so' aqui, sem mexer no label global. */
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* UX-3b (D12): erro inline de campo - mesma posicao/tamanho do field-hint. */
@@ -3651,6 +3694,60 @@ body {
   font-size: var(--fs-footnote);
   font-weight: 600;
   line-height: 1.45;
+  /* UX-6a (D10): mesmo bug de heranca do <label> global. */
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* UX-6a (item 9, D8): uploaders PT-BR sem componente/JS novo. O
+   <input type=file> nativo fica visualmente oculto (clip) mas continua
+   focavel/funcional dentro de um <label> que abre o seletor. */
+.file-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.field .file-picker__button {
+  display: inline-flex;
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: var(--fs-subhead);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.file-picker__button:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.file-picker__button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-picker__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.field .file-picker__status {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  font-size: var(--fs-footnote);
+  color: var(--text-muted);
 }
 
 .field span,
@@ -3691,8 +3788,9 @@ body {
 }
 
 .text-input::placeholder {
-  color: var(--ink-soft);
-  opacity: 0.7;
+  /* UX-6a (D4): --text-muted ja e travado >=4,5:1 nos 4 temas/3 fundos pelo
+     teste (e) do UX-5. O valor 0.85 de alfa reprovava no mobile claro/dark. */
+  color: var(--text-muted);
 }
 
 .text-input:hover:not(:disabled):not(:focus) {
@@ -3862,6 +3960,10 @@ body {
   margin: 0;
   color: var(--ink);
   font-weight: 600;
+  /* UX-6a (D10): mesmo bug de heranca do <label> global (uppercase). */
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: var(--fs-subhead);
 }
 
 .collection-window-card {
@@ -3982,10 +4084,12 @@ body {
   flex: 1 1 160px;
   min-width: 160px;
   max-width: 240px;
-  border: 1px dashed rgba(15, 23, 42, 0.18);
+  /* UX-6a (item 6): rgba(15,23,42,...) e' fixo escuro, invisivel/quase
+     invisivel no tema dark. Tokens seguem o tema. */
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-xs);
   padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.04);
+  background: var(--surface-alt);
 }
 
 .weekly-arrivals-windows__row {
@@ -4002,17 +4106,17 @@ body {
 }
 
 .weekly-arrivals-windows__shift {
-  color: rgba(15, 23, 42, 0.65);
+  color: var(--text-muted);
   font-weight: 500;
 }
 
 .weekly-arrivals-windows__label {
-  color: rgba(15, 23, 42, 0.65);
+  color: var(--text-muted);
   font-size: 0.85em;
 }
 
 .weekly-arrivals-windows__notes {
-  color: rgba(15, 23, 42, 0.7);
+  color: var(--text-muted);
 }
 
 .weekly-arrivals-item--clickable {
@@ -4021,7 +4125,7 @@ body {
 }
 
 .weekly-arrivals-item--clickable:hover {
-  background: rgba(15, 23, 42, 0.04);
+  background: var(--surface-alt);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
@@ -4037,7 +4141,7 @@ body {
 
 .collection-status-edit__group {
   font-weight: 600;
-  color: rgba(15, 23, 42, 0.7);
+  color: var(--text-muted);
 }
 
 .chip-list {
@@ -4710,7 +4814,7 @@ body {
     padding: 0 5px;
     border-radius: var(--radius-full);
     background: var(--primary);
-    color: #ffffff;
+    color: var(--on-primary);
     font-size: var(--fs-caption-2);
     font-weight: 800;
     line-height: 18px;
@@ -6554,11 +6658,14 @@ body {
     white-space: nowrap;
   }
 
-  /* Linhas detalhadas saem no mobile — viram o resumo condensado. */
+  /* Linhas detalhadas saem no mobile — viram o resumo condensado.
+     UX-6a (item 1, D7): badges de alerta (warn/danger) e o "+N"
+     (--more) NAO entram nesse escondido — o card mobile mostra ate' 2
+     alertas + "+N", em vez de esconder todos. */
   .process-list-card .process-item__main p,
   .process-list-card .process-item__line,
   .process-list-card .process-item__meta,
-  .process-list-card .process-item__chips .inline-badge {
+  .process-list-card .process-item__chips .inline-badge:not(.inline-badge--warn):not(.inline-badge--danger):not(.inline-badge--more) {
     display: none;
   }
 
@@ -6566,6 +6673,15 @@ body {
     justify-content: flex-start;
     margin-top: 4px;
     margin-bottom: 0;
+  }
+
+  /* UX-6a (item 1, D7): corte visual de badges de alerta no card mobile. */
+  .process-list-card .process-item__chips .inline-badge--overflow {
+    display: none;
+  }
+
+  .process-list-card .process-item__chips .inline-badge--more {
+    display: inline-flex;
   }
 }
 
@@ -6714,6 +6830,28 @@ body {
 
   .process-detail-toolbar__favorite:active {
     background: var(--primary-100);
+  }
+}
+
+/* UX-6a (item 3, D6): a toolbar do detalhe sobrepunha o titulo no mobile.
+   O h3 "Detalhe do processo" sai (o process-detail-mobilebar ja mostra o
+   nome) e a toolbar ganha linha propria, largura total, centralizada.
+   Especificidade (0,3,0), vence 4761/4832/6629 (combinador de filho direto
+   ajuda a nao pegar outros .process-detail-card-heading aninhados). */
+@media (max-width: 720px) {
+  .process-detail-view > .process-detail-card-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-card-heading__title {
+    display: none;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-toolbar {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -7632,6 +7770,9 @@ body {
     --danger: #f87171;
     --danger-700: #e15b5b;
     --danger-50: #3a1f1f;
+    /* UX-6a (D3): --danger dark e' claro (#f87171), entao o texto precisa ser
+       escuro pra AA (6,86:1 no --danger, 5,29:1 no --danger-700 hover). */
+    --on-danger: #1f0a0a;
     --warning: #e0ad4d;
     --warning-700: #c4922f;
     --warning-50: #322a17;
@@ -7861,6 +8002,15 @@ body {
     border-radius: var(--radius-full);
   }
 
+  /* UX-6a (D1, armadilha 2): a base `.nav__link--active .nav__link-icon`
+     (0,2,0) usa --on-primary-subtle/--on-primary (navy), que some sobre a
+     sidebar navy do desktop. Override com o mesmo (0,2,0), vindo depois no
+     arquivo, reaplica o visual translucido claro original. */
+  .nav__link--active .nav__link-icon {
+    background: var(--sidebar-pill-active);
+    color: var(--sidebar-ink);
+  }
+
   [data-theme='dark'] .sidebar-intelliquote-link,
   .sidebar-intelliquote-link {
     background: var(--sidebar-pill-hover);
@@ -7963,6 +8113,9 @@ body {
     border-radius: var(--radius-full);
     background: var(--danger);
     border: 2px solid var(--bg);
+    /* UX-6a (D1/D3): sem isso herdaria --on-primary (navy) da regra base,
+       navy sobre --danger da 3,75 e reprova. */
+    color: var(--on-danger);
   }
 
   /* Passo 2 — "Sair" só mora na sidebar no desktop (mockup não tem
@@ -8570,15 +8723,25 @@ body {
     display: flex;
     gap: 8px;
     align-items: stretch;
+    /* UX-6a (item 2): sem isso a linha estoura a largura do container
+       (causa real: .ghost-button width:100% no .chegadas-filters-toggle,
+       que tem flex-shrink:0). */
+    min-width: 0;
+    max-width: 100%;
   }
 
   .chegadas-mobilebar__row .chegadas-segmented {
     flex: 1;
+    min-width: 0;
   }
 
   .chegadas-filters-toggle {
     flex-shrink: 0;
     min-height: 36px;
+    /* UX-6a (item 2): vence o .ghost-button { width:100% } do mesmo media
+       query (mesma especificidade 0,1,0, mas esta regra vem depois). */
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .chegadas-search {
@@ -9005,12 +9168,15 @@ body {
 
   .process-swipe-row__action--favorite {
     background: var(--warning);
+    /* AD-1: texto/icone escuro sobre o amarelo, ver token --on-warn em :root. */
+    color: var(--on-warn);
   }
 
   /* F16.8: arquivar (admin) — some da lista; restaurar (seção Arquivados)
      usa a cor primária, mesmo tom de "ação construtiva" do marcar-lida. */
   .process-swipe-row__action--archive {
     background: var(--danger);
+    color: var(--on-danger);
   }
 
   .process-swipe-row__action--restore {
@@ -9429,8 +9595,13 @@ body {
     font-weight: 700;
   }
 
+  /* UX-6a (item 12): antes so' recolorava o texto (--danger-700, vermelho)
+     sobre o fundo verde herdado de .eta-meta-highlight (linha ~2466),
+     5,46:1 no claro / 5,07:1 no dark com os 3 tokens juntos. */
   .process-list-card .process-item__meta .eta-meta-highlight {
-    color: var(--danger-700);
+    color: var(--warning-700);
+    background: var(--warning-50);
+    border-color: var(--warning);
   }
 
   /* Revela leading icon (categoria) + chevron — F15.2 os deixa
@@ -10441,6 +10612,8 @@ body {
 
   .admin-section .scope-chip--active {
     box-shadow: var(--shadow-sm);
+    /* UX-6a (D5): branco sobre o gradiente do chip ativo, pior caso 5,43:1. */
+    color: var(--on-button-primary);
   }
 
   .admin-section .chip-add {
@@ -10687,6 +10860,13 @@ body {
     max-width: 860px;
     width: 100%;
     margin: 0 auto;
+  }
+
+  /* UX-6a (D9i): a pagina /notifications (fora do drawer) fica com altura
+     fixa herdada de .notifications__list (420px) — deixa a lista fluir. */
+  .notifications-page .notifications__list {
+    max-height: none;
+    overflow: visible;
   }
 
   .notifications-page .notifications__section-label {

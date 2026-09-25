@@ -101,8 +101,8 @@ export default function LoginPage() {
               <Icon name="arrivals" size={20} />
             </span>
             <span>
-              <strong>Fila de chegadas em tempo real</strong>
-              <small>ETA, DUIMP, MAPA e coleta por processo</small>
+              <strong>Fila de chegadas</strong>
+              <small>ETA, DUIMP, anuências e coleta por processo</small>
             </span>
           </div>
           <div className="auth-brand__feat">
@@ -118,7 +118,7 @@ export default function LoginPage() {
       </aside>
       <div className="auth-panel">
       <form className="auth-card auth-card--form" onSubmit={handleSubmit}>
-        <span className="brand__eyebrow">SQ Comex Updates</span>
+        <span className="brand__eyebrow">Portal COMEX</span>
         <div className="auth-toggle">
           <button
             type="button"

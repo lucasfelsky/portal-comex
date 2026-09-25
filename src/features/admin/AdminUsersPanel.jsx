@@ -470,7 +470,7 @@ export default function AdminUsersPanel() {
                       <p>
                         {getRoleLabel(user.role)} · {user.area || 'Geral'}
                       </p>
-                      <span>{user.id}</span>
+                      <span className="admin-user-row__uid">{user.id}</span>
                     </div>
                     <span className={statusClassName(user.statusTone)}>{user.status}</span>
                   </button>

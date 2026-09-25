@@ -185,7 +185,7 @@ export default function ProcessDetailView({
         >
           ‹ Voltar
         </button>
-        <div><h3>Detalhe do processo</h3></div>
+        <div className="process-detail-card-heading__title"><h3>Detalhe do processo</h3></div>
         <div className="admin-toolbar process-detail-toolbar">
           {isAdmin ? (
             <button type="button" className="ghost-button" onClick={onEditMode}>Editar processo</button>

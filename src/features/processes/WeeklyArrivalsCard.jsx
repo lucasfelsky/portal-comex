@@ -277,7 +277,7 @@ function ScheduledItem({ process, windows, canSeeName, onSelectProcess }) {
 
             return (
               <li key={window.id} className="weekly-arrivals-windows__item">
-                <span className="detail-label">Container {window.containerNumber}</span>
+                <span className="detail-label">Contêiner {window.containerNumber}</span>
                 <p className="weekly-arrivals-windows__row">
                   <strong className="weekly-arrivals-windows__date">{formatDateOnly(deliveryEstimate)}</strong>
                   {deliveryShift ? (
