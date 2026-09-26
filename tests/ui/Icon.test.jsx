@@ -27,7 +27,7 @@ describe('Icon', () => {
   it('renderiza paths/shapes para cada icone conhecido', () => {
     const KNOWN = [
       'dashboard', 'news', 'arrivals', 'admin', 'bell', 'check', 'external',
-      'logout', 'edit', 'trash', 'plus', 'search', 'download', 'chevron',
+      'logout', 'edit', 'trash', 'lock', 'plus', 'search', 'download', 'chevron',
       'dollar', 'trend', 'sparkle', 'inbox',
     ]
     for (const name of KNOWN) {

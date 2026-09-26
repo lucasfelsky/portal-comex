@@ -2,24 +2,35 @@ import SelectField from '../../components/SelectField'
 import { IMO_CLASS_OPTIONS, isValidUnNumber } from './operationalOptions'
 
 // F17.2d-1 (D-4, Q4): bloco de carga perigosa (IMDG) de UM item do
-// processo - checkbox + Número ONU (com aviso `isValidUnNumber`) + Classe
+// processo - switch + Número ONU (com aviso `isValidUnNumber`) + Classe
 // IMO. Regra de import: so' `SelectField` e `./operationalOptions` (mesmo
 // padrao de `ProcessCargoFields.jsx`).
-export default function ProcessItemDangerousGoodsFields({ item, onChange }) {
+// UX-6b-2 (D-6): checkbox virou switch (`role="switch"`, ARIA in HTML - o
+// estado real continua vindo do `checked` do input nativo). O componente
+// devolve um FRAGMENTO (sem `detail-card` externo) - quem monta o
+// `.editor-row` e' quem o usa (`ProcessForm.renderItemsStep`). Prop
+// opcional `trailing` (node) renderiza ENTRE o switch e a faixa (ordem
+// DOM/teclado: switch, trailing, ONU, classe).
+export default function ProcessItemDangerousGoodsFields({ item, onChange, trailing = null }) {
   const unNumberInvalid = item?.dangerousGoods && item?.unNumber && !isValidUnNumber(item.unNumber)
 
   return (
-    <div className="detail-card">
-      <label className="checkbox-field">
+    <>
+      <label className="editor-switch">
         <input
           type="checkbox"
+          role="switch"
+          className="editor-switch__input"
           checked={Boolean(item?.dangerousGoods)}
           onChange={(event) => onChange('dangerousGoods', event.target.checked)}
+          aria-label="Carga perigosa (IMO)"
         />
-        <span>Carga perigosa (IMO)</span>
+        <span className="editor-switch__track" aria-hidden="true" />
+        <span aria-hidden="true">IMO</span>
       </label>
+      {trailing}
       {item?.dangerousGoods ? (
-        <div className="detail-card detail-card--split">
+        <div className="process-item-editor__imo-band">
           <label className="field">
             <span>Número ONU</span>
             <input
@@ -55,6 +66,6 @@ export default function ProcessItemDangerousGoodsFields({ item, onChange }) {
           </label>
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

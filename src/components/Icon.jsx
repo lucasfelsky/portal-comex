@@ -107,6 +107,14 @@ const ICONS = {
       <path d="M14 11v6" />
     </>
   ),
+  // UX-6b-2 (D-2): cadeado do botao "Remover" travado (contêiner com coleta
+  // agendada). Mesmo estilo do trash (stroke, sem preenchimento).
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </>
+  ),
   plus: (
     <>
       <path d="M12 5v14" />

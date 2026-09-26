@@ -178,4 +178,23 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
 
     expect(onSave).toHaveBeenCalled()
   })
+
+  // UX-6b-2 (D8): o editor herda o novo visual (sem "Janela atual") e
+  // continua so' leitura (todos os inputs de horario desabilitados).
+  it('sem "Janela atual"; os inputs "Horário previsto" ficam desabilitados', () => {
+    renderView({
+      collectionStatus: 'Coleta Agendada',
+      process: {
+        id: 'PROC-1',
+        name: 'Importação Atlas',
+        category: 'FCL',
+        collectionWindows: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' }],
+        containers: [{ id: 'CNT-1', number: 'CSQU3054383' }],
+        postReceiptImages: [],
+        processStatus: 'Coleta Agendada',
+      },
+    })
+    expect(screen.queryByText('Janela atual')).not.toBeInTheDocument()
+    screen.getAllByLabelText('Horário previsto').forEach((input) => expect(input).toBeDisabled())
+  })
 })

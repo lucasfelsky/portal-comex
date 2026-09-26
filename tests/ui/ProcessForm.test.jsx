@@ -267,7 +267,7 @@ describe('ProcessForm — wizard de etapas (C11 / UX-6b-1)', () => {
     expect(screen.getByText('Classe IMO')).toBeInTheDocument()
   })
 
-  it('checkbox "Carga perigosa (IMO)" do item dispara onItemChange(id, "dangerousGoods", true)', async () => {
+  it('switch "Carga perigosa (IMO)" do item dispara onItemChange(id, "dangerousGoods", true)', async () => {
     const user = userEvent.setup()
     const onItemChange = vi.fn()
     renderForm({
@@ -275,7 +275,7 @@ describe('ProcessForm — wizard de etapas (C11 / UX-6b-1)', () => {
       onItemChange,
     })
     await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Carga perigosa (IMO)' }))
+    await user.click(screen.getByRole('switch', { name: 'Carga perigosa (IMO)' }))
     expect(onItemChange).toHaveBeenCalledWith('i1', 'dangerousGoods', true)
   })
 
@@ -892,7 +892,222 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
     const removeButtons = screen.getAllByRole('button', { name: 'Remover' })
     expect(removeButtons[0]).toBeDisabled()
     expect(removeButtons[1]).not.toBeDisabled()
-    expect(screen.getByText('Contêiner com coleta agendada — só pode ser editado.')).toBeInTheDocument()
+    expect(screen.getByText('Contêineres com coleta agendada não podem ser removidos.')).toBeInTheDocument()
+  })
+})
+
+// UX-6b-2: editores compactos (contêiner, anuência, item, janela).
+describe('ProcessForm — editores compactos (UX-6b-2)', () => {
+  it('(i) contêiner travado tem aria-describedby do hint unico; sem travado, o hint some', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderForm({
+      draft: makeDraft({
+        category: 'FCL',
+        containers: [
+          { id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '' },
+          { id: 'CNT-2', number: 'MSCU1234566', seal: '', type: '' },
+        ],
+        collectionWindows: [
+          { id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00' },
+        ],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
+    const removeButtons = screen.getAllByRole('button', { name: 'Remover' })
+    expect(removeButtons[0]).toHaveAttribute('aria-describedby', 'process-field-containers-lock-hint')
+    expect(removeButtons[0]).toHaveAccessibleDescription(/não podem ser removidos/)
+    removeButtons.forEach((button) => expect(button.querySelector('svg')).toBeInTheDocument())
+    expect(removeButtons[0]).toHaveAttribute('title')
+    expect(removeButtons[1]).toHaveAttribute('title')
+    unmount()
+
+    renderForm({
+      draft: makeDraft({
+        category: 'FCL',
+        containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: '', type: '' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Carga' }))
+    expect(screen.queryByText(/não podem ser removidos/)).not.toBeInTheDocument()
+  })
+
+  it('(ii) "+ Observação" abre o input de observações e emite onDraftChange("licenses", …)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Aguardando registro', notes: '' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
+
+    const openButton = screen.getByRole('button', { name: '+ Observação' })
+    expect(openButton).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('Observações')).not.toBeInTheDocument()
+
+    await user.click(openButton)
+    const notesInput = screen.getByLabelText('Observações')
+    expect(notesInput).toBeInTheDocument()
+    await user.type(notesInput, 'x')
+    expect(onDraftChange).toHaveBeenCalledWith('licenses', [
+      expect.objectContaining({ notes: expect.any(String) }),
+    ])
+  })
+
+  it('(ii-b) anuência com notes já preenchidas mostra o input sem clicar', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Aguardando registro', notes: 'já tem' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
+    expect(screen.getByLabelText('Observações')).toBeInTheDocument()
+  })
+
+  it('(iii) status "Deferida" mostra a legenda "Deferida em"; "Aguardando registro" nao mostra nenhuma', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Deferida', deferredAt: '2026-07-08' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
+    expect(screen.getByText('Deferida em')).toBeInTheDocument()
+    expect(document.querySelector('input[type="date"]')).toBeInTheDocument()
+    unmount()
+
+    renderForm({
+      draft: makeDraft({
+        licenses: [{ id: 'LIC-2', agency: 'MAPA', status: 'Aguardando registro' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Chegada e liberação' }))
+    expect(screen.queryByText('Deferida em')).not.toBeInTheDocument()
+    expect(screen.queryByText('Vistoria agendada para')).not.toBeInTheDocument()
+  })
+
+  it('(iv) switch IMO ligado fica checked; a faixa mostra "Número ONU"/"Classe IMO" so ligado', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderForm({
+      draft: makeDraft({
+        items: [{ id: 'i1', commercialName: 'Resina', quantity: 10, dangerousGoods: true, unNumber: '1203' }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    expect(screen.getByRole('switch', { name: 'Carga perigosa (IMO)' })).toBeChecked()
+    const band = document.querySelector('.process-item-editor__imo-band')
+    expect(band).toBeInTheDocument()
+    expect(within(band).getByText('Número ONU')).toBeInTheDocument()
+    expect(within(band).getByText('Classe IMO')).toBeInTheDocument()
+    unmount()
+
+    renderForm({
+      draft: makeDraft({
+        items: [{ id: 'i2', commercialName: 'Resina', quantity: 10, dangerousGoods: false }],
+      }),
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    expect(document.querySelector('.process-item-editor__imo-band')).not.toBeInTheDocument()
+  })
+
+  it('(v) botão "Remover item" chama onRemoveItem(id)', async () => {
+    const user = userEvent.setup()
+    const onRemoveItem = vi.fn()
+    renderForm({
+      draft: makeDraft({ items: [{ id: 'i1', commercialName: 'Resina', quantity: 10 }] }),
+      onRemoveItem,
+    })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    await user.click(screen.getByRole('button', { name: 'Remover item' }))
+    expect(onRemoveItem).toHaveBeenCalledWith('i1')
+  })
+
+  it('(vi) chip "Salvo: …" so aparece em edit quando o horario diverge do salvo na abertura', async () => {
+    const user = userEvent.setup()
+    function maritimeReadyDraft(overrides = {}) {
+      return makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        ...overrides,
+      })
+    }
+    const draft = maritimeReadyDraft({
+      collectionStatus: 'Coleta Agendada',
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383' }],
+      collectionWindows: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00' }],
+    })
+    const { rerender } = renderForm({ viewMode: 'edit', canShowMaritimeFlow: true, draft })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
+    expect(screen.queryByText(/^Salvo:/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Janela atual')).not.toBeInTheDocument()
+
+    const nextDraft = {
+      ...draft,
+      collectionWindows: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T15:00:00' }],
+    }
+    rerender(
+      <ProcessForm
+        viewMode="edit"
+        draft={nextDraft}
+        isSaving={false}
+        isImportingItems={false}
+        canShowMaritimeFlow
+        canShowAirFlow={false}
+        itemsFileInputRef={{ current: null }}
+        channelOptions={['Verde', 'Amarelo', 'Vermelho']}
+        collectionStatusOptions={['Coleta Pendente', 'Coleta Agendada']}
+        dtaStatusOptions={['Registrada']}
+        processCategoryOptions={['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']}
+        onDraftChange={() => {}}
+        onSetViewModeList={() => {}}
+        onSave={() => {}}
+        onImportItemsFile={() => {}}
+        onAddItem={() => {}}
+        onItemChange={() => {}}
+        onRemoveItem={() => {}}
+        onClickCapture={() => {}}
+      />
+    )
+    expect(screen.getByText(/^Salvo:/)).toBeInTheDocument()
+  })
+
+  it('(vii) select "Coleta" com status pos-recebimento fora da lista mostra o valor via option disabled', async () => {
+    const user = userEvent.setup()
+    const draft = makeDraft({
+      category: 'AEREO',
+      arrived: true,
+      dtaStatus: 'Trânsito concluído',
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      collectionStatus: 'Carga recebida, em conferência',
+      collectionWindows: [],
+    })
+    const { onDraftChange } = renderForm({ viewMode: 'edit', canShowAirFlow: true, draft })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Coleta' }))
+
+    const select = screen.getByLabelText('Coleta')
+    expect(select).toHaveValue('Carga recebida, em conferência')
+    const selectedOption = within(select).getByRole('option', { name: 'Carga recebida, em conferência' })
+    expect(selectedOption).toBeDisabled()
+
+    await user.selectOptions(select, 'Coleta Agendada')
+    expect(onDraftChange).toHaveBeenCalledWith('collectionStatus', 'Coleta Agendada')
+  })
+
+  it('(viii) as pills do cabeçalho tem title igual ao textContent', () => {
+    renderForm({ draft: makeDraft({ category: 'FCL' }) })
+    const header = document.querySelector('.process-form__header')
+    const pills = header.querySelectorAll('.inline-badge, .status-tag, [class*="tag-"]')
+    pills.forEach((pill) => {
+      if (!pill.title) return
+      expect(pill.title).toBe(pill.textContent)
+    })
+    const categoryPill = screen.getByText('FCL', { selector: '.inline-badge' })
+    expect(categoryPill).toHaveAttribute('title', 'FCL')
   })
 })
 
