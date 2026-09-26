@@ -456,4 +456,19 @@ describe('guardas estruturais', () => {
     expect(body).toContain('var(--warning-50)')
     expect(body).toContain('var(--warning-700)')
   })
+
+  // UX-6b-3 (D5/F2): o no atual da timeline (`--now`) deixa de ser
+  // preenchido (halo com anel externo var(--primary) - garante o verde no
+  // tema escuro, onde --primary-50 quase some sobre --surface-alt).
+  it('(s) os 2 blocos ".process-timeline__node--now {" tem o halo com --primary/--primary-50/--primary-700, sem preencher o fundo', () => {
+    const mobile = extractBlock(css, '.process-timeline__node--now {')
+    const desktop = extractBlock(css, '.process-detail-view .process-timeline__node--now {')
+
+    for (const { body } of [mobile, desktop]) {
+      expect(body).toContain('var(--primary-700)')
+      expect(body).toContain('var(--primary-50)')
+      expect(body).toContain('var(--primary)')
+      expect(body).not.toContain('background: var(--primary-700)')
+    }
+  })
 })

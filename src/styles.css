@@ -7218,25 +7218,46 @@ body {
   }
 }
 
-/* UX-6a (item 3, D6): a toolbar do detalhe sobrepunha o titulo no mobile.
-   O h3 "Detalhe do processo" sai (o process-detail-mobilebar ja mostra o
-   nome) e a toolbar ganha linha propria, largura total, centralizada.
-   Especificidade (0,3,0), vence 4761/4832/6629 (combinador de filho direto
-   ajuda a nao pegar outros .process-detail-card-heading aninhados). */
+/* UX-6a (item 3, D6) + UX-6b-3 (D10, E): a toolbar do detalhe sobrepunha o
+   titulo no mobile — a toolbar ganha linha propria, largura total,
+   centralizada. UX-6b-3: o nome/status do cabecalho (`.process-detail-heading`)
+   passa a ficar VISIVEL e centralizado no topo do card (D2 do Lucas pede
+   nome+status no cabecalho, nao so no mobilebar). Especificidade (0,3,0),
+   vence 4761/4832/6629 (combinador de filho direto ajuda a nao pegar outros
+   .process-detail-card-heading aninhados). */
 @media (max-width: 720px) {
   .process-detail-view > .process-detail-card-heading {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
   }
 
-  .process-detail-view > .process-detail-card-heading .process-detail-card-heading__title {
-    display: none;
+  .process-detail-view > .process-detail-card-heading .process-detail-heading {
+    align-items: center;
+    text-align: center;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-heading__name {
+    font-size: var(--fs-headline);
   }
 
   .process-detail-view > .process-detail-card-heading .process-detail-toolbar {
     width: 100%;
     justify-content: center;
+  }
+
+  .process-detail-view .detail-dl__row {
+    text-align: center;
+  }
+
+  .process-detail-view .detail-dl__row dt,
+  .process-detail-view .detail-dl__row dd {
+    display: block;
+  }
+
+  .process-detail-view .detail-table__scroll {
+    text-align: left;
+    overflow-x: auto;
   }
 }
 
@@ -9231,7 +9252,7 @@ body {
   display: none;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1040px) {
   .process-timeline {
     display: block;
     margin: 4px 0 14px;
@@ -9285,8 +9306,10 @@ body {
   }
 
   .process-timeline__node--now {
-    background: var(--primary-700);
-    box-shadow: 0 0 0 4px var(--primary-50);
+    background: var(--surface);
+    border: 3px solid var(--primary-700);
+    box-sizing: border-box;
+    box-shadow: 0 0 0 4px var(--primary-50), 0 0 0 5px var(--primary);
   }
 
   .process-timeline__labels {
@@ -10103,8 +10126,10 @@ body {
   }
 
   .process-detail-view .process-timeline__node--now {
-    background: var(--primary-700);
-    box-shadow: 0 0 0 6px var(--primary-50);
+    background: var(--surface);
+    border: 3px solid var(--primary-700);
+    box-sizing: border-box;
+    box-shadow: 0 0 0 6px var(--primary-50), 0 0 0 7px var(--primary);
   }
 
   .process-detail-view .process-timeline__labels {
@@ -10290,6 +10315,185 @@ body {
   .process-detail-view .field .text-input {
     border-radius: var(--radius-full);
     padding-left: 16px;
+  }
+
+  /* UX-6b-3 (D10): cabecalho do detalhe em 3 colunas (voltar | nome+status
+     | toolbar) so' dentro do escopo `.process-detail-view >` — a base
+     `.process-detail-card-heading` (styles.css:2501) fica 1fr auto 1fr pros
+     outros usos (Itens vinculados etc, aninhados em `.detail-card`). */
+  .process-detail-view > .process-detail-card-heading {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .process-detail-view > .process-detail-card-heading h2 {
+    font-family: var(--font-heading);
+    font-size: var(--fs-title);
+  }
+}
+
+/* ============================================================
+   UX-6b-3 (D6/D7/D10): cabecalho do detalhe (nome/status/subtitulo),
+   menu "Mais ações" e os blocos numerados 1-5 (`DetailBlock`/`DetailList`/
+   `DetailRow`, `ProcessOperationalDetails.jsx`). Escopado em
+   `.process-detail-view` (unica no app). So' tokens (--surface,
+   --surface-alt, --border, --ink, --text-muted, --text-subtle, --primary,
+   --primary-50, --primary-700, --danger-50, --danger-700, --radius-*,
+   --fs-*, --font-heading, --shadow-sm, --focus-ring). Sem hex novo; sem
+   override [data-theme='dark'] (os tokens ja flipam em styles.css:8132).
+   Nao toca nenhum bloco @media (max-width:*) — os ajustes mobile ficam no
+   bloco UX-6a (styles.css ~7226).
+   ============================================================ */
+.process-detail-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.process-detail-heading__name {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-title);
+  color: var(--ink);
+}
+
+.process-detail-heading__meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.process-detail-more {
+  position: relative;
+}
+
+.process-detail-more__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.process-detail-more__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+}
+
+.process-detail-more__item--danger {
+  color: var(--danger-700);
+}
+
+.process-detail-more__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.detail-block__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.detail-block__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.detail-block__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-body);
+}
+
+.detail-block--danger {
+  background: var(--danger-50);
+  border: 1px solid var(--danger-700);
+}
+
+.detail-dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px 20px;
+  margin: 12px 0 0;
+  align-items: start;
+}
+
+.detail-dl__row dt {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+  text-transform: none;
+}
+
+.detail-dl__row dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.detail-table__scroll {
+  /* `.detail-card` e' grid (styles.css:3878) - sem `min-width: 0` o item
+     do grid cresce pro conteudo intrinseco da tabela e o `overflow-x: auto`
+     nunca entra em acao (a pagina inteira que rola, nao so' a tabela). */
+  min-width: 0;
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detail-table th,
+.detail-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-footnote);
+}
+
+.detail-table th {
+  color: var(--text-subtle);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.process-item-display__name {
+  font-family: var(--font-heading);
+}
+
+@media (min-width: 1041px) {
+  .process-detail-view .tab-panel-spacing > .detail-block--wide {
+    grid-column: 1 / -1;
+  }
+
+  .process-detail-view .detail-block--wide .detail-dl {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
 }
 

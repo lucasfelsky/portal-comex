@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
@@ -6,12 +6,12 @@ import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
 import {
   CD_EN_ROUTE_STATUS,
   getDisplayedCollectionStatus,
-  getQuickReadProcessStatus,
+  getDisplayedProcessStatus,
   isCollectionScheduledOrBeyondStatus,
   isProcessStatusFinalized,
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
-import { getProcessTitle } from './processLabels'
+import { getProcessSubtitle, getProcessTitle } from './processLabels'
 import { getCollectionWindowLabel } from './containers'
 import {
   canSeePurchaseOrderDetails,
@@ -27,7 +27,13 @@ import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import {
-  ProcessCargoTransitDetails,
+  DetailBlock,
+  DetailList,
+  DetailRow,
+  hasArrivalDetails,
+  hasCustomsDetails,
+  ProcessCargoDetails,
+  ProcessTransitDetails,
   ProcessIdentificationDetails,
   ProcessLicensesDetails,
   ProcessArrivalDetails,
@@ -40,10 +46,14 @@ import {
 // 'detail'), extraída do ProcessesPage. Presentacional — lê só o
 // `selectedProcess` (via prop) e chama callbacks; o estado e os handlers
 // continuam na página. As 5 abas (general/process/items/related-item/
-// messages) são renderizadas por `detailTab`. Zero mudança
-// visual/comportamental. A gallery de pós-recebimento fica no page
-// (guardada por `isPostReceiptGalleryOpen`); esta view só chama
-// `onOpenPostReceiptGallery(index)`.
+// messages) são renderizadas por `detailTab`. A gallery de pós-recebimento
+// fica no page (guardada por `isPostReceiptGalleryOpen`); esta view só
+// chama `onOpenPostReceiptGallery(index)`.
+//
+// UX-6b-3: cabeçalho com nome/status/subtítulo (mascara intacta), menu
+// "Mais ações" (admin, com "Excluir processo") e a aba "Processo" em
+// blocos numerados 1-5 espelhando o wizard (Carga > Embarque > Chegada +
+// Free time > Aduana + Anuências > Coleta).
 export default function ProcessDetailView({
   selectedProcess,
   detailTab,
@@ -84,14 +94,57 @@ export default function ProcessDetailView({
   onDeleteMessage,
 }) {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const moreContainerRef = useRef(null)
+  const moreTriggerRef = useRef(null)
+  const firstMenuItemRef = useRef(null)
   // D-E: pendencias so pro admin.
   const pendingFields = isAdmin ? getPendingFields(selectedProcess) : []
 
+  // D4: menu "Mais ações" — foco no 1o menuitem ao abrir; Esc/clique fora
+  // fecham (e devolvem o foco ao trigger no Esc).
+  useEffect(() => {
+    if (!isMoreOpen) return undefined
+
+    const frame = requestAnimationFrame(() => {
+      firstMenuItemRef.current?.focus()
+    })
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsMoreOpen(false)
+        moreTriggerRef.current?.focus()
+      }
+    }
+
+    function handleOutsideClick(event) {
+      if (moreContainerRef.current && !moreContainerRef.current.contains(event.target)) {
+        setIsMoreOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('touchstart', handleOutsideClick)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('touchstart', handleOutsideClick)
+    }
+  }, [isMoreOpen])
+
+  function handleOpenDeleteConfirm() {
+    setIsMoreOpen(false)
+    // Foca o trigger ANTES de abrir o dialogo pro <Modal> restaurar o foco
+    // num elemento que ainda existe no DOM ao fechar.
+    moreTriggerRef.current?.focus()
+    setIsConfirmDeleteOpen(true)
+  }
+
   const getDestinationLabel = (category) =>
     category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
-
-  const formatCargoUnit = (quantity, singularLabel, pluralLabel) =>
-    `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
 
   const formatDate = (value) => {
     if (!value) return '-'
@@ -112,14 +165,29 @@ export default function ProcessDetailView({
   const getEtaDisplayClassName = (process, baseClassName = '') =>
     [baseClassName, hasUpdatedEta(process) ? 'eta-detail-highlight' : ''].filter(Boolean).join(' ')
 
-  const canShowProcessName = (process, adminFlag) =>
-    adminFlag || !['FCL', 'LCL', 'AEREO'].includes(process?.category)
-
   const hasPostReceiptContent = (process) =>
     Boolean(
       String(process?.postReceiptNotes ?? '').trim() ||
         (Array.isArray(process?.postReceiptImages) ? process.postReceiptImages : []).length > 0
     )
+
+  // UX-6b-3 (D6): numeracao dos blocos 3/4 — Chegada/Aduana levam o numero
+  // quando renderizam; senao ele passa pro bloco seguinte (Free time/
+  // Anuências).
+  const showArrivalBlock = hasArrivalDetails(selectedProcess)
+  const showCustomsBlock = hasCustomsDetails(selectedProcess)
+
+  // UX-6b-3 (D7.5): bloco 5 "Coleta" — badge de status + janelas +
+  // transportadora, cada parte com a SUA condicao de hoje.
+  const showsCollectionCategory = isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)
+  const showCollectionStatusBadge = showsCollectionCategory && Boolean(selectedProcess.collectionStatus)
+  const collectionWindows = getCollectionWindows(selectedProcess)
+  const showCollectionWindows =
+    showsCollectionCategory &&
+    (selectedProcess.collectionStatus === 'Coleta Agendada' || selectedProcess.collectionStatus === CD_EN_ROUTE_STATUS) &&
+    collectionWindows.length > 0
+  const showCarrier = isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus)
+  const showCollectionBlock = showCollectionStatusBadge || showCollectionWindows || showCarrier
 
   return (
     <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}>
@@ -139,8 +207,9 @@ export default function ProcessDetailView({
         </strong>
       </div>
 
-      {/* F16.5: timeline de 5 estágios (mobile-only via CSS) — o estado do
-          processo virado em forma, o dado mais importante em relance. */}
+      {/* F16.5/UX-6b-3 (D5/E3/F2): timeline de 5 estágios — concluidos
+          preenchidos, atual em anel com halo verde, futuros vazios; visivel
+          em todas as larguras (mobile + tablet <=1040px + desktop). */}
       {(() => {
         const { currentStage, isComplete } = getProcessStage(selectedProcess)
         return (
@@ -185,10 +254,20 @@ export default function ProcessDetailView({
         >
           ‹ Voltar
         </button>
-        <div className="process-detail-card-heading__title"><h3>Detalhe do processo</h3></div>
+        <div className="process-detail-heading">
+          <h2 className="process-detail-heading__name">{getProcessTitle(selectedProcess, canSeeName)}</h2>
+          <span className={getStatusTagClass(selectedProcess.processStatus)}>
+            {getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}
+          </span>
+          <p className="process-detail-heading__meta">
+            {[selectedProcess.category, getProcessSubtitle(selectedProcess, canSeeName), selectedProcess.destination]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
         <div className="admin-toolbar process-detail-toolbar">
           {isAdmin ? (
-            <button type="button" className="ghost-button" onClick={onEditMode}>Editar processo</button>
+            <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button>
           ) : null}
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
             <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar observações</button>
@@ -203,8 +282,56 @@ export default function ProcessDetailView({
           >
             {favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}
           </button>
+          {isAdmin ? (
+            <div className="process-detail-more" ref={moreContainerRef}>
+              <button
+                type="button"
+                className="ghost-button process-detail-more__trigger"
+                aria-label="Mais ações"
+                title="Mais ações"
+                aria-haspopup="menu"
+                aria-expanded={isMoreOpen}
+                aria-controls="process-detail-more-menu"
+                ref={moreTriggerRef}
+                onClick={() => setIsMoreOpen((open) => !open)}
+              >
+                <span aria-hidden="true">⋯</span>
+              </button>
+              {isMoreOpen ? (
+                <div id="process-detail-more-menu" role="menu" className="process-detail-more__menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    ref={firstMenuItemRef}
+                    className="process-detail-more__item process-detail-more__item--danger"
+                    disabled={isSaving}
+                    onClick={handleOpenDeleteConfirm}
+                  >
+                    {isSaving ? <Spinner size={14} /> : null} Excluir processo
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
+
+      {isAdmin ? (
+        <ConfirmDialog
+          open={isConfirmDeleteOpen}
+          title="Excluir processo?"
+          message="Esta ação é irreversível e excluirá o processo e todas as suas mensagens."
+          confirmLabel="Excluir"
+          cancelLabel="Cancelar"
+          tone="danger"
+          busy={isSaving}
+          onConfirm={() => {
+            setIsConfirmDeleteOpen(false)
+            onDeleteProcess()
+          }}
+          onCancel={() => setIsConfirmDeleteOpen(false)}
+        />
+      ) : null}
 
       <div className="detail-tab-select">
         <select
@@ -244,9 +371,6 @@ export default function ProcessDetailView({
                 </ul>
               </div>
             ) : null}
-            <div className="detail-card"><span className="detail-label">Processo</span><p>{getProcessTitle(selectedProcess, canSeeName)}</p></div>
-            <div className="detail-card"><span className="detail-label">Categoria</span><p>{selectedProcess.category}</p></div>
-            {selectedProcess.processNumber && canShowProcessName(selectedProcess, canSeeName) ? <div className="detail-card"><span className="detail-label">PO</span><p>{selectedProcess.processNumber}</p></div> : null}
             {selectedProcess.category === 'CONSOLIDADO' && getProcessPurchaseOrders(selectedProcess).length > 0 ? (
               <div className="detail-card">
                 <span className="detail-label">POs consolidadas</span>
@@ -294,36 +418,59 @@ export default function ProcessDetailView({
 
         {detailTab === 'process' ? (
           <>
-            <div className="detail-card">
-              <div className="card-heading process-detail-card-heading">
-                <div>
-                  <span className="detail-label">Status do processo</span>
-                </div>
-                <span className={getStatusTagClass(selectedProcess.processStatus)}>{getQuickReadProcessStatus(selectedProcess)}</span>
-              </div>
-            </div>
-            <div className={`detail-card${shouldShowContainerQuantity(selectedProcess.category) ? ' detail-card--split' : ''}`}>
-              {shouldShowContainerQuantity(selectedProcess.category) ? (
-                <div>
-                  <span className="detail-label">Quantidade de containers</span>
-                  <p>{formatCargoUnit(selectedProcess.containerQuantity, 'container', 'containers')}</p>
-                </div>
-              ) : null}
-              <div>
-                <span className="detail-label">Quantidade de pallets</span>
-                <p>{formatCargoUnit(selectedProcess.palletQuantity, 'pallet', 'pallets')}</p>
-              </div>
-            </div>
-            <ProcessCargoTransitDetails process={selectedProcess} />
+            <ProcessCargoDetails
+              process={selectedProcess}
+              showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
+            />
+            <ProcessTransitDetails process={selectedProcess} />
+            <ProcessArrivalDetails process={selectedProcess} step={3} />
+            <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} />
+            <ProcessCustomsDetails process={selectedProcess} step={4} />
+            <ProcessLicensesDetails process={selectedProcess} step={showCustomsBlock ? null : 4} />
+            {showCollectionBlock ? (
+              <DetailBlock
+                step={5}
+                title="Coleta"
+                wide
+                badges={
+                  showCollectionStatusBadge ? (
+                    <span className="inline-badge">{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</span>
+                  ) : null
+                }
+              >
+                {showCollectionWindows ? (
+                  <div className="detail-stack detail-stack--compact">
+                    {collectionWindows.map((window) => (
+                      <div key={window.id} className="detail-block__row">
+                        <p>
+                          <strong>
+                            {getCollectionWindowLabel(window, {
+                              category: selectedProcess.category,
+                              containers: selectedProcess.containers,
+                            })}
+                          </strong>
+                          {' · '}
+                          {formatDateTime(window.scheduledAt)}
+                        </p>
+                        {window.notes ? <small className="field-hint">{window.notes}</small> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {showCarrier ? (
+                  <DetailList>
+                    <DetailRow label="Transportadora">{selectedProcess.carrierName || '-'}</DetailRow>
+                  </DetailList>
+                ) : null}
+              </DetailBlock>
+            ) : null}
             {selectedProcess.processNotes ? (
-              <div className="detail-card">
-                <span className="detail-label">Observações do processo</span>
+              <DetailBlock title="Observações do processo">
                 <p>{selectedProcess.processNotes}</p>
-              </div>
+              </DetailBlock>
             ) : null}
             {isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? (
-              <div className="detail-card">
-                <span className="detail-label">Observações pós-recebimento da carga</span>
+              <DetailBlock title="Observações pós-recebimento da carga">
                 {selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}
                 {selectedProcessPostReceiptImages.length > 0 ? (
                   <div className="post-receipt-image-grid post-receipt-image-grid--detail">
@@ -343,48 +490,7 @@ export default function ProcessDetailView({
                     ))}
                   </div>
                 ) : null}
-              </div>
-            ) : null}
-            <ProcessLicensesDetails process={selectedProcess} />
-            <ProcessArrivalDetails process={selectedProcess} />
-            <ProcessFreeTimeDetails process={selectedProcess} />
-            <ProcessCustomsDetails process={selectedProcess} />
-            {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && (selectedProcess.collectionStatus === 'Coleta Agendada' || selectedProcess.collectionStatus === CD_EN_ROUTE_STATUS) && getCollectionWindows(selectedProcess).length > 0 ? (
-              <div className="detail-card">
-                <span className="detail-label">
-                  {selectedProcess.category === 'FCL' || selectedProcess.category === 'CONSOLIDADO'
-                    ? 'Janelas de coleta por container'
-                    : 'Janela de coleta'}
-                </span>
-                <ul className="process-detail-collection-windows">
-                  {getCollectionWindows(selectedProcess).map((window) => (
-                    <li key={window.id} className="collection-window-card collection-window-card--detail">
-                      <div>
-                        <span className="detail-label">
-                          {getCollectionWindowLabel(window, {
-                            category: selectedProcess.category,
-                            containers: selectedProcess.containers,
-                          })}
-                        </span>
-                        <p>{formatDateTime(window.scheduledAt)}</p>
-                        {window.notes ? <small className="field-hint">{window.notes}</small> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {(isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)) && selectedProcess.collectionStatus ? (
-              <div className="detail-card">
-                <span className="detail-label">Coleta</span>
-                <p>{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</p>
-              </div>
-            ) : null}
-            {isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus) ? (
-              <div className="detail-card">
-                <span className="detail-label">Transportadora</span>
-                <p>{selectedProcess.carrierName || '-'}</p>
-              </div>
+              </DetailBlock>
             ) : null}
             <ProcessReceiptDivergenceDetails process={selectedProcess} />
           </>
@@ -409,7 +515,7 @@ export default function ProcessDetailView({
                 placeholder="Digite o nome comercial do item"
               />
             </label>
-            <div className="process-items-list process-items-list--scroll">
+            <div className="process-items-list">
               {visibleProcessItems.length > 0 ? (
                 visibleProcessItems.map((item) => (
                   <button
@@ -419,8 +525,7 @@ export default function ProcessDetailView({
                     onClick={() => onOpenRelatedItemTab(item.commercialName)}
                   >
                     <div className="process-item-display">
-                      <span className="detail-label">Nome comercial:</span>
-                      <strong>{item.commercialName}</strong>
+                      <strong className="process-item-display__name">{item.commercialName}</strong>
                     </div>
                     <div className="process-item-display process-item-display--quantity">
                       <span className="detail-label">Quantidade:</span>
@@ -508,28 +613,6 @@ export default function ProcessDetailView({
 
         {detailTab === 'history' ? (
           <ProcessHistoryPanel processId={selectedProcess.id} />
-        ) : null}
-
-        {isAdmin ? (
-          <div className="action-row">
-            <button type="button" className="ghost-button" onClick={() => setIsConfirmDeleteOpen(true)} disabled={isSaving}>
-              {isSaving ? <Spinner size={14} /> : null} Excluir processo
-            </button>
-            <ConfirmDialog
-              open={isConfirmDeleteOpen}
-              title="Excluir processo?"
-              message="Esta ação é irreversível e excluirá o processo e todas as suas mensagens."
-              confirmLabel="Excluir"
-              cancelLabel="Cancelar"
-              tone="danger"
-              busy={isSaving}
-              onConfirm={() => {
-                setIsConfirmDeleteOpen(false)
-                onDeleteProcess()
-              }}
-              onCancel={() => setIsConfirmDeleteOpen(false)}
-            />
-          </div>
         ) : null}
       </div>
     </article>
