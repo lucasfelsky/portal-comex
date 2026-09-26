@@ -100,6 +100,11 @@ function renderDetail(props = {}) {
   return render(<ProcessDetailView {...defaultProps} {...props} />)
 }
 
+// UX-6b-3 (passo 6): rotulos viraram `dt` (sem ":") dentro de `DetailRow`.
+function getDefinition(label) {
+  return screen.getByText(label, { selector: 'dt' }).nextElementSibling
+}
+
 describe('ProcessDetailView — card "Transportadora" (aba Processo)', () => {
   it('coleta agendada + carrierName preenchido: mostra rótulo e valor', () => {
     renderDetail({
@@ -250,7 +255,7 @@ describe('ProcessDetailView — card "Chegada" (F17.3a)', () => {
         migratedApproxFields: ['berthedAt'],
       }),
     })
-    expect(screen.getByText(/Atracação:/)).toBeInTheDocument()
+    expect(screen.getByText('Atracação', { selector: 'dt' })).toBeInTheDocument()
     expect(screen.getByText(/\(aprox\.\)/)).toBeInTheDocument()
   })
 
@@ -269,7 +274,7 @@ describe('ProcessDetailView — card "Chegada" (F17.3a)', () => {
     })
     // "Chegada" tambem aparece como rotulo da timeline (F16.5) - filtra so
     // o card (`span.detail-label`).
-    expect(screen.queryByText('Chegada', { selector: 'span.detail-label' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Chegada', { selector: '.detail-block__title' })).not.toBeInTheDocument()
   })
 })
 
@@ -434,9 +439,9 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
         duimpStatus: 'Parametrizada',
       }),
     })
-    expect(screen.getByText('Nº da DUIMP: DU-2026-001')).toBeInTheDocument()
-    expect(screen.getByText(/Registro:/)).toBeInTheDocument()
-    expect(screen.getByText(/Parametrização:/)).toBeInTheDocument()
+    expect(getDefinition('Nº da DUIMP')).toHaveTextContent('DU-2026-001')
+    expect(screen.getByText('Registro', { selector: 'dt' })).toBeInTheDocument()
+    expect(screen.getByText('Parametrização', { selector: 'dt' })).toBeInTheDocument()
   })
 
   it('legado sem data mostra "Registro: sem data (registro antigo)"', () => {
@@ -448,7 +453,7 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
         duimpStatus: 'Aguardando parametrização da DUIMP',
       }),
     })
-    expect(screen.getByText('Registro: sem data (registro antigo)')).toBeInTheDocument()
+    expect(getDefinition('Registro')).toHaveTextContent('sem data (registro antigo)')
   })
 
   it('canal Cinza mostra "Procedimento especial:"', () => {
@@ -463,7 +468,7 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
         customsRequirementNotes: 'procedimento especial X',
       }),
     })
-    expect(screen.getByText('Procedimento especial: procedimento especial X')).toBeInTheDocument()
+    expect(getDefinition('Procedimento especial')).toHaveTextContent('procedimento especial X')
   })
 
   it('canal Vermelho mostra "Conferência agendada para:"', () => {
@@ -478,7 +483,7 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
         customsInspectionScheduledAt: '2026-09-21T09:00',
       }),
     })
-    expect(screen.getByText(/Conferência agendada para:/)).toBeInTheDocument()
+    expect(screen.getByText('Conferência agendada para', { selector: 'dt' })).toBeInTheDocument()
   })
 
   it('sem nenhum dado DUIMP o card nao renderiza', () => {
@@ -486,7 +491,7 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
       detailTab: 'process',
       selectedProcess: makeProcess(),
     })
-    expect(screen.queryByText('DUIMP')).not.toBeInTheDocument()
+    expect(screen.queryByText('Aduana (DUIMP)')).not.toBeInTheDocument()
   })
 })
 
@@ -524,7 +529,7 @@ describe('ProcessDetailView — divergência no recebimento / devolução de vaz
         ],
       }),
     })
-    expect(screen.getByText(/vazio devolvido em 10\/09\/2026/)).toBeInTheDocument()
+    expect(screen.getByText(/Devolvido em 10\/09\/2026/)).toBeInTheDocument()
   })
 })
 
@@ -605,5 +610,403 @@ describe('ProcessDetailView — confirmacao ao excluir mensagem (UX-1)', () => {
         within(screen.getByRole('alertdialog')).getByText('Não foi possível excluir a mensagem.')
       ).toBeInTheDocument()
     })
+  })
+})
+
+// UX-6b-3: detalhe pelo fluxo em blocos 1-5 — cabeçalho (nome/status/
+// subtítulo com máscara intacta), menu "Mais ações" (admin, Excluir
+// processo) e ordem dos blocos numerados.
+function makeFullFlowProcess(overrides = {}) {
+  return makeProcess({
+    category: 'FCL',
+    name: 'Processo teste',
+    processNumber: 'PO-1',
+    destination: 'Itajaí',
+    containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'L1', type: '40HC', returnedAt: '' }],
+    grossWeightKg: 1000,
+    shippedAt: '2026-09-01',
+    berthed: true,
+    berthedAt: '2026-09-20T10:00',
+    cargoPresenceInformed: true,
+    cargoPresenceInformedAt: '2026-09-21T10:00',
+    freeTimeDays: 10,
+    duimpNumber: 'DU-1',
+    duimpStatus: 'Parametrizada',
+    parameterizedAt: '2026-09-22T10:00',
+    parameterizationChannel: 'Verde',
+    licenses: [
+      { id: 'LIC-1', agency: 'MAPA', status: 'Deferida', lpcoNumber: '', inspectionScheduledAt: '', deferredAt: '', notes: '' },
+    ],
+    collectionStatus: 'Coleta Agendada',
+    collectionWindows: [{ id: 'W1', containerId: 'CNT-1', scheduledAt: '2026-09-25T09:00:00.000Z', notes: '' }],
+    carrierName: 'Transportadora X',
+    ...overrides,
+  })
+}
+
+describe('ProcessDetailView — cabeçalho, máscara e status (UX-6b-3)', () => {
+  it('n1: FCL canSeeName true mostra o nome (h2) e o subtitulo modal · PO · destino', () => {
+    renderDetail({
+      canSeeName: true,
+      selectedProcess: makeFullFlowProcess(),
+    })
+    expect(screen.getByRole('heading', { level: 2, name: 'Processo teste' })).toBeInTheDocument()
+    expect(document.querySelector('.process-detail-heading__meta')).toHaveTextContent('FCL · PO: PO-1 · Itajaí')
+  })
+
+  it('n1: FCL canSeeName false mascara o nome no h2 e em todo o DOM', () => {
+    renderDetail({
+      canSeeName: false,
+      selectedProcess: makeFullFlowProcess(),
+    })
+    expect(screen.getByRole('heading', { level: 2, name: 'PO: PO-1' })).toBeInTheDocument()
+    expect(screen.queryByText('Processo teste')).not.toBeInTheDocument()
+  })
+
+  it('n1: CONSOLIDADO canSeeName false mostra o nome (categoria nao restrita)', () => {
+    renderDetail({
+      canSeeName: false,
+      selectedProcess: makeFullFlowProcess({ category: 'CONSOLIDADO', processNumber: '' }),
+    })
+    expect(screen.getByRole('heading', { level: 2, name: 'Processo teste' })).toBeInTheDocument()
+  })
+
+  it('n2: badge do cabecalho usa getDisplayedProcessStatus (nao o quick-read de coleta)', () => {
+    renderDetail({ selectedProcess: makeFullFlowProcess({ processStatus: 'Coleta Agendada' }) })
+    const heading = document.querySelector('.process-detail-view > .process-detail-card-heading')
+    expect(within(heading).getByText('Coleta agendada')).toBeInTheDocument()
+  })
+
+  it('n2: aba Processo nao mostra mais o card solto "Status do processo"', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
+    expect(screen.queryByText('Status do processo')).not.toBeInTheDocument()
+  })
+
+  it('n2: aba Detalhes gerais nao mostra mais "Categoria" nem "Processo"', () => {
+    renderDetail({ detailTab: 'general', selectedProcess: makeFullFlowProcess() })
+    expect(screen.queryByText('Categoria')).not.toBeInTheDocument()
+    expect(screen.queryByText('Processo', { selector: 'span.detail-label' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — ordem dos blocos numerados 1-5 (UX-6b-3 D6/D7)', () => {
+  it('n3: ordem Carga/Embarque/Chegada/Aduana/Anuências/Coleta com step 1..5', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
+    const titles = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+    expect(titles.slice(0, 7)).toEqual([
+      'Carga',
+      'Embarque e trânsito',
+      'Chegada',
+      'Free time',
+      'Aduana (DUIMP)',
+      'Anuências',
+      'Coleta',
+    ])
+    const steps = Array.from(document.querySelectorAll('.detail-block__step')).map((el) => el.textContent)
+    expect(steps).toEqual(['1', '2', '3', '4', '5'])
+  })
+
+  it('n3: sem DUIMP e com anuencia, o bloco "Anuências" herda o step 4', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({
+        duimpNumber: '',
+        duimpStatus: '',
+        duimpRegisteredAt: '',
+        parameterizedAt: '',
+        parameterizationChannel: '',
+        clearanceCompletedAt: '',
+      }),
+    })
+    const licensesHeading = screen.getByRole('heading', { level: 3, name: 'Anuências' })
+    const step = licensesHeading.closest('.detail-block').querySelector('.detail-block__step')
+    expect(step).toHaveTextContent('4')
+  })
+})
+
+describe('ProcessDetailView — bloco "Carga" (UX-6b-3 D7.1)', () => {
+  it('n4: tipo do container por extenso, sem card solto de quantidade, e Pallets presente', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
+    expect(screen.getByText("40' High Cube")).toBeInTheDocument()
+    expect(screen.queryByText('Quantidade de containers')).not.toBeInTheDocument()
+    expect(getDefinition('Pallets')).toBeInTheDocument()
+  })
+
+  it('n4: legado sem containers[] com containerQuantity mostra "Contêineres" via dl', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({ containers: undefined, containerQuantity: 2 }),
+    })
+    expect(getDefinition('Contêineres')).toHaveTextContent('2 containers')
+  })
+})
+
+describe('ProcessDetailView — DUIMP neutra (UX-6b-3 D7.4)', () => {
+  it('n5: canal Verde vira badge "Canal Verde" (inline-badge--ok), bloco sem detail-card--success', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess(),
+    })
+    const badge = screen.getByText('Canal Verde')
+    expect(badge).toHaveClass('inline-badge--ok')
+    const block = badge.closest('.detail-block')
+    expect(block).not.toHaveClass('detail-card--success')
+  })
+})
+
+describe('ProcessDetailView — Free time vencido em --danger-50 (UX-6b-3 F2)', () => {
+  it('n6: prazo vencido marca o bloco com detail-block--danger; waiting-presence nao', () => {
+    const today = new Date()
+    const presenceDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 10)
+    const presenceIso = `${presenceDate.getFullYear()}-${String(presenceDate.getMonth() + 1).padStart(2, '0')}-${String(presenceDate.getDate()).padStart(2, '0')}T10:00`
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: presenceIso,
+        freeTimeDays: 5,
+      }),
+    })
+    const heading = screen.getByRole('heading', { level: 3, name: 'Free time' })
+    expect(heading.closest('.detail-block')).toHaveClass('detail-block--danger')
+    expect(screen.getByText(/vencido há/)).toBeInTheDocument()
+  })
+
+  it('n6: waiting-presence nao marca o bloco como danger', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({ cargoPresenceInformed: false, cargoPresenceInformedAt: '' }),
+    })
+    const heading = screen.getByRole('heading', { level: 3, name: 'Free time' })
+    expect(heading.closest('.detail-block')).not.toHaveClass('detail-block--danger')
+  })
+})
+
+describe('ProcessDetailView — Anuências com badge de resumo (UX-6b-3 D7.4)', () => {
+  it('n7: 1 Deferida + 1 Indeferida mostra "1 de 2 deferidas" (danger) e badge "Indeferida" (danger)', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({
+        licenses: [
+          { id: 'LIC-1', agency: 'MAPA', status: 'Deferida', lpcoNumber: '', inspectionScheduledAt: '', deferredAt: '', notes: '' },
+          { id: 'LIC-2', agency: 'ANVISA', status: 'Indeferida', lpcoNumber: '', inspectionScheduledAt: '', deferredAt: '', notes: '' },
+        ],
+      }),
+    })
+    const summary = screen.getByText('1 de 2 deferidas')
+    expect(summary).toHaveClass('inline-badge--danger')
+    const statusBadge = screen.getByText('Indeferida')
+    expect(statusBadge).toHaveClass('inline-badge--danger')
+  })
+})
+
+describe('ProcessDetailView — bloco "Coleta" (UX-6b-3 D3/D7.5)', () => {
+  it('n8: badge de status, rotulo de janela + notas visiveis, sem o rotulo antigo "Coleta: "', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({
+        collectionWindows: [
+          { id: 'W1', containerId: 'CNT-1', scheduledAt: '2026-09-25T09:00:00.000Z', notes: 'levar EPI' },
+        ],
+      }),
+    })
+    const heading = screen.getByRole('heading', { level: 3, name: 'Coleta' })
+    const block = heading.closest('.detail-block')
+    expect(within(block).getByText('Coleta Agendada')).toBeInTheDocument()
+    expect(within(block).getByText('levar EPI')).toBeInTheDocument()
+    expect(screen.queryByText(/^Coleta: /)).not.toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — timeline (UX-6b-3 D5)', () => {
+  it('n9: "Coleta Agendada" mostra 4 nos concluidos e o 5o em --now (sem --done)', () => {
+    renderDetail({ selectedProcess: makeFullFlowProcess({ processStatus: 'Coleta Agendada' }) })
+    const nodes = document.querySelectorAll('.process-timeline__node')
+    const done = document.querySelectorAll('.process-timeline__node--done')
+    const now = document.querySelectorAll('.process-timeline__node--now')
+    expect(nodes).toHaveLength(5)
+    expect(done).toHaveLength(4)
+    expect(now).toHaveLength(1)
+    expect(now[0]).not.toHaveClass('process-timeline__node--done')
+  })
+
+  it('n9: "Carga recebida" mostra 5 nos concluidos e 0 em --now', () => {
+    renderDetail({ selectedProcess: makeFullFlowProcess({ processStatus: 'Carga recebida' }) })
+    expect(document.querySelectorAll('.process-timeline__node--done')).toHaveLength(5)
+    expect(document.querySelectorAll('.process-timeline__node--now')).toHaveLength(0)
+  })
+})
+
+describe('ProcessDetailView — menu "Mais ações" / Excluir processo (UX-6b-3 D1/D4, UX-1 intacto)', () => {
+  it('n10: isAdmin false nao mostra o gatilho "Mais ações"', () => {
+    renderDetail({ isAdmin: false, selectedProcess: makeFullFlowProcess() })
+    expect(screen.queryByRole('button', { name: 'Mais ações' })).not.toBeInTheDocument()
+  })
+
+  it('n10: isAdmin true abre/fecha o menu, exclui com confirmacao e cancela sem excluir', async () => {
+    const user = userEvent.setup()
+    const onDeleteProcess = vi.fn()
+    renderDetail({ isAdmin: true, selectedProcess: makeFullFlowProcess(), onDeleteProcess })
+
+    const trigger = screen.getByRole('button', { name: 'Mais ações' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    const menuItem = screen.getByRole('menuitem', { name: 'Excluir processo' })
+    expect(menuItem).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    await user.click(document.body)
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('menuitem', { name: 'Excluir processo' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText('Excluir processo?')).toBeInTheDocument()
+    expect(onDeleteProcess).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(onDeleteProcess).not.toHaveBeenCalled()
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('menuitem', { name: 'Excluir processo' }))
+    const dialog2 = await screen.findByRole('alertdialog')
+    await user.click(within(dialog2).getByRole('button', { name: 'Excluir' }))
+    expect(onDeleteProcess).toHaveBeenCalledTimes(1)
+  })
+
+  it('n10: isSaving true desabilita o menuitem "Excluir processo"', async () => {
+    const user = userEvent.setup()
+    renderDetail({ isAdmin: true, isSaving: true, selectedProcess: makeFullFlowProcess() })
+    await user.click(screen.getByRole('button', { name: 'Mais ações' }))
+    expect(screen.getByRole('menuitem', { name: /Excluir processo/ })).toBeDisabled()
+  })
+})
+
+describe('ProcessDetailView — ações por role no cabecalho (UX-6b-3 D3)', () => {
+  it('n11: isAdmin chama onEditMode; canEditSelectedCollectionStatus/canEditPostReceiptNotes mostram os botoes', () => {
+    const onEditMode = vi.fn()
+    renderDetail({
+      isAdmin: true,
+      canEditSelectedCollectionStatus: true,
+      onEditMode,
+      selectedProcess: makeFullFlowProcess(),
+    })
+    screen.getByRole('button', { name: 'Editar processo' }).click()
+    expect(onEditMode).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Status de coleta' })).toBeInTheDocument()
+  })
+
+  it('n11: canEditPostReceiptNotes + Carga recebida mostra "Editar observações"', () => {
+    renderDetail({
+      canEditPostReceiptNotes: true,
+      selectedProcess: makeFullFlowProcess({ processStatus: 'Carga recebida' }),
+    })
+    expect(screen.getByRole('button', { name: 'Editar observações' })).toBeInTheDocument()
+  })
+
+  it('n11: usuario comum nao ve os 3 botoes admin, e Favoritar/Desfavoritar chama onToggleFavorite', () => {
+    const onToggleFavorite = vi.fn()
+    const { rerender } = renderDetail({
+      isAdmin: false,
+      onToggleFavorite,
+      selectedProcess: makeFullFlowProcess({ id: 'p-1' }),
+    })
+    expect(screen.queryByRole('button', { name: 'Editar processo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Status de coleta' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar observações' })).not.toBeInTheDocument()
+    screen.getByRole('button', { name: 'Favoritar' }).click()
+    expect(onToggleFavorite).toHaveBeenCalledWith('p-1')
+
+    rerender(
+      <ProcessDetailView
+        {...{
+          selectedProcess: makeFullFlowProcess({ id: 'p-1' }),
+          detailTab: 'process',
+          isAdmin: false,
+          isSaving: false,
+          favoriteProcessIds: ['p-1'],
+          canEditPostReceiptNotes: false,
+          canEditSelectedCollectionStatus: false,
+          itemSearchTerm: '',
+          selectedItemName: '',
+          processMessages: [],
+          isLoadingMessages: false,
+          messageDraft: '',
+          deletingMessageId: '',
+          isSendingMessage: false,
+          messageLimitReached: false,
+          remainingMessages: 0,
+          hasUnlimitedMessages: false,
+          visibleProcessItems: [],
+          relatedActiveProcesses: [],
+          selectedProcessPostReceiptImages: [],
+          profile: { name: 'Teste' },
+          itemsSectionRef: { current: null },
+          onDetailTabChange: vi.fn(),
+          onSetItemSearchTerm: vi.fn(),
+          onMessageDraftChange: vi.fn(),
+          onOpenRelatedItemTab: vi.fn(),
+          onOpenProcessDetail: vi.fn(),
+          onToggleFavorite,
+          onSetViewModeList: vi.fn(),
+          onEditMode: vi.fn(),
+          onPostReceiptEditMode: vi.fn(),
+          onCollectionStatusEditMode: vi.fn(),
+          onOpenPostReceiptGallery: vi.fn(),
+          onDeleteProcess: vi.fn(),
+          onSendMessage: vi.fn(),
+          onDeleteMessage: vi.fn(),
+        }}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Desfavoritar' })).toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — aba Itens sem altura fixa e sem "Nome comercial:" (UX-6b-3 D9)', () => {
+  it('n12: detailTab items nao tem process-items-list--scroll nem o rotulo "Nome comercial:"', () => {
+    const { container } = renderDetail({
+      detailTab: 'items',
+      selectedProcess: makeFullFlowProcess(),
+      visibleProcessItems: [{ id: 'i1', commercialName: 'Item A', quantity: 2 }],
+    })
+    expect(container.querySelector('.process-items-list--scroll')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nome comercial:')).not.toBeInTheDocument()
+    expect(screen.getByText('Item A')).toBeInTheDocument()
+  })
+
+  it('n12: detailTab related-item continua com process-items-list--scroll', () => {
+    const { container } = renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Item A',
+      selectedProcess: makeFullFlowProcess(),
+      relatedActiveProcesses: [],
+    })
+    expect(container.querySelector('.process-items-list--scroll')).toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — fotos pos-recebimento (UX-6b-3, D7 sem numero)', () => {
+  it('n13: clicar na foto chama onOpenPostReceiptGallery(0)', async () => {
+    const user = userEvent.setup()
+    const onOpenPostReceiptGallery = vi.fn()
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({ processStatus: 'Carga recebida', postReceiptNotes: 'nota' }),
+      selectedProcessPostReceiptImages: [{ id: 'img1', url: 'x', name: 'foto.jpg', size: 10 }],
+      onOpenPostReceiptGallery,
+    })
+    await user.click(screen.getByRole('button', { name: /foto\.jpg/ }))
+    expect(onOpenPostReceiptGallery).toHaveBeenCalledWith(0)
   })
 })

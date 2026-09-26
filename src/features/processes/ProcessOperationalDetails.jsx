@@ -1,4 +1,4 @@
-import { getContainerSpecialBadges } from './containers'
+import { CONTAINER_TYPE_OPTIONS, getContainerSpecialBadges } from './containers'
 import {
   getImoClassLabel,
   getItemDangerousGoodsLabel,
@@ -6,7 +6,7 @@ import {
   isLegacyProcessDangerousGoods,
 } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
-import { getEffectiveLicenses } from './licenses'
+import { getEffectiveLicenses, isLicenseDeferred, isLicenseRejected } from './licenses'
 import { formatDateTime } from '../../utils/dateFormat'
 import {
   isApproxDate,
@@ -19,7 +19,6 @@ import {
   isLegacyParameterizedWithoutDate,
 } from './arrivalCustoms'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
-import { getChannelToneClass } from './processStatusView'
 import { hasReceiptDivergence } from './receiptDivergence'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
@@ -28,13 +27,20 @@ import { hasReceiptDivergence } from './receiptDivergence'
 // (`ProcessArrivalDetails`/`ProcessFreeTimeDetails`).
 // F17.3b (D-14): card "DUIMP" completo (`ProcessCustomsDetails`).
 // F17.4b (B-4/B-7): card "Divergência no recebimento"
-// (`ProcessReceiptDivergenceDetails`) + "vazio devolvido em dd/mm/aaaa" na
-// lista de contêineres.
-// Regra de import (D-11/D-12/D-14): so' `./containers`, `./operationalOptions`,
-// `./processLabels` (so' `canShowProcessName`), `./licenses`,
-// `../../utils/dateFormat` (so' `formatDateTime`), `./arrivalCustoms`,
-// `./processCategories`, `./processStatusView` (so' `getChannelToneClass`),
-// `./receiptDivergence` (so' `hasReceiptDivergence`).
+// (`ProcessReceiptDivergenceDetails`) + "Devolvido em dd/mm/aaaa" na
+// tabela de contêineres.
+// UX-6b-3 (D6/D7): blocos numerados 1-5 (`DetailBlock`/`DetailList`/
+// `DetailRow`), tabela de contêineres (`ProcessCargoDetails`) e bloco
+// "Embarque e trânsito" (`ProcessTransitDetails`) — substituem
+// `ProcessCargoTransitDetails`.
+// Regra de import (D-11/D-12/D-14/UX-6b-3): so' `./containers` (inclusive
+// `CONTAINER_TYPE_OPTIONS`), `./operationalOptions`, `./processLabels`
+// (so' `canShowProcessName`), `./licenses` (inclusive `isLicenseDeferred`/
+// `isLicenseRejected`), `../../utils/dateFormat` (so' `formatDateTime`),
+// `./arrivalCustoms`, `./processCategories`, `./receiptDivergence` (so'
+// `hasReceiptDivergence`). A funcao de tom de canal de `./processStatusView`
+// NAO e' mais importada aqui: a DUIMP virou neutra (canal e' badge, nao
+// card colorido) — a funcao continua exportada la' pro Dashboard.
 //
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
@@ -52,39 +58,120 @@ function formatDeferredAt(value) {
   return formatDate(value)
 }
 
-// F17.2b (D-6): card "Anuências" - so' quando ha' anuencia efetiva (leitura
+// UX-6b-3 (D6): primitivas presentacionais dos blocos numerados 1-5. Sem
+// arquivo novo (D12) — vivem aqui porque `ProcessDetailView.jsx` tambem as
+// usa (bloco 5 "Coleta", montado no pai).
+export function DetailBlock({ step, title, badges, tone, wide, className, children }) {
+  const classes = [
+    'detail-card',
+    'detail-block',
+    wide ? 'detail-block--wide' : null,
+    tone ? `detail-block--${tone}` : null,
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <section className={classes}>
+      <div className="detail-block__head">
+        {step ? (
+          <span className="detail-block__step" aria-hidden="true">
+            {step}
+          </span>
+        ) : null}
+        <h3 className="detail-block__title">{title}</h3>
+        {badges}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+export function DetailList({ children }) {
+  return <dl className="detail-dl">{children}</dl>
+}
+
+export function DetailRow({ label, children }) {
+  return (
+    <div className="detail-dl__row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
+// UX-6b-3 (D6): predicados puros de "tem conteudo" — extraidos dos proprios
+// componentes de leitura, e reusados pelo pai (`ProcessDetailView.jsx`) pra
+// decidir a numeracao (Chegada `step=3` OU Free time `step=3` se Chegada nao
+// renderiza; Aduana `step=4` OU Anuências `step=4` se Aduana nao renderiza).
+export function hasArrivalDetails(process) {
+  const isMaritime = isMaritimeCategory(process?.category)
+  const isAir = isAirCategory(process?.category)
+  if (!isMaritime && !isAir) return false
+
+  const hasArrival = hasArrivalSignal(process)
+  const hasDtaContent =
+    isAir && (process?.dtaStatus || process?.dtaLoadingScheduledAt || process?.dtaArrivalAtItajai)
+
+  return Boolean(hasArrival || process?.ceMercante || process?.ceHouse || process?.terminalName || hasDtaContent)
+}
+
+export function hasCustomsDetails(process) {
+  const isMaritime = isMaritimeCategory(process?.category)
+  const isAir = isAirCategory(process?.category)
+  if (!isMaritime && !isAir) return false
+
+  return Boolean(
+    process?.duimpStatus ||
+      process?.duimpNumber ||
+      process?.duimpRegisteredAt ||
+      process?.parameterizedAt ||
+      process?.clearanceCompletedAt
+  )
+}
+
+// F17.2b (D-6): bloco "Anuências" - so' quando ha' anuencia efetiva (leitura
 // visivel a todos os aprovados, anuencia nao identifica o processo).
-export function ProcessLicensesDetails({ process }) {
+export function ProcessLicensesDetails({ process, step }) {
   const licenses = getEffectiveLicenses(process)
 
   if (licenses.length === 0) return null
 
+  const deferidasCount = licenses.filter((license) => isLicenseDeferred(license?.status)).length
+  const hasRejected = licenses.some((license) => isLicenseRejected(license?.status))
+  const allDeferred = licenses.every((license) => isLicenseDeferred(license?.status))
+  const summaryTone = hasRejected ? 'inline-badge--danger' : allDeferred ? 'inline-badge--ok' : 'inline-badge--warn'
+  const summaryBadge = (
+    <span className={`inline-badge ${summaryTone}`}>{`${deferidasCount} de ${licenses.length} deferidas`}</span>
+  )
+
   return (
-    <div className="detail-card">
-      <span className="detail-label">Anuências</span>
-      <ul className="detail-stack detail-stack--compact">
-        {licenses.map((license) => (
-          <li key={license.id}>
-            <p>
-              {[license.agency, license.lpcoNumber ? `LPCO ${license.lpcoNumber}` : null, license.status]
-                .filter(Boolean)
-                .join(' · ')}
-              {license.status === 'Indeferida' ? (
-                <>
-                  {' '}
-                  <span className="inline-badge inline-badge--danger">Indeferida</span>
-                </>
+    <DetailBlock step={step} title="Anuências" badges={summaryBadge}>
+      <div className="detail-stack detail-stack--compact">
+        {licenses.map((license) => {
+          const statusTone = isLicenseRejected(license?.status)
+            ? 'inline-badge--danger'
+            : isLicenseDeferred(license?.status)
+              ? 'inline-badge--ok'
+              : ''
+          return (
+            <div className="detail-block__row" key={license.id}>
+              <p>
+                <strong>{license.agency}</strong>
+                {license.lpcoNumber ? ` LPCO ${license.lpcoNumber}` : ''}{' '}
+                <span className={`inline-badge ${statusTone}`.trim()}>{license.status}</span>
+              </p>
+              {license.inspectionScheduledAt ? (
+                <p>Vistoria agendada: {formatDateTime(license.inspectionScheduledAt)}</p>
               ) : null}
-            </p>
-            {license.inspectionScheduledAt ? (
-              <p>Vistoria agendada: {formatDateTime(license.inspectionScheduledAt)}</p>
-            ) : null}
-            {license.deferredAt ? <p>Deferida em: {formatDeferredAt(license.deferredAt)}</p> : null}
-            {license.notes ? <p>{license.notes}</p> : null}
-          </li>
-        ))}
-      </ul>
-    </div>
+              {license.deferredAt ? <p>Deferida em: {formatDeferredAt(license.deferredAt)}</p> : null}
+              {license.notes ? <p>{license.notes}</p> : null}
+            </div>
+          )
+        })}
+      </div>
+    </DetailBlock>
   )
 }
 
@@ -111,14 +198,107 @@ export function ProcessIdentificationDetails({ process, canSeeName }) {
   )
 }
 
-export function ProcessCargoTransitDetails({ process }) {
+// UX-6b-3 (D7.1): bloco "Carga" (step 1, sempre renderiza — pallets sempre
+// aparece hoje). Tabela de contêineres (Contêiner | Tipo | Lacre | Devolução
+// do vazio) + pesos/cubagem/volumes/pallets + "Contêineres" (legado, so'
+// quando `containers[]` esta vazio e a categoria mostra quantidade) + linha
+// IMO por item perigoso (mais o legado do processo).
+export function ProcessCargoDetails({ process, showContainerQuantity }) {
   const containers = Array.isArray(process?.containers) ? process.containers : []
   const specialBadges = getContainerSpecialBadges(containers)
-  const hasWeights =
-    process?.grossWeightKg > 0 ||
-    process?.volumeM3 > 0 ||
-    process?.chargeableWeightKg > 0 ||
-    process?.packagesQuantity > 0
+  const isDangerous = hasDangerousGoods(process)
+
+  const badges = (
+    <>
+      {specialBadges.map((badge) => (
+        <span key={badge} className="inline-badge inline-badge--warn">
+          {badge}
+        </span>
+      ))}
+      {isDangerous ? <span className="inline-badge inline-badge--danger">Carga perigosa</span> : null}
+    </>
+  )
+
+  const dangerousItems = (Array.isArray(process?.items) ? process.items : []).filter(
+    (item) => item?.dangerousGoods === true
+  )
+
+  return (
+    <DetailBlock step={1} title="Carga" wide badges={badges}>
+      {containers.length > 0 ? (
+        <div className="detail-table__scroll">
+          <table className="detail-table" aria-label="Contêineres">
+            <thead>
+              <tr>
+                <th scope="col">Contêiner</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Lacre</th>
+                <th scope="col">Devolução do vazio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {containers.map((container) => (
+                <tr key={container.id}>
+                  <td>{container.number || 'Sem número'}</td>
+                  <td>
+                    {CONTAINER_TYPE_OPTIONS.find((option) => option.value === container.type)?.label ??
+                      container.type ??
+                      '—'}
+                  </td>
+                  <td>{container.seal || '—'}</td>
+                  <td>
+                    {container.returnedAt ? (
+                      <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      <DetailList>
+        {process?.grossWeightKg > 0 ? <DetailRow label="Peso bruto">{`${process.grossWeightKg} kg`}</DetailRow> : null}
+        {process?.volumeM3 > 0 ? <DetailRow label="Cubagem">{`${process.volumeM3} m³`}</DetailRow> : null}
+        {process?.chargeableWeightKg > 0 ? (
+          <DetailRow label="Peso taxado">{`${process.chargeableWeightKg} kg`}</DetailRow>
+        ) : null}
+        {process?.packagesQuantity > 0 ? <DetailRow label="Volumes">{process.packagesQuantity}</DetailRow> : null}
+        <DetailRow label="Pallets">{formatCargoUnit(process?.palletQuantity, 'pallet', 'pallets')}</DetailRow>
+        {containers.length === 0 && showContainerQuantity ? (
+          <DetailRow label="Contêineres">{formatCargoUnit(process?.containerQuantity, 'container', 'containers')}</DetailRow>
+        ) : null}
+        {dangerousItems.map((item) => (
+          <DetailRow key={item.id} label="IMO">
+            {`${item.commercialName || 'Item sem nome'}: ${getItemDangerousGoodsLabel(item)}`}
+          </DetailRow>
+        ))}
+        {isLegacyProcessDangerousGoods(process) ? (
+          <DetailRow label="IMO">
+            {`Cadastro antigo do processo: ${
+              [
+                process?.unNumber ? `ONU ${process.unNumber}` : null,
+                process?.imoClass ? `Classe ${getImoClassLabel(process.imoClass)}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || 'sem número ONU/classe registrados'
+            }`}
+          </DetailRow>
+        ) : null}
+      </DetailList>
+    </DetailBlock>
+  )
+}
+
+function formatCargoUnit(quantity, singularLabel, pluralLabel) {
+  return `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
+}
+
+// UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal
+// de embarque ou transbordo).
+export function ProcessTransitDetails({ process }) {
   const hasTransit =
     process?.shippedAt ||
     process?.vesselName ||
@@ -129,176 +309,81 @@ export function ProcessCargoTransitDetails({ process }) {
     process?.mawb ||
     process?.hawb
 
+  if (!hasTransit && !process?.transshipment) return null
+
   return (
-    <>
-      {containers.length > 0 ? (
-        <div className="detail-card">
-          <div className="card-heading process-detail-card-heading">
-            <span className="detail-label">Contêineres</span>
-            {specialBadges.map((badge) => (
-              <span key={badge} className="inline-badge inline-badge--warn">
-                {badge}
-              </span>
-            ))}
-          </div>
-          <ul className="detail-stack detail-stack--compact">
-            {containers.map((container) => (
-              <li key={container.id}>
-                {[container.number || 'Sem número', container.seal || 'sem lacre', container.type || 'sem tipo']
-                  .join(' · ')}
-                {container.returnedAt ? ` · vazio devolvido em ${formatDate(container.returnedAt)}` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {hasWeights ? (
-        <div className="detail-card detail-card--split">
-          {process?.grossWeightKg > 0 ? (
-            <div>
-              <span className="detail-label">Peso bruto</span>
-              <p>{process.grossWeightKg} kg</p>
-            </div>
-          ) : null}
-          {process?.volumeM3 > 0 ? (
-            <div>
-              <span className="detail-label">Cubagem</span>
-              <p>{process.volumeM3} m³</p>
-            </div>
-          ) : null}
-          {process?.chargeableWeightKg > 0 ? (
-            <div>
-              <span className="detail-label">Peso taxado</span>
-              <p>{process.chargeableWeightKg} kg</p>
-            </div>
-          ) : null}
-          {process?.packagesQuantity > 0 ? (
-            <div>
-              <span className="detail-label">Volumes</span>
-              <p>{process.packagesQuantity}</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {hasDangerousGoods(process) ? (
-        <div className="detail-card">
-          <span className="detail-label">Carga perigosa</span>
-          <div className="detail-stack detail-stack--compact">
-            {(Array.isArray(process?.items) ? process.items : [])
-              .filter((item) => item?.dangerousGoods === true)
-              .map((item) => (
-                <p key={item.id}>
-                  {item.commercialName || 'Item sem nome'}: {getItemDangerousGoodsLabel(item)}
-                </p>
-              ))}
-            {isLegacyProcessDangerousGoods(process) ? (
-              <p>
-                Cadastro antigo do processo:{' '}
-                {[
-                  process?.unNumber ? `ONU ${process.unNumber}` : null,
-                  process?.imoClass ? `Classe ${getImoClassLabel(process.imoClass)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ') || 'sem número ONU/classe registrados'}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {hasTransit ? (
-        <div className="detail-card">
-          <span className="detail-label">Embarque e trânsito</span>
-          <div className="detail-stack detail-stack--compact">
-            {process?.shippedAt ? <p>Data de embarque: {formatDate(process.shippedAt)}</p> : null}
-            {process?.vesselName ? <p>Navio: {process.vesselName}</p> : null}
-            {process?.voyage ? <p>Viagem: {process.voyage}</p> : null}
-            {process?.flightNumber ? <p>Voo: {process.flightNumber}</p> : null}
-            {process?.masterBl ? <p>MBL: {process.masterBl}</p> : null}
-            {process?.houseBl ? <p>HBL: {process.houseBl}</p> : null}
-            {process?.mawb ? <p>MAWB: {process.mawb}</p> : null}
-            {process?.hawb ? <p>HAWB: {process.hawb}</p> : null}
-          </div>
-        </div>
-      ) : null}
-
-      {process?.transshipment ? (
-        <div className="detail-card">
-          <span className="detail-label">Transbordo</span>
-          <p>
-            {process?.transshipmentPort ? `Sim — ${process.transshipmentPort}` : 'Sim'}
-            {process?.transshipmentEtd ? ` · ETD ${formatDate(process.transshipmentEtd)}` : ''}
-          </p>
-        </div>
-      ) : null}
-    </>
+    <DetailBlock step={2} title="Embarque e trânsito" wide>
+      <DetailList>
+        {process?.shippedAt ? <DetailRow label="Data de embarque">{formatDate(process.shippedAt)}</DetailRow> : null}
+        {process?.vesselName ? <DetailRow label="Navio">{process.vesselName}</DetailRow> : null}
+        {process?.voyage ? <DetailRow label="Viagem">{process.voyage}</DetailRow> : null}
+        {process?.flightNumber ? <DetailRow label="Voo">{process.flightNumber}</DetailRow> : null}
+        {process?.masterBl ? <DetailRow label="MBL">{process.masterBl}</DetailRow> : null}
+        {process?.houseBl ? <DetailRow label="HBL">{process.houseBl}</DetailRow> : null}
+        {process?.mawb ? <DetailRow label="MAWB">{process.mawb}</DetailRow> : null}
+        {process?.hawb ? <DetailRow label="HAWB">{process.hawb}</DetailRow> : null}
+        {process?.transshipment ? (
+          <DetailRow label="Transbordo">
+            {`${process?.transshipmentPort ? `Sim — ${process.transshipmentPort}` : 'Sim'}${process?.transshipmentEtd ? ` · ETD ${formatDate(process.transshipmentEtd)}` : ''}`}
+          </DetailRow>
+        ) : null}
+      </DetailList>
+    </DetailBlock>
   )
 }
 
-// F17.3a (D-12): card "Chegada" - atracacao/chegada com data (aprox. quando
+// F17.3a (D-12): bloco "Chegada" - atracacao/chegada com data (aprox. quando
 // migrada), CE/terminal, DTA (aereo) e presenca de carga com data. So'
 // renderiza se ha algum dado (visivel a todos os aprovados).
-export function ProcessArrivalDetails({ process }) {
+export function ProcessArrivalDetails({ process, step }) {
+  if (!hasArrivalDetails(process)) return null
+
   const isMaritime = isMaritimeCategory(process?.category)
   const isAir = isAirCategory(process?.category)
-  if (!isMaritime && !isAir) return null
-
   const hasArrival = hasArrivalSignal(process)
   const hasPresence = hasCargoPresenceSignal(process)
   const arrivalField = isMaritime ? 'berthedAt' : 'arrivedAt'
   const arrivalValue = isMaritime ? process?.berthedAt : process?.arrivedAt
   const isApprox = isApproxDate(process, arrivalField)
 
-  const hasDtaContent =
-    isAir && (process?.dtaStatus || process?.dtaLoadingScheduledAt || process?.dtaArrivalAtItajai)
-
-  const hasContent =
-    hasArrival || process?.ceMercante || process?.ceHouse || process?.terminalName || hasDtaContent
-
-  if (!hasContent) return null
-
   return (
-    <div className="detail-card">
-      <span className="detail-label">Chegada</span>
-      <div className="detail-stack detail-stack--compact">
+    <DetailBlock step={step} title="Chegada">
+      <DetailList>
         {hasArrival ? (
-          <p>
-            {isMaritime ? 'Atracação:' : 'Chegada:'}{' '}
+          <DetailRow label={isMaritime ? 'Atracação' : 'Chegada'}>
             {hasDateValue(arrivalValue)
               ? `${formatDateTime(arrivalValue)}${isApprox ? ' (aprox.)' : ''}`
               : 'Confirmada (sem data)'}
-          </p>
+          </DetailRow>
         ) : null}
-        {process?.ceMercante ? <p>CE Mercante: {process.ceMercante}</p> : null}
-        {process?.ceHouse ? <p>CE house: {process.ceHouse}</p> : null}
-        {process?.terminalName ? <p>Terminal / armazém: {process.terminalName}</p> : null}
-        {isAir && process?.dtaStatus ? <p>DTA: {process.dtaStatus}</p> : null}
+        {process?.ceMercante ? <DetailRow label="CE Mercante">{process.ceMercante}</DetailRow> : null}
+        {process?.ceHouse ? <DetailRow label="CE house">{process.ceHouse}</DetailRow> : null}
+        {process?.terminalName ? <DetailRow label="Terminal / armazém">{process.terminalName}</DetailRow> : null}
+        {isAir && process?.dtaStatus ? <DetailRow label="DTA">{process.dtaStatus}</DetailRow> : null}
         {isAir && process?.dtaLoadingScheduledAt ? (
-          <p>Carregamento DTA: {formatDateTime(process.dtaLoadingScheduledAt)}</p>
+          <DetailRow label="Carregamento DTA">{formatDateTime(process.dtaLoadingScheduledAt)}</DetailRow>
         ) : null}
         {isAir && process?.dtaArrivalAtItajai ? (
-          <p>Chegada prevista em Itajaí: {formatDateTime(process.dtaArrivalAtItajai)}</p>
+          <DetailRow label="Chegada prevista em Itajaí">{formatDateTime(process.dtaArrivalAtItajai)}</DetailRow>
         ) : null}
         {hasArrival ? (
-          <p>
-            Presença de carga:{' '}
+          <DetailRow label="Presença de carga">
             {hasPresence
               ? hasDateValue(process?.cargoPresenceInformedAt)
                 ? formatDateTime(process.cargoPresenceInformedAt)
                 : 'Informada (sem data)'
               : 'Pendente'}
-          </p>
+          </DetailRow>
         ) : null}
-      </div>
-    </div>
+      </DetailList>
+    </DetailBlock>
   )
 }
 
-// F17.3a (D-12): card "Free time" (FCL/CONSOLIDADO) - prazo de devolucao do
-// vazio (A1: conta da presenca de carga).
-export function ProcessFreeTimeDetails({ process }) {
+// F17.3a (D-12): bloco "Free time" (FCL/CONSOLIDADO) - prazo de devolucao do
+// vazio (A1: conta da presenca de carga). UX-6b-3 (F2): vencido e' o UNICO
+// bloco que muda de cor (`tone="danger"`).
+export function ProcessFreeTimeDetails({ process, step }) {
   const status = getFreeTimeStatus(process)
   if (!status || status.state === 'not-informed') return null
 
@@ -332,101 +417,94 @@ export function ProcessFreeTimeDetails({ process }) {
     }
   }
 
+  const badge = toneClass ? <span className={`inline-badge ${toneClass}`}>{content}</span> : null
+
   return (
-    <div className="detail-card">
-      <span className="detail-label">Free time</span>
-      <div className="detail-stack detail-stack--compact">
-        {toneClass ? (
-          <p><span className={`inline-badge ${toneClass}`}>{content}</span></p>
-        ) : (
-          <p>{content}</p>
-        )}
+    <DetailBlock step={step} title="Free time" badges={badge} tone={status.state === 'overdue' ? 'danger' : undefined}>
+      <DetailList>
+        {!badge ? <DetailRow label="Situação">{content}</DetailRow> : null}
         {process?.demurrageDailyRateUsd != null ? (
-          <p>
-            Diária de demurrage:{' '}
+          <DetailRow label="Diária de demurrage">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' }).format(
               process.demurrageDailyRateUsd
             )}
-          </p>
+          </DetailRow>
         ) : null}
-      </div>
-    </div>
+      </DetailList>
+    </DetailBlock>
   )
 }
 
-// F17.3b (D-14): card "DUIMP" (numero, registro, parametrizacao, canal,
-// conferencia, exigencia/procedimento especial, desembaraco). So' renderiza
-// se maritimo/aereo e ha algum dado preenchido. Visivel a todos os
-// aprovados (nenhum campo identifica o processo; mascara de nome intocada).
-export function ProcessCustomsDetails({ process }) {
-  const isMaritime = isMaritimeCategory(process?.category)
-  const isAir = isAirCategory(process?.category)
-  if (!isMaritime && !isAir) return null
+const CHANNEL_BADGE_TONE = {
+  Verde: 'inline-badge--ok',
+  Amarelo: 'inline-badge--warn',
+  Vermelho: 'inline-badge--danger',
+}
 
-  const hasContent =
-    process?.duimpStatus ||
-    process?.duimpNumber ||
-    process?.duimpRegisteredAt ||
-    process?.parameterizedAt ||
-    process?.clearanceCompletedAt
-
-  if (!hasContent) return null
+// F17.3b (D-14): bloco "Aduana (DUIMP)" (numero, registro, parametrizacao,
+// conferencia, exigencia/procedimento especial, desembaraco). UX-6b-3 (D7.4):
+// DUIMP NEUTRA — o canal vira badge no cabecalho (nao mais card colorido).
+// So' renderiza se maritimo/aereo e ha algum dado preenchido. Visivel a
+// todos os aprovados (nenhum campo identifica o processo; mascara de nome
+// intocada).
+export function ProcessCustomsDetails({ process, step }) {
+  if (!hasCustomsDetails(process)) return null
 
   const channel = process?.parameterizationChannel
   const isCinza = channel === 'Cinza'
   const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(channel)
+  const channelBadge = channel ? (
+    <span className={`inline-badge ${CHANNEL_BADGE_TONE[channel] ?? ''}`.trim()}>{`Canal ${channel}`}</span>
+  ) : null
 
   return (
-    <div className={`detail-card ${getChannelToneClass(channel)}`.trim()}>
-      <span className="detail-label">DUIMP</span>
-      <div className="detail-stack detail-stack--compact">
-        {process?.duimpStatus ? <p>Status: {process.duimpStatus}</p> : null}
-        {process?.duimpNumber ? <p>Nº da DUIMP: {process.duimpNumber}</p> : null}
+    <DetailBlock step={step} title="Aduana (DUIMP)" badges={channelBadge}>
+      <DetailList>
+        {process?.duimpStatus ? <DetailRow label="Status">{process.duimpStatus}</DetailRow> : null}
+        {process?.duimpNumber ? <DetailRow label="Nº da DUIMP">{process.duimpNumber}</DetailRow> : null}
         {isLegacyDuimpRegisteredWithoutDate(process) ? (
-          <p>Registro: sem data (registro antigo)</p>
+          <DetailRow label="Registro">sem data (registro antigo)</DetailRow>
         ) : process?.duimpRegisteredAt ? (
-          <p>Registro: {formatDateTime(process.duimpRegisteredAt)}</p>
+          <DetailRow label="Registro">{formatDateTime(process.duimpRegisteredAt)}</DetailRow>
         ) : null}
         {isLegacyParameterizedWithoutDate(process) ? (
-          <p>Parametrização: sem data (registro antigo)</p>
+          <DetailRow label="Parametrização">sem data (registro antigo)</DetailRow>
         ) : process?.parameterizedAt ? (
-          <p>Parametrização: {formatDateTime(process.parameterizedAt)}</p>
+          <DetailRow label="Parametrização">{formatDateTime(process.parameterizedAt)}</DetailRow>
         ) : null}
-        {channel ? <p>Canal da parametrização: {channel}</p> : null}
         {isInspectionChannel && process?.customsInspectionScheduledAt ? (
-          <p>Conferência agendada para: {formatDateTime(process.customsInspectionScheduledAt)}</p>
+          <DetailRow label="Conferência agendada para">
+            {formatDateTime(process.customsInspectionScheduledAt)}
+          </DetailRow>
         ) : null}
         {process?.customsRequirement && !isCinza ? (
-          <p>Exigência: {process?.customsRequirementNotes || 'Sim'}</p>
+          <DetailRow label="Exigência">{process?.customsRequirementNotes || 'Sim'}</DetailRow>
         ) : null}
         {isCinza && process?.customsRequirementNotes ? (
-          <p>Procedimento especial: {process.customsRequirementNotes}</p>
+          <DetailRow label="Procedimento especial">{process.customsRequirementNotes}</DetailRow>
         ) : null}
         {process?.clearanceCompletedAt ? (
-          <p>Desembaraço concluído em: {formatDateTime(process.clearanceCompletedAt)}</p>
+          <DetailRow label="Desembaraço concluído em">{formatDateTime(process.clearanceCompletedAt)}</DetailRow>
         ) : null}
-      </div>
-    </div>
+      </DetailList>
+    </DetailBlock>
   )
 }
 
-// F17.4b (B-4): card "Divergência no recebimento" - visivel a todo aprovado
+// F17.4b (B-4): bloco "Divergência no recebimento" - visivel a todo aprovado
 // que ve o detalhe (mesma regra das observacoes pos-recebimento; nenhum
 // campo identifica o processo).
 export function ProcessReceiptDivergenceDetails({ process }) {
   if (!hasReceiptDivergence(process)) return null
 
   return (
-    <div className="detail-card">
-      <span className="detail-label">Divergência no recebimento</span>
-      <div className="detail-stack detail-stack--compact">
-        <p>
-          <span className="inline-badge inline-badge--danger">
-            {process?.receiptDivergenceType || 'Tipo não informado'}
-          </span>
-        </p>
-        {process?.receiptDivergenceNotes ? <p>{process.receiptDivergenceNotes}</p> : null}
-      </div>
-    </div>
+    <DetailBlock title="Divergência no recebimento">
+      <p>
+        <span className="inline-badge inline-badge--danger">
+          {process?.receiptDivergenceType || 'Tipo não informado'}
+        </span>
+      </p>
+      {process?.receiptDivergenceNotes ? <p>{process.receiptDivergenceNotes}</p> : null}
+    </DetailBlock>
   )
 }
