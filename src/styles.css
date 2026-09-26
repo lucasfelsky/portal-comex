@@ -4357,6 +4357,264 @@ body {
   white-space: nowrap;
 }
 
+/* UX-6b-2 (D11): editores compactos de contêiner/anuência/item/janela -
+   linha unica com cabecalho de colunas (aria-hidden) no desktop >=721px, e 1
+   card centralizado por registro no mobile <=720px (D12). Classes NOVAS,
+   aditivas - `.collection-windows-editor*` (3993-4035) NAO muda, porque
+   `PurchaseOrdersEditor.jsx` tambem usa essas classes. So' tokens. */
+.editor-grid__head {
+  display: none;
+}
+
+.editor-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface);
+}
+
+.editor-row__title {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.editor-row__full {
+  grid-column: 1 / -1;
+}
+
+.editor-row .field,
+.editor-row .editor-switch {
+  text-align: left;
+}
+
+.editor-row__remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.editor-row__meta {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.editor-row--window {
+  display: block;
+}
+
+.editor-row--window .editor-row__title {
+  grid-column: auto;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.editor-row--window .editor-row__remove {
+  position: static;
+  margin-left: auto;
+  display: block;
+}
+
+.editor-chip--saved {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.editor-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link-color);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--fs-subhead);
+}
+
+.editor-link-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.editor-link-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Switch (D6) - o input nativo fica sobre o track (opacity:0), clicavel; o
+   estado real vem do `checked`, nao de `aria-checked` (ARIA in HTML). */
+.editor-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.editor-switch__input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-switch__track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  transition: background-color 150ms;
+  flex-shrink: 0;
+}
+
+.editor-switch__track::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 150ms;
+}
+
+.editor-switch__input:checked + .editor-switch__track {
+  background: var(--primary);
+}
+
+.editor-switch__input:checked + .editor-switch__track::before {
+  transform: translateX(18px);
+  background: var(--on-primary);
+}
+
+.editor-switch__input:focus-visible + .editor-switch__track {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Faixa IMO (F1): fundo `--warning-50`, texto `--warning-700`, nos 2 temas
+   (tokens ja flipam em `:root[data-theme='dark']`). */
+.process-item-editor__imo-band {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+@media (min-width: 721px) {
+  .editor-grid__head {
+    display: grid;
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .editor-grid__head span {
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+  }
+
+  .editor-grid__head--containers,
+  .editor-grid--containers > .editor-row {
+    grid-template-columns: minmax(140px, 1fr) minmax(160px, 1.2fr) minmax(120px, 1fr) 40px;
+  }
+
+  .editor-grid__head--licenses,
+  .editor-grid--licenses > .editor-row {
+    grid-template-columns: minmax(110px, .8fr) minmax(130px, 1fr) minmax(150px, 1fr) minmax(170px, 1.1fr) 40px;
+  }
+
+  .editor-grid__head--items,
+  .editor-grid--items > .editor-row {
+    grid-template-columns: minmax(200px, 2fr) minmax(100px, .8fr) auto 40px;
+  }
+
+  .editor-grid__head--items-po,
+  .editor-grid--items-po > .editor-row {
+    grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) minmax(100px, .8fr) auto 40px;
+  }
+
+  .editor-row {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: none;
+  }
+
+  .editor-row__title {
+    display: none;
+  }
+
+  .editor-row--window .editor-row__title {
+    display: flex;
+  }
+
+  .editor-row__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .editor-row__label--caption {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    order: 1;
+    margin-top: 4px;
+    font-size: var(--fs-footnote);
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-muted);
+  }
+
+  .editor-row__remove {
+    position: static;
+  }
+
+  .process-item-editor__imo-band {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
 /* Conteúdo do passo: mais respiro entre campos que o detail-stack padrão
    (12px), pra um form menos apertado e mais profissional. */
 .wizard-panel {

@@ -447,4 +447,13 @@ describe('guardas estruturais', () => {
     const { body } = extractBlock(css, '.field-hint {')
     expect(body).toContain('text-transform: none')
   })
+
+  // UX-6b-2 (F1): faixa IMO (`.process-item-editor__imo-band`) usa
+  // --warning-50/--warning-700 - o par ja e' verificado >= 4.5:1 nos 2 temas
+  // em "(m)" (309-313).
+  it('(r) ".process-item-editor__imo-band {" contem var(--warning-50) e var(--warning-700)', () => {
+    const { body } = extractBlock(css, '.process-item-editor__imo-band {')
+    expect(body).toContain('var(--warning-50)')
+    expect(body).toContain('var(--warning-700)')
+  })
 })

@@ -1,20 +1,25 @@
 import SelectField from '../../components/SelectField'
+import Icon from '../../components/Icon'
 import {
   CONTAINER_TYPE_OPTIONS,
   MAX_CONTAINERS,
   createEmptyContainer,
   getContainerNumberWarning,
+  getContainerOptionLabel,
   isContainerRemovalLocked,
 } from './containers'
 import { getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.2a (D-11): editor de containers[] - lista editavel (tipo, numero +
 // aviso ISO 6346, lacre, remover) + botao "Adicionar contêiner" (desabilita
-// no teto de 40). So' importa de `./containers` e `SelectField` (D-11 -
-// tests/ui/ProcessesPage.test.jsx mocka modulos com lista fechada).
+// no teto de 40). So' importa de `./containers`, `SelectField` e `Icon`
+// (D-11 - tests/ui/ProcessesPage.test.jsx mocka modulos com lista fechada).
 // F17.2d-2 (D-13, Q8): "Remover" trava quando o contêiner tem coleta
 // AGENDADA (`isContainerRemovalLocked`) - numero/lacre/tipo continuam
 // editaveis.
+// UX-6b-2 (D-1/D-2/D-3): linha unica (grid, cabecalho de colunas no
+// desktop) por contêiner - lixeira vira icone (cadeado quando travada) e o
+// hint de trava fica UNICO acima da lista.
 function generateContainerId() {
   return `CNT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -30,6 +35,10 @@ export default function ContainersEditor({
   const canAddMore = containers.length < MAX_CONTAINERS
   const groupDomId = 'process-field-containers'
   const groupError = errors.containers
+  const lockHintId = 'process-field-containers-lock-hint'
+  const hasLockedContainer = containers.some((container) =>
+    isContainerRemovalLocked(container.id, collectionWindows)
+  )
 
   function handleAdd() {
     onChange([...containers, createEmptyContainer(generateContainerId())])
@@ -73,22 +82,35 @@ export default function ContainersEditor({
         </button>
       </div>
 
+      {hasLockedContainer ? (
+        <small className="field-hint" id={lockHintId}>
+          Contêineres com coleta agendada não podem ser removidos.
+        </small>
+      ) : null}
+
       {containers.length === 0 ? (
         <div className="empty-state" role="status">
           <strong>Nenhum contêiner cadastrado</strong>
           <p>Adicione ao menos um contêiner para este processo.</p>
         </div>
       ) : (
-        <ul className="collection-windows-editor__list">
-          {containers.map((container) => {
-            const warning = getContainerNumberWarning(container.number)
-            const removalLocked = isContainerRemovalLocked(container.id, collectionWindows)
-            const numberHintId = `process-field-containers-${container.id}-number-hint`
-            return (
-              <li key={container.id} className="collection-windows-editor__item">
-                <div className="collection-windows-editor__row">
+        <>
+          <div className="editor-grid__head editor-grid__head--containers" aria-hidden="true">
+            <span>Tipo</span>
+            <span>Número (ISO 6346)</span>
+            <span>Lacre</span>
+            <span />
+          </div>
+          <ul className="collection-windows-editor__list editor-grid editor-grid--containers">
+            {containers.map((container, index) => {
+              const warning = getContainerNumberWarning(container.number)
+              const removalLocked = isContainerRemovalLocked(container.id, collectionWindows)
+              const numberHintId = `process-field-containers-${container.id}-number-hint`
+              return (
+                <li key={container.id} className="editor-row">
+                  <span className="editor-row__title">{getContainerOptionLabel(container, index)}</span>
                   <label className="field">
-                    <span>Tipo</span>
+                    <span className="editor-row__label">Tipo</span>
                     <SelectField
                       className="text-input"
                       value={container.type}
@@ -104,7 +126,7 @@ export default function ContainersEditor({
                     </SelectField>
                   </label>
                   <label className="field">
-                    <span>Número</span>
+                    <span className="editor-row__label">Número</span>
                     <input
                       className="text-input"
                       type="text"
@@ -121,7 +143,7 @@ export default function ContainersEditor({
                     ) : null}
                   </label>
                   <label className="field">
-                    <span>Lacre</span>
+                    <span className="editor-row__label">Lacre</span>
                     <input
                       className="text-input"
                       type="text"
@@ -132,22 +154,20 @@ export default function ContainersEditor({
                   </label>
                   <button
                     type="button"
-                    className="ghost-button collection-windows-editor__remove"
+                    className="action-icon-button editor-row__remove"
                     onClick={() => handleRemove(container.id)}
                     disabled={disabled || removalLocked}
+                    aria-label="Remover"
+                    aria-describedby={removalLocked ? lockHintId : undefined}
+                    title={removalLocked ? 'Coleta agendada: não pode ser removido' : 'Remover contêiner'}
                   >
-                    Remover
+                    <Icon name={removalLocked ? 'lock' : 'trash'} />
                   </button>
-                </div>
-                {removalLocked ? (
-                  <small className="field-hint">
-                    Contêiner com coleta agendada — só pode ser editado.
-                  </small>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
     </div>
   )

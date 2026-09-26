@@ -53,7 +53,7 @@ describe('CollectionWindowsEditor — 1 row por contêiner (F17.2d-2)', () => {
 
   it('observacao fica desabilitada enquanto a row nao tem janela', () => {
     renderEditor()
-    const notes = screen.getAllByLabelText('Observações do container (opcional)')
+    const notes = screen.getAllByLabelText('Observações do contêiner (opcional)')
     expect(notes[0]).toBeDisabled()
     expect(notes[1]).toBeDisabled()
   })
@@ -62,7 +62,7 @@ describe('CollectionWindowsEditor — 1 row por contêiner (F17.2d-2)', () => {
     renderEditor({
       value: [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' }],
     })
-    const notes = screen.getAllByLabelText('Observações do container (opcional)')
+    const notes = screen.getAllByLabelText('Observações do contêiner (opcional)')
     expect(notes[0]).not.toBeDisabled()
     expect(notes[1]).toBeDisabled()
   })
@@ -94,5 +94,87 @@ describe('CollectionWindowsEditor — 1 row por contêiner (F17.2d-2)', () => {
   it('LCL continua com janela unica ("Adicionar janela")', () => {
     renderEditor({ category: 'LCL', containers: [] })
     expect(screen.getByRole('button', { name: 'Adicionar janela' })).toBeInTheDocument()
+  })
+})
+
+// UX-6b-2 (D-7/D-8): chip "Salvo: …" via prop `savedValue`, sem o card
+// "Janela atual".
+describe('CollectionWindowsEditor — chip "Salvo: …" (UX-6b-2)', () => {
+  const SAVED_10H = [{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' }]
+
+  it('(a) savedValue com horario diferente do atual mostra "Salvo:"; igual ou sem savedValue nao mostra', () => {
+    const { rerender } = render(
+      <CollectionWindowsEditor
+        value={[{ id: 'W1', containerId: 'CNT-1', containerNumber: 1, scheduledAt: '2026-07-08T11:00:00.000Z', notes: '' }]}
+        savedValue={SAVED_10H}
+        category="FCL"
+        containers={CONTAINERS}
+        onChange={() => {}}
+      />
+    )
+    expect(screen.getByText(/^Salvo:/)).toBeInTheDocument()
+
+    rerender(
+      <CollectionWindowsEditor
+        value={SAVED_10H}
+        savedValue={SAVED_10H}
+        category="FCL"
+        containers={CONTAINERS}
+        onChange={() => {}}
+      />
+    )
+    expect(screen.queryByText(/^Salvo:/)).not.toBeInTheDocument()
+
+    rerender(
+      <CollectionWindowsEditor
+        value={SAVED_10H}
+        category="FCL"
+        containers={CONTAINERS}
+        onChange={() => {}}
+      />
+    )
+    expect(screen.queryByText(/^Salvo:/)).not.toBeInTheDocument()
+  })
+
+  it('(b) value limpo com savedValue preenchido mostra "Salvo:"', () => {
+    render(
+      <CollectionWindowsEditor
+        value={[]}
+        savedValue={SAVED_10H}
+        category="FCL"
+        containers={CONTAINERS}
+        onChange={() => {}}
+      />
+    )
+    expect(screen.getByText(/^Salvo:/)).toBeInTheDocument()
+  })
+
+  it('(c) hint "Limpar o horário remove a janela." aparece uma unica vez com 2 conteineres', () => {
+    renderEditor()
+    expect(screen.getAllByText('Limpar o horário remove a janela.')).toHaveLength(1)
+  })
+
+  it('(d) LCL mostra o rotulo "Observações da coleta (opcional)"', () => {
+    renderEditor({
+      category: 'LCL',
+      containers: [],
+      value: [{ id: 'W1', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' }],
+    })
+    expect(screen.getByLabelText('Observações da coleta (opcional)')).toBeInTheDocument()
+  })
+
+  it('(e) "Janela atual" nunca aparece, nos 2 modos', () => {
+    renderEditor()
+    expect(screen.queryByText('Janela atual')).not.toBeInTheDocument()
+    renderEditor({ category: 'LCL', containers: [] })
+    expect(screen.queryByText('Janela atual')).not.toBeInTheDocument()
+  })
+
+  it('(f) janela orfa mostra o horario formatado e o botão "Remover"', () => {
+    renderEditor({
+      value: [{ id: 'W1', containerId: 'CNT-REMOVIDO', containerNumber: 1, scheduledAt: '2026-07-08T10:00:00.000Z', notes: '' }],
+    })
+    expect(screen.getByText(/\d{2}\/\d{2}\/\d{4}/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remover' })).toBeInTheDocument()
   })
 })

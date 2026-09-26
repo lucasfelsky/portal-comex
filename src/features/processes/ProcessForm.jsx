@@ -313,6 +313,9 @@ export default function ProcessForm({
   // `shippedAt` (passo "Embarque") e' quem faz o status avancar a partir de
   // "Aguardando Embarque".
   const derivedProcessStatus = deriveProcessStatus(draft)
+  // UX-6b-2 (D-10): calculado UMA vez - usado no texto do badge e no `title`
+  // (pill truncada no cabecalho mobile do wizard).
+  const displayedProcessStatus = getDisplayedProcessStatus(derivedProcessStatus, draft.category)
 
   const renderCargoStep = () => (
     <>
@@ -442,6 +445,15 @@ export default function ProcessForm({
   const hasCollectionContent =
     showCollectionSelect || showCollectionWindows || showCollectionReadOnly || showCarrier || showEmptyReturn
 
+  // UX-6b-2 (D-9): status atual fora das opcoes calculadas (`collectionStatus`
+  // pos-recebimento sem janelas cadastradas) - somar uma `<option disabled>`
+  // com o status atual logo apos o placeholder, so' pra o select nao mostrar
+  // vazio. Opcoes selecionaveis/onChange/condicoes de exibicao continuam
+  // identicos - o admin nao consegue "reescolher" o status atual, como hoje.
+  const collectionStatusOptionsForSelect = getCollectionStatusOptions(draft)
+  const currentCollectionStatusMissing =
+    Boolean(draft.collectionStatus) && !collectionStatusOptionsForSelect.includes(draft.collectionStatus)
+
   const renderCollectionStep = () => (
     <>
       {showCollectionSelect ? (
@@ -453,7 +465,12 @@ export default function ProcessForm({
             onChange={(event) => onDraftChange('collectionStatus', event.target.value)}
           >
             <option value="">Selecione o status</option>
-            {getCollectionStatusOptions(draft).map((item) => (
+            {currentCollectionStatusMissing ? (
+              <option value={draft.collectionStatus} disabled>
+                {getDisplayedCollectionStatus(draft.collectionStatus)}
+              </option>
+            ) : null}
+            {collectionStatusOptionsForSelect.map((item) => (
               <option key={item} value={item}>{getDisplayedCollectionStatus(item)}</option>
             ))}
           </SelectField>
@@ -462,6 +479,7 @@ export default function ProcessForm({
       {showCollectionWindows ? (
         <CollectionWindowsEditor
           value={draft.collectionWindows}
+          savedValue={savedWindows.value}
           category={draft.category}
           containers={draft.containers}
           onChange={(nextWindows) => onDraftChange('collectionWindows', nextWindows)}
@@ -509,8 +527,10 @@ export default function ProcessForm({
 
   const consolidatedPurchaseOrders = getPurchaseOrderNumbers(getProcessPurchaseOrders(draft))
 
+  const isConsolidatedItems = draft.category === 'CONSOLIDADO'
+
   const renderItemsStep = () => (
-    <div className="detail-card">
+    <div className="form-group">
       <div className="card-heading process-detail-card-heading">
         <div>
           <span className="detail-label">Itens do processo</span>
@@ -536,11 +556,26 @@ export default function ProcessForm({
         </div>
       </div>
 
-      <div className="process-items-editor">
+      {(draft.items ?? []).length > 0 ? (
+        <div className="editor-grid__head editor-grid__head--items" aria-hidden="true">
+          <span>Nome comercial</span>
+          {isConsolidatedItems ? <span>PO</span> : null}
+          <span>Quantidade</span>
+          <span>IMO</span>
+          <span />
+        </div>
+      ) : null}
+
+      <div
+        className={`process-items-editor editor-grid ${
+          isConsolidatedItems ? 'editor-grid--items-po' : 'editor-grid--items'
+        }`}
+      >
         {(draft.items ?? []).map((item) => (
-          <div key={item.id} className="detail-card detail-card--split">
+          <div key={item.id} className="editor-row">
+            <span className="editor-row__title">{item.commercialName || 'Item'}</span>
             <label className="field">
-              <span>Nome comercial</span>
+              <span className="editor-row__label">Nome comercial</span>
               <input
                 className="text-input"
                 type="text"
@@ -549,9 +584,28 @@ export default function ProcessForm({
                 placeholder="Ex.: Resina Atlas"
               />
             </label>
+            {isConsolidatedItems ? (
+              <label className="field">
+                <span className="editor-row__label">PO</span>
+                {consolidatedPurchaseOrders.length > 0 ? (
+                  <SelectField
+                    className="text-input"
+                    value={item.poNumber ?? ''}
+                    onChange={(event) => onItemChange(item.id, 'poNumber', event.target.value)}
+                  >
+                    <option value="">Selecione a PO</option>
+                    {consolidatedPurchaseOrders.map((po) => (
+                      <option key={po} value={po}>{po}</option>
+                    ))}
+                  </SelectField>
+                ) : (
+                  <small className="field-hint">Cadastre as POs no passo Identificação.</small>
+                )}
+              </label>
+            ) : null}
             <div className="process-item-editor__actions">
               <label className="field">
-                <span>Quantidade</span>
+                <span className="editor-row__label">Quantidade</span>
                 <input
                   className="text-input"
                   type="number"
@@ -573,32 +627,21 @@ export default function ProcessForm({
                   </small>
                 ) : null}
               </label>
-              <button type="button" className="ghost-button" onClick={() => onRemoveItem(item.id)}>
-                Remover item
-              </button>
             </div>
-            {draft.category === 'CONSOLIDADO' ? (
-              <label className="field">
-                <span>PO</span>
-                {consolidatedPurchaseOrders.length > 0 ? (
-                  <SelectField
-                    className="text-input"
-                    value={item.poNumber ?? ''}
-                    onChange={(event) => onItemChange(item.id, 'poNumber', event.target.value)}
-                  >
-                    <option value="">Selecione a PO</option>
-                    {consolidatedPurchaseOrders.map((po) => (
-                      <option key={po} value={po}>{po}</option>
-                    ))}
-                  </SelectField>
-                ) : (
-                  <small className="field-hint">Cadastre as POs no passo Identificação.</small>
-                )}
-              </label>
-            ) : null}
             <ProcessItemDangerousGoodsFields
               item={item}
               onChange={(field, value) => onItemChange(item.id, field, value)}
+              trailing={
+                <button
+                  type="button"
+                  className="action-icon-button editor-row__remove"
+                  onClick={() => onRemoveItem(item.id)}
+                  aria-label="Remover item"
+                  title="Remover item"
+                >
+                  <Icon name="trash" />
+                </button>
+              }
             />
           </div>
         ))}
@@ -617,6 +660,20 @@ export default function ProcessForm({
   ]
 
   const [step, setStep] = useState(0)
+
+  // UX-6b-2 (D-7): snapshot de `draft.collectionWindows` do momento em que a
+  // edicao abriu - fonte do chip "Salvo: …" do `CollectionWindowsEditor`. Em
+  // 'create' o snapshot fica `undefined` (nunca ha' chip). A chave
+  // `viewMode:draft.id` reinicia o snapshot quando o form monta outro
+  // processo.
+  const savedKey = `${viewMode}:${draft?.id ?? ''}`
+  const [savedWindows, setSavedWindows] = useState(() => ({
+    key: savedKey,
+    value: viewMode === 'edit' ? draft?.collectionWindows : undefined,
+  }))
+  if (savedWindows.key !== savedKey) {
+    setSavedWindows({ key: savedKey, value: viewMode === 'edit' ? draft?.collectionWindows : undefined })
+  }
 
   // Reabrir o form (criar/editar outro processo) reinicia no primeiro passo.
   useEffect(() => {
@@ -701,9 +758,11 @@ export default function ProcessForm({
           <Icon name="chevron-left" /> Voltar
         </button>
         <h3>{viewMode === 'create' ? 'Criar processo' : 'Editar processo'}</h3>
-        <span className="inline-badge">{draft.category || 'Sem categoria'}</span>
-        <span className={getStatusTagClass(derivedProcessStatus)}>
-          {getDisplayedProcessStatus(derivedProcessStatus, draft.category)}
+        <span className="inline-badge" title={draft.category || 'Sem categoria'}>
+          {draft.category || 'Sem categoria'}
+        </span>
+        <span className={getStatusTagClass(derivedProcessStatus)} title={displayedProcessStatus}>
+          {displayedProcessStatus}
         </span>
       </div>
 

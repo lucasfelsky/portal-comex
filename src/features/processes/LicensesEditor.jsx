@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react'
 import SelectField from '../../components/SelectField'
+import Icon from '../../components/Icon'
 import {
   LICENSE_AGENCY_OPTIONS,
   LICENSE_STATUS_OPTIONS,
@@ -10,9 +12,12 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // F17.2b (D-5): editor de anuencias `licenses[]` - lista editavel (orgao,
 // No LPCO, status, vistoria/deferimento condicionais, observacoes,
 // "Remover") + botao "Adicionar anuência" (desabilita no teto de 10). So'
-// importa de `./licenses` e `SelectField` (mesma regra de import de
+// importa de `./licenses`, `SelectField` e `Icon` (mesma regra de import de
 // `ContainersEditor.jsx` - `tests/ui/ProcessesPage.test.jsx` mocka modulos
 // com lista fechada de exports).
+// UX-6b-2 (D-1/D-3/D-4/D-5): linha unica por anuencia (grid, cabecalho de
+// colunas no desktop), celula "Data" unica (rotulo varia por status) e
+// observacoes atras de um link-botao "+ Observação".
 function generateLicenseId() {
   return `LIC-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -22,6 +27,8 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
   const canAddMore = licenses.length < MAX_LICENSES
   const groupDomId = 'process-field-licenses'
   const groupError = errors.licenses
+  const [openNotes, setOpenNotes] = useState({})
+  const notesInputRefs = useRef({})
 
   function handleAdd() {
     onChange([...licenses, createEmptyLicense(generateLicenseId())])
@@ -33,6 +40,13 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
 
   function handleRemove(id) {
     onChange(licenses.filter((license) => license.id !== id))
+  }
+
+  function handleOpenNotes(id) {
+    setOpenNotes((current) => ({ ...current, [id]: true }))
+    requestAnimationFrame(() => {
+      notesInputRefs.current[id]?.focus()
+    })
   }
 
   return (
@@ -76,18 +90,27 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
           <p>Adicione uma anuência se este processo exigir liberação de órgão anuente.</p>
         </div>
       ) : (
-        <ul className="collection-windows-editor__list">
-          {licenses.map((license) => {
-            const showInspection =
-              license.status === 'Vistoria agendada' || license.status === 'Vistoria realizada'
-            const showDeferredAt = license.status === 'Deferida'
-            const isRejected = license.status === 'Indeferida'
+        <>
+          <div className="editor-grid__head editor-grid__head--licenses" aria-hidden="true">
+            <span>Órgão</span>
+            <span>Nº LPCO</span>
+            <span>Status</span>
+            <span>Data</span>
+            <span />
+          </div>
+          <ul className="collection-windows-editor__list editor-grid editor-grid--licenses">
+            {licenses.map((license) => {
+              const showInspection =
+                license.status === 'Vistoria agendada' || license.status === 'Vistoria realizada'
+              const showDeferredAt = license.status === 'Deferida'
+              const isRejected = license.status === 'Indeferida'
+              const notesOpen = Boolean(openNotes[license.id]) || Boolean(license.notes)
 
-            return (
-              <li key={license.id} className="collection-windows-editor__item">
-                <div className="collection-windows-editor__row">
+              return (
+                <li key={license.id} className="editor-row">
+                  <span className="editor-row__title">{license.agency || 'Anuência'}</span>
                   <label className="field">
-                    <span>Órgão</span>
+                    <span className="editor-row__label">Órgão</span>
                     <SelectField
                       className="text-input"
                       value={license.agency}
@@ -100,7 +123,7 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                     </SelectField>
                   </label>
                   <label className="field">
-                    <span>Nº LPCO</span>
+                    <span className="editor-row__label">Nº LPCO</span>
                     <input
                       className="text-input"
                       type="text"
@@ -110,7 +133,7 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                     />
                   </label>
                   <label className="field">
-                    <span>Status</span>
+                    <span className="editor-row__label">Status</span>
                     <SelectField
                       className="text-input"
                       value={license.status}
@@ -127,20 +150,10 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                       </small>
                     ) : null}
                   </label>
-                  <button
-                    type="button"
-                    className="ghost-button collection-windows-editor__remove"
-                    onClick={() => handleRemove(license.id)}
-                    disabled={disabled}
-                  >
-                    Remover
-                  </button>
-                </div>
 
-                {showInspection ? (
-                  <div className="collection-windows-editor__row">
+                  {showInspection ? (
                     <label className="field">
-                      <span>Vistoria agendada para</span>
+                      <span className="editor-row__label editor-row__label--caption">Vistoria agendada para</span>
                       <input
                         className="text-input"
                         type="datetime-local"
@@ -164,13 +177,9 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                         </small>
                       ) : null}
                     </label>
-                  </div>
-                ) : null}
-
-                {showDeferredAt ? (
-                  <div className="collection-windows-editor__row">
+                  ) : showDeferredAt ? (
                     <label className="field">
-                      <span>Deferida em</span>
+                      <span className="editor-row__label editor-row__label--caption">Deferida em</span>
                       <input
                         className="text-input"
                         type="date"
@@ -192,25 +201,58 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                         </small>
                       ) : null}
                     </label>
-                  </div>
-                ) : null}
+                  ) : (
+                    <span className="editor-row__full" />
+                  )}
 
-                <div className="collection-windows-editor__row">
-                  <label className="field">
-                    <span>Observações</span>
-                    <input
-                      className="text-input"
-                      type="text"
-                      value={license.notes}
-                      onChange={(event) => handleChange(license.id, { notes: event.target.value })}
-                      disabled={disabled}
-                    />
-                  </label>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                  <button
+                    type="button"
+                    className="action-icon-button editor-row__remove"
+                    onClick={() => handleRemove(license.id)}
+                    disabled={disabled}
+                    aria-label="Remover"
+                    title="Remover anuência"
+                  >
+                    <Icon name="trash" />
+                  </button>
+
+                  <div className="editor-row__full">
+                    {!notesOpen ? (
+                      <button
+                        type="button"
+                        className="editor-link-button"
+                        aria-expanded="false"
+                        aria-controls={`process-field-licenses-${license.id}-notes`}
+                        onClick={() => handleOpenNotes(license.id)}
+                        disabled={disabled}
+                      >
+                        + Observação
+                      </button>
+                    ) : (
+                      <label className="field">
+                        <span className="editor-row__label">Observações</span>
+                        <input
+                          id={`process-field-licenses-${license.id}-notes`}
+                          ref={(node) => {
+                            notesInputRefs.current[license.id] = node
+                          }}
+                          className="text-input"
+                          type="text"
+                          value={license.notes}
+                          onChange={(event) => {
+                            setOpenNotes((current) => ({ ...current, [license.id]: true }))
+                            handleChange(license.id, { notes: event.target.value })
+                          }}
+                          disabled={disabled}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
     </div>
   )
