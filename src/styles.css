@@ -11662,6 +11662,22 @@ body {
   min-width: 0;
 }
 
+/* REVIEW rodada 1: `.documents-row__content`/`.documents-row__cell` sao
+   flex-column sem `align-items` -> o default (`stretch`) faz os badges
+   (`.inline-badge`/`.documents-badge--neutral`) esticarem para 100% da
+   largura da coluna em telas >720px (a rede de seguranca generica do app
+   em `styles.css:5750-5755` so' cobre <=720px). Corrigido com
+   `align-self: flex-start` SO' nos badges (escopado a estas 2 colunas) -
+   nao usamos `align-items: flex-start` no container pra nao mudar o
+   comportamento de largura do nome do arquivo/meta (que devem continuar
+   ocupando a largura disponivel pra quebra/truncamento de texto longo). */
+.documents-row__content > .inline-badge,
+.documents-row__content > .documents-badge--neutral,
+.documents-row__cell > .inline-badge,
+.documents-row__cell > .documents-badge--neutral {
+  align-self: flex-start;
+}
+
 .documents-row__actions {
   display: flex;
   align-items: center;
