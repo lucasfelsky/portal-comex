@@ -11593,6 +11593,14 @@ body {
   gap: 20px;
 }
 
+/* REVIEW rodada 4: o wrapper das secoes nao tinha regra propria - os cards
+   ficavam colados (sem gap entre eles). Mesmo padrao de `.documents-panel`. */
+.documents-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .documents-visually-hidden {
   position: absolute;
   width: 1px;
@@ -12024,6 +12032,13 @@ body {
 }
 
 @media (max-width: 720px) {
+  /* REVIEW rodada 4: gap de 16px entre as secoes no mobile (artboard
+     Mobile.dc.html usa 16px no container raiz; desktop fica 20px). */
+  .documents-panel,
+  .documents-sections {
+    gap: 16px;
+  }
+
   /* REVIEW rodada 3 (item 11): badges + Atualizar numa linha centralizada;
      legenda em linha propria com largura total. */
   .documents-summary {
