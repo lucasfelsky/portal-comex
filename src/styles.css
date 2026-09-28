@@ -11579,44 +11579,18 @@ body {
 
 /* F18b-2 - Documentos */
 /* Aba "Documentos" redesenhada (design aprovado, canvas Claude Design
-   M8NdiBoZfvbmJxVY5oZL6e). Bloco unico, so' anexado (nenhuma regra
-   existente editada). Prefixo `documents-`. Badges reusam
+   M8NdiBoZfvbmJxVY5oZL6e; rodada 3 alinhada aos artboards Main.dc.html/
+   Consolidado.dc.html/Mobile.dc.html). Bloco unico, so' anexado (nenhuma
+   regra existente editada). Prefixo `documents-`. Badges reusam
    `.inline-badge--ok/--warn` (styles.css:3119-3132); neutro =
    `.documents-badge--neutral`. Somente `var(--token)` existentes - ZERO
    hex/rgb novo (tema escuro sai de graca pelo flip em
    `:root[data-theme='dark']`, styles.css:8153). */
 
-.documents-panel .card-heading.documents-summary {
-  align-items: flex-start;
-}
-
-.documents-summary__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.documents-empty-state {
+.documents-panel {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
-  padding: 20px 12px;
-  color: var(--ink-soft);
-}
-
-.documents-live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  gap: 20px;
 }
 
 .documents-visually-hidden {
@@ -11631,15 +11605,110 @@ body {
   border: 0;
 }
 
+.documents-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* REVIEW rodada 3 (item 1): faixa do resumo numa unica linha via grid de
+   3 areas nomeadas (badges/hint/update) - cada item e' filho direto e
+   independente, entao a mesma marcacao serve pro desktop (3 na mesma linha,
+   `justify-content` equivalente via 1fr no meio) e pro mobile (badges+botao
+   juntos, legenda embaixo em largura total) so' trocando as areas no
+   @media, sem duplicar JSX. */
+.documents-summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'badges hint update';
+  align-items: center;
+  gap: 12px;
+}
+
+.documents-summary__badges {
+  grid-area: badges;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.documents-summary__hint {
+  grid-area: hint;
+  margin: 0;
+  font-size: var(--fs-footnote);
+  color: var(--text-muted);
+}
+
+.documents-summary__update {
+  grid-area: update;
+}
+
+.documents-empty-state {
+  grid-column: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 20px 12px;
+  color: var(--ink-soft);
+}
+
+.documents-empty-state p {
+  margin: 0;
+}
+
+/* REVIEW rodada 3 (item 2): cada secao vira um card proprio (artboard
+   `.card`) - fundo, borda, raio 16 (--radius-md) e sombra sm. */
+.documents-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.documents-section__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px 20px 12px;
+}
+
+.documents-section__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.documents-section__subtitle {
+  margin: 4px 0 0;
+  font-size: var(--fs-footnote);
+  color: var(--text-muted);
+}
+
+/* REVIEW rodada 3 (item 3/4): linha em grid de 4 colunas (artboard `.row`)
+   - icone / conteudo / badge (coluna propria) / acoes. Cada linha e' seu
+   proprio grid (nao precisa alinhar largura entre linhas, igual ao
+   artboard). Icone com fundo tintado (--on) quando ha' arquivo, neutro
+   quando nao ha'. */
 .documents-row {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto auto;
-  align-items: start;
-  gap: 12px;
-  padding: 12px 0;
-}
-
-.documents-row + .documents-row {
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
   border-top: 1px solid var(--border);
 }
 
@@ -11650,60 +11719,69 @@ body {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-sm);
-  background: var(--surface-alt);
+  background: var(--neutral-50);
   color: var(--ink-soft);
   flex-shrink: 0;
+}
+
+.documents-row__icon--on {
+  background: var(--primary-50);
+  color: var(--primary-700);
 }
 
 .documents-row__content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
-/* REVIEW rodada 1: `.documents-row__content`/`.documents-row__cell` sao
-   flex-column sem `align-items` -> o default (`stretch`) faz os badges
-   (`.inline-badge`/`.documents-badge--neutral`) esticarem para 100% da
-   largura da coluna em telas >720px (a rede de seguranca generica do app
-   em `styles.css:5750-5755` so' cobre <=720px). Corrigido com
-   `align-self: flex-start` SO' nos badges (escopado a estas 2 colunas) -
-   nao usamos `align-items: flex-start` no container pra nao mudar o
-   comportamento de largura do nome do arquivo/meta (que devem continuar
-   ocupando a largura disponivel pra quebra/truncamento de texto longo). */
-.documents-row__content > .inline-badge,
-.documents-row__content > .documents-badge--neutral,
-.documents-row__cell > .inline-badge,
-.documents-row__cell > .documents-badge--neutral {
-  align-self: flex-start;
+.documents-row__label {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--ink);
 }
 
-.documents-row__actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  grid-column: 3 / span 2;
-  justify-self: end;
-}
-
-.documents-row__previous {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--ink-soft);
-  font-size: var(--fs-footnote);
-}
-
-.documents-row__error {
-  color: var(--danger-700);
-  font-size: var(--fs-footnote);
+.documents-row__file {
+  margin: 0;
+  font-size: var(--fs-subhead);
   font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.documents-chip-row {
+/* REVIEW rodada 3 (item 5): meta curta ("Nenhum arquivo enviado") sempre em
+   13px muted - nunca no corpo 15px. */
+.documents-row__meta {
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.documents-row__meta--chips {
+  row-gap: 6px;
+}
+
+.documents-row__badge {
+  display: flex;
+  align-items: center;
+}
+
+.documents-badge--neutral {
+  background: var(--neutral-50);
+  color: var(--neutral-700);
+}
+
+/* REVIEW rodada 3 (item 6): gap entre o icone de alerta e o texto do badge
+   "Pendente" (a base `.inline-badge` nao e' flex). */
+.documents-badge--icon {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
 }
 
@@ -11719,9 +11797,42 @@ body {
   font-weight: 600;
 }
 
-.documents-badge--neutral {
-  background: var(--neutral-50);
-  color: var(--neutral-700);
+.documents-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* REVIEW rodada 3 (item 7): versao anterior FORA da grade da linha
+   (irmao), recuada pra alinhar com o texto - 40px do icone + 14px do gap
+   da linha + 20px do padding horizontal da linha = 74px, igual ao
+   artboard `.prev`. */
+.documents-row__previous {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 20px 14px 74px;
+  font-size: var(--fs-footnote);
+  color: var(--text-muted);
+}
+
+.documents-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--primary-700);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.documents-row__error {
+  margin: 0;
+  color: var(--danger-700);
+  font-size: var(--fs-footnote);
+  font-weight: 600;
 }
 
 .documents-icon-button {
@@ -11735,9 +11846,11 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  color: var(--ink-soft);
 }
 
 .documents-icon-button:hover {
+  color: var(--primary-700);
   border-color: var(--border-strong);
 }
 
@@ -11754,12 +11867,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--ink-soft);
+  color: var(--text-muted);
   font-size: var(--fs-footnote);
 }
 
+.documents-add-other-row {
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+
 .documents-add-other {
-  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -11821,6 +11938,13 @@ body {
   font-weight: 700;
 }
 
+.documents-po-empty {
+  margin: 0;
+  padding: 14px 20px 18px;
+  color: var(--text-muted);
+  font-size: var(--fs-subhead);
+}
+
 .documents-po-table-wrap {
   overflow-x: auto;
 }
@@ -11830,63 +11954,164 @@ body {
   border-collapse: collapse;
 }
 
+/* REVIEW rodada 3 (item 8/10): coluna PO so' o numero (sem prefixo "PO ");
+   celula com botao "Enviar" compacto (largura do conteudo, nao a celula
+   inteira) - `.documents-po-cell` e' flex ROW (icone+nome+meta+acoes numa
+   linha), como o artboard `.mx`/`.fchip`. */
 .documents-po-table th,
 .documents-po-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .documents-po-table thead th {
-  font-family: var(--font-heading);
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-caption);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-soft);
+  border-top: 0;
+  padding-top: 4px;
+  padding-bottom: 10px;
 }
 
-.documents-row__cell {
+.documents-po-table tbody th[scope='row'] {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.documents-po-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.documents-po-cell__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+}
+
+.documents-po-cell__info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.documents-po-cell__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-subhead);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.documents-po-cell__spacer {
+  flex: 1 1 auto;
+}
+
+.documents-po-cell__previous {
+  flex-basis: 100%;
+  padding: 4px 0 0 42px;
 }
 
 @media (max-width: 720px) {
-  .documents-summary__badges,
-  .documents-empty-state {
+  /* REVIEW rodada 3 (item 11): badges + Atualizar numa linha centralizada;
+     legenda em linha propria com largura total. */
+  .documents-summary {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'badges update'
+      'hint hint';
+    justify-items: center;
+  }
+
+  .documents-summary__badges {
     justify-content: center;
+  }
+
+  .documents-summary__hint {
+    width: 100%;
     text-align: center;
   }
 
-  .documents-panel .detail-label,
-  .documents-panel .card-heading {
+  .documents-empty-state {
+    grid-column: 1 / -1;
+  }
+
+  /* REVIEW rodada 3 (item 12): titulo/subtitulo da secao centralizados;
+     texto DENTRO da linha continua alinhado a esquerda (ao lado do icone). */
+  .documents-section__header {
+    justify-content: center;
     text-align: center;
+    padding: 18px 16px 10px;
   }
 
   .documents-row {
     grid-template-columns: 40px minmax(0, 1fr);
+    padding: 14px 16px;
   }
 
+  .documents-row__content {
+    text-align: left;
+  }
+
+  .documents-row__badge {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  /* REVIEW rodada 3 (item 13): acoes em linha propria abaixo, 44px de
+     altura, `flex:1` dividindo a largura (Baixar | Substituir | Excluir
+     juntos); "Enviar"/"Enviar relatorio" (unico filho) ocupa a largura
+     toda. */
   .documents-row__actions {
     grid-column: 1 / -1;
-    justify-self: stretch;
-    justify-content: flex-start;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .documents-row__actions > .documents-icon-button,
+  .documents-row__actions > .primary-button,
+  .documents-row__actions > .ghost-button {
+    flex: 1 1 0%;
+    min-width: 0;
+    justify-content: center;
+    height: 44px;
+  }
+
+  .documents-icon-button {
+    width: auto;
+    padding: 0 8px;
   }
 
   .documents-row__action-label {
     display: inline;
   }
 
-  .documents-icon-button {
-    width: auto;
-    height: 44px;
-    padding: 0 14px;
+  .documents-row__previous {
+    padding: 8px 16px 14px 54px;
+  }
+
+  .documents-add-other-row {
+    padding: 14px 16px 18px;
   }
 
   .documents-add-other {
+    width: 100%;
+    justify-content: center;
     min-height: 44px;
   }
 
+  /* REVIEW rodada 3 (item 14): Consolidado no mobile - 1 card por PO. */
   .documents-po-table,
   .documents-po-table thead,
   .documents-po-table tbody,
@@ -11902,15 +12127,33 @@ body {
   }
 
   .documents-po-table tr {
-    margin-bottom: 12px;
+    margin: 12px 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 8px 12px;
+  }
+
+  .documents-po-table th,
+  .documents-po-table td {
+    padding: 8px 4px;
+    border-top: 0;
   }
 
   .documents-po-table th[scope='row'] {
     text-align: center;
     border-bottom: 1px solid var(--border);
     margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+
+  .documents-po-cell__previous {
+    padding-left: 0;
+  }
+
+  /* Dentro da celula do Consolidado (flex, nao grid), as acoes precisam da
+     largura toda explicitamente pra nao dividir so' o espaco sobrando ao
+     lado do icone/nome (o que espremia os botoes). */
+  .documents-po-cell .documents-row__actions {
+    flex-basis: 100%;
   }
 }

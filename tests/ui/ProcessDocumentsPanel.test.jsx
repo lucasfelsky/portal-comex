@@ -217,7 +217,7 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
     expect(within(table).getByText('Packing List')).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
 
-    const po2Row = within(table).getByText('PO PO-2').closest('tr')
+    const po2Row = within(table).getByText('PO-2', { selector: 'th' }).closest('tr')
     const invoiceCell = po2Row.querySelectorAll('td')[0]
     const uploadButton = within(invoiceCell).getByRole('button', { name: 'Enviar' })
     await user.click(uploadButton)
@@ -266,7 +266,7 @@ describe('ProcessDocumentsPanel — (g) documentos sem vínculo', () => {
     expect(screen.getByText('Contêiner removido')).toBeInTheDocument()
     expect(screen.getByText('PO removida')).toBeInTheDocument()
 
-    const section = screen.getByText('Documentos sem vínculo atual').closest('.detail-card')
+    const section = screen.getByText('Documentos sem vínculo atual').closest('.documents-section')
     expect(within(section).queryByRole('button', { name: /^Enviar/ })).not.toBeInTheDocument()
   })
 })
@@ -346,7 +346,8 @@ describe('ProcessDocumentsPanel — (l) versão anterior', () => {
     ])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl-v2.pdf')).toBeInTheDocument())
-    expect(screen.getByText('Versão anterior: bl-v1.pdf')).toBeInTheDocument()
+    expect(screen.getByText(/Versão anterior: bl-v1\.pdf/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar' })).toBeInTheDocument()
   })
 })
 
