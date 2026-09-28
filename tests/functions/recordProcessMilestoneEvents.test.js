@@ -152,6 +152,22 @@ describe('recordProcessMilestoneEvents', () => {
     expect(secondIds).toEqual(firstIds)
   })
 
+  // F18b-1 (B1): o write do `documentIndex` (feito SO' por
+  // `syncProcessDocumentIndex`) dispara este trigger tambem (ambos reagem a
+  // `onDocumentUpdated('processes/{processId}')`), mas `documentIndex` sozinho
+  // nunca deveria gerar marco - garantido por `MILESTONE_RULES` nao conhecer
+  // o campo.
+  it('before/after diferem SO em documentIndex -> 0 eventos (index-only nao gera marco)', async () => {
+    const before = { ...PROCESS_BASE, updatedById: 'admin-1', updatedByName: 'Admin' }
+    const after = {
+      ...before,
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] },
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+    expect(mockBatch.commit).not.toHaveBeenCalled()
+  })
+
   it('updatedByName com mojibake -> actorName reparado', async () => {
     const before = { ...PROCESS_BASE }
     const after = {

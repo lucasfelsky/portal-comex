@@ -512,6 +512,49 @@ describe('F17.4b - divergencia no recebimento (normalizeProcess/saveProcess/save
   })
 })
 
+// F18b-1 (B1): `documentIndex` e' gravado SO' pelo trigger
+// `syncProcessDocumentIndex` - o cliente NUNCA envia essa chave no
+// `setDoc`/`updateDoc`, so' le (normalizeProcess).
+describe('F18b-1 - documentIndex (normalizeProcess/saveProcess)', () => {
+  it('listProcesses normaliza documentIndex ausente -> vazio', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [{ id: 'PROC-DOC-1', data: () => baseMaritimeProcess() }],
+    })
+    const items = await listProcesses()
+    expect(items[0].documentIndex).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  })
+
+  it('listProcesses normaliza documentIndex com lixo -> vazio/limpo', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-DOC-2',
+          data: () =>
+            baseMaritimeProcess({
+              documentIndex: {
+                fispqItemIds: ['ITEM-2', 'ITEM-1', 'ITEM-1', 123, null],
+                containerWashIds: 'nao-e-array',
+              },
+            }),
+        },
+      ],
+    })
+    const items = await listProcesses()
+    expect(items[0].documentIndex).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: [] })
+  })
+
+  it('saveProcess com documentIndex no objeto NAO o envia no payload do setDoc', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: ['CNT-1'] },
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.documentIndex).toBeUndefined()
+    expect(Object.prototype.hasOwnProperty.call(payload, 'documentIndex')).toBe(false)
+  })
+})
+
 // F17.4b-fix: fotos do recebimento gravadas no MESMO update de
 // saveProcessCollectionStatus (D1), so' com status pos-recebimento.
 describe('F17.4b-fix - postReceiptImages em saveProcessCollectionStatus', () => {

@@ -139,6 +139,12 @@ export default function NotificationsPage() {
         >
           Alertas
         </TabButton>
+        <TabButton
+          active={notificationFilter === 'process_document_uploaded'}
+          onClick={() => setNotificationFilter('process_document_uploaded')}
+        >
+          Documentos
+        </TabButton>
       </div>
 
       <div className="notifications__list">

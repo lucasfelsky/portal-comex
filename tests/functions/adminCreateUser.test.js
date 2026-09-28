@@ -44,6 +44,8 @@ vi.mock('firebase-functions/v2/firestore', () => ({
   // sem isto, TODOS os testes de tests/functions/* que importam
   // functions/index.js quebram ("No export defined on the mock").
   onDocumentDeleted: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+  // F18b-1 (B6): `syncProcessDocumentIndex` - mesmo motivo do `onDocumentDeleted` acima.
+  onDocumentWritten: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
 }))
 vi.mock('firebase-functions/v2/https', async () => {
   const actual = await vi.importActual('firebase-functions/v2/https')

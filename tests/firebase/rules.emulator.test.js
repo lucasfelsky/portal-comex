@@ -485,6 +485,41 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
+    // F18b-1 (B1): `documentIndex` e' gravado SO' pelo trigger
+    // `syncProcessDocumentIndex` (Admin SDK ignora rules) - o cliente NUNCA
+    // pode gravar essa chave, nem admin nem logistica.
+    it('admin NAO atualiza processo com documentIndex no payload', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p-doc-idx-1'), { name: 'Orig' }))
+      const db = admin('admin-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p-doc-idx-1'), {
+          name: 'Editado',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+          documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] },
+        })
+      )
+    })
+
+    it('logistica NAO atualiza processo com documentIndex no payload', async () => {
+      await seed((db) =>
+        setDoc(doc(db, 'processes/p-doc-idx-2'), {
+          name: 'Orig',
+          category: 'FCL',
+          postReceiptNotes: '',
+        })
+      )
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/p-doc-idx-2'), {
+          updatedById: 'log-1',
+          updatedByName: 'Logi',
+          postReceiptNotes: 'Carga descarregada',
+          documentIndex: { fispqItemIds: [], containerWashIds: ['CNT-1'] },
+        })
+      )
+    })
+
     it('admin cria processo com todos os 77 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b/F17.2d-1)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(

@@ -25,6 +25,15 @@ export const DOCUMENT_TYPES = [
 
 const DOCUMENT_TYPE_MAP = new Map(DOCUMENT_TYPES.map((type) => [type.id, type]))
 
+// F18b-1 (B3): tipos de documento que geram marco no Historico. Espelhado
+// (sem importar) em `functions/src/process/documentIndex.js` - teste de
+// paridade em `tests/unit/processDocuments.test.js`.
+export const DOCUMENT_MILESTONE_EVENT_TYPES = {
+  bl: 'blUploaded',
+  fispq: 'fispqUploaded',
+  containerWash: 'containerWashUploaded',
+}
+
 // AD-1: no CONSOLIDADO, Invoice/Packing List sao 1 slot POR PO. Nas demais
 // categorias continuam 1 slot por processo.
 const PO_SCOPED_TYPES = new Set(['invoice', 'packingList'])
@@ -139,4 +148,19 @@ export function formatDocumentSize(sizeInBytes) {
   }
 
   return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function sortUniqueStrings(list) {
+  return [...new Set((Array.isArray(list) ? list : []).filter((value) => typeof value === 'string' && value)).values()].sort()
+}
+
+// F18b-1 (B1): normaliza `documentIndex` na leitura (`normalizeProcess`,
+// `processesRepository.js`). Ausente/lixo -> `{ fispqItemIds: [], containerWashIds: [] }`.
+// Gravado SO' pelo trigger `syncProcessDocumentIndex` - o cliente nunca envia
+// esta chave (`toFirestorePayload` nao muda, teste dedicado).
+export function normalizeDocumentIndex(raw) {
+  return {
+    fispqItemIds: sortUniqueStrings(raw?.fispqItemIds),
+    containerWashIds: sortUniqueStrings(raw?.containerWashIds),
+  }
 }

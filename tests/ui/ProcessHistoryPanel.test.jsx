@@ -66,6 +66,33 @@ describe('ProcessHistoryPanel', () => {
     )
   })
 
+  // F18b-1 (B3): marcos de upload de documento.
+  it("tipo 'blUploaded' usa o label fixo (sem escopo)", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'blUploaded', value: '', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T10:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() => expect(screen.getByText('BL/AWB enviado')).toBeInTheDocument())
+  })
+
+  it("tipo 'fispqUploaded' usa o label com o nome do item entre parenteses", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'fispqUploaded', value: 'Resina Atlas', previousValue: '', actorName: 'Admin', occurredAt: '2026-09-20T10:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() => expect(screen.getByText('FISPQ enviada (Resina Atlas)')).toBeInTheDocument())
+  })
+
+  it("tipo 'containerWashUploaded' usa o label com o numero do conteiner entre parenteses", async () => {
+    mockListProcessEvents.mockResolvedValue([
+      { id: 'e1', type: 'containerWashUploaded', value: 'MSCU1234567', previousValue: '', actorName: 'Logi', occurredAt: '2026-09-20T10:00:00.000Z' },
+    ])
+    render(<ProcessHistoryPanel processId="p1" />)
+    await waitFor(() =>
+      expect(screen.getByText('Relatório de lavação enviado (MSCU1234567)')).toBeInTheDocument()
+    )
+  })
+
   it('vazio mostra a mensagem de sem retroativos', async () => {
     mockListProcessEvents.mockResolvedValue([])
     render(<ProcessHistoryPanel processId="p1" />)
