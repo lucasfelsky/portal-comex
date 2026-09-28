@@ -12,6 +12,7 @@ import {
   getProcessPurchaseOrders,
 } from './purchaseOrders.js'
 import { isLegacyProcessDangerousGoods } from './operationalOptions.js'
+import { getDocumentPendingFields } from './processDocuments.js'
 import {
   CE_HOUSE_CATEGORIES,
   CUSTOMS_INSPECTION_CHANNELS,
@@ -484,10 +485,15 @@ export function getPendingFields(process) {
   const derivedStatus = deriveProcessStatus(process)
   const { currentStage } = getProcessStage({ processStatus: derivedStatus })
 
-  return PENDING_FIELD_RULES.filter((rule) => {
+  const rulePendingFields = PENDING_FIELD_RULES.filter((rule) => {
     if (rule.stage > currentStage) return false
     if (rule.categories && !rule.categories.includes(process?.category)) return false
     if (rule.when && !rule.when(process)) return false
     return rule.isMissing(process)
   }).map((rule) => ({ id: rule.id, field: rule.field, label: rule.label, stage: rule.stage }))
+
+  // F18b-2 (E5): documentos (FISPQ por item IMO + lavação por contêiner
+  // devolvido) somados as pendencias de dados - sem filtro por estagio (a
+  // condicao ja e' factual).
+  return [...rulePendingFields, ...getDocumentPendingFields(process)]
 }

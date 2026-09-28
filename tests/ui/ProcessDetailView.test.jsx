@@ -226,15 +226,13 @@ describe('ProcessDetailView — aba "Documentos" (F18a)', () => {
     expect(screen.getByRole('button', { name: 'Documentos' })).toBeInTheDocument()
   })
 
-  it('detailTab="documents" com role logistica renderiza o painel', () => {
+  it('detailTab="documents" com role logistica renderiza o painel', async () => {
     renderDetail({
       detailTab: 'documents',
       profile: { name: 'Log', role: 'logistica' },
       selectedProcess: makeProcess({ id: 'p-doc' }),
     })
-    expect(
-      screen.getByText('Documentos do processo (BL/AWB, relatório de carga, invoice, packing list).')
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Documentos do processo')).toBeInTheDocument()
   })
 
   it('deep link detailTab="documents" com role user renderiza a aba geral', () => {
@@ -243,9 +241,119 @@ describe('ProcessDetailView — aba "Documentos" (F18a)', () => {
       profile: { name: 'User', role: 'user' },
       selectedProcess: makeProcess({ id: 'p-doc' }),
     })
-    expect(
-      screen.queryByText('Documentos do processo (BL/AWB, relatório de carga, invoice, packing list).')
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Documentos do processo')).not.toBeInTheDocument()
+  })
+})
+
+// F18b-2 (E3): contador de documentos pendentes na aba/select "Documentos".
+describe('ProcessDetailView — contador da aba "Documentos" (F18b-2)', () => {
+  it('N=0: nome acessível continua "Documentos" (sem contador)', () => {
+    renderDetail({ profile: { name: 'Admin', role: 'admin' } })
+    expect(screen.getByRole('button', { name: 'Documentos' })).toBeInTheDocument()
+  })
+
+  it('N>0: item IMO sem FISPQ no documentIndex mostra "N pendente(s)" no botao e na option', () => {
+    renderDetail({
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-pend',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+    })
+    expect(screen.getByRole('button', { name: /Documentos.*1 pendente/s })).toBeInTheDocument()
+    expect(screen.getByText('Documentos (1 pendente)')).toBeInTheDocument()
+  })
+
+  it('logistica tambem ve o contador (nao e admin-only)', () => {
+    renderDetail({
+      profile: { name: 'Log', role: 'logistica' },
+      selectedProcess: makeProcess({
+        id: 'p-pend',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+    })
+    expect(screen.getByRole('button', { name: /Documentos.*1 pendente/s })).toBeInTheDocument()
+  })
+})
+
+// F18b-2 (E9): indicadores read-only de FISPQ (aba Itens) e lavação (bloco Carga).
+describe('ProcessDetailView — indicadores FISPQ/lavação (F18b-2, E9)', () => {
+  it('aba Itens: item IMO sem FISPQ no indice -> badge "FISPQ pendente" (admin)', () => {
+    renderDetail({
+      detailTab: 'items',
+      isAdmin: true,
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-imo',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+      visibleProcessItems: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+    })
+    expect(screen.getByText('FISPQ pendente')).toBeInTheDocument()
+  })
+
+  it('aba Itens: item IMO com FISPQ no indice -> badge "FISPQ enviada"', () => {
+    renderDetail({
+      detailTab: 'items',
+      isAdmin: true,
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-imo',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] },
+      }),
+      visibleProcessItems: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+    })
+    expect(screen.getByText('FISPQ enviada')).toBeInTheDocument()
+  })
+
+  it('role user: badges FISPQ ausentes mesmo com item IMO', () => {
+    renderDetail({
+      detailTab: 'items',
+      isAdmin: false,
+      profile: { name: 'User', role: 'user' },
+      selectedProcess: makeProcess({
+        id: 'p-imo',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+      visibleProcessItems: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+    })
+    expect(screen.queryByText('FISPQ pendente')).not.toBeInTheDocument()
+    expect(screen.queryByText('FISPQ enviada')).not.toBeInTheDocument()
+  })
+
+  it('bloco Carga: contêiner devolvido sem lavação no indice -> "Lavação pendente"', () => {
+    renderDetail({
+      detailTab: 'process',
+      isAdmin: true,
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-cnt',
+        category: 'FCL',
+        containers: [{ id: 'CNT-1', number: 'MSCU1234567', type: '20DC', seal: '', returnedAt: '2026-09-01' }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+    })
+    expect(screen.getByText('Lavação pendente')).toBeInTheDocument()
+  })
+
+  it('bloco Carga: contêiner devolvido com lavação no indice -> "Lavação enviada"', () => {
+    renderDetail({
+      detailTab: 'process',
+      isAdmin: true,
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-cnt',
+        category: 'FCL',
+        containers: [{ id: 'CNT-1', number: 'MSCU1234567', type: '20DC', seal: '', returnedAt: '2026-09-01' }],
+        documentIndex: { fispqItemIds: [], containerWashIds: ['CNT-1'] },
+      }),
+    })
+    expect(screen.getByText('Lavação enviada')).toBeInTheDocument()
   })
 })
 

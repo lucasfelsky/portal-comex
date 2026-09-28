@@ -3,15 +3,21 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  CONTAINER_WASH_CATEGORIES,
   DOCUMENT_MILESTONE_EVENT_TYPES,
   DOCUMENT_TYPES,
+  buildDocumentPendingFields,
   buildDocumentSlotKey,
   canDeleteDocument,
   canUploadDocumentType,
   canViewProcessRecords,
   formatDocumentSize,
+  getDocumentFileKindLabel,
+  getDocumentIndexFromDocuments,
+  getDocumentPendingFields,
   getDocumentTypeLabel,
   getSlotKeyPoNumber,
+  getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
   isProcessDocumentType,
   normalizeDocumentIndex,
@@ -164,10 +170,10 @@ describe('groupDocumentsBySlot', () => {
 })
 
 describe('formatDocumentSize', () => {
-  it('bytes/KB/MB', () => {
+  it('bytes/KB/MB (virgula decimal pt-BR)', () => {
     expect(formatDocumentSize(500)).toBe('500 B')
     expect(formatDocumentSize(2048)).toBe('2 KB')
-    expect(formatDocumentSize(3 * 1024 * 1024)).toBe('3.0 MB')
+    expect(formatDocumentSize(3 * 1024 * 1024)).toBe('3,0 MB')
   })
 
   it('valores invalidos -> string vazia', () => {
@@ -275,5 +281,211 @@ describe('buildDocumentIndex/describeDocumentScope/buildDocumentUploadedNotifica
     expect(buildDocumentUploadedNotificationBody('PO 123', 'Logi da Silva', 'BL/AWB', '')).toBe(
       'Logi da Silva enviou BL/AWB em PO 123.'
     )
+  })
+})
+
+// F18b-2 (E4): getDocumentIndexFromDocuments - paridade com buildDocumentIndex
+// (functions), mesma regra.
+describe('getDocumentIndexFromDocuments', () => {
+  it('mesmo resultado de buildDocumentIndex (functions) para a mesma entrada', () => {
+    const docs = [
+      { type: 'fispq', itemId: 'ITEM-2' },
+      { type: 'fispq', itemId: 'ITEM-1' },
+      { type: 'containerWash', containerId: 'CNT-1' },
+      { type: 'bl' },
+    ]
+    expect(getDocumentIndexFromDocuments(docs)).toEqual(buildDocumentIndex(docs))
+  })
+
+  it('lista vazia -> ambos vazios', () => {
+    expect(getDocumentIndexFromDocuments([])).toEqual({ fispqItemIds: [], containerWashIds: [] })
+    expect(getDocumentIndexFromDocuments(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  })
+})
+
+describe('CONTAINER_WASH_CATEGORIES', () => {
+  it('so FCL/CONSOLIDADO', () => {
+    expect(CONTAINER_WASH_CATEGORIES).toEqual(['FCL', 'CONSOLIDADO'])
+  })
+})
+
+// F18b-2 (E4): buildDocumentPendingFields/getDocumentPendingFields.
+describe('buildDocumentPendingFields', () => {
+  it('item IMO com id fora do indice -> pendencia fispq:<id>', () => {
+    const process = {
+      category: 'FCL',
+      items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true }],
+    }
+    const fields = buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })
+    expect(fields).toEqual([
+      { id: 'fispq:ITEM-1', field: 'documents', label: 'FISPQ do item Resina Atlas', stage: 0 },
+    ])
+  })
+
+  it('item sem commercialName -> "Item sem nome"', () => {
+    const process = { category: 'FCL', items: [{ id: 'ITEM-1', dangerousGoods: true }] }
+    const [field] = buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })
+    expect(field.label).toBe('FISPQ do item Item sem nome')
+  })
+
+  it('item IMO ja no indice -> sem pendencia', () => {
+    const process = {
+      category: 'FCL',
+      items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true }],
+    }
+    expect(buildDocumentPendingFields(process, { fispqItemIds: ['ITEM-1'], containerWashIds: [] })).toEqual([])
+  })
+
+  it('item sem id persistido e' + ' item nao-IMO -> ignorados', () => {
+    const process = {
+      category: 'FCL',
+      items: [
+        { commercialName: 'Sem id', dangerousGoods: true },
+        { id: 'ITEM-2', commercialName: 'Nao perigoso', dangerousGoods: false },
+      ],
+    }
+    expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
+  })
+
+  it('conteiner devolvido fora do indice (FCL/CONSOLIDADO) -> pendencia containerWash:<id>', () => {
+    const process = {
+      category: 'FCL',
+      containers: [{ id: 'CNT-1', number: 'MSCU1234567', returnedAt: '2026-09-01' }],
+    }
+    const fields = buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })
+    expect(fields).toEqual([
+      {
+        id: 'containerWash:CNT-1',
+        field: 'documents',
+        label: 'Relatório de lavação do contêiner MSCU1234567',
+        stage: 4,
+      },
+    ])
+  })
+
+  it('conteiner sem returnedAt -> sem pendencia', () => {
+    const process = { category: 'FCL', containers: [{ id: 'CNT-1', returnedAt: '' }] }
+    expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
+  })
+
+  it('categoria fora de FCL/CONSOLIDADO -> nunca gera pendencia de lavacao', () => {
+    const process = {
+      category: 'LCL',
+      containers: [{ id: 'CNT-1', returnedAt: '2026-09-01' }],
+    }
+    expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
+  })
+})
+
+describe('getDocumentPendingFields', () => {
+  it('le process.documentIndex (normalizado)', () => {
+    const process = {
+      category: 'FCL',
+      items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true }],
+      documentIndex: { fispqItemIds: ['ITEM-1'] },
+    }
+    expect(getDocumentPendingFields(process)).toEqual([])
+  })
+})
+
+// F18b-2 (E4): getUnlinkedDocumentGroups.
+describe('getUnlinkedDocumentGroups', () => {
+  const purchaseOrders = [{ po: 'PO-1' }, { po: 'PO-2' }]
+
+  it('fispq: item removido / item nao-IMO / vinculado', () => {
+    const process = { category: 'FCL', items: [{ id: 'ITEM-1', dangerousGoods: false }] }
+    const groups = [
+      { slotKey: 'fispq:ITEM-999', primary: { id: 'd1' } },
+      { slotKey: 'fispq:ITEM-1', primary: { id: 'd2' } },
+    ]
+    const result = getUnlinkedDocumentGroups(groups, process, purchaseOrders)
+    expect(result).toEqual([
+      { slotKey: 'fispq:ITEM-999', primary: { id: 'd1' }, reason: 'Item removido' },
+      { slotKey: 'fispq:ITEM-1', primary: { id: 'd2' }, reason: 'Item não é mais IMO' },
+    ])
+  })
+
+  it('containerWash: categoria sem conteineres / conteiner removido', () => {
+    const groups = [{ slotKey: 'containerWash:CNT-1', primary: { id: 'd1' } }]
+    expect(getUnlinkedDocumentGroups(groups, { category: 'LCL', containers: [] }, [])).toEqual([
+      { slotKey: 'containerWash:CNT-1', primary: { id: 'd1' }, reason: 'Categoria atual sem contêineres' },
+    ])
+    expect(getUnlinkedDocumentGroups(groups, { category: 'FCL', containers: [] }, [])).toEqual([
+      { slotKey: 'containerWash:CNT-1', primary: { id: 'd1' }, reason: 'Contêiner removido' },
+    ])
+    expect(
+      getUnlinkedDocumentGroups(
+        groups,
+        { category: 'FCL', containers: [{ id: 'CNT-1' }] },
+        []
+      )
+    ).toEqual([])
+  })
+
+  it('invoice/packingList: categoria mudou / PO removida / vinculado', () => {
+    const groups = [{ slotKey: 'invoice:PO-9', primary: { id: 'd1' } }]
+    expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([
+      { slotKey: 'invoice:PO-9', primary: { id: 'd1' }, reason: 'Categoria mudou' },
+    ])
+    expect(getUnlinkedDocumentGroups(groups, { category: 'CONSOLIDADO' }, purchaseOrders)).toEqual([
+      { slotKey: 'invoice:PO-9', primary: { id: 'd1' }, reason: 'PO removida' },
+    ])
+    expect(
+      getUnlinkedDocumentGroups(
+        [{ slotKey: 'invoice:PO-1', primary: { id: 'd1' } }],
+        { category: 'CONSOLIDADO' },
+        purchaseOrders
+      )
+    ).toEqual([])
+    expect(
+      getUnlinkedDocumentGroups(
+        [{ slotKey: 'invoice', primary: { id: 'd1' } }],
+        { category: 'CONSOLIDADO' },
+        purchaseOrders
+      )
+    ).toEqual([{ slotKey: 'invoice', primary: { id: 'd1' }, reason: 'Categoria mudou' }])
+  })
+
+  it('bl/cargoReport/other: sempre vinculados', () => {
+    const groups = [
+      { slotKey: 'bl', primary: { id: 'd1' } },
+      { slotKey: 'cargoReport', primary: { id: 'd2' } },
+      { slotKey: 'other:doc-1', primary: { id: 'd3' } },
+    ]
+    expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([])
+  })
+
+  it('slotKey de tipo desconhecido -> "Tipo não reconhecido"', () => {
+    const groups = [{ slotKey: 'unknown:1', primary: { id: 'd1' } }]
+    expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([
+      { slotKey: 'unknown:1', primary: { id: 'd1' }, reason: 'Tipo não reconhecido' },
+    ])
+  })
+})
+
+// F18b-2 (E4): getDocumentFileKindLabel.
+describe('getDocumentFileKindLabel', () => {
+  it('reconhece por mimeType', () => {
+    expect(getDocumentFileKindLabel('application/pdf', 'a.pdf')).toBe('PDF')
+    expect(getDocumentFileKindLabel('application/vnd.ms-excel', 'a.xls')).toBe('Excel')
+    expect(
+      getDocumentFileKindLabel(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'a.xlsx'
+      )
+    ).toBe('Excel')
+    expect(getDocumentFileKindLabel('text/csv', 'a.csv')).toBe('CSV')
+    expect(getDocumentFileKindLabel('application/msword', 'a.doc')).toBe('Word')
+    expect(getDocumentFileKindLabel('image/png', 'a.png')).toBe('Imagem')
+  })
+
+  it('sem mimeType, cai pra extensao do nome', () => {
+    expect(getDocumentFileKindLabel('', 'relatorio.pdf')).toBe('PDF')
+    expect(getDocumentFileKindLabel(undefined, 'planilha.XLSX')).toBe('Excel')
+  })
+
+  it('nao reconhecido -> string vazia', () => {
+    expect(getDocumentFileKindLabel('application/zip', 'a.zip')).toBe('')
+    expect(getDocumentFileKindLabel('', '')).toBe('')
   })
 })

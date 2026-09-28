@@ -226,6 +226,58 @@ const ICONS = {
       <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" />
     </>
   ),
+  // F18b-2 (E10): icones novos da aba "Documentos" redesenhada.
+  upload: (
+    <>
+      <path d="M12 15V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M4 4v5h5" />
+      <path d="M20 20v-5h-5" />
+      <path d="M5.5 9a7 7 0 0 1 12.3-3.2L20 8" />
+      <path d="M18.5 15a7 7 0 0 1-12.3 3.2L4 16" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z" />
+      <path d="M14 3.5V7a1 1 0 0 0 1 1h3.5" />
+    </>
+  ),
+  flask: (
+    <>
+      <path d="M9.5 3.5h5" />
+      <path d="M10.5 3.5v5.8L5.8 17a2 2 0 0 0 1.7 3h9a2 2 0 0 0 1.7-3l-4.7-7.7V3.5" />
+      <path d="M8.2 14.5h7.6" />
+    </>
+  ),
+  container: (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="1" />
+      <path d="M8 6v12" />
+      <path d="M16 6v12" />
+      <path d="M3.5 12h17" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 3.5 21 19.5H3Z" />
+      <path d="M12 10v4" />
+      <path d="M12 16.8h.01" />
+    </>
+  ),
+  history: (
+    <>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 9v4l3 2" />
+      <path d="M8 3.5 5 5.8" />
+      <path d="M16 3.5l3 2.3" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

@@ -136,6 +136,8 @@ export function groupDocumentsBySlot(documents) {
   return groups
 }
 
+// F18b-2 (E4): virgula decimal pt-BR ("1,2 MB", como no artboard). Unico
+// chamador e' o painel (`ProcessDocumentsPanel.jsx`).
 export function formatDocumentSize(sizeInBytes) {
   if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0) return ''
 
@@ -147,7 +149,7 @@ export function formatDocumentSize(sizeInBytes) {
     return `${(sizeInBytes / 1024).toFixed(0)} KB`
   }
 
-  return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(sizeInBytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
 }
 
 function sortUniqueStrings(list) {
@@ -163,4 +165,185 @@ export function normalizeDocumentIndex(raw) {
     fispqItemIds: sortUniqueStrings(raw?.fispqItemIds),
     containerWashIds: sortUniqueStrings(raw?.containerWashIds),
   }
+}
+
+// F18b-2 (E4): categorias que tem lavacao de conteiner (FCL/CONSOLIDADO).
+// Constante LOCAL - nao importa de `processCategories.js` (mock fechado de
+// `tests/ui/ProcessesPage.test.jsx`).
+export const CONTAINER_WASH_CATEGORIES = ['FCL', 'CONSOLIDADO']
+
+// F18b-2 (E4): mesma regra de `functions/src/process/documentIndex.js:40-54`
+// (`buildDocumentIndex`) - espelhada aqui (sem importar) porque `src/` nao
+// pode importar de `functions/`. Paridade testada em
+// `tests/unit/processDocuments.test.js`.
+export function getDocumentIndexFromDocuments(documents) {
+  const list = Array.isArray(documents) ? documents : []
+  const fispqItemIds = []
+  const containerWashIds = []
+
+  for (const document of list) {
+    if (document?.type === 'fispq' && document?.itemId) fispqItemIds.push(String(document.itemId))
+    if (document?.type === 'containerWash' && document?.containerId) {
+      containerWashIds.push(String(document.containerId))
+    }
+  }
+
+  return {
+    fispqItemIds: sortUniqueStrings(fispqItemIds),
+    containerWashIds: sortUniqueStrings(containerWashIds),
+  }
+}
+
+// F18b-2 (E4/E5): pendencias derivadas do `documentIndex` (FISPQ de item IMO
+// + lavacao de conteiner devolvido). Item/conteiner sem `id` persistido e'
+// ignorado (registrado como limitacao conhecida no PLAN.md).
+export function buildDocumentPendingFields(process, index) {
+  const fispqItemIds = new Set(index?.fispqItemIds ?? [])
+  const containerWashIds = new Set(index?.containerWashIds ?? [])
+  const fields = []
+
+  const items = Array.isArray(process?.items) ? process.items : []
+  for (const item of items) {
+    const itemId = typeof item?.id === 'string' ? item.id : ''
+    if (!itemId) continue
+    if (item?.dangerousGoods !== true) continue
+    if (fispqItemIds.has(itemId)) continue
+    const name = String(item?.commercialName ?? '').trim() || 'Item sem nome'
+    fields.push({
+      id: `fispq:${itemId}`,
+      field: 'documents',
+      label: `FISPQ do item ${name}`,
+      stage: 0,
+    })
+  }
+
+  if (CONTAINER_WASH_CATEGORIES.includes(process?.category)) {
+    const containers = Array.isArray(process?.containers) ? process.containers : []
+    containers.forEach((container, index_) => {
+      const containerId = typeof container?.id === 'string' ? container.id : ''
+      if (!containerId) return
+      if (!String(container?.returnedAt ?? '').trim()) return
+      if (containerWashIds.has(containerId)) return
+      const label = String(container?.number ?? '').trim() || `Contêiner ${index_ + 1}`
+      fields.push({
+        id: `containerWash:${containerId}`,
+        field: 'documents',
+        label: `Relatório de lavação do contêiner ${label}`,
+        stage: 4,
+      })
+    })
+  }
+
+  return fields
+}
+
+// F18b-2 (E5): usado por `pendingFields.js` (getPendingFields, admin) e pelo
+// contador da aba "Documentos" (`ProcessDetailView.jsx`, admin/logistica).
+export function getDocumentPendingFields(process) {
+  return buildDocumentPendingFields(process, normalizeDocumentIndex(process?.documentIndex))
+}
+
+const UNLINKED_REASON_ITEM_REMOVED = 'Item removido'
+const UNLINKED_REASON_ITEM_NOT_IMO = 'Item não é mais IMO'
+const UNLINKED_REASON_CONTAINER_REMOVED = 'Contêiner removido'
+const UNLINKED_REASON_CATEGORY_NO_CONTAINERS = 'Categoria atual sem contêineres'
+const UNLINKED_REASON_PO_REMOVED = 'PO removida'
+const UNLINKED_REASON_CATEGORY_CHANGED = 'Categoria mudou'
+const UNLINKED_REASON_UNKNOWN_TYPE = 'Tipo não reconhecido'
+
+// F18b-2 (E2/E4): grupos de documento que nao aparecem em nenhuma secao hoje
+// (item/conteiner/PO removido, categoria mudou, tipo desconhecido). `groups`
+// = `groupDocumentsBySlot(documents)`; `purchaseOrders` por argumento (NAO
+// importa `purchaseOrders.js`). Nunca apaga nada - so' rotula o motivo.
+export function getUnlinkedDocumentGroups(groups, process, purchaseOrders) {
+  const list = Array.isArray(groups) ? groups : []
+  const items = Array.isArray(process?.items) ? process.items : []
+  const containers = Array.isArray(process?.containers) ? process.containers : []
+  const poNumbers = new Set(
+    (Array.isArray(purchaseOrders) ? purchaseOrders : [])
+      .map((order) => String(order?.po ?? '').trim())
+      .filter(Boolean)
+  )
+  const category = process?.category
+
+  const result = []
+
+  for (const group of list) {
+    const slotKey = String(group?.slotKey ?? '')
+    let reason = ''
+
+    if (slotKey.startsWith('fispq:')) {
+      const itemId = slotKey.slice('fispq:'.length)
+      const item = items.find((candidate) => String(candidate?.id ?? '') === itemId)
+      if (!item) reason = UNLINKED_REASON_ITEM_REMOVED
+      else if (item?.dangerousGoods !== true) reason = UNLINKED_REASON_ITEM_NOT_IMO
+    } else if (slotKey.startsWith('containerWash:')) {
+      const containerId = slotKey.slice('containerWash:'.length)
+      if (!CONTAINER_WASH_CATEGORIES.includes(category)) {
+        reason = UNLINKED_REASON_CATEGORY_NO_CONTAINERS
+      } else {
+        const container = containers.find((candidate) => String(candidate?.id ?? '') === containerId)
+        if (!container) reason = UNLINKED_REASON_CONTAINER_REMOVED
+      }
+    } else if (slotKey.startsWith('other:')) {
+      reason = ''
+    } else if (slotKey === 'bl' || slotKey === 'cargoReport') {
+      reason = ''
+    } else if (slotKey === 'invoice' || slotKey === 'packingList') {
+      if (category === 'CONSOLIDADO') reason = UNLINKED_REASON_CATEGORY_CHANGED
+    } else if (slotKey.startsWith('invoice:') || slotKey.startsWith('packingList:')) {
+      const [type, po] = slotKey.split(':')
+      if (category !== 'CONSOLIDADO') reason = UNLINKED_REASON_CATEGORY_CHANGED
+      else if (!poNumbers.has(po)) reason = UNLINKED_REASON_PO_REMOVED
+      void type
+    } else {
+      reason = UNLINKED_REASON_UNKNOWN_TYPE
+    }
+
+    if (reason) result.push({ ...group, reason })
+  }
+
+  return result
+}
+
+const FILE_KIND_BY_MIME = {
+  'application/pdf': 'PDF',
+  'text/csv': 'CSV',
+  'application/vnd.ms-excel': 'Excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+  'application/msword': 'Word',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+  'image/jpeg': 'Imagem',
+  'image/png': 'Imagem',
+  'image/webp': 'Imagem',
+  'image/gif': 'Imagem',
+}
+
+const FILE_KIND_BY_EXTENSION = {
+  pdf: 'PDF',
+  csv: 'CSV',
+  xls: 'Excel',
+  xlsx: 'Excel',
+  doc: 'Word',
+  docx: 'Word',
+  jpg: 'Imagem',
+  jpeg: 'Imagem',
+  png: 'Imagem',
+  webp: 'Imagem',
+  gif: 'Imagem',
+}
+
+function extensionFromName(name) {
+  const value = String(name ?? '').trim().toLowerCase()
+  return value.includes('.') ? value.split('.').pop() : ''
+}
+
+// F18b-2 (E4): rotulo curto do tipo de arquivo (whitelist de
+// `src/utils/storageUploadValidation.js:28-53`, espelhada aqui - modulo
+// puro, sem importar util nao-mockado). '' quando nao reconhecido.
+export function getDocumentFileKindLabel(mimeType, name) {
+  const mime = String(mimeType ?? '').trim().toLowerCase()
+  if (FILE_KIND_BY_MIME[mime]) return FILE_KIND_BY_MIME[mime]
+  const ext = extensionFromName(name)
+  return FILE_KIND_BY_EXTENSION[ext] ?? ''
 }
