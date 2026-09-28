@@ -478,6 +478,130 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // F18a (D1-D5) + AD-1: helpers de validacao do metadado imutavel de
+    // `processes/{processId}/documents/{documentId}`. AD-1 (adendo do
+    // orquestrador, PREVALECE): no CONSOLIDADO, `invoice`/`packingList` sao
+    // 1 slot POR PO (`slotKey = 'invoice:'+po` / `'packingList:'+po'`,
+    // + campo `poNumber`); nas demais categorias continuam 1 slot por
+    // processo (`slotKey == type`). Campos: `type`, `slotKey`, `itemId` (so
+    // `fispq`), `containerId` (so `containerWash`), `description` (so
+    // `other`), `name`, `mimeType`, `size`, `storagePath`, `uploadedAt`,
+    // `uploadedById`, `uploadedByName`, `uploadedByRole`, `poNumber` (so
+    // invoice/packingList no CONSOLIDADO - AD-1).
+    function isValidProcessDocumentSlotKey(processId) {
+      return (
+        (request.resource.data.type == 'fispq'
+          && request.resource.data.slotKey == 'fispq:' + request.resource.data.itemId)
+        || (request.resource.data.type == 'containerWash'
+          && request.resource.data.slotKey == 'containerWash:' + request.resource.data.containerId)
+        || (request.resource.data.type == 'other'
+          && request.resource.data.slotKey.matches('^other:.+$'))
+        || (request.resource.data.type == 'bl' && request.resource.data.slotKey == 'bl')
+        || (request.resource.data.type == 'cargoReport' && request.resource.data.slotKey == 'cargoReport')
+        || (
+          (request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
+          && get(/databases/$(database)/documents/processes/$(processId)).data.category == 'CONSOLIDADO'
+          && request.resource.data.slotKey == request.resource.data.type + ':' + request.resource.data.poNumber
+        )
+        || (
+          (request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
+          && get(/databases/$(database)/documents/processes/$(processId)).data.category != 'CONSOLIDADO'
+          && request.resource.data.slotKey == request.resource.data.type
+        )
+      );
+    }
+
+    // D3 + AD-1: `storagePath` casa EXATAMENTE com o `processId`/`type`/
+    // escopo (`itemId`/`containerId`/`poNumber` saneado)/`uid` do criador -
+    // sem `firestore.get` na storage.rules (PR #4 de 2026-07-09), a rule do
+    // Firestore garante que o path bate.
+    function isValidProcessDocumentStoragePath(processId) {
+      return request.resource.data.storagePath is string
+        && (
+          (request.resource.data.type == 'fispq'
+            && request.resource.data.storagePath.matches(
+              '^processes/' + processId + '/documents/fispq/' + request.resource.data.itemId
+              + '/[0-9]+-' + request.auth.uid + '-[A-Za-z0-9_.-]+$'
+            ))
+          || (request.resource.data.type == 'containerWash'
+            && request.resource.data.storagePath.matches(
+              '^processes/' + processId + '/documents/containerWash/' + request.resource.data.containerId
+              + '/[0-9]+-' + request.auth.uid + '-[A-Za-z0-9_.-]+$'
+            ))
+          || (
+            (request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
+            && request.resource.data.slotKey != request.resource.data.type
+            && request.resource.data.storagePath.matches(
+              '^processes/' + processId + '/documents/' + request.resource.data.type + '/' + request.resource.data.poNumber
+              + '/[0-9]+-' + request.auth.uid + '-[A-Za-z0-9_.-]+$'
+            ))
+          || (
+            (request.resource.data.type == 'bl' || request.resource.data.type == 'cargoReport'
+              || request.resource.data.type == 'other'
+              || ((request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
+                && request.resource.data.slotKey == request.resource.data.type))
+            && request.resource.data.storagePath.matches(
+              '^processes/' + processId + '/documents/' + request.resource.data.type
+              + '/[0-9]+-' + request.auth.uid + '-[A-Za-z0-9_.-]+$'
+            ))
+        );
+    }
+
+    function isValidProcessDocumentRequiredFields(processId) {
+      return request.resource.data.keys().hasAll([
+        'type', 'slotKey', 'name', 'mimeType', 'size', 'storagePath',
+        'uploadedAt', 'uploadedById', 'uploadedByName', 'uploadedByRole',
+      ])
+        && (request.resource.data.type != 'fispq' || request.resource.data.keys().hasAll(['itemId']))
+        && (request.resource.data.type != 'containerWash' || request.resource.data.keys().hasAll(['containerId']))
+        && (request.resource.data.type != 'other' || request.resource.data.keys().hasAll(['description']))
+        && (
+          !(request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
+          || get(/databases/$(database)/documents/processes/$(processId)).data.category != 'CONSOLIDADO'
+          || request.resource.data.keys().hasAll(['poNumber'])
+        );
+    }
+
+    function isValidProcessDocumentFieldShapes() {
+      return request.resource.data.type in
+          ['bl', 'cargoReport', 'fispq', 'containerWash', 'invoice', 'packingList', 'other']
+        && request.resource.data.slotKey is string && request.resource.data.slotKey.size() > 0
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 200
+        && request.resource.data.mimeType is string && request.resource.data.mimeType.size() > 0
+        && request.resource.data.size is int
+        && request.resource.data.size >= 1 && request.resource.data.size <= 20971520
+        && request.resource.data.uploadedAt == request.time
+        && request.resource.data.uploadedById == request.auth.uid
+        && request.resource.data.uploadedByName == myName()
+        && request.resource.data.uploadedByRole == myRole()
+        && (!('description' in request.resource.data)
+          || (request.resource.data.description is string
+            && request.resource.data.description.size() >= 1
+            && request.resource.data.description.size() <= 120))
+        && (!('poNumber' in request.resource.data)
+          || (request.resource.data.poNumber is string
+            && request.resource.data.poNumber.size() > 0
+            && request.resource.data.poNumber.size() <= 64));
+    }
+
+    function isValidProcessDocumentCreate(processId) {
+      return exists(/databases/$(database)/documents/processes/$(processId))
+        && request.resource.data.keys().hasOnly([
+          'type', 'slotKey', 'itemId', 'containerId', 'description', 'name',
+          'mimeType', 'size', 'storagePath', 'uploadedAt', 'uploadedById',
+          'uploadedByName', 'uploadedByRole', 'poNumber',
+        ])
+        && isValidProcessDocumentRequiredFields(processId)
+        && isValidProcessDocumentFieldShapes()
+        && isValidProcessDocumentSlotKey(processId)
+        && isValidProcessDocumentStoragePath(processId)
+        && (
+          request.resource.data.type != 'containerWash'
+          || get(/databases/$(database)/documents/processes/$(processId)).data.category in ['FCL', 'CONSOLIDADO']
+        );
+    }
+
     match /processes/{processId} {
       allow read: if isApprovedUser();
       allow create: if isAdmin()
@@ -511,9 +635,28 @@ service cloud.firestore {
       }
 
       // F17.1b: gravada SO pelo trigger recordProcessMilestoneEvents (admin SDK ignora rules)
+      // F18a (Decisao 10): historico restrito - so admin/logistica leem.
       match /events/{eventId} {
-        allow read: if isApprovedUser();
+        allow read: if isAdmin() || isLogistics();
         allow create, update, delete: if false;
+      }
+
+      // F18a (D1-D5) + AD-1 (adendo do orquestrador): metadado IMUTAVEL de
+      // documentos do processo (BL/AWB, relatorio de carga, invoice/packing
+      // list, FISPQ por item, lavacao por conteiner, outros). Leitura so
+      // admin/logistica (nunca usuario comum). `update: if false` sempre -
+      // "versao anterior" e' derivada por ordem de `uploadedAt` dentro do
+      // mesmo `slotKey` (D1), nunca reescrita.
+      match /documents/{documentId} {
+        allow read: if isAdmin() || isLogistics();
+        allow create: if isValidProcessDocumentCreate(processId)
+          && (
+            isAdmin()
+            || (isLogistics() && request.resource.data.type == 'containerWash')
+          );
+        allow update: if false;
+        allow delete: if isAdmin()
+          || (isLogistics() && resource.data.uploadedById == request.auth.uid);
       }
     }
 

@@ -60,6 +60,14 @@ vi.mock('../../src/services/processMessagesRepository', () => ({
 vi.mock('../../src/services/processEventsRepository', () => ({
   listProcessEvents: vi.fn().mockResolvedValue([]),
 }))
+// F18a: defensivo — a aba "Documentos" (ProcessDocumentsPanel) se autocarrega,
+// mesmo padrao de processEventsRepository acima.
+vi.mock('../../src/services/processDocumentsRepository', () => ({
+  listProcessDocuments: vi.fn().mockResolvedValue([]),
+  uploadProcessDocument: vi.fn(),
+  deleteProcessDocument: vi.fn(),
+  getProcessDocumentDownloadUrl: vi.fn(),
+}))
 vi.mock('../../src/services/postReceiptImagesStorage', () => ({
   deletePostReceiptImages: vi.fn().mockResolvedValue(undefined),
   getAddedPostReceiptImages: () => [],

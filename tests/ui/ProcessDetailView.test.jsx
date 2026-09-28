@@ -12,6 +12,15 @@ vi.mock('../../src/services/processEventsRepository', () => ({
   listProcessEvents: (...args) => mockListProcessEvents(...args),
 }))
 
+// F18a: defensivo - ProcessDetailView agora renderiza ProcessDocumentsPanel
+// na aba "Documentos" (autocarregado, mesmo padrao de processEventsRepository).
+vi.mock('../../src/services/processDocumentsRepository', () => ({
+  listProcessDocuments: vi.fn().mockResolvedValue([]),
+  uploadProcessDocument: vi.fn(),
+  deleteProcessDocument: vi.fn(),
+  getProcessDocumentDownloadUrl: vi.fn(),
+}))
+
 function makeProcess(overrides = {}) {
   return {
     id: 'p-1',
@@ -162,31 +171,81 @@ describe('ProcessDetailView — card "Dados pendentes" (F17.1a)', () => {
 })
 
 // F17.1b: aba "Histórico" — painel autocarregado via listProcessEvents.
-describe('ProcessDetailView — aba "Histórico" (F17.1b)', () => {
-  it('detailTab="history" renderiza o painel e chama listProcessEvents(selectedProcess.id)', async () => {
+// F18a (D6): historico e' restrito a admin/logistica (`profile.role`), nao
+// mais a qualquer usuario. Deep link (`detailTab='history'`) com role sem
+// acesso cai na aba "Detalhes gerais" (guard `effectiveTab`).
+describe('ProcessDetailView — aba "Histórico" (F17.1b, restrita no F18a)', () => {
+  it('detailTab="history" com role admin renderiza o painel e chama listProcessEvents(selectedProcess.id)', async () => {
     renderDetail({
       detailTab: 'history',
+      profile: { name: 'Admin', role: 'admin' },
       selectedProcess: makeProcess({ id: 'p-history' }),
     })
     await waitFor(() => expect(mockListProcessEvents).toHaveBeenCalledWith('p-history'))
     expect(screen.getByText('Histórico de marcos')).toBeInTheDocument()
   })
 
-  it('a opção/botão "Histórico" aparece para isAdmin true', () => {
-    renderDetail({ isAdmin: true })
+  it('a opção/botão "Histórico" aparece para profile.role admin', () => {
+    renderDetail({ isAdmin: true, profile: { name: 'Admin', role: 'admin' } })
     expect(screen.getByRole('button', { name: 'Histórico' })).toBeInTheDocument()
   })
 
-  it('a opção/botão "Histórico" aparece para isAdmin false', () => {
-    renderDetail({ isAdmin: false })
+  it('a opção/botão "Histórico" aparece para profile.role logistica', () => {
+    renderDetail({ isAdmin: false, profile: { name: 'Log', role: 'logistica' } })
     expect(screen.getByRole('button', { name: 'Histórico' })).toBeInTheDocument()
+  })
+
+  it('a opção/botão "Histórico" NAO aparece para profile.role user (isAdmin false)', () => {
+    renderDetail({ isAdmin: false, profile: { name: 'User', role: 'user' } })
+    expect(screen.queryByRole('button', { name: 'Histórico' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Documentos' })).not.toBeInTheDocument()
+  })
+
+  it('deep link detailTab="history" com role user renderiza a aba geral', () => {
+    renderDetail({
+      detailTab: 'history',
+      profile: { name: 'User', role: 'user' },
+      selectedProcess: makeProcess({ id: 'p-history' }),
+    })
+    expect(screen.queryByText('Histórico de marcos')).not.toBeInTheDocument()
+    expect(screen.getByText('ETD / ETA')).toBeInTheDocument()
   })
 
   it('clicar no botão "Histórico" chama onDetailTabChange("history")', () => {
     const onDetailTabChange = vi.fn()
-    renderDetail({ onDetailTabChange })
+    renderDetail({ profile: { name: 'Admin', role: 'admin' }, onDetailTabChange })
     screen.getByRole('button', { name: 'Histórico' }).click()
     expect(onDetailTabChange).toHaveBeenCalledWith('history')
+  })
+})
+
+// F18a (D9): aba "Documentos" - mesma restricao de D6.
+describe('ProcessDetailView — aba "Documentos" (F18a)', () => {
+  it('a opção/botão "Documentos" aparece para profile.role admin', () => {
+    renderDetail({ profile: { name: 'Admin', role: 'admin' } })
+    expect(screen.getByRole('button', { name: 'Documentos' })).toBeInTheDocument()
+  })
+
+  it('detailTab="documents" com role logistica renderiza o painel', () => {
+    renderDetail({
+      detailTab: 'documents',
+      profile: { name: 'Log', role: 'logistica' },
+      selectedProcess: makeProcess({ id: 'p-doc' }),
+    })
+    expect(
+      screen.getByText('Documentos do processo (BL/AWB, relatório de carga, invoice, packing list).')
+    ).toBeInTheDocument()
+  })
+
+  it('deep link detailTab="documents" com role user renderiza a aba geral', () => {
+    renderDetail({
+      detailTab: 'documents',
+      profile: { name: 'User', role: 'user' },
+      selectedProcess: makeProcess({ id: 'p-doc' }),
+    })
+    expect(
+      screen.queryByText('Documentos do processo (BL/AWB, relatório de carga, invoice, packing list).')
+    ).not.toBeInTheDocument()
   })
 })
 

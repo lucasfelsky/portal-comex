@@ -53,7 +53,7 @@
     "count": 12
   },
   "srcServices": {
-    "count": 18,
+    "count": 19,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -68,6 +68,7 @@
       "newsRepository.js",
       "notificationsRepository.js",
       "postReceiptImagesStorage.js",
+      "processDocumentsRepository.js",
       "processEventsRepository.js",
       "processMessagesRepository.js",
       "processesRepository.js",
@@ -96,7 +97,7 @@
   },
   "firestore": {
     "topLevelCollections": 12,
-    "subcollections": 2,
+    "subcollections": 3,
     "_topLevel_list": [
       "announcements",
       "audits",
@@ -112,16 +113,17 @@
       "users"
     ],
     "_subcollections_list": [
+      "processes/documents",
       "processes/events",
       "processes/messages"
     ]
   },
   "tests": {
-    "totalFiles": 78,
+    "totalFiles": 80,
     "_breakdown": {
       "firebase": 4,
-      "functions": 14,
-      "ui": 60
+      "functions": 15,
+      "ui": 61
     }
   },
   "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",
@@ -282,6 +284,22 @@
       "resolvedByName",
       "status",
       "updatedAt"
+    ],
+    "isValidProcessDocumentCreate": [
+      "containerId",
+      "description",
+      "itemId",
+      "mimeType",
+      "name",
+      "poNumber",
+      "size",
+      "slotKey",
+      "storagePath",
+      "type",
+      "uploadedAt",
+      "uploadedById",
+      "uploadedByName",
+      "uploadedByRole"
     ]
   },
   "routes": {

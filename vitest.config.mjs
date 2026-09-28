@@ -22,6 +22,11 @@ const firebaseBackendAlias = Object.fromEntries(
     'firebase-admin/auth',
     'firebase-admin/firestore',
     'firebase-admin/messaging',
+    // F18a (D7): `deleteProcessDocumentFile`/`cleanupDeletedProcessData`
+    // usam `firebase-admin/storage` (getStorage) - mesmo motivo dos demais
+    // subpaths acima (sem o alias, o `vi.mock('firebase-admin/storage', ...)`
+    // nao casa quando `functions/node_modules` existir).
+    'firebase-admin/storage',
     'firebase-functions/v2/firestore',
     'firebase-functions/v2/https',
     'firebase-functions/params',

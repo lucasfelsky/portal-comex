@@ -87,12 +87,56 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/events\/\{eventId\}\s*\{/)
     })
 
-    it('match /events/{eventId} permite so leitura para aprovados (write: if false)', () => {
+    it('match /events/{eventId} permite leitura so admin/logistica (F18a Decisao 10) e write: if false', () => {
       const match = rules.match(/match\s+\/events\/\{eventId\}\s*\{([\s\S]*?)\n\s{6}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
-      expect(body).toMatch(/allow\s+read:\s*if\s+isApprovedUser\s*\(\s*\)/)
+      expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)/)
       expect(body).toMatch(/allow\s+create,\s*update,\s*delete:\s*if\s+false/)
+    })
+
+    it('declara a subcollection processes/{pid}/documents/{documentId} (F18a)', () => {
+      expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/documents\/\{documentId\}\s*\{/)
+    })
+
+    it('match /documents/{documentId} e imutavel (update: if false), leitura so admin/logistica', () => {
+      const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)/)
+      expect(body).toMatch(/allow\s+update:\s*if\s+false/)
+      expect(body).toMatch(/isValidProcessDocumentCreate\s*\(\s*processId\s*\)/)
+    })
+  })
+
+  describe('F18a — isValidProcessDocumentCreate (D1-D5, AD-1)', () => {
+    it('hasOnly contem os 14 campos (13 do D1 + poNumber do AD-1)', () => {
+      const match = rules.match(/function\s+isValidProcessDocumentCreate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      const fields = [
+        'type', 'slotKey', 'itemId', 'containerId', 'description', 'name',
+        'mimeType', 'size', 'storagePath', 'uploadedAt', 'uploadedById',
+        'uploadedByName', 'uploadedByRole', 'poNumber',
+      ]
+      for (const field of fields) {
+        expect(body, `campo ${field} nao esta em isValidProcessDocumentCreate`).toMatch(
+          new RegExp(`['"]${field}['"]`)
+        )
+      }
+    })
+
+    it('AD-1: slotKey de invoice/packingList no CONSOLIDADO usa poNumber', () => {
+      const match = rules.match(/function\s+isValidProcessDocumentSlotKey\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/poNumber/)
+      expect(match[1]).toMatch(/CONSOLIDADO/)
+    })
+
+    it('containerWash so em FCL/CONSOLIDADO', () => {
+      const match = rules.match(/function\s+isValidProcessDocumentCreate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/\[\s*['"]FCL['"]\s*,\s*['"]CONSOLIDADO['"]\s*\]/)
     })
   })
 

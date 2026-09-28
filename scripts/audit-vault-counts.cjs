@@ -373,7 +373,7 @@ function audit() {
     // sozinho nao carrega o path completo (a regex nao olha nesting), entao
     // mantemos uma lista explicita de nomes de subcolecao pra excluir do
     // top-level e contar por CONTEUDO (nao so por tamanho).
-    const SUBCOLLECTION_NAMES = new Set(['messages', 'events'])
+    const SUBCOLLECTION_NAMES = new Set(['messages', 'events', 'documents'])
     const matches = Array.from(rules.matchAll(/match\s+\/([a-zA-Z][a-zA-Z0-9_]*)\/\{[a-zA-Z]+\}/g)).map((m) => m[1])
     const topLevel = matches.filter((n) => n !== 'databases' && !SUBCOLLECTION_NAMES.has(n)).sort()
     const subLevel = [...new Set(matches.filter((n) => SUBCOLLECTION_NAMES.has(n)))].sort()

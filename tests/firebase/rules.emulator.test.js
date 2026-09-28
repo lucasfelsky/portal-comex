@@ -2150,8 +2150,8 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('usuario aprovado le', async () => {
-      await assertSucceeds(getDoc(doc(approvedUser('user-1'), 'processes/p1/events/e1')))
+    it('usuario aprovado comum NAO le (F18a Decisao 10)', async () => {
+      await assertFails(getDoc(doc(approvedUser('user-1'), 'processes/p1/events/e1')))
     })
 
     it('logistica le', async () => {
@@ -2205,6 +2205,356 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(
         setDoc(doc(approvedUser('user-1'), 'processes/p1/events/e2'), { type: 'berthed', processId: 'p1' })
       )
+    })
+  })
+
+  describe('documents (subcollection, F18a + AD-1)', () => {
+    beforeEach(async () => {
+      await seed(async (db) => {
+        await setDoc(doc(db, 'processes/p1'), { category: 'FCL' })
+        await setDoc(doc(db, 'processes/p-consolidado'), { category: 'CONSOLIDADO' })
+        await setDoc(doc(db, 'processes/p-lcl'), { category: 'LCL' })
+      })
+    })
+
+    function baseFields(overrides = {}) {
+      return {
+        type: 'bl',
+        slotKey: 'bl',
+        name: 'BL.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+        storagePath: 'processes/p1/documents/bl/1-admin-1-BL.pdf',
+        uploadedAt: serverTimestamp(),
+        uploadedById: 'admin-1',
+        uploadedByName: 'Admin',
+        uploadedByRole: 'admin',
+        ...overrides,
+      }
+    }
+
+    it('admin cria bl', async () => {
+      await assertSucceeds(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields()))
+    })
+
+    it('admin cria cargoReport', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'cargoReport',
+            slotKey: 'cargoReport',
+            storagePath: 'processes/p1/documents/cargoReport/1-admin-1-relatorio.pdf',
+          })
+        )
+      )
+    })
+
+    it('admin cria fispq com itemId', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'fispq',
+            slotKey: 'fispq:ITEM-1',
+            itemId: 'ITEM-1',
+            storagePath: 'processes/p1/documents/fispq/ITEM-1/1-admin-1-fispq.pdf',
+          })
+        )
+      )
+    })
+
+    it('fispq sem itemId falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'fispq',
+            slotKey: 'fispq:ITEM-1',
+            storagePath: 'processes/p1/documents/fispq/ITEM-1/1-admin-1-fispq.pdf',
+          })
+        )
+      )
+    })
+
+    it('admin cria other com description', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'other',
+            slotKey: 'other:d1',
+            description: 'nota fiscal',
+            storagePath: 'processes/p1/documents/other/1-admin-1-nf.pdf',
+          })
+        )
+      )
+    })
+
+    it('other sem description falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'other',
+            slotKey: 'other:d1',
+            storagePath: 'processes/p1/documents/other/1-admin-1-nf.pdf',
+          })
+        )
+      )
+    })
+
+    it('admin cria containerWash em FCL', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'containerWash',
+            slotKey: 'containerWash:CNT-1',
+            containerId: 'CNT-1',
+            storagePath: 'processes/p1/documents/containerWash/CNT-1/1-admin-1-lavacao.pdf',
+          })
+        )
+      )
+    })
+
+    it('containerWash em LCL falha (mesmo pra admin)', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p-lcl/documents/d1'),
+          baseFields({
+            type: 'containerWash',
+            slotKey: 'containerWash:CNT-1',
+            containerId: 'CNT-1',
+            storagePath: 'processes/p-lcl/documents/containerWash/CNT-1/1-admin-1-lavacao.pdf',
+          })
+        )
+      )
+    })
+
+    it('logistica cria containerWash em FCL', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(logistics('log-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'containerWash',
+            slotKey: 'containerWash:CNT-1',
+            containerId: 'CNT-1',
+            storagePath: 'processes/p1/documents/containerWash/CNT-1/1-log-1-lavacao.pdf',
+            uploadedById: 'log-1',
+            uploadedByName: 'Logistica',
+            uploadedByRole: 'logistica',
+          })
+        )
+      )
+    })
+
+    it('logistica cria containerWash em CONSOLIDADO', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(logistics('log-1'), 'processes/p-consolidado/documents/d1'),
+          baseFields({
+            type: 'containerWash',
+            slotKey: 'containerWash:CNT-1',
+            containerId: 'CNT-1',
+            storagePath: 'processes/p-consolidado/documents/containerWash/CNT-1/1-log-1-lavacao.pdf',
+            uploadedById: 'log-1',
+            uploadedByName: 'Logistica',
+            uploadedByRole: 'logistica',
+          })
+        )
+      )
+    })
+
+    it('logistica cria containerWash em LCL falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(logistics('log-1'), 'processes/p-lcl/documents/d1'),
+          baseFields({
+            type: 'containerWash',
+            slotKey: 'containerWash:CNT-1',
+            containerId: 'CNT-1',
+            storagePath: 'processes/p-lcl/documents/containerWash/CNT-1/1-log-1-lavacao.pdf',
+            uploadedById: 'log-1',
+            uploadedByName: 'Logistica',
+            uploadedByRole: 'logistica',
+          })
+        )
+      )
+    })
+
+    it('logistica NAO cria bl', async () => {
+      await assertFails(
+        setDoc(
+          doc(logistics('log-1'), 'processes/p1/documents/d1'),
+          baseFields({ uploadedById: 'log-1', uploadedByName: 'Logistica', uploadedByRole: 'logistica' })
+        )
+      )
+    })
+
+    // AD-1: invoice/packingList no CONSOLIDADO exigem poNumber == sufixo do slotKey.
+    it('AD-1: admin cria invoice no CONSOLIDADO com poNumber == sufixo do slotKey', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
+          baseFields({
+            type: 'invoice',
+            slotKey: 'invoice:PO-1',
+            poNumber: 'PO-1',
+            storagePath: 'processes/p-consolidado/documents/invoice/PO-1/1-admin-1-invoice.pdf',
+          })
+        )
+      )
+    })
+
+    it('AD-1: admin cria invoice no CONSOLIDADO SEM poNumber falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
+          baseFields({
+            type: 'invoice',
+            slotKey: 'invoice',
+            storagePath: 'processes/p-consolidado/documents/invoice/1-admin-1-invoice.pdf',
+          })
+        )
+      )
+    })
+
+    it('AD-1: poNumber diferente do sufixo do slotKey falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
+          baseFields({
+            type: 'invoice',
+            slotKey: 'invoice:PO-1',
+            poNumber: 'PO-2',
+            storagePath: 'processes/p-consolidado/documents/invoice/PO-1/1-admin-1-invoice.pdf',
+          })
+        )
+      )
+    })
+
+    it('AD-1: slot por PO recusado fora do CONSOLIDADO (FCL)', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'invoice',
+            slotKey: 'invoice:PO-1',
+            poNumber: 'PO-1',
+            storagePath: 'processes/p1/documents/invoice/PO-1/1-admin-1-invoice.pdf',
+          })
+        )
+      )
+    })
+
+    it('admin cria invoice em FCL sem PO (slot unico)', async () => {
+      await assertSucceeds(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({
+            type: 'invoice',
+            slotKey: 'invoice',
+            storagePath: 'processes/p1/documents/invoice/1-admin-1-invoice.pdf',
+          })
+        )
+      )
+    })
+
+    it('campo extra fora da allowlist falha', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), { ...baseFields(), extra: 'x' })
+      )
+    })
+
+    it('size acima de 20 MB falha', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields({ size: 20971521 }))
+      )
+    })
+
+    it('slotKey errado falha', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields({ slotKey: 'bl-errado' }))
+      )
+    })
+
+    it('storagePath de outro processo falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({ storagePath: 'processes/p-outro/documents/bl/1-admin-1-BL.pdf' })
+        )
+      )
+    })
+
+    it('storagePath com uid de outro usuario falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p1/documents/d1'),
+          baseFields({ storagePath: 'processes/p1/documents/bl/1-outro-uid-BL.pdf' })
+        )
+      )
+    })
+
+    it('uploadedById forjado (diferente do auth.uid) falha', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields({ uploadedById: 'outro-uid' }))
+      )
+    })
+
+    it('uploadedByRole forjado falha', async () => {
+      await assertFails(
+        setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields({ uploadedByRole: 'logistica' }))
+      )
+    })
+
+    it('processo inexistente falha', async () => {
+      await assertFails(
+        setDoc(
+          doc(admin('admin-1'), 'processes/p-inexistente/documents/d1'),
+          baseFields({ storagePath: 'processes/p-inexistente/documents/bl/1-admin-1-BL.pdf' })
+        )
+      )
+    })
+
+    it('usuario comum nao le nem cria', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+      await assertFails(getDoc(doc(approvedUser('user-1'), 'processes/p1/documents/d1')))
+      await assertFails(
+        setDoc(doc(approvedUser('user-1'), 'processes/p1/documents/d2'), baseFields({ uploadedById: 'user-1' }))
+      )
+    })
+
+    it('usuario Pendente nao le', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+      const db = approvedUser('user-pend', { status: 'Pendente' })
+      await assertFails(getDoc(doc(db, 'processes/p1/documents/d1')))
+    })
+
+    it('anonimo nao le nem cria', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+      await assertFails(getDoc(doc(anon(), 'processes/p1/documents/d1')))
+      await assertFails(setDoc(doc(anon(), 'processes/p1/documents/d2'), baseFields()))
+    })
+
+    it('update falha mesmo para admin (documento imutavel)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+      await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), { name: 'outro.pdf' }))
+    })
+
+    it('logistica apaga o proprio; NAO apaga o de outro', async () => {
+      await seed(async (db) => {
+        await setDoc(doc(db, 'processes/p1/documents/own'), baseFields({ uploadedById: 'log-1' }))
+        await setDoc(doc(db, 'processes/p1/documents/other-doc'), baseFields({ uploadedById: 'admin-1' }))
+      })
+      await assertSucceeds(deleteDoc(doc(logistics('log-1'), 'processes/p1/documents/own')))
+      await assertFails(deleteDoc(doc(logistics('log-1'), 'processes/p1/documents/other-doc')))
+    })
+
+    it('admin apaga qualquer documento', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields({ uploadedById: 'log-1' })))
+      await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'processes/p1/documents/d1')))
     })
   })
 
