@@ -203,7 +203,10 @@ export function ProcessIdentificationDetails({ process, canSeeName }) {
 // do vazio) + pesos/cubagem/volumes/pallets + "Contêineres" (legado, so'
 // quando `containers[]` esta vazio e a categoria mostra quantidade) + linha
 // IMO por item perigoso (mais o legado do processo).
-export function ProcessCargoDetails({ process, showContainerQuantity }) {
+// F18b-2 (E9): `containerWashIds` e' prop opcional (array de `container.id`
+// com relatorio de lavacao enviado, lido de `documentIndex` pelo pai). Sem
+// a prop, o render fica identico ao atual.
+export function ProcessCargoDetails({ process, showContainerQuantity, containerWashIds }) {
   const containers = Array.isArray(process?.containers) ? process.containers : []
   const specialBadges = getContainerSpecialBadges(containers)
   const isDangerous = hasDangerousGoods(process)
@@ -248,7 +251,16 @@ export function ProcessCargoDetails({ process, showContainerQuantity }) {
                   <td>{container.seal || '—'}</td>
                   <td>
                     {container.returnedAt ? (
-                      <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
+                      <>
+                        <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
+                        {Array.isArray(containerWashIds) ? (
+                          containerWashIds.includes(container.id) ? (
+                            <span className="inline-badge inline-badge--ok">Lavação enviada</span>
+                          ) : (
+                            <span className="inline-badge inline-badge--warn">Lavação pendente</span>
+                          )
+                        ) : null}
+                      </>
                     ) : (
                       '—'
                     )}

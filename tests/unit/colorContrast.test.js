@@ -335,6 +335,32 @@ describe.each(Object.entries(themes))('--on-warn (%s)', (themeName, theme) => {
 })
 
 // ---------------------------------------------------------------------------
+// F18b-2 (E11): pares novos de texto usados na aba "Documentos" redesenhada
+// (badges "Enviado"/"Enviada" via --success-700/--success-50, badge neutro
+// via --neutral-700/--neutral-50, erro de linha via --danger-700/--surface).
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('--success-700 (%s)', (themeName, theme) => {
+  it('sobre --success-50 >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--success-700', theme, '--success-50')
+    expect(ratio, `--success-700/--success-50 (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe.each(Object.entries(themes))('--neutral-700 (%s)', (themeName, theme) => {
+  it('sobre --neutral-50 >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--neutral-700', theme, '--neutral-50')
+    expect(ratio, `--neutral-700/--neutral-50 (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe.each(Object.entries(themes))('--danger-700 texto de erro (%s)', (themeName, theme) => {
+  it('sobre --surface >= 4.5:1', () => {
+    const ratio = ratioTokenOverBg('--danger-700', theme, '--surface')
+    expect(ratio, `--danger-700/--surface (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Guardas estruturais (g, h, i).
 // ---------------------------------------------------------------------------
 describe('guardas estruturais', () => {

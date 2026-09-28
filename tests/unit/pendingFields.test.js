@@ -693,3 +693,47 @@ describe('getPendingFields - divergencia no recebimento / devolucao de vazio (F1
     expect(getPendingFields(process).map((f) => f.id)).not.toContain('containersReturnedAt')
   })
 })
+
+// F18b-2 (E5): getPendingFields concatena as pendencias de documentos
+// (FISPQ por item IMO + lavação por contêiner devolvido), lidas do
+// `documentIndex` do processo - sem filtro por estagio.
+describe('getPendingFields - documentos (F18b-2)', () => {
+  it('item IMO com id fora do documentIndex -> inclui fispq:<id>', () => {
+    const process = completeMaritimeProcess({
+      items: [{ id: 'ITEM-1', commercialName: 'Resina', quantity: 10, dangerousGoods: true }],
+      documentIndex: { fispqItemIds: [], containerWashIds: [] },
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('fispq:ITEM-1')
+  })
+
+  it('item IMO com id JA no documentIndex -> NAO inclui', () => {
+    const process = completeMaritimeProcess({
+      items: [{ id: 'ITEM-1', commercialName: 'Resina', quantity: 10, dangerousGoods: true }],
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] },
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('fispq:ITEM-1')
+  })
+
+  it('contêiner devolvido com id fora do documentIndex -> inclui containerWash:<id>', () => {
+    const process = completeMaritimeProcess({
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC', returnedAt: '2026-09-01' }],
+      documentIndex: { fispqItemIds: [], containerWashIds: [] },
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('containerWash:CNT-1')
+  })
+
+  it('contêiner devolvido com id JA no documentIndex -> NAO inclui', () => {
+    const process = completeMaritimeProcess({
+      containers: [{ id: 'CNT-1', number: 'CSQU3054383', seal: 'LACRE-1', type: '40DC', returnedAt: '2026-09-01' }],
+      documentIndex: { fispqItemIds: [], containerWashIds: ['CNT-1'] },
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('containerWash:CNT-1')
+  })
+
+  it('sem documentIndex (processo legado) -> trata como vazio, gera as pendencias', () => {
+    const process = completeMaritimeProcess({
+      items: [{ id: 'ITEM-1', commercialName: 'Resina', quantity: 10, dangerousGoods: true }],
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('fispq:ITEM-1')
+  })
+})

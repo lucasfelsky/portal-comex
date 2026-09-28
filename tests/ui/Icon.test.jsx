@@ -29,6 +29,8 @@ describe('Icon', () => {
       'dashboard', 'news', 'arrivals', 'admin', 'bell', 'check', 'external',
       'logout', 'edit', 'trash', 'lock', 'plus', 'search', 'download', 'chevron',
       'dollar', 'trend', 'sparkle', 'inbox',
+      // F18b-2 (E10): aba "Documentos" redesenhada.
+      'upload', 'refresh', 'file', 'flask', 'container', 'alert', 'history',
     ]
     for (const name of KNOWN) {
       const { container } = render(<Icon name={name} />)

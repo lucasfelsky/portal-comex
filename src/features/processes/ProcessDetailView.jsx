@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
@@ -26,7 +26,7 @@ import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
-import { canViewProcessRecords } from './processDocuments'
+import { canViewProcessRecords, getDocumentPendingFields, normalizeDocumentIndex } from './processDocuments'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import {
   DetailBlock,
@@ -108,6 +108,32 @@ export default function ProcessDetailView({
   const canViewRecords = canViewProcessRecords(profile?.role)
   const effectiveTab =
     !canViewRecords && (detailTab === 'history' || detailTab === 'documents') ? 'general' : detailTab
+
+  // F18b-2 (E3): contador de documentos pendentes na aba - `documentIndex`
+  // (aba/select, atualizado no reload assincrono do trigger) EXCETO quando o
+  // painel ja reportou a contagem fresca do MESMO processo via
+  // `onPendingCountChange` nesta sessao (apos um upload, evita divergencia
+  // entre a aba e o resumo do painel).
+  const [pendingCountOverride, setPendingCountOverride] = useState(null)
+  const documentsPendingCount = canViewRecords
+    ? pendingCountOverride && pendingCountOverride.processId === selectedProcess.id
+      ? pendingCountOverride.count
+      : getDocumentPendingFields(selectedProcess).length
+    : 0
+
+  // useCallback (identidade estavel por processId): a funcao vira dependencia
+  // do `useEffect` de `ProcessDocumentsPanel` - se recriada a cada render do
+  // pai, o efeito reroda a cada chamada e entra em loop infinito.
+  const handleDocumentsPendingCountChange = useCallback(
+    (count) => {
+      setPendingCountOverride({ processId: selectedProcess.id, count })
+    },
+    [selectedProcess.id]
+  )
+
+  // F18b-2 (E9): indicadores read-only de FISPQ/lavacao (aba Itens/bloco
+  // Carga), lidos do `documentIndex` do processo - so canViewRecords.
+  const documentIndex = canViewRecords ? normalizeDocumentIndex(selectedProcess.documentIndex) : null
 
   // D4: menu "Mais ações" — foco no 1o menuitem ao abrir; Esc/clique fora
   // fecham (e devolvem o foco ao trigger no Esc).
@@ -353,7 +379,13 @@ export default function ProcessDetailView({
           <option value="items">Itens</option>
           <option value="messages">Mensagens</option>
           {canViewRecords ? <option value="history">Histórico</option> : null}
-          {canViewRecords ? <option value="documents">Documentos</option> : null}
+          {canViewRecords ? (
+            <option value="documents">
+              {documentsPendingCount > 0
+                ? `Documentos (${documentsPendingCount} ${documentsPendingCount === 1 ? 'pendente' : 'pendentes'})`
+                : 'Documentos'}
+            </option>
+          ) : null}
           {effectiveTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
         </select>
       </div>
@@ -367,7 +399,14 @@ export default function ProcessDetailView({
           <button type="button" className={`tab-button${effectiveTab === 'history' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('history')}>Histórico</button>
         ) : null}
         {canViewRecords ? (
-          <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('documents')}>Documentos</button>
+          <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('documents')}>
+            Documentos
+            {documentsPendingCount > 0 ? (
+              <span className="documents-tab-count">
+                {`${documentsPendingCount} ${documentsPendingCount === 1 ? 'pendente' : 'pendentes'}`}
+              </span>
+            ) : null}
+          </button>
         ) : null}
         {effectiveTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
       </div>
@@ -435,6 +474,7 @@ export default function ProcessDetailView({
             <ProcessCargoDetails
               process={selectedProcess}
               showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
+              containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
             />
             <ProcessTransitDetails process={selectedProcess} />
             <ProcessArrivalDetails process={selectedProcess} step={3} />
@@ -556,6 +596,13 @@ export default function ProcessDetailView({
                         {getItemDangerousGoodsLabel(item)}
                       </span>
                     ) : null}
+                    {documentIndex && item.dangerousGoods && item.id ? (
+                      documentIndex.fispqItemIds.includes(item.id) ? (
+                        <span className="inline-badge inline-badge--ok">FISPQ enviada</span>
+                      ) : (
+                        <span className="inline-badge inline-badge--warn">FISPQ pendente</span>
+                      )
+                    ) : null}
                   </button>
                 ))
               ) : (
@@ -630,7 +677,11 @@ export default function ProcessDetailView({
         ) : null}
 
         {effectiveTab === 'documents' ? (
-          <ProcessDocumentsPanel process={selectedProcess} profile={profile} />
+          <ProcessDocumentsPanel
+            process={selectedProcess}
+            profile={profile}
+            onPendingCountChange={handleDocumentsPendingCountChange}
+          />
         ) : null}
       </div>
     </article>
