@@ -25,6 +25,8 @@ import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
+import ProcessDocumentsPanel from './ProcessDocumentsPanel'
+import { canViewProcessRecords } from './processDocuments'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import {
   DetailBlock,
@@ -100,6 +102,12 @@ export default function ProcessDetailView({
   const firstMenuItemRef = useRef(null)
   // D-E: pendencias so pro admin.
   const pendingFields = isAdmin ? getPendingFields(selectedProcess) : []
+  // F18a (D6): "Histórico"/"Documentos" so pra admin/logistica. Deep link
+  // (`location.state.detailTab`, `ProcessesPage.jsx:813`) pode cair aqui
+  // com um role sem acesso - o guard redireciona pra "Detalhes gerais".
+  const canViewRecords = canViewProcessRecords(profile?.role)
+  const effectiveTab =
+    !canViewRecords && (detailTab === 'history' || detailTab === 'documents') ? 'general' : detailTab
 
   // D4: menu "Mais ações" — foco no 1o menuitem ao abrir; Esc/clique fora
   // fecham (e devolvem o foco ao trigger no Esc).
@@ -336,7 +344,7 @@ export default function ProcessDetailView({
       <div className="detail-tab-select">
         <select
           className="detail-tab-select__native"
-          value={detailTab === 'related-item' && selectedItemName ? 'related-item' : detailTab}
+          value={effectiveTab === 'related-item' && selectedItemName ? 'related-item' : effectiveTab}
           onChange={(event) => onDetailTabChange(event.target.value)}
           aria-label="Seção do processo"
         >
@@ -344,22 +352,28 @@ export default function ProcessDetailView({
           <option value="process">Processo</option>
           <option value="items">Itens</option>
           <option value="messages">Mensagens</option>
-          <option value="history">Histórico</option>
-          {detailTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
+          {canViewRecords ? <option value="history">Histórico</option> : null}
+          {canViewRecords ? <option value="documents">Documentos</option> : null}
+          {effectiveTab === 'related-item' && selectedItemName ? <option value="related-item">Item relacionado</option> : null}
         </select>
       </div>
 
       <div className="tab-row detail-tab-row">
-        <button type="button" className={`tab-button${detailTab === 'general' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('general')}>Detalhes gerais</button>
-        <button type="button" className={`tab-button${detailTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('process')}>Processo</button>
-        <button type="button" className={`tab-button${detailTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('items')}>Itens</button>
-        <button type="button" className={`tab-button${detailTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
-        <button type="button" className={`tab-button${detailTab === 'history' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('history')}>Histórico</button>
-        {detailTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
+        <button type="button" className={`tab-button${effectiveTab === 'general' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('general')}>Detalhes gerais</button>
+        <button type="button" className={`tab-button${effectiveTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('process')}>Processo</button>
+        <button type="button" className={`tab-button${effectiveTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('items')}>Itens</button>
+        <button type="button" className={`tab-button${effectiveTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
+        {canViewRecords ? (
+          <button type="button" className={`tab-button${effectiveTab === 'history' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('history')}>Histórico</button>
+        ) : null}
+        {canViewRecords ? (
+          <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('documents')}>Documentos</button>
+        ) : null}
+        {effectiveTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
       </div>
 
       <div className="detail-stack tab-panel-spacing">
-        {detailTab === 'general' ? (
+        {effectiveTab === 'general' ? (
           <>
             {isAdmin && pendingFields.length > 0 ? (
               <div className="detail-card">
@@ -416,7 +430,7 @@ export default function ProcessDetailView({
           </>
         ) : null}
 
-        {detailTab === 'process' ? (
+        {effectiveTab === 'process' ? (
           <>
             <ProcessCargoDetails
               process={selectedProcess}
@@ -496,7 +510,7 @@ export default function ProcessDetailView({
           </>
         ) : null}
 
-        {detailTab === 'items' ? (
+        {effectiveTab === 'items' ? (
           <div ref={itemsSectionRef} className="detail-card">
             <div className="card-heading process-detail-card-heading">
               <div>
@@ -554,7 +568,7 @@ export default function ProcessDetailView({
           </div>
         ) : null}
 
-        {detailTab === 'related-item' && selectedItemName ? (
+        {effectiveTab === 'related-item' && selectedItemName ? (
           <div className="detail-card">
             <div className="card-heading process-detail-card-heading">
               <div>
@@ -592,7 +606,7 @@ export default function ProcessDetailView({
           </div>
         ) : null}
 
-        {detailTab === 'messages' ? (
+        {effectiveTab === 'messages' ? (
           <ProcessMessagesPanel
             messages={processMessages}
             isLoading={isLoadingMessages}
@@ -611,8 +625,12 @@ export default function ProcessDetailView({
           />
         ) : null}
 
-        {detailTab === 'history' ? (
+        {effectiveTab === 'history' ? (
           <ProcessHistoryPanel processId={selectedProcess.id} />
+        ) : null}
+
+        {effectiveTab === 'documents' ? (
+          <ProcessDocumentsPanel process={selectedProcess} profile={profile} />
         ) : null}
       </div>
     </article>

@@ -30,7 +30,26 @@ export const mockFirestoreApi = {
   where: vi.fn(),
   orderBy: vi.fn(),
   limit: vi.fn(),
+  // F18a (D7): `cleanupDeletedProcessData` apaga as subcolecoes do
+  // processo excluido via `firestore.recursiveDelete(docRef)`.
+  recursiveDelete: vi.fn().mockResolvedValue(undefined),
   FieldValue: { serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'), arrayRemove: vi.fn((...values) => ({ __arrayRemove: values })) },
+}
+
+// F18a (D7): mock do firebase-admin/storage (bucket().file().delete() e
+// bucket().deleteFiles()) usado por `deleteProcessDocumentFile` e
+// `cleanupDeletedProcessData`.
+export const mockStorageFile = {
+  delete: vi.fn().mockResolvedValue(undefined),
+}
+
+export const mockBucket = {
+  file: vi.fn(() => mockStorageFile),
+  deleteFiles: vi.fn().mockResolvedValue(undefined),
+}
+
+export const mockStorageApi = {
+  bucket: vi.fn(() => mockBucket),
 }
 
 export const mockBatch = {
@@ -83,6 +102,12 @@ export const mocks = {
   firebaseFirestoreTriggers: () => ({
     onDocumentCreated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
     onDocumentUpdated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+    // F18a (D7): `deleteProcessDocumentFile`/`cleanupDeletedProcessData`.
+    onDocumentDeleted: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+  }),
+  // F18a (D7): `firebase-admin/storage`.
+  firebaseStorage: () => ({
+    getStorage: () => mockStorageApi,
   }),
   firebaseHttps: () => ({
     onCall: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),

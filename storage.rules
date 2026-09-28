@@ -58,6 +58,35 @@ service firebase.storage {
       return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
     }
 
+    // F18a (D4): leitura de documentos do processo - admin OU logistica
+    // (nunca usuario comum, mesma restricao da subcolecao `documents` no
+    // firestore.rules).
+    function canReadProcessDocuments() {
+      return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
+    }
+
+    // F18a (D4): quem pode ENVIAR cada tipo. Admin sobe qualquer tipo;
+    // logistica so `containerWash` (lavacao de conteiner).
+    function canUploadProcessDocumentType(type) {
+      return isApprovedUser()
+        && (
+          myRole() == 'admin'
+          || (myRole() == 'logistica' && type == 'containerWash')
+        );
+    }
+
+    // F18a (D4): 20 MB (MAX_DOCUMENT_MB = 20 em storageUploadValidation.js).
+    function isWithinDocumentSizeLimit() {
+      return request.resource.size <= 20 * 1024 * 1024;
+    }
+
+    // F18a (D3): o nome do arquivo carrega o uid do "dono" (mesmo padrao do
+    // post-receipt) - usado pelo delete de rollback SEM `firestore.get`
+    // (PR #4 de 2026-07-09 tirou `firestore.get` das storage.rules).
+    function isOwnUploadFileName(name) {
+      return name is string && name.matches('^[0-9]+-' + request.auth.uid + '-[\\w.-]+$');
+    }
+
     // PR #4 do backlog (2026-07-09): limites hardcoded que espelham
     // `src/utils/storageUploadValidation.js` (`MAX_IMAGE_BYTES = 5 MB`,
     // `MAX_FILE_BYTES = 5 MB`). Manter em sincronia quando o helper do
@@ -130,6 +159,43 @@ service firebase.storage {
         && isWithinImageSizeLimit()
         && isSafeFileName(fileName)
         && hasEmptyMetadata();
+    }
+
+    // F18a (D3/D4): documentos do processo SEM escopo (BL/AWB, relatorio de
+    // carga, Outro, e Invoice/Packing List fora do CONSOLIDADO - AD-1). O
+    // delete "de verdade" do metadado + arquivo e' feito pelo trigger
+    // `deleteProcessDocumentFile` (admin SDK); o delete aqui e' so o
+    // rollback de upload cuja gravacao do metadado falhou (D4).
+    match /processes/{processId}/documents/{type}/{fileName} {
+      allow read: if canReadProcessDocuments();
+      allow create: if canUploadProcessDocumentType(type)
+        && type in ['bl', 'cargoReport', 'invoice', 'packingList', 'other']
+        && isAllowedFileContentType()
+        && isWithinDocumentSizeLimit()
+        // D3: o nome do arquivo carrega o uid de quem envia (mesmo formato
+        // exigido pela rule do Firestore em `storagePath`) - garante que o
+        // dono fica registrado no proprio nome, sem `firestore.get`.
+        && isOwnUploadFileName(fileName)
+        && hasEmptyMetadata();
+      allow delete: if isApprovedUser()
+        && (myRole() == 'admin' || (myRole() == 'logistica' && isOwnUploadFileName(fileName)));
+    }
+
+    // F18a (D3/D4) + AD-1: documentos do processo COM escopo - FISPQ por
+    // item (`fispq/{itemId}`), lavacao por conteiner (`containerWash/{containerId}`)
+    // e Invoice/Packing List por PO no CONSOLIDADO (`invoice/{po}` /
+    // `packingList/{po}`).
+    match /processes/{processId}/documents/{type}/{scopeId}/{fileName} {
+      allow read: if canReadProcessDocuments();
+      allow create: if canUploadProcessDocumentType(type)
+        && type in ['fispq', 'containerWash', 'invoice', 'packingList']
+        && isAllowedFileContentType()
+        && isWithinDocumentSizeLimit()
+        && isOwnUploadFileName(fileName)
+        && isSafeFileName(scopeId)
+        && hasEmptyMetadata();
+      allow delete: if isApprovedUser()
+        && (myRole() == 'admin' || (myRole() == 'logistica' && isOwnUploadFileName(fileName)));
     }
 
     match /news/{newsId}/{folderName}/{fileName} {

@@ -278,6 +278,159 @@ describeEmulator('storage.rules (emulador)', () => {
     })
   })
 
+  describe('process documents (processes/{pid}/documents/... - F18a + AD-1)', () => {
+    const uploadDoc = (uid, email, role, status, path, contentType = 'application/pdf') =>
+      uploadBytes(
+        ref(storageAs(uid, email, role, status), path),
+        new Blob(['conteudo'], { type: contentType }),
+        { contentType }
+      )
+
+    it('admin sobe PDF em bl (sem escopo)', async () => {
+      await assertSucceeds(
+        uploadDoc('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo', 'processes/p1/documents/bl/1-admin-1-bl.pdf')
+      )
+    })
+
+    it('admin sobe XLSX em invoice (sem escopo)', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/invoice/1-admin-1-invoice.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+      )
+    })
+
+    it('admin sobe DOCX em cargoReport', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/cargoReport/1-admin-1-relatorio.docx',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+      )
+    })
+
+    it('admin sobe imagem em fispq/{itemId} (com escopo)', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/fispq/ITEM-1/1-admin-1-fispq.png', 'image/png'
+        )
+      )
+    })
+
+    it('admin sobe PDF em invoice/{po} (CONSOLIDADO, com escopo)', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/invoice/PO-1/1-admin-1-invoice.pdf'
+        )
+      )
+    })
+
+    it('logistica sobe em containerWash/{cid}', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'log-1', 'log@sqquimica.com', 'logistica', 'Ativo',
+          'processes/p1/documents/containerWash/CNT-1/1-log-1-lavacao.pdf'
+        )
+      )
+    })
+
+    it('logistica NAO sobe em bl', async () => {
+      await assertFails(
+        uploadDoc('log-1', 'log@sqquimica.com', 'logistica', 'Ativo', 'processes/p1/documents/bl/1-log-1-bl.pdf')
+      )
+    })
+
+    it('logistica NAO sobe em fispq', async () => {
+      await assertFails(
+        uploadDoc(
+          'log-1', 'log@sqquimica.com', 'logistica', 'Ativo',
+          'processes/p1/documents/fispq/ITEM-1/1-log-1-fispq.pdf'
+        )
+      )
+    })
+
+    it('usuario comum NAO le nem sobe', async () => {
+      await assertFails(
+        uploadDoc('user-1', 'user@sqquimica.com', 'user', 'Ativo', 'processes/p1/documents/bl/1-user-1-bl.pdf')
+      )
+      await seedObject('processes/p1/documents/bl/1-admin-1-bl.pdf')
+      await assertFails(
+        getMetadata(ref(storageAs('user-1', 'user@sqquimica.com', 'user', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
+      )
+    })
+
+    it('admin/logistica LEEM o objeto', async () => {
+      await seedObject('processes/p1/documents/bl/1-admin-1-bl.pdf')
+      await assertSucceeds(
+        getMetadata(ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
+      )
+      await assertSucceeds(
+        getMetadata(ref(storageAs('log-1', 'log@sqquimica.com', 'logistica', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
+      )
+    })
+
+    it('acima de 20 MB falha', async () => {
+      const bigBlob = new Blob([new Uint8Array(20 * 1024 * 1024 + 1)], { type: 'application/pdf' })
+      await assertFails(
+        uploadBytes(
+          ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-grande.pdf'),
+          bigBlob,
+          { contentType: 'application/pdf' }
+        )
+      )
+    })
+
+    it('mime fora da whitelist falha (mesmo para admin)', async () => {
+      await assertFails(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/bl/1-admin-1-evil.exe', 'application/octet-stream'
+        )
+      )
+    })
+
+    it('nome de arquivo sem o proprio uid falha', async () => {
+      await assertFails(
+        uploadDoc('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo', 'processes/p1/documents/bl/1-outro-uid-bl.pdf')
+      )
+    })
+
+    it('delete: admin apaga qualquer', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      await seedObject('processes/p1/documents/containerWash/CNT-1/1-log-1-lavacao.pdf')
+      await assertSucceeds(
+        deleteObject(
+          ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), 'processes/p1/documents/containerWash/CNT-1/1-log-1-lavacao.pdf')
+        )
+      )
+    })
+
+    it('delete: logistica NAO apaga arquivo de outro uid', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      await seedObject('processes/p1/documents/containerWash/CNT-2/1-admin-1-lavacao.pdf')
+      await assertFails(
+        deleteObject(
+          ref(storageAs('log-1', 'log@sqquimica.com', 'logistica', 'Ativo'), 'processes/p1/documents/containerWash/CNT-2/1-admin-1-lavacao.pdf')
+        )
+      )
+    })
+
+    it('delete: logistica apaga o proprio arquivo', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      await seedObject('processes/p1/documents/containerWash/CNT-3/1-log-1-lavacao.pdf')
+      await assertSucceeds(
+        deleteObject(
+          ref(storageAs('log-1', 'log@sqquimica.com', 'logistica', 'Ativo'), 'processes/p1/documents/containerWash/CNT-3/1-log-1-lavacao.pdf')
+        )
+      )
+    })
+  })
+
   describe('supportTickets ({uid}/{file}) — aba de suporte (backlog 2026-07-10)', () => {
     const uploadTo = (uid, email, role, status, path, contentType = 'image/png') =>
       uploadBytes(

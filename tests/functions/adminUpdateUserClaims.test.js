@@ -43,6 +43,10 @@ vi.mock('firebase-admin/firestore', () => ({
 vi.mock('firebase-functions/v2/firestore', () => ({
   onDocumentCreated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
   onDocumentUpdated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+  // F18a (D7): `deleteProcessDocumentFile`/`cleanupDeletedProcessData` -
+  // sem isto, TODOS os testes de tests/functions/* que importam
+  // functions/index.js quebram ("No export defined on the mock").
+  onDocumentDeleted: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
 }))
 vi.mock('firebase-functions/v2/https', () => ({
   onCall: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),

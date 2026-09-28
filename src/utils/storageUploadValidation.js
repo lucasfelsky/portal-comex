@@ -9,9 +9,14 @@
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
 const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5 MB
+// F18a: documentos do processo (BL/AWB, invoice, packing list, FISPQ,
+// lavacao de conteiner) toleram ate 20 MB - teto maior que post-receipt/news
+// porque PDFs de invoice/packing list de CONSOLIDADO podem ser extensos.
+export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024 // 20 MB
 
 export const MAX_IMAGE_MB = 5
 export const MAX_FILE_MB = 5
+export const MAX_DOCUMENT_MB = 20
 
 const IMAGE_MIME_WHITELIST = new Set([
   'image/jpeg',
@@ -47,7 +52,7 @@ const EXTENSION_MIME_MAP = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
-function inferMimeType(file) {
+export function inferMimeType(file) {
   const declared = String(file?.type ?? '').trim().toLowerCase()
 
   if (declared) return declared
