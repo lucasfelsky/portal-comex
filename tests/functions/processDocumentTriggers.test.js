@@ -35,6 +35,8 @@ const {
   deleteProcessDocumentFile,
   cleanupDeletedProcessData,
   planDocumentRotation,
+  syncProcessDocumentIndex,
+  recordProcessDocumentEvents,
 } = await import('../../functions/index.js')
 
 const { groupDocumentsBySlot } = await import('../../src/features/processes/processDocuments.js')
@@ -196,6 +198,271 @@ describe('cleanupDeletedProcessData', () => {
     const handler = getHandler(cleanupDeletedProcessData)
     await expect(handler({ params: { processId: PROCESS_ID } })).resolves.toBeUndefined()
     expect(mockBucket.deleteFiles).toHaveBeenCalledTimes(1)
+  })
+})
+
+// F18b-1 (B1): `syncProcessDocumentIndex`.
+describe('syncProcessDocumentIndex', () => {
+  function makeEvent({ processId = PROCESS_ID } = {}) {
+    return { params: { processId } }
+  }
+
+  it('recalcula o index a partir da subcolecao inteira e escreve SO documentIndex', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      'processes/proc-1/documents': [
+        { id: 'd1', data: { type: 'fispq', itemId: 'ITEM-1' } },
+        { id: 'd2', data: { type: 'containerWash', containerId: 'CNT-1' } },
+        { id: 'd3', data: { type: 'bl' } },
+      ],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).toHaveBeenCalledTimes(1)
+    expect(processRef.update).toHaveBeenCalledWith({
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: ['CNT-1'] },
+    })
+  })
+
+  it('index igual ao atual -> nao escreve (sem write inutil)', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [
+        { id: PROCESS_ID, data: { documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] } } },
+      ],
+      'processes/proc-1/documents': [{ id: 'd1', data: { type: 'fispq', itemId: 'ITEM-1' } }],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).not.toHaveBeenCalled()
+  })
+
+  it('delete: subcolecao ja sem o documento apagado -> index recalculado fica vazio', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [
+        { id: PROCESS_ID, data: { documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] } } },
+      ],
+      'processes/proc-1/documents': [],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).toHaveBeenCalledWith({
+      documentIndex: { fispqItemIds: [], containerWashIds: [] },
+    })
+  })
+
+  it('processo inexistente (cascata de cleanupDeletedProcessData) -> nao escreve', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {}, exists: false }],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).not.toHaveBeenCalled()
+  })
+})
+
+// F18b-1 (B3/B4): `recordProcessDocumentEvents` - marcos + aviso da logistica.
+describe('recordProcessDocumentEvents', () => {
+  const ADMIN_1 = { id: 'admin-1', name: 'Admin Um', email: 'admin1@sqquimica.com', role: 'admin', status: 'Ativo' }
+  const ADMIN_2 = { id: 'admin-2', name: 'Admin Dois', email: 'admin2@sqquimica.com', role: 'admin', status: 'Ativo' }
+
+  function makeEvent(created, { processId = PROCESS_ID, documentId = 'doc-1', id = 'evt-1', time } = {}) {
+    return {
+      id,
+      time,
+      params: { processId, documentId },
+      data: { data: () => created },
+    }
+  }
+
+  beforeEach(() => {
+    mockFirestoreApi.batch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+  })
+
+  it('bl enviado por admin -> grava marco blUploaded, SEM aviso (ator e admin)', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      users: [ADMIN_1, ADMIN_2].map((user) => ({ id: user.id, data: user })),
+    })
+    const handler = getHandler(recordProcessDocumentEvents)
+
+    await handler(
+      makeEvent({
+        type: 'bl',
+        uploadedById: 'admin-1',
+        uploadedByName: 'Admin Um',
+        uploadedByRole: 'admin',
+        uploadedAt: '2026-09-20T10:00:00.000Z',
+      })
+    )
+
+    expect(mockBatch.set).toHaveBeenCalledTimes(1)
+    const [[ref, data]] = mockBatch.set.mock.calls
+    expect(ref.id).toBe('evt-1_blUploaded')
+    expect(data.type).toBe('blUploaded')
+    expect(data.value).toBe('')
+    expect(mockBatch.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('fispq com itemId -> marco fispqUploaded com o nome comercial do item', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: { items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas' }] } }],
+      users: [ADMIN_1].map((user) => ({ id: user.id, data: user })),
+    })
+    const handler = getHandler(recordProcessDocumentEvents)
+
+    await handler(
+      makeEvent({
+        type: 'fispq',
+        itemId: 'ITEM-1',
+        uploadedById: 'admin-1',
+        uploadedByName: 'Admin Um',
+        uploadedByRole: 'admin',
+        uploadedAt: '2026-09-20T10:00:00.000Z',
+      })
+    )
+
+    const [, data] = mockBatch.set.mock.calls[0]
+    expect(data.type).toBe('fispqUploaded')
+    expect(data.value).toBe('Resina Atlas')
+  })
+
+  it('containerWash enviado por LOGISTICA -> marco containerWashUploaded + aviso a admins ativos (nao ao ator)', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: { containers: [{ id: 'CNT-1', number: 'MSCU1234567' }] } }],
+      users: [
+        { id: ADMIN_1.id, data: ADMIN_1 },
+        { id: ADMIN_2.id, data: ADMIN_2 },
+        { id: 'logi-1', data: { id: 'logi-1', role: 'logistica', status: 'Ativo', email: 'logi@sqquimica.com' } },
+      ],
+    })
+    const handler = getHandler(recordProcessDocumentEvents)
+
+    await handler(
+      makeEvent({
+        type: 'containerWash',
+        containerId: 'CNT-1',
+        uploadedById: 'logi-1',
+        uploadedByName: 'Logi da Silva',
+        uploadedByRole: 'logistica',
+        uploadedAt: '2026-09-20T10:00:00.000Z',
+      })
+    )
+
+    const eventSetCalls = mockBatch.set.mock.calls.filter(([, data]) => data?.type === 'containerWashUploaded')
+    expect(eventSetCalls).toHaveLength(1)
+    expect(eventSetCalls[0][1].value).toBe('MSCU1234567')
+
+    const notificationSetCalls = mockBatch.set.mock.calls.filter(
+      ([, data]) => data?.type === 'process_document_uploaded'
+    )
+    expect(notificationSetCalls).toHaveLength(2)
+    const recipients = notificationSetCalls.map(([, data]) => data.recipientUserId).sort()
+    expect(recipients).toEqual(['admin-1', 'admin-2'])
+    for (const [, data] of notificationSetCalls) {
+      expect(data.targetTab).toBe('documents')
+      expect(data.actorUserId).toBe('logi-1')
+      expect(data.body).toContain('Logi da Silva')
+      expect(data.body).toContain('Relatório de lavação')
+      expect(data.body).toContain('MSCU1234567')
+    }
+  })
+
+  it('invoice/other/cargoReport nao geram marco', async () => {
+    for (const type of ['invoice', 'other', 'cargoReport']) {
+      setupFirestoreChain({ processes: [{ id: PROCESS_ID, data: {} }], users: [] })
+      const handler = getHandler(recordProcessDocumentEvents)
+      await handler(
+        makeEvent({
+          type,
+          uploadedById: 'admin-1',
+          uploadedByName: 'Admin Um',
+          uploadedByRole: 'admin',
+          uploadedAt: '2026-09-20T10:00:00.000Z',
+        })
+      )
+      expect(mockBatch.set).not.toHaveBeenCalled()
+      vi.clearAllMocks()
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+    }
+  })
+
+  it('admin enviando NAO gera aviso (so a logistica notifica admins)', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      users: [ADMIN_1, ADMIN_2].map((user) => ({ id: user.id, data: user })),
+    })
+    const handler = getHandler(recordProcessDocumentEvents)
+
+    await handler(
+      makeEvent({
+        type: 'containerWash',
+        containerId: 'CNT-1',
+        uploadedById: 'admin-1',
+        uploadedByName: 'Admin Um',
+        uploadedByRole: 'admin',
+        uploadedAt: '2026-09-20T10:00:00.000Z',
+      })
+    )
+
+    const notificationSetCalls = mockBatch.set.mock.calls.filter(
+      ([, data]) => data?.type === 'process_document_uploaded'
+    )
+    expect(notificationSetCalls).toHaveLength(0)
+  })
+
+  it('falha ao gravar o marco NAO impede o aviso da logistica', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: { containers: [{ id: 'CNT-1', number: 'MSCU1234567' }] } }],
+      users: [
+        { id: ADMIN_1.id, data: ADMIN_1 },
+        { id: 'logi-1', data: { id: 'logi-1', role: 'logistica', status: 'Ativo', email: 'logi@sqquimica.com' } },
+      ],
+    })
+    mockBatch.commit.mockRejectedValueOnce(new Error('boom'))
+    const handler = getHandler(recordProcessDocumentEvents)
+
+    await handler(
+      makeEvent({
+        type: 'containerWash',
+        containerId: 'CNT-1',
+        uploadedById: 'logi-1',
+        uploadedByName: 'Logi da Silva',
+        uploadedByRole: 'logistica',
+        uploadedAt: '2026-09-20T10:00:00.000Z',
+      })
+    )
+
+    const notificationSetCalls = mockBatch.set.mock.calls.filter(
+      ([, data]) => data?.type === 'process_document_uploaded'
+    )
+    expect(notificationSetCalls).toHaveLength(1)
+  })
+
+  it('processo inexistente -> nada', async () => {
+    setupFirestoreChain({ processes: [], users: [] })
+    const handler = getHandler(recordProcessDocumentEvents)
+    await handler(makeEvent({ type: 'bl', uploadedById: 'admin-1', uploadedByRole: 'admin' }))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('sem dado criado (delete concorrente) -> nada', async () => {
+    const handler = getHandler(recordProcessDocumentEvents)
+    await handler({ params: { processId: PROCESS_ID, documentId: 'x' }, data: { data: () => undefined } })
+    expect(mockBatch.set).not.toHaveBeenCalled()
   })
 })
 

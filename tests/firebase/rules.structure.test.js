@@ -402,4 +402,10 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/postReceiptImages\.size\(\)\s*<=\s*10/)
     })
   })
+
+  describe('F18b-1 — documentIndex (B1)', () => {
+    it('firestore.rules NAO contem "documentIndex" (gravado SO pelo trigger, nunca pelo cliente)', () => {
+      expect(rules).not.toMatch(/documentIndex/)
+    })
+  })
 })

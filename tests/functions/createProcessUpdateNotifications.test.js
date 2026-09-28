@@ -195,6 +195,26 @@ describe('createProcessUpdateNotifications', () => {
     expect(mockBatch.set).not.toHaveBeenCalled()
   })
 
+  // F18b-1 (B1): o write do `documentIndex` (feito SO' por
+  // `syncProcessDocumentIndex`) tambem dispara este trigger - `documentIndex`
+  // fica FORA da allowlist de `sanitizeProcessForComparison`, entao sozinho
+  // nao conta como "change significativa".
+  it('admin altera processo SO em documentIndex -> NAO notifica (index-only)', async () => {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: 'fan-1', data: FAVORITER_USER },
+      ],
+    })
+    const before = { ...PROCESS_BASE, updatedById: 'admin-1', updatedByName: 'Admin Root' }
+    const after = {
+      ...before,
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] },
+    }
+    await handler(makeEvent(before, after))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
   // F17.2d-1 (D-6, Q4): carga perigosa POR ITEM - defaults na comparacao
   // evitam notificacao espuria no 1o save de legado; classificar/alterar um
   // item notifica.

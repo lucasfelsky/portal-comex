@@ -206,6 +206,25 @@ describe('sendProcessNotificationEmail', () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1)
   })
 
+  // F18b-1 (B4): `process_document_uploaded` NAO entra em
+  // `EMAIL_NOTIFICATION_TYPES` (aviso da logistica e' so' in-app/push).
+  it('process_document_uploaded -> NAO envia e-mail', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'process_document_uploaded',
+        recipientUserId: RECIPIENT_UID,
+        title: 'Novo documento no processo',
+        body: 'Logi da Silva enviou Relatório de lavação (MSCU1234567) em PO 12345.',
+      })
+    )
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
   it('recipientUserId vazio -> ignora', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

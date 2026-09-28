@@ -33,6 +33,17 @@ export const mockFirestoreApi = {
   // F18a (D7): `cleanupDeletedProcessData` apaga as subcolecoes do
   // processo excluido via `firestore.recursiveDelete(docRef)`.
   recursiveDelete: vi.fn().mockResolvedValue(undefined),
+  // F18b-1 (B1): `syncProcessDocumentIndex` usa `firestore.runTransaction`.
+  // O mock delega `tx.get`/`tx.update` direto pro ref recebido (docRef ou
+  // collectionRef ja encadeaveis via `setupFirestoreChain`) - assim os
+  // testes seguem espionando `docRef.update`/`collectionRef.get` como ja
+  // fazem hoje, sem precisar de um mock de transacao a parte.
+  runTransaction: vi.fn(async (callback) =>
+    callback({
+      get: (ref) => ref.get(),
+      update: (ref, data) => ref.update(data),
+    })
+  ),
   FieldValue: { serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'), arrayRemove: vi.fn((...values) => ({ __arrayRemove: values })) },
 }
 
@@ -104,6 +115,8 @@ export const mocks = {
     onDocumentUpdated: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
     // F18a (D7): `deleteProcessDocumentFile`/`cleanupDeletedProcessData`.
     onDocumentDeleted: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+    // F18b-1 (B1): `syncProcessDocumentIndex`.
+    onDocumentWritten: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
   }),
   // F18a (D7): `firebase-admin/storage`.
   firebaseStorage: () => ({

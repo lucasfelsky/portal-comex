@@ -26,6 +26,11 @@ const EVENT_LABELS = {
     event.value ? `Divergência no recebimento (${event.value})` : 'Divergência no recebimento',
   emptyReturned: (event) => `Vazio devolvido (${event.value || '-'})`,
   statusChanged: (event) => `Status: ${event.previousValue || '-'} → ${event.value || '-'}`,
+  // F18b-1 (B3): marcos de upload de documento do processo.
+  blUploaded: () => 'BL/AWB enviado',
+  fispqUploaded: (event) => (event.value ? `FISPQ enviada (${event.value})` : 'FISPQ enviada'),
+  containerWashUploaded: (event) =>
+    event.value ? `Relatório de lavação enviado (${event.value})` : 'Relatório de lavação enviado',
 }
 
 function getEventLabel(event) {

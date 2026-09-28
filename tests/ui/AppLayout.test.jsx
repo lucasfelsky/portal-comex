@@ -256,6 +256,20 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(document.activeElement).toBe(filterSelect)
     })
 
+    // F18b-1 (B4): filtro "Documentos" no drawer (option value
+    // process_document_uploaded), depois de "Alertas".
+    it('drawer: filtro tem a opção "Documentos" (process_document_uploaded)', async () => {
+      renderWithRole('admin')
+      const bell = screen.getAllByLabelText('Notificações')[0]
+      const user = userEvent.setup()
+      await user.click(bell)
+
+      const filterSelect = await screen.findByLabelText('Filtrar notificações por categoria')
+      const option = within(filterSelect).getByText('Documentos')
+      expect(option).toBeInTheDocument()
+      expect(option.closest('option').value).toBe('process_document_uploaded')
+    })
+
     it('erro no drawer: alerta "Não foi possível carregar as notificações" e retry limpa', async () => {
       listNotifications.mockRejectedValueOnce(new Error('x'))
       renderWithRole('admin')

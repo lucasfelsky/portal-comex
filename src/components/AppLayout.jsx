@@ -422,6 +422,7 @@ export default function AppLayout() {
               <option value="receipt_divergence_reported">Divergências</option>
               <option value="license_rejected">Anuências</option>
               <option value="process_daily_alerts">Alertas</option>
+              <option value="process_document_uploaded">Documentos</option>
             </select>
             <button
               type="button"

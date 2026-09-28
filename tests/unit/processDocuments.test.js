@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  DOCUMENT_MILESTONE_EVENT_TYPES,
   DOCUMENT_TYPES,
   buildDocumentSlotKey,
   canDeleteDocument,
@@ -13,7 +14,17 @@ import {
   getSlotKeyPoNumber,
   groupDocumentsBySlot,
   isProcessDocumentType,
+  normalizeDocumentIndex,
 } from '../../src/features/processes/processDocuments'
+import {
+  DOCUMENT_MILESTONE_EVENT_TYPES as DOCUMENT_MILESTONE_EVENT_TYPES_FUNCTIONS,
+  DOCUMENT_TYPE_LABELS,
+  buildDocumentIndex,
+  buildDocumentUploadedNotificationBody,
+  describeDocumentScope,
+  isSameDocumentIndex,
+  normalizeDocumentIndexMirror,
+} from '../../functions/src/process/documentIndex.js'
 
 describe('DOCUMENT_TYPES', () => {
   it('tem os 7 tipos esperados', () => {
@@ -163,5 +174,106 @@ describe('formatDocumentSize', () => {
     expect(formatDocumentSize(0)).toBe('')
     expect(formatDocumentSize(-1)).toBe('')
     expect(formatDocumentSize(NaN)).toBe('')
+  })
+})
+
+// F18b-1 (B1): leitura do documentIndex (normalizeProcess).
+describe('normalizeDocumentIndex', () => {
+  it('ausente -> vazio', () => {
+    expect(normalizeDocumentIndex(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+    expect(normalizeDocumentIndex(null)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  })
+
+  it('lixo (nao-array, itens nao-string, duplicados) -> limpo/ordenado', () => {
+    expect(
+      normalizeDocumentIndex({
+        fispqItemIds: ['ITEM-2', 'ITEM-1', 'ITEM-1', 123, null, ''],
+        containerWashIds: 'nao-e-array',
+      })
+    ).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: [] })
+  })
+})
+
+// F18b-1 (B2/B3): paridade src x functions - `DOCUMENT_MILESTONE_EVENT_TYPES`
+// (src) tem que ser IGUAL ao de `functions/` (deploy nao empacota `src/`).
+describe('paridade DOCUMENT_MILESTONE_EVENT_TYPES src x functions', () => {
+  it('mesmo mapa tipo -> evento', () => {
+    expect(DOCUMENT_MILESTONE_EVENT_TYPES).toEqual(DOCUMENT_MILESTONE_EVENT_TYPES_FUNCTIONS)
+  })
+
+  it('so bl/fispq/containerWash geram marco', () => {
+    expect(Object.keys(DOCUMENT_MILESTONE_EVENT_TYPES).sort()).toEqual(
+      ['bl', 'containerWash', 'fispq'].sort()
+    )
+  })
+})
+
+// F18b-1 (B2): paridade dos labels de tipo (src `DOCUMENT_TYPES` x functions
+// `DOCUMENT_TYPE_LABELS`).
+describe('paridade DOCUMENT_TYPE_LABELS src x functions', () => {
+  it('mesmo label por tipo', () => {
+    for (const type of DOCUMENT_TYPES) {
+      expect(DOCUMENT_TYPE_LABELS[type.id]).toBe(type.label)
+    }
+  })
+})
+
+// F18b-1 (B2): funcoes puras de `functions/src/process/documentIndex.js`
+// (mesmo modulo usado pelo trigger e pelo script de backfill).
+describe('buildDocumentIndex/describeDocumentScope/buildDocumentUploadedNotificationBody (puras)', () => {
+  it('buildDocumentIndex agrupa fispq/containerWash, ordenado e sem duplicata', () => {
+    const index = buildDocumentIndex([
+      { type: 'fispq', itemId: 'ITEM-2' },
+      { type: 'fispq', itemId: 'ITEM-1' },
+      { type: 'fispq', itemId: 'ITEM-1' },
+      { type: 'containerWash', containerId: 'CNT-1' },
+      { type: 'bl' },
+    ])
+    expect(index).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: ['CNT-1'] })
+  })
+
+  it('buildDocumentIndex de lista vazia -> ambos vazios', () => {
+    expect(buildDocumentIndex([])).toEqual({ fispqItemIds: [], containerWashIds: [] })
+    expect(buildDocumentIndex(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  })
+
+  it('isSameDocumentIndex compara por conteudo (ordem normalizada)', () => {
+    expect(
+      isSameDocumentIndex(
+        { fispqItemIds: ['A', 'B'], containerWashIds: [] },
+        normalizeDocumentIndexMirror({ fispqItemIds: ['B', 'A'], containerWashIds: [] })
+      )
+    ).toBe(true)
+    expect(
+      isSameDocumentIndex({ fispqItemIds: ['A'], containerWashIds: [] }, { fispqItemIds: ['A', 'B'], containerWashIds: [] })
+    ).toBe(false)
+  })
+
+  it('describeDocumentScope: fispq usa commercialName do item (fallback o id)', () => {
+    const process = { items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas' }] }
+    expect(describeDocumentScope(process, { type: 'fispq', itemId: 'ITEM-1' })).toBe('Resina Atlas')
+    expect(describeDocumentScope(process, { type: 'fispq', itemId: 'ITEM-999' })).toBe('ITEM-999')
+    expect(describeDocumentScope(process, { type: 'fispq', itemId: '' })).toBe('')
+  })
+
+  it('describeDocumentScope: containerWash usa number (fallback Contêiner N, fallback o id)', () => {
+    const process = { containers: [{ id: 'CNT-1', number: 'MSCU1234567' }, { id: 'CNT-2', number: '' }] }
+    expect(describeDocumentScope(process, { type: 'containerWash', containerId: 'CNT-1' })).toBe('MSCU1234567')
+    expect(describeDocumentScope(process, { type: 'containerWash', containerId: 'CNT-2' })).toBe('Contêiner 2')
+    expect(describeDocumentScope(process, { type: 'containerWash', containerId: 'CNT-999' })).toBe('CNT-999')
+  })
+
+  it('describeDocumentScope: demais tipos -> string vazia', () => {
+    expect(describeDocumentScope({}, { type: 'bl' })).toBe('')
+    expect(describeDocumentScope({}, { type: 'invoice' })).toBe('')
+  })
+
+  it('buildDocumentUploadedNotificationBody: com escopo usa parenteses, sem escopo nao', () => {
+    expect(buildDocumentUploadedNotificationBody('PO 123', 'Logi da Silva', 'FISPQ', 'Resina Atlas')).toBe(
+      'Logi da Silva enviou FISPQ (Resina Atlas) em PO 123.'
+    )
+    expect(buildDocumentUploadedNotificationBody('PO 123', 'Logi da Silva', 'BL/AWB', '')).toBe(
+      'Logi da Silva enviou BL/AWB em PO 123.'
+    )
   })
 })

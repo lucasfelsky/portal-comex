@@ -51,6 +51,7 @@ import {
   normalizeItemPoNumber,
 } from '../features/processes/purchaseOrders'
 import { isRestrictedCategory } from '../features/processes/processCategories'
+import { normalizeDocumentIndex } from '../features/processes/processDocuments'
 import {
   INCOTERM_OPTIONS,
   itemsHaveDangerousGoods,
@@ -670,6 +671,10 @@ function normalizeProcess(rawProcess, fallbackId) {
     archivedBy: String(rawProcess.archivedBy ?? '').trim(),
     // F17.4b (B-2/B-1): divergencia no recebimento (logistica + admin).
     ...normalizeReceiptDivergenceFields(rawProcess),
+    // F18b-1 (B1): indice de documentos, gravado SO' pelo trigger
+    // `syncProcessDocumentIndex` (nunca pelo cliente). `toFirestorePayload`
+    // NAO envia esta chave.
+    documentIndex: normalizeDocumentIndex(rawProcess.documentIndex),
     updatedAt: rawProcess.updatedAt ?? new Date().toISOString(),
   }
 }

@@ -46,7 +46,7 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         status: 'Ativo',
         email: 'fav1@sqquimica.com',
         name: 'Favoritador',
-        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence', 'proc-upd-masterbl', 'proc-receipt-divergence-lote-imgs'],
+        favoriteProcessIds: ['proc-msg-user', 'proc-msg-admin', 'proc-upd-admin', 'proc-upd-log', 'proc-upd-events', 'proc-upd-licenses', 'proc-collection-status', 'proc-receipt-divergence', 'proc-upd-masterbl', 'proc-receipt-divergence-lote-imgs', 'proc-doc-bl'],
       },
     }
     await Promise.all(
@@ -624,6 +624,121 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         .doc(`daily_alerts_${todayKey}_admin-externo`)
         .get()
       expect(externalSnapshot.exists).toBe(false)
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  // F18b-1 (B1/B3/B4): `syncProcessDocumentIndex` + `recordProcessDocumentEvents`
+  // rodando de verdade no emulador. O emulador desta suite nao tem Storage:
+  // `deleteProcessDocumentFile` so' loga warn (ja' previsto na F18a) - nao
+  // afeta os asserts abaixo (metadado do documento e' o suficiente).
+  it(
+    'logistica envia containerWash: notifica admin-1 (process_document_uploaded) + documentIndex.containerWashIds',
+    async () => {
+      const processId = 'proc-doc-containerwash'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Documento Lavação',
+        processNumber: 'PO-2001',
+        category: 'FCL',
+        containers: [{ id: 'CNT-1', number: 'MSCU1234567' }],
+      })
+
+      await processRef.collection('documents').add({
+        type: 'containerWash',
+        slotKey: 'containerWash:CNT-1',
+        containerId: 'CNT-1',
+        name: 'lavacao.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+        storagePath: `processes/${processId}/documents/containerWash/x.pdf`,
+        uploadedAt: Timestamp.now(),
+        uploadedById: 'log-1',
+        uploadedByName: 'Logistica Um',
+        uploadedByRole: 'logistica',
+      })
+
+      // NOTA: admin-2 pode existir neste ponto (seedado pelo teste "F17.5a
+      // A-7" mais acima, mesmo db sem clearFirestore entre testes) - por
+      // isso o assert busca pelo destinatario admin-1 especificamente, em
+      // vez de fixar o total de notificacoes.
+      const docs = await waitForNotifications(processId, 1)
+      const uploaded = docs.filter((doc) => doc.type === 'process_document_uploaded')
+      const adminOneNotification = uploaded.find((doc) => doc.recipientUserId === 'admin-1')
+      expect(adminOneNotification).toBeTruthy()
+      expect(adminOneNotification.actorUserId).toBe('log-1')
+      expect(adminOneNotification.targetTab).toBe('documents')
+      expect(adminOneNotification.body).toContain('Logistica Um')
+      expect(adminOneNotification.body).toContain('MSCU1234567')
+
+      const deadline = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      let processData = {}
+      while (Date.now() < deadline) {
+        const snapshot = await processRef.get()
+        processData = snapshot.data() ?? {}
+        if (processData.documentIndex?.containerWashIds?.length > 0) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+      expect(processData.documentIndex).toEqual({ fispqItemIds: [], containerWashIds: ['CNT-1'] })
+    },
+    TRIGGER_TIMEOUT_MS
+  )
+
+  it(
+    'admin envia fispq em processo favoritado: 0 notificacoes, marco fispqUploaded gravado, documentIndex escrito',
+    async () => {
+      const processId = 'proc-doc-bl'
+      const processRef = db.collection('processes').doc(processId)
+      await processRef.set({
+        name: 'Processo Documento BL',
+        processNumber: 'PO-2002',
+        category: 'FCL',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas' }],
+      })
+
+      await processRef.collection('documents').add({
+        type: 'fispq',
+        slotKey: 'fispq:ITEM-1',
+        itemId: 'ITEM-1',
+        name: 'fispq.pdf',
+        mimeType: 'application/pdf',
+        size: 2048,
+        storagePath: `processes/${processId}/documents/fispq/x.pdf`,
+        uploadedAt: Timestamp.now(),
+        uploadedById: 'admin-1',
+        uploadedByName: 'Admin Um',
+        uploadedByRole: 'admin',
+      })
+
+      const deadline = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      let eventDocs = []
+      while (Date.now() < deadline) {
+        const snapshot = await processRef.collection('events').where('type', '==', 'fispqUploaded').get()
+        eventDocs = snapshot.docs.map((item) => item.data())
+        if (eventDocs.length >= 1) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+      expect(eventDocs).toHaveLength(1)
+      expect(eventDocs[0].actorId).toBe('admin-1')
+      expect(eventDocs[0].value).toBe('Resina Atlas')
+
+      let processData = {}
+      const deadline2 = Date.now() + TRIGGER_TIMEOUT_MS - 2_000
+      while (Date.now() < deadline2) {
+        const snapshot = await processRef.get()
+        processData = snapshot.data() ?? {}
+        if (processData.documentIndex) break
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+      expect(processData.documentIndex).toEqual({ fispqItemIds: ['ITEM-1'], containerWashIds: [] })
+
+      // Sem aviso (o ator e' admin) e sem duplicar favorite_process_updated
+      // (documentIndex fica fora de sanitizeProcessForComparison).
+      const notificationsSnapshot = await db
+        .collection('notifications')
+        .where('processId', '==', processId)
+        .get()
+      expect(notificationsSnapshot.empty).toBe(true)
     },
     TRIGGER_TIMEOUT_MS
   )
