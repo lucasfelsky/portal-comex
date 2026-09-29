@@ -4,8 +4,9 @@ import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { isFirebaseConfigured } from '../../lib/firebase'
 import {
   deleteProcessDocument,
-  getProcessDocumentDownloadUrl,
+  downloadProcessDocumentBlob,
   listProcessDocuments,
+  saveBlobAsFile,
   uploadProcessDocument,
 } from '../../services/processDocumentsRepository'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -106,6 +107,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [reloadToken, setReloadToken] = useState(0)
   const [rowErrors, setRowErrors] = useState({})
   const [uploadingKey, setUploadingKey] = useState('')
+  const [downloadingId, setDownloadingId] = useState('')
   const [liveMessage, setLiveMessage] = useState('')
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -302,22 +304,26 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   }
 
   async function handleDownload(document_) {
+    if (downloadingId) return
     const slotKey = document_?.slotKey
     if (slotKey) clearRowError(slotKey)
-    // D8: popup SINCRONO no clique (iOS/PWA) - so' navega depois de
-    // resolver a URL.
-    const win = window.open('', '_blank')
+    setDownloadingId(document_.id)
+    setLiveMessage(`Baixando ${document_.name}…`)
     try {
-      const url = await getProcessDocumentDownloadUrl(document_.storagePath)
-      if (win) win.location.href = url
+      // L38: download autenticado via Cloud Function (sem URL persistida).
+      const blob = await downloadProcessDocumentBlob(processId, document_.id)
+      saveBlobAsFile(blob, document_.name || 'documento')
+      setLiveMessage('Download concluído.')
     } catch (error) {
-      win?.close()
+      setLiveMessage('')
       if (slotKey) {
         setRowErrors((current) => ({
           ...current,
           [slotKey]: buildDocumentError('Não foi possível baixar o documento.', error),
         }))
       }
+    } finally {
+      setDownloadingId('')
     }
   }
 
@@ -353,7 +359,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         <span>
           {`Versão anterior: ${previous.name} · ${formatDocumentSize(previous.size)} · ${formatShortDateFromIso(previous.uploadedAt)}`}
         </span>
-        <button type="button" className="documents-link-button" onClick={() => handleDownload(previous)}>
+        <button
+          type="button"
+          className="documents-link-button"
+          disabled={downloadingId === previous.id}
+          aria-busy={downloadingId === previous.id || undefined}
+          onClick={() => handleDownload(previous)}
+        >
           Baixar
         </button>
       </div>
@@ -438,7 +450,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 className="documents-icon-button ghost-button"
                 aria-label={`Baixar ${primary.name}`}
                 title={`Baixar ${primary.name}`}
-                disabled={isRowUploading}
+                disabled={isRowUploading || downloadingId === primary.id}
+                aria-busy={downloadingId === primary.id || undefined}
                 onClick={() => handleDownload(primary)}
               >
                 <Icon name="download" />
@@ -536,7 +549,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   className="documents-icon-button ghost-button"
                   aria-label={`Baixar ${primary.name}`}
                   title={`Baixar ${primary.name}`}
-                  disabled={isRowUploading}
+                  disabled={isRowUploading || downloadingId === primary.id}
+                  aria-busy={downloadingId === primary.id || undefined}
                   onClick={() => handleDownload(primary)}
                 >
                   <Icon name="download" />
@@ -588,7 +602,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   <span>
                     {`Versão anterior: ${group.previous.name} · ${formatDocumentSize(group.previous.size)} · ${formatShortDateFromIso(group.previous.uploadedAt)}`}
                   </span>
-                  <button type="button" className="documents-link-button" onClick={() => handleDownload(group.previous)}>
+                  <button
+                    type="button"
+                    className="documents-link-button"
+                    disabled={downloadingId === group.previous.id}
+                    aria-busy={downloadingId === group.previous.id || undefined}
+                    onClick={() => handleDownload(group.previous)}
+                  >
                     Baixar
                   </button>
                 </div>

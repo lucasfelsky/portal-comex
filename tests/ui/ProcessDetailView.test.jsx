@@ -18,7 +18,8 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
   listProcessDocuments: vi.fn().mockResolvedValue([]),
   uploadProcessDocument: vi.fn(),
   deleteProcessDocument: vi.fn(),
-  getProcessDocumentDownloadUrl: vi.fn(),
+  downloadProcessDocumentBlob: vi.fn(),
+  saveBlobAsFile: vi.fn(),
 }))
 
 function makeProcess(overrides = {}) {

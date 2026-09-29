@@ -12,8 +12,8 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore/lite'
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { firestore, isFirebaseConfigured, storage } from '../lib/firebase'
+import { deleteObject, ref, uploadBytes } from 'firebase/storage'
+import { auth, firebaseConfig, firestore, isFirebaseConfigured, storage } from '../lib/firebase'
 import { repairTextEncoding } from '../utils/textEncoding'
 import { validateFileUpload, MAX_DOCUMENT_BYTES } from '../utils/storageUploadValidation'
 import { buildDocumentSlotKey } from '../features/processes/processDocuments'
@@ -170,10 +170,62 @@ export async function deleteProcessDocument(processId, documentId) {
   await deleteDoc(doc(firestore, 'processes', processId, 'documents', documentId))
 }
 
-// D8: download sob demanda - a URL NUNCA e' persistida.
-export async function getProcessDocumentDownloadUrl(storagePath) {
-  if (!isFirebaseConfigured || !storage) {
+// L38: download autenticado. Nenhuma URL de Storage e' gerada nem persistida
+// (D8): o cliente chama a Cloud Function HTTP `downloadProcessDocument` com o
+// ID token e salva o blob (as storage.rules negam a leitura via SDK cliente).
+export function buildProcessDocumentDownloadEndpoint() {
+  const projectId = firebaseConfig?.projectId
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+    return `http://127.0.0.1:5001/${projectId}/us-central1/downloadProcessDocument`
+  }
+  return `https://us-central1-${projectId}.cloudfunctions.net/downloadProcessDocument`
+}
+
+function buildDownloadError(message, code) {
+  const error = new Error(message)
+  if (code) error.code = code
+  return error
+}
+
+const DOWNLOAD_STATUS_CODES = {
+  401: 'unauthenticated',
+  403: 'permission-denied',
+  404: 'storage/object-not-found',
+}
+
+export async function downloadProcessDocumentBlob(processId, documentId) {
+  if (!isFirebaseConfigured) {
     throw new Error('Documentos disponíveis apenas com o Firebase configurado.')
   }
-  return getDownloadURL(ref(storage, storagePath))
+  if (!auth?.currentUser) {
+    throw buildDownloadError('Sessão expirada.', 'unauthenticated')
+  }
+
+  const token = await auth.currentUser.getIdToken()
+  const url = `${buildProcessDocumentDownloadEndpoint()}?processId=${encodeURIComponent(processId)}&documentId=${encodeURIComponent(documentId)}`
+
+  let response
+  try {
+    response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  } catch {
+    throw buildDownloadError('Falha de rede ao baixar o documento.', 'unavailable')
+  }
+
+  if (!response.ok) {
+    const code = DOWNLOAD_STATUS_CODES[response.status]
+    throw buildDownloadError('Não foi possível baixar o documento.', code)
+  }
+  return response.blob()
+}
+
+export function saveBlobAsFile(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.style.display = 'none'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

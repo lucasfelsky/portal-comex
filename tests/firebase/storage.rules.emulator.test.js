@@ -364,13 +364,16 @@ describeEmulator('storage.rules (emulador)', () => {
       )
     })
 
-    it('admin/logistica LEEM o objeto', async () => {
+    it('NINGUEM le via SDK cliente (L38: leitura so pela function)', async () => {
       await seedObject('processes/p1/documents/bl/1-admin-1-bl.pdf')
-      await assertSucceeds(
+      await assertFails(
         getMetadata(ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
       )
-      await assertSucceeds(
+      await assertFails(
         getMetadata(ref(storageAs('log-1', 'log@sqquimica.com', 'logistica', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
+      )
+      await assertFails(
+        getMetadata(ref(storageAs('user-1', 'user@sqquimica.com', 'user', 'Ativo'), 'processes/p1/documents/bl/1-admin-1-bl.pdf'))
       )
     })
 

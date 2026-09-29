@@ -15,13 +15,15 @@ vi.mock('../../src/lib/firebase', () => ({
 const mockListProcessDocuments = vi.fn()
 const mockUploadProcessDocument = vi.fn()
 const mockDeleteProcessDocument = vi.fn()
-const mockGetProcessDocumentDownloadUrl = vi.fn()
+const mockDownloadProcessDocumentBlob = vi.fn()
+const mockSaveBlobAsFile = vi.fn()
 
 vi.mock('../../src/services/processDocumentsRepository', () => ({
   listProcessDocuments: (...args) => mockListProcessDocuments(...args),
   uploadProcessDocument: (...args) => mockUploadProcessDocument(...args),
   deleteProcessDocument: (...args) => mockDeleteProcessDocument(...args),
-  getProcessDocumentDownloadUrl: (...args) => mockGetProcessDocumentDownloadUrl(...args),
+  downloadProcessDocumentBlob: (...args) => mockDownloadProcessDocumentBlob(...args),
+  saveBlobAsFile: (...args) => mockSaveBlobAsFile(...args),
 }))
 
 const ADMIN_PROFILE = { uid: 'admin-1', name: 'Admin', role: 'admin' }
@@ -61,7 +63,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   firebaseConfigured = true
   mockListProcessDocuments.mockResolvedValue([])
-  window.open = vi.fn(() => ({ location: {}, close: vi.fn() }))
 })
 
 describe('ProcessDocumentsPanel — Firebase nao configurado (D9)', () => {
@@ -348,6 +349,70 @@ describe('ProcessDocumentsPanel — (l) versão anterior', () => {
     await waitFor(() => expect(screen.getByText('bl-v2.pdf')).toBeInTheDocument())
     expect(screen.getByText(/Versão anterior: bl-v1\.pdf/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Baixar' })).toBeInTheDocument()
+  })
+})
+
+// L38: download autenticado (blob via Cloud Function).
+describe('ProcessDocumentsPanel — download autenticado (L38)', () => {
+  it('Baixar chama downloadProcessDocumentBlob + saveBlobAsFile; durante a espera desabilita e anuncia', async () => {
+    const user = userEvent.setup()
+    const blob = new Blob(['PDF'])
+    let resolveDownload
+    mockDownloadProcessDocumentBlob.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDownload = resolve
+      })
+    )
+    mockListProcessDocuments.mockResolvedValue([docBl()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(screen.getByText('bl.pdf')).toBeInTheDocument())
+
+    const button = screen.getByRole('button', { name: 'Baixar bl.pdf' })
+    await user.click(button)
+
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'd1')
+    expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByText('Baixando bl.pdf…')).toBeInTheDocument()
+
+    resolveDownload(blob)
+    await waitFor(() => expect(mockSaveBlobAsFile).toHaveBeenCalledWith(blob, 'bl.pdf'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeEnabled())
+    expect(screen.getByText('Download concluído.')).toBeInTheDocument()
+  })
+
+  it('permission-denied -> alert com titulo e detalhe', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockRejectedValue({ code: 'permission-denied' })
+    mockListProcessDocuments.mockResolvedValue([docBl()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(screen.getByText('bl.pdf')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Baixar bl.pdf' }))
+
+    const row = screen.getByRole('button', { name: 'Baixar bl.pdf' }).closest('.documents-row')
+    const alert = await within(row).findByRole('alert')
+    expect(alert.textContent).toBe(
+      'Não foi possível baixar o documento. Você não tem permissão para esta ação.'
+    )
+    expect(mockSaveBlobAsFile).not.toHaveBeenCalled()
+  })
+
+  it('Baixar da versão anterior baixa o documento anterior', async () => {
+    const user = userEvent.setup()
+    const blob = new Blob(['PDF'])
+    mockDownloadProcessDocumentBlob.mockResolvedValue(blob)
+    mockListProcessDocuments.mockResolvedValue([
+      docBl({ id: 'd1', name: 'bl-v1.pdf', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      docBl({ id: 'd2', name: 'bl-v2.pdf', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(screen.getByText('bl-v2.pdf')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Baixar' }))
+
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'd1')
+    await waitFor(() => expect(mockSaveBlobAsFile).toHaveBeenCalledWith(blob, 'bl-v1.pdf'))
   })
 })
 

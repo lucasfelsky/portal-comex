@@ -61,6 +61,8 @@ service firebase.storage {
     // F18a (D4): leitura de documentos do processo - admin OU logistica
     // (nunca usuario comum, mesma restricao da subcolecao `documents` no
     // firestore.rules).
+    // L38: hoje SEM uso nas rules (leitura = false); a function
+    // `downloadProcessDocument` espelha este conjunto via claims.
     function canReadProcessDocuments() {
       return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
     }
@@ -167,7 +169,10 @@ service firebase.storage {
     // `deleteProcessDocumentFile` (admin SDK); o delete aqui e' so o
     // rollback de upload cuja gravacao do metadado falhou (D4).
     match /processes/{processId}/documents/{type}/{fileName} {
-      allow read: if canReadProcessDocuments();
+      // L38: leitura so' pela function `downloadProcessDocument` (Admin SDK, ignora
+      // rules). `getDownloadURL`/`getMetadata`/`getBlob` do cliente negados para
+      // TODOS - senao admin/logistica poderiam gerar URL com token permanente.
+      allow read: if false;
       allow create: if canUploadProcessDocumentType(type)
         && type in ['bl', 'cargoReport', 'invoice', 'packingList', 'other']
         && isAllowedFileContentType()
@@ -186,7 +191,10 @@ service firebase.storage {
     // e Invoice/Packing List por PO no CONSOLIDADO (`invoice/{po}` /
     // `packingList/{po}`).
     match /processes/{processId}/documents/{type}/{scopeId}/{fileName} {
-      allow read: if canReadProcessDocuments();
+      // L38: leitura so' pela function `downloadProcessDocument` (Admin SDK, ignora
+      // rules). `getDownloadURL`/`getMetadata`/`getBlob` do cliente negados para
+      // TODOS - senao admin/logistica poderiam gerar URL com token permanente.
+      allow read: if false;
       allow create: if canUploadProcessDocumentType(type)
         && type in ['fispq', 'containerWash', 'invoice', 'packingList']
         && isAllowedFileContentType()
