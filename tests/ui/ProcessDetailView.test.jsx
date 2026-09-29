@@ -762,6 +762,28 @@ describe('ProcessDetailView — divergência no recebimento / devolução de vaz
   })
 })
 
+describe('ProcessDetailView — plural de mensagens (aba Mensagens)', () => {
+  it('mensagens restantes: singular com 1', () => {
+    renderDetail({ detailTab: 'messages', isAdmin: true, remainingMessages: 1 })
+    expect(screen.getByText('Resta 1 mensagem disponível nesta conversa para este perfil.')).toBeInTheDocument()
+  })
+
+  it('mensagens restantes: plural com 20', () => {
+    renderDetail({ detailTab: 'messages', isAdmin: true, remainingMessages: 20 })
+    expect(screen.getByText('Restam 20 mensagens disponíveis nesta conversa para este perfil.')).toBeInTheDocument()
+    expect(screen.queryByText(/mensagemns|disponívelis/)).toBeNull()
+  })
+
+  it('contador do cabecalho: "1 mensagem" com 1 e "N mensagens" com N diferente de 1', () => {
+    const msg = (id) => ({ id, authorName: 'Maria', createdAt: '2026-09-20T10:00:00.000Z', content: 'Oi ' + id })
+    const { unmount } = renderDetail({ detailTab: 'messages', isAdmin: true, processMessages: [msg('a')] })
+    expect(screen.getByText('1 mensagem')).toBeInTheDocument()
+    unmount()
+    renderDetail({ detailTab: 'messages', isAdmin: true, processMessages: [msg('a'), msg('b')] })
+    expect(screen.getByText('2 mensagens')).toBeInTheDocument()
+  })
+})
+
 // UX-1 (2026-09-25): confirmacao antes de excluir mensagem do processo.
 describe('ProcessDetailView — confirmacao ao excluir mensagem (UX-1)', () => {
   const MESSAGE = {

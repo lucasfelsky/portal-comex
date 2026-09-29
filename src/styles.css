@@ -10331,8 +10331,9 @@ body {
   /* Heading da aba "Itens" (rotulo eyebrow + badge "N itens") e o campo
      de busca -- so' pill no input de busca pra combinar com o card
      refinado acima; `.detail-label`/`.inline-badge` ja' sao dark-aware
-     na base (nao setar background/color novos aqui). */
-  .process-detail-view .field .text-input {
+     na base (nao setar background/color novos aqui). A textarea (Nova
+     mensagem) fica de fora: mantem o raio base. */
+  .process-detail-view .field .text-input:not(textarea) {
     border-radius: var(--radius-full);
     padding-left: 16px;
   }

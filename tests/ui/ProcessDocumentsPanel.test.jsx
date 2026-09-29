@@ -42,6 +42,16 @@ const FCL_PROCESS = {
   ],
 }
 
+// Espera a 1a carga TERMINAR (nao so' a chamada do mock): sem isso, em CI
+// mais lento o painel ainda esta' em "Carregando documentos" quando o
+// teste consulta as linhas (falha intermitente do "(b) FISPQ pendente").
+async function waitForDocumentsLoaded() {
+  await waitFor(() => {
+    expect(mockListProcessDocuments).toHaveBeenCalled()
+    expect(screen.queryByLabelText('Carregando documentos')).not.toBeInTheDocument()
+  })
+}
+
 function docBl(overrides = {}) {
   return {
     id: 'd1',
@@ -95,7 +105,7 @@ describe('ProcessDocumentsPanel — (b) FISPQ pendente', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     expect(screen.getAllByText('Pendente').length).toBeGreaterThan(0)
     const row = screen.getByText('Resina Atlas').closest('.documents-row')
@@ -120,7 +130,7 @@ describe('ProcessDocumentsPanel — (c) lavação', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     expect(screen.getByText('Ainda não exigido')).toBeInTheDocument()
     const uploadButton = screen.getByRole('button', { name: 'Enviar relatório' })
@@ -182,7 +192,7 @@ describe('ProcessDocumentsPanel — (e) secoes condicionais', () => {
         profile={ADMIN_PROFILE}
       />
     )
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
     expect(screen.queryByText('Relatório de lavação por contêiner')).not.toBeInTheDocument()
   })
 
@@ -193,7 +203,7 @@ describe('ProcessDocumentsPanel — (e) secoes condicionais', () => {
         profile={ADMIN_PROFILE}
       />
     )
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
     expect(screen.queryByText('FISPQ por item')).not.toBeInTheDocument()
   })
 })
@@ -278,7 +288,7 @@ describe('ProcessDocumentsPanel — (h) erro com titulo e detalhe', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockRejectedValue({ code: 'permission-denied' })
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     const uploadButton = screen.getAllByRole('button', { name: 'Enviar' })[0]
     const row = uploadButton.closest('.documents-row')
@@ -558,7 +568,7 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
     const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     const nameInput = screen.getByLabelText('Nome do documento (opcional)')
     await user.type(nameInput, '  Certificado de análise  ')
@@ -577,7 +587,7 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
     const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     await user.type(screen.getByLabelText('Nome do documento (opcional)'), '   ')
     await user.upload(otherFileInput(container), new File(['x'], 'a.pdf', { type: 'application/pdf' }))
@@ -594,7 +604,7 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockRejectedValue({ code: 'permission-denied' })
     const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
 
     await user.type(screen.getByLabelText('Nome do documento (opcional)'), 'Laudo')
     await user.upload(otherFileInput(container), new File(['x'], 'a.pdf', { type: 'application/pdf' }))
@@ -605,13 +615,13 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
 
   it('o campo limita a 80 caracteres', async () => {
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
     expect(screen.getByLabelText('Nome do documento (opcional)')).toHaveAttribute('maxlength', '80')
   })
 
   it('logística não vê o campo', async () => {
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={LOGISTICS_PROFILE} />)
-    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    await waitForDocumentsLoaded()
     expect(screen.queryByLabelText('Nome do documento (opcional)')).not.toBeInTheDocument()
   })
 
