@@ -17,6 +17,7 @@ export const mockAuthApi = {
   createUser: vi.fn(),
   deleteUser: vi.fn(),
   getUser: vi.fn(),
+  verifyIdToken: vi.fn(),
   setCustomUserClaims: vi.fn(),
 }
 
@@ -52,6 +53,9 @@ export const mockFirestoreApi = {
 // `cleanupDeletedProcessData`.
 export const mockStorageFile = {
   delete: vi.fn().mockResolvedValue(undefined),
+  // L38: `downloadProcessDocument`.
+  getMetadata: vi.fn(),
+  createReadStream: vi.fn(),
 }
 
 export const mockBucket = {
@@ -124,6 +128,8 @@ export const mocks = {
   }),
   firebaseHttps: () => ({
     onCall: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+    // L38: `downloadProcessDocument` (HTTP).
+    onRequest: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler, __opts: opts })),
     HttpsError: class HttpsError extends Error { constructor(c, m) { super(m); this.code = c } },
   }),
   firebaseParams: () => ({

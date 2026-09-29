@@ -52,6 +52,7 @@ vi.mock('firebase-functions/v2/firestore', () => ({
 }))
 vi.mock('firebase-functions/v2/https', () => ({
   onCall: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler })),
+  onRequest: vi.fn((opts, handler) => ({ __handler: typeof opts === 'function' ? opts : handler, __opts: opts })),
   HttpsError: class HttpsError extends Error { constructor(c, m) { super(m); this.code = c } },
 }))
 vi.mock('firebase-functions/params', () => ({ defineSecret: vi.fn((n) => ({ name: n })) }))

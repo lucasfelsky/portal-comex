@@ -14,7 +14,8 @@ const {
   mockRef,
   mockUploadBytes,
   mockDeleteObject,
-  mockGetDownloadURL,
+  mockGetIdToken,
+  mockAuth,
 } = vi.hoisted(() => ({
   mockCollection: vi.fn(),
   mockDoc: vi.fn(),
@@ -25,7 +26,8 @@ const {
   mockRef: vi.fn(),
   mockUploadBytes: vi.fn(),
   mockDeleteObject: vi.fn(),
-  mockGetDownloadURL: vi.fn(),
+  mockGetIdToken: vi.fn(),
+  mockAuth: { currentUser: null },
 }))
 
 let firebaseConfigured = true
@@ -36,6 +38,8 @@ vi.mock('../../src/lib/firebase', () => ({
   },
   firestore: {},
   storage: {},
+  auth: mockAuth,
+  firebaseConfig: { projectId: 'proj-test' },
 }))
 
 vi.mock('firebase/firestore/lite', () => ({
@@ -51,13 +55,14 @@ vi.mock('firebase/storage', () => ({
   ref: (...args) => mockRef(...args),
   uploadBytes: (...args) => mockUploadBytes(...args),
   deleteObject: (...args) => mockDeleteObject(...args),
-  getDownloadURL: (...args) => mockGetDownloadURL(...args),
 }))
 
 import {
   deleteProcessDocument,
-  getProcessDocumentDownloadUrl,
+  buildProcessDocumentDownloadEndpoint,
+  downloadProcessDocumentBlob,
   listProcessDocuments,
+  saveBlobAsFile,
   uploadProcessDocument,
 } from '../../src/services/processDocumentsRepository'
 
@@ -71,7 +76,9 @@ beforeEach(() => {
   mockSetDoc.mockResolvedValue(undefined)
   mockDeleteDoc.mockResolvedValue(undefined)
   mockDeleteObject.mockResolvedValue(undefined)
-  mockGetDownloadURL.mockResolvedValue('https://example.com/file')
+  mockGetIdToken.mockResolvedValue('TOKEN')
+  mockAuth.currentUser = { getIdToken: mockGetIdToken }
+  vi.unstubAllEnvs()
 })
 
 describe('listProcessDocuments', () => {
@@ -187,14 +194,100 @@ describe('deleteProcessDocument', () => {
   })
 })
 
-describe('getProcessDocumentDownloadUrl', () => {
-  it('resolve a URL', async () => {
-    const url = await getProcessDocumentDownloadUrl('processes/p1/documents/bl/1-uid-bl.pdf')
-    expect(url).toBe('https://example.com/file')
+describe('buildProcessDocumentDownloadEndpoint', () => {
+  it('producao: Cloud Function us-central1', () => {
+    expect(buildProcessDocumentDownloadEndpoint()).toBe(
+      'https://us-central1-proj-test.cloudfunctions.net/downloadProcessDocument'
+    )
+  })
+
+  it('emulador: 127.0.0.1:5001', () => {
+    vi.stubEnv('VITE_USE_FIREBASE_EMULATORS', 'true')
+    expect(buildProcessDocumentDownloadEndpoint()).toBe(
+      'http://127.0.0.1:5001/proj-test/us-central1/downloadProcessDocument'
+    )
+  })
+})
+
+describe('downloadProcessDocumentBlob', () => {
+  let fetchMock
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  it('envia Bearer token + query codificada e devolve o blob', async () => {
+    const blob = new Blob(['PDF'])
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: () => Promise.resolve(blob) })
+
+    const result = await downloadProcessDocumentBlob('p 1', 'd/1')
+
+    expect(result).toBe(blob)
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      'https://us-central1-proj-test.cloudfunctions.net/downloadProcessDocument?processId=p%201&documentId=d%2F1'
+    )
+    expect(options.headers.Authorization).toBe('Bearer TOKEN')
+  })
+
+  it.each([
+    [401, 'unauthenticated'],
+    [403, 'permission-denied'],
+    [404, 'storage/object-not-found'],
+  ])('status %s -> code %s', async (status, code) => {
+    fetchMock.mockResolvedValue({ ok: false, status })
+    await expect(downloadProcessDocumentBlob('p1', 'd1')).rejects.toMatchObject({ code })
+  })
+
+  it('status 500 -> erro sem code mapeado', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 })
+    const error = await downloadProcessDocumentBlob('p1', 'd1').catch((e) => e)
+    expect(error.message).toBe('Não foi possível baixar o documento.')
+    expect(error.code).toBeUndefined()
+  })
+
+  it('fetch rejeita -> unavailable', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(downloadProcessDocumentBlob('p1', 'd1')).rejects.toMatchObject({ code: 'unavailable' })
+  })
+
+  it('sem currentUser -> unauthenticated e nao chama fetch', async () => {
+    mockAuth.currentUser = null
+    await expect(downloadProcessDocumentBlob('p1', 'd1')).rejects.toMatchObject({ code: 'unauthenticated' })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('nao configurado -> lanca erro', async () => {
     firebaseConfigured = false
-    await expect(getProcessDocumentDownloadUrl('x')).rejects.toThrow()
+    await expect(downloadProcessDocumentBlob('p1', 'd1')).rejects.toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('saveBlobAsFile', () => {
+  it('cria e revoga object URL e clica o anchor com download', () => {
+    vi.useFakeTimers()
+    const createObjectURL = vi.fn(() => 'blob:abc')
+    const revokeObjectURL = vi.fn()
+    const anchor = { click: vi.fn(), style: {} }
+    const body = { appendChild: vi.fn(), removeChild: vi.fn() }
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    vi.stubGlobal('document', { createElement: vi.fn(() => anchor), body })
+
+    saveBlobAsFile(new Blob(['x']), 'bl.pdf')
+
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(anchor.download).toBe('bl.pdf')
+    expect(anchor.href).toBe('blob:abc')
+    expect(body.appendChild).toHaveBeenCalledWith(anchor)
+    expect(anchor.click).toHaveBeenCalledTimes(1)
+    expect(body.removeChild).toHaveBeenCalledWith(anchor)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:abc')
+
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 })

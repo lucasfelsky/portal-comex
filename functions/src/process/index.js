@@ -15,6 +15,7 @@ import {
 import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents } from './documents.js';
+export { downloadProcessDocument } from './documentDownload.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';
 import { getNewlyRejectedLicensesMirror } from '../core/licenses.js';
