@@ -10497,6 +10497,99 @@ body {
   }
 }
 
+/* Detalhe desktop (SPEC 2026-09-28): ordem/largura dos cards por aba do
+   detalhe do processo (Detalhes gerais, Processo, Itens, Mensagens,
+   Historico, Documentos). So desktop, so tokens, nenhum @media (max-width)
+   tocado. */
+@media (min-width: 1041px) {
+  /* Detalhes gerais: ordem */
+  .process-detail-view .process-general-card--pending { order: 1; }
+  .process-detail-view .process-general-card--etd-eta { order: 2; }
+  .process-detail-view .process-general-card--ident { order: 3; }
+  .process-detail-view .process-general-card--forecast { order: 4; }
+  .process-detail-view .process-general-card--destination { order: 5; }
+  .process-detail-view .process-general-card--eta-original { order: 6; }
+  .process-detail-view .process-general-card--linked-items { order: 7; }
+  .process-detail-view .process-general-card--consolidated-pos { order: 8; }
+
+  /* ETD/ETA vira meia coluna: (0,5,0) vence `.detail-card:has(.detail-card--split)` (0,4,0) */
+  .process-detail-view .tab-panel-spacing > .detail-card.process-general-card.process-general-card--etd-eta {
+    grid-column: auto;
+  }
+  .process-detail-view .tab-panel-spacing > .detail-card.process-general-card--consolidated-pos {
+    grid-column: 1 / -1;
+  }
+
+  /* listas em 2 colunas */
+  .process-detail-view .process-general-card__list { columns: 2; column-gap: 24px; }
+  .process-detail-view .process-general-card--consolidated-pos > .detail-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+  }
+
+  /* Identificacao: 2 colunas, rotulo acima do valor (estilo de .detail-label) */
+  .process-detail-view .detail-ident {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+  }
+  .process-detail-view .detail-ident__row { display: grid; gap: 2px; }
+  .process-detail-view .detail-ident__label {
+    display: block;
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+  }
+  .process-detail-view .detail-ident__sep { display: none; }
+
+  /* Processo: ordem + largura + passos escondidos */
+  .process-detail-view .process-block--transit { order: 1; }
+  .process-detail-view .process-block--arrival { order: 2; }
+  .process-detail-view .process-block--customs { order: 3; }
+  .process-detail-view .process-block--cargo { order: 4; }
+  .process-detail-view .process-block--licenses { order: 5; }
+  .process-detail-view .process-block--collection { order: 6; }
+  .process-detail-view .process-block--process-notes { order: 7; }
+  .process-detail-view .process-block--free-time { order: 8; }
+  .process-detail-view .process-block--post-receipt { order: 9; }
+  .process-detail-view .process-block--divergence { order: 10; }
+  .process-detail-view .detail-block__step { display: none; }
+
+  /* Heading com badge/botao a direita (Itens, Mensagens, Historico) */
+  .process-detail-view .process-detail-card-heading--end {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* Itens: grade 2 col (1041-1279) */
+  .process-detail-view .process-items-list:not(.process-items-list--scroll) {
+    padding: 2px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .process-detail-view .process-items-list:not(.process-items-list--scroll) > .empty-state {
+    grid-column: 1 / -1;
+  }
+
+  /* Documentos: painel e fallback em linha inteira */
+  .process-detail-view .tab-panel-spacing > .documents-panel,
+  .process-detail-view .tab-panel-spacing > .documents-panel-unconfigured {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .process-detail-view .process-items-list:not(.process-items-list--scroll) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .process-detail-view .documents-section--process .documents-section__rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .process-detail-view .documents-section--process .documents-add-other-row {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ============================================================
    Ciclo 3a (redesign Fase 3) — Noticias desktop: cards da lista
    (`.news-list-card`/`.news-editor-card`), grid de cards (`.news-grid`/

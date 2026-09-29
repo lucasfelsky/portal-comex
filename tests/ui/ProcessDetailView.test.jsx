@@ -7,6 +7,10 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
 
+const identRow = (pattern) => (_content, element) =>
+  Boolean(element?.classList?.contains('detail-ident__row')) &&
+  (typeof pattern === 'string' ? element.textContent === pattern : pattern.test(element.textContent))
+
 const mockListProcessEvents = vi.fn().mockResolvedValue([])
 vi.mock('../../src/services/processEventsRepository', () => ({
   listProcessEvents: (...args) => mockListProcessEvents(...args),
@@ -396,7 +400,7 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
       canSeeName: true,
       selectedProcess: makeProcess({ category: 'FCL', supplierName: 'Fornecedor Atlas' }),
     })
-    expect(screen.getByText('Fornecedor: Fornecedor Atlas')).toBeInTheDocument()
+    expect(screen.getByText(identRow('Fornecedor: Fornecedor Atlas'))).toBeInTheDocument()
   })
 
   it('CONSOLIDADO: nunca mostra "Fornecedor:" de processo, mesmo com supplierName legado populado (Q1)', () => {
@@ -405,7 +409,7 @@ describe('ProcessDetailView — fornecedor mascarado (F17.2a D-8)', () => {
       canSeeName: true,
       selectedProcess: makeProcess({ category: 'CONSOLIDADO', supplierName: 'Fornecedor Delta' }),
     })
-    expect(screen.queryByText(/^Fornecedor: /)).not.toBeInTheDocument()
+    expect(screen.queryByText(identRow(/^Fornecedor: /))).not.toBeInTheDocument()
     expect(screen.queryByText('Fornecedor Delta')).not.toBeInTheDocument()
   })
 })
@@ -563,7 +567,7 @@ describe('ProcessDetailView — POs do consolidado (F17.2c/F17.2d-2)', () => {
         purchaseOrders: [{ po: 'PO-A', reference: '', supplierName: 'ACME' }],
       }),
     })
-    expect(screen.queryByText(/^Fornecedor: /)).not.toBeInTheDocument()
+    expect(screen.queryByText(identRow(/^Fornecedor: /))).not.toBeInTheDocument()
   })
 })
 

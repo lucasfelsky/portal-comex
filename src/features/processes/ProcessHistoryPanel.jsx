@@ -75,7 +75,7 @@ export default function ProcessHistoryPanel({ processId }) {
 
   return (
     <div className="detail-card">
-      <div className="card-heading process-detail-card-heading">
+      <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
         <div>
           <span className="detail-label">Histórico de marcos</span>
           <p>Linha do tempo de eventos operacionais deste processo.</p>

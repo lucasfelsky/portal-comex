@@ -30,7 +30,7 @@ export default function ProcessMessagesPanel({
 
   return (
     <div className="detail-card">
-      <div className="card-heading process-detail-card-heading">
+      <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
         <div>
           <span className="detail-label">Mensagens para dúvidas</span>
           <p>Histórico vinculado ao processo.</p>

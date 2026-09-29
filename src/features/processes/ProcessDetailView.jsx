@@ -415,9 +415,9 @@ export default function ProcessDetailView({
         {effectiveTab === 'general' ? (
           <>
             {isAdmin && pendingFields.length > 0 ? (
-              <div className="detail-card">
+              <div className="detail-card process-general-card process-general-card--pending">
                 <span className="detail-label">Dados pendentes</span>
-                <ul>
+                <ul className="process-general-card__list">
                   {pendingFields.map((field) => (
                     <li key={field.id}>{field.label}</li>
                   ))}
@@ -425,7 +425,7 @@ export default function ProcessDetailView({
               </div>
             ) : null}
             {selectedProcess.category === 'CONSOLIDADO' && getProcessPurchaseOrders(selectedProcess).length > 0 ? (
-              <div className="detail-card">
+              <div className="detail-card process-general-card process-general-card--consolidated-pos">
                 <span className="detail-label">POs consolidadas</span>
                 <ul className="detail-stack detail-stack--compact">
                   {getProcessPurchaseOrders(selectedProcess).map((order) => (
@@ -436,9 +436,9 @@ export default function ProcessDetailView({
                 </ul>
               </div>
             ) : null}
-            <div className="detail-card"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
+            <div className="detail-card process-general-card process-general-card--destination"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
             <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} />
-            <div className="detail-card">
+            <div className="detail-card process-general-card process-general-card--etd-eta">
               <span className="detail-label">ETD / ETA</span>
               <div className="detail-card--split" style={{ marginTop: '8px' }}>
                 <div>
@@ -451,13 +451,13 @@ export default function ProcessDetailView({
                 </div>
               </div>
             </div>
-            {selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}
-            <div className="detail-card">
+            {selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card process-general-card process-general-card--eta-original"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}
+            <div className="detail-card process-general-card process-general-card--forecast">
               <span className="detail-label">Previsão de entrega no armazém</span>
               <p>{getEstimatedDeliveryLabel(selectedProcess)}</p>
               <small className="field-hint">{selectedProcess.warehouseDeliveryDateOverride ? 'Data definida manualmente por um admin.' : 'Data calculada automaticamente pelo sistema.'}</small>
             </div>
-            <div className="detail-card">
+            <div className="detail-card process-general-card process-general-card--linked-items">
               <div className="card-heading process-detail-card-heading">
                 <div>
                   <span className="detail-label">Itens vinculados</span>
@@ -486,6 +486,7 @@ export default function ProcessDetailView({
                 step={5}
                 title="Coleta"
                 wide
+                className="process-block--collection"
                 badges={
                   showCollectionStatusBadge ? (
                     <span className="inline-badge">{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</span>
@@ -519,12 +520,12 @@ export default function ProcessDetailView({
               </DetailBlock>
             ) : null}
             {selectedProcess.processNotes ? (
-              <DetailBlock title="Observações do processo">
+              <DetailBlock title="Observações do processo" wide className="process-block--process-notes">
                 <p>{selectedProcess.processNotes}</p>
               </DetailBlock>
             ) : null}
             {isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? (
-              <DetailBlock title="Observações pós-recebimento da carga">
+              <DetailBlock title="Observações pós-recebimento da carga" wide className="process-block--post-receipt">
                 {selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}
                 {selectedProcessPostReceiptImages.length > 0 ? (
                   <div className="post-receipt-image-grid post-receipt-image-grid--detail">
@@ -552,7 +553,7 @@ export default function ProcessDetailView({
 
         {effectiveTab === 'items' ? (
           <div ref={itemsSectionRef} className="detail-card">
-            <div className="card-heading process-detail-card-heading">
+            <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
               <div>
                 <span className="detail-label">Itens do processo</span>
                 <p>Itens comerciais vinculados diretamente a este processo.</p>

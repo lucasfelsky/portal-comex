@@ -147,7 +147,7 @@ export function ProcessLicensesDetails({ process, step }) {
   )
 
   return (
-    <DetailBlock step={step} title="Anuências" badges={summaryBadge}>
+    <DetailBlock step={step} title="Anuências" wide className="process-block--licenses" badges={summaryBadge}>
       <div className="detail-stack detail-stack--compact">
         {licenses.map((license) => {
           const statusTone = isLicenseRejected(license?.status)
@@ -175,6 +175,18 @@ export function ProcessLicensesDetails({ process, step }) {
   )
 }
 
+function IdentRow({ label, children }) {
+  return (
+    <p className="detail-ident__row">
+      <span className="detail-ident__label">
+        {label}
+        <span className="detail-ident__sep">:</span>
+      </span>{' '}
+      <span className="detail-ident__value">{children}</span>
+    </p>
+  )
+}
+
 export function ProcessIdentificationDetails({ process, canSeeName }) {
   const showSupplier =
     canShowProcessName(process, canSeeName) &&
@@ -186,13 +198,13 @@ export function ProcessIdentificationDetails({ process, canSeeName }) {
   if (!hasContent) return null
 
   return (
-    <div className="detail-card">
+    <div className="detail-card process-general-card process-general-card--ident">
       <span className="detail-label">Identificação</span>
-      <div className="detail-stack detail-stack--compact">
-        {showSupplier ? <p>Fornecedor: {process.supplierName}</p> : null}
-        {process?.originLocation ? <p>Origem: {process.originLocation}</p> : null}
-        {process?.incoterm ? <p>Incoterm: {process.incoterm}</p> : null}
-        {process?.forwarderName ? <p>Agente de carga: {process.forwarderName}</p> : null}
+      <div className="detail-stack detail-stack--compact detail-ident">
+        {showSupplier ? <IdentRow label="Fornecedor">{process.supplierName}</IdentRow> : null}
+        {process?.originLocation ? <IdentRow label="Origem">{process.originLocation}</IdentRow> : null}
+        {process?.incoterm ? <IdentRow label="Incoterm">{process.incoterm}</IdentRow> : null}
+        {process?.forwarderName ? <IdentRow label="Agente de carga">{process.forwarderName}</IdentRow> : null}
       </div>
     </div>
   )
@@ -227,7 +239,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
   )
 
   return (
-    <DetailBlock step={1} title="Carga" wide badges={badges}>
+    <DetailBlock step={1} title="Carga" wide className="process-block--cargo" badges={badges}>
       {containers.length > 0 ? (
         <div className="detail-table__scroll">
           <table className="detail-table" aria-label="Contêineres">
@@ -324,7 +336,7 @@ export function ProcessTransitDetails({ process }) {
   if (!hasTransit && !process?.transshipment) return null
 
   return (
-    <DetailBlock step={2} title="Embarque e trânsito" wide>
+    <DetailBlock step={2} title="Embarque e trânsito" wide className="process-block--transit">
       <DetailList>
         {process?.shippedAt ? <DetailRow label="Data de embarque">{formatDate(process.shippedAt)}</DetailRow> : null}
         {process?.vesselName ? <DetailRow label="Navio">{process.vesselName}</DetailRow> : null}
@@ -359,7 +371,7 @@ export function ProcessArrivalDetails({ process, step }) {
   const isApprox = isApproxDate(process, arrivalField)
 
   return (
-    <DetailBlock step={step} title="Chegada">
+    <DetailBlock step={step} title="Chegada" className="process-block--arrival">
       <DetailList>
         {hasArrival ? (
           <DetailRow label={isMaritime ? 'Atracação' : 'Chegada'}>
@@ -432,7 +444,7 @@ export function ProcessFreeTimeDetails({ process, step }) {
   const badge = toneClass ? <span className={`inline-badge ${toneClass}`}>{content}</span> : null
 
   return (
-    <DetailBlock step={step} title="Free time" badges={badge} tone={status.state === 'overdue' ? 'danger' : undefined}>
+    <DetailBlock step={step} title="Free time" wide className="process-block--free-time" badges={badge} tone={status.state === 'overdue' ? 'danger' : undefined}>
       <DetailList>
         {!badge ? <DetailRow label="Situação">{content}</DetailRow> : null}
         {process?.demurrageDailyRateUsd != null ? (
@@ -470,7 +482,7 @@ export function ProcessCustomsDetails({ process, step }) {
   ) : null
 
   return (
-    <DetailBlock step={step} title="Aduana (DUIMP)" badges={channelBadge}>
+    <DetailBlock step={step} title="Aduana (DUIMP)" className="process-block--customs" badges={channelBadge}>
       <DetailList>
         {process?.duimpStatus ? <DetailRow label="Status">{process.duimpStatus}</DetailRow> : null}
         {process?.duimpNumber ? <DetailRow label="Nº da DUIMP">{process.duimpNumber}</DetailRow> : null}
@@ -510,7 +522,7 @@ export function ProcessReceiptDivergenceDetails({ process }) {
   if (!hasReceiptDivergence(process)) return null
 
   return (
-    <DetailBlock title="Divergência no recebimento">
+    <DetailBlock title="Divergência no recebimento" className="process-block--divergence">
       <p>
         <span className="inline-badge inline-badge--danger">
           {process?.receiptDivergenceType || 'Tipo não informado'}
