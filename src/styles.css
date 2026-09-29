@@ -10435,6 +10435,10 @@ body {
   border: 1px solid var(--danger-700);
 }
 
+.process-detail-view .detail-block--placeholder {
+  display: none;
+}
+
 .detail-dl {
   display: grid;
   grid-template-columns: 1fr;
@@ -10555,6 +10559,7 @@ body {
   .process-detail-view .process-block--post-receipt { order: 9; }
   .process-detail-view .process-block--divergence { order: 10; }
   .process-detail-view .detail-block__step { display: none; }
+  .process-detail-view .tab-panel-spacing > .detail-block--placeholder { display: grid; }
 
   /* Heading com badge/botao a direita (Itens, Mensagens, Historico) */
   .process-detail-view .process-detail-card-heading--end {
