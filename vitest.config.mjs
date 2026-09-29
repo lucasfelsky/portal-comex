@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const require = createRequire(import.meta.url)
@@ -35,6 +36,28 @@ const firebaseBackendAlias = Object.fromEntries(
   ].map((spec) => [spec, require.resolve(spec)])
 )
 
+// Env de teste: as 6 VITE_FIREBASE_* fazem `isConfigured` (src/lib/firebase.js)
+// ser true, igual ao CI (placeholders de .github/workflows/ci.yml). Sem elas,
+// componentes que dependem de isFirebaseConfigured renderizam o fallback e a
+// suite local falha. Lista ESPELHADA de REQUIRED_FIREBASE_ENV (vite.config.js),
+// sem importa-lo, para nao acoplar/rodar o firebase-env-guard. So' preenche o
+// que NAO vier do processo/CI nem de .env* local. O build de producao continua
+// exigindo as variaveis reais.
+const FIREBASE_TEST_ENV_DEFAULTS = {
+  VITE_FIREBASE_API_KEY: 'AIzaSyDevPlaceholder',
+  VITE_FIREBASE_AUTH_DOMAIN: 'dev-placeholder.firebaseapp.com',
+  VITE_FIREBASE_PROJECT_ID: 'dev-placeholder',
+  VITE_FIREBASE_STORAGE_BUCKET: 'dev-placeholder.appspot.com',
+  VITE_FIREBASE_MESSAGING_SENDER_ID: '000000000000',
+  VITE_FIREBASE_APP_ID: '1:000000000000:web:devplaceholder',
+}
+const fileEnv = loadEnv('test', process.cwd(), 'VITE_')
+const firebaseTestEnv = Object.fromEntries(
+  Object.entries(FIREBASE_TEST_ENV_DEFAULTS).filter(
+    ([key]) => !process.env[key] && !fileEnv[key]
+  )
+)
+
 // Config de teste para o Portal COMEX.
 // Existe um `vite.config.js` (usado pelo build de producao) que nao
 // interfere — vitest prioriza este arquivo.
@@ -46,6 +69,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     alias: firebaseBackendAlias,
+    env: firebaseTestEnv,
     environment: 'node',
     environmentMatchGlobs: [
       ['tests/ui/**', 'jsdom'],
