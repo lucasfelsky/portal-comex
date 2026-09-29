@@ -35,7 +35,7 @@ export default function ProcessMessagesPanel({
           <span className="detail-label">Mensagens para dúvidas</span>
           <p>Histórico vinculado ao processo.</p>
         </div>
-        <span className="inline-badge">{messages.length} mensagens</span>
+        <span className="inline-badge">{messages.length === 1 ? '1 mensagem' : `${messages.length} mensagens`}</span>
       </div>
 
       <div className="process-messages-list">
@@ -95,7 +95,9 @@ export default function ProcessMessagesPanel({
         </div>
       ) : showRemainingMessages ? (
         <p className="process-message-limit-text">
-          Resta{remainingMessages === 1 ? '' : 'm'} {remainingMessages} mensagem{remainingMessages === 1 ? '' : 'ns'} disponível{remainingMessages === 1 ? '' : 'is'} nesta conversa para este perfil.
+          {remainingMessages === 1
+            ? 'Resta 1 mensagem disponível nesta conversa para este perfil.'
+            : `Restam ${remainingMessages} mensagens disponíveis nesta conversa para este perfil.`}
         </p>
       ) : null}
 
