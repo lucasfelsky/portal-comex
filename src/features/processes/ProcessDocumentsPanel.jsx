@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { isFirebaseConfigured } from '../../lib/firebase'
@@ -398,7 +398,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const rowError = rowErrors[slotKey]
 
     return (
-      <Fragment key={slotKey}>
+      <div key={slotKey} className="documents-row-group">
         <div className="documents-row">
           <span
             className={`documents-row__icon${primary ? ' documents-row__icon--on' : ''}`}
@@ -511,7 +511,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
           </div>
         </div>
         {renderPreviousLine(previous)}
-      </Fragment>
+      </div>
     )
   }
 
@@ -673,7 +673,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   // server-only).
   if (!isFirebaseConfigured) {
     return (
-      <div className="detail-card">
+      <div className="detail-card documents-panel-unconfigured">
         <span className="detail-label">Documentos</span>
         <div className="empty-state" role="status">
           <strong>Documentos disponíveis apenas com o Firebase configurado</strong>
@@ -771,113 +771,115 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         </div>
       ) : (
         <div className="documents-sections">
-          <div className="documents-section">
+          <div className="documents-section documents-section--process">
             <DocumentsSectionHeader
               title="Documentos do processo"
               subtitle="Cada tipo guarda o arquivo atual e a última versão anterior."
             />
-            {PROCESS_LEVEL_TYPES.map((type) => {
-              const slotKey = buildDocumentSlotKey(type)
-              const group = findGroup(slotKey)
-              const primary = group?.primary ?? null
-              const metaText = primary
-                ? [
-                    getDocumentFileKindLabel(primary.mimeType, primary.name),
-                    formatDocumentSize(primary.size),
-                    formatDateTime(primary.uploadedAt),
-                    primary.uploadedByName,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : 'Nenhum arquivo enviado'
-              return renderRow({
-                slotKey,
-                title: getDocumentTypeLabel(type),
-                fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
-                metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
-                group,
-                canUpload: canUploadDocumentType(role, type),
-                canDelete: primary ? canDeleteDocument(profile, primary) : false,
-                onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
-              })
-            })}
-
-            {!isConsolidated
-              ? PO_SCOPABLE_TYPES.map((type) => {
-                  const slotKey = buildDocumentSlotKey(type, { category })
-                  const group = findGroup(slotKey)
-                  const primary = group?.primary ?? null
-                  const metaText = primary
-                    ? [
-                        getDocumentFileKindLabel(primary.mimeType, primary.name),
-                        formatDocumentSize(primary.size),
-                        formatDateTime(primary.uploadedAt),
-                        primary.uploadedByName,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : 'Nenhum arquivo enviado'
-                  return renderRow({
-                    slotKey,
-                    title: getDocumentTypeLabel(type),
-                    fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
-                    metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
-                    group,
-                    canUpload: canUploadDocumentType(role, type),
-                    canDelete: primary ? canDeleteDocument(profile, primary) : false,
-                    onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
-                  })
+            <div className="documents-section__rows">
+              {PROCESS_LEVEL_TYPES.map((type) => {
+                const slotKey = buildDocumentSlotKey(type)
+                const group = findGroup(slotKey)
+                const primary = group?.primary ?? null
+                const metaText = primary
+                  ? [
+                      getDocumentFileKindLabel(primary.mimeType, primary.name),
+                      formatDocumentSize(primary.size),
+                      formatDateTime(primary.uploadedAt),
+                      primary.uploadedByName,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Nenhum arquivo enviado'
+                return renderRow({
+                  slotKey,
+                  title: getDocumentTypeLabel(type),
+                  fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
+                  metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
+                  group,
+                  canUpload: canUploadDocumentType(role, type),
+                  canDelete: primary ? canDeleteDocument(profile, primary) : false,
+                  onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
                 })
-              : null}
+              })}
 
-            {otherDocuments.map((document_) => {
-              const metaText = [
-                getDocumentFileKindLabel(document_.mimeType, document_.name),
-                formatDocumentSize(document_.size),
-                formatDateTime(document_.uploadedAt),
-                document_.uploadedByName,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-              return renderRow({
-                slotKey: document_.slotKey,
-                title: `Outro · ${document_.description || document_.name}`,
-                fileLine: <p className="documents-row__file">{document_.name}</p>,
-                metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
-                group: { slotKey: document_.slotKey, primary: document_, previous: null },
-                canUpload: false,
-                canDelete: canDeleteDocument(profile, document_),
-                showBadgeOnPresent: false,
-              })
-            })}
+              {!isConsolidated
+                ? PO_SCOPABLE_TYPES.map((type) => {
+                    const slotKey = buildDocumentSlotKey(type, { category })
+                    const group = findGroup(slotKey)
+                    const primary = group?.primary ?? null
+                    const metaText = primary
+                      ? [
+                          getDocumentFileKindLabel(primary.mimeType, primary.name),
+                          formatDocumentSize(primary.size),
+                          formatDateTime(primary.uploadedAt),
+                          primary.uploadedByName,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : 'Nenhum arquivo enviado'
+                    return renderRow({
+                      slotKey,
+                      title: getDocumentTypeLabel(type),
+                      fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
+                      metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
+                      group,
+                      canUpload: canUploadDocumentType(role, type),
+                      canDelete: primary ? canDeleteDocument(profile, primary) : false,
+                      onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                    })
+                  })
+                : null}
 
-            {canUploadDocumentType(role, 'other') ? (
-              <div className="documents-add-other-row">
-                <input
-                  type="file"
-                  ref={registerFileInput('other:new')}
-                  style={{ display: 'none' }}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    event.target.value = ''
-                    if (file) handleUploadFile('other', 'other:new', { description: 'Documento adicional' }, file)
-                  }}
-                />
-                <button
-                  type="button"
-                  className="ghost-button documents-add-other"
-                  disabled={uploadingKey === 'other:new'}
-                  onClick={() => triggerFilePicker('other:new')}
-                >
-                  <Icon name="plus" /> Adicionar outro documento
-                </button>
-                {rowErrors['other:new'] ? (
-                  <p role="alert" className="documents-row__error">
-                    <strong>{rowErrors['other:new'].title}</strong> {rowErrors['other:new'].detail}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+              {otherDocuments.map((document_) => {
+                const metaText = [
+                  getDocumentFileKindLabel(document_.mimeType, document_.name),
+                  formatDocumentSize(document_.size),
+                  formatDateTime(document_.uploadedAt),
+                  document_.uploadedByName,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+                return renderRow({
+                  slotKey: document_.slotKey,
+                  title: `Outro · ${document_.description || document_.name}`,
+                  fileLine: <p className="documents-row__file">{document_.name}</p>,
+                  metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
+                  group: { slotKey: document_.slotKey, primary: document_, previous: null },
+                  canUpload: false,
+                  canDelete: canDeleteDocument(profile, document_),
+                  showBadgeOnPresent: false,
+                })
+              })}
+
+              {canUploadDocumentType(role, 'other') ? (
+                <div className="documents-add-other-row">
+                  <input
+                    type="file"
+                    ref={registerFileInput('other:new')}
+                    style={{ display: 'none' }}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      event.target.value = ''
+                      if (file) handleUploadFile('other', 'other:new', { description: 'Documento adicional' }, file)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="ghost-button documents-add-other"
+                    disabled={uploadingKey === 'other:new'}
+                    onClick={() => triggerFilePicker('other:new')}
+                  >
+                    <Icon name="plus" /> Adicionar outro documento
+                  </button>
+                  {rowErrors['other:new'] ? (
+                    <p role="alert" className="documents-row__error">
+                      <strong>{rowErrors['other:new'].title}</strong> {rowErrors['other:new'].detail}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {isConsolidated ? (
