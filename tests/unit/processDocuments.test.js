@@ -185,9 +185,35 @@ describe('formatDocumentSize', () => {
 
 // F18b-1 (B1): leitura do documentIndex (normalizeProcess).
 describe('normalizeDocumentIndex', () => {
-  it('ausente -> vazio', () => {
-    expect(normalizeDocumentIndex(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
-    expect(normalizeDocumentIndex(null)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  it('ausente -> vazio CONHECIDO (processSlotKeys: [])', () => {
+    const empty = { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }
+    expect(normalizeDocumentIndex(undefined)).toEqual(empty)
+    expect(normalizeDocumentIndex(null)).toEqual(empty)
+    expect(normalizeDocumentIndex([])).toEqual(empty)
+    expect(normalizeDocumentIndex('x')).toEqual(empty)
+  })
+
+  it('objeto legado sem processSlotKeys -> null (desconhecido)', () => {
+    expect(normalizeDocumentIndex({ fispqItemIds: ['A'] })).toEqual({
+      fispqItemIds: ['A'],
+      containerWashIds: [],
+      processSlotKeys: null,
+    })
+  })
+
+  it('paridade com normalizeDocumentIndexMirror (functions) e idempotencia', () => {
+    const samples = [
+      undefined,
+      null,
+      {},
+      { fispqItemIds: ['A'] },
+      { processSlotKeys: ['bl', 'bl', 1] },
+      { processSlotKeys: 'x' },
+    ]
+    for (const sample of samples) {
+      expect(normalizeDocumentIndex(sample)).toEqual(normalizeDocumentIndexMirror(sample))
+      expect(normalizeDocumentIndex(normalizeDocumentIndex(sample))).toEqual(normalizeDocumentIndex(sample))
+    }
   })
 
   it('lixo (nao-array, itens nao-string, duplicados) -> limpo/ordenado', () => {
@@ -196,7 +222,7 @@ describe('normalizeDocumentIndex', () => {
         fispqItemIds: ['ITEM-2', 'ITEM-1', 'ITEM-1', 123, null, ''],
         containerWashIds: 'nao-e-array',
       })
-    ).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: [] })
+    ).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: [], processSlotKeys: null })
   })
 })
 
@@ -233,14 +259,29 @@ describe('buildDocumentIndex/describeDocumentScope/buildDocumentUploadedNotifica
       { type: 'fispq', itemId: 'ITEM-1' },
       { type: 'fispq', itemId: 'ITEM-1' },
       { type: 'containerWash', containerId: 'CNT-1' },
-      { type: 'bl' },
+      { type: 'bl', slotKey: 'bl' },
+      { type: 'invoice', slotKey: 'invoice:PO-1' },
+      { type: 'other', slotKey: 'other:x' },
     ])
-    expect(index).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: ['CNT-1'] })
+    expect(index).toEqual({
+      fispqItemIds: ['ITEM-1', 'ITEM-2'],
+      containerWashIds: ['CNT-1'],
+      processSlotKeys: ['bl', 'invoice:PO-1'],
+    })
   })
 
-  it('buildDocumentIndex de lista vazia -> ambos vazios', () => {
-    expect(buildDocumentIndex([])).toEqual({ fispqItemIds: [], containerWashIds: [] })
-    expect(buildDocumentIndex(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  it('buildDocumentIndex de lista vazia -> todos vazios', () => {
+    const empty = { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }
+    expect(buildDocumentIndex([])).toEqual(empty)
+    expect(buildDocumentIndex(undefined)).toEqual(empty)
+  })
+
+  it('isSameDocumentIndex: null x [] em processSlotKeys = diferente; ambos sem o campo = igual', () => {
+    const base = { fispqItemIds: [], containerWashIds: [] }
+    expect(isSameDocumentIndex({ ...base, processSlotKeys: null }, { ...base, processSlotKeys: [] })).toBe(false)
+    expect(isSameDocumentIndex(base, base)).toBe(true)
+    expect(isSameDocumentIndex({ ...base, processSlotKeys: ['bl'] }, { ...base, processSlotKeys: ['bl'] })).toBe(true)
+    expect(isSameDocumentIndex({ ...base, processSlotKeys: ['bl'] }, { ...base, processSlotKeys: [] })).toBe(false)
   })
 
   it('isSameDocumentIndex compara por conteudo (ordem normalizada)', () => {
@@ -292,14 +333,17 @@ describe('getDocumentIndexFromDocuments', () => {
       { type: 'fispq', itemId: 'ITEM-2' },
       { type: 'fispq', itemId: 'ITEM-1' },
       { type: 'containerWash', containerId: 'CNT-1' },
-      { type: 'bl' },
+      { type: 'bl', slotKey: 'bl' },
+      { type: 'invoice', slotKey: 'invoice:PO-1' },
+      { type: 'other', slotKey: 'other:x' },
     ]
     expect(getDocumentIndexFromDocuments(docs)).toEqual(buildDocumentIndex(docs))
   })
 
-  it('lista vazia -> ambos vazios', () => {
-    expect(getDocumentIndexFromDocuments([])).toEqual({ fispqItemIds: [], containerWashIds: [] })
-    expect(getDocumentIndexFromDocuments(undefined)).toEqual({ fispqItemIds: [], containerWashIds: [] })
+  it('lista vazia -> todos vazios', () => {
+    const empty = { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }
+    expect(getDocumentIndexFromDocuments([])).toEqual(empty)
+    expect(getDocumentIndexFromDocuments(undefined)).toEqual(empty)
   })
 })
 
@@ -374,6 +418,98 @@ describe('buildDocumentPendingFields', () => {
       containers: [{ id: 'CNT-1', returnedAt: '2026-09-01' }],
     }
     expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
+  })
+})
+
+describe('buildDocumentPendingFields - embarque confirmado (BL/Relatorio/Invoice/Packing)', () => {
+  const noDocs = { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }
+  const ids = (fields) => fields.map((field) => field.id)
+
+  it.each(['FCL', 'LCL', 'AEREO'])('%s embarcado sem documentos -> 4 pendencias com labels e stage 1', (category) => {
+    const fields = buildDocumentPendingFields({ category, shippedAt: '2026-09-01' }, noDocs)
+    expect(fields).toEqual([
+      { id: 'bl', field: 'documents', label: 'BL/AWB', stage: 1 },
+      { id: 'cargoReport', field: 'documents', label: 'Relatório de carga', stage: 1 },
+      { id: 'invoice', field: 'documents', label: 'Invoice', stage: 1 },
+      { id: 'packingList', field: 'documents', label: 'Packing List', stage: 1 },
+    ])
+  })
+
+  it('sem shippedAt -> nenhum dos 4', () => {
+    expect(buildDocumentPendingFields({ category: 'FCL' }, noDocs)).toEqual([])
+  })
+
+  it('embarcado com os 4 presentes -> nenhum', () => {
+    const index = { ...noDocs, processSlotKeys: ['bl', 'cargoReport', 'invoice', 'packingList'] }
+    expect(buildDocumentPendingFields({ category: 'LCL', shippedAt: '2026-09-01' }, index)).toEqual([])
+  })
+
+  it('CONSOLIDADO: 1 pendencia de invoice/packing por PO', () => {
+    const process = {
+      category: 'CONSOLIDADO',
+      shippedAt: '2026-09-01',
+      purchaseOrders: [{ po: '4500130' }, { po: '4500131' }],
+    }
+    const fields = buildDocumentPendingFields(process, { ...noDocs, processSlotKeys: ['bl', 'cargoReport'] })
+    expect(ids(fields)).toEqual([
+      'invoice:4500130',
+      'packingList:4500130',
+      'invoice:4500131',
+      'packingList:4500131',
+    ])
+    expect(fields[0].label).toBe('Invoice da PO 4500130')
+    expect(fields[1].label).toBe('Packing List da PO 4500130')
+    expect(fields.every((field) => field.stage === 1)).toBe(true)
+  })
+
+  it('CONSOLIDADO com slot unico `invoice` no indice ainda cobra invoice:<po>', () => {
+    const process = { category: 'CONSOLIDADO', shippedAt: '2026-09-01', purchaseOrders: [{ po: '4500130' }] }
+    const fields = buildDocumentPendingFields(process, { ...noDocs, processSlotKeys: ['bl', 'cargoReport', 'invoice'] })
+    expect(ids(fields)).toEqual(['invoice:4500130', 'packingList:4500130'])
+  })
+
+  it('CONSOLIDADO sem POs -> so bl/cargoReport', () => {
+    const fields = buildDocumentPendingFields(
+      { category: 'CONSOLIDADO', shippedAt: '2026-09-01', purchaseOrders: [] },
+      noDocs
+    )
+    expect(ids(fields)).toEqual(['bl', 'cargoReport'])
+  })
+
+  it('indice legado (processSlotKeys null) -> nenhum dos 4, mas FISPQ continua', () => {
+    const process = {
+      category: 'FCL',
+      shippedAt: '2026-09-01',
+      items: [{ id: 'ITEM-1', commercialName: 'Resina', dangerousGoods: true }],
+    }
+    const fields = buildDocumentPendingFields(process, {
+      fispqItemIds: [],
+      containerWashIds: [],
+      processSlotKeys: null,
+    })
+    expect(ids(fields)).toEqual(['fispq:ITEM-1'])
+  })
+
+  it('getDocumentPendingFields: documentIndex ausente + embarcado -> gera os 4', () => {
+    const fields = getDocumentPendingFields({ category: 'FCL', shippedAt: '2026-09-01' })
+    expect(ids(fields)).toEqual(['bl', 'cargoReport', 'invoice', 'packingList'])
+  })
+
+  it('ordem: FISPQ, documentos de embarque, lavacao', () => {
+    const process = {
+      category: 'FCL',
+      shippedAt: '2026-09-01',
+      items: [{ id: 'ITEM-1', commercialName: 'Resina', dangerousGoods: true }],
+      containers: [{ id: 'CNT-1', number: 'M1', returnedAt: '2026-09-02' }],
+    }
+    expect(ids(buildDocumentPendingFields(process, noDocs))).toEqual([
+      'fispq:ITEM-1',
+      'bl',
+      'cargoReport',
+      'invoice',
+      'packingList',
+      'containerWash:CNT-1',
+    ])
   })
 })
 

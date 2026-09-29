@@ -31,18 +31,25 @@ export const DOCUMENT_MILESTONE_EVENT_TYPES = {
   containerWash: 'containerWashUploaded',
 }
 
+// Espelho de `PROCESS_SLOT_DOCUMENT_TYPES` (`src/features/processes/processDocuments.js`).
+const PROCESS_SLOT_DOCUMENT_TYPES = ['bl', 'cargoReport', 'invoice', 'packingList']
+
 function sortUnique(list) {
   return [...new Set((Array.isArray(list) ? list : []).filter((value) => typeof value === 'string' && value)).values()].sort()
 }
 
-// B1: recalcula `{ fispqItemIds, containerWashIds }` a partir da subcolecao
+// B1: recalcula `{ fispqItemIds, containerWashIds, processSlotKeys }` a partir da subcolecao
 // `documents` INTEIRA (autocura - nunca acumula incrementalmente).
 export function buildDocumentIndex(docs) {
   const list = Array.isArray(docs) ? docs : []
   const fispqItemIds = []
   const containerWashIds = []
+  const processSlotKeys = []
 
   for (const doc of list) {
+    if (PROCESS_SLOT_DOCUMENT_TYPES.includes(doc?.type) && typeof doc?.slotKey === 'string' && doc.slotKey) {
+      processSlotKeys.push(doc.slotKey)
+    }
     if (doc?.type === 'fispq' && doc?.itemId) fispqItemIds.push(String(doc.itemId))
     if (doc?.type === 'containerWash' && doc?.containerId) containerWashIds.push(String(doc.containerId))
   }
@@ -50,16 +57,26 @@ export function buildDocumentIndex(docs) {
   return {
     fispqItemIds: sortUnique(fispqItemIds),
     containerWashIds: sortUnique(containerWashIds),
+    processSlotKeys: sortUnique(processSlotKeys),
   }
 }
 
 // B1: normaliza o `documentIndex` cru (do doc do processo) pro mesmo shape
 // de `buildDocumentIndex` - usado pra comparar "index atual" x "index novo"
 // sem write inutil (`isSameDocumentIndex`).
+// `processSlotKeys` em 3 estados (paridade com `normalizeDocumentIndex` do
+// front): ausente/nao-objeto -> `[]`; objeto sem array (legado) -> `null`;
+// array -> limpo/ordenado.
 export function normalizeDocumentIndexMirror(raw) {
+  const isObject = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+  let processSlotKeys = []
+  if (isObject) {
+    processSlotKeys = Array.isArray(raw.processSlotKeys) ? sortUnique(raw.processSlotKeys) : null
+  }
   return {
     fispqItemIds: sortUnique(raw?.fispqItemIds),
     containerWashIds: sortUnique(raw?.containerWashIds),
+    processSlotKeys,
   }
 }
 
@@ -68,9 +85,19 @@ function sameStringArray(a, b) {
   return a.every((value, index) => value === b[index])
 }
 
+function sameOptionalStringArray(a, b) {
+  const aIsArray = Array.isArray(a)
+  const bIsArray = Array.isArray(b)
+  if (aIsArray && bIsArray) return sameStringArray(a, b)
+  return !aIsArray && !bIsArray
+}
+
+// `processSlotKeys`: ambos arrays e iguais, OU nenhum dos dois e' array
+// (`null` x `[]` = diferente; ambos sem o campo = igual).
 export function isSameDocumentIndex(a, b) {
   return sameStringArray(a?.fispqItemIds ?? [], b?.fispqItemIds ?? []) &&
-    sameStringArray(a?.containerWashIds ?? [], b?.containerWashIds ?? [])
+    sameStringArray(a?.containerWashIds ?? [], b?.containerWashIds ?? []) &&
+    sameOptionalStringArray(a?.processSlotKeys, b?.processSlotKeys)
 }
 
 // B2: nome do escopo do documento (item/conteiner) pra frase do marco/aviso.

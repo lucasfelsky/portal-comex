@@ -5,6 +5,9 @@
 // processo. Este script cobre a janela: le cada processo + a subcolecao
 // `documents` inteira, e propoe (ou aplica) o `documentIndex` correto.
 //
+// Recalcula tambem `documentIndex.processSlotKeys` (slots BL/Relatorio de
+// carga/Invoice/Packing List usados pela pendencia de embarque confirmado).
+//
 // Uso:
 //   node scripts/backfillDocumentIndex.mjs          # dry-run (default), le e imprime, nao escreve
 //   node scripts/backfillDocumentIndex.mjs --apply  # escreve (SO' o campo documentIndex)
@@ -59,7 +62,8 @@ Uso: node scripts/backfillDocumentIndex.mjs [--apply] [--help]
   --apply      aplica as escritas propostas (ZONA VERMELHA - so' apos o Lucas
                ler o relatorio do dry-run). Escreve SO' o campo
                "documentIndex" (o write dispara os triggers de processo, mas
-               index-only nunca notifica nem gera marco - F18b-1 B1).
+               index-only nunca notifica nem gera marco - F18b-1 B1). Tambem grava
+               "processSlotKeys" (slots BL/Relatorio de carga/Invoice/Packing List).
   --help       mostra este uso e sai (nao exige nenhuma env).
 
 Env obrigatoria (dry-run/apply): FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL +
@@ -267,6 +271,7 @@ async function applyBackfillEntry(accessToken, entry) {
             fields: {
               fispqItemIds: toStringArrayFieldValue(entry.after.fispqItemIds),
               containerWashIds: toStringArrayFieldValue(entry.after.containerWashIds),
+              processSlotKeys: toStringArrayFieldValue(entry.after.processSlotKeys),
             },
           },
         },

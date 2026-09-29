@@ -281,6 +281,51 @@ describe('ProcessDetailView — contador da aba "Documentos" (F18b-2)', () => {
     })
     expect(screen.getByRole('button', { name: /Documentos.*1 pendente/s })).toBeInTheDocument()
   })
+
+  it('embarque confirmado + indice com processSlotKeys vazio: botao mostra 4 pendentes', () => {
+    renderDetail({
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-ship',
+        shippedAt: '2026-09-01',
+        items: [],
+        containers: [],
+        documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+      }),
+    })
+    expect(screen.getByRole('button', { name: /Documentos.*4 pendentes/s })).toBeInTheDocument()
+  })
+
+  it('embarque confirmado + indice legado (sem processSlotKeys): sem contador', () => {
+    renderDetail({
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-ship-legacy',
+        shippedAt: '2026-09-01',
+        items: [],
+        containers: [],
+        documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      }),
+    })
+    expect(screen.getByRole('button', { name: 'Documentos' })).toBeInTheDocument()
+  })
+
+  it('admin + embarcado + processSlotKeys vazio: card "Dados pendentes" lista BL/AWB', () => {
+    renderDetail({
+      isAdmin: true,
+      detailTab: 'general',
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        id: 'p-ship-card',
+        shippedAt: '2026-09-01',
+        items: [],
+        containers: [],
+        documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+      }),
+    })
+    expect(screen.getByText('Dados pendentes')).toBeInTheDocument()
+    expect(screen.getByText('BL/AWB')).toBeInTheDocument()
+  })
 })
 
 // F18b-2 (E9): indicadores read-only de FISPQ (aba Itens) e lavação (bloco Carga).

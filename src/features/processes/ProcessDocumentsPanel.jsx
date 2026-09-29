@@ -15,17 +15,20 @@ import Icon from '../../components/Icon'
 import {
   CONTAINER_WASH_CATEGORIES,
   MAX_DOCUMENT_MB,
+  buildDocumentPendingFields,
   buildDocumentSlotKey,
   canDeleteDocument,
   canUploadDocumentType,
   formatDocumentSize,
   getDocumentFileKindLabel,
+  getDocumentIndexFromDocuments,
   getDocumentTypeLabel,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
 } from './processDocuments'
 import { CONTAINER_TYPE_OPTIONS } from './containers'
 import { getProcessPurchaseOrders } from './purchaseOrders'
+import { isShipmentConfirmed } from './shipmentConfirmation'
 
 // F18b-2 (design aprovado - canvas Claude Design M8NdiBoZfvbmJxVY5oZL6e):
 // reescrita da aba "Documentos" (rodada 3: fidelidade visual aos artboards
@@ -109,6 +112,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [uploadingKey, setUploadingKey] = useState('')
   const [downloadingId, setDownloadingId] = useState('')
   const [liveMessage, setLiveMessage] = useState('')
+  const [otherDescription, setOtherDescription] = useState('')
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -193,22 +197,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     return { state, group, slotKey, isReturned }
   }
 
-  const pendentesCount = useMemo(() => {
-    let count = 0
-    if (showFispqSection) {
-      for (const item of imoItems) {
-        const group = findGroup(buildDocumentSlotKey('fispq', { itemId: item.id }))
-        if (!group?.primary) count += 1
-      }
-    }
-    if (showWashSection) {
-      for (const container of washContainers) {
-        if (getWashRowState(container).state === 'pending') count += 1
-      }
-    }
-    return count
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, imoItems, washContainers, showFispqSection, showWashSection])
+  // Fonte unica da pendencia (FISPQ, lavacao e, com embarque confirmado,
+  // BL/Relatorio de carga/Invoice/Packing List): a mesma regra usada pelo
+  // contador da aba e pelo card "Dados pendentes". Le a subcolecao real.
+  const shipmentConfirmed = isShipmentConfirmed(process)
+  const pendentesCount = useMemo(
+    () => buildDocumentPendingFields(process, getDocumentIndexFromDocuments(documents)).length,
+    [process, documents]
+  )
 
   const enviadosCount = useMemo(() => {
     let count = 0
@@ -239,9 +235,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection])
 
+  // Review #202: so' publica a contagem derivada depois da 1a carga com
+  // sucesso - durante o loading (`documents` = []) ou com erro na 1a carga
+  // a aba mantem a contagem do `documentIndex` (sem falso "4 pendentes").
   useEffect(() => {
+    if (isLoading || loadError) return
     if (typeof onPendingCountChange === 'function') onPendingCountChange(pendentesCount)
-  }, [pendentesCount, onPendingCountChange])
+  }, [pendentesCount, onPendingCountChange, isLoading, loadError])
 
   useEffect(() => {
     if (!focusAfterUploadRef.current) return
@@ -292,15 +292,23 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
       setLiveMessage('Documento enviado.')
       focusAfterUploadRef.current = slotKey
       setReloadToken((token) => token + 1)
+      return true
     } catch (error) {
       setLiveMessage('')
       setRowErrors((current) => ({
         ...current,
         [slotKey]: buildDocumentError('Não foi possível enviar o documento.', error),
       }))
+      return false
     } finally {
       setUploadingKey('')
     }
+  }
+
+  async function handleAddOtherDocument(file) {
+    const description = otherDescription.trim().slice(0, 80) || 'Documento adicional'
+    const ok = await handleUploadFile('other', 'other:new', { description }, file)
+    if (ok) setOtherDescription('')
   }
 
   async function handleDownload(document_) {
@@ -616,7 +624,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             </>
           ) : (
             <>
-              <span className="inline-badge documents-badge--neutral">Não enviado</span>
+              {shipmentConfirmed ? (
+                <span className="inline-badge inline-badge--warn documents-badge--icon">
+                  <Icon name="alert" size={14} />
+                  Pendente
+                </span>
+              ) : (
+                <span className="inline-badge documents-badge--neutral">Não enviado</span>
+              )}
               <span className="documents-po-cell__spacer" />
               {canUpload ? (
                 <>
@@ -707,6 +722,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 ? 'Os documentos enviados pelo COMEX aparecem aqui.'
                 : 'Envie BL, relatório de carga, invoice e packing list. FISPQ e lavação aparecem quando houver item IMO ou contêiner.'}
             </p>
+            {pendentesCount > 0 ? (
+              <span className="inline-badge inline-badge--warn">
+                {`${pendentesCount} ${pluralize(pendentesCount, 'pendente', 'pendentes')}`}
+              </span>
+            ) : null}
           </div>
         ) : showLoadedContent ? (
           <>
@@ -800,6 +820,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   canUpload: canUploadDocumentType(role, type),
                   canDelete: primary ? canDeleteDocument(profile, primary) : false,
                   onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                  ...(shipmentConfirmed ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' } : {}),
                 })
               })}
 
@@ -827,12 +848,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                       canUpload: canUploadDocumentType(role, type),
                       canDelete: primary ? canDeleteDocument(profile, primary) : false,
                       onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                      ...(shipmentConfirmed ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' } : {}),
                     })
                   })
                 : null}
 
               {otherDocuments.map((document_) => {
                 const metaText = [
+                  'Outro',
                   getDocumentFileKindLabel(document_.mimeType, document_.name),
                   formatDocumentSize(document_.size),
                   formatDateTime(document_.uploadedAt),
@@ -842,7 +865,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   .join(' · ')
                 return renderRow({
                   slotKey: document_.slotKey,
-                  title: `Outro · ${document_.description || document_.name}`,
+                  title: document_.description || document_.name,
                   fileLine: <p className="documents-row__file">{document_.name}</p>,
                   metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
                   group: { slotKey: document_.slotKey, primary: document_, previous: null },
@@ -861,9 +884,22 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     onChange={(event) => {
                       const file = event.target.files?.[0]
                       event.target.value = ''
-                      if (file) handleUploadFile('other', 'other:new', { description: 'Documento adicional' }, file)
+                      if (file) handleAddOtherDocument(file)
                     }}
                   />
+                  <label className="field documents-add-other__name">
+                    <span>Nome do documento (opcional)</span>
+                    <input
+                      className="text-input"
+                      type="text"
+                      maxLength={80}
+                      autoComplete="off"
+                      placeholder="Ex.: Certificado de análise"
+                      value={otherDescription}
+                      onChange={(event) => setOtherDescription(event.target.value)}
+                      disabled={uploadingKey === 'other:new'}
+                    />
+                  </label>
                   <button
                     type="button"
                     className="ghost-button documents-add-other"

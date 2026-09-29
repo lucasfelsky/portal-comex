@@ -521,7 +521,7 @@ describe('F18b-1 - documentIndex (normalizeProcess/saveProcess)', () => {
       docs: [{ id: 'PROC-DOC-1', data: () => baseMaritimeProcess() }],
     })
     const items = await listProcesses()
-    expect(items[0].documentIndex).toEqual({ fispqItemIds: [], containerWashIds: [] })
+    expect(items[0].documentIndex).toEqual({ fispqItemIds: [], containerWashIds: [], processSlotKeys: [] })
   })
 
   it('listProcesses normaliza documentIndex com lixo -> vazio/limpo', async () => {
@@ -540,7 +540,24 @@ describe('F18b-1 - documentIndex (normalizeProcess/saveProcess)', () => {
       ],
     })
     const items = await listProcesses()
-    expect(items[0].documentIndex).toEqual({ fispqItemIds: ['ITEM-1', 'ITEM-2'], containerWashIds: [] })
+    expect(items[0].documentIndex).toEqual({
+      fispqItemIds: ['ITEM-1', 'ITEM-2'],
+      containerWashIds: [],
+      processSlotKeys: null,
+    })
+  })
+
+  it('listProcesses normaliza processSlotKeys (dedup/ordenado)', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'PROC-DOC-3',
+          data: () => baseMaritimeProcess({ documentIndex: { processSlotKeys: ['invoice', 'bl', 'bl'] } }),
+        },
+      ],
+    })
+    const items = await listProcesses()
+    expect(items[0].documentIndex.processSlotKeys).toEqual(['bl', 'invoice'])
   })
 
   it('saveProcess com documentIndex no objeto NAO o envia no payload do setDoc', async () => {
