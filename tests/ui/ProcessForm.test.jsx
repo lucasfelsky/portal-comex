@@ -423,6 +423,47 @@ describe('ProcessForm — ProcessArrivalFields (F17.3a)', () => {
     expect(screen.queryByText('Free time (dias)')).not.toBeInTheDocument()
   })
 
+  it('ordem dos grupos: Chegada -> Liberação (DUIMP) -> Anuências -> Free time', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: true, cargoPresenceInformed: true }),
+    })
+    await openArrivalStep(user)
+    const titles = ['Chegada', 'Liberação (DUIMP)', 'Anuências', 'Free time'].map((name) =>
+      screen.getByRole('heading', { level: 4, name })
+    )
+    for (let i = 0; i < titles.length - 1; i += 1) {
+      expect(titles[i].compareDocumentPosition(titles[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+  })
+
+  it('Free time e um grupo proprio, fora do grupo "Chegada"', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowMaritimeFlow: true, draft: makeDraft({ category: 'FCL', berthed: true }) })
+    await openArrivalStep(user)
+    const freeTimeGroup = screen.getByText('Free time').closest('.form-group')
+    expect(freeTimeGroup).not.toContainElement(screen.getByText('Atracação (data e hora)'))
+    const arrivalGroup = screen.getByRole('heading', { level: 4, name: 'Chegada' }).closest('.form-group')
+    expect(arrivalGroup).not.toContainElement(freeTimeGroup)
+  })
+
+  it('create sem fluxo (FCL) NAO mostra "Free time (dias)"', async () => {
+    const user = userEvent.setup()
+    renderForm({ canShowMaritimeFlow: false, draft: makeDraft({ category: 'FCL' }) })
+    await openArrivalStep(user)
+    expect(screen.queryByText('Free time (dias)')).not.toBeInTheDocument()
+  })
+
+  it('passo Itens: cabeçalho usa o modificador --end (botões à direita no desktop)', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ category: 'FCL' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Itens' }))
+    expect(screen.getByText('Itens do processo').closest('.process-detail-card-heading')).toHaveClass(
+      'process-detail-card-heading--end'
+    )
+  })
+
   it('hint de data aproximada aparece com migratedApproxFields: ["berthedAt"]', async () => {
     const user = userEvent.setup()
     renderForm({

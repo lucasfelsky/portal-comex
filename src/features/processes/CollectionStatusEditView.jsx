@@ -22,6 +22,7 @@ import { getProcessTitle } from './processLabels'
 // mesmo componente da tela "Observações pós-recebimento"), visivel na MESMA
 // condicao do editor de divergencia (status escolhido pos-recebimento) - nao
 // exige o checkbox marcado, evita estado oculto.
+// Ordem: Processo -> Status -> Janelas (leitura) -> Divergencia -> Fotos -> Salvar.
 export default function CollectionStatusEditView({
   process,
   collectionStatus,
@@ -58,13 +59,6 @@ export default function CollectionStatusEditView({
           <span className="detail-label">Processo</span>
           <p>{getProcessTitle(process, canSeeName)}</p>
         </div>
-        <CollectionWindowsEditor
-          value={process.collectionWindows}
-          category={process.category}
-          containers={process.containers}
-          onChange={() => {}}
-          disabled
-        />
         <label className="field">
           <span>Status</span>
           <SelectField
@@ -89,6 +83,13 @@ export default function CollectionStatusEditView({
             </optgroup>
           </SelectField>
         </label>
+        <CollectionWindowsEditor
+          value={process.collectionWindows}
+          category={process.category}
+          containers={process.containers}
+          onChange={() => {}}
+          disabled
+        />
         {postCollectionStatusOptions.includes(collectionStatus) ? (
           <>
             <ReceiptDivergenceFields

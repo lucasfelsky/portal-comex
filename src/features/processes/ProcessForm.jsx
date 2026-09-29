@@ -22,7 +22,7 @@ import { getProcessFieldDomId, getProcessFieldStep } from './processDraftValidat
 import { getFieldA11yProps, getFieldErrorId, focusField } from '../../utils/fieldErrors'
 import ProcessCargoFields from './ProcessCargoFields'
 import ProcessTransitFields from './ProcessTransitFields'
-import ProcessArrivalFields from './ProcessArrivalFields'
+import ProcessArrivalFields, { ProcessFreeTimeFields } from './ProcessArrivalFields'
 import ProcessCustomsFields from './ProcessCustomsFields'
 import ProcessItemDangerousGoodsFields from './ProcessItemDangerousGoodsFields'
 import LicensesEditor from './LicensesEditor'
@@ -384,10 +384,11 @@ export default function ProcessForm({
     </>
   )
 
-  // F17.3a (D-10): "Chegada" (atracacao/chegada com data, CE/terminal/free
-  // time, presenca de carga) extraida pra `ProcessArrivalFields`; DUIMP/
+  // F17.3a (D-10): "Chegada" (atracacao/chegada com data, CE/terminal,
+  // presenca de carga) extraida pra `ProcessArrivalFields`; DUIMP/
   // canal/desembaraco extraidos pra `ProcessCustomsFields`; anuencias
   // (`LicensesEditor`) tambem vivem aqui (D1: `licenses` -> passo `arrival`).
+  // Ordem: Chegada -> Liberacao (DUIMP) -> Anuencias -> Free time.
   const renderArrivalStep = () => (
     <>
       {canShowMaritimeFlow || canShowAirFlow ? (
@@ -423,6 +424,10 @@ export default function ProcessForm({
           errors={fieldErrors}
         />
       </div>
+
+      {canShowMaritimeFlow || canShowAirFlow ? (
+        <ProcessFreeTimeFields draft={draft} onDraftChange={onDraftChange} errors={fieldErrors} />
+      ) : null}
     </>
   )
 
@@ -531,7 +536,7 @@ export default function ProcessForm({
 
   const renderItemsStep = () => (
     <div className="form-group">
-      <div className="card-heading process-detail-card-heading">
+      <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
         <div>
           <span className="detail-label">Itens do processo</span>
           <p>Nome comercial e quantidade vinculados ao processo. A importação aceita planilhas Excel com colunas de nome e quantidade.</p>

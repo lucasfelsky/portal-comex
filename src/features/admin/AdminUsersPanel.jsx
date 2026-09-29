@@ -347,66 +347,6 @@ export default function AdminUsersPanel() {
         <article className="list-card">
           <div className="card-heading">
             <div>
-              <h3>Fila de aprovação</h3>
-            </div>
-            <span className="inline-badge">{pendingUsers.length} pendentes</span>
-          </div>
-
-          <div className="invite-list">
-            {pendingUsers.length > 0 ? (
-              pendingUsers.map((user) => (
-                <div key={user.id} className="invite-card">
-                  <div className="invite-card__header">
-                    <div>
-                      <strong>{user.name}</strong>
-                      <p>{user.email}</p>
-                    </div>
-                    <span className={statusClassName(user.statusTone)}>{user.status}</span>
-                  </div>
-                  <div className="invite-card__meta">
-                    <span>Perfil: {getRoleLabel(user.role)}</span>
-                    <span>Área: {user.area || 'Geral'}</span>
-                    <span>ID: {user.id}</span>
-                  </div>
-                  <div className="invite-card__actions">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => handleSetUserStatus(user, 'Ativo')}
-                      disabled={isSavingUser}
-                    >
-                      Aprovar
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => openConfirm('reject', user)}
-                      disabled={isSavingUser}
-                    >
-                      Reprovar
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => handleSelectUser(user.id)}
-                    >
-                      Abrir detalhe
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="empty-state">
-                <strong>Nenhum cadastro pendente</strong>
-                <p>Novos registros aparecerão aqui para aprovação administrativa.</p>
-              </div>
-            )}
-          </div>
-        </article>
-
-        <article className="list-card">
-          <div className="card-heading">
-            <div>
               <h3>Gestão de usuários</h3>
             </div>
             <span className="inline-badge">{filteredUsers.length} visíveis</span>
@@ -483,185 +423,245 @@ export default function AdminUsersPanel() {
               )}
             </div>
         </article>
+
+        <article className="list-card">
+          <div className="card-heading">
+            <div>
+              <h3>{isCreating ? 'Novo usuário' : 'Detalhe do usuário'}</h3>
+            </div>
+            <div className="admin-toolbar">
+              <span className={statusClassName(selectedStatusTone)}>{draft.status}</span>
+              <button type="button" className="primary-button" onClick={handleCreateMode}>
+                Novo usuário
+              </button>
+            </div>
+          </div>
+
+          <div className="detail-stack">
+            <label className="field">
+              <span>Nome</span>
+              <input
+                className="text-input"
+                type="text"
+                value={draft.name}
+                onChange={(event) => handleDraftChange('name', event.target.value)}
+                placeholder="Nome completo"
+              />
+            </label>
+
+            <label className="field">
+              <span>Email</span>
+              <input
+                className="text-input"
+                type="email"
+                value={draft.email}
+                onChange={(event) => handleDraftChange('email', event.target.value)}
+                placeholder="email@empresa.com"
+                disabled={!isCreating && isFirebaseConfigured}
+              />
+            </label>
+
+            {!isCreating && isFirebaseConfigured ? (
+              <div className="detail-card detail-card--warning">
+                <span className="detail-label">Email protegido</span>
+                <p>
+                  Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o Firebase Auth.
+                </p>
+              </div>
+            ) : null}
+
+            <label className="field">
+              <span>Senha</span>
+              <input
+                className="text-input"
+                type={isPasswordVisible ? 'text' : 'password'}
+                value={draft.password}
+                onChange={(event) => handleDraftChange('password', event.target.value)}
+                onFocus={() => setIsPasswordVisible(true)}
+                onClick={() => setIsPasswordVisible(true)}
+                placeholder={passwordInputPlaceholder}
+                autoComplete="new-password"
+                {...getFieldA11yProps('admin-user-password', passwordError)}
+              />
+              {passwordError ? (
+                <small className="field-error" id={getFieldErrorId('admin-user-password')} aria-hidden="true">
+                  {passwordError}
+                </small>
+              ) : null}
+            </label>
+
+            {!isCreating && isFirebaseConfigured ? (
+              <div className="detail-card detail-card--warning">
+                <span className="detail-label">Senha não disponível</span>
+                <p>
+                  Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário, digite uma
+                  nova senha e salve.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="action-row">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setIsPasswordVisible((current) => !current)}
+                disabled={!draft.password}
+              >
+                {isPasswordVisible ? 'Ocultar senha' : 'Mostrar senha'}
+              </button>
+            </div>
+
+            <div className="detail-card detail-card--split">
+              <label className="field">
+                <span>Perfil</span>
+                <SelectField
+                  className="text-input"
+                  value={draft.role}
+                  onChange={(event) => handleDraftChange('role', event.target.value)}
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </SelectField>
+              </label>
+
+              <label className="field">
+                <span>Status</span>
+                <SelectField
+                  className="text-input"
+                  value={draft.status}
+                  onChange={(event) => handleDraftChange('status', event.target.value)}
+                >
+                  {statusOptions
+                    .filter((status) => status !== 'Todos')
+                    .map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                </SelectField>
+              </label>
+            </div>
+
+            <label className="field">
+              <span>Área</span>
+              <input
+                className="text-input"
+                type="text"
+                value={draft.area}
+                onChange={(event) => handleDraftChange('area', event.target.value)}
+                placeholder="Ex.: Importação"
+              />
+            </label>
+
+            <div className="detail-card">
+              <span className="detail-label">Permissões do perfil</span>
+              <div className="chip-list">
+                {draft.scopes.map((scope) => (
+                  <span key={scope} className="scope-chip">
+                    {scope}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="action-row">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSaveUser}
+              disabled={isSavingUser}
+            >
+              {isSavingUser ? 'Salvando...' : isCreating ? 'Criar usuário' : 'Salvar alterações'}
+            </button>
+            {!isCreating && selectedUser ? (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() =>
+                  selectedUser.status === 'Ativo'
+                    ? openConfirm('block', selectedUser)
+                    : handleSetUserStatus(selectedUser, 'Ativo')
+                }
+                disabled={isSavingUser}
+              >
+                {selectedUser.status === 'Ativo' ? 'Bloquear usuário' : 'Ativar usuário'}
+              </button>
+            ) : null}
+            {!isCreating && selectedUser ? (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => openConfirm('delete', selectedUser)}
+                disabled={isSavingUser || selectedUser.id === profile?.uid}
+              >
+                Excluir usuário
+              </button>
+            ) : null}
+          </div>
+        </article>
       </div>
 
       <article className="list-card">
         <div className="card-heading">
           <div>
-            <h3>{isCreating ? 'Novo usuário' : 'Detalhe do usuário'}</h3>
+            <h3>Fila de aprovação</h3>
           </div>
-          <div className="admin-toolbar">
-            <span className={statusClassName(selectedStatusTone)}>{draft.status}</span>
-            <button type="button" className="primary-button" onClick={handleCreateMode}>
-              Novo usuário
-            </button>
-          </div>
+          <span className="inline-badge">{pendingUsers.length} pendentes</span>
         </div>
 
-        <div className="detail-stack">
-          <label className="field">
-            <span>Nome</span>
-            <input
-              className="text-input"
-              type="text"
-              value={draft.name}
-              onChange={(event) => handleDraftChange('name', event.target.value)}
-              placeholder="Nome completo"
-            />
-          </label>
-
-          <label className="field">
-            <span>Email</span>
-            <input
-              className="text-input"
-              type="email"
-              value={draft.email}
-              onChange={(event) => handleDraftChange('email', event.target.value)}
-              placeholder="email@empresa.com"
-              disabled={!isCreating && isFirebaseConfigured}
-            />
-          </label>
-
-          {!isCreating && isFirebaseConfigured ? (
-            <div className="detail-card detail-card--warning">
-              <span className="detail-label">Email protegido</span>
-              <p>
-                Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o Firebase Auth.
-              </p>
+        <div className="invite-list">
+          {pendingUsers.length > 0 ? (
+            pendingUsers.map((user) => (
+              <div key={user.id} className="invite-card">
+                <div className="invite-card__header">
+                  <div>
+                    <strong>{user.name}</strong>
+                    <p>{user.email}</p>
+                  </div>
+                  <span className={statusClassName(user.statusTone)}>{user.status}</span>
+                </div>
+                <div className="invite-card__meta">
+                  <span>Perfil: {getRoleLabel(user.role)}</span>
+                  <span>Área: {user.area || 'Geral'}</span>
+                  <span>ID: {user.id}</span>
+                </div>
+                <div className="invite-card__actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => handleSetUserStatus(user, 'Ativo')}
+                    disabled={isSavingUser}
+                  >
+                    Aprovar
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => openConfirm('reject', user)}
+                    disabled={isSavingUser}
+                  >
+                    Reprovar
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => handleSelectUser(user.id)}
+                  >
+                    Abrir detalhe
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">
+              <strong>Nenhum cadastro pendente</strong>
+              <p>Novos registros aparecerão aqui para aprovação administrativa.</p>
             </div>
-          ) : null}
-
-          <label className="field">
-            <span>Senha</span>
-            <input
-              className="text-input"
-              type={isPasswordVisible ? 'text' : 'password'}
-              value={draft.password}
-              onChange={(event) => handleDraftChange('password', event.target.value)}
-              onFocus={() => setIsPasswordVisible(true)}
-              onClick={() => setIsPasswordVisible(true)}
-              placeholder={passwordInputPlaceholder}
-              autoComplete="new-password"
-              {...getFieldA11yProps('admin-user-password', passwordError)}
-            />
-            {passwordError ? (
-              <small className="field-error" id={getFieldErrorId('admin-user-password')} aria-hidden="true">
-                {passwordError}
-              </small>
-            ) : null}
-          </label>
-
-          {!isCreating && isFirebaseConfigured ? (
-            <div className="detail-card detail-card--warning">
-              <span className="detail-label">Senha não disponível</span>
-              <p>
-                Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário, digite uma
-                nova senha e salve.
-              </p>
-            </div>
-          ) : null}
-
-          <div className="action-row">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => setIsPasswordVisible((current) => !current)}
-              disabled={!draft.password}
-            >
-              {isPasswordVisible ? 'Ocultar senha' : 'Mostrar senha'}
-            </button>
-          </div>
-
-          <div className="detail-card detail-card--split">
-            <label className="field">
-              <span>Perfil</span>
-              <SelectField
-                className="text-input"
-                value={draft.role}
-                onChange={(event) => handleDraftChange('role', event.target.value)}
-              >
-                {roleOptions.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </SelectField>
-            </label>
-
-            <label className="field">
-              <span>Status</span>
-              <SelectField
-                className="text-input"
-                value={draft.status}
-                onChange={(event) => handleDraftChange('status', event.target.value)}
-              >
-                {statusOptions
-                  .filter((status) => status !== 'Todos')
-                  .map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-              </SelectField>
-            </label>
-          </div>
-
-          <label className="field">
-            <span>Área</span>
-            <input
-              className="text-input"
-              type="text"
-              value={draft.area}
-              onChange={(event) => handleDraftChange('area', event.target.value)}
-              placeholder="Ex.: Importação"
-            />
-          </label>
-
-          <div className="detail-card">
-            <span className="detail-label">Permissões do perfil</span>
-            <div className="chip-list">
-              {draft.scopes.map((scope) => (
-                <span key={scope} className="scope-chip">
-                  {scope}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="action-row">
-          <button
-            type="button"
-            className="primary-button"
-            onClick={handleSaveUser}
-            disabled={isSavingUser}
-          >
-            {isSavingUser ? 'Salvando...' : isCreating ? 'Criar usuário' : 'Salvar alterações'}
-          </button>
-          {!isCreating && selectedUser ? (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() =>
-                selectedUser.status === 'Ativo'
-                  ? openConfirm('block', selectedUser)
-                  : handleSetUserStatus(selectedUser, 'Ativo')
-              }
-              disabled={isSavingUser}
-            >
-              {selectedUser.status === 'Ativo' ? 'Bloquear usuário' : 'Ativar usuário'}
-            </button>
-          ) : null}
-          {!isCreating && selectedUser ? (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => openConfirm('delete', selectedUser)}
-              disabled={isSavingUser || selectedUser.id === profile?.uid}
-            >
-              Excluir usuário
-            </button>
-          ) : null}
+          )}
         </div>
       </article>
 

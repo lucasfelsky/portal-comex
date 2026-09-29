@@ -202,6 +202,19 @@ describe('AdminBarStatusPanel', () => {
       expect(document.querySelector('.suggestion-banner .status-tag--danger')).toBeInTheDocument()
     })
 
+    it('ordem: select "Status atual" -> botão Salvar -> banner de sugestão', async () => {
+      mockGetBarSuggestion.mockResolvedValueOnce(SUGGESTION_DIFF)
+      renderPanel()
+      await waitFor(() => {
+        expect(document.querySelector('.suggestion-banner')).toBeInTheDocument()
+      })
+      const select = screen.getByText('Status atual')
+      const salvar = screen.getByRole('button', { name: 'Salvar status da barra' })
+      const banner = document.querySelector('.suggestion-banner')
+      expect(select.compareDocumentPosition(salvar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(salvar.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
     it('Aplicar chama saveBarStatus com o status sugerido + profile', async () => {
       const user = userEvent.setup()
       mockGetBarSuggestion.mockResolvedValueOnce(SUGGESTION_DIFF)

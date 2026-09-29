@@ -179,6 +179,25 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
     expect(onSave).toHaveBeenCalled()
   })
 
+  // Layout telas 2026-09-29: Processo -> Status -> Janelas (leitura) ->
+  // Divergencia -> Fotos -> Salvar.
+  it('ordem: Processo -> Status -> Janelas -> Divergência -> Fotos -> Salvar', () => {
+    renderView({
+      collectionStatus: 'Carga recebida, em conferência',
+      receiptDivergenceFields: { receiptDivergence: true, receiptDivergenceType: '', receiptDivergenceNotes: '' },
+    })
+    const processo = screen.getByText('Processo', { selector: '.detail-label' })
+    const status = screen.getByText('Status', { selector: 'label.field > span' })
+    const janelas = screen.getByText('Janela de coleta')
+    const divergencia = screen.getByText('Houve divergência no recebimento?')
+    const fotos = screen.getByText('Fotos do recebimento')
+    const salvar = screen.getByRole('button', { name: 'Salvar status' })
+    const ordered = [processo, status, janelas, divergencia, fotos, salvar]
+    for (let i = 0; i < ordered.length - 1; i += 1) {
+      expect(ordered[i].compareDocumentPosition(ordered[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+  })
+
   // UX-6b-2 (D8): o editor herda o novo visual (sem "Janela atual") e
   // continua so' leitura (todos os inputs de horario desabilitados).
   it('sem "Janela atual"; os inputs "Horário previsto" ficam desabilitados', () => {
