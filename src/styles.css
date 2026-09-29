@@ -9800,13 +9800,14 @@ body {
 
   /* Ajuste (layout telas 2026-09-29) - respiro de 14px entre os blocos do
      Dashboard (heading/KPIs/cards). `.surface:has(> .dashboard-heading)`
-     so' alcanca a surface do Dashboard; o `margin-bottom` dos KPIs e'
-     zerado em regra escopada por `.dashboard-heading ~` (a regra solta
+     so' alcanca a surface do Dashboard; o `margin-bottom` do heading
+     (28px acima) e dos KPIs e' zerado em regra escopada por `.dashboard-heading ~` (a regra solta
      `.dashboard-stat-row` e' compartilhada com AdminSupportPanel). */
   .surface:has(> .dashboard-heading) {
     gap: 14px;
   }
 
+  .surface:has(> .dashboard-heading) > .dashboard-heading,
   .dashboard-heading ~ .dashboard-stat-row {
     margin-bottom: 0;
   }
