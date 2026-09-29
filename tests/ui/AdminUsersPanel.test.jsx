@@ -149,6 +149,19 @@ describe('AdminUsersPanel', () => {
     expect(screen.getByText('3 visíveis')).toBeInTheDocument()
   })
 
+  it('estrutura: Gestão + Detalhe dentro do dual-grid; Fila de aprovação fora e depois', async () => {
+    renderPanel()
+    const gestao = await screen.findByRole('heading', { level: 3, name: 'Gestão de usuários' })
+    const detalhe = screen.getByRole('heading', { level: 3, name: 'Detalhe do usuário' })
+    const fila = screen.getByRole('heading', { level: 3, name: 'Fila de aprovação' })
+    const grid = document.querySelector('.dual-grid')
+    expect(grid).toContainElement(gestao)
+    expect(grid).toContainElement(detalhe)
+    expect(grid).not.toContainElement(fila)
+    expect(gestao.compareDocumentPosition(detalhe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(detalhe.compareDocumentPosition(fila) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('fila de pendentes: "Nenhum cadastro pendente" se vazio', async () => {
     mockListUsers.mockResolvedValueOnce([USERS[0]]) // so Ativo
     renderPanel()

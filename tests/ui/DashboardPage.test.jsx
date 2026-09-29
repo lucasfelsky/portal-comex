@@ -341,14 +341,22 @@ describe('DashboardPage', () => {
     })
     renderPage()
     await waitFor(() => {
-      // PR #5 (2026-07-09): o card de favoritos e' o 2o `.list-card`
-      // (o 1o e' o WeeklyArrivalsCard). Pegar o ultimo e contar os
-      // `.process-item` dentro dele.
-      const cards = document.querySelectorAll('.list-card')
-      const favoriteCard = cards[cards.length - 1]
+      // Layout telas 2026-09-29: Favoritos deixou de ser o ultimo
+      // `.list-card` (a ordem agora termina em Chegadas da semana) - pegar
+      // pela classe propria e contar os `.process-item` dentro dele.
+      const favoriteCard = document.querySelector('.dashboard-favorites-card')
       const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
       expect(favoriteItems.length).toBe(1)
     })
+  })
+
+  it('ordem dos cards: Comunicados recentes -> Processos favoritos -> Chegadas da semana', async () => {
+    renderPage()
+    const comunicados = await screen.findByRole('heading', { name: 'Comunicados recentes' })
+    const favoritos = await screen.findByRole('heading', { name: 'Processos favoritos' })
+    const chegadas = await screen.findByRole('heading', { name: 'Chegadas da semana' })
+    expect(comunicados.compareDocumentPosition(favoritos) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(favoritos.compareDocumentPosition(chegadas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('Favoritos: renderiza a quantidade correta de processos', async () => {
@@ -357,8 +365,7 @@ describe('DashboardPage', () => {
     })
     renderPage()
     await waitFor(() => {
-      const cards = document.querySelectorAll('.list-card')
-      const favoriteCard = cards[cards.length - 1]
+      const favoriteCard = document.querySelector('.dashboard-favorites-card')
       const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
       expect(favoriteItems.length).toBe(2)
     })

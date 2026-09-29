@@ -342,15 +342,6 @@ export default function DashboardPage() {
         </div>
       </article>
 
-      <WeeklyArrivalsCard
-        processes={loadedProcesses}
-        canSeeName={canSeeName}
-        isLoading={isLoadingProcesses}
-        loadError={processesError}
-        onRetry={retryProcesses}
-        onSelectProcess={handleSelectProcess}
-      />
-
       <article className="list-card dashboard-favorites-card">        <div className="card-heading">
           <div>
             <h3>Processos favoritos</h3>
@@ -556,6 +547,15 @@ export default function DashboardPage() {
           )}
         </div>
       </article>
+
+      <WeeklyArrivalsCard
+        processes={loadedProcesses}
+        canSeeName={canSeeName}
+        isLoading={isLoadingProcesses}
+        loadError={processesError}
+        onRetry={retryProcesses}
+        onSelectProcess={handleSelectProcess}
+      />
       </Stagger>
     </section>
   )

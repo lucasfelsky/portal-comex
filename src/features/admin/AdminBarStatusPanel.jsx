@@ -142,35 +142,6 @@ export default function AdminBarStatusPanel() {
           </div>
         ) : (
           <div className="detail-stack">
-            {barSuggestion ? (
-              <div className={`suggestion-banner suggestion-banner--${barSuggestion.tone}`}>
-                <div className="suggestion-banner__text">
-                  <strong>{barSuggestion.sourceName}</strong> sugere:{' '}
-                  <span className={`status-tag status-tag--${barSuggestion.tone}`}>
-                    {barSuggestion.label}
-                  </span>
-                  {barSuggestion.fetchedAt ? (
-                    <span className="suggestion-banner__time">
-                      {' '}
-                      ({formatRelativeTime(barSuggestion.fetchedAt)})
-                    </span>
-                  ) : null}
-                </div>
-                {suggestionMatchesCurrent ? (
-                  <span className="suggestion-banner__match">Coincide com o status atual.</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={handleApplySuggestion}
-                    disabled={isSavingBarStatus}
-                  >
-                    Aplicar
-                  </button>
-                )}
-              </div>
-            ) : null}
-
             <label className="field">
               <span>Status atual</span>
               <SelectField
@@ -201,6 +172,35 @@ export default function AdminBarStatusPanel() {
                 {isSavingBarStatus ? 'Salvando...' : 'Salvar status da barra'}
               </button>
             </div>
+
+            {barSuggestion ? (
+              <div className={`suggestion-banner suggestion-banner--${barSuggestion.tone}`}>
+                <div className="suggestion-banner__text">
+                  <strong>{barSuggestion.sourceName}</strong> sugere:{' '}
+                  <span className={`status-tag status-tag--${barSuggestion.tone}`}>
+                    {barSuggestion.label}
+                  </span>
+                  {barSuggestion.fetchedAt ? (
+                    <span className="suggestion-banner__time">
+                      {' '}
+                      ({formatRelativeTime(barSuggestion.fetchedAt)})
+                    </span>
+                  ) : null}
+                </div>
+                {suggestionMatchesCurrent ? (
+                  <span className="suggestion-banner__match">Coincide com o status atual.</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={handleApplySuggestion}
+                    disabled={isSavingBarStatus}
+                  >
+                    Aplicar
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </article>

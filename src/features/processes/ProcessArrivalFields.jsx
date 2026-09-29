@@ -16,9 +16,10 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // checkboxes "Atracou?"/"Chegou?" do antigo passo "Fluxo operacional"
 // (D-10). Imports permitidos (D-11): `react` (implicito via JSX), SelectField,
 // `./arrivalCustoms`, `./processStatus` (so' os 2 helpers de DTA), `./processCategories`.
-// UX-6b-1: grupos "Chegada" (Atracação/Chegada|Terminal, CE Mercante|CE
-// house, DTA, Presença|`extraField`) e "Free time" (hint corrigido, D3),
-// em `.form-group`/`.form-grid`. `extraField` (D4) e' a previsao manual de
+// UX-6b-1: grupo "Chegada" (Atracação/Chegada|Terminal, CE Mercante|CE
+// house, DTA, Presença|`extraField`) em `.form-group`/`.form-grid`. O grupo
+// "Free time" (hint corrigido, D3) foi extraido para `ProcessFreeTimeFields`
+// (named export abaixo), renderizado pelo `ProcessForm` depois de Anuências. `extraField` (D4) e' a previsao manual de
 // entrega, renderizada pelo `ProcessForm` como ultima celula do grid junto
 // da Presença.
 export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions, errors = {}, extraField = null }) {
@@ -218,53 +219,60 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
           {extraField}
         </div>
       ) : null}
+    </div>
+  )
+}
 
-      {showFreeTime ? (
-        <div className="form-group">
-          <h4 className="form-group__title">Free time</h4>
-          <small className="field-hint">O prazo conta a partir da presença de carga.</small>
-          <div className="form-grid form-grid--numeric">
-            <label className="field">
-              <span>Free time (dias)</span>
-              <input
-                className="text-input"
-                type="number"
-                min="0"
-                step="1"
-                value={draft.freeTimeDays ?? ''}
-                onChange={(event) => onDraftChange('freeTimeDays', event.target.value)}
-                {...getFieldA11yProps('process-field-freeTimeDays', errors.freeTimeDays)}
-              />
-              {errors.freeTimeDays ? (
-                <small className="field-error" id={getFieldErrorId('process-field-freeTimeDays')} aria-hidden="true">
-                  {errors.freeTimeDays}
-                </small>
-              ) : null}
-            </label>
-            <label className="field">
-              <span>Diária de demurrage (USD, opcional)</span>
-              <input
-                className="text-input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={draft.demurrageDailyRateUsd ?? ''}
-                onChange={(event) => onDraftChange('demurrageDailyRateUsd', event.target.value)}
-                {...getFieldA11yProps('process-field-demurrageDailyRateUsd', errors.demurrageDailyRateUsd)}
-              />
-              {errors.demurrageDailyRateUsd ? (
-                <small
-                  className="field-error"
-                  id={getFieldErrorId('process-field-demurrageDailyRateUsd')}
-                  aria-hidden="true"
-                >
-                  {errors.demurrageDailyRateUsd}
-                </small>
-              ) : null}
-            </label>
-          </div>
-        </div>
-      ) : null}
+// Grupo "Free time" como irmao de "Anuências" no passo "Chegada e liberação".
+// Mesmas condicoes de antes: so maritimo/aereo e categorias de FREE_TIME_CATEGORIES.
+export function ProcessFreeTimeFields({ draft, onDraftChange, errors = {} }) {
+  if (!(isMaritimeCategory(draft.category) || isAirCategory(draft.category))) return null
+  if (!FREE_TIME_CATEGORIES.includes(draft.category)) return null
+
+  return (
+    <div className="form-group">
+      <h4 className="form-group__title">Free time</h4>
+      <small className="field-hint">O prazo conta a partir da presença de carga.</small>
+      <div className="form-grid form-grid--numeric">
+        <label className="field">
+          <span>Free time (dias)</span>
+          <input
+            className="text-input"
+            type="number"
+            min="0"
+            step="1"
+            value={draft.freeTimeDays ?? ''}
+            onChange={(event) => onDraftChange('freeTimeDays', event.target.value)}
+            {...getFieldA11yProps('process-field-freeTimeDays', errors.freeTimeDays)}
+          />
+          {errors.freeTimeDays ? (
+            <small className="field-error" id={getFieldErrorId('process-field-freeTimeDays')} aria-hidden="true">
+              {errors.freeTimeDays}
+            </small>
+          ) : null}
+        </label>
+        <label className="field">
+          <span>Diária de demurrage (USD, opcional)</span>
+          <input
+            className="text-input"
+            type="number"
+            min="0"
+            step="0.01"
+            value={draft.demurrageDailyRateUsd ?? ''}
+            onChange={(event) => onDraftChange('demurrageDailyRateUsd', event.target.value)}
+            {...getFieldA11yProps('process-field-demurrageDailyRateUsd', errors.demurrageDailyRateUsd)}
+          />
+          {errors.demurrageDailyRateUsd ? (
+            <small
+              className="field-error"
+              id={getFieldErrorId('process-field-demurrageDailyRateUsd')}
+              aria-hidden="true"
+            >
+              {errors.demurrageDailyRateUsd}
+            </small>
+          ) : null}
+        </label>
+      </div>
     </div>
   )
 }
