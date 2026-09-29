@@ -30,6 +30,7 @@ import { canViewProcessRecords, getDocumentPendingFields, normalizeDocumentIndex
 import ConfirmDialog from '../../components/ConfirmDialog'
 import {
   DetailBlock,
+  DetailBlockPlaceholder,
   DetailList,
   DetailRow,
   hasArrivalDetails,
@@ -476,11 +477,15 @@ export default function ProcessDetailView({
               showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
               containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
             />
-            <ProcessTransitDetails process={selectedProcess} />
-            <ProcessArrivalDetails process={selectedProcess} step={3} />
-            <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} />
-            <ProcessCustomsDetails process={selectedProcess} step={4} />
-            <ProcessLicensesDetails process={selectedProcess} step={showCustomsBlock ? null : 4} />
+            <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder />
+            <ProcessArrivalDetails process={selectedProcess} step={3} showEmptyPlaceholder />
+            <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} showEmptyPlaceholder />
+            <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder />
+            <ProcessLicensesDetails
+              process={selectedProcess}
+              step={showCustomsBlock ? null : 4}
+              showEmptyPlaceholder
+            />
             {showCollectionBlock ? (
               <DetailBlock
                 step={5}
@@ -518,6 +523,13 @@ export default function ProcessDetailView({
                   </DetailList>
                 ) : null}
               </DetailBlock>
+            ) : showsCollectionCategory ? (
+              <DetailBlockPlaceholder
+                title="Coleta"
+                wide
+                className="process-block--collection"
+                message="Coleta ainda não agendada."
+              />
             ) : null}
             {selectedProcess.processNotes ? (
               <DetailBlock title="Observações do processo" wide className="process-block--process-notes">

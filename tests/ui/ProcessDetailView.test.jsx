@@ -376,12 +376,16 @@ describe('ProcessDetailView — card "Anuências" (F17.2b)', () => {
     expect(screen.getByText(/Deferida/)).toBeInTheDocument()
   })
 
-  it('sem licenças o card não existe', () => {
+  it('sem licenças: só o placeholder (sem o bloco real)', () => {
     renderDetail({
       detailTab: 'process',
       selectedProcess: makeProcess({ licenses: [] }),
     })
-    expect(screen.queryByText('Anuências')).not.toBeInTheDocument()
+    // jsdom nao aplica styles.css: o placeholder (display:none fora do desktop) aparece no DOM.
+    const block = screen.getByRole('heading', { level: 3, name: 'Anuências' }).closest('.detail-block')
+    expect(block).toHaveClass('detail-block--placeholder')
+    expect(block).toHaveTextContent('Nenhuma anuência registrada.')
+    expect(screen.queryByText(/deferidas/)).not.toBeInTheDocument()
   })
 })
 
@@ -444,9 +448,11 @@ describe('ProcessDetailView — card "Chegada" (F17.3a)', () => {
       detailTab: 'process',
       selectedProcess: makeProcess({ category: 'FCL' }),
     })
-    // "Chegada" tambem aparece como rotulo da timeline (F16.5) - filtra so
-    // o card (`span.detail-label`).
-    expect(screen.queryByText('Chegada', { selector: '.detail-block__title' })).not.toBeInTheDocument()
+    // jsdom nao aplica styles.css: exclui o placeholder (desktop) e confere o aviso.
+    expect(document.querySelector('.process-block--arrival:not(.detail-block--placeholder)')).toBeNull()
+    expect(document.querySelector('.process-block--arrival.detail-block--placeholder')).toHaveTextContent(
+      'Chegada ainda não registrada.',
+    )
   })
 })
 
@@ -487,7 +493,9 @@ describe('ProcessDetailView — card "Free time" (F17.3a)', () => {
       detailTab: 'process',
       selectedProcess: makeProcess({ category: 'FCL', freeTimeDays: null }),
     })
-    expect(screen.queryByText('Free time')).not.toBeInTheDocument()
+    // FCL not-informed gera placeholder (jsdom nao aplica CSS): exclui-o e confere o aviso.
+    expect(document.querySelector('.process-block--free-time:not(.detail-block--placeholder)')).toBeNull()
+    expect(screen.getByText('Free time não informado.')).toBeInTheDocument()
   })
 
   it('LCL nunca renderiza o card Free time', () => {
@@ -496,6 +504,8 @@ describe('ProcessDetailView — card "Free time" (F17.3a)', () => {
       selectedProcess: makeProcess({ category: 'LCL', freeTimeDays: 5 }),
     })
     expect(screen.queryByText('Free time')).not.toBeInTheDocument()
+    // cobre bloco real E placeholder
+    expect(document.querySelector('.process-block--free-time')).toBeNull()
   })
 })
 
@@ -663,7 +673,9 @@ describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {
       detailTab: 'process',
       selectedProcess: makeProcess(),
     })
-    expect(screen.queryByText('Aduana (DUIMP)')).not.toBeInTheDocument()
+    // jsdom nao aplica styles.css: exclui o placeholder (desktop) e confere o aviso.
+    expect(document.querySelector('.process-block--customs:not(.detail-block--placeholder)')).toBeNull()
+    expect(screen.getByText('DUIMP ainda não registrada.')).toBeInTheDocument()
   })
 })
 
@@ -1180,5 +1192,80 @@ describe('ProcessDetailView — fotos pos-recebimento (UX-6b-3, D7 sem numero)',
     })
     await user.click(screen.getByRole('button', { name: /foto\.jpg/ }))
     expect(onOpenPostReceiptGallery).toHaveBeenCalledWith(0)
+  })
+})
+
+// Blocos vazios (SPEC 2026-09-28): placeholder so' aparece no desktop via CSS;
+// no DOM do jsdom ele sempre existe quando o bloco real esta vazio.
+describe('ProcessDetailView — blocos vazios com placeholder (desktop, SPEC 2026-09-28)', () => {
+  const CLASSES = ['transit', 'arrival', 'customs', 'licenses', 'collection', 'free-time']
+  const MESSAGES = {
+    transit: 'Embarque ainda não registrado.',
+    arrival: 'Chegada ainda não registrada.',
+    customs: 'DUIMP ainda não registrada.',
+    licenses: 'Nenhuma anuência registrada.',
+    collection: 'Coleta ainda não agendada.',
+    'free-time': 'Free time não informado.',
+  }
+  const WIDE = ['transit', 'licenses', 'collection', 'free-time']
+  const placeholder = (name) => document.querySelector(`.process-block--${name}.detail-block--placeholder`)
+
+  it('FCL vazio: 6 placeholders com classe e aviso corretos, sem numero de passo', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeProcess() })
+    expect(document.querySelectorAll('.detail-block--placeholder')).toHaveLength(6)
+    CLASSES.forEach((name) => {
+      const el = placeholder(name)
+      expect(el).not.toBeNull()
+      expect(el).toHaveTextContent(MESSAGES[name])
+      expect(el.querySelector('.detail-block__step')).toBeNull()
+    })
+  })
+
+  it('wide herdado do bloco real', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeProcess() })
+    CLASSES.forEach((name) => {
+      if (WIDE.includes(name)) expect(placeholder(name)).toHaveClass('detail-block--wide')
+      else expect(placeholder(name)).not.toHaveClass('detail-block--wide')
+    })
+  })
+
+  it('processo completo: nenhum placeholder', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
+    expect(document.querySelectorAll('.detail-block--placeholder')).toHaveLength(0)
+  })
+
+  it('bloco real nunca coexiste com o placeholder', () => {
+    ;[makeProcess(), makeFullFlowProcess()].forEach((process) => {
+      const { unmount } = renderDetail({ detailTab: 'process', selectedProcess: process })
+      CLASSES.forEach((name) => {
+        expect(document.querySelectorAll(`.process-block--${name}`).length).toBeLessThanOrEqual(1)
+      })
+      unmount()
+    })
+  })
+
+  it.each(['LCL', 'AEREO'])('%s vazio: sem Free time, demais 5 placeholders presentes', (category) => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeProcess({ category }) })
+    expect(document.querySelector('.process-block--free-time')).toBeNull()
+    CLASSES.filter((name) => name !== 'free-time').forEach((name) => {
+      expect(placeholder(name)).not.toBeNull()
+    })
+  })
+
+  it('numeracao intacta: FCL vazio so numera Carga', () => {
+    renderDetail({ detailTab: 'process', selectedProcess: makeProcess() })
+    const steps = [...document.querySelectorAll('.detail-block__step')].map((el) => el.textContent)
+    expect(steps).toEqual(['1'])
+  })
+
+  it('placeholder individual some quando ha dado', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ shippedAt: '2026-09-01', collectionStatus: 'Coleta Agendada' }),
+    })
+    expect(placeholder('transit')).toBeNull()
+    expect(document.querySelector('.process-block--transit')).not.toBeNull()
+    expect(placeholder('collection')).toBeNull()
+    expect(document.querySelector('.process-block--collection')).not.toBeNull()
   })
 })

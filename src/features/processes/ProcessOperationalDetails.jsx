@@ -42,6 +42,9 @@ import { hasReceiptDivergence } from './receiptDivergence'
 // NAO e' mais importada aqui: a DUIMP virou neutra (canal e' badge, nao
 // card colorido) — a funcao continua exportada la' pro Dashboard.
 //
+// Blocos vazios (SPEC 2026-09-28): `showEmptyPlaceholder` + `DetailBlockPlaceholder`
+// renderizam um aviso no lugar do bloco ausente; visivel so' no desktop via CSS.
+//
 // D-3: `shippedAt` e' data pura (`YYYY-MM-DD`) - formatador local, NUNCA
 // `toISOString()`/`new Date(value)` direto num `Intl.DateTimeFormat` (bug de
 // fuso: meia-noite UTC vira o dia anterior em BRT).
@@ -85,6 +88,14 @@ export function DetailBlock({ step, title, badges, tone, wide, className, childr
       </div>
       {children}
     </section>
+  )
+}
+
+export function DetailBlockPlaceholder({ title, wide, className, message }) {
+  return (
+    <DetailBlock title={title} wide={wide} className={[className, 'detail-block--placeholder'].filter(Boolean).join(' ')}>
+      <p className="field-hint">{message}</p>
+    </DetailBlock>
   )
 }
 
@@ -133,10 +144,19 @@ export function hasCustomsDetails(process) {
 
 // F17.2b (D-6): bloco "Anuências" - so' quando ha' anuencia efetiva (leitura
 // visivel a todos os aprovados, anuencia nao identifica o processo).
-export function ProcessLicensesDetails({ process, step }) {
+export function ProcessLicensesDetails({ process, step, showEmptyPlaceholder = false }) {
   const licenses = getEffectiveLicenses(process)
 
-  if (licenses.length === 0) return null
+  if (licenses.length === 0) {
+    return showEmptyPlaceholder ? (
+      <DetailBlockPlaceholder
+        title="Anuências"
+        wide
+        className="process-block--licenses"
+        message="Nenhuma anuência registrada."
+      />
+    ) : null
+  }
 
   const deferidasCount = licenses.filter((license) => isLicenseDeferred(license?.status)).length
   const hasRejected = licenses.some((license) => isLicenseRejected(license?.status))
@@ -322,7 +342,7 @@ function formatCargoUnit(quantity, singularLabel, pluralLabel) {
 
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal
 // de embarque ou transbordo).
-export function ProcessTransitDetails({ process }) {
+export function ProcessTransitDetails({ process, showEmptyPlaceholder = false }) {
   const hasTransit =
     process?.shippedAt ||
     process?.vesselName ||
@@ -333,7 +353,16 @@ export function ProcessTransitDetails({ process }) {
     process?.mawb ||
     process?.hawb
 
-  if (!hasTransit && !process?.transshipment) return null
+  if (!hasTransit && !process?.transshipment) {
+    return showEmptyPlaceholder ? (
+      <DetailBlockPlaceholder
+        title="Embarque e trânsito"
+        wide
+        className="process-block--transit"
+        message="Embarque ainda não registrado."
+      />
+    ) : null
+  }
 
   return (
     <DetailBlock step={2} title="Embarque e trânsito" wide className="process-block--transit">
@@ -359,11 +388,20 @@ export function ProcessTransitDetails({ process }) {
 // F17.3a (D-12): bloco "Chegada" - atracacao/chegada com data (aprox. quando
 // migrada), CE/terminal, DTA (aereo) e presenca de carga com data. So'
 // renderiza se ha algum dado (visivel a todos os aprovados).
-export function ProcessArrivalDetails({ process, step }) {
-  if (!hasArrivalDetails(process)) return null
-
+export function ProcessArrivalDetails({ process, step, showEmptyPlaceholder = false }) {
   const isMaritime = isMaritimeCategory(process?.category)
   const isAir = isAirCategory(process?.category)
+
+  if (!hasArrivalDetails(process)) {
+    return showEmptyPlaceholder && (isMaritime || isAir) ? (
+      <DetailBlockPlaceholder
+        title="Chegada"
+        className="process-block--arrival"
+        message="Chegada ainda não registrada."
+      />
+    ) : null
+  }
+
   const hasArrival = hasArrivalSignal(process)
   const hasPresence = hasCargoPresenceSignal(process)
   const arrivalField = isMaritime ? 'berthedAt' : 'arrivedAt'
@@ -407,9 +445,19 @@ export function ProcessArrivalDetails({ process, step }) {
 // F17.3a (D-12): bloco "Free time" (FCL/CONSOLIDADO) - prazo de devolucao do
 // vazio (A1: conta da presenca de carga). UX-6b-3 (F2): vencido e' o UNICO
 // bloco que muda de cor (`tone="danger"`).
-export function ProcessFreeTimeDetails({ process, step }) {
+export function ProcessFreeTimeDetails({ process, step, showEmptyPlaceholder = false }) {
   const status = getFreeTimeStatus(process)
-  if (!status || status.state === 'not-informed') return null
+  if (!status) return null
+  if (status.state === 'not-informed') {
+    return showEmptyPlaceholder ? (
+      <DetailBlockPlaceholder
+        title="Free time"
+        wide
+        className="process-block--free-time"
+        message="Free time não informado."
+      />
+    ) : null
+  }
 
   function formatDeadline(value) {
     if (!value) return ''
@@ -471,8 +519,16 @@ const CHANNEL_BADGE_TONE = {
 // So' renderiza se maritimo/aereo e ha algum dado preenchido. Visivel a
 // todos os aprovados (nenhum campo identifica o processo; mascara de nome
 // intocada).
-export function ProcessCustomsDetails({ process, step }) {
-  if (!hasCustomsDetails(process)) return null
+export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = false }) {
+  if (!hasCustomsDetails(process)) {
+    return showEmptyPlaceholder && (isMaritimeCategory(process?.category) || isAirCategory(process?.category)) ? (
+      <DetailBlockPlaceholder
+        title="Aduana (DUIMP)"
+        className="process-block--customs"
+        message="DUIMP ainda não registrada."
+      />
+    ) : null
+  }
 
   const channel = process?.parameterizationChannel
   const isCinza = channel === 'Cinza'
