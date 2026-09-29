@@ -459,3 +459,155 @@ describe('ProcessDocumentsPanel — excluir', () => {
     expect(mockDeleteProcessDocument).not.toHaveBeenCalled()
   })
 })
+
+// Embarque confirmado: BL/Relatorio de carga/Invoice/Packing List sem arquivo
+// viram pendencia (linha "Pendente" + resumo "N pendentes").
+describe('ProcessDocumentsPanel — embarque confirmado gera pendências', () => {
+  const SHIPPED_FCL = { ...FCL_PROCESS, shippedAt: '2026-09-01' }
+
+  function rowOf(title) {
+    return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  }
+
+  it('FCL embarcado com só o BL: Relatório de carga/Invoice/Packing List "Pendente"; resumo 6 pendentes', async () => {
+    const onPendingCountChange = vi.fn()
+    mockListProcessDocuments.mockResolvedValue([docBl()])
+    render(
+      <ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} onPendingCountChange={onPendingCountChange} />
+    )
+    await waitFor(() => expect(screen.getByText('1 enviado')).toBeInTheDocument())
+
+    // 2 FISPQ + 1 lavacao + 3 documentos de embarque (BL enviado).
+    expect(screen.getByText('6 pendentes')).toBeInTheDocument()
+    await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(6))
+    for (const title of ['Relatório de carga', 'Invoice', 'Packing List']) {
+      expect(within(rowOf(title)).getByText('Pendente')).toBeInTheDocument()
+    }
+    expect(within(rowOf('BL/AWB')).queryByText('Pendente')).not.toBeInTheDocument()
+  })
+
+  it('mesmo processo sem shippedAt: resumo 3 pendentes e linhas "Não enviado"', async () => {
+    mockListProcessDocuments.mockResolvedValue([docBl()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(screen.getByText('1 enviado')).toBeInTheDocument())
+
+    expect(screen.getByText('3 pendentes')).toBeInTheDocument()
+    expect(within(rowOf('Invoice')).getByText('Não enviado')).toBeInTheDocument()
+  })
+
+  it('embarcado com ZERO documentos: mostra o selo "N pendentes" e as linhas "Pendente"', async () => {
+    render(
+      <ProcessDocumentsPanel process={{ id: 'p5', category: 'LCL', shippedAt: '2026-09-01' }} profile={ADMIN_PROFILE} />
+    )
+    await waitFor(() => expect(screen.getByText('4 pendentes')).toBeInTheDocument())
+
+    expect(screen.getByText('4 pendentes')).toHaveClass('inline-badge--warn')
+    for (const title of ['BL/AWB', 'Relatório de carga', 'Invoice', 'Packing List']) {
+      expect(within(rowOf(title)).getByText('Pendente')).toBeInTheDocument()
+    }
+  })
+
+  it('sem documentos e sem pendência: mantém "Nenhum documento ainda" sem selo de pendentes', async () => {
+    render(<ProcessDocumentsPanel process={{ id: 'p6', category: 'LCL' }} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(screen.getByText('Nenhum documento ainda')).toBeInTheDocument())
+
+    expect(screen.queryByText(/pendente/)).not.toBeInTheDocument()
+  })
+
+  it('CONSOLIDADO embarcado sem documentos: 4 células "Pendente" na tabela por PO', async () => {
+    render(
+      <ProcessDocumentsPanel
+        process={{ id: 'p7', category: 'CONSOLIDADO', shippedAt: '2026-09-01', purchaseOrders: [{ po: 'PO-1' }, { po: 'PO-2' }] }}
+        profile={ADMIN_PROFILE}
+      />
+    )
+    const table = await screen.findByRole('table')
+    expect(within(table).getAllByText('Pendente')).toHaveLength(4)
+    // 2 (BL/Relatorio de carga) + 4 (Invoice/Packing por PO)
+    expect(screen.getByText('6 pendentes')).toBeInTheDocument()
+  })
+})
+
+// Nome do documento adicional ("Outro").
+describe('ProcessDocumentsPanel — nome do documento adicional', () => {
+  const OTHER_PROCESS = { id: 'p1', category: 'LCL' }
+
+  function otherFileInput(container) {
+    return container.querySelector('.documents-add-other-row input[type="file"]')
+  }
+
+  it('envia o nome digitado como description e limpa o campo após sucesso', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+
+    const nameInput = screen.getByLabelText('Nome do documento (opcional)')
+    await user.type(nameInput, '  Certificado de análise  ')
+    await user.upload(otherFileInput(container), new File(['x'], 'cert.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'other', description: 'Certificado de análise' })
+      )
+    )
+    await waitFor(() => expect(screen.getByLabelText('Nome do documento (opcional)')).toHaveValue(''))
+  })
+
+  it('campo vazio (só espaços) -> "Documento adicional"', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+
+    await user.type(screen.getByLabelText('Nome do documento (opcional)'), '   ')
+    await user.upload(otherFileInput(container), new File(['x'], 'a.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'other', description: 'Documento adicional' })
+      )
+    )
+  })
+
+  it('erro no envio mantém o texto digitado', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockRejectedValue({ code: 'permission-denied' })
+    const { container } = render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+
+    await user.type(screen.getByLabelText('Nome do documento (opcional)'), 'Laudo')
+    await user.upload(otherFileInput(container), new File(['x'], 'a.pdf', { type: 'application/pdf' }))
+
+    await screen.findByRole('alert')
+    expect(screen.getByLabelText('Nome do documento (opcional)')).toHaveValue('Laudo')
+  })
+
+  it('o campo limita a 80 caracteres', async () => {
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    expect(screen.getByLabelText('Nome do documento (opcional)')).toHaveAttribute('maxlength', '80')
+  })
+
+  it('logística não vê o campo', async () => {
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    expect(screen.queryByLabelText('Nome do documento (opcional)')).not.toBeInTheDocument()
+  })
+
+  it('documento "other" exibe o nome como título e "Outro" no início da meta', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      {
+        id: 'o1', type: 'other', slotKey: 'other:o1', description: 'Certificado', name: 'cert.pdf',
+        mimeType: 'application/pdf', size: 1024, storagePath: 'x', uploadedAt: '2026-09-01T10:00:00.000Z',
+        uploadedById: 'admin-1', uploadedByName: 'Admin', uploadedByRole: 'admin',
+      },
+    ])
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const title = await screen.findByText('Certificado', { selector: '.documents-row__label' })
+    const meta = title.closest('.documents-row').querySelector('.documents-row__meta')
+    expect(meta.textContent.startsWith('Outro · PDF')).toBe(true)
+  })
+})

@@ -213,7 +213,7 @@ describe('syncProcessDocumentIndex', () => {
       'processes/proc-1/documents': [
         { id: 'd1', data: { type: 'fispq', itemId: 'ITEM-1' } },
         { id: 'd2', data: { type: 'containerWash', containerId: 'CNT-1' } },
-        { id: 'd3', data: { type: 'bl' } },
+        { id: 'd3', data: { type: 'bl', slotKey: 'bl' } },
       ],
     })
     const handler = getHandler(syncProcessDocumentIndex)
@@ -223,11 +223,29 @@ describe('syncProcessDocumentIndex', () => {
 
     expect(processRef.update).toHaveBeenCalledTimes(1)
     expect(processRef.update).toHaveBeenCalledWith({
-      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: ['CNT-1'] },
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: ['CNT-1'], processSlotKeys: ['bl'] },
     })
   })
 
   it('index igual ao atual -> nao escreve (sem write inutil)', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [
+        {
+          id: PROCESS_ID,
+          data: { documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [], processSlotKeys: [] } },
+        },
+      ],
+      'processes/proc-1/documents': [{ id: 'd1', data: { type: 'fispq', itemId: 'ITEM-1' } }],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).not.toHaveBeenCalled()
+  })
+
+  it('index legado (sem processSlotKeys) com subcolecao equivalente -> ESCREVE com processSlotKeys', async () => {
     const { collectionRefs } = setupFirestoreChain({
       processes: [
         { id: PROCESS_ID, data: { documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] } } },
@@ -239,7 +257,9 @@ describe('syncProcessDocumentIndex', () => {
 
     await handler(makeEvent())
 
-    expect(processRef.update).not.toHaveBeenCalled()
+    expect(processRef.update).toHaveBeenCalledWith({
+      documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [], processSlotKeys: [] },
+    })
   })
 
   it('delete: subcolecao ja sem o documento apagado -> index recalculado fica vazio', async () => {
@@ -255,7 +275,7 @@ describe('syncProcessDocumentIndex', () => {
     await handler(makeEvent())
 
     expect(processRef.update).toHaveBeenCalledWith({
-      documentIndex: { fispqItemIds: [], containerWashIds: [] },
+      documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
     })
   })
 

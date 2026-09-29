@@ -3,9 +3,14 @@
 // `pendingFields.js`, `processCategories.js` nem `processLabels.js` -
 // `tests/ui/ProcessesPage.test.jsx` mocka esses modulos com uma lista
 // fechada de exports (mesma regra de `containers.js`/`purchaseOrders.js`).
+// Importa APENAS `./shipmentConfirmation` e `./purchaseOrders` (ZERO imports
+// e nao mockados nesse teste) para as pendencias de embarque confirmado.
 //
 // D1/D2/D9 do PLAN.md (F18a) + AD-1 do adendo do orquestrador (Invoice e
 // Packing List por PO no CONSOLIDADO).
+
+import { isShipmentConfirmed } from './shipmentConfirmation'
+import { getProcessPurchaseOrders } from './purchaseOrders'
 
 export const MAX_DOCUMENT_MB = 20
 
@@ -156,14 +161,27 @@ function sortUniqueStrings(list) {
   return [...new Set((Array.isArray(list) ? list : []).filter((value) => typeof value === 'string' && value)).values()].sort()
 }
 
+// Tipos de documento de nivel-processo cujo `slotKey` entra em
+// `documentIndex.processSlotKeys`. Espelho de `functions/src/process/documentIndex.js`.
+const PROCESS_SLOT_DOCUMENT_TYPES = ['bl', 'cargoReport', 'invoice', 'packingList']
+
 // F18b-1 (B1): normaliza `documentIndex` na leitura (`normalizeProcess`,
-// `processesRepository.js`). Ausente/lixo -> `{ fispqItemIds: [], containerWashIds: [] }`.
+// `processesRepository.js`). Ausente/lixo -> `{ fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }`.
+// `processSlotKeys` tem 3 estados: indice ausente/nao-objeto -> `[]` (vazio
+// CONHECIDO); objeto legado sem o array -> `null` (DESCONHECIDO, nao gera
+// pendencia); array -> limpo/ordenado. Idempotente.
 // Gravado SO' pelo trigger `syncProcessDocumentIndex` - o cliente nunca envia
 // esta chave (`toFirestorePayload` nao muda, teste dedicado).
 export function normalizeDocumentIndex(raw) {
+  const isObject = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+  let processSlotKeys = []
+  if (isObject) {
+    processSlotKeys = Array.isArray(raw.processSlotKeys) ? sortUniqueStrings(raw.processSlotKeys) : null
+  }
   return {
     fispqItemIds: sortUniqueStrings(raw?.fispqItemIds),
     containerWashIds: sortUniqueStrings(raw?.containerWashIds),
+    processSlotKeys,
   }
 }
 
@@ -180,8 +198,16 @@ export function getDocumentIndexFromDocuments(documents) {
   const list = Array.isArray(documents) ? documents : []
   const fispqItemIds = []
   const containerWashIds = []
+  const processSlotKeys = []
 
   for (const document of list) {
+    if (
+      PROCESS_SLOT_DOCUMENT_TYPES.includes(document?.type) &&
+      typeof document?.slotKey === 'string' &&
+      document.slotKey
+    ) {
+      processSlotKeys.push(document.slotKey)
+    }
     if (document?.type === 'fispq' && document?.itemId) fispqItemIds.push(String(document.itemId))
     if (document?.type === 'containerWash' && document?.containerId) {
       containerWashIds.push(String(document.containerId))
@@ -191,16 +217,19 @@ export function getDocumentIndexFromDocuments(documents) {
   return {
     fispqItemIds: sortUniqueStrings(fispqItemIds),
     containerWashIds: sortUniqueStrings(containerWashIds),
+    processSlotKeys: sortUniqueStrings(processSlotKeys),
   }
 }
 
 // F18b-2 (E4/E5): pendencias derivadas do `documentIndex` (FISPQ de item IMO
-// + lavacao de conteiner devolvido). Item/conteiner sem `id` persistido e'
+// + lavacao de conteiner devolvido + BL/Relatorio de carga/Invoice/Packing
+// List com embarque confirmado, so' quando `processSlotKeys` e' array). Item/conteiner sem `id` persistido e'
 // ignorado (registrado como limitacao conhecida no PLAN.md).
 export function buildDocumentPendingFields(process, index) {
   const fispqItemIds = new Set(index?.fispqItemIds ?? [])
   const containerWashIds = new Set(index?.containerWashIds ?? [])
   const fields = []
+  const processSlotKeys = Array.isArray(index?.processSlotKeys) ? new Set(index.processSlotKeys) : null
 
   const items = Array.isArray(process?.items) ? process.items : []
   for (const item of items) {
@@ -215,6 +244,36 @@ export function buildDocumentPendingFields(process, index) {
       label: `FISPQ do item ${name}`,
       stage: 0,
     })
+  }
+
+  if (processSlotKeys && isShipmentConfirmed(process)) {
+    if (!processSlotKeys.has('bl')) {
+      fields.push({ id: 'bl', field: 'documents', label: 'BL/AWB', stage: 1 })
+    }
+    if (!processSlotKeys.has('cargoReport')) {
+      fields.push({ id: 'cargoReport', field: 'documents', label: 'Relatório de carga', stage: 1 })
+    }
+    if (process?.category === 'CONSOLIDADO') {
+      for (const order of getProcessPurchaseOrders(process)) {
+        const po = String(order?.po ?? '').trim()
+        if (!po) continue
+        const invoiceSlot = buildDocumentSlotKey('invoice', { category: 'CONSOLIDADO', po })
+        const packingSlot = buildDocumentSlotKey('packingList', { category: 'CONSOLIDADO', po })
+        if (!processSlotKeys.has(invoiceSlot)) {
+          fields.push({ id: invoiceSlot, field: 'documents', label: `Invoice da PO ${po}`, stage: 1 })
+        }
+        if (!processSlotKeys.has(packingSlot)) {
+          fields.push({ id: packingSlot, field: 'documents', label: `Packing List da PO ${po}`, stage: 1 })
+        }
+      }
+    } else {
+      if (!processSlotKeys.has('invoice')) {
+        fields.push({ id: 'invoice', field: 'documents', label: 'Invoice', stage: 1 })
+      }
+      if (!processSlotKeys.has('packingList')) {
+        fields.push({ id: 'packingList', field: 'documents', label: 'Packing List', stage: 1 })
+      }
+    }
   }
 
   if (CONTAINER_WASH_CATEGORIES.includes(process?.category)) {

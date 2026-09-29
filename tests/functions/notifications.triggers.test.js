@@ -679,7 +679,11 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         if (processData.documentIndex?.containerWashIds?.length > 0) break
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
       }
-      expect(processData.documentIndex).toEqual({ fispqItemIds: [], containerWashIds: ['CNT-1'] })
+      expect(processData.documentIndex).toEqual({
+        fispqItemIds: [],
+        containerWashIds: ['CNT-1'],
+        processSlotKeys: [],
+      })
     },
     TRIGGER_TIMEOUT_MS
   )
@@ -730,7 +734,11 @@ describeEmulator('triggers de notificacao (emulador functions)', () => {
         if (processData.documentIndex) break
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
       }
-      expect(processData.documentIndex).toEqual({ fispqItemIds: ['ITEM-1'], containerWashIds: [] })
+      expect(processData.documentIndex).toEqual({
+        fispqItemIds: ['ITEM-1'],
+        containerWashIds: [],
+        processSlotKeys: [],
+      })
 
       // Sem aviso (o ator e' admin) e sem duplicar favorite_process_updated
       // (documentIndex fica fora de sanitizeProcessForComparison).

@@ -736,4 +736,22 @@ describe('getPendingFields - documentos (F18b-2)', () => {
     })
     expect(getPendingFields(process).map((f) => f.id)).toContain('fispq:ITEM-1')
   })
+
+  it('embarcado + processSlotKeys vazio -> inclui bl/cargoReport/invoice/packingList', () => {
+    const process = completeMaritimeProcess({
+      shippedAt: '2026-01-02',
+      documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).toEqual(expect.arrayContaining(['bl', 'cargoReport', 'invoice', 'packingList']))
+  })
+
+  it('embarcado + indice legado (sem processSlotKeys) -> nao inclui nenhum dos 4', () => {
+    const process = completeMaritimeProcess({
+      shippedAt: '2026-01-02',
+      documentIndex: { fispqItemIds: [], containerWashIds: [] },
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    for (const id of ['bl', 'cargoReport', 'invoice', 'packingList']) expect(ids).not.toContain(id)
+  })
 })

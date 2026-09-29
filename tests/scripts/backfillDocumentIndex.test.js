@@ -12,8 +12,8 @@ describe('planDocumentIndexBackfill', () => {
     expect(plan).toEqual([
       {
         id: 'P1',
-        before: { fispqItemIds: [], containerWashIds: [] },
-        after: { fispqItemIds: [], containerWashIds: [] },
+        before: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+        after: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
         changed: false,
       },
     ])
@@ -26,20 +26,35 @@ describe('planDocumentIndexBackfill', () => {
         P2: [
           { type: 'fispq', itemId: 'ITEM-1' },
           { type: 'containerWash', containerId: 'CNT-1' },
+          { type: 'bl', slotKey: 'bl' },
         ],
       }
     )
     const [entry] = plan
     expect(entry.changed).toBe(true)
-    expect(entry.after).toEqual({ fispqItemIds: ['ITEM-1'], containerWashIds: ['CNT-1'] })
+    expect(entry.after).toEqual({
+      fispqItemIds: ['ITEM-1'],
+      containerWashIds: ['CNT-1'],
+      processSlotKeys: ['bl'],
+    })
   })
 
   it('documentIndex ja bate com a subcolecao -> inalterado', () => {
     const plan = planDocumentIndexBackfill(
-      [{ id: 'P3', documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [] } }],
+      [{ id: 'P3', documentIndex: { fispqItemIds: ['ITEM-1'], containerWashIds: [], processSlotKeys: [] } }],
       { P3: [{ type: 'fispq', itemId: 'ITEM-1' }] }
     )
     expect(plan[0].changed).toBe(false)
+  })
+
+  it('documentIndex legado (sem processSlotKeys) e sem documentos -> muda e ganha processSlotKeys: []', () => {
+    const plan = planDocumentIndexBackfill(
+      [{ id: 'P5', documentIndex: { fispqItemIds: [], containerWashIds: [] } }],
+      {}
+    )
+    expect(plan[0].changed).toBe(true)
+    expect(plan[0].before.processSlotKeys).toBeNull()
+    expect(plan[0].after.processSlotKeys).toEqual([])
   })
 
   it('documentIndex velho (falta item novo) -> muda', () => {
