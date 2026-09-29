@@ -486,6 +486,24 @@ describe('ProcessDocumentsPanel — embarque confirmado gera pendências', () =>
     expect(within(rowOf('BL/AWB')).queryByText('Pendente')).not.toBeInTheDocument()
   })
 
+  it('não publica a contagem enquanto a lista carrega nem se a 1ª carga falha', async () => {
+    const onPendingCountChange = vi.fn()
+    mockListProcessDocuments.mockReturnValueOnce(new Promise(() => {}))
+    const { unmount } = render(
+      <ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} onPendingCountChange={onPendingCountChange} />
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(onPendingCountChange).not.toHaveBeenCalled()
+    unmount()
+
+    mockListProcessDocuments.mockRejectedValueOnce({ code: 'unavailable' })
+    render(
+      <ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} onPendingCountChange={onPendingCountChange} />
+    )
+    await waitFor(() => expect(screen.getByText('Tentar novamente')).toBeInTheDocument())
+    expect(onPendingCountChange).not.toHaveBeenCalled()
+  })
+
   it('mesmo processo sem shippedAt: resumo 3 pendentes e linhas "Não enviado"', async () => {
     mockListProcessDocuments.mockResolvedValue([docBl()])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)

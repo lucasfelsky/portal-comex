@@ -235,9 +235,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection])
 
+  // Review #202: so' publica a contagem derivada depois da 1a carga com
+  // sucesso - durante o loading (`documents` = []) ou com erro na 1a carga
+  // a aba mantem a contagem do `documentIndex` (sem falso "4 pendentes").
   useEffect(() => {
+    if (isLoading || loadError) return
     if (typeof onPendingCountChange === 'function') onPendingCountChange(pendentesCount)
-  }, [pendentesCount, onPendingCountChange])
+  }, [pendentesCount, onPendingCountChange, isLoading, loadError])
 
   useEffect(() => {
     if (!focusAfterUploadRef.current) return
