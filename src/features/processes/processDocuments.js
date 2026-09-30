@@ -10,7 +10,7 @@
 // Packing List por PO no CONSOLIDADO).
 
 import { isShipmentConfirmed } from './shipmentConfirmation'
-import { getProcessPurchaseOrders } from './purchaseOrders'
+import { formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { isContainerReturned } from './containers'
 
 export const MAX_DOCUMENT_MB = 20
@@ -304,11 +304,17 @@ export function buildDocumentPendingFields(process, index) {
         if (!po) continue
         const invoiceSlot = buildDocumentSlotKey('invoice', { category: 'CONSOLIDADO', po })
         const packingSlot = buildDocumentSlotKey('packingList', { category: 'CONSOLIDADO', po })
+        // 2026-09-30 (Lucas): nome do processo (Referencia da PO) no rotulo.
+        // So' admin ve estes rotulos (ProcessDetailView/ProcessListView).
+        const reference = String(order?.reference ?? '').trim()
+        const target = reference
+          ? `de ${reference} (${formatPurchaseOrderNumber(po)})`
+          : `da ${formatPurchaseOrderNumber(po)}`
         if (!processSlotKeys.has(invoiceSlot)) {
-          fields.push({ id: invoiceSlot, field: 'documents', label: `Invoice da PO ${po}`, stage: 1 })
+          fields.push({ id: invoiceSlot, field: 'documents', label: `Invoice ${target}`, stage: 1 })
         }
         if (!processSlotKeys.has(packingSlot)) {
-          fields.push({ id: packingSlot, field: 'documents', label: `Packing List da PO ${po}`, stage: 1 })
+          fields.push({ id: packingSlot, field: 'documents', label: `Packing List ${target}`, stage: 1 })
         }
       }
     } else {
