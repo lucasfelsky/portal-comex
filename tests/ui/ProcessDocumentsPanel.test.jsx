@@ -1,7 +1,7 @@
 // F18b-2: aba "Documentos" redesenhada (design aprovado). Cobre os
 // criterios (a)-(n) do PLAN.md.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProcessDocumentsPanel from '../../src/features/processes/ProcessDocumentsPanel'
 
@@ -637,5 +637,95 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
     const title = await screen.findByText('Certificado', { selector: '.documents-row__label' })
     const meta = title.closest('.documents-row').querySelector('.documents-row__meta')
     expect(meta.textContent.startsWith('Outro · PDF')).toBe(true)
+  })
+})
+
+describe('ProcessDocumentsPanel — arrastar e soltar', () => {
+  const CONSOLIDATED = { id: 'p2', category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-1' }, { po: 'PO-2' }] }
+  const pdf = (name = 'a.pdf') => new File(['x'], name, { type: 'application/pdf' })
+  const dt = (files) => ({ dataTransfer: { files, types: ['Files'] } })
+  const blGroup = () => screen.getByText('BL/AWB', { selector: '.documents-row__label' }).closest('.documents-row-group')
+
+  it('(a) admin solta arquivo no BL e envia type bl', async () => {
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    const file = pdf('bl.pdf')
+    fireEvent.drop(blGroup(), dt([file]))
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'bl', file }))
+    )
+  })
+
+  it('(b) 2 arquivos: avisa e nao envia', async () => {
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    fireEvent.drop(blGroup(), dt([pdf('1.pdf'), pdf('2.pdf')]))
+    expect(await screen.findByText('Solte apenas um arquivo por vez.')).toBeInTheDocument()
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+  })
+
+  it('(c) logística: sem drop no BL; drop na lavação envia containerWash', async () => {
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitForDocumentsLoaded()
+    const bl = blGroup()
+    fireEvent.dragOver(bl, dt([]))
+    expect(bl).not.toHaveClass('documents-drop-active')
+    fireEvent.drop(bl, dt([pdf()]))
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+
+    const washGroup = screen.getAllByRole('button', { name: 'Enviar' })[0].closest('.documents-row-group')
+    fireEvent.drop(washGroup, dt([pdf('lav.pdf')]))
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'containerWash' }))
+    )
+  })
+
+  it('(d) drop em "Adicionar outro" usa o nome digitado', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const { container } = render(<ProcessDocumentsPanel process={{ id: 'p1', category: 'LCL' }} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    await user.type(screen.getByLabelText('Nome do documento (opcional)'), 'Laudo')
+    fireEvent.drop(container.querySelector('.documents-add-other-row'), dt([pdf()]))
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'other', description: 'Laudo' })
+      )
+    )
+  })
+
+  it('(e) CONSOLIDADO: drop na célula Invoice da PO-2 envia po', async () => {
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={CONSOLIDATED} profile={ADMIN_PROFILE} />)
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledWith('p2'))
+    const table = screen.getByRole('table')
+    const po2Row = within(table).getByText('PO-2', { selector: 'th' }).closest('tr')
+    fireEvent.drop(po2Row.querySelectorAll('td')[0], dt([pdf('inv.pdf')]))
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p2',
+        expect.objectContaining({ type: 'invoice', po: 'PO-2' })
+      )
+    )
+  })
+
+  it('(f) dragOver destaca e dragLeave remove', async () => {
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    const bl = blGroup()
+    fireEvent.dragOver(bl, dt([]))
+    expect(bl).toHaveClass('documents-drop-active')
+    fireEvent.dragLeave(bl, { relatedTarget: document.body })
+    expect(bl).not.toHaveClass('documents-drop-active')
+  })
+
+  it('(g) drop no container do painel é cancelado (defaultPrevented)', async () => {
+    const { container } = render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    expect(fireEvent.drop(container.querySelector('.documents-panel'), dt([pdf()]))).toBe(false)
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
   })
 })

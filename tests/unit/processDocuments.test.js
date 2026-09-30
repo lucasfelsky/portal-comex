@@ -19,8 +19,10 @@ import {
   getSlotKeyPoNumber,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
+  isFileDragEvent,
   isProcessDocumentType,
   normalizeDocumentIndex,
+  pickSingleDroppedFile,
 } from '../../src/features/processes/processDocuments'
 import {
   DOCUMENT_MILESTONE_EVENT_TYPES as DOCUMENT_MILESTONE_EVENT_TYPES_FUNCTIONS,
@@ -623,5 +625,23 @@ describe('getDocumentFileKindLabel', () => {
   it('nao reconhecido -> string vazia', () => {
     expect(getDocumentFileKindLabel('application/zip', 'a.zip')).toBe('')
     expect(getDocumentFileKindLabel('', '')).toBe('')
+  })
+})
+
+describe('isFileDragEvent', () => {
+  it('true so quando types contem Files', () => {
+    expect(isFileDragEvent({ dataTransfer: { types: ['Files'] } })).toBe(true)
+    expect(isFileDragEvent({ dataTransfer: { types: ['text/plain'] } })).toBe(false)
+    expect(isFileDragEvent({})).toBe(false)
+  })
+})
+
+describe('pickSingleDroppedFile', () => {
+  it('0 -> empty, 1 -> file, 2 -> multiple', () => {
+    const a = { name: 'a' }
+    expect(pickSingleDroppedFile({ files: [] })).toEqual({ file: null, error: 'empty' })
+    expect(pickSingleDroppedFile(undefined)).toEqual({ file: null, error: 'empty' })
+    expect(pickSingleDroppedFile({ files: [a] })).toEqual({ file: a, error: null })
+    expect(pickSingleDroppedFile({ files: [a, { name: 'b' }] })).toEqual({ file: null, error: 'multiple' })
   })
 })
