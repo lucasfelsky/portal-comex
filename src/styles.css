@@ -12169,6 +12169,18 @@ body {
   color: var(--ink);
 }
 
+.documents-po-name {
+  display: block;
+}
+
+.documents-po-number {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-footnote);
+  font-weight: 500;
+  color: var(--text-subtle);
+}
+
 .documents-po-cell {
   display: flex;
   flex-wrap: wrap;

@@ -32,7 +32,8 @@ import {
   pickSingleDroppedFile,
 } from './processDocuments'
 import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
-import { getProcessPurchaseOrders } from './purchaseOrders'
+import { canSeePurchaseOrderDetails, getProcessPurchaseOrders } from './purchaseOrders'
+import { canSeeProcessName } from './processLabels'
 import { isShipmentConfirmed } from './shipmentConfirmation'
 
 // F18b-2 (design aprovado - canvas Claude Design M8NdiBoZfvbmJxVY5oZL6e):
@@ -104,6 +105,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const processId = process?.id
   const category = process?.category
   const role = profile?.role
+  const canSeePoReference = canSeePurchaseOrderDetails(canSeeProcessName(role))
   const isConsolidated = category === 'CONSOLIDADO'
   const purchaseOrders = isConsolidated ? getProcessPurchaseOrders(process) : []
 
@@ -1213,7 +1215,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     <caption className="documents-visually-hidden">Invoice e Packing List por PO</caption>
                     <thead>
                       <tr>
-                        <th scope="col">PO</th>
+                        <th scope="col">Processo</th>
                         <th scope="col">Invoice</th>
                         <th scope="col">Packing List</th>
                       </tr>
@@ -1221,7 +1223,18 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     <tbody>
                       {purchaseOrders.map((order) => (
                         <tr key={order.po}>
-                          <th scope="row">{order.po}</th>
+                          <th scope="row">
+                            {/* 2026-09-30 (Lucas): nome do processo (Referência da PO) no
+                                lugar do número; a PO fica como linha secundária. */}
+                            {canSeePoReference && String(order.reference ?? '').trim() ? (
+                              <>
+                                <span className="documents-po-name">{String(order.reference).trim()}</span>
+                                <span className="documents-po-number">{`PO ${order.po}`}</span>
+                              </>
+                            ) : (
+                              order.po
+                            )}
+                          </th>
                           {renderPoCell('invoice', order)}
                           {renderPoCell('packingList', order)}
                         </tr>
