@@ -38,6 +38,32 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
                   onChange={(event) => onDraftChange('voyage', event.target.value)}
                 />
               </label>
+              <label className="field">
+                <span>IMO do navio</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={draft.vesselImo ?? ''}
+                  onChange={(event) => onDraftChange('vesselImo', event.target.value)}
+                  {...getFieldA11yProps('process-field-vesselImo', errors.vesselImo, [
+                    'process-field-vesselImo-hint',
+                  ])}
+                />
+                <small className="field-hint" id="process-field-vesselImo-hint">
+                  7 dígitos. Deixa o rastreamento exato — sem ele, o botão busca pelo nome.
+                </small>
+                {errors.vesselImo ? (
+                  <small
+                    className="field-error"
+                    id={getFieldErrorId('process-field-vesselImo')}
+                    aria-hidden="true"
+                  >
+                    {errors.vesselImo}
+                  </small>
+                ) : null}
+              </label>
             </>
           ) : null}
 

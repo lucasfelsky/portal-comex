@@ -57,6 +57,7 @@ function makeDraft(overrides = {}) {
     shippedAt: '',
     vesselName: '',
     voyage: '',
+    vesselImo: '',
     flightNumber: '',
     masterBl: '',
     houseBl: '',
@@ -162,6 +163,23 @@ describe('ProcessForm — wizard de etapas (C11 / UX-6b-1)', () => {
     renderForm()
     await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
     expect(screen.queryByText('Data de embarque')).not.toBeInTheDocument()
+  })
+
+  it('passo "Embarque" FCL mostra "IMO do navio" + hint e dispara onDraftChange', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderForm({ draft: makeDraft({ category: 'FCL' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
+    expect(screen.getByText('IMO do navio')).toBeInTheDocument()
+    expect(screen.getByText(/7 dígitos\. Deixa o rastreamento exato/)).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/IMO do navio/), '9')
+    expect(onDraftChange).toHaveBeenCalledWith('vesselImo', '9')
+  })
+
+  it('passo "Embarque" AEREO nao mostra "IMO do navio"', async () => {
+    const user = userEvent.setup()
+    renderForm({ draft: makeDraft({ category: 'AEREO' }) })
+    await user.click(within(stepsRow()).getByRole('button', { name: 'Embarque' }))
+    expect(screen.queryByText('IMO do navio')).not.toBeInTheDocument()
   })
 
   it('transbordo marcado mostra "ETD do transbordo" e dispara onDraftChange("transshipmentEtd", ...)', async () => {
@@ -1381,6 +1399,19 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
     const input = document.getElementById('process-field-transshipmentEtd')
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(input).toHaveAccessibleDescription(/entre 2000 e 2100/)
+  })
+
+  it('IMO do navio invalido mostra aria-invalid e a mensagem', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      fieldErrors: { vesselImo: 'IMO inválido: informe os 7 dígitos do navio (ex.: 9787027).' },
+      draft: makeDraft({ category: 'FCL', vesselImo: '123' }),
+    })
+    await openShipmentStep(user)
+
+    const input = document.getElementById('process-field-vesselImo')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText(/IMO inválido: informe os 7 dígitos/)).toBeInTheDocument()
   })
 
   it('free time (edit FCL, canShowMaritimeFlow): freeTimeDays invalido mostra aria-invalid/descricao', async () => {

@@ -20,6 +20,8 @@ import {
 } from './arrivalCustoms'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { hasReceiptDivergence } from './receiptDivergence'
+import VesselTrackingButton from './VesselTrackingButton'
+import { getVesselTrackingTarget } from './vesselTracking'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
 // processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
@@ -38,7 +40,8 @@ import { hasReceiptDivergence } from './receiptDivergence'
 // (so' `canShowProcessName`), `./licenses` (inclusive `isLicenseDeferred`/
 // `isLicenseRejected`), `../../utils/dateFormat` (so' `formatDateTime`),
 // `./arrivalCustoms`, `./processCategories`, `./receiptDivergence` (so'
-// `hasReceiptDivergence`). A funcao de tom de canal de `./processStatusView`
+// `hasReceiptDivergence`), `./VesselTrackingButton` (+ `./vesselTracking`, puro,
+// sem imports). A funcao de tom de canal de `./processStatusView`
 // NAO e' mais importada aqui: a DUIMP virou neutra (canal e' badge, nao
 // card colorido) — a funcao continua exportada la' pro Dashboard.
 //
@@ -381,6 +384,11 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false })
           </DetailRow>
         ) : null}
       </DetailList>
+      {getVesselTrackingTarget(process) ? (
+        <div className="detail-block__actions process-transit__actions">
+          <VesselTrackingButton process={process} />
+        </div>
+      ) : null}
     </DetailBlock>
   )
 }

@@ -225,6 +225,7 @@
       "updatedAt",
       "updatedById",
       "updatedByName",
+      "vesselImo",
       "vesselName",
       "volumeM3",
       "voyage",

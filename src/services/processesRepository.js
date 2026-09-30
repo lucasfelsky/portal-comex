@@ -27,6 +27,7 @@ import {
   isCollectionReleased,
 } from '../features/processes/deriveProcessStatus'
 import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
+import { isValidVesselImo, normalizeVesselImo } from '../features/processes/vesselTracking'
 import {
   EMPTY_CUSTOMS_CLEARANCE_FIELDS,
   hasArrivalSignal,
@@ -400,6 +401,7 @@ function sanitizeCargoAndTransitFields(process) {
     transshipmentEtd: transshipment ? normalizeIsoDate(process.transshipmentEtd) : '',
     vesselName: isMaritime ? String(process.vesselName ?? '').trim() : '',
     voyage: isMaritime ? String(process.voyage ?? '').trim() : '',
+    vesselImo: isMaritime && isValidVesselImo(process.vesselImo) ? normalizeVesselImo(process.vesselImo) : '',
     masterBl: isMaritime ? String(process.masterBl ?? '').trim() : '',
     houseBl: isMaritime ? String(process.houseBl ?? '').trim() : '',
     flightNumber: isAir ? String(process.flightNumber ?? '').trim() : '',
@@ -604,6 +606,7 @@ function normalizeProcess(rawProcess, fallbackId) {
     transshipmentPort: rawProcess.transshipmentPort,
     vesselName: rawProcess.vesselName,
     voyage: rawProcess.voyage,
+    vesselImo: rawProcess.vesselImo,
     masterBl: rawProcess.masterBl,
     houseBl: rawProcess.houseBl,
     flightNumber: rawProcess.flightNumber,
@@ -750,6 +753,7 @@ function toFirestorePayload(process) {
     transshipmentPort: process.transshipmentPort,
     vesselName: process.vesselName,
     voyage: process.voyage,
+    vesselImo: process.vesselImo,
     masterBl: process.masterBl,
     houseBl: process.houseBl,
     flightNumber: process.flightNumber,

@@ -156,7 +156,7 @@ describe('audit-vault-counts', () => {
       const result = runScript()
       expect(isAuditFailure(result)).toBe(false)
       expect(result.stdout).toMatch(/firestore\.rules isAllowedSelfUserUpdate\(\) = 9 campos/)
-      expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 80 campos/)
+      expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 81 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isLogisticsCollectionStatusUpdate\(\) = 10 campos/)
       expect(result.stdout).toMatch(/src\/App\.jsx rotas = 16/)
       expect(result.stdout).toMatch(/declaredDependencies = \d+ \(todas instaladas\)/)

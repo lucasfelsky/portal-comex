@@ -151,6 +151,7 @@ const emptyDraft = () => ({
   shippedAt: '',
   vesselName: '',
   voyage: '',
+  vesselImo: '',
   flightNumber: '',
   masterBl: '',
   houseBl: '',

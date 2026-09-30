@@ -144,7 +144,9 @@ service cloud.firestore {
     // processes: 61 campos gravados pelo `toFirestorePayload()`
     // (src/services/processesRepository.js). setDoc usado com
     // `merge: true` para create E update, entao ambos compartilham a
-    // mesma allowlist. `createdById/Name/createdAt` e
+    // mesma allowlist. `vesselImo` (IMO do navio, rastreio): string de 7
+    // digitos ou '' - formato garantido aqui, digito verificador so no app.
+    // `createdById/Name/createdAt` e
     // `customsFlow/mapaFlow/operationalFields` da Colecoes.md NAO sao
     // gravados pelo app (sao campos-fantasma da vault).
     //
@@ -233,7 +235,7 @@ service cloud.firestore {
         // F17.2a (D-1/D-10): identificacao, carga por modal, containers[],
         // BL/AWB, navio/viagem/voo, transbordo, carga perigosa, shippedAt.
         'supplierName', 'originLocation', 'incoterm', 'forwarderName',
-        'unNumber', 'imoClass', 'shippedAt', 'vesselName', 'voyage',
+        'unNumber', 'imoClass', 'shippedAt', 'vesselName', 'voyage', 'vesselImo',
         'flightNumber', 'masterBl', 'houseBl', 'mawb', 'hawb',
         'transshipmentPort', 'dangerousGoods', 'transshipment',
         'grossWeightKg', 'volumeM3', 'chargeableWeightKg',
@@ -285,6 +287,12 @@ service cloud.firestore {
         || (
           request.resource.data.migratedApproxFields is list
           && request.resource.data.migratedApproxFields.size() <= 10
+        )
+      ) && (
+        !('vesselImo' in request.resource.data)
+        || (
+          request.resource.data.vesselImo is string
+          && request.resource.data.vesselImo.matches('^([0-9]{7})?$')
         )
       );
     }

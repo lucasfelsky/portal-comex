@@ -327,6 +327,27 @@ describe('getProcessFieldStep', () => {
   })
 })
 
+describe('validateProcessDraft - vesselImo', () => {
+  it('FCL com IMO invalido -> erro, firstKey e passo shipment', () => {
+    const { errors, firstKey } = validateProcessDraft(baseDraft({ vesselImo: '9787028' }))
+    expect(errors.vesselImo).toMatch(/IMO inválido/)
+    expect(firstKey).toBe('vesselImo')
+    expect(getProcessFieldStep('vesselImo')).toBe('shipment')
+  })
+
+  it('IMO valido, com prefixo ou vazio -> sem erro', () => {
+    expect(validateProcessDraft(baseDraft({ vesselImo: '9787027' })).errors.vesselImo).toBeUndefined()
+    expect(validateProcessDraft(baseDraft({ vesselImo: 'IMO 9787027' })).errors.vesselImo).toBeUndefined()
+    expect(validateProcessDraft(baseDraft({ vesselImo: '' })).errors.vesselImo).toBeUndefined()
+  })
+
+  it('AEREO com lixo no IMO -> sem erro (o repositorio zera)', () => {
+    expect(
+      validateProcessDraft(baseDraft({ category: 'AEREO', vesselImo: 'lixo' })).errors.vesselImo
+    ).toBeUndefined()
+  })
+})
+
 describe('getProcessFieldDomId', () => {
   it('prefixa "process-field-"', () => {
     expect(getProcessFieldDomId('etd')).toBe('process-field-etd')

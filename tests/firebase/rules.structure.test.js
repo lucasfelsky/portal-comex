@@ -242,6 +242,15 @@ describe('firestore.rules structure', () => {
       }
     })
 
+    it('isAdminProcessFields contem vesselImo e guarda o formato (string, 7 digitos ou vazio)', () => {
+      const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/['"]vesselImo['"]/)
+      expect(body).toMatch(/vesselImo\s+is\s+string/)
+      expect(body).toMatch(/vesselImo\.matches\(/)
+    })
+
     it('isAdminProcessFields guarda o shape de containers (list, size <= 40)', () => {
       const match = rules.match(/function\s+isAdminProcessFields\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
       expect(match).not.toBeNull()
