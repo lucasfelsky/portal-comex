@@ -43,7 +43,11 @@ import {
   normalizeCollectionWindows,
   serializeCollectionWindowsForFirestore,
 } from '../utils/collectionWindows'
-import { normalizeContainers, linkCollectionWindowsToContainers } from '../features/processes/containers'
+import {
+  normalizeContainers,
+  linkCollectionWindowsToContainers,
+  matchesContainerSearch,
+} from '../features/processes/containers'
 import { normalizeReceiptDivergenceFields } from '../features/processes/receiptDivergence'
 import {
   canSeePurchaseOrderDetails,
@@ -1272,7 +1276,7 @@ export async function searchProcesses(rawQuery, { canSeeName = false } = {}) {
     ]
       .join(' ')
       .toLowerCase()
-    return haystack.includes(q)
+    return haystack.includes(q) || matchesContainerSearch(process.containers, q)
   })
 
   return matches.slice(0, 8)

@@ -308,6 +308,17 @@ export function isContainerRemovalLocked(containerId, windows) {
   )
 }
 
+// 2026-09-30 (Lucas): a busca da fila acha o processo pelo numero de qualquer
+// conteiner, ignorando espacos, traco e maiusculas ("MSKU 482193-0" ==
+// "msku4821930"); aceita trecho com 4+ caracteres.
+export function matchesContainerSearch(containers, query) {
+  const needle = String(query ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (needle.length < 4) return false
+  return (Array.isArray(containers) ? containers : []).some((container) =>
+    String(container?.number ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').includes(needle)
+  )
+}
+
 // D-2/D-7: badges especiais distintos, ordem fixa (Reefer, ISO tank).
 export function getContainerSpecialBadges(containers) {
   const types = new Set((Array.isArray(containers) ? containers : []).map((container) => container?.type))
