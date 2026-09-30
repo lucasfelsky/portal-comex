@@ -119,6 +119,54 @@ function getDefinition(label) {
   return screen.getByText(label, { selector: 'dt' }).nextElementSibling
 }
 
+describe('ProcessDetailView — Rastrear navio', () => {
+  it('FCL com nome + IMO abre modal com iframe e links externos', async () => {
+    const user = userEvent.setup()
+    renderDetail({
+      selectedProcess: makeProcess({ category: 'FCL', vesselName: 'EVER BLOOM', vesselImo: '9787027' }),
+    })
+    await user.click(screen.getByRole('button', { name: 'Rastrear navio' }))
+    const dialog = screen.getByRole('dialog')
+    const iframe = dialog.querySelector('iframe')
+    expect(iframe.getAttribute('src')).toContain('imo=9787027')
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-popups')
+    const vf = within(dialog).getByRole('link', { name: 'Abrir no VesselFinder' })
+    expect(vf).toHaveAttribute('href', 'https://www.vesselfinder.com/vessels/details/9787027')
+    expect(vf).toHaveAttribute('target', '_blank')
+    expect(vf).toHaveAttribute('rel', 'noopener noreferrer')
+    const mt = within(dialog).getByRole('link', { name: 'Abrir no MarineTraffic' })
+    expect(mt).toHaveAttribute('href', 'https://www.marinetraffic.com/en/ais/details/ships/imo:9787027')
+    expect(mt).toHaveAttribute('target', '_blank')
+    expect(mt).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('LCL so com nome vira link de busca em nova aba', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'LCL', vesselName: 'EVER BLOOM' }) })
+    const link = screen.getByRole('link', { name: 'Rastrear navio' })
+    expect(link).toHaveAttribute(
+      'href',
+      `https://www.vesselfinder.com/vessels?name=${encodeURIComponent('EVER BLOOM')}`
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('AEREO nao mostra o botao', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'AEREO', flightNumber: 'LA123' }) })
+    expect(screen.queryByText('Rastrear navio')).toBeNull()
+  })
+
+  it('FCL so com IMO mostra o bloco, a linha IMO e o botao', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'FCL', vesselImo: '9787027' }) })
+    expect(getDefinition('IMO do navio')).toHaveTextContent('9787027')
+    expect(screen.getByRole('button', { name: 'Rastrear navio' })).toBeInTheDocument()
+  })
+
+  it('FCL sem nome nem IMO nao mostra o botao', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'FCL', masterBl: 'MBL1' }) })
+    expect(screen.queryByText('Rastrear navio')).toBeNull()
+  })
+})
+
 describe('ProcessDetailView — card "Transportadora" (aba Processo)', () => {
   it('coleta agendada + carrierName preenchido: mostra rótulo e valor', () => {
     renderDetail({

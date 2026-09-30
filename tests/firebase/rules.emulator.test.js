@@ -520,7 +520,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       )
     })
 
-    it('admin cria processo com todos os 77 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b/F17.2d-1)', async () => {
+    it('admin cria processo com todos os 78 campos validos (F17.2a/F17.2b/F17.2c/F17.3a/F17.3b/F17.2d-1)', async () => {
       const db = admin('admin-1')
       await assertSucceeds(
         setDoc(doc(db, 'processes/p6'), {
@@ -563,6 +563,7 @@ describeEmulator('firestore.rules (emulador)', () => {
           shippedAt: '',
           vesselName: '',
           voyage: '',
+          vesselImo: '',
           flightNumber: '',
           masterBl: '',
           houseBl: '',
@@ -1012,6 +1013,52 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(
         updateDoc(doc(db, 'processes/p18'), {
           shippedAt: '2026-09-20',
+          updatedById: 'log-1',
+          updatedByName: 'Logistica',
+        })
+      )
+    })
+
+    // IMO do navio (rastreio): admin-only, string de 7 digitos ou ''.
+    it('admin atualiza vesselImo valido e vazio', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/pimo1'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/pimo1'), {
+          vesselImo: '9787027',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+      await assertSucceeds(
+        updateDoc(doc(db, 'processes/pimo1'), {
+          vesselImo: '',
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    })
+
+    it('admin NAO grava vesselImo fora do formato (6 digitos, prefixo IMO, numero)', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/pimo2'), { name: 'Orig', category: 'FCL' }))
+      const db = admin('admin-1')
+      for (const value of ['978702', 'IMO 9787027', 9787027]) {
+        await assertFails(
+          updateDoc(doc(db, 'processes/pimo2'), {
+            vesselImo: value,
+            updatedById: 'admin-1',
+            updatedByName: 'Admin',
+          })
+        )
+      }
+    })
+
+    it('logistica NAO atualiza vesselImo', async () => {
+      await seed((db) => setDoc(doc(db, 'processes/pimo3'), { name: 'Orig', category: 'FCL' }))
+      const db = logistics('log-1')
+      await assertFails(
+        updateDoc(doc(db, 'processes/pimo3'), {
+          vesselImo: '9787027',
           updatedById: 'log-1',
           updatedByName: 'Logistica',
         })

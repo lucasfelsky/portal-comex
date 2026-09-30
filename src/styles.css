@@ -12340,3 +12340,33 @@ body {
     flex-basis: 100%;
   }
 }
+
+/* Rastreio de navio: acoes do bloco "Embarque e transito" + moldura do iframe. */
+.process-transit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.vessel-tracking__frame iframe {
+  display: block;
+  width: 100%;
+  height: min(420px, 60vh);
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.vessel-tracking__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .process-transit__actions,
+  .vessel-tracking__links {
+    justify-content: center;
+  }
+}

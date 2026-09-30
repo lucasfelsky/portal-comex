@@ -4,7 +4,7 @@
 //
 // Regra de import (D1, mesma logica de `containers.js`/`licenses.js`):
 // SO' `./operationalOptions`, `./containers`, `./licenses`,
-// `./purchaseOrders`, `./arrivalCustoms` - nenhum importa nada, nenhum e'
+// `./purchaseOrders`, `./arrivalCustoms`, `./vesselTracking` - nenhum importa nada, nenhum e'
 // mockado em `tests/ui/ProcessesPage.test.jsx`. Categoria e' comparada por
 // string literal (NAO importar `processCategories.js`, que o teste mocka).
 
@@ -13,6 +13,7 @@ import { MAX_CONTAINERS } from './containers'
 import { MAX_LICENSES } from './licenses'
 import { MAX_PURCHASE_ORDERS } from './purchaseOrders'
 import { FREE_TIME_CATEGORIES } from './arrivalCustoms'
+import { isValidVesselImo } from './vesselTracking'
 
 // Mesma ordem visual dos 6 passos fixos do wizard (UX-6b-1, `ProcessForm.jsx`).
 const STEP_ORDER = ['ident', 'shipment', 'cargo', 'arrival', 'collection', 'items']
@@ -23,6 +24,7 @@ const STATIC_FIELD_STEPS = {
   etd: 'shipment',
   eta: 'shipment',
   transshipmentEtd: 'shipment',
+  vesselImo: 'shipment',
   containers: 'cargo',
   volumeM3: 'cargo',
   grossWeightKg: 'cargo',
@@ -149,6 +151,12 @@ export function validateProcessDraft(draft) {
   }
 
   // ---- shipment ----
+  if (
+    (category === 'FCL' || category === 'LCL' || category === 'CONSOLIDADO') &&
+    !isValidVesselImo(draft?.vesselImo)
+  ) {
+    setError('vesselImo', 'IMO inválido: informe os 7 dígitos do navio (ex.: 9787027).')
+  }
   checkDate('etd', draft?.etd)
   checkDate('eta', draft?.eta)
   if (draft?.transshipment === true) {

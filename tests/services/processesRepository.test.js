@@ -722,6 +722,25 @@ describe('F17.2a - containers[]/campos de embarque e transito (D-4/D-5)', () => 
     expect(payload.transshipmentPort).toBe('')
   })
 
+  it('vesselImo: FCL normaliza "IMO 9787027"; AEREO e IMO invalido gravam ""', async () => {
+    await saveProcess(baseMaritimeProcess({ vesselImo: 'IMO 9787027' }))
+    expect(mockSetDoc.mock.calls[0][1].vesselImo).toBe('9787027')
+
+    mockSetDoc.mockClear()
+    await saveProcess(baseAirProcess({ vesselImo: '9787027' }))
+    expect(mockSetDoc.mock.calls[0][1].vesselImo).toBe('')
+
+    mockSetDoc.mockClear()
+    await saveProcess(baseMaritimeProcess({ vesselImo: '9787028' }))
+    expect(mockSetDoc.mock.calls[0][1].vesselImo).toBe('')
+
+    mockSetDoc.mockClear()
+    await saveProcess(baseMaritimeProcess())
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload).toHaveProperty('vesselImo')
+    expect(payload.vesselImo).toBe('')
+  })
+
   it('payload contem as 22 chaves novas e nenhuma undefined', async () => {
     await saveProcess(baseMaritimeProcess())
 
