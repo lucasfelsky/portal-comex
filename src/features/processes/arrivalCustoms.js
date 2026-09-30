@@ -382,6 +382,22 @@ function toLocalDateKey(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }
 
+// Decisao 2026-09-30: `returnedAt` futuro = devolucao PREVISTA (free time segue
+// contando); so' data <= hoje conta como devolvido. Modulo sem imports:
+// espelha `isContainerReturned` de `containers.js`.
+function isReturnedOnOrBefore(container, todayKey) {
+  const value = container?.returnedAt
+  let key = ''
+  if (typeof value === 'string') {
+    const match = value.match(/^\d{4}-\d{2}-\d{2}/)
+    key = match ? match[0] : ''
+  } else if (value && typeof value.toDate === 'function') {
+    const date = value.toDate()
+    if (!Number.isNaN(date.getTime())) key = toLocalDateKey(date)
+  }
+  return key !== '' && key <= todayKey
+}
+
 // D-1 (A1): prazo de devolucao do vazio conta da PRESENCA DE CARGA (nao da
 // atracacao). So' FCL/CONSOLIDADO (`FREE_TIME_CATEGORIES`).
 export function getFreeTimeStatus(process, today = new Date()) {
@@ -400,7 +416,8 @@ export function getFreeTimeStatus(process, today = new Date()) {
   }
 
   const containers = Array.isArray(process?.containers) ? process.containers : []
-  if (containers.length > 0 && containers.every((container) => hasDateValue(container?.returnedAt))) {
+  const todayKey = toLocalDateKey(today)
+  if (containers.length > 0 && containers.every((container) => isReturnedOnOrBefore(container, todayKey))) {
     return { state: 'closed', deadlineKey: null, daysRemaining: null }
   }
 

@@ -809,6 +809,19 @@ describe('ProcessDetailView — divergência no recebimento / devolução de vaz
     })
     expect(screen.getByText(/Devolvido em 10\/09\/2026/)).toBeInTheDocument()
   })
+
+  it('container com returnedAt futuro mostra "Devolução prevista para" e nao "Devolvido em"', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        containers: [
+          { id: 'CNT-1', number: 'CSQU3054383', seal: 'L1', type: '40DC', returnedAt: '2999-01-15' },
+        ],
+      }),
+    })
+    expect(screen.getByText('Devolução prevista para 15/01/2999')).toBeInTheDocument()
+    expect(screen.queryByText(/Devolvido em/)).not.toBeInTheDocument()
+  })
 })
 
 describe('ProcessDetailView — plural de mensagens (aba Mensagens)', () => {

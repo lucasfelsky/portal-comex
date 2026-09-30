@@ -150,6 +150,21 @@ describe('ProcessDocumentsPanel — (c) lavação', () => {
   })
 })
 
+describe('ProcessDocumentsPanel — lavação com devolução prevista', () => {
+  it('returnedAt futuro -> subtitulo "devolução prevista para" e nao fica pendente', async () => {
+    const plannedProcess = {
+      ...FCL_PROCESS,
+      containers: [{ id: 'CNT-1', number: 'MSCU1234567', returnedAt: '2999-01-15' }],
+    }
+    render(<ProcessDocumentsPanel process={plannedProcess} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.getByText(/devolução prevista para 15\/01\/2999/)).toBeInTheDocument()
+    expect(screen.queryByText(/nenhum relatório enviado/)).not.toBeInTheDocument()
+    expect(screen.getByText('Ainda não exigido')).toBeInTheDocument()
+  })
+})
+
 // (d) logistica: upload so nas linhas de lavacao; cadeado nas demais; Excluir so no proprio.
 describe('ProcessDocumentsPanel — (d) logística', () => {
   it('botao de envio so nas linhas de lavacao; cadeado nas demais; Excluir so do proprio uid', async () => {

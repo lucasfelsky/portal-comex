@@ -127,6 +127,30 @@ function normalizeReturnedAt(value) {
   return ''
 }
 
+// Decisao 2026-09-30: o MESMO `returnedAt` (data pura) significa "devolucao
+// prevista" enquanto a data for FUTURA (> hoje) e "devolvido" quando for hoje
+// ou passada. `todayKey` = data LOCAL `YYYY-MM-DD` (NUNCA `toISOString()`).
+export function getLocalTodayKey(now = new Date()) {
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function getReturnedAtKey(container) {
+  const key = normalizeReturnedAt(container?.returnedAt)
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : ''
+}
+
+export function isContainerReturned(container, todayKey = getLocalTodayKey()) {
+  const key = getReturnedAtKey(container)
+  return key !== '' && key <= todayKey
+}
+
+export function isContainerReturnPlanned(container, todayKey = getLocalTodayKey()) {
+  const key = getReturnedAtKey(container)
+  return key !== '' && key > todayKey
+}
+
 function normalizeContainerEntry(rawContainer, index) {
   const id =
     typeof rawContainer?.id === 'string' && rawContainer.id.trim()

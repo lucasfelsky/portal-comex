@@ -620,8 +620,8 @@ describe('ProcessForm — bugs 2 e 3 (passo Coleta)', () => {
   })
 })
 
-// F17.4b (B-7, D6): devolucao de vazio - so' admin, so' FCL/CONSOLIDADO
-// apos "Carga recebida" (derivado por `collectionStatus` pos-recebimento).
+// F17.4b (B-7, D6): devolucao de vazio - so' admin, so' FCL/CONSOLIDADO,
+// desde "Aguardando agendamento de coleta" (2026-09-30; antes so' apos recebido).
 // UX-6b-1: vive no passo "Coleta".
 describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
   function receivedDraft(overrides = {}) {
@@ -690,12 +690,39 @@ describe('ProcessForm — EmptyReturnFields (F17.4b)', () => {
     expect(screen.queryByText('Devolução do vazio')).not.toBeInTheDocument()
   })
 
-  it('FCL em "Coleta Agendada" (nao recebido) -> sem o bloco', async () => {
+  // 2026-09-30: a devolucao e' agendada junto com a coleta -> o bloco aparece
+  // desde "Aguardando agendamento de coleta".
+  it('FCL liberado aguardando agendamento de coleta ja mostra o bloco', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft({ collectionStatus: '' }),
+    })
+    await openCollectionStep(user)
+
+    expect(screen.getByText('Devolução do vazio')).toBeInTheDocument()
+    expect(screen.getByLabelText('CSQU3054383')).toBeInTheDocument()
+  })
+
+  it('FCL em "Coleta Agendada" (nao recebido) tambem mostra o bloco', async () => {
     const user = userEvent.setup()
     renderForm({
       viewMode: 'edit',
       canShowMaritimeFlow: true,
       draft: receivedDraft({ collectionStatus: 'Coleta Agendada' }),
+    })
+    await openCollectionStep(user)
+
+    expect(screen.getByText('Devolução do vazio')).toBeInTheDocument()
+  })
+
+  it('FCL ainda sem liberacao da carga -> sem o bloco', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      viewMode: 'edit',
+      canShowMaritimeFlow: true,
+      draft: receivedDraft({ collectionStatus: '', duimpStatus: '', parameterizationChannel: '' }),
     })
     await openCollectionStep(user)
 
@@ -887,8 +914,11 @@ describe('ProcessForm — purchaseOrders/janelas por container (F17.2c/F17.2d-2)
       }),
     })
     await openCollectionStep(user)
-    expect(screen.getByText('CSQU3054383')).toBeInTheDocument()
-    expect(screen.getByText('MSCU1234566')).toBeInTheDocument()
+    // Escopado no editor de janelas: desde 2026-09-30 o bloco "Devolucao do
+    // vazio" tambem lista os conteineres em "Coleta Agendada".
+    const windowsEditor = document.querySelector('.collection-windows-editor')
+    expect(within(windowsEditor).getByText('CSQU3054383')).toBeInTheDocument()
+    expect(within(windowsEditor).getByText('MSCU1234566')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Adicionar container' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Adicionar primeira janela' })).not.toBeInTheDocument()
     expect(screen.queryByText('Contêiner')).not.toBeInTheDocument()

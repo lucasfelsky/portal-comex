@@ -127,6 +127,23 @@ describe('getFreeTimeStatusMirror - paridade com getFreeTimeStatus (front)', () 
   }
 })
 
+describe('getFreeTimeStatusMirror - devolucao prevista (returnedAt futuro)', () => {
+  const base = {
+    category: 'FCL',
+    freeTimeDays: 7,
+    cargoPresenceInformedAt: '2026-09-20T10:00',
+    containers: [{ id: 'CNT-1', returnedAt: '2026-09-25' }],
+  }
+
+  it('returnedAt futuro nao fecha o free time', () => {
+    expect(getFreeTimeStatusMirror(base, '2026-09-24').state).toBe('running')
+  })
+
+  it('returnedAt hoje fecha', () => {
+    expect(getFreeTimeStatusMirror(base, '2026-09-25').state).toBe('closed')
+  })
+})
+
 describe('buildOperationalAlerts', () => {
   const TODAY_KEY = '2026-09-24'
   const CLEARANCE_OVERDUE_DAYS = 3

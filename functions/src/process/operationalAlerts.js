@@ -107,6 +107,21 @@ function hasCargoPresenceSignalLocal(process) {
 // Espelho de `getFreeTimeStatus` (`arrivalCustoms.js`) recebendo a CHAVE do
 // dia (`todayKey`) em vez de um `Date`. Teste de paridade em
 // `tests/unit/operationalAlerts.test.js`.
+// Decisao 2026-09-30: `returnedAt` futuro = devolucao prevista (nao fecha o
+// free time); so' data <= hoje (`todayKey`, fuso de Sao Paulo) conta.
+function isReturnedOnOrBeforeMirror(container, todayKey) {
+  const value = container?.returnedAt
+  let key = ''
+  if (typeof value === 'string') {
+    const match = value.match(/^\d{4}-\d{2}-\d{2}/)
+    key = match ? match[0] : ''
+  } else if (value && typeof value.toDate === 'function') {
+    const date = value.toDate()
+    key = date instanceof Date && !Number.isNaN(date.getTime()) ? getSaoPauloDateKey(date) : ''
+  }
+  return key !== '' && key <= todayKey
+}
+
 export function getFreeTimeStatusMirror(process, todayKey) {
   if (!FREE_TIME_CATEGORIES_MIRROR.includes(process?.category)) return null
 
@@ -123,7 +138,7 @@ export function getFreeTimeStatusMirror(process, todayKey) {
   }
 
   const containers = Array.isArray(process?.containers) ? process.containers : []
-  if (containers.length > 0 && containers.every((container) => hasDateValueMirror(container?.returnedAt))) {
+  if (containers.length > 0 && containers.every((container) => isReturnedOnOrBeforeMirror(container, todayKey))) {
     return { state: 'closed', deadlineKey: null, daysRemaining: null }
   }
 

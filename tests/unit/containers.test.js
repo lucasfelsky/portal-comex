@@ -13,6 +13,8 @@ import {
   getContainerSpecialBadges,
   getContainerWindowRows,
   isContainerRemovalLocked,
+  isContainerReturnPlanned,
+  isContainerReturned,
   isOrphanCollectionWindow,
   linkCollectionWindowsToContainers,
   normalizeContainerNumber,
@@ -354,5 +356,27 @@ describe('isContainerRemovalLocked (D-10, Q8)', () => {
   it('sem janelas -> false', () => {
     expect(isContainerRemovalLocked('CNT-1', [])).toBe(false)
     expect(isContainerRemovalLocked('CNT-1', undefined)).toBe(false)
+  })
+})
+
+describe('isContainerReturned / isContainerReturnPlanned (devolucao prevista vs devolvido)', () => {
+  const today = '2026-09-30'
+  const cases = [
+    ['ontem', '2026-09-29', true, false],
+    ['hoje', '2026-09-30', true, false],
+    ['amanha', '2026-10-01', false, true],
+    ['vazio', '', false, false],
+    ['invalido', 'lixo', false, false],
+  ]
+  for (const [label, returnedAt, returned, planned] of cases) {
+    it(`${label}: returned=${returned}, planned=${planned}`, () => {
+      expect(isContainerReturned({ returnedAt }, today)).toBe(returned)
+      expect(isContainerReturnPlanned({ returnedAt }, today)).toBe(planned)
+    })
+  }
+
+  it('container ausente/sem returnedAt -> nenhum dos dois', () => {
+    expect(isContainerReturned(null, today)).toBe(false)
+    expect(isContainerReturnPlanned({}, today)).toBe(false)
   })
 })
