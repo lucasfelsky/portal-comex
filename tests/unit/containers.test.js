@@ -17,6 +17,7 @@ import {
   isContainerReturned,
   isOrphanCollectionWindow,
   linkCollectionWindowsToContainers,
+  matchesContainerSearch,
   normalizeContainerNumber,
   normalizeContainers,
   validateContainerNumber,
@@ -378,5 +379,22 @@ describe('isContainerReturned / isContainerReturnPlanned (devolucao prevista vs 
   it('container ausente/sem returnedAt -> nenhum dos dois', () => {
     expect(isContainerReturned(null, today)).toBe(false)
     expect(isContainerReturnPlanned({}, today)).toBe(false)
+  })
+})
+
+describe('matchesContainerSearch', () => {
+  const containers = [{ number: 'MSKU4821930' }, { number: 'TGHU7710253' }]
+  it('ignora espaco, traco e maiusculas', () => {
+    expect(matchesContainerSearch(containers, 'msku 482193-0')).toBe(true)
+    expect(matchesContainerSearch(containers, 'TGHU 771025-3')).toBe(true)
+  })
+  it('aceita trecho com 4+ caracteres', () => {
+    expect(matchesContainerSearch(containers, '7710')).toBe(true)
+    expect(matchesContainerSearch(containers, '771')).toBe(false)
+  })
+  it('sem conteiner ou sem match: false', () => {
+    expect(matchesContainerSearch([], 'MSKU4821930')).toBe(false)
+    expect(matchesContainerSearch(undefined, 'MSKU4821930')).toBe(false)
+    expect(matchesContainerSearch(containers, 'ZZZU9999999')).toBe(false)
   })
 })

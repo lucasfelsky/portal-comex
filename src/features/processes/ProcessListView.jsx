@@ -427,7 +427,7 @@ export default function ProcessListView({
             type="text"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
-            placeholder="Buscar processo, PO, produto…"
+            placeholder="Buscar processo, PO, produto, contêiner…"
             aria-label="Buscar processo"
           />
         </label>
@@ -472,7 +472,7 @@ export default function ProcessListView({
             type="text"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
-            placeholder="Nome, item, destino, categoria, PO, ETA, ETD, status ou ID"
+            placeholder="Nome, item, contêiner, destino, categoria, PO, ETA, ETD, status ou ID"
           />
         </label>
         <label className="field field--compact">

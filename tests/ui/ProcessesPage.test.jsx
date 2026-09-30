@@ -327,6 +327,56 @@ describe('ProcessesPage — busca por PO do CONSOLIDADO mascarada (F17.2d-2)', (
   })
 })
 
+// 2026-09-30: busca pelo numero de um dos conteineres do processo.
+describe('ProcessesPage — busca por contêiner', () => {
+  const WITH_CONTAINERS = {
+    id: 'p-cnt',
+    name: 'Processo Conteiner Zeta',
+    processNumber: 'PO 55555',
+    category: 'FCL',
+    status: 'Em Andamento',
+    collectionStatus: 'Aguardando',
+    channel: 'Maritima',
+    destination: 'Itajai',
+    eta: '2026-07-20',
+    containers: [
+      { id: 'CNT-1', number: 'MSKU4821930', seal: '', type: '40HC', returnedAt: '' },
+      { id: 'CNT-2', number: 'TGHU7710253', seal: '', type: '40HC', returnedAt: '' },
+    ],
+  }
+
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    mockListProcesses.mockResolvedValue([...PROCESSES, WITH_CONTAINERS])
+  })
+
+  async function search(text) {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], text)
+  }
+
+  it('acha pelo numero do segundo conteiner, com espaco e traco', async () => {
+    await search('TGHU 771025-3')
+    await waitFor(() => {
+      expect(screen.getByText('Processo Conteiner Zeta')).toBeInTheDocument()
+      expect(screen.queryByText(/PO 67890/)).not.toBeInTheDocument()
+    })
+  })
+
+  it('acha por trecho do numero em minusculas', async () => {
+    await search('msku482')
+    await waitFor(() => expect(screen.getByText('Processo Conteiner Zeta')).toBeInTheDocument())
+  })
+
+  it('numero que nao existe nao traz o processo', async () => {
+    await search('ZZZU9999999')
+    await waitFor(() => expect(screen.queryByText('Processo Conteiner Zeta')).not.toBeInTheDocument())
+  })
+})
+
 // UX-3a: guarda de alteracoes nao salvas no criar/editar processo.
 describe('ProcessesPage — guarda de alteracoes nao salvas (UX-3a)', () => {
   beforeEach(() => {

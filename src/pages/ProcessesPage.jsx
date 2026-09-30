@@ -63,6 +63,7 @@ import {
   getPurchaseOrderSearchTerms,
   normalizePurchaseOrders,
 } from '../features/processes/purchaseOrders'
+import { matchesContainerSearch } from '../features/processes/containers'
 import { applyEtdEdit, applyShipmentConfirmation } from '../features/processes/shipmentConfirmation'
 import { resolveProcessDangerousGoods } from '../features/processes/operationalOptions'
 import {
@@ -675,7 +676,7 @@ export default function ProcessesPage() {
         ]
           .join(' ')
           .toLowerCase()
-          .includes(query) || matchesItemName
+          .includes(query) || matchesItemName || matchesContainerSearch(item.containers, query)
       })
       .sort((left, right) => {
         if (!left.eta && !right.eta) return 0

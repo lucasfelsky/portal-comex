@@ -985,6 +985,29 @@ describe('F17.2c/F17.2d-2 - purchaseOrders[]/items[].poNumber/collectionWindows[
   })
 })
 
+// 2026-09-30: a busca rapida (Ctrl+K) tambem acha pelo numero de conteiner.
+describe('searchProcesses - numero de conteiner', () => {
+  it('acha pelo numero de um dos conteineres, com espaco e traco', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-cnt',
+          data: () => ({
+            id: 'p-cnt',
+            name: 'Processo Zeta',
+            category: 'FCL',
+            processNumber: 'FCL-9',
+            containers: [{ id: 'CNT-1', number: 'MSKU4821930' }, { id: 'CNT-2', number: 'TGHU7710253' }],
+          }),
+        },
+      ],
+    })
+
+    expect(await searchProcesses('TGHU 771025-3')).toHaveLength(1)
+    expect(await searchProcesses('ZZZU9999999')).toHaveLength(0)
+  })
+})
+
 // F17.2d-2 (AD-1): `searchProcesses` mascara `name` de categoria restrita
 // (isRestrictedCategory) e referencia/fornecedor da PO do CONSOLIDADO.
 describe('F17.2d-2 - searchProcesses mascarado (AD-1)', () => {
