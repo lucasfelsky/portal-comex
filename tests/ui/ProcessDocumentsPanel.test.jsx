@@ -233,6 +233,25 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
     purchaseOrders: [{ po: 'PO-1' }, { po: 'PO-2' }],
   }
 
+  it('mostra o nome do processo (Referencia da PO) no lugar do numero, com a PO embaixo', async () => {
+    render(
+      <ProcessDocumentsPanel
+        process={{ ...CONSOLIDATED_PROCESS, purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-2' }, { po: 'PO-12345', reference: 'GOOYER SEA 158-26' }] }}
+        profile={ADMIN_PROFILE}
+      />
+    )
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledWith('p2'))
+    const table = screen.getByRole('table')
+    const header = within(table).getByText('BLUESKY SEA 003-26').closest('th')
+    expect(header).toHaveAttribute('scope', 'row')
+    expect(within(header).getByText('PO 5093')).toBeInTheDocument()
+    expect(within(table).getByText('PO-2', { selector: 'th' })).toBeInTheDocument()
+    // sem prefixo duplicado quando a PO ja' vem como 'PO-...'
+    const prefixed = within(table).getByText('GOOYER SEA 158-26').closest('th')
+    expect(within(prefixed).getByText('PO-12345')).toBeInTheDocument()
+    expect(within(prefixed).queryByText('PO PO-12345')).not.toBeInTheDocument()
+  })
+
   it('renderiza table com cabecalhos PO/Invoice/Packing List sem combobox; upload da PO-2 repassa po', async () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
@@ -240,7 +259,7 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
     await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledWith('p2'))
 
     const table = screen.getByRole('table')
-    expect(within(table).getByText('PO')).toBeInTheDocument()
+    expect(within(table).getByText('Processo', { selector: 'th' })).toBeInTheDocument()
     expect(within(table).getByText('Invoice')).toBeInTheDocument()
     expect(within(table).getByText('Packing List')).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
