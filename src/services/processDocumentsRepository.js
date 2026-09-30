@@ -11,6 +11,8 @@ import {
   getDocs,
   serverTimestamp,
   setDoc,
+  updateDoc,
+  writeBatch,
 } from 'firebase/firestore/lite'
 import { deleteObject, ref, uploadBytes } from 'firebase/storage'
 import { auth, firebaseConfig, firestore, isFirebaseConfigured, storage } from '../lib/firebase'
@@ -61,6 +63,7 @@ function normalizeDocument(rawDocument, fallbackId) {
     uploadedById: String(rawDocument?.uploadedById ?? ''),
     uploadedByName: repairTextEncoding(String(rawDocument?.uploadedByName ?? '')),
     uploadedByRole: String(rawDocument?.uploadedByRole ?? ''),
+    alsoPackingList: rawDocument?.alsoPackingList === true,
   }
 }
 
@@ -101,7 +104,7 @@ function buildStoragePath(processId, type, { itemId, containerId, po, uid, fileN
  */
 export async function uploadProcessDocument(
   processId,
-  { type, file, itemId, containerId, description, po, category, actor } = {}
+  { type, file, itemId, containerId, description, po, category, alsoPackingList, actor } = {}
 ) {
   if (!isFirebaseConfigured || !firestore || !storage) {
     throw new Error('Documentos disponíveis apenas com o Firebase configurado.')
@@ -149,6 +152,7 @@ export async function uploadProcessDocument(
 
     if (type === 'fispq') payload.itemId = itemId
     if (type === 'containerWash') payload.containerId = containerId
+    if (type === 'invoice' && alsoPackingList === true) payload.alsoPackingList = true
     if (type === 'other') payload.description = repairTextEncoding(normalizeStringValue(description))
     if ((type === 'invoice' || type === 'packingList') && category === 'CONSOLIDADO') {
       payload.poNumber = po
@@ -165,9 +169,35 @@ export async function uploadProcessDocument(
 
 // A exclusao do ARQUIVO fica a cargo do trigger `deleteProcessDocumentFile`
 // (D7) - aqui so apagamos o metadado (imutavel, mas deletavel).
-export async function deleteProcessDocument(processId, documentId) {
+// `unlinkPreviousId`: ao excluir a Invoice atual cuja versao anterior tem
+// `alsoPackingList`, desfaz o vinculo da anterior NO MESMO batch (atomico:
+// se a exclusao falhar, a anterior nao fica alterada).
+export async function deleteProcessDocument(processId, documentId, { unlinkPreviousId = '', actor } = {}) {
   if (!isFirebaseConfigured || !firestore) return
-  await deleteDoc(doc(firestore, 'processes', processId, 'documents', documentId))
+  const target = doc(firestore, 'processes', processId, 'documents', documentId)
+  if (!unlinkPreviousId) {
+    await deleteDoc(target)
+    return
+  }
+  const batch = writeBatch(firestore)
+  batch.update(doc(firestore, 'processes', processId, 'documents', unlinkPreviousId), {
+    alsoPackingList: false,
+    alsoPackingListUpdatedAt: serverTimestamp(),
+    alsoPackingListUpdatedById: actor?.uid ?? '',
+  })
+  batch.delete(target)
+  await batch.commit()
+}
+
+// Marca/desmarca que a Invoice tambem contem o Packing List. A rule so'
+// aceita estas 3 chaves, em doc `invoice`, por admin.
+export async function setInvoicePackingListLink(processId, documentId, included, actor) {
+  if (!isFirebaseConfigured || !firestore) return
+  await updateDoc(doc(firestore, 'processes', processId, 'documents', documentId), {
+    alsoPackingList: included === true,
+    alsoPackingListUpdatedAt: serverTimestamp(),
+    alsoPackingListUpdatedById: actor?.uid ?? '',
+  })
 }
 
 // L38: download autenticado. Nenhuma URL de Storage e' gerada nem persistida

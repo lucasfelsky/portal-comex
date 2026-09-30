@@ -7,6 +7,7 @@ import {
   downloadProcessDocumentBlob,
   listProcessDocuments,
   saveBlobAsFile,
+  setInvoicePackingListLink,
   uploadProcessDocument,
 } from '../../services/processDocumentsRepository'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -24,6 +25,7 @@ import {
   getDocumentFileKindLabel,
   getDocumentIndexFromDocuments,
   getDocumentTypeLabel,
+  getInvoicePackingListLink,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
   isFileDragEvent,
@@ -119,6 +121,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [dragOverKey, setDragOverKey] = useState('')
+  const [pendingCombine, setPendingCombine] = useState({})
+  const [linkBusyKey, setLinkBusyKey] = useState('')
+
+  // As chaves de `pendingCombine` sao genericas (`invoice`, `invoice:<po>`):
+  // trocar de processo no mesmo painel nao pode herdar a escolha nao salva.
+  useEffect(() => {
+    setPendingCombine({})
+  }, [processId])
 
   const fileInputsRef = useRef({})
   const substituteRefs = useRef({})
@@ -210,6 +220,15 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     [process, documents]
   )
 
+  // Slot Invoice/Packing List coberto: arquivo proprio OU (so' Packing List)
+  // a Invoice atual do mesmo slot marcada como "tambem contem o Packing List".
+  function hasDocumentCoverage(type, slotOptions) {
+    const slotKey = buildDocumentSlotKey(type, slotOptions)
+    if (findGroup(slotKey)?.primary) return true
+    if (type !== 'packingList') return false
+    return Boolean(getInvoicePackingListLink(groups, buildDocumentSlotKey('invoice', slotOptions)))
+  }
+
   const enviadosCount = useMemo(() => {
     let count = 0
     for (const type of PROCESS_LEVEL_TYPES) {
@@ -217,10 +236,10 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
     for (const type of PO_SCOPABLE_TYPES) {
       if (!isConsolidated) {
-        if (findGroup(buildDocumentSlotKey(type, { category }))?.primary) count += 1
+        if (hasDocumentCoverage(type, { category })) count += 1
       } else {
         for (const order of purchaseOrders) {
-          if (findGroup(buildDocumentSlotKey(type, { category, po: order.po }))?.primary) count += 1
+          if (hasDocumentCoverage(type, { category, po: order.po })) count += 1
         }
       }
     }
@@ -350,15 +369,91 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
   }
 
+  // Invoice: o envio/substituicao herda o estado do checkbox "tambem contem
+  // o Packing List" (nunca quando o PL ja tem arquivo proprio).
+  async function uploadInvoiceFile(invoiceSlotKey, packingSlotKey, extra, file) {
+    const { checked, packingHasOwnFile } = getCombineState(invoiceSlotKey, packingSlotKey)
+    const ok = await handleUploadFile(
+      'invoice',
+      invoiceSlotKey,
+      { ...extra, alsoPackingList: checked && !packingHasOwnFile },
+      file
+    )
+    if (ok) {
+      setPendingCombine((current) => {
+        if (!(invoiceSlotKey in current)) return current
+        const next = { ...current }
+        delete next[invoiceSlotKey]
+        return next
+      })
+    }
+    return ok
+  }
+
+  function getCombineState(invoiceSlotKey, packingSlotKey) {
+    const invoicePrimary = findGroup(invoiceSlotKey)?.primary ?? null
+    const checked = invoicePrimary
+      ? invoicePrimary.alsoPackingList === true
+      : Boolean(pendingCombine[invoiceSlotKey])
+    const packingHasOwnFile = Boolean(findGroup(packingSlotKey)?.primary)
+    return { invoicePrimary, checked, packingHasOwnFile }
+  }
+
+  // Grava o vinculo na Invoice atual (ou, sem Invoice, so' guarda a escolha
+  // para o proximo envio). `errorKey` = linha que mostra o erro.
+  async function handleSetPackingListLink(invoiceSlotKey, next, errorKey = invoiceSlotKey) {
+    const invoicePrimary = findGroup(invoiceSlotKey)?.primary ?? null
+    if (!invoicePrimary) {
+      setPendingCombine((current) => ({ ...current, [invoiceSlotKey]: next }))
+      return
+    }
+    clearRowError(errorKey)
+    setLinkBusyKey(invoiceSlotKey)
+    try {
+      await setInvoicePackingListLink(processId, invoicePrimary.id, next, { uid: profile?.uid })
+      setReloadToken((token) => token + 1)
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [errorKey]: buildDocumentError('Não foi possível atualizar o vínculo com o Packing List.', error),
+      }))
+    } finally {
+      setLinkBusyKey('')
+    }
+  }
+
+  // Checkbox "Este arquivo tambem contem o Packing List" (so' quem envia Invoice).
+  function renderCombineOption(invoiceSlotKey, packingSlotKey, po = '') {
+    if (!canUploadDocumentType(role, 'invoice')) return null
+    const { checked, packingHasOwnFile } = getCombineState(invoiceSlotKey, packingSlotKey)
+    const blocked = !checked && packingHasOwnFile
+    const busy = uploadingKey === invoiceSlotKey || linkBusyKey === invoiceSlotKey
+    return (
+      <div className="documents-combine">
+        <label className="documents-combine__label">
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={blocked || busy}
+            aria-label={po ? `Este arquivo também contém o Packing List da PO ${po}` : undefined}
+            onChange={(event) => handleSetPackingListLink(invoiceSlotKey, event.target.checked)}
+          />
+          <span>Este arquivo também contém o Packing List</span>
+        </label>
+        {blocked ? <small className="field-hint">O Packing List já tem arquivo próprio.</small> : null}
+      </div>
+    )
+  }
+
   async function handleAddOtherDocument(file) {
     const description = otherDescription.trim().slice(0, 80) || 'Documento adicional'
     const ok = await handleUploadFile('other', 'other:new', { description }, file)
     if (ok) setOtherDescription('')
   }
 
-  async function handleDownload(document_) {
+  async function handleDownload(document_, errorKey) {
     if (downloadingId) return
-    const slotKey = document_?.slotKey
+    const slotKey = errorKey ?? document_?.slotKey
     if (slotKey) clearRowError(slotKey)
     setDownloadingId(document_.id)
     setLiveMessage(`Baixando ${document_.name}…`)
@@ -386,7 +481,24 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const slotKey = confirmDeleteDoc.slotKey
 
     try {
-      await deleteProcessDocument(processId, confirmDeleteDoc.id)
+      // A versao anterior promovida herdaria o vinculo com o Packing List:
+      // excluir a Invoice atual desfaz o vinculo antes.
+      // Mesmo batch (atomico) que a exclusao - ver deleteProcessDocument.
+      const deletedGroup = findGroup(slotKey)
+      const unlinkPreviousId =
+        confirmDeleteDoc.type === 'invoice' &&
+        deletedGroup?.primary?.id === confirmDeleteDoc.id &&
+        deletedGroup.previous?.alsoPackingList === true
+          ? deletedGroup.previous.id
+          : ''
+      if (unlinkPreviousId) {
+        await deleteProcessDocument(processId, confirmDeleteDoc.id, {
+          unlinkPreviousId,
+          actor: { uid: profile?.uid },
+        })
+      } else {
+        await deleteProcessDocument(processId, confirmDeleteDoc.id)
+      }
       setConfirmDeleteDoc(null)
       setReloadToken((token) => token + 1)
     } catch (error) {
@@ -444,6 +556,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     emptyBadgeText = 'Não enviado',
     emptyBadgeTone = 'neutral',
     onUpload,
+    extraContent = null,
+    includedInInvoice = null,
   }) {
     const primary = group?.primary ?? null
     const previous = group?.previous ?? null
@@ -467,6 +581,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             <p className="documents-row__label">{title}</p>
             {primary ? fileLine : null}
             {metaLine}
+            {extraContent}
             {isRowUploading ? (
               <div className="documents-progress">
                 <span className="documents-progress__bar" role="progressbar" aria-label={`Enviando ${title}`} />
@@ -493,7 +608,9 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   </span>
                 )
                 : null
-              : (
+              : includedInInvoice
+                ? <span className="inline-badge inline-badge--ok">Incluído na Invoice</span>
+                : (
                 <span className={`${badgeClassForTone(emptyBadgeTone)}${emptyBadgeText === 'Pendente' ? ' documents-badge--icon' : ''}`}>
                   {emptyBadgeText === 'Pendente' ? <Icon name="alert" size={14} /> : null}
                   {emptyBadgeText}
@@ -501,6 +618,34 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               )}
           </div>
           <div className="documents-row__actions">
+            {includedInInvoice ? (
+              <>
+                <button
+                  type="button"
+                  className="documents-icon-button ghost-button"
+                  aria-label={`Baixar ${includedInInvoice.invoice.name}`}
+                  title={`Baixar ${includedInInvoice.invoice.name}`}
+                  disabled={downloadingId === includedInInvoice.invoice.id}
+                  aria-busy={downloadingId === includedInInvoice.invoice.id || undefined}
+                  onClick={() => handleDownload(includedInInvoice.invoice, slotKey)}
+                >
+                  <Icon name="download" />
+                  <span className="documents-row__action-label">Baixar</span>
+                </button>
+                {includedInInvoice.canSeparate ? (
+                  <button
+                    type="button"
+                    className="documents-icon-button ghost-button"
+                    aria-label="Separar Packing List da Invoice"
+                    title="Separar Packing List da Invoice"
+                    disabled={linkBusyKey === includedInInvoice.invoiceSlotKey}
+                    onClick={() => handleSetPackingListLink(includedInInvoice.invoiceSlotKey, false, slotKey)}
+                  >
+                    <span className="documents-row__action-label">Separar</span>
+                  </button>
+                ) : null}
+              </>
+            ) : null}
             {primary ? (
               <button
                 type="button"
@@ -546,7 +691,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   )}
                 </button>
               </>
-            ) : !primary ? (
+            ) : !primary && !includedInInvoice ? (
               <span className="documents-lock">
                 <Icon name="lock" />
                 Somente o COMEX envia este documento
@@ -579,14 +724,22 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const canUpload = canUploadDocumentType(role, type)
     const isRowUploading = uploadingKey === slotKey
     const rowError = rowErrors[slotKey]
+    const invoiceSlotKey = buildDocumentSlotKey('invoice', { category, po: order.po })
+    const packingSlotKey = buildDocumentSlotKey('packingList', { category, po: order.po })
+    const invoiceLink = type === 'packingList' && !primary ? getInvoicePackingListLink(groups, invoiceSlotKey) : null
+    const uploadFile = (file) =>
+      type === 'invoice'
+        ? uploadInvoiceFile(slotKey, packingSlotKey, { po: order.po }, file)
+        : handleUploadFile(type, slotKey, { po: order.po }, file)
 
     return (
       <td
         key={type}
         className={dragOverKey === slotKey ? 'documents-drop-active' : undefined}
         {...getDropTargetProps(slotKey, {
-          enabled: canUpload,
-          onFile: (file) => handleUploadFile(type, slotKey, { po: order.po }, file),
+          // PL "incluido na Invoice": so' volta a aceitar arquivo depois de "Separar".
+          enabled: canUpload && !invoiceLink,
+          onFile: uploadFile,
         })}
       >
         <div className="documents-po-cell">
@@ -656,7 +809,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   onChange={(event) => {
                     const file = event.target.files?.[0]
                     event.target.value = ''
-                    if (file) handleUploadFile(type, slotKey, { po: order.po }, file)
+                    if (file) uploadFile(file)
                   }}
                 />
               ) : null}
@@ -678,6 +831,39 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 </div>
               ) : null}
             </>
+          ) : invoiceLink ? (
+            <>
+              <div className="documents-po-cell__info">
+                <span className="inline-badge inline-badge--ok">Incluído na Invoice</span>
+                <small className="field-hint">{`No mesmo arquivo da Invoice: ${invoiceLink.name}`}</small>
+              </div>
+              <div className="documents-row__actions">
+                <button
+                  type="button"
+                  className="documents-icon-button ghost-button"
+                  aria-label={`Baixar ${invoiceLink.name}`}
+                  title={`Baixar ${invoiceLink.name}`}
+                  disabled={downloadingId === invoiceLink.id}
+                  aria-busy={downloadingId === invoiceLink.id || undefined}
+                  onClick={() => handleDownload(invoiceLink, slotKey)}
+                >
+                  <Icon name="download" />
+                  <span className="documents-row__action-label">Baixar</span>
+                </button>
+                {canUploadDocumentType(role, 'invoice') ? (
+                  <button
+                    type="button"
+                    className="documents-icon-button ghost-button"
+                    aria-label={`Separar Packing List da Invoice da PO ${order.po}`}
+                    title="Separar Packing List da Invoice"
+                    disabled={linkBusyKey === invoiceSlotKey}
+                    onClick={() => handleSetPackingListLink(invoiceSlotKey, false, slotKey)}
+                  >
+                    <span className="documents-row__action-label">Separar</span>
+                  </button>
+                ) : null}
+              </div>
+            </>
           ) : (
             <>
               {shipmentConfirmed ? (
@@ -698,7 +884,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     onChange={(event) => {
                       const file = event.target.files?.[0]
                       event.target.value = ''
-                      if (file) handleUploadFile(type, slotKey, { po: order.po }, file)
+                      if (file) uploadFile(file)
                     }}
                   />
                   <button
@@ -719,6 +905,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             </>
           )}
         </div>
+        {type === 'invoice' ? renderCombineOption(slotKey, packingSlotKey, order.po) : null}
         {isRowUploading ? (
           <div className="documents-progress">
             <span
@@ -759,7 +946,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const missingConsolidatedCount = isConsolidated
     ? purchaseOrders.reduce((count, order) => {
         const invoiceMissing = !findGroup(buildDocumentSlotKey('invoice', { category, po: order.po }))?.primary
-        const packingMissing = !findGroup(buildDocumentSlotKey('packingList', { category, po: order.po }))?.primary
+        const packingMissing = !hasDocumentCoverage('packingList', { category, po: order.po })
         return count + (invoiceMissing ? 1 : 0) + (packingMissing ? 1 : 0)
       }, 0)
     : 0
@@ -897,6 +1084,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     const slotKey = buildDocumentSlotKey(type, { category })
                     const group = findGroup(slotKey)
                     const primary = group?.primary ?? null
+                    const invoiceLink =
+                      type === 'packingList' && !primary ? getInvoicePackingListLink(groups, 'invoice') : null
                     const metaText = primary
                       ? [
                           getDocumentFileKindLabel(primary.mimeType, primary.name),
@@ -906,16 +1095,29 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                         ]
                           .filter(Boolean)
                           .join(' · ')
-                      : 'Nenhum arquivo enviado'
+                      : invoiceLink
+                        ? `No mesmo arquivo da Invoice: ${invoiceLink.name}`
+                        : 'Nenhum arquivo enviado'
                     return renderRow({
                       slotKey,
                       title: getDocumentTypeLabel(type),
                       fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
                       metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
                       group,
-                      canUpload: canUploadDocumentType(role, type),
+                      canUpload: invoiceLink ? false : canUploadDocumentType(role, type),
                       canDelete: primary ? canDeleteDocument(profile, primary) : false,
-                      onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                      onUpload:
+                        type === 'invoice'
+                          ? (file) => uploadInvoiceFile(slotKey, 'packingList', {}, file)
+                          : (file) => handleUploadFile(type, slotKey, {}, file),
+                      extraContent: type === 'invoice' ? renderCombineOption('invoice', 'packingList') : null,
+                      includedInInvoice: invoiceLink
+                        ? {
+                            invoice: invoiceLink,
+                            invoiceSlotKey: 'invoice',
+                            canSeparate: canUploadDocumentType(role, 'invoice'),
+                          }
+                        : null,
                       ...(shipmentConfirmed ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' } : {}),
                     })
                   })
@@ -1149,7 +1351,12 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
       <ConfirmDialog
         open={Boolean(confirmDeleteDoc)}
         title="Excluir documento?"
-        message="Esta ação é irreversível e o arquivo será removido do armazenamento."
+        message={
+          'Esta ação é irreversível e o arquivo será removido do armazenamento.' +
+          (confirmDeleteDoc?.alsoPackingList
+            ? ' O Packing List marcado como incluído nesta Invoice volta a ficar sem arquivo.'
+            : '')
+        }
         confirmLabel="Excluir"
         cancelLabel="Cancelar"
         tone="danger"

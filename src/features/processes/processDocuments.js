@@ -141,6 +141,26 @@ export function groupDocumentsBySlot(documents) {
   return groups
 }
 
+// Invoice que tambem contem o Packing List: slot do PL coberto pela Invoice.
+// '' quando o slot nao e' de Invoice. Espelhado em
+// functions/src/process/documentIndex.js (paridade testada).
+export function getPackingListSlotKeyForInvoice(slotKey) {
+  const value = String(slotKey ?? '')
+  if (value === 'invoice') return 'packingList'
+  if (value.startsWith('invoice:') && value.length > 'invoice:'.length) {
+    return 'packingList:' + value.slice('invoice:'.length)
+  }
+  return ''
+}
+
+// Vinculo vale so' quando a Invoice ATUAL (primary) do slot tem o flag.
+// Devolve o doc da Invoice ou null.
+export function getInvoicePackingListLink(groups, invoiceSlotKey) {
+  const list = Array.isArray(groups) ? groups : []
+  const group = list.find((candidate) => candidate?.slotKey === invoiceSlotKey)
+  return group?.primary?.alsoPackingList === true ? group.primary : null
+}
+
 export const DROP_MULTIPLE_FILES_MESSAGE = 'Solte apenas um arquivo por vez.'
 
 // Arrastar e soltar: `true` quando o drag carrega arquivos (e nao texto/link).
@@ -227,6 +247,14 @@ export function getDocumentIndexFromDocuments(documents) {
     if (document?.type === 'fispq' && document?.itemId) fispqItemIds.push(String(document.itemId))
     if (document?.type === 'containerWash' && document?.containerId) {
       containerWashIds.push(String(document.containerId))
+    }
+  }
+
+  // Invoice atual marcada "tambem contem o Packing List" cobre o slot do PL.
+  for (const group of groupDocumentsBySlot(list)) {
+    if (group.type === 'invoice' && group.primary?.alsoPackingList === true) {
+      const packingSlot = getPackingListSlotKeyForInvoice(group.slotKey)
+      if (packingSlot) processSlotKeys.push(packingSlot)
     }
   }
 

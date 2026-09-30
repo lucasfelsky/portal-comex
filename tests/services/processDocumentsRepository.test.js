@@ -10,6 +10,9 @@ const {
   mockGetDocs,
   mockSetDoc,
   mockDeleteDoc,
+  mockUpdateDoc,
+  mockBatch,
+  mockWriteBatch,
   mockServerTimestamp,
   mockRef,
   mockUploadBytes,
@@ -22,6 +25,9 @@ const {
   mockGetDocs: vi.fn(),
   mockSetDoc: vi.fn(),
   mockDeleteDoc: vi.fn(),
+  mockUpdateDoc: vi.fn(),
+  mockBatch: { update: vi.fn(), delete: vi.fn(), commit: vi.fn() },
+  mockWriteBatch: vi.fn(),
   mockServerTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   mockRef: vi.fn(),
   mockUploadBytes: vi.fn(),
@@ -48,6 +54,8 @@ vi.mock('firebase/firestore/lite', () => ({
   getDocs: (...args) => mockGetDocs(...args),
   setDoc: (...args) => mockSetDoc(...args),
   deleteDoc: (...args) => mockDeleteDoc(...args),
+  updateDoc: (...args) => mockUpdateDoc(...args),
+  writeBatch: (...args) => mockWriteBatch(...args),
   serverTimestamp: (...args) => mockServerTimestamp(...args),
 }))
 
@@ -63,6 +71,7 @@ import {
   downloadProcessDocumentBlob,
   listProcessDocuments,
   saveBlobAsFile,
+  setInvoicePackingListLink,
   uploadProcessDocument,
 } from '../../src/services/processDocumentsRepository'
 
@@ -168,6 +177,22 @@ describe('uploadProcessDocument', () => {
     expect(payload.slotKey).toBe('invoice:PO-1')
   })
 
+  it('invoice com alsoPackingList: true grava o campo; sem o flag nao grava', async () => {
+    await uploadProcessDocument('p1', { type: 'invoice', file, alsoPackingList: true, actor })
+    expect(mockSetDoc.mock.calls[0][1].alsoPackingList).toBe(true)
+    await uploadProcessDocument('p1', { type: 'invoice', file, alsoPackingList: false, actor })
+    expect('alsoPackingList' in mockSetDoc.mock.calls[1][1]).toBe(false)
+    await uploadProcessDocument('p1', { type: 'invoice', file, actor })
+    expect('alsoPackingList' in mockSetDoc.mock.calls[2][1]).toBe(false)
+  })
+
+  it('bl/packingList com alsoPackingList: true NAO gravam o campo', async () => {
+    await uploadProcessDocument('p1', { type: 'bl', file, alsoPackingList: true, actor })
+    await uploadProcessDocument('p1', { type: 'packingList', file, alsoPackingList: true, actor })
+    expect('alsoPackingList' in mockSetDoc.mock.calls[0][1]).toBe(false)
+    expect('alsoPackingList' in mockSetDoc.mock.calls[1][1]).toBe(false)
+  })
+
   it('setDoc falha -> rollback deleteObject e relanca o erro', async () => {
     mockSetDoc.mockRejectedValueOnce(new Error('permission-denied'))
     await expect(uploadProcessDocument('p1', { type: 'bl', file, actor })).rejects.toThrow('permission-denied')
@@ -191,6 +216,49 @@ describe('deleteProcessDocument', () => {
     firebaseConfigured = false
     await deleteProcessDocument('p1', 'd1')
     expect(mockDeleteDoc).not.toHaveBeenCalled()
+  })
+
+  it('com unlinkPreviousId: desfaz o vinculo da anterior e exclui no MESMO batch', async () => {
+    mockWriteBatch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+    await deleteProcessDocument('p1', 'new', { unlinkPreviousId: 'old', actor: { uid: 'uid-1' } })
+    expect(mockDeleteDoc).not.toHaveBeenCalled()
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+    expect(mockBatch.update).toHaveBeenCalledWith('DOC_REF', {
+      alsoPackingList: false,
+      alsoPackingListUpdatedAt: 'SERVER_TIMESTAMP',
+      alsoPackingListUpdatedById: 'uid-1',
+    })
+    expect(mockBatch.delete).toHaveBeenCalledWith('DOC_REF')
+    expect(mockBatch.commit).toHaveBeenCalledTimes(1)
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'old')
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'new')
+  })
+})
+
+describe('setInvoicePackingListLink', () => {
+  it('chama updateDoc so com as 3 chaves do vinculo', async () => {
+    await setInvoicePackingListLink('p1', 'd1', true, { uid: 'uid-1' })
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1)
+    const [ref, payload] = mockUpdateDoc.mock.calls[0]
+    expect(ref).toBe('DOC_REF')
+    expect(payload).toEqual({
+      alsoPackingList: true,
+      alsoPackingListUpdatedAt: 'SERVER_TIMESTAMP',
+      alsoPackingListUpdatedById: 'uid-1',
+    })
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'd1')
+  })
+
+  it('included diferente de true grava false', async () => {
+    await setInvoicePackingListLink('p1', 'd1', 'sim', { uid: 'uid-1' })
+    expect(mockUpdateDoc.mock.calls[0][1].alsoPackingList).toBe(false)
+  })
+
+  it('nao configurado -> nao chama updateDoc', async () => {
+    firebaseConfigured = false
+    await setInvoicePackingListLink('p1', 'd1', false, { uid: 'uid-1' })
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
   })
 })
 

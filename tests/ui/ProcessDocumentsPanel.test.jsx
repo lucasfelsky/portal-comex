@@ -17,6 +17,7 @@ const mockUploadProcessDocument = vi.fn()
 const mockDeleteProcessDocument = vi.fn()
 const mockDownloadProcessDocumentBlob = vi.fn()
 const mockSaveBlobAsFile = vi.fn()
+const mockSetInvoicePackingListLink = vi.fn()
 
 vi.mock('../../src/services/processDocumentsRepository', () => ({
   listProcessDocuments: (...args) => mockListProcessDocuments(...args),
@@ -24,6 +25,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
   deleteProcessDocument: (...args) => mockDeleteProcessDocument(...args),
   downloadProcessDocumentBlob: (...args) => mockDownloadProcessDocumentBlob(...args),
   saveBlobAsFile: (...args) => mockSaveBlobAsFile(...args),
+  setInvoicePackingListLink: (...args) => mockSetInvoicePackingListLink(...args),
 }))
 
 const ADMIN_PROFILE = { uid: 'admin-1', name: 'Admin', role: 'admin' }
@@ -727,5 +729,242 @@ describe('ProcessDocumentsPanel — arrastar e soltar', () => {
     await waitForDocumentsLoaded()
     expect(fireEvent.drop(container.querySelector('.documents-panel'), dt([pdf()]))).toBe(false)
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
+  const CHECKBOX = 'Este arquivo também contém o Packing List'
+  const docInvoice = (overrides = {}) =>
+    docBl({
+      id: 'inv1',
+      type: 'invoice',
+      slotKey: 'invoice',
+      name: 'inv.pdf',
+      storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+      ...overrides,
+    })
+  const docPacking = (overrides = {}) =>
+    docBl({
+      id: 'pl1',
+      type: 'packingList',
+      slotKey: 'packingList',
+      name: 'pl.pdf',
+      storagePath: 'processes/p1/documents/packingList/1-admin-1-pl.pdf',
+      ...overrides,
+    })
+  const rowOf = (title) =>
+    screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+
+  it('(a2) trocar de processo no mesmo painel descarta a marcacao nao salva', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    await user.click(screen.getByLabelText(CHECKBOX))
+    expect(screen.getByLabelText(CHECKBOX)).toBeChecked()
+
+    rerender(<ProcessDocumentsPanel process={{ ...FCL_PROCESS, id: 'p9' }} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    expect(screen.getByLabelText(CHECKBOX)).not.toBeChecked()
+  })
+
+  it('(a) FCL sem docs: marcar o checkbox e enviar a Invoice grava alsoPackingList: true', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByLabelText(CHECKBOX))
+    expect(mockSetInvoicePackingListLink).not.toHaveBeenCalled()
+    const file = new File(['x'], 'inv.pdf', { type: 'application/pdf' })
+    await user.upload(rowOf('Invoice').querySelector('input[type="file"]'), file)
+
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'invoice', alsoPackingList: true })
+      )
+    )
+  })
+
+  it('(a2) sem marcar: envia alsoPackingList: false; o BL nunca leva o campo', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const file = new File(['x'], 'inv.pdf', { type: 'application/pdf' })
+    await user.upload(rowOf('Invoice').querySelector('input[type="file"]'), file)
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'invoice', alsoPackingList: false })
+      )
+    )
+    await user.upload(rowOf('BL/AWB').querySelector('input[type="file"]'), file)
+    await waitFor(() => expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2))
+    expect(mockUploadProcessDocument.mock.calls[1][1]).not.toHaveProperty('alsoPackingList')
+  })
+
+  it('(b) Invoice marcada: PL "Incluído na Invoice"; Baixar usa o id da Invoice; Separar desfaz o vínculo', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['PDF']))
+    mockSetInvoicePackingListLink.mockResolvedValue(undefined)
+    mockListProcessDocuments.mockResolvedValue([docInvoice({ alsoPackingList: true })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const packingRow = rowOf('Packing List')
+    expect(within(packingRow).getByText('Incluído na Invoice')).toBeInTheDocument()
+    expect(within(packingRow).getByText('No mesmo arquivo da Invoice: inv.pdf')).toBeInTheDocument()
+    expect(within(packingRow).queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument()
+    expect(within(packingRow).queryByText('Somente o COMEX envia este documento')).not.toBeInTheDocument()
+
+    await user.click(within(packingRow).getByRole('button', { name: 'Baixar inv.pdf' }))
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'inv1')
+
+    await user.click(within(packingRow).getByRole('button', { name: 'Separar Packing List da Invoice' }))
+    expect(mockSetInvoicePackingListLink).toHaveBeenCalledWith('p1', 'inv1', false, { uid: 'admin-1' })
+  })
+
+  it('(b2) desmarcar o checkbox da Invoice enviada grava o vínculo; erro aparece na linha', async () => {
+    const user = userEvent.setup()
+    mockSetInvoicePackingListLink.mockRejectedValueOnce({ code: 'permission-denied' })
+    mockListProcessDocuments.mockResolvedValue([docInvoice({ alsoPackingList: true })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const checkbox = screen.getByLabelText(CHECKBOX)
+    expect(checkbox).toBeChecked()
+    await user.click(checkbox)
+    expect(mockSetInvoicePackingListLink).toHaveBeenCalledWith('p1', 'inv1', false, { uid: 'admin-1' })
+    expect(
+      await within(rowOf('Invoice')).findByText('Não foi possível atualizar o vínculo com o Packing List.')
+    ).toBeInTheDocument()
+  })
+
+  it('(c) PL com arquivo próprio: checkbox desabilitado + aviso; Invoice marcada não esconde o arquivo próprio', async () => {
+    mockListProcessDocuments.mockResolvedValue([docInvoice(), docPacking()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.getByLabelText(CHECKBOX)).toBeDisabled()
+    expect(screen.getByText('O Packing List já tem arquivo próprio.')).toBeInTheDocument()
+    expect(within(rowOf('Packing List')).queryByText('Incluído na Invoice')).not.toBeInTheDocument()
+  })
+
+  it('(d) embarcado com BL + Relatório + Invoice marcada: 4 enviados, 0 pendentes', async () => {
+    const onPendingCountChange = vi.fn()
+    mockListProcessDocuments.mockResolvedValue([
+      docBl(),
+      docBl({ id: 'c1', type: 'cargoReport', slotKey: 'cargoReport', name: 'rel.pdf' }),
+      docInvoice({ alsoPackingList: true }),
+    ])
+    render(
+      <ProcessDocumentsPanel
+        process={{ id: 'p1', category: 'LCL', shippedAt: '2026-09-01' }}
+        profile={ADMIN_PROFILE}
+        onPendingCountChange={onPendingCountChange}
+      />
+    )
+    await waitFor(() => expect(screen.getByText('4 enviados')).toBeInTheDocument())
+    expect(screen.queryByText(/pendente/)).not.toBeInTheDocument()
+    await waitFor(() => expect(onPendingCountChange).toHaveBeenLastCalledWith(0))
+  })
+
+  it('(e) CONSOLIDADO: célula PL da PO-1 "Incluído na Invoice" e o badge desconta', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['PDF']))
+    mockSetInvoicePackingListLink.mockResolvedValue(undefined)
+    mockListProcessDocuments.mockResolvedValue([
+      docInvoice({ id: 'invPO1', slotKey: 'invoice:PO-1', poNumber: 'PO-1', alsoPackingList: true }),
+    ])
+    render(
+      <ProcessDocumentsPanel
+        process={{ id: 'p2', category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-1' }, { po: 'PO-2' }] }}
+        profile={ADMIN_PROFILE}
+      />
+    )
+    const table = await screen.findByRole('table')
+    await waitFor(() => expect(within(table).getByText('Incluído na Invoice')).toBeInTheDocument())
+    expect(within(table).getAllByText('Incluído na Invoice')).toHaveLength(1)
+    // PO-1: Invoice enviada + PL coberto; PO-2: 2 faltando.
+    expect(screen.getByText('2 de 4 faltando')).toBeInTheDocument()
+
+    const po1Row = within(table).getByText('PO-1', { selector: 'th' }).closest('tr')
+    const packingCell = po1Row.querySelectorAll('td')[1]
+    await user.click(within(packingCell).getByRole('button', { name: 'Baixar inv.pdf' }))
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p2', 'invPO1')
+    await user.click(within(packingCell).getByRole('button', { name: 'Separar Packing List da Invoice da PO PO-1' }))
+    expect(mockSetInvoicePackingListLink).toHaveBeenCalledWith('p2', 'invPO1', false, { uid: 'admin-1' })
+
+    // checkbox por PO: so a PO-1 esta marcada.
+    expect(screen.getByLabelText('Este arquivo também contém o Packing List da PO PO-1')).toBeChecked()
+    expect(screen.getByLabelText('Este arquivo também contém o Packing List da PO PO-2')).not.toBeChecked()
+  })
+
+  it('(f) excluir a Invoice atual com anterior marcada desfaz o vínculo no MESMO batch da exclusão', async () => {
+    const user = userEvent.setup()
+    mockSetInvoicePackingListLink.mockResolvedValue(undefined)
+    mockDeleteProcessDocument.mockResolvedValue(undefined)
+    mockListProcessDocuments.mockResolvedValue([
+      docInvoice({ id: 'old', name: 'old.pdf', alsoPackingList: true, uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      docInvoice({ id: 'new', name: 'new.pdf', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByRole('button', { name: 'Excluir new.pdf' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
+
+    await waitFor(() =>
+      expect(mockDeleteProcessDocument).toHaveBeenCalledWith('p1', 'new', {
+        unlinkPreviousId: 'old',
+        actor: { uid: 'admin-1' },
+      })
+    )
+    expect(mockSetInvoicePackingListLink).not.toHaveBeenCalled()
+  })
+
+  it('(f2) excluir a Invoice marcada avisa na confirmação', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([docInvoice({ alsoPackingList: true })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByRole('button', { name: 'Excluir inv.pdf' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(/volta a ficar sem arquivo/)).toBeInTheDocument()
+  })
+
+  it('(g) logística: sem checkbox, com Baixar no PL incluído e sem Separar', async () => {
+    mockListProcessDocuments.mockResolvedValue([docInvoice({ alsoPackingList: true })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.queryByLabelText(CHECKBOX)).not.toBeInTheDocument()
+    const packingRow = rowOf('Packing List')
+    expect(within(packingRow).getByText('Incluído na Invoice')).toBeInTheDocument()
+    expect(within(packingRow).getByRole('button', { name: 'Baixar inv.pdf' })).toBeInTheDocument()
+    expect(within(packingRow).queryByRole('button', { name: /Separar/ })).not.toBeInTheDocument()
+  })
+
+  it('soltar a Invoice herda o checkbox marcado (mesmo onUpload do clique)', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByLabelText(CHECKBOX))
+    const file = new File(['x'], 'inv.pdf', { type: 'application/pdf' })
+    fireEvent.drop(rowOf('Invoice').closest('.documents-row-group'), {
+      dataTransfer: { files: [file], types: ['Files'] },
+    })
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'invoice', alsoPackingList: true })
+      )
+    )
   })
 })
