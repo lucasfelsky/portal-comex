@@ -11,6 +11,8 @@ const {
   mockSetDoc,
   mockDeleteDoc,
   mockUpdateDoc,
+  mockBatch,
+  mockWriteBatch,
   mockServerTimestamp,
   mockRef,
   mockUploadBytes,
@@ -24,6 +26,8 @@ const {
   mockSetDoc: vi.fn(),
   mockDeleteDoc: vi.fn(),
   mockUpdateDoc: vi.fn(),
+  mockBatch: { update: vi.fn(), delete: vi.fn(), commit: vi.fn() },
+  mockWriteBatch: vi.fn(),
   mockServerTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   mockRef: vi.fn(),
   mockUploadBytes: vi.fn(),
@@ -51,6 +55,7 @@ vi.mock('firebase/firestore/lite', () => ({
   setDoc: (...args) => mockSetDoc(...args),
   deleteDoc: (...args) => mockDeleteDoc(...args),
   updateDoc: (...args) => mockUpdateDoc(...args),
+  writeBatch: (...args) => mockWriteBatch(...args),
   serverTimestamp: (...args) => mockServerTimestamp(...args),
 }))
 
@@ -211,6 +216,23 @@ describe('deleteProcessDocument', () => {
     firebaseConfigured = false
     await deleteProcessDocument('p1', 'd1')
     expect(mockDeleteDoc).not.toHaveBeenCalled()
+  })
+
+  it('com unlinkPreviousId: desfaz o vinculo da anterior e exclui no MESMO batch', async () => {
+    mockWriteBatch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+    await deleteProcessDocument('p1', 'new', { unlinkPreviousId: 'old', actor: { uid: 'uid-1' } })
+    expect(mockDeleteDoc).not.toHaveBeenCalled()
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+    expect(mockBatch.update).toHaveBeenCalledWith('DOC_REF', {
+      alsoPackingList: false,
+      alsoPackingListUpdatedAt: 'SERVER_TIMESTAMP',
+      alsoPackingListUpdatedById: 'uid-1',
+    })
+    expect(mockBatch.delete).toHaveBeenCalledWith('DOC_REF')
+    expect(mockBatch.commit).toHaveBeenCalledTimes(1)
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'old')
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'new')
   })
 })
 

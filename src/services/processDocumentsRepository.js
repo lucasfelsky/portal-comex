@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore/lite'
 import { deleteObject, ref, uploadBytes } from 'firebase/storage'
 import { auth, firebaseConfig, firestore, isFirebaseConfigured, storage } from '../lib/firebase'
@@ -168,9 +169,24 @@ export async function uploadProcessDocument(
 
 // A exclusao do ARQUIVO fica a cargo do trigger `deleteProcessDocumentFile`
 // (D7) - aqui so apagamos o metadado (imutavel, mas deletavel).
-export async function deleteProcessDocument(processId, documentId) {
+// `unlinkPreviousId`: ao excluir a Invoice atual cuja versao anterior tem
+// `alsoPackingList`, desfaz o vinculo da anterior NO MESMO batch (atomico:
+// se a exclusao falhar, a anterior nao fica alterada).
+export async function deleteProcessDocument(processId, documentId, { unlinkPreviousId = '', actor } = {}) {
   if (!isFirebaseConfigured || !firestore) return
-  await deleteDoc(doc(firestore, 'processes', processId, 'documents', documentId))
+  const target = doc(firestore, 'processes', processId, 'documents', documentId)
+  if (!unlinkPreviousId) {
+    await deleteDoc(target)
+    return
+  }
+  const batch = writeBatch(firestore)
+  batch.update(doc(firestore, 'processes', processId, 'documents', unlinkPreviousId), {
+    alsoPackingList: false,
+    alsoPackingListUpdatedAt: serverTimestamp(),
+    alsoPackingListUpdatedById: actor?.uid ?? '',
+  })
+  batch.delete(target)
+  await batch.commit()
 }
 
 // Marca/desmarca que a Invoice tambem contem o Packing List. A rule so'

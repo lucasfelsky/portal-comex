@@ -755,6 +755,18 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
   const rowOf = (title) =>
     screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
 
+  it('(a2) trocar de processo no mesmo painel descarta a marcacao nao salva', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    await user.click(screen.getByLabelText(CHECKBOX))
+    expect(screen.getByLabelText(CHECKBOX)).toBeChecked()
+
+    rerender(<ProcessDocumentsPanel process={{ ...FCL_PROCESS, id: 'p9' }} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    expect(screen.getByLabelText(CHECKBOX)).not.toBeChecked()
+  })
+
   it('(a) FCL sem docs: marcar o checkbox e enviar a Invoice grava alsoPackingList: true', async () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
@@ -890,7 +902,7 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
     expect(screen.getByLabelText('Este arquivo também contém o Packing List da PO PO-2')).not.toBeChecked()
   })
 
-  it('(f) excluir a Invoice atual com anterior marcada desfaz o vínculo ANTES de excluir', async () => {
+  it('(f) excluir a Invoice atual com anterior marcada desfaz o vínculo no MESMO batch da exclusão', async () => {
     const user = userEvent.setup()
     mockSetInvoicePackingListLink.mockResolvedValue(undefined)
     mockDeleteProcessDocument.mockResolvedValue(undefined)
@@ -905,11 +917,13 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
     const dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
 
-    await waitFor(() => expect(mockDeleteProcessDocument).toHaveBeenCalledWith('p1', 'new'))
-    expect(mockSetInvoicePackingListLink).toHaveBeenCalledWith('p1', 'old', false, { uid: 'admin-1' })
-    expect(mockSetInvoicePackingListLink.mock.invocationCallOrder[0]).toBeLessThan(
-      mockDeleteProcessDocument.mock.invocationCallOrder[0]
+    await waitFor(() =>
+      expect(mockDeleteProcessDocument).toHaveBeenCalledWith('p1', 'new', {
+        unlinkPreviousId: 'old',
+        actor: { uid: 'admin-1' },
+      })
     )
+    expect(mockSetInvoicePackingListLink).not.toHaveBeenCalled()
   })
 
   it('(f2) excluir a Invoice marcada avisa na confirmação', async () => {

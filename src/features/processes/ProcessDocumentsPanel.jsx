@@ -124,6 +124,12 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [pendingCombine, setPendingCombine] = useState({})
   const [linkBusyKey, setLinkBusyKey] = useState('')
 
+  // As chaves de `pendingCombine` sao genericas (`invoice`, `invoice:<po>`):
+  // trocar de processo no mesmo painel nao pode herdar a escolha nao salva.
+  useEffect(() => {
+    setPendingCombine({})
+  }, [processId])
+
   const fileInputsRef = useRef({})
   const substituteRefs = useRef({})
   const hasLoadedOnceRef = useRef(false)
@@ -477,15 +483,22 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     try {
       // A versao anterior promovida herdaria o vinculo com o Packing List:
       // excluir a Invoice atual desfaz o vinculo antes.
+      // Mesmo batch (atomico) que a exclusao - ver deleteProcessDocument.
       const deletedGroup = findGroup(slotKey)
-      if (
+      const unlinkPreviousId =
         confirmDeleteDoc.type === 'invoice' &&
         deletedGroup?.primary?.id === confirmDeleteDoc.id &&
         deletedGroup.previous?.alsoPackingList === true
-      ) {
-        await setInvoicePackingListLink(processId, deletedGroup.previous.id, false, { uid: profile?.uid })
+          ? deletedGroup.previous.id
+          : ''
+      if (unlinkPreviousId) {
+        await deleteProcessDocument(processId, confirmDeleteDoc.id, {
+          unlinkPreviousId,
+          actor: { uid: profile?.uid },
+        })
+      } else {
+        await deleteProcessDocument(processId, confirmDeleteDoc.id)
       }
-      await deleteProcessDocument(processId, confirmDeleteDoc.id)
       setConfirmDeleteDoc(null)
       setReloadToken((token) => token + 1)
     } catch (error) {
