@@ -1229,7 +1229,9 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                             {canSeePoReference && String(order.reference ?? '').trim() ? (
                               <>
                                 <span className="documents-po-name">{String(order.reference).trim()}</span>
-                                <span className="documents-po-number">{`PO ${order.po}`}</span>
+                                <span className="documents-po-number">
+                                  {/^PO[^A-Z]/i.test(String(order.po).trim()) ? order.po : `PO ${order.po}`}
+                                </span>
                               </>
                             ) : (
                               order.po

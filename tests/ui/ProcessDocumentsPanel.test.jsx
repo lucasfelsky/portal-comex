@@ -236,7 +236,7 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
   it('mostra o nome do processo (Referencia da PO) no lugar do numero, com a PO embaixo', async () => {
     render(
       <ProcessDocumentsPanel
-        process={{ ...CONSOLIDATED_PROCESS, purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-2' }] }}
+        process={{ ...CONSOLIDATED_PROCESS, purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-2' }, { po: 'PO-12345', reference: 'GOOYER SEA 158-26' }] }}
         profile={ADMIN_PROFILE}
       />
     )
@@ -246,6 +246,10 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
     expect(header).toHaveAttribute('scope', 'row')
     expect(within(header).getByText('PO 5093')).toBeInTheDocument()
     expect(within(table).getByText('PO-2', { selector: 'th' })).toBeInTheDocument()
+    // sem prefixo duplicado quando a PO ja' vem como 'PO-...'
+    const prefixed = within(table).getByText('GOOYER SEA 158-26').closest('th')
+    expect(within(prefixed).getByText('PO-12345')).toBeInTheDocument()
+    expect(within(prefixed).queryByText('PO PO-12345')).not.toBeInTheDocument()
   })
 
   it('renderiza table com cabecalhos PO/Invoice/Packing List sem combobox; upload da PO-2 repassa po', async () => {
