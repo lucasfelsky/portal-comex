@@ -12047,6 +12047,12 @@ body {
   margin: 0;
 }
 
+.documents-drop-active {
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+  background: var(--primary-50);
+}
+
 .documents-progress {
   display: flex;
   flex-direction: column;

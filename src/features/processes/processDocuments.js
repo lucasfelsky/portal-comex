@@ -141,6 +141,22 @@ export function groupDocumentsBySlot(documents) {
   return groups
 }
 
+export const DROP_MULTIPLE_FILES_MESSAGE = 'Solte apenas um arquivo por vez.'
+
+// Arrastar e soltar: `true` quando o drag carrega arquivos (e nao texto/link).
+export function isFileDragEvent(event) {
+  return Array.from(event?.dataTransfer?.types ?? []).includes('Files')
+}
+
+// Arrastar e soltar: exatamente 1 arquivo vira `file`; 0 -> 'empty',
+// >1 -> 'multiple' (recusa, sem escolher um arbitrario).
+export function pickSingleDroppedFile(dataTransfer) {
+  const files = Array.from(dataTransfer?.files ?? [])
+  if (files.length === 0) return { file: null, error: 'empty' }
+  if (files.length > 1) return { file: null, error: 'multiple' }
+  return { file: files[0], error: null }
+}
+
 // F18b-2 (E4): virgula decimal pt-BR ("1,2 MB", como no artboard). Unico
 // chamador e' o painel (`ProcessDocumentsPanel.jsx`).
 export function formatDocumentSize(sizeInBytes) {

@@ -14,6 +14,7 @@ import Skeleton from '../../components/Skeleton'
 import Icon from '../../components/Icon'
 import {
   CONTAINER_WASH_CATEGORIES,
+  DROP_MULTIPLE_FILES_MESSAGE,
   MAX_DOCUMENT_MB,
   buildDocumentPendingFields,
   buildDocumentSlotKey,
@@ -25,6 +26,8 @@ import {
   getDocumentTypeLabel,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
+  isFileDragEvent,
+  pickSingleDroppedFile,
 } from './processDocuments'
 import { CONTAINER_TYPE_OPTIONS } from './containers'
 import { getProcessPurchaseOrders } from './purchaseOrders'
@@ -115,6 +118,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [otherDescription, setOtherDescription] = useState('')
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [dragOverKey, setDragOverKey] = useState('')
 
   const fileInputsRef = useRef({})
   const substituteRefs = useRef({})
@@ -276,6 +280,47 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     })
   }
 
+  // Arrastar e soltar: handlers de uma zona de drop (linha/celula). Sem
+  // permissao de envio (ou enviando), nao devolve handler nem destaque.
+  function getDropTargetProps(key, { enabled, onFile }) {
+    if (!enabled || !onFile || uploadingKey === key) return {}
+
+    function handleDragOver(event) {
+      if (!isFileDragEvent(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      setDragOverKey(key)
+    }
+
+    return {
+      onDragEnter: handleDragOver,
+      onDragOver: handleDragOver,
+      onDragLeave: (event) => {
+        if (event.currentTarget.contains(event.relatedTarget)) return
+        setDragOverKey((current) => (current === key ? '' : current))
+      },
+      onDrop: (event) => {
+        if (!isFileDragEvent(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        setDragOverKey('')
+        const { file, error } = pickSingleDroppedFile(event.dataTransfer)
+        if (error === 'multiple') {
+          setRowErrors((current) => ({
+            ...current,
+            [key]: {
+              title: 'Não foi possível enviar o documento.',
+              detail: DROP_MULTIPLE_FILES_MESSAGE,
+            },
+          }))
+          return
+        }
+        if (file) onFile(file)
+      },
+    }
+  }
+
   async function handleUploadFile(type, slotKey, extra, file) {
     clearRowError(slotKey)
     setUploadingKey(slotKey)
@@ -406,7 +451,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const rowError = rowErrors[slotKey]
 
     return (
-      <div key={slotKey} className="documents-row-group">
+      <div
+        key={slotKey}
+        className={`documents-row-group${dragOverKey === slotKey ? ' documents-drop-active' : ''}`}
+        {...getDropTargetProps(slotKey, { enabled: Boolean(canUpload && onUpload), onFile: onUpload })}
+      >
         <div className="documents-row">
           <span
             className={`documents-row__icon${primary ? ' documents-row__icon--on' : ''}`}
@@ -532,7 +581,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const rowError = rowErrors[slotKey]
 
     return (
-      <td key={type}>
+      <td
+        key={type}
+        className={dragOverKey === slotKey ? 'documents-drop-active' : undefined}
+        {...getDropTargetProps(slotKey, {
+          enabled: canUpload,
+          onFile: (file) => handleUploadFile(type, slotKey, { po: order.po }, file),
+        })}
+      >
         <div className="documents-po-cell">
           {primary ? (
             <>
@@ -709,7 +765,19 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     : 0
 
   return (
-    <div className="documents-panel">
+    <div
+      className="documents-panel"
+      onDragOver={(event) => {
+        if (!isFileDragEvent(event)) return
+        event.preventDefault()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
+      }}
+      onDrop={(event) => {
+        if (!isFileDragEvent(event)) return
+        event.preventDefault()
+        setDragOverKey('')
+      }}
+    >
       <h2 className="documents-visually-hidden">Documentos</h2>
 
       <div className="documents-summary">
@@ -876,7 +944,10 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               })}
 
               {canUploadDocumentType(role, 'other') ? (
-                <div className="documents-add-other-row">
+                <div
+                  className={`documents-add-other-row${dragOverKey === 'other:new' ? ' documents-drop-active' : ''}`}
+                  {...getDropTargetProps('other:new', { enabled: true, onFile: handleAddOtherDocument })}
+                >
                   <input
                     type="file"
                     ref={registerFileInput('other:new')}
