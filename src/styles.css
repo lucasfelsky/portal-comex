@@ -10582,6 +10582,9 @@ body {
   .process-detail-view .detail-block__step { display: none; }
   .process-detail-view .tab-panel-spacing > .detail-block--placeholder { display: grid; }
 
+  /* Mensagens: espaco entre mensagens 12 -> 6px (painel 2026-09-30) */
+  .process-detail-view .process-messages-list { gap: 6px; }
+
   /* Heading com badge/botao a direita (Itens do detalhe e do form, Mensagens, Historico) */
   .process-detail-view .process-detail-card-heading--end,
   .process-form .process-detail-card-heading--end {
@@ -10696,6 +10699,15 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    /* Painel 2026-09-30: "Anteriores" rola a partir de 400px */
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+
+  /* sem isso o flex espreme os cards para caber nos 400px em vez de rolar */
+  .surface--news .news-aside > * {
+    flex-shrink: 0;
   }
 
   .surface--news .news-section-label {
