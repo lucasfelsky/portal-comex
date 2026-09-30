@@ -495,7 +495,8 @@ service cloud.firestore {
     // `fispq`), `containerId` (so `containerWash`), `description` (so
     // `other`), `name`, `mimeType`, `size`, `storagePath`, `uploadedAt`,
     // `uploadedById`, `uploadedByName`, `uploadedByRole`, `poNumber` (so
-    // invoice/packingList no CONSOLIDADO - AD-1).
+    // invoice/packingList no CONSOLIDADO - AD-1), `alsoPackingList` (bool, so
+    // `invoice`: o arquivo da Invoice tambem contem o Packing List).
     function isValidProcessDocumentSlotKey(processId) {
       return (
         (request.resource.data.type == 'fispq'
@@ -590,7 +591,10 @@ service cloud.firestore {
         && (!('poNumber' in request.resource.data)
           || (request.resource.data.poNumber is string
             && request.resource.data.poNumber.size() > 0
-            && request.resource.data.poNumber.size() <= 64));
+            && request.resource.data.poNumber.size() <= 64))
+        && (!('alsoPackingList' in request.resource.data)
+          || (request.resource.data.alsoPackingList is bool
+            && request.resource.data.type == 'invoice'));
     }
 
     function isValidProcessDocumentCreate(processId) {
@@ -598,7 +602,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'type', 'slotKey', 'itemId', 'containerId', 'description', 'name',
           'mimeType', 'size', 'storagePath', 'uploadedAt', 'uploadedById',
-          'uploadedByName', 'uploadedByRole', 'poNumber',
+          'uploadedByName', 'uploadedByRole', 'poNumber', 'alsoPackingList',
         ])
         && isValidProcessDocumentRequiredFields(processId)
         && isValidProcessDocumentFieldShapes()
@@ -608,6 +612,18 @@ service cloud.firestore {
           request.resource.data.type != 'containerWash'
           || get(/databases/$(database)/documents/processes/$(processId)).data.category in ['FCL', 'CONSOLIDADO']
         );
+    }
+
+    // Unica mutacao permitida em documento ja criado: admin marca/desmarca
+    // que a Invoice tambem contem o Packing List. So' `invoice`, so' as 3
+    // chaves do vinculo (nunca name/storagePath/etc.), com trilha de auditoria.
+    function isValidInvoicePackingListLinkUpdate() {
+      return resource.data.type == 'invoice'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['alsoPackingList', 'alsoPackingListUpdatedAt', 'alsoPackingListUpdatedById'])
+        && request.resource.data.alsoPackingList is bool
+        && request.resource.data.alsoPackingListUpdatedAt == request.time
+        && request.resource.data.alsoPackingListUpdatedById == request.auth.uid;
     }
 
     match /processes/{processId} {
@@ -652,9 +668,10 @@ service cloud.firestore {
       // F18a (D1-D5) + AD-1 (adendo do orquestrador): metadado IMUTAVEL de
       // documentos do processo (BL/AWB, relatorio de carga, invoice/packing
       // list, FISPQ por item, lavacao por conteiner, outros). Leitura so
-      // admin/logistica (nunca usuario comum). `update: if false` sempre -
-      // "versao anterior" e' derivada por ordem de `uploadedAt` dentro do
-      // mesmo `slotKey` (D1), nunca reescrita.
+      // admin/logistica (nunca usuario comum). Imutavel, EXCETO o vinculo
+      // Invoice -> Packing List (`isValidInvoicePackingListLinkUpdate`, so
+      // admin) - "versao anterior" e' derivada por ordem de `uploadedAt`
+      // dentro do mesmo `slotKey` (D1), nunca reescrita.
       match /documents/{documentId} {
         allow read: if isAdmin() || isLogistics();
         allow create: if isValidProcessDocumentCreate(processId)
@@ -662,7 +679,7 @@ service cloud.firestore {
             isAdmin()
             || (isLogistics() && request.resource.data.type == 'containerWash')
           );
-        allow update: if false;
+        allow update: if isAdmin() && isValidInvoicePackingListLinkUpdate();
         allow delete: if isAdmin()
           || (isLogistics() && resource.data.uploadedById == request.auth.uid);
       }

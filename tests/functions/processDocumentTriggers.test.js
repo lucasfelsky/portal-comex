@@ -227,6 +227,42 @@ describe('syncProcessDocumentIndex', () => {
     })
   })
 
+  it('Invoice atual com alsoPackingList: true -> processSlotKeys inclui invoice e packingList', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      'processes/proc-1/documents': [
+        { id: 'd1', data: { type: 'invoice', slotKey: 'invoice', alsoPackingList: true, uploadedAt: '2026-09-02T10:00:00.000Z' } },
+        { id: 'd0', data: { type: 'invoice', slotKey: 'invoice', uploadedAt: '2026-09-01T10:00:00.000Z' } },
+      ],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).toHaveBeenCalledWith({
+      documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: ['invoice', 'packingList'] },
+    })
+  })
+
+  it('so a Invoice ANTERIOR com flag -> packingList fora do index', async () => {
+    const { collectionRefs } = setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      'processes/proc-1/documents': [
+        { id: 'd0', data: { type: 'invoice', slotKey: 'invoice', alsoPackingList: true, uploadedAt: '2026-09-01T10:00:00.000Z' } },
+        { id: 'd1', data: { type: 'invoice', slotKey: 'invoice', uploadedAt: '2026-09-02T10:00:00.000Z' } },
+      ],
+    })
+    const handler = getHandler(syncProcessDocumentIndex)
+    const processRef = collectionRefs.get('processes').doc(PROCESS_ID)
+
+    await handler(makeEvent())
+
+    expect(processRef.update).toHaveBeenCalledWith({
+      documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: ['invoice'] },
+    })
+  })
+
   it('index igual ao atual -> nao escreve (sem write inutil)', async () => {
     const { collectionRefs } = setupFirestoreChain({
       processes: [

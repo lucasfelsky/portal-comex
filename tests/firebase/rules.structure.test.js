@@ -99,25 +99,27 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/documents\/\{documentId\}\s*\{/)
     })
 
-    it('match /documents/{documentId} e imutavel (update: if false), leitura so admin/logistica', () => {
+    it('match /documents/{documentId} so permite update do vinculo Invoice->Packing List (admin), leitura so admin/logistica', () => {
       const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
       expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)/)
-      expect(body).toMatch(/allow\s+update:\s*if\s+false/)
+      expect(body).toMatch(
+        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)/
+      )
       expect(body).toMatch(/isValidProcessDocumentCreate\s*\(\s*processId\s*\)/)
     })
   })
 
   describe('F18a — isValidProcessDocumentCreate (D1-D5, AD-1)', () => {
-    it('hasOnly contem os 14 campos (13 do D1 + poNumber do AD-1)', () => {
+    it('hasOnly contem os 15 campos (13 do D1 + poNumber do AD-1 + alsoPackingList)', () => {
       const match = rules.match(/function\s+isValidProcessDocumentCreate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
       const fields = [
         'type', 'slotKey', 'itemId', 'containerId', 'description', 'name',
         'mimeType', 'size', 'storagePath', 'uploadedAt', 'uploadedById',
-        'uploadedByName', 'uploadedByRole', 'poNumber',
+        'uploadedByName', 'uploadedByRole', 'poNumber', 'alsoPackingList',
       ]
       for (const field of fields) {
         expect(body, `campo ${field} nao esta em isValidProcessDocumentCreate`).toMatch(

@@ -158,7 +158,9 @@ export const syncProcessDocumentIndex = onDocumentWritten(
       if (!processSnapshot.exists) return
 
       const documentsSnapshot = await transaction.get(documentsCollectionRef)
-      const nextIndex = buildDocumentIndex(documentsSnapshot.docs.map((doc) => doc.data()))
+      const nextIndex = buildDocumentIndex(
+        documentsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      )
       const currentIndex = normalizeDocumentIndexMirror(processSnapshot.data()?.documentIndex)
 
       if (isSameDocumentIndex(currentIndex, nextIndex)) return

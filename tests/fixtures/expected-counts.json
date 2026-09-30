@@ -286,7 +286,13 @@
       "status",
       "updatedAt"
     ],
+    "isValidInvoicePackingListLinkUpdate": [
+      "alsoPackingList",
+      "alsoPackingListUpdatedAt",
+      "alsoPackingListUpdatedById"
+    ],
     "isValidProcessDocumentCreate": [
+      "alsoPackingList",
       "containerId",
       "description",
       "itemId",

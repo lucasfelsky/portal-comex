@@ -31,6 +31,25 @@ export const DOCUMENT_MILESTONE_EVENT_TYPES = {
   containerWash: 'containerWashUploaded',
 }
 
+function toMillis(value) {
+  if (value == null) return 0
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return value.toDate().getTime()
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime()
+}
+
+// Espelho de getPackingListSlotKeyForInvoice (front).
+function getPackingListSlotKeyForInvoice(slotKey) {
+  const value = String(slotKey ?? '')
+  if (value === 'invoice') return 'packingList'
+  if (value.startsWith('invoice:') && value.length > 'invoice:'.length) {
+    return 'packingList:' + value.slice('invoice:'.length)
+  }
+  return ''
+}
+
 // Espelho de `PROCESS_SLOT_DOCUMENT_TYPES` (`src/features/processes/processDocuments.js`).
 const PROCESS_SLOT_DOCUMENT_TYPES = ['bl', 'cargoReport', 'invoice', 'packingList']
 
@@ -52,6 +71,29 @@ export function buildDocumentIndex(docs) {
     }
     if (doc?.type === 'fispq' && doc?.itemId) fispqItemIds.push(String(doc.itemId))
     if (doc?.type === 'containerWash' && doc?.containerId) containerWashIds.push(String(doc.containerId))
+  }
+
+  // Invoice ATUAL (maior uploadedAt, desempate id maior - mesmo criterio de
+  // groupDocumentsBySlot no front) marcada com alsoPackingList cobre o slot
+  // do Packing List.
+  const currentInvoiceBySlot = new Map()
+  for (const doc of list) {
+    if (doc?.type !== 'invoice' || typeof doc?.slotKey !== 'string' || !doc.slotKey) continue
+    const best = currentInvoiceBySlot.get(doc.slotKey)
+    if (!best) {
+      currentInvoiceBySlot.set(doc.slotKey, doc)
+      continue
+    }
+    const diff = toMillis(doc.uploadedAt) - toMillis(best.uploadedAt)
+    if (diff > 0 || (diff === 0 && String(doc.id ?? '').localeCompare(String(best.id ?? '')) > 0)) {
+      currentInvoiceBySlot.set(doc.slotKey, doc)
+    }
+  }
+  for (const [slotKey, doc] of currentInvoiceBySlot) {
+    if (doc.alsoPackingList === true) {
+      const packingSlot = getPackingListSlotKeyForInvoice(slotKey)
+      if (packingSlot) processSlotKeys.push(packingSlot)
+    }
   }
 
   return {

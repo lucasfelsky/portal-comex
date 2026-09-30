@@ -12053,6 +12053,21 @@ body {
   background: var(--primary-50);
 }
 
+.documents-combine {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.documents-combine__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .documents-progress {
   display: flex;
   flex-direction: column;

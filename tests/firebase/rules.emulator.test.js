@@ -2620,7 +2620,144 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(setDoc(doc(anon(), 'processes/p1/documents/d2'), baseFields()))
     })
 
-    it('update falha mesmo para admin (documento imutavel)', async () => {
+    // Invoice que tambem contem o Packing List: unico update permitido em
+    // documento (admin, doc invoice, so as 3 chaves do vinculo).
+    describe('vinculo Invoice -> Packing List (alsoPackingList)', () => {
+      const invoiceFields = (overrides = {}) =>
+        baseFields({
+          type: 'invoice',
+          slotKey: 'invoice',
+          storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+          ...overrides,
+        })
+      const linkUpdate = (overrides = {}) => ({
+        alsoPackingList: true,
+        alsoPackingListUpdatedAt: serverTimestamp(),
+        alsoPackingListUpdatedById: 'admin-1',
+        ...overrides,
+      })
+      const invoicePath = 'processes/p1/documents/inv1'
+
+      it('admin cria invoice com alsoPackingList: true', async () => {
+        await assertSucceeds(
+          setDoc(doc(admin('admin-1'), invoicePath), invoiceFields({ alsoPackingList: true }))
+        )
+      })
+
+      it('admin cria invoice com alsoPackingList: false', async () => {
+        await assertSucceeds(
+          setDoc(doc(admin('admin-1'), invoicePath), invoiceFields({ alsoPackingList: false }))
+        )
+      })
+
+      it('alsoPackingList em documento que nao e invoice falha (bl e packingList)', async () => {
+        await assertFails(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), baseFields({ alsoPackingList: true })))
+        await assertFails(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p1/documents/d2'),
+            baseFields({
+              type: 'packingList',
+              slotKey: 'packingList',
+              storagePath: 'processes/p1/documents/packingList/1-admin-1-pl.pdf',
+              alsoPackingList: true,
+            })
+          )
+        )
+      })
+
+      it('alsoPackingList nao booleano falha no create', async () => {
+        await assertFails(setDoc(doc(admin('admin-1'), invoicePath), invoiceFields({ alsoPackingList: 'sim' })))
+        await assertFails(setDoc(doc(admin('admin-1'), invoicePath), invoiceFields({ alsoPackingList: 1 })))
+      })
+
+      it('admin atualiza o vinculo na invoice com as 3 chaves validas (marcar e desmarcar)', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertSucceeds(updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate()))
+        await assertSucceeds(updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate({ alsoPackingList: false })))
+      })
+
+      it('o mesmo update em documento bl falha', async () => {
+        await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), linkUpdate()))
+      })
+
+      it('o mesmo update em packingList falha', async () => {
+        await seed((db) =>
+          setDoc(
+            doc(db, 'processes/p1/documents/pl1'),
+            baseFields({
+              type: 'packingList',
+              slotKey: 'packingList',
+              storagePath: 'processes/p1/documents/packingList/1-admin-1-pl.pdf',
+            })
+          )
+        )
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/pl1'), linkUpdate()))
+      })
+
+      it('update junto com name, storagePath, slotKey, type ou uploadedById falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        const ref = doc(admin('admin-1'), invoicePath)
+        await assertFails(updateDoc(ref, linkUpdate({ name: 'outro.pdf' })))
+        await assertFails(updateDoc(ref, linkUpdate({ storagePath: 'processes/p1/documents/invoice/x.pdf' })))
+        await assertFails(updateDoc(ref, linkUpdate({ slotKey: 'invoice:PO-1' })))
+        await assertFails(updateDoc(ref, linkUpdate({ type: 'bl' })))
+        await assertFails(updateDoc(ref, linkUpdate({ uploadedById: 'admin-2' })))
+      })
+
+      it('update so de name/storagePath na invoice falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        const ref = doc(admin('admin-1'), invoicePath)
+        await assertFails(updateDoc(ref, { name: 'outro.pdf' }))
+        await assertFails(updateDoc(ref, { storagePath: 'processes/p1/documents/invoice/x.pdf' }))
+      })
+
+      it('update com chave extra desconhecida falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate({ extra: 'x' })))
+      })
+
+      it('update com alsoPackingList nao booleano falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate({ alsoPackingList: 'sim' })))
+      })
+
+      it('update com alsoPackingListUpdatedById de outro uid falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(
+          updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate({ alsoPackingListUpdatedById: 'admin-2' }))
+        )
+      })
+
+      it('update com alsoPackingListUpdatedAt fora do request.time falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(
+          updateDoc(doc(admin('admin-1'), invoicePath), linkUpdate({ alsoPackingListUpdatedAt: new Date('2020-01-01') }))
+        )
+      })
+
+      it('update sem a trilha de auditoria (so o booleano) falha', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), invoicePath), { alsoPackingList: true }))
+      })
+
+      it('logistica nao atualiza o vinculo', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(
+          updateDoc(doc(logistics('log-1'), invoicePath), linkUpdate({ alsoPackingListUpdatedById: 'log-1' }))
+        )
+      })
+
+      it('usuario aprovado comum e anonimo nao atualizam o vinculo', async () => {
+        await seed((db) => setDoc(doc(db, invoicePath), invoiceFields()))
+        await assertFails(
+          updateDoc(doc(approvedUser('user-1'), invoicePath), linkUpdate({ alsoPackingListUpdatedById: 'user-1' }))
+        )
+        await assertFails(updateDoc(doc(anon(), invoicePath), linkUpdate()))
+      })
+    })
+
+    it('update de name falha mesmo para admin (documento imutavel, exceto o vinculo Invoice->Packing List)', async () => {
       await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
       await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), { name: 'outro.pdf' }))
     })

@@ -16,6 +16,8 @@ import {
   getDocumentIndexFromDocuments,
   getDocumentPendingFields,
   getDocumentTypeLabel,
+  getInvoicePackingListLink,
+  getPackingListSlotKeyForInvoice,
   getSlotKeyPoNumber,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
@@ -643,5 +645,119 @@ describe('pickSingleDroppedFile', () => {
     expect(pickSingleDroppedFile(undefined)).toEqual({ file: null, error: 'empty' })
     expect(pickSingleDroppedFile({ files: [a] })).toEqual({ file: a, error: null })
     expect(pickSingleDroppedFile({ files: [a, { name: 'b' }] })).toEqual({ file: null, error: 'multiple' })
+  })
+})
+
+// Invoice que tambem contem o Packing List: slot PL coberto pela Invoice ATUAL.
+describe('Invoice contem Packing List (processSlotKeys)', () => {
+  const inv = (overrides = {}) => ({
+    id: 'i1',
+    type: 'invoice',
+    slotKey: 'invoice',
+    uploadedAt: '2026-09-01T10:00:00.000Z',
+    ...overrides,
+  })
+
+  const cases = {
+    'Invoice atual com flag': [inv({ alsoPackingList: true })],
+    'so a versao ANTERIOR com flag': [
+      inv({ id: 'old', alsoPackingList: true, uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      inv({ id: 'new', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ],
+    'atual com flag e anterior sem': [
+      inv({ id: 'old', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      inv({ id: 'new', alsoPackingList: true, uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ],
+    'CONSOLIDADO invoice:PO-1 com flag': [
+      inv({ slotKey: 'invoice:PO-1', alsoPackingList: true }),
+      inv({ id: 'i2', slotKey: 'invoice:PO-2' }),
+    ],
+    'PL com arquivo proprio e Invoice com flag': [
+      inv({ alsoPackingList: true }),
+      { id: 'pl1', type: 'packingList', slotKey: 'packingList', uploadedAt: '2026-09-01T11:00:00.000Z' },
+    ],
+    'empate de uploadedAt desempata por id (Timestamp-like)': [
+      inv({ id: 'a', alsoPackingList: true, uploadedAt: { toDate: () => new Date('2026-09-01T10:00:00.000Z') } }),
+      inv({ id: 'b', uploadedAt: { toDate: () => new Date('2026-09-01T10:00:00.000Z') } }),
+    ],
+    'flag nao booleano e ignorado': [inv({ alsoPackingList: 'true' })],
+    'flag em documento que nao e invoice e ignorado': [
+      { id: 'b1', type: 'bl', slotKey: 'bl', alsoPackingList: true, uploadedAt: '2026-09-01T10:00:00.000Z' },
+    ],
+  }
+
+  it('Invoice atual com flag -> processSlotKeys contem packingList', () => {
+    expect(getDocumentIndexFromDocuments(cases['Invoice atual com flag']).processSlotKeys).toEqual([
+      'invoice',
+      'packingList',
+    ])
+  })
+
+  it('so a versao anterior com flag -> NAO contem packingList', () => {
+    expect(getDocumentIndexFromDocuments(cases['so a versao ANTERIOR com flag']).processSlotKeys).toEqual([
+      'invoice',
+    ])
+  })
+
+  it('CONSOLIDADO invoice:PO-1 com flag -> packingList:PO-1 (so a PO marcada)', () => {
+    expect(getDocumentIndexFromDocuments(cases['CONSOLIDADO invoice:PO-1 com flag']).processSlotKeys).toEqual([
+      'invoice:PO-1',
+      'invoice:PO-2',
+      'packingList:PO-1',
+    ])
+  })
+
+  it('PL com arquivo proprio + flag -> sem duplicata', () => {
+    expect(getDocumentIndexFromDocuments(cases['PL com arquivo proprio e Invoice com flag']).processSlotKeys).toEqual([
+      'invoice',
+      'packingList',
+    ])
+  })
+
+  it('paridade getDocumentIndexFromDocuments (front) x buildDocumentIndex (function) em todos os conjuntos', () => {
+    for (const [name, docs] of Object.entries(cases)) {
+      expect(getDocumentIndexFromDocuments(docs), name).toEqual(buildDocumentIndex(docs))
+    }
+  })
+
+  it('paridade: ordem de entrada nao muda o resultado', () => {
+    const docs = cases['atual com flag e anterior sem']
+    const reversed = [...docs].reverse()
+    expect(getDocumentIndexFromDocuments(reversed)).toEqual(getDocumentIndexFromDocuments(docs))
+    expect(buildDocumentIndex(reversed)).toEqual(buildDocumentIndex(docs))
+  })
+
+  it('embarcado com BL+Relatorio+Invoice marcada: Packing List nao e pendencia', () => {
+    const docs = [
+      { id: 'b', type: 'bl', slotKey: 'bl', uploadedAt: '2026-09-01T10:00:00.000Z' },
+      { id: 'c', type: 'cargoReport', slotKey: 'cargoReport', uploadedAt: '2026-09-01T10:00:00.000Z' },
+      inv({ alsoPackingList: true }),
+    ]
+    const process = { id: 'p1', category: 'LCL', shippedAt: '2026-09-01' }
+    expect(buildDocumentPendingFields(process, getDocumentIndexFromDocuments(docs))).toEqual([])
+    expect(buildDocumentPendingFields(process, buildDocumentIndex(docs))).toEqual([])
+    const semFlag = docs.map((doc) => ({ ...doc, alsoPackingList: false }))
+    expect(
+      buildDocumentPendingFields(process, getDocumentIndexFromDocuments(semFlag)).map((field) => field.id)
+    ).toEqual(['packingList'])
+  })
+
+  it('getPackingListSlotKeyForInvoice', () => {
+    expect(getPackingListSlotKeyForInvoice('invoice')).toBe('packingList')
+    expect(getPackingListSlotKeyForInvoice('invoice:PO-1')).toBe('packingList:PO-1')
+    expect(getPackingListSlotKeyForInvoice('invoice:')).toBe('')
+    expect(getPackingListSlotKeyForInvoice('bl')).toBe('')
+    expect(getPackingListSlotKeyForInvoice('other:x')).toBe('')
+    expect(getPackingListSlotKeyForInvoice('packingList')).toBe('')
+    expect(getPackingListSlotKeyForInvoice(undefined)).toBe('')
+  })
+
+  it('getInvoicePackingListLink so devolve a Invoice ATUAL marcada', () => {
+    const groups = groupDocumentsBySlot(cases['atual com flag e anterior sem'])
+    expect(getInvoicePackingListLink(groups, 'invoice')?.id).toBe('new')
+    const anterior = groupDocumentsBySlot(cases['so a versao ANTERIOR com flag'])
+    expect(getInvoicePackingListLink(anterior, 'invoice')).toBeNull()
+    expect(getInvoicePackingListLink(groups, 'invoice:PO-9')).toBeNull()
+    expect(getInvoicePackingListLink(undefined, 'invoice')).toBeNull()
   })
 })
