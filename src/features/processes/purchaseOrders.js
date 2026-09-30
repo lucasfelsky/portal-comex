@@ -130,6 +130,12 @@ export function clearRemovedPurchaseOrderLinks(items, purchaseOrders) {
   })
 }
 
+// 2026-09-30: "PO 5093", sem duplicar quando o numero ja' vem como "PO-5093".
+export function formatPurchaseOrderNumber(po) {
+  const value = String(po ?? '').trim()
+  return /^PO[^A-Z]/i.test(value) ? value : `PO ${value}`
+}
+
 // F17.2d-2 (D-1, Q6): ponto unico da mascara - flag de ROLE (`canSeeName`),
 // NUNCA `canShowProcessName` (que libera CONSOLIDADO para todos).
 export function canSeePurchaseOrderDetails(canSeeName) {

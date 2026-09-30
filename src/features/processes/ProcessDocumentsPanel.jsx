@@ -32,7 +32,7 @@ import {
   pickSingleDroppedFile,
 } from './processDocuments'
 import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
-import { canSeePurchaseOrderDetails, getProcessPurchaseOrders } from './purchaseOrders'
+import { canSeePurchaseOrderDetails, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { canSeeProcessName } from './processLabels'
 import { isShipmentConfirmed } from './shipmentConfirmation'
 
@@ -1230,7 +1230,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                               <>
                                 <span className="documents-po-name">{String(order.reference).trim()}</span>
                                 <span className="documents-po-number">
-                                  {/^PO[^A-Z]/i.test(String(order.po).trim()) ? order.po : `PO ${order.po}`}
+                                  {formatPurchaseOrderNumber(order.po)}
                                 </span>
                               </>
                             ) : (

@@ -480,6 +480,21 @@ describe('buildDocumentPendingFields - embarque confirmado (BL/Relatorio/Invoice
     expect(fields.every((field) => field.stage === 1)).toBe(true)
   })
 
+  it('CONSOLIDADO: com Referencia, o rotulo mostra o nome do processo (sem duplicar prefixo PO)', () => {
+    const process = {
+      category: 'CONSOLIDADO',
+      shippedAt: '2026-09-01',
+      purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-7', reference: 'GOOYER SEA 158-26' }],
+    }
+    const fields = buildDocumentPendingFields(process, { ...noDocs, processSlotKeys: ['bl', 'cargoReport'] })
+    expect(fields.map((field) => field.label)).toEqual([
+      'Invoice de BLUESKY SEA 003-26 (PO 5093)',
+      'Packing List de BLUESKY SEA 003-26 (PO 5093)',
+      'Invoice de GOOYER SEA 158-26 (PO-7)',
+      'Packing List de GOOYER SEA 158-26 (PO-7)',
+    ])
+  })
+
   it('CONSOLIDADO com slot unico `invoice` no indice ainda cobra invoice:<po>', () => {
     const process = { category: 'CONSOLIDADO', shippedAt: '2026-09-01', purchaseOrders: [{ po: '4500130' }] }
     const fields = buildDocumentPendingFields(process, { ...noDocs, processSlotKeys: ['bl', 'cargoReport', 'invoice'] })
