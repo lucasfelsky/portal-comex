@@ -34,6 +34,12 @@ import {
   isShipmentConfirmed,
 } from './shipmentConfirmation'
 
+const EMPTY_RETURN_EDITABLE_STATUSES = [
+  'Aguardando agendamento de coleta',
+  'Coleta Agendada',
+  'Carga recebida',
+]
+
 // F10.5 (backlog 2026-07-12): tela de criação/edição do processo
 // (viewMode 'create' || 'edit'), extraída do ProcessesPage. Presentacional
 // — lê o `draft` (via prop) e chama callbacks (`onDraftChange` para cada
@@ -443,9 +449,12 @@ export default function ProcessForm({
     keepsCollectionSchedule(draft.collectionStatus) &&
     !shouldEditCollectionSchedule(draft.collectionStatus)
   const showCarrier = isCollectionScheduledOrBeyondStatus(draft.collectionStatus)
+  // 2026-09-30 (Lucas): devolucao do vazio e' agendada junto com a coleta, entao
+  // aparece a partir de "Aguardando agendamento de coleta" (a pendencia segue
+  // cobrada so' apos "Carga recebida", em pendingFields.js).
   const showEmptyReturn =
     FREE_TIME_CATEGORIES.includes(draft.category) &&
-    derivedProcessStatus === 'Carga recebida' &&
+    EMPTY_RETURN_EDITABLE_STATUSES.includes(derivedProcessStatus) &&
     (draft.containers ?? []).length > 0
   const hasCollectionContent =
     showCollectionSelect || showCollectionWindows || showCollectionReadOnly || showCarrier || showEmptyReturn

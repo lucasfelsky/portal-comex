@@ -2,7 +2,7 @@ import { getContainerOptionLabel } from './containers'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 
 // F17.4b (B-7, D6): devolucao de vazio - editavel SO pelo admin, no passo
-// "Fluxo operacional" do form (FCL/CONSOLIDADO, apos recebimento). Importa
+// "Coleta" do form (FCL/CONSOLIDADO, desde "Aguardando agendamento de coleta"). Importa
 // `./containers` e `../../utils/fieldErrors` (UX-3b, nao mockado).
 export default function EmptyReturnFields({ containers, onChange, disabled, errors = {} }) {
   const containerList = Array.isArray(containers) ? containers : []
