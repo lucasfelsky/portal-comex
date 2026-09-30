@@ -155,6 +155,12 @@ describe('ProcessDetailView — Rastrear navio', () => {
     expect(screen.queryByText('Rastrear navio')).toBeNull()
   })
 
+  it('FCL so com IMO mostra o bloco, a linha IMO e o botao', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'FCL', vesselImo: '9787027' }) })
+    expect(getDefinition('IMO do navio')).toHaveTextContent('9787027')
+    expect(screen.getByRole('button', { name: 'Rastrear navio' })).toBeInTheDocument()
+  })
+
   it('FCL sem nome nem IMO nao mostra o botao', () => {
     renderDetail({ selectedProcess: makeProcess({ category: 'FCL', masterBl: 'MBL1' }) })
     expect(screen.queryByText('Rastrear navio')).toBeNull()

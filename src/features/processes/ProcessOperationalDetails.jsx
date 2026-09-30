@@ -346,7 +346,9 @@ function formatCargoUnit(quantity, singularLabel, pluralLabel) {
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal
 // de embarque ou transbordo).
 export function ProcessTransitDetails({ process, showEmptyPlaceholder = false }) {
+  const trackingTarget = getVesselTrackingTarget(process)
   const hasTransit =
+    trackingTarget ||
     process?.shippedAt ||
     process?.vesselName ||
     process?.voyage ||
@@ -373,6 +375,7 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false })
         {process?.shippedAt ? <DetailRow label="Data de embarque">{formatDate(process.shippedAt)}</DetailRow> : null}
         {process?.vesselName ? <DetailRow label="Navio">{process.vesselName}</DetailRow> : null}
         {process?.voyage ? <DetailRow label="Viagem">{process.voyage}</DetailRow> : null}
+        {trackingTarget?.imo ? <DetailRow label="IMO do navio">{trackingTarget.imo}</DetailRow> : null}
         {process?.flightNumber ? <DetailRow label="Voo">{process.flightNumber}</DetailRow> : null}
         {process?.masterBl ? <DetailRow label="MBL">{process.masterBl}</DetailRow> : null}
         {process?.houseBl ? <DetailRow label="HBL">{process.houseBl}</DetailRow> : null}
@@ -384,7 +387,7 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false })
           </DetailRow>
         ) : null}
       </DetailList>
-      {getVesselTrackingTarget(process) ? (
+      {trackingTarget ? (
         <div className="detail-block__actions process-transit__actions">
           <VesselTrackingButton process={process} />
         </div>
