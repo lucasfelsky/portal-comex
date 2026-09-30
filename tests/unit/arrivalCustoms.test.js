@@ -271,6 +271,38 @@ describe('sanitizeArrivalFields', () => {
   })
 })
 
+describe('getFreeTimeStatus - devolucao prevista (returnedAt futuro)', () => {
+  const base = {
+    category: 'FCL',
+    freeTimeDays: 7,
+    cargoPresenceInformedAt: '2026-09-01T10:00',
+  }
+
+  it('returnedAt futuro NAO fecha: free time segue contando', () => {
+    const result = getFreeTimeStatus(
+      { ...base, containers: [{ returnedAt: '2026-09-05' }] },
+      new Date(2026, 8, 3)
+    )
+    expect(result.state).toBe('running')
+  })
+
+  it('returnedAt hoje fecha', () => {
+    const result = getFreeTimeStatus(
+      { ...base, containers: [{ returnedAt: '2026-09-05' }] },
+      new Date(2026, 8, 5)
+    )
+    expect(result.state).toBe('closed')
+  })
+
+  it('um devolvido e outro previsto -> nao fecha', () => {
+    const result = getFreeTimeStatus(
+      { ...base, containers: [{ returnedAt: '2026-09-02' }, { returnedAt: '2026-09-06' }] },
+      new Date(2026, 8, 5)
+    )
+    expect(result.state).not.toBe('closed')
+  })
+})
+
 describe('getFreeTimeStatus', () => {
   it('fora de FREE_TIME_CATEGORIES -> null', () => {
     expect(getFreeTimeStatus({ category: 'LCL' })).toBeNull()

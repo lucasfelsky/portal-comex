@@ -29,7 +29,7 @@ import {
   isFileDragEvent,
   pickSingleDroppedFile,
 } from './processDocuments'
-import { CONTAINER_TYPE_OPTIONS } from './containers'
+import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
 import { getProcessPurchaseOrders } from './purchaseOrders'
 import { isShipmentConfirmed } from './shipmentConfirmation'
 
@@ -196,7 +196,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const slotKey = buildDocumentSlotKey('containerWash', { containerId: container.id })
     const group = findGroup(slotKey)
     const hasDoc = Boolean(group?.primary)
-    const isReturned = Boolean(String(container?.returnedAt ?? '').trim())
+    const isReturned = isContainerReturned(container)
     const state = hasDoc ? 'sent' : isReturned ? 'pending' : 'not-required'
     return { state, group, slotKey, isReturned }
   }
@@ -1096,7 +1096,9 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   container.type ??
                   '—'
                 const metaText = !isReturned
-                  ? `${typeLabel} · aguardando devolução do vazio`
+                  ? isContainerReturnPlanned(container)
+                    ? `${typeLabel} · devolução prevista para ${formatShortDate(container.returnedAt)}`
+                    : `${typeLabel} · aguardando devolução do vazio`
                   : primary
                     ? `${typeLabel} · vazio devolvido em ${formatShortDate(container.returnedAt)} · ${primary.name} · ${formatDocumentSize(primary.size)} · ${formatShortDateFromIso(primary.uploadedAt)}`
                     : `${typeLabel} · vazio devolvido em ${formatShortDate(container.returnedAt)} · nenhum relatório enviado`

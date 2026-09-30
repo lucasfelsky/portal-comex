@@ -11,6 +11,7 @@
 
 import { isShipmentConfirmed } from './shipmentConfirmation'
 import { getProcessPurchaseOrders } from './purchaseOrders'
+import { isContainerReturned } from './containers'
 
 export const MAX_DOCUMENT_MB = 20
 
@@ -297,7 +298,7 @@ export function buildDocumentPendingFields(process, index) {
     containers.forEach((container, index_) => {
       const containerId = typeof container?.id === 'string' ? container.id : ''
       if (!containerId) return
-      if (!String(container?.returnedAt ?? '').trim()) return
+      if (!isContainerReturned(container)) return
       if (containerWashIds.has(containerId)) return
       const label = String(container?.number ?? '').trim() || `Contêiner ${index_ + 1}`
       fields.push({

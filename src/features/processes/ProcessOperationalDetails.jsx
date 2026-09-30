@@ -1,4 +1,8 @@
-import { CONTAINER_TYPE_OPTIONS, getContainerSpecialBadges } from './containers'
+import {
+  CONTAINER_TYPE_OPTIONS,
+  getContainerSpecialBadges,
+  isContainerReturnPlanned,
+} from './containers'
 import {
   getImoClassLabel,
   getItemDangerousGoodsLabel,
@@ -287,8 +291,12 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
                   <td>
                     {container.returnedAt ? (
                       <>
-                        <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
-                        {Array.isArray(containerWashIds) ? (
+                        {isContainerReturnPlanned(container) ? (
+                          <span className="inline-badge">{`Devolução prevista para ${formatDate(container.returnedAt)}`}</span>
+                        ) : (
+                          <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
+                        )}
+                        {Array.isArray(containerWashIds) && !isContainerReturnPlanned(container) ? (
                           containerWashIds.includes(container.id) ? (
                             <span className="inline-badge inline-badge--ok">Lavação enviada</span>
                           ) : (

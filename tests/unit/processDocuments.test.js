@@ -409,6 +409,20 @@ describe('buildDocumentPendingFields', () => {
     ])
   })
 
+  it('returnedAt futuro (devolucao prevista) -> sem pendencia de lavacao', () => {
+    const process = { category: 'FCL', containers: [{ id: 'CNT-1', returnedAt: '2999-01-01' }] }
+    expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
+  })
+
+  it('returnedAt hoje -> pendencia de lavacao', () => {
+    const now = new Date()
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const process = { category: 'FCL', containers: [{ id: 'CNT-1', returnedAt: todayKey }] }
+    expect(
+      buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] }).map((field) => field.id)
+    ).toEqual(['containerWash:CNT-1'])
+  })
+
   it('conteiner sem returnedAt -> sem pendencia', () => {
     const process = { category: 'FCL', containers: [{ id: 'CNT-1', returnedAt: '' }] }
     expect(buildDocumentPendingFields(process, { fispqItemIds: [], containerWashIds: [] })).toEqual([])
