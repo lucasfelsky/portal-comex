@@ -363,10 +363,13 @@ describe('AppLayout (drawer da sidebar no tablet)', () => {
   const originalMatchMedia = window.matchMedia
   let listeners
 
-  function stubTablet() {
+  // `reducedMotion` liga so' a media `prefers-reduced-motion: reduce`.
+  function stubTablet({ reducedMotion = false } = {}) {
     listeners = []
     window.matchMedia = (query) => ({
-      matches: /max-width:\s*1040px/.test(query),
+      matches:
+        /max-width:\s*1040px/.test(query) ||
+        (reducedMotion && /prefers-reduced-motion:\s*reduce/.test(query)),
       media: query,
       onchange: null,
       addListener: () => {},
@@ -447,6 +450,53 @@ describe('AppLayout (drawer da sidebar no tablet)', () => {
     })
     expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
     expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+  })
+
+  // Movimento reduzido: o CSS tira as animacoes, mas o fechamento sempre foi
+  // por TIMER no JS (nada escuta animationend/transitionend). O jsdom nunca
+  // dispara esses eventos, entao estes testes quebram se alguem amarrar o
+  // fechamento a eles (backdrop preso / conteudo inert para sempre).
+  it('reduced motion: fechar pelo backdrop conclui por timer, sem animationend (backdrop desmonta e nada fica inert)', async () => {
+    stubTablet({ reducedMotion: true })
+    const { container } = renderWithRole('admin')
+    openMenu(container)
+    expect(container.querySelector('.main-content')).toHaveAttribute('inert')
+
+    act(() => {
+      container.querySelector('.sidebar-backdrop').click()
+    })
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+    expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+    expect(container.querySelector('.sidebar-backdrop')).toHaveClass('sidebar-backdrop--closing')
+
+    await waitFor(() => {
+      expect(container.querySelector('.sidebar-backdrop')).toBeNull()
+    })
+    expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+  })
+
+  it('reduced motion: central de notificacoes fecha por timer (painel e backdrop desmontam, nada fica inert)', async () => {
+    stubTablet({ reducedMotion: true })
+    const { container } = renderWithRole('admin')
+    act(() => {
+      screen.getAllByLabelText('Notificações')[0].click()
+    })
+    // O painel abre no requestAnimationFrame: so' entao o conteudo fica inert.
+    await waitFor(() => {
+      expect(container.querySelector('.main-content')).toHaveAttribute('inert')
+    })
+    expect(container.querySelector('.notifications__panel')).not.toBeNull()
+
+    act(() => {
+      fireKeyDown('Escape')
+    })
+    await waitFor(() => {
+      expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+    })
+    await waitFor(() => {
+      expect(container.querySelector('.notifications__panel')).toBeNull()
+      expect(container.querySelector('.notifications-backdrop')).toBeNull()
+    })
   })
 })
 

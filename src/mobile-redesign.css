@@ -16,7 +16,9 @@
      - `(min-width: 721px) and (max-width: 1040px)` = T: ajustes so de
        tablet (largura maxima, lista de Chegadas do DOM de desktop como
        grupo inset, KPIs em 4 colunas).
-     - `(max-width: 720px) and (prefers-reduced-motion: reduce)` e
+     - `(max-width: 1040px) and (prefers-reduced-motion: reduce)` = gavetas
+       e overlays de L/T sem deslize nem fade; `(max-width: 720px) and
+       (prefers-reduced-motion: reduce)` = so o swipe de S; e
        `(min-width: 721px)` (esconde o icone novo do Favoritar).
    No tablet o chrome continua o de desktop-lite (topbar de 64px +
    sidebar em drawer): nada de tab bar nem large title (ver PLAN.md).
@@ -3067,9 +3069,54 @@
 }
 
 /* 16. Movimento reduzido ------------------------------------------------ */
-@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
-  .process-swipe-row__actions,
+/* Gavetas e overlays (<= 1040px): sem deslize nem fade. Fica DEPOIS da camada
+   T de proposito: `:root .sidebar` do T tem a mesma especificidade e quem vem
+   depois vence. O fechamento continua por TIMER no JS (AppLayout, Modal,
+   Toast; nada depende de animationend/transitionend); aqui o `--closing` so
+   some na hora e deixa o toque passar. */
+@media (max-width: 1040px) and (prefers-reduced-motion: reduce) {
+  :root .sidebar {
+    transition: none;
+  }
+
+  .sidebar-backdrop,
+  .notifications__panel,
+  .notifications-backdrop,
+  .modal-backdrop,
+  .news-modal-backdrop,
+  .modal,
+  .action-sheet-backdrop,
+  .action-sheet,
+  .toast {
+    animation: none;
+  }
+
+  /* O backdrop da sidebar nasce com opacity 0 e so aparecia pelo `forwards`
+     da animacao: sem ela, precisa nascer visivel. */
+  .sidebar-backdrop {
+    opacity: 1;
+  }
+
+  /* `opacity: 0` tambem contorna o `transform ... !important` do
+     `.modal--sheet-closing` (styles.css), que este arquivo nao pode repetir. */
+  .sidebar-backdrop--closing,
+  .notifications__panel--closing,
+  .notifications-backdrop--closing,
+  .modal--sheet-closing,
+  .modal-backdrop--closing,
+  .toast--closing {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .notifications-swipe-row__actions {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .process-swipe-row__actions {
     transition: none;
   }
 }
