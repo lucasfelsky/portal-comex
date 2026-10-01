@@ -7,7 +7,9 @@
 //     initialValue="Certificado"      // nome atual
 //     busy={boolean}                  // salvando: bloqueia fechar/enviar
 //     error={{ title, detail } | null} // erro do servidor (dialogo segue aberto)
-//     onSubmit={(nome) => void}       // nome ja aparado (trim + limite)
+//     onSubmit={(nome) => void}       // nome ja aparado (trim). Nome novo: ate o limite
+//                                     // da UI. Nome atual mais longo (valido pela rule,
+//                                     // ate 120) nunca e' cortado: sem edicao volta intacto.
 //     onCancel={() => void}
 //   />
 //
@@ -45,9 +47,18 @@ export default function RenameDocumentDialog({
   function handleSubmit(event) {
     event.preventDefault()
     if (busy) return
-    const next = value.trim().slice(0, MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH)
+    const next = value.trim()
     if (!next) {
       setValidationError('Informe o nome do documento.')
+      inputRef.current?.focus()
+      return
+    }
+    // A rule aceita ate 120 caracteres, a UI limita a 80. Um nome atual mais longo
+    // nao pode ser cortado em silencio: sem edicao ele volta intacto (o pai trata
+    // como "sem mudanca"); editado, precisa caber no limite da UI.
+    const unchanged = next === String(initialValue ?? '').trim()
+    if (!unchanged && next.length > MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH) {
+      setValidationError(`Use no máximo ${MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH} caracteres.`)
       inputRef.current?.focus()
       return
     }

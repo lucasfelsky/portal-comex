@@ -866,6 +866,43 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     expect(screen.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
     expect(document.querySelector('.documents-live')).toHaveTextContent('O documento foi removido.')
   })
+
+  // Nome atual com 81-120 caracteres e' valido pela rule (paridade com o create), mas
+  // passa do limite da UI (80): o dialogo nunca pode corta-lo em silencio.
+  const LONG_NAME = 'Certificado de análise ' + 'x'.repeat(77)
+
+  it('(r14) nome atual mais longo que o limite da UI + Enter sem editar: fecha sem escrever nem cortar', async () => {
+    const user = userEvent.setup()
+    expect(LONG_NAME.length).toBe(100)
+    mockListProcessDocuments.mockResolvedValue([docBl(), docOther({ description: LONG_NAME })])
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await user.click(await screen.findByRole('button', { name: `Renomear ${LONG_NAME}` }))
+    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
+    const input = within(dialog).getByLabelText('Nome do documento')
+    expect(input).toHaveValue(LONG_NAME)
+
+    await user.type(input, '{Enter}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+  })
+
+  it('(r15) nome atual mais longo editado e ainda acima do limite: erro de validacao, sem cortar nem escrever', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([docBl(), docOther({ description: LONG_NAME })])
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await user.click(await screen.findByRole('button', { name: `Renomear ${LONG_NAME}` }))
+    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
+    const input = within(dialog).getByLabelText('Nome do documento')
+
+    await user.type(input, '{Backspace}')
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Use no máximo 80 caracteres.')
+    expect(input).toHaveValue(LONG_NAME.slice(0, -1))
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+  })
 })
 
 describe('ProcessDocumentsPanel — arrastar e soltar', () => {
