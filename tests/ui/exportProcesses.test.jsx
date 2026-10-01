@@ -2,6 +2,7 @@
 // pura (linhas + nome de arquivo) — o I/O do xlsx fica fora (import
 // dinâmico só acontece no exportProcessesToXlsx).
 import { describe, expect, it } from 'vitest'
+import * as XLSX from 'xlsx'
 import {
   buildExportFileName,
   buildProcessesExportRows,
@@ -63,6 +64,9 @@ describe('buildProcessesExportRows', () => {
     expect(row['Próxima coleta']).toBe('')
     expect(row.Containers).toBe('')
     expect(row.Pallets).toBe('')
+    expect(row.Navio).toBe('')
+    expect(row.Viagem).toBe('')
+    expect(row['IMO do navio']).toBe('')
   })
 
   it('lista vazia/invalida -> sem linhas', () => {
@@ -73,6 +77,40 @@ describe('buildProcessesExportRows', () => {
   it('data invalida e ecoada como texto (nao vira Invalid Date)', () => {
     const rows = buildProcessesExportRows([{ id: 'x', eta: 'quando-chegar' }], NOW)
     expect(rows[0].ETA).toBe('quando-chegar')
+  })
+})
+
+describe('buildProcessesExportRows — Navio, Viagem e IMO do navio', () => {
+  const WITH_VESSEL = { ...PROCESS, vesselName: 'MSC Rio', voyage: 'V-001', vesselImo: '9787027' }
+
+  it('exporta Navio, Viagem e IMO do navio (IMO sempre string)', () => {
+    const row = buildProcessesExportRows([WITH_VESSEL], NOW, { canSeeName: true })[0]
+    expect(row.Navio).toBe('MSC Rio')
+    expect(row.Viagem).toBe('V-001')
+    expect(row['IMO do navio']).toBe('9787027')
+    expect(typeof row['IMO do navio']).toBe('string')
+  })
+
+  it('as 3 colunas ficam imediatamente após ETA', () => {
+    const keys = Object.keys(buildProcessesExportRows([WITH_VESSEL], NOW)[0])
+    const etaIndex = keys.indexOf('ETA')
+    expect(keys.indexOf('Navio')).toBe(etaIndex + 1)
+    expect(keys.indexOf('Viagem')).toBe(etaIndex + 2)
+    expect(keys.indexOf('IMO do navio')).toBe(etaIndex + 3)
+  })
+
+  it('o IMO sai como texto na célula do xlsx', () => {
+    const rows = buildProcessesExportRows([WITH_VESSEL], NOW)
+    const sheet = XLSX.utils.json_to_sheet(rows)
+    const range = XLSX.utils.decode_range(sheet['!ref'])
+    let imoColumn = -1
+    for (let col = range.s.c; col <= range.e.c; col += 1) {
+      if (sheet[XLSX.utils.encode_cell({ r: 0, c: col })]?.v === 'IMO do navio') imoColumn = col
+    }
+    expect(imoColumn).toBeGreaterThanOrEqual(0)
+    const cell = sheet[XLSX.utils.encode_cell({ r: 1, c: imoColumn })]
+    expect(cell.t).toBe('s')
+    expect(cell.v).toBe('9787027')
   })
 })
 

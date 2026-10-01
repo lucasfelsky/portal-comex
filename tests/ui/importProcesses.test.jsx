@@ -219,6 +219,7 @@ describe('importProcesses — parseProcessesFromWorkbook', () => {
       expect(warnings).toEqual([])
       expect(validRows[0].name).toBe('Importação Atlas')
       expect(validRows[0].category).toBe('FCL')
+      expect(validRows[0].vesselImo).toBe('')
     })
 
     it('todas as colunas novas FCL: identificação/rastreio + containers/tipos com containerQuantity derivado', async () => {
@@ -450,6 +451,125 @@ describe('importProcesses — parseProcessesFromWorkbook', () => {
       const { validRows, errors } = await parseProcessesFromWorkbook(file)
       expect(errors).toHaveLength(0)
       expect(validRows[0].eta).toBe('2026-03-08')
+    })
+  })
+
+  // IMO do navio (vesselImo): cabecalhos explicitos, sem colidir com Classe IMO.
+  describe('IMO do navio (vesselImo)', () => {
+    const VALID_IMO = '9787027'
+    const INVALID_IMO = '9787028'
+
+    it.each(['IMO do navio', 'IMO navio', 'Navio IMO', 'Vessel IMO', 'IMO Number', 'IMO nº'])(
+      'cabeçalho "%s" mapeia o IMO do navio',
+      async (header) => {
+        const file = makeFile([
+          ['Nome', 'Categoria', header],
+          ['X', 'FCL', VALID_IMO],
+        ])
+
+        const { validRows, errors, warnings } = await parseProcessesFromWorkbook(file)
+
+        expect(errors).toHaveLength(0)
+        expect(warnings).toEqual([])
+        expect(validRows[0].vesselImo).toBe(VALID_IMO)
+      }
+    )
+
+    it('normaliza prefixo "IMO " e aceita célula numérica', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'IMO do navio'],
+        ['X', 'FCL', 'IMO 9787027'],
+        ['Y', 'FCL', 9787027],
+      ])
+
+      const { validRows, errors } = await parseProcessesFromWorkbook(file)
+
+      expect(errors).toHaveLength(0)
+      expect(validRows[0].vesselImo).toBe(VALID_IMO)
+      expect(validRows[1].vesselImo).toBe(VALID_IMO)
+    })
+
+    it('não rouba colunas "Classe IMO", "IMO Class" nem "IMO" solto', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'Classe IMO', 'IMO Class', 'IMO'],
+        ['X', 'FCL', '3', '3', VALID_IMO],
+      ])
+
+      const { validRows, errors, warnings } = await parseProcessesFromWorkbook(file)
+
+      expect(errors).toHaveLength(0)
+      expect(warnings).toEqual([])
+      expect(validRows[0].vesselImo).toBe('')
+    })
+
+    it('coexiste com a coluna "Classe IMO"', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'Classe IMO', 'IMO do navio'],
+        ['X', 'FCL', '3', VALID_IMO],
+      ])
+
+      const { validRows, errors } = await parseProcessesFromWorkbook(file)
+
+      expect(errors).toHaveLength(0)
+      expect(validRows[0].vesselImo).toBe(VALID_IMO)
+      expect(validRows[0].name).toBe('X')
+      expect(validRows[0].category).toBe('FCL')
+    })
+
+    it('IMO inválido gera aviso, importa a linha e deixa o IMO em branco', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'IMO do navio'],
+        ['X', 'FCL', INVALID_IMO],
+      ])
+
+      const { validRows, errors, warnings } = await parseProcessesFromWorkbook(file)
+
+      expect(errors).toHaveLength(0)
+      expect(validRows).toHaveLength(1)
+      expect(validRows[0].vesselImo).toBe('')
+      expect(warnings.some((w) => /IMO do navio inválido/.test(w.motivo))).toBe(true)
+    })
+
+    it('AEREO ignora o IMO com aviso; LCL e CONSOLIDADO mantêm', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'IMO do navio'],
+        ['A', 'AEREO', VALID_IMO],
+        ['B', 'LCL', VALID_IMO],
+        ['C', 'CONSOLIDADO', VALID_IMO],
+      ])
+
+      const { validRows, warnings } = await parseProcessesFromWorkbook(file)
+
+      expect(validRows[0].vesselImo).toBe('')
+      expect(warnings.some((w) => /IMO do navio ignorado/.test(w.motivo))).toBe(true)
+      expect(validRows[1].vesselImo).toBe(VALID_IMO)
+      expect(validRows[2].vesselImo).toBe(VALID_IMO)
+    })
+
+    it('planilha sem a coluna deixa vesselImo vazio e sem avisos', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria'],
+        ['X', 'FCL'],
+      ])
+
+      const { validRows, warnings } = await parseProcessesFromWorkbook(file)
+
+      expect(validRows[0].vesselImo).toBe('')
+      expect(warnings).toEqual([])
+    })
+
+    it('round-trip dos cabeçalhos do export: Navio, Viagem e IMO do navio', async () => {
+      const file = makeFile([
+        ['Nome', 'Categoria', 'Navio', 'Viagem', 'IMO do navio'],
+        ['X', 'FCL', 'MSC Rio', 'V-001', VALID_IMO],
+      ])
+
+      const { validRows, errors } = await parseProcessesFromWorkbook(file)
+
+      expect(errors).toHaveLength(0)
+      expect(validRows[0].vesselName).toBe('MSC Rio')
+      expect(validRows[0].voyage).toBe('V-001')
+      expect(validRows[0].vesselImo).toBe(VALID_IMO)
     })
   })
 })
