@@ -1052,6 +1052,22 @@ describe('ProcessDetailView — bloco "Carga" (UX-6b-3 D7.1)', () => {
     })
     expect(getDefinition('Contêineres')).toHaveTextContent('2 containers')
   })
+
+  it('contador de conteineres conta a tabela (1 container / 2 containers)', () => {
+    const { unmount } = renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
+    expect(getDefinition('Contêineres')).toHaveTextContent('1 container')
+    unmount()
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeFullFlowProcess({
+        containers: [
+          { id: 'CNT-1', number: 'TIIU6793077', seal: 'M7610909', type: '40HC', returnedAt: '' },
+          { id: 'CNT-2', number: 'TLLU4116398', seal: 'M7700532', type: '40HC', returnedAt: '' },
+        ],
+      }),
+    })
+    expect(getDefinition('Contêineres')).toHaveTextContent('2 containers')
+  })
 })
 
 describe('ProcessDetailView — DUIMP neutra (UX-6b-3 D7.4)', () => {
