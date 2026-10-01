@@ -495,6 +495,44 @@ describe('getPendingFields - chegada/CE/free time/presenca (F17.3a)', () => {
     expect(getPendingFields(process).map((f) => f.id)).toContain('arrivedAt')
   })
 
+  it('sinal compat: berthedAt preenchido com berthed false NAO gera pendencia de berthedAt; berthed true sem data gera', () => {
+    const comDataBoolFalse = shippedMaritimeProcess({ berthed: false, berthedAt: '2026-01-10T10:00' })
+    expect(getPendingFields(comDataBoolFalse).map((f) => f.id)).not.toContain('berthedAt')
+    const legadoSemData = shippedMaritimeProcess({ berthed: true, berthedAt: '' })
+    expect(getPendingFields(legadoSemData).map((f) => f.id)).toContain('berthedAt')
+  })
+
+  it('sinal compat AEREO: arrivedAt preenchido com arrived false NAO gera pendencia de arrivedAt', () => {
+    const process = completeMaritimeProcess({
+      category: 'AEREO',
+      containers: [],
+      containerQuantity: 0,
+      shippedAt: '2026-01-05',
+      mawb: 'MAWB-1',
+      flightNumber: 'FL-1',
+      arrived: false,
+      arrivedAt: '2026-01-10T10:00',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('arrivedAt')
+  })
+
+  it('sinal compat presenca: cargoPresenceInformedAt preenchido com bool false nao gera pendencia; bool true sem data gera', () => {
+    const comDataBoolFalse = shippedMaritimeProcess({
+      berthed: true,
+      berthedAt: '2026-01-10T10:00',
+      cargoPresenceInformed: false,
+      cargoPresenceInformedAt: '2026-01-11T09:00',
+    })
+    expect(getPendingFields(comDataBoolFalse).map((f) => f.id)).not.toContain('cargoPresenceInformedAt')
+    const legadoSemData = shippedMaritimeProcess({
+      berthed: true,
+      berthedAt: '2026-01-10T10:00',
+      cargoPresenceInformed: true,
+      cargoPresenceInformedAt: '',
+    })
+    expect(getPendingFields(legadoSemData).map((f) => f.id)).toContain('cargoPresenceInformedAt')
+  })
+
   it('cargoPresenceInformedAt: FCL/CONSOLIDADO com sinal e sem data -> pendencia; LCL NAO cobra', () => {
     const fcl = shippedMaritimeProcess({
       berthed: true,

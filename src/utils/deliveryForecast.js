@@ -1,3 +1,6 @@
+import { isMaritimeCategory } from '../features/processes/processCategories'
+import { hasArrivalSignal } from '../features/processes/arrivalCustoms'
+
 function pad(value) {
   return String(value).padStart(2, '0')
 }
@@ -327,7 +330,7 @@ function shouldUseRollingCustomsForecast(process, settings) {
 
   const appliesTo = Array.isArray(rolling.appliesTo) ? rolling.appliesTo : []
   if (!appliesTo.includes(process.category)) return false
-  if (!process.berthed) return false
+  if (!isMaritimeCategory(process.category) || !hasArrivalSignal(process)) return false
 
   const duimpStatus = normalizeText(process.duimpStatus)
   const allowedStatuses = Array.isArray(rolling.duimpStatuses)

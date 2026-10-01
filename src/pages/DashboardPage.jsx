@@ -35,6 +35,7 @@ import { listProcesses } from '../services/processesRepository'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
 import { formatContainerCount, formatPalletCount } from '../utils/cargoUnits'
 import { getEffectiveLicenses } from '../features/processes/licenses'
+import { hasArrivalSignal, hasCargoPresenceSignal } from '../features/processes/arrivalCustoms'
 
 function formatTimestamp(value) {
   if (!value) return 'Agora'
@@ -355,8 +356,8 @@ export default function DashboardPage() {
             renderLoadError(processesError, retryProcesses)
           ) : favoriteProcesses.length > 0 ? (
             favoriteProcesses.map((item) => {
-              const showMaritimePostArrival = isMaritimeCategory(item.category) && item.berthed
-              const showAirPostArrival = isAirCategory(item.category) && item.arrived
+              const showMaritimePostArrival = isMaritimeCategory(item.category) && hasArrivalSignal(item)
+              const showAirPostArrival = isAirCategory(item.category) && hasArrivalSignal(item)
               const hideSchedule = shouldHideProcessCardSchedule(item)
               const hideEta = showMaritimePostArrival || showAirPostArrival || hideSchedule
 
@@ -406,7 +407,7 @@ export default function DashboardPage() {
                       <div className="dashboard-process-inline">
                         <div className="dashboard-process-inline__row">
                           <span className="detail-label">Pós-atracação</span>
-                          <p>Presença de carga: {item.cargoPresenceInformed ? 'Informada' : 'Pendente'}</p>
+                          <p>Presença de carga: {hasCargoPresenceSignal(item) ? 'Informada' : 'Pendente'}</p>
                         </div>
                         {getEffectiveLicenses(item).length > 0 ? (
                           <div className="dashboard-process-inline__row">
@@ -476,7 +477,7 @@ export default function DashboardPage() {
                         {isDtaTransitCompletedStatus(item.dtaStatus) ? (
                           <div className="dashboard-process-inline__row">
                             <span className="detail-label">Presença de carga</span>
-                            <p>{item.cargoPresenceInformed ? 'Informada' : 'Pendente'}</p>
+                            <p>{hasCargoPresenceSignal(item) ? 'Informada' : 'Pendente'}</p>
                           </div>
                         ) : null}
                         {item.duimpStatus ? (

@@ -856,4 +856,64 @@ describe('ProcessesPage — filtro Etapa operacional (L37: data local + berthedA
     await waitFor(() => expect(list().getByText('Chegou Legado L37')).toBeInTheDocument())
     expect(list().queryByText('Atracado Legado L37')).not.toBeInTheDocument()
   })
+
+  it('presenca de carga: data preenchida com boolean false e legado boolean true sem data saem de Aguardando presença e entram em DUIMP pendente', async () => {
+    mockListProcesses.mockResolvedValue([
+      baseProcess({
+        id: 'l37-presenca-sem',
+        name: 'Presenca Sem L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: true,
+        berthedAt: '2026-09-21T10:00',
+        cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '',
+      }),
+      baseProcess({
+        id: 'l37-presenca-data',
+        name: 'Presenca Data L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: true,
+        berthedAt: '2026-09-21T10:00',
+        cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '2026-09-22T09:00',
+      }),
+      baseProcess({
+        id: 'l37-presenca-legado',
+        name: 'Presenca Legado L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: true,
+        berthedAt: '2026-09-21T10:00',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '',
+      }),
+      baseProcess({
+        id: 'l37-presenca-aereo',
+        name: 'Presenca Aereo L37',
+        category: 'AEREO',
+        channel: 'Aerea',
+        eta: '2026-09-20',
+        arrived: false,
+        arrivedAt: '2026-09-21T10:00',
+        dtaStatus: 'Trânsito concluído',
+        cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '2026-09-22T09:00',
+      }),
+    ])
+    const list = await renderAndWaitFor('Presenca Sem L37')
+
+    selectOperation('Aguardando presença de carga')
+    await waitFor(() => expect(list().queryByText('Presenca Data L37')).not.toBeInTheDocument())
+    expect(list().getByText('Presenca Sem L37')).toBeInTheDocument()
+    expect(list().queryByText('Presenca Legado L37')).not.toBeInTheDocument()
+    expect(list().queryByText('Presenca Aereo L37')).not.toBeInTheDocument()
+
+    selectOperation('DUIMP pendente')
+    await waitFor(() => expect(list().getByText('Presenca Data L37')).toBeInTheDocument())
+    expect(list().getByText('Presenca Legado L37')).toBeInTheDocument()
+    expect(list().getByText('Presenca Aereo L37')).toBeInTheDocument()
+    expect(list().queryByText('Presenca Sem L37')).not.toBeInTheDocument()
+  })
 })

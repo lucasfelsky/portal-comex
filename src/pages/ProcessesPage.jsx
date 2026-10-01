@@ -636,12 +636,12 @@ export default function ProcessesPage() {
           (operationFilter === 'Aguardando presença de carga' &&
             ((isMaritimeCategory(item.category) &&
               hasArrivalSignal(item) &&
-              !item.cargoPresenceInformed) ||
+              !hasCargoPresenceSignal(item)) ||
               (isAirCategory(item.category) &&
                 isDtaTransitCompleted(item.dtaStatus) &&
-                !item.cargoPresenceInformed))) ||
+                !hasCargoPresenceSignal(item)))) ||
           (operationFilter === 'DUIMP pendente' &&
-            item.cargoPresenceInformed &&
+            hasCargoPresenceSignal(item) &&
             (!item.duimpStatus || item.duimpStatus !== 'Parametrizada')) ||
           (operationFilter === 'Coleta pendente' &&
             isCollectionReleased(item) &&

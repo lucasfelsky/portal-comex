@@ -109,6 +109,71 @@ describe('getProcessDerivedStatus - isOverdue timezone (PR #15)', () => {
   })
 })
 
+// Sinal de chegada compat (F17.3a): data OU boolean legado, igual ao deriveProcessStatus.
+describe('getProcessDerivedStatus - Atrasado usa o sinal de chegada (data OU boolean legado)', () => {
+  const base = { eta: '2026-07-08', collectionWindows: [] }
+
+  it('maritimo com berthedAt preenchido e berthed false = NAO Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'FCL',
+      berthed: false,
+      berthedAt: '2026-07-07T10:00',
+    })
+    expect(result.label).not.toBe('Atrasado')
+  })
+
+  it('maritimo legado berthed true sem berthedAt = NAO Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'CONSOLIDADO',
+      berthed: true,
+      berthedAt: '',
+    })
+    expect(result.label).not.toBe('Atrasado')
+  })
+
+  it('maritimo sem data e sem boolean = Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'LCL',
+      berthed: false,
+      berthedAt: '',
+    })
+    expect(result.label).toBe('Atrasado')
+  })
+
+  it('aereo com arrivedAt preenchido e arrived false = NAO Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'AEREO',
+      arrived: false,
+      arrivedAt: '2026-07-07T10:00',
+    })
+    expect(result.label).not.toBe('Atrasado')
+  })
+
+  it('aereo legado arrived true sem arrivedAt = NAO Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'AEREO',
+      arrived: true,
+      arrivedAt: '',
+    })
+    expect(result.label).not.toBe('Atrasado')
+  })
+
+  it('aereo sem data e sem boolean = Atrasado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      category: 'AEREO',
+      arrived: false,
+      arrivedAt: '',
+    })
+    expect(result.label).toBe('Atrasado')
+  })
+})
+
 // F17.1a: novo status 'Aguardando desembaraço' entra no mesmo bloco de
 // 'Atracação Confirmada'/'Aguardando registro/parametrização da DUIMP' - fase
 // NO_PORTO ("no porto / desembaraço").
