@@ -149,6 +149,13 @@ export default function AppLayout() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Drawer da sidebar (<=1040px): se a janela cresce alem disso com o menu
+  // aberto, fecha. Senao o `.main-content` ficaria `inert` sem sidebar
+  // off-canvas nem backdrop. Roda so' quando o breakpoint muda.
+  useEffect(() => {
+    if (!isMobileViewport) setIsMobileMenuOpen(false)
+  }, [isMobileViewport])
+
   // F16.2: o drawer aposentou no mobile (a tela /menu assumiu na tab bar) —
   // o swipe lateral que o abria (C15) saiu junto. O swipe-back de conteúdo
   // (detalhe→lista) vive nas páginas, não aqui.

@@ -356,6 +356,100 @@ describe('AppLayout (large title mobile no Admin)', () => {
   })
 })
 
+// Tablet (721-1040px): a sidebar e' um drawer (off-canvas via CSS em
+// mobile-redesign.css). O JS do AppLayout ja' serve toda a faixa: botao do
+// topbar, backdrop, Esc (focus trap) e fechar ao crescer acima de 1040px.
+describe('AppLayout (drawer da sidebar no tablet)', () => {
+  const originalMatchMedia = window.matchMedia
+  let listeners
+
+  function stubTablet() {
+    listeners = []
+    window.matchMedia = (query) => ({
+      matches: /max-width:\s*1040px/.test(query),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: (type, handler) => {
+        if (type === 'change') listeners.push({ query, handler })
+      },
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  function openMenu(container) {
+    act(() => {
+      container.querySelector('.topbar__menu-button').click()
+    })
+  }
+
+  it('fechado: sem backdrop, sidebar sem a classe aberta e botao "Abrir menu" no topbar', () => {
+    stubTablet()
+    const { container } = renderWithRole('admin')
+    const button = container.querySelector('.topbar__menu-button')
+    expect(button).toHaveAttribute('aria-label', 'Abrir menu')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+    expect(container.querySelector('.sidebar-backdrop')).toBeNull()
+    expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+  })
+
+  it('botao abre (sidebar aberta + backdrop + conteudo inert) e fecha de novo', () => {
+    stubTablet()
+    const { container } = renderWithRole('admin')
+    openMenu(container)
+    expect(container.querySelector('.sidebar')).toHaveClass('sidebar--mobile-open')
+    expect(container.querySelector('.sidebar-backdrop')).not.toBeNull()
+    expect(container.querySelector('.main-content')).toHaveAttribute('inert')
+    expect(container.querySelector('.topbar__menu-button')).toHaveAttribute('aria-label', 'Fechar menu')
+
+    openMenu(container)
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+  })
+
+  it('toque no backdrop fecha o menu', () => {
+    stubTablet()
+    const { container } = renderWithRole('admin')
+    openMenu(container)
+    act(() => {
+      container.querySelector('.sidebar-backdrop').click()
+    })
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+    expect(container.querySelector('.sidebar-backdrop')).toHaveClass('sidebar-backdrop--closing')
+  })
+
+  it('Esc fecha o menu', () => {
+    stubTablet()
+    const { container } = renderWithRole('admin')
+    openMenu(container)
+    expect(container.querySelector('.sidebar')).toHaveClass('sidebar--mobile-open')
+    act(() => {
+      fireKeyDown('Escape')
+    })
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+  })
+
+  it('crescer acima de 1040px com o menu aberto fecha o menu (nada fica inert)', () => {
+    stubTablet()
+    const { container } = renderWithRole('admin')
+    openMenu(container)
+    expect(container.querySelector('.main-content')).toHaveAttribute('inert')
+    act(() => {
+      listeners
+        .filter((entry) => /max-width:\s*1040px/.test(entry.query))
+        .forEach((entry) => entry.handler({ matches: false }))
+    })
+    expect(container.querySelector('.sidebar')).not.toHaveClass('sidebar--mobile-open')
+    expect(container.querySelector('.main-content')).not.toHaveAttribute('inert')
+  })
+})
+
 function fireKeyDown(key, init = {}) {
   document.dispatchEvent(
     new KeyboardEvent('keydown', { key, ...init, bubbles: true, cancelable: true })

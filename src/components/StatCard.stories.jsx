@@ -24,7 +24,7 @@ export const TrendUp = {
 
 export const TrendDown = {
   args: {
-    label: 'Custo médio por container',
+    label: 'Custo médio por contêiner',
     value: 'US$ 1.850',
     icon: 'dollar',
     trend: { delta: -8, period: 'vs. mês passado' },

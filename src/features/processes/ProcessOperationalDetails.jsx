@@ -26,6 +26,7 @@ import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { hasReceiptDivergence } from './receiptDivergence'
 import VesselTrackingButton from './VesselTrackingButton'
 import { getVesselTrackingTarget } from './vesselTracking'
+import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
 
 // F17.2a (D-11/D-7/D-8): leitura dos 22 campos novos no detalhe do
 // processo. F17.2b (D-6): leitura de `licenses[]` (`ProcessLicensesDetails`).
@@ -42,7 +43,7 @@ import { getVesselTrackingTarget } from './vesselTracking'
 // Regra de import (D-11/D-12/D-14/UX-6b-3): so' `./containers` (inclusive
 // `CONTAINER_TYPE_OPTIONS`), `./operationalOptions`, `./processLabels`
 // (so' `canShowProcessName`), `./licenses` (inclusive `isLicenseDeferred`/
-// `isLicenseRejected`), `../../utils/dateFormat` (so' `formatDateTime`),
+// `isLicenseRejected`), `../../utils/dateFormat` (so' `formatDateTime`), `../../utils/cargoUnits` (puro),
 // `./arrivalCustoms`, `./processCategories`, `./receiptDivergence` (so'
 // `hasReceiptDivergence`), `./VesselTrackingButton` (+ `./vesselTracking`, puro,
 // sem imports). A funcao de tom de canal de `./processStatusView`
@@ -317,7 +318,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
       <DetailList>
         {/* 2026-10-01 (Lucas): contador de conteineres no card, contando a tabela. */}
         {containers.length > 0 ? (
-          <DetailRow label="Contêineres">{formatCargoUnit(containers.length, 'container', 'containers')}</DetailRow>
+          <DetailRow label="Contêineres">{formatContainerCount(containers.length)}</DetailRow>
         ) : null}
         {process?.grossWeightKg > 0 ? <DetailRow label="Peso bruto">{`${process.grossWeightKg} kg`}</DetailRow> : null}
         {process?.volumeM3 > 0 ? <DetailRow label="Cubagem">{`${process.volumeM3} m³`}</DetailRow> : null}
@@ -325,9 +326,9 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
           <DetailRow label="Peso taxado">{`${process.chargeableWeightKg} kg`}</DetailRow>
         ) : null}
         {process?.packagesQuantity > 0 ? <DetailRow label="Volumes">{process.packagesQuantity}</DetailRow> : null}
-        <DetailRow label="Pallets">{formatCargoUnit(process?.palletQuantity, 'pallet', 'pallets')}</DetailRow>
+        <DetailRow label="Pallets">{formatPalletCount(process?.palletQuantity)}</DetailRow>
         {containers.length === 0 && showContainerQuantity ? (
-          <DetailRow label="Contêineres">{formatCargoUnit(process?.containerQuantity, 'container', 'containers')}</DetailRow>
+          <DetailRow label="Contêineres">{formatContainerCount(process?.containerQuantity)}</DetailRow>
         ) : null}
         {dangerousItems.map((item) => (
           <DetailRow key={item.id} label="IMO">
@@ -349,11 +350,6 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
       </DetailList>
     </DetailBlock>
   )
-}
-
-function formatCargoUnit(quantity, singularLabel, pluralLabel) {
-  const value = Number(quantity) || 0
-  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
 }
 
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal

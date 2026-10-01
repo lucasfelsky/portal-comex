@@ -171,11 +171,6 @@ const emptyDraft = () => ({
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
 
-function formatCargoUnit(quantity, singularLabel, pluralLabel) {
-  const value = Number(quantity) || 0
-  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
-}
-
 function getDestinationLabel(category) {
   return category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
 }

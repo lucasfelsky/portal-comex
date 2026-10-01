@@ -45,7 +45,7 @@ describe('buildProcessesExportRows', () => {
     expect(typeof row['Status derivado']).toBe('string')
     expect(row['Status derivado'].length).toBeGreaterThan(0)
     expect(row['Status de coleta']).toBe('Coleta Agendada')
-    expect(row.Containers).toBe(2)
+    expect(row['Contêineres']).toBe(2)
     expect(row.Pallets).toBe(24)
   })
 
@@ -62,7 +62,7 @@ describe('buildProcessesExportRows', () => {
     expect(row.ETD).toBe('')
     expect(row.ETA).toBe('')
     expect(row['Próxima coleta']).toBe('')
-    expect(row.Containers).toBe('')
+    expect(row['Contêineres']).toBe('')
     expect(row.Pallets).toBe('')
     expect(row.Navio).toBe('')
     expect(row.Viagem).toBe('')
