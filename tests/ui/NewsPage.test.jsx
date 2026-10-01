@@ -147,6 +147,24 @@ describe('NewsPage', () => {
     expect(screen.getAllByText('SISCOMEX').length).toBeGreaterThan(0)
   })
 
+  it('noticia automatica: decodifica entidades HTML do titulo e do resumo', async () => {
+    mockListExternalNews.mockResolvedValueOnce([
+      {
+        ...AUTOMATIC_NEWS[0],
+        id: 'e-2',
+        title: 'Receita &#8211; nova regra',
+        summary: 'Prazo &amp; multa',
+      },
+    ])
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Receita – nova regra')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Prazo & multa')).toBeInTheDocument()
+    expect(screen.queryByText(/&#8211;/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/&amp;/)).not.toBeInTheDocument()
+  })
+
   it('empty state: "Nenhuma noticia publicada" se lista vazia', async () => {
     mockListNews.mockResolvedValueOnce([])
     mockListExternalNews.mockResolvedValueOnce([])

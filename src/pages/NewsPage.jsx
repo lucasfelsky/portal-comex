@@ -26,6 +26,7 @@ import {
 } from '../utils/newsMedia'
 import { buildActionErrorMessage } from '../utils/errorMessages'
 import { getFieldA11yProps, getFieldErrorId } from '../utils/fieldErrors'
+import { decodeHtmlEntities } from '../utils/textEncoding'
 
 function createEmptyDraft() {
   return {
@@ -111,13 +112,17 @@ function getNewsCoverImage(newsItem) {
   return newsItem?.coverImage || defaultNewsCoverImage
 }
 
+function getNewsTitle(newsItem) {
+  return decodeHtmlEntities(String(newsItem?.title ?? ''))
+}
+
 function getNewsSummary(newsItem) {
-  const summary = String(newsItem?.summary ?? newsItem?.content ?? '').trim()
+  const summary = decodeHtmlEntities(String(newsItem?.summary ?? newsItem?.content ?? '')).trim()
   return summary || buildAutomaticNewsFallbackText(newsItem)
 }
 
 function getNewsBodyText(newsItem) {
-  const content = String(newsItem?.content ?? '').trim()
+  const content = decodeHtmlEntities(String(newsItem?.content ?? '')).trim()
   return content || getNewsSummary(newsItem)
 }
 
@@ -279,7 +284,7 @@ export default function NewsPage() {
           <div className="news-card__image-wrap">
             <img
               src={getNewsCoverImage(item)}
-              alt={item.title}
+              alt={getNewsTitle(item)}
               className="news-card__image"
               onError={(event) => {
                 event.currentTarget.onerror = null
@@ -292,7 +297,7 @@ export default function NewsPage() {
               <span className="inline-badge">{item.sourceName ?? 'Portal COMEX'}</span>
               <span className="news-card__timestamp">{formatTimestamp(item.updatedAt)}</span>
             </div>
-            <strong>{item.title}</strong>
+            <strong>{getNewsTitle(item)}</strong>
             <p className="news-card__summary">{getNewsSummary(item)}</p>
           </div>
           <span className="news-card__chevron" aria-hidden="true">
@@ -700,7 +705,7 @@ export default function NewsPage() {
       <Modal
         open={Boolean(selectedNews)}
         onClose={handleCloseModal}
-        title={selectedNews?.title}
+        title={selectedNews ? getNewsTitle(selectedNews) : undefined}
         wide
         className="news-modal"
         ariaLabel="Detalhes da noticia"
@@ -709,7 +714,7 @@ export default function NewsPage() {
           <div className="news-modal__content">
             <img
               src={getNewsCoverImage(selectedNews)}
-              alt={selectedNews.title}
+              alt={getNewsTitle(selectedNews)}
               className="news-modal__cover"
               onError={(event) => {
                 event.currentTarget.onerror = null
@@ -724,7 +729,7 @@ export default function NewsPage() {
             {selectedNewsImageItems.length > 0 ? (
               <div className="news-modal__gallery">
                 {selectedNewsImageItems.map((item) => (
-                  <img key={item.id} src={item.url} alt={item.caption || selectedNews.title} className="news-modal__gallery-image" />
+                  <img key={item.id} src={item.url} alt={item.caption || getNewsTitle(selectedNews)} className="news-modal__gallery-image" />
                 ))}
               </div>
             ) : null}
