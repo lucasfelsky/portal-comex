@@ -1050,12 +1050,12 @@ describe('ProcessDetailView — bloco "Carga" (UX-6b-3 D7.1)', () => {
       detailTab: 'process',
       selectedProcess: makeFullFlowProcess({ containers: undefined, containerQuantity: 2 }),
     })
-    expect(getDefinition('Contêineres')).toHaveTextContent('2 containers')
+    expect(getDefinition('Contêineres')).toHaveTextContent('2 contêineres')
   })
 
-  it('contador de conteineres conta a tabela (1 container / 2 containers)', () => {
+  it('contador de conteineres conta a tabela (1 contêiner / 2 contêineres)', () => {
     const { unmount } = renderDetail({ detailTab: 'process', selectedProcess: makeFullFlowProcess() })
-    expect(getDefinition('Contêineres')).toHaveTextContent('1 container')
+    expect(getDefinition('Contêineres')).toHaveTextContent('1 contêiner')
     unmount()
     renderDetail({
       detailTab: 'process',
@@ -1066,7 +1066,7 @@ describe('ProcessDetailView — bloco "Carga" (UX-6b-3 D7.1)', () => {
         ],
       }),
     })
-    expect(getDefinition('Contêineres')).toHaveTextContent('2 containers')
+    expect(getDefinition('Contêineres')).toHaveTextContent('2 contêineres')
   })
 })
 

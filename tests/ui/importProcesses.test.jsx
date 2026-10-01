@@ -573,3 +573,56 @@ describe('importProcesses — parseProcessesFromWorkbook', () => {
     })
   })
 })
+// Rodada de ajustes finais: o cabecalho exportado passou de "Containers" para
+// "Contêineres". O import aceita os DOIS (planilha antiga nao pode quebrar).
+describe('importProcesses — cabecalho de quantidade de contêineres (novo e legado)', () => {
+  it.each([
+    'Contêineres',
+    'Quantidade de contêineres',
+    'Qtd Contêineres',
+    'Containers',
+    'Quantidade de containers',
+    'Qtd Containers',
+  ])('"%s" mapeia para containerQuantity', async (header) => {
+    const file = makeFile([
+      ['Nome', 'Categoria', header],
+      ['Importação Atlas', 'FCL', '2'],
+    ])
+
+    const { validRows, errors } = await parseProcessesFromWorkbook(file)
+
+    expect(errors).toHaveLength(0)
+    expect(validRows[0].containerQuantity).toBe(2)
+  })
+})
+
+// O alias novo "conteineres" e' EXACT-ONLY: nao pode entrar na fase fuzzy, senao
+// uma coluna parecida ("Nº dos contêineres", "Tipos de contêineres") viraria a
+// quantidade. Sem coluna exata de quantidade, o resultado tem que ser o do HEAD (0).
+describe('importProcesses — "contêineres" nao captura colunas parecidas pela fase fuzzy', () => {
+  it.each([
+    ['Nº dos contêineres', 'MSKU1234567'],
+    ['Tipos de contêineres', '40HC'],
+    ['Contêineres (números)', 'MSKU1234567'],
+  ])('"%s" sem coluna exata de quantidade -> containerQuantity 0', async (header, value) => {
+    const file = makeFile([
+      ['Nome', 'Categoria', header],
+      ['Importação Atlas', 'LCL', value],
+    ])
+
+    const { validRows, errors } = await parseProcessesFromWorkbook(file)
+
+    expect(errors).toHaveLength(0)
+    expect(validRows[0].containerQuantity).toBe(0)
+  })
+
+  it('coluna exata "Contêineres" convive com "Nº dos contêineres": so a exata e a quantidade', async () => {
+    const file = makeFile([
+      ['Nome', 'Categoria', 'Nº dos contêineres', 'Contêineres'],
+      ['Importação Atlas', 'LCL', 'MSKU1234567', '3'],
+    ])
+
+    const { validRows } = await parseProcessesFromWorkbook(file)
+    expect(validRows[0].containerQuantity).toBe(3)
+  })
+})

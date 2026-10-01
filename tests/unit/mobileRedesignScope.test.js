@@ -78,7 +78,10 @@ const normalizePrelude = (value) => value.replace(/\s+/g, ' ').trim()
 const cleaned = stripComments(css)
 const top = readBlocks(cleaned)
 
+// 3 camadas: L (<= 1040, compartilhado mobile+tablet), S (<= 720, so mobile) e
+// T (721-1040, so tablet). Mais o movimento reduzido e o desktop-hide do icone.
 const ALLOWED_MEDIA = [
+  '@media (max-width: 1040px)',
   '@media (max-width: 720px)',
   '@media (max-width: 720px) and (prefers-reduced-motion: reduce)',
   '@media (min-width: 721px) and (max-width: 1040px)',
@@ -126,25 +129,45 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     }
   })
 
-  it('(c) fora do mobile so existem as regras permitidas', () => {
-    const outside = mediaBlocks.filter((block) => !block.prelude.startsWith('@media (max-width: 720px)'))
-    const desktopHide = outside.filter((block) => block.prelude === '@media (min-width: 721px)')
-    const tablet = outside.filter((block) => block.prelude === '@media (min-width: 721px) and (max-width: 1040px)')
-    expect(desktopHide).toHaveLength(1)
-    expect(tablet).toHaveLength(1)
+  it('(c) nenhuma regra vale acima de 1040px, exceto o desktop-hide do icone', () => {
+    for (const block of mediaBlocks) {
+      const widths = [...block.prelude.matchAll(/\((min|max)-width:\s*(\d+)px\)/g)].map((match) => ({
+        kind: match[1],
+        value: Number(match[2]),
+      }))
+      // Todo @media tem um corte de largura conhecido.
+      expect(widths.length).toBeGreaterThan(0)
+      for (const { kind, value } of widths) {
+        if (kind === 'max') expect(value).toBeLessThanOrEqual(1040)
+        // O unico min-width permitido e' o corte tablet/mobile (721px).
+        if (kind === 'min') expect(value).toBe(721)
+      }
+      // Sem teto (so min-width): unico caso permitido = desktop-hide (abaixo).
+      const hasMax = widths.some((width) => width.kind === 'max')
+      if (!hasMax) expect(block.prelude).toBe('@media (min-width: 721px)')
+    }
 
+    const desktopHide = mediaBlocks.filter((block) => block.prelude === '@media (min-width: 721px)')
+    expect(desktopHide).toHaveLength(1)
     expect(desktopHide[0].rules).toHaveLength(1)
     expect(desktopHide[0].rules[0].selector).toBe('.process-detail-fav__icon')
     expect(desktopHide[0].rules[0].declarations).toEqual([{ prop: 'display', value: 'none' }])
+  })
 
-    expect(tablet[0].rules).toHaveLength(1)
-    expect(splitTopLevel(tablet[0].rules[0].selector, ',')).toEqual([
-      '.process-detail-view .detail-card > .process-detail-card-heading',
-      '.process-form .process-detail-card-heading--end',
-    ])
-    expect(tablet[0].rules[0].declarations).toEqual([
-      { prop: 'grid-template-columns', value: 'minmax(0, 1fr) auto' },
-    ])
+  it('(c2) tablet: bloco T so de tablet e L/S nao vazam o chrome mobile', () => {
+    const tablet = mediaBlocks.filter((block) => block.prelude === '@media (min-width: 721px) and (max-width: 1040px)')
+    expect(tablet).toHaveLength(1)
+    expect(tablet[0].rules.length).toBeGreaterThan(0)
+
+    // Chrome que so existe no mobile (>720px estao display:none no styles.css)
+    // nao pode ser estilizado fora do bloco S.
+    const MOBILE_ONLY = /mobile-bottom-nav|mobile-page-header|mobile-nav-compact|process-detail-mobilebar|process-list__group|chegadas-(mobilebar|search|segmented)/
+    const sharedOrTablet = mediaBlocks.filter((block) => !block.prelude.startsWith('@media (max-width: 720px)'))
+    for (const block of sharedOrTablet) {
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(MOBILE_ONLY)
+      }
+    }
   })
 
   it('(d) literais de cor so aparecem nos blocos :root', () => {

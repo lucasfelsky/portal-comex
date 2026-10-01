@@ -82,7 +82,7 @@ export function buildProcessesExportRows(processes, now = new Date(), { canSeeNa
       'Status derivado': getProcessDerivedStatus(process, now).label,
       'Status de coleta': process.collectionStatus || '',
       'Próxima coleta': nextCollectionWindowLabel(process),
-      Containers: process.containerQuantity ?? '',
+      Contêineres: process.containerQuantity ?? '',
       Pallets: process.palletQuantity ?? '',
     }
   })

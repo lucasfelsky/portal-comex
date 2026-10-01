@@ -46,6 +46,14 @@ const LEGACY_COLUMN_ALIASES = {
   processNotes: ['observacoes', 'obs', 'notes', 'notas'],
 }
 
+// Aliases que entram SO' na fase 1 (match exato), nunca na fuzzy: o cabecalho
+// atual da exportacao ("Contêineres", sem acento apos a normalizacao) e variantes.
+// Na fuzzy, 'conteineres' capturaria "Nº dos contêineres" / "Tipos de contêineres"
+// como quantidade (a fuzzy dos aliases antigos 'containers' nao casa com eles).
+const EXACT_ONLY_COLUMN_ALIASES = {
+  containerQuantity: ['conteineres', 'quantidade de conteineres', 'qtd conteineres'],
+}
+
 // F17.5b: 14 colunas novas. O 1o alias de cada campo e' o cabecalho
 // canonico PT-BR usado no hint da UI. NUNCA entram na fase fuzzy (D-passo 11).
 const NEW_COLUMN_ALIASES = {
@@ -104,7 +112,7 @@ function findColumnIndexes(headerRow) {
   const takenIndexes = new Set()
 
   for (const field of Object.keys(allAliases)) {
-    const aliases = allAliases[field]
+    const aliases = [...allAliases[field], ...(EXACT_ONLY_COLUMN_ALIASES[field] ?? [])]
     let found = -1
     for (let index = 0; index < headerRow.length; index += 1) {
       if (takenIndexes.has(index)) continue

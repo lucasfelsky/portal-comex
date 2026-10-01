@@ -567,3 +567,16 @@ describe('ProcessListView — redesign mobile (grupos e swipe em repouso)', () =
     })
   })
 })
+
+// Ajustes finais: "container(s)" -> "contêiner(es)" em todo texto visivel.
+describe('ProcessListView — grafia "contêiner(es)"', () => {
+  beforeEach(() => stubMatchMedia(false))
+
+  it('2 -> "2 contêineres" e 1 -> "1 contêiner" nos chips; nunca "container"', () => {
+    const { container } = renderView()
+    const badges = [...container.querySelectorAll('.process-item__chips .inline-badge')].map((el) => el.textContent)
+    expect(badges).toContain('2 contêineres')
+    expect(badges).toContain('1 contêiner')
+    expect(container.textContent).not.toMatch(/\bcontainers?\b/i)
+  })
+})

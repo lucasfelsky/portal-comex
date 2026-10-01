@@ -18,14 +18,10 @@ import { getPendingFields } from './pendingFields'
 import { getContainerSpecialBadges } from './containers'
 import { hasRejectedLicense } from './licenses'
 import { hasDangerousGoods } from './operationalOptions'
+import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
 
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
-
-const formatCargoUnit = (quantity, singularLabel, pluralLabel) => {
-  const value = Number(quantity) || 0
-  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
-}
 
 const formatDate = (value) => {
   if (!value) return '-'
@@ -161,9 +157,9 @@ function ProcessRow({
               hideSchedule || !item.eta ? null : `ETA ${formatDate(item.eta).slice(0, 5)}`,
               item.destination || null,
               shouldShowContainerQuantity(item.category) && item.containerQuantity > 0
-                ? formatCargoUnit(item.containerQuantity, 'container', 'containers')
+                ? formatContainerCount(item.containerQuantity)
                 : item.palletQuantity > 0
-                  ? formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')
+                  ? formatPalletCount(item.palletQuantity)
                   : null,
             ]
               .filter(Boolean)
@@ -177,12 +173,12 @@ function ProcessRow({
             )}
             {shouldShowContainerQuantity(item.category) && item.containerQuantity > 0 ? (
               <span className="inline-badge">
-                {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
+                {formatContainerCount(item.containerQuantity)}
               </span>
             ) : null}
             {item.palletQuantity > 0 ? (
               <span className="inline-badge">
-                {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
+                {formatPalletCount(item.palletQuantity)}
               </span>
             ) : null}
             {alerts.map((alert, index) => (

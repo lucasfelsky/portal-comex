@@ -33,6 +33,7 @@ import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
+import { formatContainerCount, formatPalletCount } from '../utils/cargoUnits'
 import { getEffectiveLicenses } from '../features/processes/licenses'
 
 function formatTimestamp(value) {
@@ -89,11 +90,6 @@ function getEstimatedDeliveryLabel(process) {
 }
 
 const isRestrictedCategory = (category) => ['FCL', 'LCL', 'AEREO'].includes(category)
-
-function formatCargoUnit(quantity, singularLabel, pluralLabel) {
-  const value = Number(quantity) || 0
-  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
-}
 
 function getDestinationLabel(category) {
   return category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
@@ -396,12 +392,12 @@ export default function DashboardPage() {
                       <ProcessDerivedStatusBadge process={item} />
                       {shouldShowContainerQuantity(item.category) && item.containerQuantity > 0 ? (
                         <span className="inline-badge">
-                          {formatCargoUnit(item.containerQuantity, 'container', 'containers')}
+                          {formatContainerCount(item.containerQuantity)}
                         </span>
                       ) : null}
                       {item.palletQuantity > 0 ? (
                         <span className="inline-badge">
-                          {formatCargoUnit(item.palletQuantity, 'pallet', 'pallets')}
+                          {formatPalletCount(item.palletQuantity)}
                         </span>
                       ) : null}
                     </div>
