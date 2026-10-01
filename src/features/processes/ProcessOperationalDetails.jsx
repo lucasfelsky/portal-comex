@@ -315,6 +315,10 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
         </div>
       ) : null}
       <DetailList>
+        {/* 2026-10-01 (Lucas): contador de conteineres no card, contando a tabela. */}
+        {containers.length > 0 ? (
+          <DetailRow label="Contêineres">{formatCargoUnit(containers.length, 'container', 'containers')}</DetailRow>
+        ) : null}
         {process?.grossWeightKg > 0 ? <DetailRow label="Peso bruto">{`${process.grossWeightKg} kg`}</DetailRow> : null}
         {process?.volumeM3 > 0 ? <DetailRow label="Cubagem">{`${process.volumeM3} m³`}</DetailRow> : null}
         {process?.chargeableWeightKg > 0 ? (
