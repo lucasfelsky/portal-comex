@@ -265,6 +265,54 @@ describe('getEstimatedDeliveryDate — override manual x "coleta agendada em dia
   })
 })
 
+// Previsao rolante (apos atracacao) le o sinal compat (data OU boolean legado).
+// ETA no passado distante separa os dois caminhos: rolante parte de "hoje",
+// a regra por categoria parte da ETA.
+describe('getAutomaticEstimatedDeliveryDate - previsao rolante usa o sinal de atracacao', () => {
+  const base = { category: 'FCL', eta: '2020-01-06', destination: 'Navegantes' }
+  const ROLLING_FLOOR = '2025-01-01'
+
+  it('berthedAt preenchido com berthed false usa a previsao rolante', () => {
+    const date = getAutomaticEstimatedDeliveryDate(
+      { ...base, berthed: false, berthedAt: '2026-01-10T10:00' },
+      base.category,
+      DEFAULT_FORECAST_SETTINGS
+    )
+    expect(date > ROLLING_FLOOR).toBe(true)
+  })
+
+  it('legado berthed true sem berthedAt usa a previsao rolante', () => {
+    const date = getAutomaticEstimatedDeliveryDate(
+      { ...base, berthed: true, berthedAt: '' },
+      base.category,
+      DEFAULT_FORECAST_SETTINGS
+    )
+    expect(date > ROLLING_FLOOR).toBe(true)
+  })
+
+  it('sem data e sem boolean nao usa a rolante (parte da ETA)', () => {
+    const date = getAutomaticEstimatedDeliveryDate(
+      { ...base, berthed: false, berthedAt: '' },
+      base.category,
+      DEFAULT_FORECAST_SETTINGS
+    )
+    expect(date < '2021-01-01').toBe(true)
+  })
+
+  it('AEREO com arrivedAt nao entra na rolante mesmo se o admin aplicar a AEREO', () => {
+    const settings = {
+      ...DEFAULT_FORECAST_SETTINGS,
+      rollingCustoms: { ...DEFAULT_FORECAST_SETTINGS.rollingCustoms, appliesTo: ['AEREO'] },
+    }
+    const date = getAutomaticEstimatedDeliveryDate(
+      { ...base, category: 'AEREO', arrived: false, arrivedAt: '2026-01-10T10:00' },
+      'AEREO',
+      settings
+    )
+    expect(date < '2021-01-01').toBe(true)
+  })
+})
+
 // F17.6: inversa de addBusinessDays, usada pra comparar lead time real
 // (Atracação/Chegada -> Recebimento) com a previsão (mesmo calendário).
 describe('countBusinessDaysBetween', () => {

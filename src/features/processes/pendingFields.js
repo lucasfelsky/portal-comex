@@ -17,6 +17,8 @@ import {
   CE_HOUSE_CATEGORIES,
   CUSTOMS_INSPECTION_CHANNELS,
   FREE_TIME_CATEGORIES,
+  hasArrivalSignal,
+  hasCargoPresenceSignal,
   hasDuimpRegistrationSignal,
   hasParameterizationSignal,
   isApproxDate,
@@ -430,7 +432,7 @@ export const PENDING_FIELD_RULES = [
     field: 'berthedAt',
     label: 'Data da atracação',
     stage: 2,
-    when: (p) => isMaritimeCategory(p?.category) && p?.berthed === true,
+    when: (p) => isMaritimeCategory(p?.category) && hasArrivalSignal(p),
     isMissing: (p) => !hasText(p?.berthedAt) && !isApproxDate(p, 'berthedAt'),
   },
   {
@@ -439,7 +441,7 @@ export const PENDING_FIELD_RULES = [
     label: 'Data da chegada',
     stage: 2,
     categories: ['AEREO'],
-    when: (p) => p?.arrived === true,
+    when: (p) => hasArrivalSignal(p),
     isMissing: (p) => !hasText(p?.arrivedAt) && !isApproxDate(p, 'arrivedAt'),
   },
   {
@@ -448,7 +450,7 @@ export const PENDING_FIELD_RULES = [
     label: 'Data da presença de carga',
     stage: 3,
     categories: FREE_TIME_CATEGORIES,
-    when: (p) => p?.cargoPresenceInformed === true,
+    when: (p) => hasCargoPresenceSignal(p),
     isMissing: (p) => !hasText(p?.cargoPresenceInformedAt),
   },
   // F17.4b (B-5): divergencia no recebimento - aviso, nunca bloqueio.

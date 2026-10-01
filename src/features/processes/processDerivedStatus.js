@@ -1,4 +1,5 @@
 import { isMaritimeCategory, isAirCategory } from './processCategories'
+import { hasArrivalSignal } from './arrivalCustoms'
 import {
   isCdEnRouteStatus,
   isCdUnloadingOrReceivedStatus,
@@ -45,8 +46,9 @@ function isOverdue(process, todayIso) {
   const eta = String(process.eta).slice(0, 10)
   if (!eta || eta >= todayIso) return false
 
-  if (isMaritimeCategory(process.category)) return !process.berthed
-  if (isAirCategory(process.category)) return !process.arrived
+  if (isMaritimeCategory(process.category) || isAirCategory(process.category)) {
+    return !hasArrivalSignal(process)
+  }
 
   return false
 }

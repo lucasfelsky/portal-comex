@@ -19,7 +19,7 @@
 // de ProcessesPage.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -29,6 +29,9 @@ const mockNavigate = vi.fn()
 const mockListAnnouncements = vi.fn()
 const mockGetBarStatus = vi.fn()
 const mockListProcesses = vi.fn()
+// Por padrao as categorias sao mockadas como falsas (nao ativam blocos
+// pos-chegada); os testes de sinal de chegada ligam o modo real.
+const mockCategoryMode = { real: false }
 
 vi.mock('../../src/hooks/useAuth', () => ({
   default: () => mockUseAuth(),
@@ -82,8 +85,9 @@ vi.mock('../../src/features/processes/processLabels', () => ({
   getProcessSubtitle: (p) => p?.processNumber || '',
 }))
 vi.mock('../../src/features/processes/processCategories', () => ({
-  isMaritimeCategory: () => false,
-  isAirCategory: () => false,
+  isMaritimeCategory: (category) =>
+    mockCategoryMode.real && ['FCL', 'LCL', 'CONSOLIDADO'].includes(category),
+  isAirCategory: (category) => mockCategoryMode.real && category === 'AEREO',
   shouldShowContainerQuantity: () => false,
 }))
 vi.mock('../../src/utils/collectionWindows', () => ({
@@ -563,4 +567,94 @@ describe('DashboardPage', () => {
     })
   })
 
+})
+
+// Card de favoritos: bloco pos-chegada e presenca de carga leem o sinal compat
+// (data OU boolean legado, F17.3a), igual ao deriveProcessStatus.
+describe('DashboardPage - Favoritos: sinal de chegada (data OU boolean legado)', () => {
+  afterEach(() => {
+    mockCategoryMode.real = false
+  })
+
+  function favorite(overrides) {
+    return {
+      id: 'p-fav',
+      name: 'PO FAV',
+      processNumber: 'PO FAV',
+      category: 'FCL',
+      status: 'Em Andamento',
+      processStatus: 'Embarcado',
+      collectionStatus: 'Aguardando',
+      destination: 'Navegantes',
+      eta: '2026-07-15',
+      ...overrides,
+    }
+  }
+
+  async function renderFavorite(process) {
+    mockCategoryMode.real = true
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'user', favoriteProcessIds: [process.id] },
+    })
+    mockListProcesses.mockResolvedValue([process])
+    renderPage()
+    await waitFor(() => {
+      expect(document.querySelector('.dashboard-favorites-card .process-item')).not.toBeNull()
+    })
+    return within(document.querySelector('.dashboard-favorites-card .process-item'))
+  }
+
+  it('maritimo com berthedAt e berthed false mostra Pós-atracação; presenca por data aparece Informada', async () => {
+    const item = await renderFavorite(
+      favorite({
+        berthed: false,
+        berthedAt: '2026-07-07T10:00',
+        cargoPresenceInformed: false,
+        cargoPresenceInformedAt: '2026-07-08T09:00',
+      })
+    )
+    expect(item.getByText('Pós-atracação')).toBeInTheDocument()
+    expect(item.getByText('Presença de carga: Informada')).toBeInTheDocument()
+  })
+
+  it('maritimo legado berthed true sem data mostra Pós-atracação; presenca sem sinal fica Pendente', async () => {
+    const item = await renderFavorite(
+      favorite({ berthed: true, berthedAt: '', cargoPresenceInformed: false })
+    )
+    expect(item.getByText('Pós-atracação')).toBeInTheDocument()
+    expect(item.getByText('Presença de carga: Pendente')).toBeInTheDocument()
+  })
+
+  it('maritimo legado cargoPresenceInformed true sem data aparece Informada', async () => {
+    const item = await renderFavorite(
+      favorite({ berthed: true, berthedAt: '', cargoPresenceInformed: true })
+    )
+    expect(item.getByText('Presença de carga: Informada')).toBeInTheDocument()
+  })
+
+  it('maritimo sem data e sem boolean nao mostra Pós-atracação', async () => {
+    const item = await renderFavorite(favorite({ berthed: false, berthedAt: '' }))
+    expect(item.queryByText('Pós-atracação')).not.toBeInTheDocument()
+  })
+
+  it('aereo com arrivedAt e arrived false mostra o bloco pos-chegada (DTA)', async () => {
+    const item = await renderFavorite(
+      favorite({ category: 'AEREO', arrived: false, arrivedAt: '2026-07-07T10:00', dtaStatus: 'Pendente' })
+    )
+    expect(item.getByText('DTA')).toBeInTheDocument()
+  })
+
+  it('aereo legado arrived true sem data mostra o bloco pos-chegada (DTA)', async () => {
+    const item = await renderFavorite(
+      favorite({ category: 'AEREO', arrived: true, arrivedAt: '', dtaStatus: 'Pendente' })
+    )
+    expect(item.getByText('DTA')).toBeInTheDocument()
+  })
+
+  it('aereo sem data e sem boolean nao mostra o bloco pos-chegada', async () => {
+    const item = await renderFavorite(
+      favorite({ category: 'AEREO', arrived: false, arrivedAt: '', dtaStatus: 'Pendente' })
+    )
+    expect(item.queryByText('DTA')).not.toBeInTheDocument()
+  })
 })
