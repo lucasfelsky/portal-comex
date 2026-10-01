@@ -3,7 +3,10 @@
 //  (a) ordem dos imports; (b) so @media com preludio conhecido, nada solto;
 //  (c) fora do mobile so as duas regras permitidas; (d) literais de cor so nos
 //  blocos :root; (e) :focus sem outline exige --focus-ring; (f) !important so
-//  em `margin-top: 0 !important`; (g) tokens de fonte declarados.
+//  em `margin-top: 0 !important`; (g) tokens de fonte declarados; (h) toda
+//  animation/transition tem par `none` no bloco de movimento reduzido da faixa;
+//  (i) reduce <= 1040px: overlays sem animacao, backdrop da sidebar visivel e
+//  `--closing` some na hora (bloco depois da camada T).
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -83,10 +86,14 @@ const top = readBlocks(cleaned)
 const ALLOWED_MEDIA = [
   '@media (max-width: 1040px)',
   '@media (max-width: 720px)',
+  '@media (max-width: 1040px) and (prefers-reduced-motion: reduce)',
   '@media (max-width: 720px) and (prefers-reduced-motion: reduce)',
   '@media (min-width: 721px) and (max-width: 1040px)',
   '@media (min-width: 721px)',
 ]
+const REDUCE_1040 = '@media (max-width: 1040px) and (prefers-reduced-motion: reduce)'
+const REDUCE_720 = '@media (max-width: 720px) and (prefers-reduced-motion: reduce)'
+const TABLET = '@media (min-width: 721px) and (max-width: 1040px)'
 
 const mediaBlocks = top.blocks.map((block) => {
   const inner = readBlocks(block.body)
@@ -214,6 +221,104 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     const props = rootRule.declarations.map((declaration) => declaration.prop)
     expect(props).toContain('--m-font-text')
     expect(props).toContain('--m-font-display')
+  })
+
+  it('(h) toda animation/transition de L/S/T tem par `none` no bloco de movimento reduzido da faixa', () => {
+    // Regra de ate 720px aceita qualquer um dos dois blocos reduce; regra de L ou
+    // de T so e' coberta pelo bloco reduce de ate 1040px.
+    const REDUCE_FOR = {
+      '@media (max-width: 720px)': [REDUCE_720, REDUCE_1040],
+      '@media (max-width: 1040px)': [REDUCE_1040],
+      [TABLET]: [REDUCE_1040],
+    }
+    const withMotion = []
+    for (const block of mediaBlocks) {
+      if (block.prelude.includes('prefers-reduced-motion')) continue
+      for (const rule of block.rules) {
+        for (const declaration of rule.declarations) {
+          // Shorthand exato: `transition-delay` nao move nada sozinho.
+          if (declaration.prop !== 'animation' && declaration.prop !== 'transition') continue
+          if (declaration.value === 'none') continue
+          for (const selector of splitTopLevel(rule.selector, ',')) {
+            withMotion.push({ media: block.prelude, selector, prop: declaration.prop })
+          }
+        }
+      }
+    }
+    // Evita falso verde: o parser precisa enxergar as regras com movimento.
+    expect(withMotion.length).toBeGreaterThanOrEqual(4)
+
+    for (const { media, selector, prop } of withMotion) {
+      const accepted = REDUCE_FOR[media] ?? []
+      const covered = mediaBlocks
+        .filter((block) => accepted.includes(block.prelude))
+        .some((block) =>
+          block.rules.some(
+            (rule) =>
+              splitTopLevel(rule.selector, ',').includes(selector) &&
+              rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === 'none')
+          )
+        )
+      expect(covered, `${media} :: ${selector} :: ${prop}`).toBe(true)
+    }
+  })
+
+  it('(i) reduce <= 1040px: overlays sem animacao, backdrop da sidebar visivel e --closing some na hora, depois da camada T', () => {
+    const reduceBlocks = mediaBlocks.filter((block) => block.prelude === REDUCE_1040)
+    expect(reduceBlocks).toHaveLength(1)
+    // Cascata: `:root .sidebar` do T tem a mesma especificidade; o bloco reduce
+    // precisa vir depois para vencer.
+    const reduceIndex = mediaBlocks.findIndex((block) => block.prelude === REDUCE_1040)
+    const tabletIndex = mediaBlocks.findIndex((block) => block.prelude === TABLET)
+    expect(tabletIndex).toBeGreaterThanOrEqual(0)
+    expect(reduceIndex).toBeGreaterThan(tabletIndex)
+
+    const { rules } = reduceBlocks[0]
+    const selectorsOf = (rule) => splitTopLevel(rule.selector, ',')
+    const declares = (rule, prop, value) =>
+      rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === value)
+
+    expect(rules.some((rule) => selectorsOf(rule).includes(':root .sidebar') && declares(rule, 'transition', 'none'))).toBe(true)
+
+    const OVERLAYS = [
+      '.sidebar-backdrop',
+      '.notifications__panel',
+      '.notifications-backdrop',
+      '.modal-backdrop',
+      '.news-modal-backdrop',
+      '.modal',
+      '.action-sheet-backdrop',
+      '.action-sheet',
+      '.toast',
+    ]
+    for (const selector of OVERLAYS) {
+      const hasNoAnimation = rules.some((rule) => selectorsOf(rule).includes(selector) && declares(rule, 'animation', 'none'))
+      expect(hasNoAnimation, `${selector} sem animation: none`).toBe(true)
+    }
+
+    // O backdrop da sidebar nasce com opacity 0 e so aparecia pelo `forwards` da
+    // animacao: sem ela precisa de opacity 1, senao fica invisivel.
+    const visibleIndex = rules.findIndex((rule) => rule.selector === '.sidebar-backdrop' && declares(rule, 'opacity', '1'))
+    expect(visibleIndex).toBeGreaterThanOrEqual(0)
+
+    const CLOSING = [
+      '.sidebar-backdrop--closing',
+      '.notifications__panel--closing',
+      '.notifications-backdrop--closing',
+      '.modal--sheet-closing',
+      '.modal-backdrop--closing',
+      '.toast--closing',
+    ]
+    for (const selector of CLOSING) {
+      const closingIndex = rules.findIndex(
+        (rule) =>
+          selectorsOf(rule).includes(selector) &&
+          declares(rule, 'animation', 'none') &&
+          declares(rule, 'opacity', '0') &&
+          declares(rule, 'pointer-events', 'none')
+      )
+      expect(closingIndex, `${selector} sem opacity: 0 + pointer-events: none`).toBeGreaterThan(visibleIndex)
+    }
   })
 
   it('T10: nunca declara display em .inline-badge / .status-tag', () => {
