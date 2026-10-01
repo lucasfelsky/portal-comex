@@ -15,7 +15,8 @@
 #   3. Nenhuma -> pula o deploy com ::warning::.
 # Build-time: VITE_FIREBASE_* (6, obrigatorios) + VITE_FCM_VAPID_KEY (opcional).
 # firebase-tools = versao do devDependency (package-lock), nao @latest.
-# Artifact: portal-comex-dist-<sha publicado> = dist/ EXATO enviado ao Hosting (10 dias).
+# Artifact: portal-comex-dist-<sha publicado> = dist/ EXATO enviado ao Hosting (10 dias),
+#   criado SO depois de um deploy bem-sucedido (prova de publicacao).
 #   Baixar: gh run download <run-id> -n portal-comex-dist-<sha>
 # Functions, firestore/storage rules e backfills continuam MANUAIS (ver RUNBOOK).
 
@@ -109,21 +110,6 @@ jobs:
           VITE_FCM_VAPID_KEY: ${{ secrets.VITE_FCM_VAPID_KEY }}
         run: npm run build
 
-      # L20: guarda o dist/ EXATO que vai ao Hosting. Fica antes do deploy: o artifact
-      # e o mesmo dist/ que sera publicado. Nome = commit publicado (steps.commit), nao
-      # github.sha (em workflow_run e o HEAD da main). overwrite: re-run do job na mesma
-      # run nao colide com o nome ja enviado. continue-on-error: o armazenamento de
-      # artifacts e auxiliar; se falhar, vira anotacao e NAO bloqueia o deploy.
-      - name: Upload dist/ publicado (artifact)
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: portal-comex-dist-${{ steps.commit.outputs.sha }}
-          path: dist/
-          retention-days: 10
-          if-no-files-found: error
-          overwrite: true
-
       - name: Detectar credencial disponivel
         id: creds
         env:
@@ -150,6 +136,7 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Deploy to Firebase Hosting
+        id: deploy
         if: ${{ steps.creds.outputs.auth_method != 'NONE' }}
         env:
           # So injeta o token no modo legado: com WIF, um FIREBASE_TOKEN presente teria
@@ -172,6 +159,25 @@ jobs:
             fi
             exit "$code"
           fi
+
+      # L20: guarda o dist/ EXATO que foi ao Hosting. Fica DEPOIS do deploy e so roda
+      # quando o deploy rodou e terminou com sucesso (inclui "versao identica a ativa"):
+      # o artifact e prova de publicacao. Sem credencial (NONE) o deploy e pulado e,
+      # com deploy falho, o job falha - nos dois casos nao ha artifact. Nome = commit
+      # publicado (steps.commit), nao github.sha (em workflow_run e o HEAD da main).
+      # overwrite: re-run do job na mesma run nao colide com o nome ja enviado.
+      # continue-on-error: o armazenamento de artifacts e auxiliar; se falhar, vira
+      # anotacao e NAO marca como falho um deploy que ja foi publicado.
+      - name: Upload dist/ publicado (artifact)
+        if: ${{ success() && steps.creds.outputs.auth_method != 'NONE' && steps.deploy.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: portal-comex-dist-${{ steps.commit.outputs.sha }}
+          path: dist/
+          retention-days: 10
+          if-no-files-found: error
+          overwrite: true
 
       - name: Aviso se nenhuma credencial disponivel
         if: ${{ steps.creds.outputs.auth_method == 'NONE' }}

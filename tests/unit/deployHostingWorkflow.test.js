@@ -1,5 +1,6 @@
 // Guarda do workflow de deploy do Hosting (L20). Le .github/workflows/*.yml como
-// YAML e garante: (a) o dist/ publicado sobe como artifact entre Build e deploy;
+// YAML e garante: (a) o dist/ publicado sobe como artifact SO depois de um deploy
+// bem-sucedido (prova de publicacao: sem credencial ou com deploy falho, nao ha artifact);
 // (b) o nome do artifact usa o commit publicado (steps.commit), nao github.sha;
 // (c) gate por CI e autenticacao (WIF) seguem intactos; (d) o ci.yml nao duplica
 // o artifact do dist (so o playwright-report).
@@ -27,7 +28,7 @@ const findIndex = (predicate, label) => {
 }
 
 describe('deploy-hosting.yml - artifact do dist/ publicado (L20)', () => {
-  it('sobe dist/ como artifact depois do Build e antes da credencial/deploy', () => {
+  it('sobe dist/ como artifact so depois do Build, da credencial e do deploy', () => {
     const build = findIndex((step) => step.run === 'npm run build', 'Build')
     const creds = findIndex((step) => step.name === 'Detectar credencial disponivel', 'credencial')
     const hostingDeploy = findIndex((step) => step.name === 'Deploy to Firebase Hosting', 'deploy')
@@ -37,9 +38,23 @@ describe('deploy-hosting.yml - artifact do dist/ publicado (L20)', () => {
     expect(uploads[0].uses).toBe('actions/upload-artifact@v4')
 
     const upload = steps.indexOf(uploads[0])
-    expect(build).toBeLessThan(upload)
-    expect(upload).toBeLessThan(creds)
+    expect(build).toBeLessThan(creds)
     expect(creds).toBeLessThan(hostingDeploy)
+    expect(hostingDeploy).toBeLessThan(upload)
+  })
+
+  it('o artifact so existe quando o deploy rodou e terminou com sucesso', () => {
+    const hostingDeploy = steps.find((step) => step.name === 'Deploy to Firebase Hosting')
+    expect(hostingDeploy.id).toBe('deploy')
+    expect(String(hostingDeploy.if)).toContain("steps.creds.outputs.auth_method != 'NONE'")
+
+    const condition = String(steps.find(isUpload).if ?? '')
+    // Sem credencial o deploy e pulado (outcome 'skipped'); com falha o job falha e
+    // success() fica falso. Nos dois casos o upload nao roda.
+    expect(condition).toContain('success()')
+    expect(condition).toContain("steps.deploy.outcome == 'success'")
+    expect(condition).toContain("steps.creds.outputs.auth_method != 'NONE'")
+    expect(condition).not.toMatch(/\balways\(\)|\bfailure\(\)|!\s*cancelled\(\)/)
   })
 
   it('o nome do artifact identifica o commit publicado (nao github.sha)', () => {
@@ -62,29 +77,20 @@ describe('deploy-hosting.yml - artifact do dist/ publicado (L20)', () => {
     expect(upload.with['if-no-files-found']).toBe('error')
     expect(upload.with.overwrite).toBe(true)
     expect(upload.with['include-hidden-files']).toBeUndefined()
-    expect(upload.if).toBeUndefined()
     expect(upload['continue-on-error']).toBe(true)
   })
 
-  it('falha no upload do artifact (servico auxiliar) nao impede o deploy de producao', () => {
-    // Semantica do Actions: step sem `if` equivale a success(). Falha de step sem
-    // continue-on-error marca o job como failure e pula os seguintes, exceto os que
-    // usam always()/failure()/!cancelled(). Aqui o upload falha e vemos o que roda.
-    const runsAfterFailure = /\balways\(\)|\bfailure\(\)|!\s*cancelled\(\)/
+  it('falha no upload do artifact (servico auxiliar) nao derruba um deploy ja publicado', () => {
+    // O deploy roda antes do upload, entao a publicacao nunca depende do artifact.
+    // continue-on-error garante que uma falha do upload vire anotacao e nao marque o
+    // job (e o deploy que ja foi ao ar) como falho.
     const upload = steps.find(isUpload)
-    const jobFailsOnUpload = upload['continue-on-error'] !== true
-    const stepsAfterUpload = steps.slice(steps.indexOf(upload) + 1)
-    const runWhenUploadFails = stepsAfterUpload
-      .filter((step) => !jobFailsOnUpload || runsAfterFailure.test(String(step.if ?? '')))
-      .map((step) => step.name)
+    const hostingDeploy = steps.findIndex((step) => step.name === 'Deploy to Firebase Hosting')
+    expect(hostingDeploy).toBeLessThan(steps.indexOf(upload))
+    expect(upload['continue-on-error']).toBe(true)
 
-    expect(runWhenUploadFails).toEqual(
-      expect.arrayContaining([
-        'Detectar credencial disponivel',
-        'Autenticar no Google Cloud (WIF)',
-        'Deploy to Firebase Hosting',
-      ]),
-    )
+    const stepsBeforeDeploy = steps.slice(0, hostingDeploy + 1)
+    expect(stepsBeforeDeploy.some(isUpload)).toBe(false)
   })
 
   it('gate por CI e autenticacao do deploy seguem inalterados', () => {
