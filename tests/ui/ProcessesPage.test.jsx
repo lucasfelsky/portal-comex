@@ -17,7 +17,7 @@
 // cobertos isoladamente).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -118,8 +118,9 @@ vi.mock('../../src/features/processes/processLabels', () => ({
   canShowProcessName: () => true,
 }))
 vi.mock('../../src/features/processes/processCategories', () => ({
-  isMaritimeCategory: () => true,
-  isAirCategory: () => false,
+  // Espelha src/features/processes/processCategories.js (L37): so AEREO e' aereo.
+  isMaritimeCategory: (c) => c === 'FCL' || c === 'LCL' || c === 'CONSOLIDADO',
+  isAirCategory: (c) => c === 'AEREO',
   shouldShowContainerQuantity: () => false,
 }))
 vi.mock('../../src/utils/collectionWindows', () => ({
@@ -141,6 +142,7 @@ vi.mock('../../src/utils/postReceiptImages', () => ({
 }))
 
 import ProcessesPage from '../../src/pages/ProcessesPage'
+import { getLocalDateKey } from '../../src/features/processes/shipmentConfirmation'
 
 const PROCESSES = [
   {
@@ -649,5 +651,208 @@ describe('ProcessesPage — validacao inline (UX-3b)', () => {
     await user.click(screen.getByRole('button', { name: 'Criar processo' }))
 
     await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+  })
+})
+
+// L37: filtro "Etapa operacional" usa a data LOCAL (nao UTC) como "hoje" e le
+// berthedAt/arrivedAt (F17.3a) com fallback para os booleans legados.
+// Fuso deterministico: relogio fixo + spies em getFullYear/getMonth/getDate
+// simulando America/Sao_Paulo (UTC-3 fixo, sem horario de verao desde 2019).
+// Nao usa process.env.TZ: no pool `threads` do vitest a troca em runtime nao e
+// confiavel e o teste poderia passar sem provar nada (o CI roda em UTC).
+describe('ProcessesPage — filtro Etapa operacional (L37: data local + berthedAt/arrivedAt)', () => {
+  const BRT_OFFSET_MS = 3 * 60 * 60 * 1000
+  const dateSpies = []
+
+  function baseProcess(overrides) {
+    return {
+      processNumber: '',
+      status: 'Em Andamento',
+      collectionStatus: 'Aguardando',
+      channel: 'Maritima',
+      destination: 'Santos',
+      ...overrides,
+    }
+  }
+
+  beforeEach(() => {
+    // So o Date e' falso: o waitFor do Testing Library segue com timers reais.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 2026-10-02T01:30Z = 2026-10-01 22:30 em America/Sao_Paulo.
+    vi.setSystemTime(new Date('2026-10-02T01:30:00.000Z'))
+    const shifted = (date) => new Date(date.getTime() - BRT_OFFSET_MS)
+    dateSpies.push(
+      vi.spyOn(Date.prototype, 'getFullYear').mockImplementation(function () {
+        return shifted(this).getUTCFullYear()
+      }),
+      vi.spyOn(Date.prototype, 'getMonth').mockImplementation(function () {
+        return shifted(this).getUTCMonth()
+      }),
+      vi.spyOn(Date.prototype, 'getDate').mockImplementation(function () {
+        return shifted(this).getUTCDate()
+      })
+    )
+  })
+
+  afterEach(() => {
+    // vi.clearAllMocks() (afterEach global) NAO restaura spies: restaurar aqui
+    // para nao contaminar os testes seguintes do arquivo.
+    while (dateSpies.length > 0) dateSpies.pop().mockRestore()
+    vi.useRealTimers()
+  })
+
+  async function renderAndWaitFor(firstName) {
+    const { container } = renderPage()
+    const list = () => within(container.querySelector('.process-list'))
+    await waitFor(() => expect(list().getByText(firstName)).toBeInTheDocument())
+    return list
+  }
+
+  function selectOperation(value) {
+    fireEvent.change(screen.getByLabelText('Etapa operacional'), { target: { value } })
+  }
+
+  it('22:30 em America/Sao_Paulo (UTC ja no dia seguinte): ETA de amanha NAO entra em Pós-chegada pendente; ETA de hoje entra', async () => {
+    // Guarda: falha alto se o fuso simulado nao foi aplicado.
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-02')
+    expect(getLocalDateKey(new Date())).toBe('2026-10-01')
+
+    mockListProcesses.mockResolvedValue([
+      baseProcess({
+        id: 'l37-hoje',
+        name: 'Chegada Hoje L37',
+        category: 'FCL',
+        eta: '2026-10-01',
+        berthed: false,
+        berthedAt: '',
+      }),
+      baseProcess({
+        id: 'l37-amanha',
+        name: 'Chegada Amanha L37',
+        category: 'FCL',
+        eta: '2026-10-02',
+        berthed: false,
+        berthedAt: '',
+      }),
+    ])
+    const list = await renderAndWaitFor('Chegada Hoje L37')
+    expect(list().getByText('Chegada Amanha L37')).toBeInTheDocument()
+
+    selectOperation('Pós-chegada pendente')
+
+    await waitFor(() => expect(list().queryByText('Chegada Amanha L37')).not.toBeInTheDocument())
+    expect(list().getByText('Chegada Hoje L37')).toBeInTheDocument()
+  })
+
+  it('berthedAt preenchido com berthed legado false: sai de Pós-chegada pendente e entra em Aguardando presença de carga', async () => {
+    mockListProcesses.mockResolvedValue([
+      baseProcess({
+        id: 'l37-sem-atracacao',
+        name: 'Sem Atracacao L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: false,
+        berthedAt: '',
+      }),
+      baseProcess({
+        id: 'l37-atracado-data',
+        name: 'Atracado Data L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: false,
+        berthedAt: '2026-09-21T10:00',
+        cargoPresenceInformed: false,
+      }),
+    ])
+    const list = await renderAndWaitFor('Sem Atracacao L37')
+
+    selectOperation('Pós-chegada pendente')
+    await waitFor(() => expect(list().queryByText('Atracado Data L37')).not.toBeInTheDocument())
+    expect(list().getByText('Sem Atracacao L37')).toBeInTheDocument()
+
+    selectOperation('Aguardando presença de carga')
+    await waitFor(() => expect(list().getByText('Atracado Data L37')).toBeInTheDocument())
+    expect(list().queryByText('Sem Atracacao L37')).not.toBeInTheDocument()
+  })
+
+  it('arrivedAt preenchido com arrived legado false (AEREO): sai de Pós-chegada pendente e entra em DTA em andamento', async () => {
+    mockListProcesses.mockResolvedValue([
+      baseProcess({
+        id: 'l37-base-fcl',
+        name: 'Base FCL L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: true,
+      }),
+      baseProcess({
+        id: 'l37-aereo-sem-chegada',
+        name: 'Aereo Sem Chegada L37',
+        category: 'AEREO',
+        channel: 'Aerea',
+        eta: '2026-09-20',
+        arrived: false,
+        arrivedAt: '',
+        dtaStatus: '',
+      }),
+      baseProcess({
+        id: 'l37-chegou-data',
+        name: 'Chegou Data L37',
+        category: 'AEREO',
+        channel: 'Aerea',
+        eta: '2026-09-20',
+        arrived: false,
+        arrivedAt: '2026-09-21T10:00',
+        dtaStatus: 'Pendente',
+      }),
+    ])
+    const list = await renderAndWaitFor('Aereo Sem Chegada L37')
+
+    selectOperation('Pós-chegada pendente')
+    await waitFor(() => expect(list().queryByText('Chegou Data L37')).not.toBeInTheDocument())
+    expect(list().getByText('Aereo Sem Chegada L37')).toBeInTheDocument()
+
+    selectOperation('DTA em andamento')
+    await waitFor(() => expect(list().getByText('Chegou Data L37')).toBeInTheDocument())
+    expect(list().queryByText('Aereo Sem Chegada L37')).not.toBeInTheDocument()
+  })
+
+  it('legado sem data: berthed true / arrived true sem berthedAt/arrivedAt continuam contando como atracado/chegado', async () => {
+    mockListProcesses.mockResolvedValue([
+      baseProcess({
+        id: 'l37-atracado-legado',
+        name: 'Atracado Legado L37',
+        category: 'FCL',
+        eta: '2026-09-20',
+        berthed: true,
+        berthedAt: '',
+        cargoPresenceInformed: false,
+      }),
+      baseProcess({
+        id: 'l37-chegou-legado',
+        name: 'Chegou Legado L37',
+        category: 'AEREO',
+        channel: 'Aerea',
+        eta: '2026-09-20',
+        arrived: true,
+        arrivedAt: '',
+        dtaStatus: 'Pendente',
+      }),
+    ])
+    const list = await renderAndWaitFor('Atracado Legado L37')
+    expect(list().getByText('Chegou Legado L37')).toBeInTheDocument()
+
+    selectOperation('Pós-chegada pendente')
+    await waitFor(() => {
+      expect(list().queryByText('Atracado Legado L37')).not.toBeInTheDocument()
+      expect(list().queryByText('Chegou Legado L37')).not.toBeInTheDocument()
+    })
+
+    selectOperation('Aguardando presença de carga')
+    await waitFor(() => expect(list().getByText('Atracado Legado L37')).toBeInTheDocument())
+    expect(list().queryByText('Chegou Legado L37')).not.toBeInTheDocument()
+
+    selectOperation('DTA em andamento')
+    await waitFor(() => expect(list().getByText('Chegou Legado L37')).toBeInTheDocument())
+    expect(list().queryByText('Atracado Legado L37')).not.toBeInTheDocument()
   })
 })

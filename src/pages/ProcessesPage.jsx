@@ -64,7 +64,11 @@ import {
   normalizePurchaseOrders,
 } from '../features/processes/purchaseOrders'
 import { matchesContainerSearch } from '../features/processes/containers'
-import { applyEtdEdit, applyShipmentConfirmation } from '../features/processes/shipmentConfirmation'
+import {
+  applyEtdEdit,
+  applyShipmentConfirmation,
+  getLocalDateKey,
+} from '../features/processes/shipmentConfirmation'
 import { resolveProcessDangerousGoods } from '../features/processes/operationalOptions'
 import {
   canonicalizeIncoterm,
@@ -609,7 +613,7 @@ export default function ProcessesPage() {
       .filter((item) => {
         const query = searchTerm.trim().toLowerCase()
         const normalizedQuery = normalizeItemName(searchTerm)
-        const today = new Date().toISOString().slice(0, 10)
+        const today = getLocalDateKey(new Date())
         // F16.8 (swipe-to-arquivar): processos arquivados somem da lista
         // principal — só aparecem na seção "Arquivados" (admin), via
         // archivedProcesses abaixo.
@@ -627,10 +631,12 @@ export default function ProcessesPage() {
           (operationFilter === 'Pós-chegada pendente' &&
             item.eta &&
             item.eta <= today &&
-            ((isMaritimeCategory(item.category) && !item.berthed) ||
-              (isAirCategory(item.category) && !item.arrived))) ||
+            ((isMaritimeCategory(item.category) && !hasArrivalSignal(item)) ||
+              (isAirCategory(item.category) && !hasArrivalSignal(item)))) ||
           (operationFilter === 'Aguardando presença de carga' &&
-            ((isMaritimeCategory(item.category) && item.berthed && !item.cargoPresenceInformed) ||
+            ((isMaritimeCategory(item.category) &&
+              hasArrivalSignal(item) &&
+              !item.cargoPresenceInformed) ||
               (isAirCategory(item.category) &&
                 isDtaTransitCompleted(item.dtaStatus) &&
                 !item.cargoPresenceInformed))) ||
@@ -643,7 +649,7 @@ export default function ProcessesPage() {
           (operationFilter === 'Coleta agendada' && keepsCollectionSchedule(item.collectionStatus)) ||
           (operationFilter === 'DTA em andamento' &&
             isAirCategory(item.category) &&
-            item.arrived &&
+            hasArrivalSignal(item) &&
             item.dtaStatus &&
             !isDtaTransitCompleted(item.dtaStatus)) ||
           (operationFilter === 'Dados pendentes' && getPendingFields(item).length > 0)
