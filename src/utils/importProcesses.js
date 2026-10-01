@@ -29,6 +29,7 @@ import {
   getContainerNumberWarning,
 } from '../features/processes/containers'
 import { MAX_PURCHASE_ORDERS, normalizePurchaseOrders } from '../features/processes/purchaseOrders'
+import { isValidVesselImo, isVesselTrackingCategory, normalizeVesselImo } from '../features/processes/vesselTracking'
 
 // Colunas legadas (intocadas). O normalizador aceita variações (com/sem
 // acento, case-insensitive, sinonimos).
@@ -58,6 +59,8 @@ const NEW_COLUMN_ALIASES = {
   hawb: ['hawb', 'awb house'],
   vesselName: ['navio', 'nome do navio', 'vessel'],
   voyage: ['viagem', 'numero da viagem', 'voyage'],
+  // IMO do navio (7 digitos). NUNCA incluir 'imo'/'classe imo'/'imo class': colide com imoClass.
+  vesselImo: ['imo do navio', 'imo navio', 'navio imo', 'vessel imo', 'imo number', 'imo nº', 'imo n°', 'imo no', 'numero imo'],
   flightNumber: ['voo', 'numero do voo', 'flight'],
   containerNumbers: [
     'numeros dos conteineres',
@@ -425,6 +428,24 @@ export async function parseProcessesFromWorkbook(file) {
     const hawb = columnIndex.hawb >= 0 ? String(row[columnIndex.hawb] ?? '').trim() : ''
     const vesselName = columnIndex.vesselName >= 0 ? String(row[columnIndex.vesselName] ?? '').trim() : ''
     const voyage = columnIndex.voyage >= 0 ? String(row[columnIndex.voyage] ?? '').trim() : ''
+    const rawVesselImo =
+      columnIndex.vesselImo >= 0 ? String(row[columnIndex.vesselImo] ?? '').trim() : ''
+    let vesselImo = ''
+    if (rawVesselImo !== '') {
+      if (!isVesselTrackingCategory(category)) {
+        rowWarnings.push({
+          linha: lineNumber,
+          motivo: 'IMO do navio ignorado (categoria não é FCL/LCL/CONSOLIDADO).',
+        })
+      } else if (!isValidVesselImo(rawVesselImo)) {
+        rowWarnings.push({
+          linha: lineNumber,
+          motivo: `IMO do navio inválido: ${rawVesselImo} (informe os 7 dígitos, ex.: 9787027). Campo deixado em branco.`,
+        })
+      } else {
+        vesselImo = normalizeVesselImo(rawVesselImo)
+      }
+    }
     const flightNumber =
       columnIndex.flightNumber >= 0 ? String(row[columnIndex.flightNumber] ?? '').trim() : ''
 
@@ -526,8 +547,9 @@ export async function parseProcessesFromWorkbook(file) {
       hawb,
       vesselName,
       voyage,
+      vesselImo,
       flightNumber,
-      // F17.2d-1 (D-6): a planilha nao suporta itens/IMO - itens seguem
+      // F17.2d-1 (D-6): a planilha nao suporta itens/Classe IMO (imoClass) - itens seguem
       // sendo lancados no detalhe do processo.
       items: [],
     }

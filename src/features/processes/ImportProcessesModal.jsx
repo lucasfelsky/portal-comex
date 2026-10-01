@@ -106,7 +106,7 @@ export default function ImportProcessesModal({
           Selecione uma planilha (.xlsx, .xls ou .csv). Colunas reconhecidas:{' '}
           <strong>Nome</strong> e <strong>Categoria</strong> (obrigatórias), além de PO, Destino,
           ETD, ETA, Containers, Pallets, Status, Observações, Fornecedor, Origem, Incoterm, Agente
-          de carga, MBL, HBL, MAWB, HAWB, Navio, Viagem, Voo, Números dos contêineres, Tipos dos
+          de carga, MBL, HBL, MAWB, HAWB, Navio, Viagem, IMO do navio, Voo, Números dos contêineres, Tipos dos
           contêineres e POs do consolidado.
         </p>
 
