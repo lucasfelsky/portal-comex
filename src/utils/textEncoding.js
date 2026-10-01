@@ -62,7 +62,7 @@ const NAMED_HTML_ENTITIES = {
   Ccedil: 'Ç',
 }
 
-const HTML_ENTITY_PATTERN = /&(#x[0-9a-fA-F]{1,6}|#[0-9]{1,7}|[a-zA-Z][a-zA-Z0-9]{1,31});/g
+const HTML_ENTITY_PATTERN = /&(#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[a-zA-Z][a-zA-Z0-9]{1,31});/g
 
 function isValidCodePoint(code) {
   if (code === 9 || code === 10 || code === 13) return true
@@ -78,7 +78,7 @@ export function decodeHtmlEntities(value) {
 
   return value.replace(HTML_ENTITY_PATTERN, (match, body) => {
     if (body.charAt(0) === '#') {
-      const isHex = body.charAt(1) === 'x'
+      const isHex = body.charAt(1) === 'x' || body.charAt(1) === 'X'
       const code = Number.parseInt(body.slice(isHex ? 2 : 1), isHex ? 16 : 10)
       return isValidCodePoint(code) ? String.fromCodePoint(code) : match
     }

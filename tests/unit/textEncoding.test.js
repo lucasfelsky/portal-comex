@@ -5,6 +5,7 @@ describe('decodeHtmlEntities', () => {
   it('decodifica entidades numericas decimais e hexadecimais', () => {
     expect(decodeHtmlEntities('A &#8211; B')).toBe('A – B')
     expect(decodeHtmlEntities('&#x2013;')).toBe('–')
+    expect(decodeHtmlEntities('&#X2013;')).toBe('–')
   })
 
   it('decodifica entidades nomeadas comuns', () => {
