@@ -8,7 +8,9 @@ import {
   DOCUMENT_TYPES,
   buildDocumentPendingFields,
   buildDocumentSlotKey,
+  MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH,
   canDeleteDocument,
+  canRenameDocument,
   canUploadDocumentType,
   canViewProcessRecords,
   formatDocumentSize,
@@ -94,6 +96,30 @@ describe('canDeleteDocument', () => {
 
   it('user nunca apaga', () => {
     expect(canDeleteDocument({ role: 'user', uid: 'u-1' }, { uploadedById: 'u-1' })).toBe(false)
+  })
+})
+
+describe('canRenameDocument', () => {
+  it('admin renomeia so documento adicional (other)', () => {
+    expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'other' })).toBe(true)
+    expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'bl' })).toBe(false)
+    expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'invoice' })).toBe(false)
+  })
+
+  it('logistica e user nunca renomeiam, nem o proprio', () => {
+    expect(canRenameDocument({ role: 'logistica', uid: 'log-1' }, { type: 'other', uploadedById: 'log-1' })).toBe(false)
+    expect(canRenameDocument({ role: 'user', uid: 'u-1' }, { type: 'other', uploadedById: 'u-1' })).toBe(false)
+  })
+
+  it('perfil ou documento ausente -> false', () => {
+    expect(canRenameDocument(null, { type: 'other' })).toBe(false)
+    expect(canRenameDocument(undefined, { type: 'other' })).toBe(false)
+    expect(canRenameDocument({ role: 'admin' }, null)).toBe(false)
+    expect(canRenameDocument({ role: 'admin' }, undefined)).toBe(false)
+  })
+
+  it('o limite do nome do documento adicional na UI e 80', () => {
+    expect(MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH).toBe(80)
   })
 })
 
@@ -272,6 +298,14 @@ describe('buildDocumentIndex/describeDocumentScope/buildDocumentUploadedNotifica
       containerWashIds: ['CNT-1'],
       processSlotKeys: ['bl', 'invoice:PO-1'],
     })
+  })
+
+  it('buildDocumentIndex nao depende de description: renomear documento adicional nao muda o indice', () => {
+    const bl = { type: 'bl', slotKey: 'bl' }
+    const before = buildDocumentIndex([bl, { type: 'other', slotKey: 'other:o1', description: 'Certificado' }])
+    const after = buildDocumentIndex([bl, { type: 'other', slotKey: 'other:o1', description: 'Laudo técnico' }])
+    expect(after).toEqual(before)
+    expect(isSameDocumentIndex(before, after)).toBe(true)
   })
 
   it('buildDocumentIndex de lista vazia -> todos vazios', () => {

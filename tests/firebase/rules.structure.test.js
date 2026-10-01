@@ -99,15 +99,30 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/documents\/\{documentId\}\s*\{/)
     })
 
-    it('match /documents/{documentId} so permite update do vinculo Invoice->Packing List (admin), leitura so admin/logistica', () => {
+    it('match /documents/{documentId} so permite update do vinculo Invoice->Packing List ou do nome do documento adicional (admin), leitura so admin/logistica', () => {
       const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
       expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)/)
       expect(body).toMatch(
-        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)/
+        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*\(\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)\s*\|\|\s*isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\)/
       )
       expect(body).toMatch(/isValidProcessDocumentCreate\s*\(\s*processId\s*\)/)
+    })
+
+    it('isValidAdditionalDocumentRenameUpdate so aceita description + carimbos, type other, 1..120', () => {
+      const match = rules.match(/function\s+isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/resource\.data\.type\s*==\s*'other'/)
+      expect(body).toMatch(/request\.resource\.data\.type\s*==\s*'other'/)
+      expect(body).toMatch(
+        /affectedKeys\(\)\s*\.hasOnly\(\s*\[\s*'description'\s*,\s*'descriptionUpdatedAt'\s*,\s*'descriptionUpdatedById'\s*\]\s*\)/
+      )
+      expect(body).toMatch(/descriptionUpdatedAt\s*==\s*request\.time/)
+      expect(body).toMatch(/descriptionUpdatedById\s*==\s*request\.auth\.uid/)
+      expect(body).toMatch(/description\.size\(\)\s*>=\s*1/)
+      expect(body).toMatch(/description\.size\(\)\s*<=\s*120/)
     })
   })
 

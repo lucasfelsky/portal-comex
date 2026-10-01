@@ -15,6 +15,10 @@ import { isContainerReturned } from './containers'
 
 export const MAX_DOCUMENT_MB = 20
 
+// Tamanho maximo do nome do documento adicional (`other`) digitado na UI
+// (envio e renome). A rule aceita ate 120; a UI e' mais restrita.
+export const MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH = 80
+
 // D-1: 7 tipos de documento de nivel-processo/item/conteiner. `scope`
 // determina que campo extra a rule/UI exige (`itemId`/`containerId`/
 // `description`/`po`); `roles` = quem pode ENVIAR (nao confundir com quem
@@ -74,6 +78,11 @@ export function canDeleteDocument(profile, document) {
     return Boolean(document?.uploadedById) && document.uploadedById === profile?.uid
   }
   return false
+}
+
+// Renomear o nome exibido: so admin, so documento adicional (`other`).
+export function canRenameDocument(profile, document) {
+  return profile?.role === 'admin' && document?.type === 'other'
 }
 
 function sanitizeSlotSegment(value) {

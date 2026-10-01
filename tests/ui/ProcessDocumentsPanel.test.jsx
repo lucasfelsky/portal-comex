@@ -18,6 +18,7 @@ const mockDeleteProcessDocument = vi.fn()
 const mockDownloadProcessDocumentBlob = vi.fn()
 const mockSaveBlobAsFile = vi.fn()
 const mockSetInvoicePackingListLink = vi.fn()
+const mockRenameAdditionalDocument = vi.fn()
 
 vi.mock('../../src/services/processDocumentsRepository', () => ({
   listProcessDocuments: (...args) => mockListProcessDocuments(...args),
@@ -26,6 +27,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
   downloadProcessDocumentBlob: (...args) => mockDownloadProcessDocumentBlob(...args),
   saveBlobAsFile: (...args) => mockSaveBlobAsFile(...args),
   setInvoicePackingListLink: (...args) => mockSetInvoicePackingListLink(...args),
+  renameAdditionalDocument: (...args) => mockRenameAdditionalDocument(...args),
 }))
 
 const ADMIN_PROFILE = { uid: 'admin-1', name: 'Admin', role: 'admin' }
@@ -673,6 +675,196 @@ describe('ProcessDocumentsPanel — nome do documento adicional', () => {
     const title = await screen.findByText('Certificado', { selector: '.documents-row__label' })
     const meta = title.closest('.documents-row').querySelector('.documents-row__meta')
     expect(meta.textContent.startsWith('Outro · PDF')).toBe(true)
+  })
+})
+
+// Renomear o documento adicional ("Outro") depois de anexado: so' admin, so'
+// o nome exibido (description).
+describe('ProcessDocumentsPanel — renomear documento adicional', () => {
+  const OTHER_PROCESS = { id: 'p1', category: 'LCL' }
+  const CONSOLIDATED = { id: 'p2', category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-1' }] }
+
+  function docOther(overrides = {}) {
+    return {
+      id: 'o1', type: 'other', slotKey: 'other:o1', description: 'Certificado', name: 'cert.pdf',
+      mimeType: 'application/pdf', size: 1024, storagePath: 'x', uploadedAt: '2026-09-01T10:00:00.000Z',
+      uploadedById: 'admin-1', uploadedByName: 'Admin', uploadedByRole: 'admin',
+      ...overrides,
+    }
+  }
+
+  async function openRenameDialog(user) {
+    await user.click(await screen.findByRole('button', { name: 'Renomear Certificado' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
+    return { dialog, input: within(dialog).getByLabelText('Nome do documento') }
+  }
+
+  beforeEach(() => {
+    mockListProcessDocuments.mockResolvedValue([docBl(), docOther()])
+  })
+
+  it('(r1) admin ve "Renomear" so na linha do documento adicional', async () => {
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await screen.findByRole('button', { name: 'Renomear Certificado' })
+    expect(screen.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+  })
+
+  it('(r2) clicar abre o dialogo com o nome atual, maxlength 80 e foco no campo', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { input } = await openRenameDialog(user)
+    expect(input).toHaveValue('Certificado')
+    expect(input).toHaveAttribute('maxlength', '80')
+    await waitFor(() => expect(input).toHaveFocus())
+  })
+
+  it('(r3) Enter salva o nome aparado, fecha o dialogo e recarrega a lista', async () => {
+    const user = userEvent.setup()
+    mockRenameAdditionalDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { input } = await openRenameDialog(user)
+
+    await user.clear(input)
+    await user.type(input, '  Laudo técnico  {Enter}')
+
+    await waitFor(() =>
+      expect(mockRenameAdditionalDocument).toHaveBeenCalledWith('p1', 'o1', 'Laudo técnico', { uid: 'admin-1' })
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledTimes(2))
+  })
+
+  it('(r4) so espacos + Salvar: mostra o erro de validacao e nao chama o repositorio', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { dialog, input } = await openRenameDialog(user)
+
+    await user.clear(input)
+    await user.type(input, '   ')
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Informe o nome do documento.')
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+  })
+
+  it('(r5) Esc cancela sem salvar e devolve o foco ao botao Renomear', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    await openRenameDialog(user)
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Renomear Certificado' })).toHaveFocus())
+  })
+
+  it('(r6) Cancelar fecha sem salvar', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { dialog } = await openRenameDialog(user)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+  })
+
+  it('(r7) erro do servidor: mostra a mensagem amigavel, mantem o dialogo aberto e o texto', async () => {
+    const user = userEvent.setup()
+    mockRenameAdditionalDocument.mockRejectedValue({ code: 'permission-denied' })
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { dialog, input } = await openRenameDialog(user)
+
+    await user.clear(input)
+    await user.type(input, 'Laudo{Enter}')
+
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent('Não foi possível renomear o documento.')
+    expect(alert).toHaveTextContent('Você não tem permissão para esta ação.')
+    expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Nome do documento')).toHaveValue('Laudo')
+  })
+
+  it('(r8) nome igual ao atual: fecha sem escrever', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { input } = await openRenameDialog(user)
+
+    await user.type(input, '{Enter}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
+    expect(mockListProcessDocuments).toHaveBeenCalledTimes(1)
+  })
+
+  it('(r9) logistica ve o documento adicional mas nao ve "Renomear"', async () => {
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await screen.findByText('Certificado', { selector: '.documents-row__label' })
+    expect(screen.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
+  })
+
+  it('(r10) CONSOLIDADO: admin tambem ve "Renomear" no documento adicional', async () => {
+    render(<ProcessDocumentsPanel process={CONSOLIDATED} profile={ADMIN_PROFILE} />)
+    await screen.findByRole('button', { name: 'Renomear Certificado' })
+    expect(screen.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+  })
+
+  it('(r11) salvando: botoes desabilitados e Esc nao fecha ate concluir', async () => {
+    const user = userEvent.setup()
+    let finish
+    mockRenameAdditionalDocument.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { dialog, input } = await openRenameDialog(user)
+
+    await user.clear(input)
+    await user.type(input, 'Laudo{Enter}')
+
+    const saving = await within(dialog).findByRole('button', { name: 'Salvando…' })
+    expect(saving).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+
+    finish()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('(r12) erro ao salvar recarrega a lista; documento ainda existe -> dialogo segue aberto com o erro', async () => {
+    const user = userEvent.setup()
+    mockRenameAdditionalDocument.mockRejectedValue({ code: 'permission-denied' })
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { dialog, input } = await openRenameDialog(user)
+
+    await user.clear(input)
+    await user.type(input, 'Laudo{Enter}')
+
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByLabelText('Carregando documentos')).not.toBeInTheDocument())
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Não foi possível renomear o documento.')
+    expect(within(dialog).getByLabelText('Nome do documento')).toHaveValue('Laudo')
+    expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+  })
+
+  it('(r13) documento excluido por outro admin com o dialogo aberto: recarrega, fecha o dialogo e some a linha', async () => {
+    const user = userEvent.setup()
+    // Firestore devolve permission-denied (nao not-found) em updateDoc de doc inexistente.
+    mockRenameAdditionalDocument.mockRejectedValue({ code: 'permission-denied' })
+    render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
+    const { input } = await openRenameDialog(user)
+    expect(screen.getByText('Certificado', { selector: '.documents-row__label' })).toBeInTheDocument()
+
+    // Outro admin excluiu o documento: a recarga ja nao o traz.
+    mockListProcessDocuments.mockResolvedValue([docBl()])
+    await user.clear(input)
+    await user.type(input, 'Laudo{Enter}')
+
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByText('Certificado', { selector: '.documents-row__label' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.documents-live')).toHaveTextContent('O documento foi removido.')
   })
 })
 
