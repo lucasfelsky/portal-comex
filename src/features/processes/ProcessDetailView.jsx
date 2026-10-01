@@ -20,6 +20,8 @@ import {
 } from './purchaseOrders'
 import { getItemDangerousGoodsLabel } from './operationalOptions'
 import Spinner from '../../components/Spinner'
+import Icon from '../../components/Icon'
+import { useMobileLayout } from '../../hooks/useMobileLayout'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
@@ -98,6 +100,9 @@ export default function ProcessDetailView({
 }) {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  // Mobile (<=720px): Favoritar e "..." sobem pra barra do topo (nav bar do
+  // iOS); no desktop ficam na toolbar abaixo do titulo, como sempre.
+  const isMobileLayout = useMobileLayout()
   const moreContainerRef = useRef(null)
   const moreTriggerRef = useRef(null)
   const firstMenuItemRef = useRef(null)
@@ -223,6 +228,52 @@ export default function ProcessDetailView({
     collectionWindows.length > 0
   const showCarrier = isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus)
   const showCollectionBlock = showCollectionStatusBadge || showCollectionWindows || showCarrier
+  const isFavorite = favoriteProcessIds.includes(selectedProcess.id)
+  const linkedItemsCount = selectedProcess.items?.length ?? 0
+
+  const favoriteButton = (
+    <button
+      type="button"
+      className="ghost-button process-detail-fav"
+      aria-label={isFavorite ? 'Desfavoritar' : 'Favoritar'}
+      onClick={() => onToggleFavorite(selectedProcess.id)}
+    >
+      <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} className="process-detail-fav__icon" />
+      <span className="process-detail-fav__label">{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
+    </button>
+  )
+
+  const moreActions = isAdmin ? (
+    <div className="process-detail-more" ref={moreContainerRef}>
+      <button
+        type="button"
+        className="ghost-button process-detail-more__trigger"
+        aria-label="Mais ações"
+        title="Mais ações"
+        aria-haspopup="menu"
+        aria-expanded={isMoreOpen}
+        aria-controls="process-detail-more-menu"
+        ref={moreTriggerRef}
+        onClick={() => setIsMoreOpen((open) => !open)}
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      {isMoreOpen ? (
+        <div id="process-detail-more-menu" role="menu" className="process-detail-more__menu">
+          <button
+            type="button"
+            role="menuitem"
+            ref={firstMenuItemRef}
+            className="process-detail-more__item process-detail-more__item--danger"
+            disabled={isSaving}
+            onClick={handleOpenDeleteConfirm}
+          >
+            {isSaving ? <Spinner size={14} /> : null} Excluir processo
+          </button>
+        </div>
+      ) : null}
+    </div>
+  ) : null
 
   return (
     <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}>
@@ -233,13 +284,20 @@ export default function ProcessDetailView({
         <button
           type="button"
           className="process-detail-mobilebar__back"
+          aria-label="Voltar para Chegadas"
           onClick={onSetViewModeList}
         >
-          ‹ Voltar
+          <Icon name="chevron-left" size={22} aria-hidden="true" /> Chegadas
         </button>
         <strong className="process-detail-mobilebar__title">
           {getProcessTitle(selectedProcess, canSeeName)}
         </strong>
+        {isMobileLayout ? (
+          <div className="process-detail-mobilebar__actions">
+            {favoriteButton}
+            {moreActions}
+          </div>
+        ) : null}
       </div>
 
       {/* F16.5/UX-6b-3 (D5/E3/F2): timeline de 5 estágios — concluidos
@@ -310,44 +368,8 @@ export default function ProcessDetailView({
           {canEditSelectedCollectionStatus ? (
             <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>Status de coleta</button>
           ) : null}
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => onToggleFavorite(selectedProcess.id)}
-          >
-            {favoriteProcessIds.includes(selectedProcess.id) ? 'Desfavoritar' : 'Favoritar'}
-          </button>
-          {isAdmin ? (
-            <div className="process-detail-more" ref={moreContainerRef}>
-              <button
-                type="button"
-                className="ghost-button process-detail-more__trigger"
-                aria-label="Mais ações"
-                title="Mais ações"
-                aria-haspopup="menu"
-                aria-expanded={isMoreOpen}
-                aria-controls="process-detail-more-menu"
-                ref={moreTriggerRef}
-                onClick={() => setIsMoreOpen((open) => !open)}
-              >
-                <span aria-hidden="true">⋯</span>
-              </button>
-              {isMoreOpen ? (
-                <div id="process-detail-more-menu" role="menu" className="process-detail-more__menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    ref={firstMenuItemRef}
-                    className="process-detail-more__item process-detail-more__item--danger"
-                    disabled={isSaving}
-                    onClick={handleOpenDeleteConfirm}
-                  >
-                    {isSaving ? <Spinner size={14} /> : null} Excluir processo
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          {isMobileLayout ? null : favoriteButton}
+          {isMobileLayout ? null : moreActions}
         </div>
       </div>
 
@@ -462,7 +484,14 @@ export default function ProcessDetailView({
               <div className="card-heading process-detail-card-heading">
                 <div>
                   <span className="detail-label">Itens vinculados</span>
-                  <p>{selectedProcess.items?.length ?? 0} itens cadastrados para este processo.</p>
+                  <p>
+                    <span className="process-linked-items__count">
+                      {linkedItemsCount === 1 ? '1 item' : `${linkedItemsCount} itens`}
+                    </span>
+                    <span className="process-linked-items__suffix">
+                      {linkedItemsCount === 1 ? ' cadastrado' : ' cadastrados'} para este processo.
+                    </span>
+                  </p>
                 </div>
                 <button type="button" className="ghost-button" onClick={() => onDetailTabChange('items')}>Ver itens do processo</button>
               </div>
@@ -570,7 +599,9 @@ export default function ProcessDetailView({
                 <span className="detail-label">Itens do processo</span>
                 <p>Itens comerciais vinculados diretamente a este processo.</p>
               </div>
-              <span className="inline-badge">{visibleProcessItems.length} itens</span>
+              <span className="inline-badge">
+                {visibleProcessItems.length === 1 ? '1 item' : `${visibleProcessItems.length} itens`}
+              </span>
             </div>
             <label className="field">
               <span>Buscar item</span>
@@ -635,7 +666,9 @@ export default function ProcessDetailView({
                 <span className="detail-label">Chegadas ativas com este item</span>
                 <p>Item selecionado: {selectedItemName}</p>
               </div>
-              <span className="inline-badge">{relatedActiveProcesses.length} chegadas</span>
+              <span className="inline-badge">
+                {relatedActiveProcesses.length === 1 ? '1 chegada' : `${relatedActiveProcesses.length} chegadas`}
+              </span>
             </div>
             <div className="process-items-list process-items-list--scroll">
               {relatedActiveProcesses.length > 0 ? (

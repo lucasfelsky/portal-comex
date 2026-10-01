@@ -388,3 +388,43 @@ describe('AdminForecastPage', () => {
     expect(screen.queryByText('pendente')).not.toBeInTheDocument()
   })
 })
+
+// Redesign mobile (rodada de QA): o badge de origem dos dados vai pro
+// cabecalho do card "Destinos e cutoff" no mobile; no desktop fica na toolbar.
+describe('AdminForecastPage — badge de origem (mobile x desktop)', () => {
+  const originalMatchMedia = window.matchMedia
+
+  function stubMatchMedia(matches) {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('mobile: badge no cabecalho do card "Destinos e cutoff" e sem toolbar solta', () => {
+    stubMatchMedia(true)
+    const { container } = renderPage()
+    const row = container.querySelector('.admin-heading-row')
+    expect(row).not.toBeNull()
+    expect(row.querySelector('h3').textContent).toBe('Destinos e cutoff')
+    expect(row.querySelector('.inline-badge')).not.toBeNull()
+    expect(container.querySelector('.admin-toolbar--right')).toBeNull()
+    expect(container.querySelectorAll('.inline-badge')).toHaveLength(1)
+  })
+
+  it('desktop: badge segue na toolbar acima dos cards', () => {
+    stubMatchMedia(false)
+    const { container } = renderPage()
+    expect(container.querySelector('.admin-heading-row')).toBeNull()
+    expect(container.querySelector('.admin-toolbar--right .inline-badge')).not.toBeNull()
+  })
+})

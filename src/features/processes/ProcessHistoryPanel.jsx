@@ -98,7 +98,7 @@ export default function ProcessHistoryPanel({ processId }) {
       ) : events.length > 0 ? (
         <div className="process-messages-list">
           {events.map((event) => (
-            <article key={event.id} className="process-message-card">
+            <article key={event.id} className="process-message-card process-message-card--event">
               <div className="process-message-card__meta">
                 <div className="process-message-card__meta-content">
                   <strong>{getEventLabel(event)}</strong>

@@ -2,7 +2,7 @@
 // card de LEITURA (sem <input>/<textarea>) na aba "Processo" do detalhe,
 // visível a partir de "Coleta Agendada" (inclusive) em diante — usa
 // `isCollectionScheduledOrBeyondStatus` (módulo REAL, sem mock).
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
@@ -1412,5 +1412,193 @@ describe('ProcessDetailView — blocos vazios com placeholder (desktop, SPEC 202
     expect(document.querySelector('.process-block--transit')).not.toBeNull()
     expect(placeholder('collection')).toBeNull()
     expect(document.querySelector('.process-block--collection')).not.toBeNull()
+  })
+})
+
+// Redesign mobile (PLAN.md B4/B5/B7): plurais, data-label dos conteineres,
+// botao Voltar com nome acessivel proprio e Favoritar com icone + rotulo.
+describe('ProcessDetailView — redesign mobile (plurais, conteineres, cabecalho)', () => {
+  it('aba Itens: "1 item" no singular e "2 itens" no plural', () => {
+    const { unmount } = renderDetail({
+      detailTab: 'items',
+      visibleProcessItems: [{ id: 'i1', commercialName: 'Item A', quantity: 2 }],
+    })
+    expect(screen.getByText('1 item')).toBeInTheDocument()
+    unmount()
+    renderDetail({
+      detailTab: 'items',
+      visibleProcessItems: [
+        { id: 'i1', commercialName: 'Item A', quantity: 2 },
+        { id: 'i2', commercialName: 'Item B', quantity: 1 },
+      ],
+    })
+    expect(screen.getByText('2 itens')).toBeInTheDocument()
+  })
+
+  it('aba Item relacionado: "1 chegada" no singular e "N chegadas" no plural', () => {
+    const arrival = (id) => ({ process: makeProcess({ id, name: `Proc ${id}` }), quantity: 3 })
+    const { unmount } = renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Item A',
+      relatedActiveProcesses: [arrival('a')],
+    })
+    expect(screen.getByText('1 chegada')).toBeInTheDocument()
+    unmount()
+    renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Item A',
+      relatedActiveProcesses: [arrival('a'), arrival('b')],
+    })
+    expect(screen.getByText('2 chegadas')).toBeInTheDocument()
+  })
+
+  it('Detalhes gerais: "Itens vinculados" concorda o plural ("1 item cadastrado" / "2 itens cadastrados")', () => {
+    const item = (id) => ({ id, commercialName: `Item ${id}`, quantity: 1 })
+    const { unmount } = renderDetail({
+      detailTab: 'general',
+      selectedProcess: makeProcess({ items: [item('a')] }),
+    })
+    expect(document.querySelector('.process-general-card--linked-items p').textContent).toBe(
+      '1 item cadastrado para este processo.'
+    )
+    unmount()
+    renderDetail({
+      detailTab: 'general',
+      selectedProcess: makeProcess({ items: [item('a'), item('b')] }),
+    })
+    expect(document.querySelector('.process-general-card--linked-items p').textContent).toBe(
+      '2 itens cadastrados para este processo.'
+    )
+  })
+
+  it('aba Processo: palletQuantity 0 mostra "0 pallets" e 1 mostra "1 pallet"', () => {
+    const { unmount } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ palletQuantity: 0 }),
+    })
+    expect(getDefinition('Pallets').textContent).toBe('0 pallets')
+    unmount()
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ palletQuantity: 1 }),
+    })
+    expect(getDefinition('Pallets').textContent).toBe('1 pallet')
+  })
+
+  it('aba Processo: cada <td> dos 2 conteineres tem data-label (8 celulas)', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        containers: [
+          { id: 'CNT-1', number: 'CSQU3054383', seal: 'L1', type: '40DC', returnedAt: '2026-09-10' },
+          { id: 'CNT-2', number: 'MSCU1234567', seal: 'L2', type: '20DC', returnedAt: '' },
+        ],
+      }),
+    })
+    expect(document.querySelectorAll('.detail-table td[data-label]')).toHaveLength(8)
+    const labels = [...document.querySelectorAll('.detail-table tbody tr:first-child td')].map((cell) =>
+      cell.getAttribute('data-label')
+    )
+    expect(labels).toEqual(['Contêiner', 'Tipo', 'Lacre', 'Devolução do vazio'])
+    expect(document.querySelectorAll('.detail-table__badges')).toHaveLength(1)
+  })
+
+  it('mobilebar: "Voltar para Chegadas" chama onSetViewModeList e o nome do processo segue no DOM', () => {
+    const onSetViewModeList = vi.fn()
+    renderDetail({ onSetViewModeList, canSeeName: true })
+    screen.getByRole('button', { name: 'Voltar para Chegadas' }).click()
+    expect(onSetViewModeList).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('.process-detail-mobilebar__title')).not.toBeNull()
+  })
+
+  it('Favoritar: icone + rotulo, nome acessivel continua "Favoritar"/"Desfavoritar"', () => {
+    const { unmount } = renderDetail({ favoriteProcessIds: [] })
+    const favorite = screen.getByRole('button', { name: 'Favoritar' })
+    expect(favorite.querySelector('.process-detail-fav__icon')).not.toBeNull()
+    expect(favorite.querySelector('.process-detail-fav__label').textContent).toBe('Favoritar')
+    unmount()
+    renderDetail({ favoriteProcessIds: ['p-1'] })
+    expect(screen.getByRole('button', { name: 'Desfavoritar' })).toBeInTheDocument()
+  })
+})
+
+// Redesign mobile (rodada de QA): Favoritar e "..." sobem para a barra do topo
+// no mobile (<=720px); no desktop ficam na toolbar. Um DOM por vez.
+describe('ProcessDetailView — acoes na barra do topo (mobile)', () => {
+  const originalMatchMedia = window.matchMedia
+
+  function stubMatchMedia(matches) {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('mobile: estrela e "Mais acoes" ficam na mobilebar e nao na toolbar', () => {
+    stubMatchMedia(true)
+    renderDetail({ isAdmin: true, canEditSelectedCollectionStatus: true })
+    const bar = document.querySelector('.process-detail-mobilebar__actions')
+    expect(bar).not.toBeNull()
+    expect(within(bar).getByRole('button', { name: 'Favoritar' })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: 'Mais ações' })).toBeInTheDocument()
+    const toolbar = document.querySelector('.process-detail-toolbar')
+    expect(within(toolbar).queryByRole('button', { name: 'Favoritar' })).toBeNull()
+    expect(within(toolbar).queryByRole('button', { name: 'Mais ações' })).toBeNull()
+    expect(within(toolbar).getByRole('button', { name: 'Editar processo' })).toBeInTheDocument()
+    expect(within(toolbar).getByRole('button', { name: 'Status de coleta' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Favoritar' })).toHaveLength(1)
+  })
+
+  it('mobile: o menu "..." da barra abre o mesmo menu (Excluir processo)', async () => {
+    stubMatchMedia(true)
+    const user = userEvent.setup()
+    renderDetail({ isAdmin: true })
+    await user.click(screen.getByRole('button', { name: 'Mais ações' }))
+    expect(screen.getByRole('menuitem', { name: /Excluir processo/ })).toBeInTheDocument()
+  })
+
+  it('mobile: estrela chama onToggleFavorite', async () => {
+    stubMatchMedia(true)
+    const user = userEvent.setup()
+    const onToggleFavorite = vi.fn()
+    renderDetail({ onToggleFavorite })
+    await user.click(screen.getByRole('button', { name: 'Favoritar' }))
+    expect(onToggleFavorite).toHaveBeenCalledWith('p-1')
+  })
+
+  it('desktop: mobilebar sem acoes; estrela e "..." seguem na toolbar', () => {
+    stubMatchMedia(false)
+    renderDetail({ isAdmin: true })
+    expect(document.querySelector('.process-detail-mobilebar__actions')).toBeNull()
+    const toolbar = document.querySelector('.process-detail-toolbar')
+    expect(within(toolbar).getByRole('button', { name: 'Favoritar' })).toBeInTheDocument()
+    expect(within(toolbar).getByRole('button', { name: 'Mais ações' })).toBeInTheDocument()
+  })
+})
+
+describe('ProcessDetailView — Histórico (redesign mobile)', () => {
+  it('cada evento ganha .process-message-card--event com titulo, data e autor', async () => {
+    mockListProcessEvents.mockResolvedValueOnce([
+      { id: 'e1', type: 'status_changed', occurredAt: '2026-10-01T03:00:00.000Z', actorName: 'Lucas Gabriel Felsky' },
+    ])
+    renderDetail({
+      detailTab: 'history',
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({ id: 'p-history-2' }),
+    })
+    await waitFor(() => expect(document.querySelector('.process-message-card--event')).not.toBeNull())
+    const card = document.querySelector('.process-message-card--event')
+    expect(card.querySelector('p').textContent).toBe('Lucas Gabriel Felsky')
+    expect(card.querySelector('strong')).not.toBeNull()
+    expect(card.querySelector('.process-message-card__meta-content span')).not.toBeNull()
   })
 })

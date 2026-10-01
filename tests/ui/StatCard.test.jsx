@@ -82,6 +82,16 @@ describe('StatCard', () => {
     })
   })
 
+  it('sparkline: o gradiente da area tem id valido (sem espacos) mesmo com label longo', () => {
+    const { container } = render(
+      <StatCard label="Chamados abertos por semana" value="3" sparkline={[1, 2, 3, 4, 5]} />
+    )
+    const gradient = container.querySelector('.stat-card__sparkline linearGradient')
+    expect(gradient.getAttribute('id')).not.toMatch(/\s/)
+    const area = container.querySelector('.stat-card__sparkline path')
+    expect(area.getAttribute('fill')).toBe(`url(#${gradient.getAttribute('id')})`)
+  })
+
   it('sem sparkline: nao renderiza SVG de sparkline', () => {
     const { container } = render(<StatCard label="X" value="0" />)
     expect(container.querySelector('.stat-card__sparkline')).toBeNull()

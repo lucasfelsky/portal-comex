@@ -22,8 +22,10 @@ import { hasDangerousGoods } from './operationalOptions'
 const getDestinationLabel = (category) =>
   category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
 
-const formatCargoUnit = (quantity, singularLabel, pluralLabel) =>
-  `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
+const formatCargoUnit = (quantity, singularLabel, pluralLabel) => {
+  const value = Number(quantity) || 0
+  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
+}
 
 const formatDate = (value) => {
   if (!value) return '-'
@@ -81,8 +83,12 @@ function ProcessRow({
     ...getContainerSpecialBadges(item.containers).map((badge) => ({ label: badge, tone: 'warn' })),
   ].filter(Boolean)
 
+  // Acoes do swipe so' ficam visiveis enquanto a linha esta aberta/arrastando
+  // (evita 1px da cor da acao vazando na borda em repouso).
+  const isRevealing = isSwipeOpen || swipe.isDragging || swipe.translateX !== 0
+
   return (
-    <div className="process-swipe-row">
+    <div className={`process-swipe-row${isRevealing ? ' process-swipe-row--revealing' : ''}`}>
       <div className="process-swipe-row__actions" aria-hidden={!isSwipeOpen}>
         {onToggleFavorite ? (
           <button
@@ -134,7 +140,10 @@ function ProcessRow({
         {/* F15.2: leading icon por categoria + resumo condensado +
             chevron — só aparecem no mobile (≤720px); no desktop o
             CSS os esconde e o layout atual permanece intacto. */}
-        <span className="process-item__leading" aria-hidden="true">
+        <span
+          className={`process-item__leading${isAirCategory(item.category) ? ' process-item__leading--air' : ''}`}
+          aria-hidden="true"
+        >
           <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={20} />
         </span>
         <div className="process-item__main">
@@ -604,19 +613,19 @@ export default function ProcessListView({
               {activeProcesses.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Em andamento</div>
-                  {activeProcesses.map(renderProcessRow)}
+                  <div className="process-list__group">{activeProcesses.map(renderProcessRow)}</div>
                 </>
               ) : null}
               {doneProcesses.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Concluídos</div>
-                  {doneProcesses.map(renderProcessRow)}
+                  <div className="process-list__group">{doneProcesses.map(renderProcessRow)}</div>
                 </>
               ) : null}
               {isAdmin && archivedProcesses.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Arquivados</div>
-                  {archivedProcesses.map(renderArchivedRow)}
+                  <div className="process-list__group">{archivedProcesses.map(renderArchivedRow)}</div>
                 </>
               ) : null}
             </>
