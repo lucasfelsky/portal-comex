@@ -67,3 +67,64 @@ describe('repairTextEncoding', () => {
     expect(repairTextEncoding(42)).toBe(42)
   })
 })
+
+// Espelho server-side (`functions/src/core/shared.js`) - mesma correcao do front:
+// TextDecoder com fatal: true, para e-mails/notificacoes nao trocarem acentos por U+FFFD.
+describe('repairTextEncoding - espelho em functions (shared.js)', () => {
+  const loadServer = async () => (await import('../../functions/src/core/shared.js')).repairTextEncoding
+
+  const CORRECT_TEXTS = [
+    'Contrato de câmbio',
+    'CONTRATO DE CÂMBIO',
+    'NÃO CONFORMIDADE',
+    'Laudo da Câmara técnica',
+    'Trâmite aduaneiro',
+    'Maria Âncora',
+    'Fatura 2Â via',
+  ]
+  const MOJIBAKE_TEXTS = [
+    ['AÃ§Ã£o', 'Ação'],
+    ['RelatÃ³rio de anÃ¡lise', 'Relatório de análise'],
+    ['JoÃ£o', 'João'],
+  ]
+  const NON_STRINGS = [null, undefined, 42, true, { a: 1 }]
+
+  it('mantem intacto texto correto com â/Â/Ã e nunca gera U+FFFD', async () => {
+    const serverRepair = await loadServer()
+    for (const text of CORRECT_TEXTS) {
+      const result = serverRepair(text)
+      expect(result).toBe(text)
+      expect(result).not.toContain('�')
+    }
+  })
+
+  it('conserta mojibake de verdade', async () => {
+    const serverRepair = await loadServer()
+    for (const [broken, fixed] of MOJIBAKE_TEXTS) {
+      expect(serverRepair(broken)).toBe(fixed)
+    }
+  })
+
+  it('devolve nao-string como veio e string sem marcador inalterada', async () => {
+    const serverRepair = await loadServer()
+    for (const value of NON_STRINGS) {
+      expect(serverRepair(value)).toBe(value)
+    }
+    expect(serverRepair('Certificado')).toBe('Certificado')
+  })
+
+  it('paridade: front e server devolvem a mesma saida para o mesmo corpus', async () => {
+    const serverRepair = await loadServer()
+    const corpus = [
+      ...CORRECT_TEXTS,
+      ...MOJIBAKE_TEXTS.map(([broken]) => broken),
+      ...NON_STRINGS,
+      'Certificado',
+      '',
+      'AÃ§Ã£o e Contrato de câmbio',
+    ]
+    for (const value of corpus) {
+      expect(serverRepair(value)).toStrictEqual(repairTextEncoding(value))
+    }
+  })
+})
