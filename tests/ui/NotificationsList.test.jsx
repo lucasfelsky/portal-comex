@@ -205,6 +205,23 @@ describe('NotificationsList', () => {
       expect(onMarkAsRead).toHaveBeenCalledTimes(1)
       expect(onOpen).not.toHaveBeenCalled()
     })
+
+    it('em repouso nenhuma linha tem .notifications-swipe-row--revealing (acoes escondidas)', () => {
+      const grouped = [
+        makeGroup({ processId: 'p1', type: 't1', title: 'R1', count: 2, unreadCount: 2, createdAt: '2026-01-01T00:00:00Z' }),
+      ]
+      const { container } = render(
+        <NotificationsList
+          grouped={grouped}
+          onOpenNotification={() => {}}
+          onMarkAsRead={() => {}}
+          formatRelative={formatRelative}
+          formatDate={formatDate}
+        />
+      )
+      expect(container.querySelectorAll('.notifications-swipe-row').length).toBeGreaterThan(0)
+      expect(container.querySelectorAll('.notifications-swipe-row--revealing')).toHaveLength(0)
+    })
   })
 
   // UX-2: estado de erro/loading + notificacoes navegaveis por teclado.

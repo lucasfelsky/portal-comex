@@ -75,6 +75,18 @@ const pageMeta = {
   },
 }
 
+// Mobile: nas sub-abas do Admin o large title e' o nome da secao e o eyebrow
+// vira "Admin" (mesmos rotulos do AdminLayout.jsx). So' alimenta os elementos
+// mobile-only (.mobile-page-header / .mobile-nav-compact).
+const adminSectionTitles = {
+  '/admin/usuarios': 'Usuários',
+  '/admin/comunicados': 'Comunicados',
+  '/admin/barra': 'Barra do porto',
+  '/admin/previsoes': 'Previsões',
+  '/admin/lead-time': 'Lead time',
+  '/admin/suporte': 'Suporte',
+}
+
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -191,11 +203,18 @@ export default function AppLayout() {
   // "Portal COMEX") + nav compacta com blur que aparece ao rolar, como o
   // UINavigationBar do iOS. Título curto próprio; admin usa o meta.title.
   const mobileTitle =
-    { '/': 'Visão geral', '/news': 'Notícias', '/processos': 'Chegadas', '/menu': 'Menu' }[
-      location.pathname
-    ] ?? meta.title
+    {
+      '/': 'Visão geral',
+      '/news': 'Notícias',
+      '/processos': 'Chegadas',
+      '/notifications': 'Notificações',
+      '/menu': 'Menu',
+    }[location.pathname] ??
+    adminSectionTitles[location.pathname] ??
+    (location.pathname.startsWith('/admin') ? 'Admin' : meta.title)
   const mobileEyebrow = useMemo(() => {
     if (location.pathname === '/menu') return null
+    if (adminSectionTitles[location.pathname]) return 'Admin'
     const text = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',

@@ -1,0 +1,2753 @@
+/* ============================================================
+   Redesign mobile "bem Apple" do Portal COMEX (PLAN.md, 2026-10-01).
+
+   ESCOPO: tudo vive dentro de `@media (max-width: 720px)` (chrome iOS:
+   tab bar, large title, mobilebar). Excecoes, todas verificadas por
+   `tests/unit/mobileRedesignScope.test.js`:
+     - `(max-width: 720px) and (prefers-reduced-motion: reduce)`;
+     - `(min-width: 721px) and (max-width: 1040px)`: UMA regra minima que
+       corrige os cabecalhos de card espremidos do detalhe (item 1);
+     - `(min-width: 721px)`: esconde o icone novo do botao Favoritar.
+   Desktop >= 1041px fica pixel-identico (styles.css nao e tocado).
+
+   ORDEM: este arquivo e importado DEPOIS de `./styles.css` em main.jsx;
+   a cascata entre regras de mesma especificidade vence o que vem depois.
+   A ordem das secoes abaixo importa (leia as armadilhas T1-T15 do plano).
+
+   TOKENS: so aqui entram literais de cor (blocos :root). Cor de TEXTO usa
+   apenas tokens ja cobertos por tests/unit/colorContrast.test.js.
+
+   D-FONTE: fonte do sistema (SF Pro no iPhone), inclusive nos titulos.
+   Para trocar por Manrope, mude --m-font-text e --m-font-display.
+   ============================================================ */
+
+/* 1. Tokens ---------------------------------------------------------- */
+@media (max-width: 720px) {
+  :root {
+    --m-font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    --m-font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    --font-heading: var(--m-font-display);
+    --m-fs-large-title: 2.125rem; /* 34 / 700 */
+    --m-fs-title1: 1.75rem; /* 28 / 700 */
+    --m-fs-title2: 1.375rem; /* 22 / 700 */
+    --m-fs-title3: 1.25rem; /* 20 / 700 */
+    --m-fs-headline: 1.0625rem; /* 17 / 600 */
+    --m-fs-body: 1.0625rem; /* 17 / 400 */
+    --m-fs-callout: 1rem; /* 16 */
+    --m-fs-subhead: 0.9375rem; /* 15 */
+    --m-fs-footnote: 0.8125rem; /* 13 */
+    --m-fs-caption: 0.75rem; /* 12 */
+    --m-fs-caption2: 0.6875rem; /* 11 */
+    --m-radius-group: 16px;
+    --m-radius-control: 12px;
+    --m-radius-field: 10px;
+    --m-inset: 16px;
+    --m-row-min: 44px;
+    --m-row-pad-y: 11px;
+    --m-leading: 32px;
+    --m-separator: var(--border);
+    --m-tint-bg: var(--primary-50);
+    --m-tint-fg: var(--primary-700);
+    --m-fill: rgba(118, 128, 124, 0.12);
+    --m-fill-strong: rgba(118, 128, 124, 0.2);
+    --m-bar-bg: rgba(249, 250, 250, 0.84);
+    --m-segment-on: #ffffff;
+    --m-shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  :root[data-theme='dark'] {
+    --m-fill: rgba(118, 128, 124, 0.24);
+    --m-fill-strong: rgba(118, 128, 124, 0.34);
+    --m-bar-bg: rgba(20, 22, 21, 0.82);
+    --m-segment-on: rgba(255, 255, 255, 0.16);
+    --m-shadow-segment: none;
+    --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@media (max-width: 720px) {
+  /* 2. Base global --------------------------------------------------- */
+  body {
+    font-family: var(--m-font-text);
+  }
+
+  .list-card {
+    border-color: transparent;
+    box-shadow: none;
+    border-radius: var(--m-radius-group);
+  }
+
+  /* A7: pilulas. NUNCA declarar display aqui (T10). */
+  .status-tag,
+  .inline-badge {
+    font-size: var(--m-fs-caption);
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0;
+    padding: 3px 9px;
+    min-width: 0;
+  }
+
+  .field > span:first-child {
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-soft);
+  }
+
+  .text-input:not(textarea) {
+    min-height: 44px;
+    border-radius: var(--m-radius-field);
+    font-size: var(--m-fs-callout);
+  }
+
+  /* Texto digitado em peso normal (herdava 600/700 do rotulo `.field`). */
+  .text-input {
+    font-weight: 400;
+  }
+
+  /* Desfaz a "caixa" das barras de acao (styles.css:5223). */
+  .admin-toolbar,
+  .action-row {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  /* 3. Barras, large title e espacamento ------------------------------ */
+  .main-content {
+    gap: 12px;
+  }
+
+  .surface {
+    gap: 16px;
+  }
+
+  .surface > .dashboard-heading {
+    margin-bottom: 0;
+  }
+
+  /* Tela "empurrada" (lista/detalhe/form) nao repete o titulo da pai. */
+  .surface:has(> .process-list-card, > .process-detail-view, > .process-form) > .section-heading {
+    display: none;
+  }
+
+  /* O h1 continua na arvore de acessibilidade (visualmente oculto). */
+  .main-content:has(.process-detail-view, .process-form) > .mobile-page-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .main-content:has(.process-detail-view, .process-form) > .mobile-nav-compact {
+    display: none;
+  }
+
+  /* T9: unico uso de !important (anula o marginTop inline 8/16px). */
+  .process-list-card.list-card,
+  .process-detail-view.list-card,
+  .process-form.list-card {
+    margin-top: 0 !important;
+  }
+
+  .mobile-page-header {
+    gap: 2px;
+    padding: 2px 0 0;
+  }
+
+  .mobile-page-header__eyebrow {
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--text-subtle);
+  }
+
+  .mobile-page-header__title {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-large-title);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+  }
+
+  /* A10: barras translucidas (T13: --glass-strong nao existe no claro). */
+  .mobile-nav-compact {
+    background: var(--m-bar-bg);
+    -webkit-backdrop-filter: saturate(1.8) blur(20px);
+    backdrop-filter: saturate(1.8) blur(20px);
+    border-bottom: 1px solid var(--m-separator);
+    box-shadow: none;
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  :root .mobile-bottom-nav {
+    background: var(--m-bar-bg);
+    -webkit-backdrop-filter: saturate(1.8) blur(20px);
+    backdrop-filter: saturate(1.8) blur(20px);
+    border-top: 1px solid var(--m-separator);
+    box-shadow: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item {
+    font-size: var(--m-fs-caption2);
+    font-weight: 600;
+    gap: 3px;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item--active,
+  .mobile-bottom-nav .mobile-bottom-nav__item--active:hover {
+    color: var(--primary-700);
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__badge {
+    background: var(--danger);
+    color: var(--on-danger);
+  }
+
+  /* 4. Chegadas -------------------------------------------------------- */
+  .process-list-card.list-card {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .process-list-card > .card-heading {
+    margin-bottom: 12px;
+  }
+
+  /* T7: mesmos seletores de styles.css:9083/9095/9489. */
+  .process-list-card > .card-heading .admin-toolbar .primary-button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    box-shadow: none;
+    font-size: var(--m-fs-callout);
+    font-weight: 600;
+  }
+
+  .process-list-card > .card-heading .admin-toolbar .secondary-row {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .process-list-card > .card-heading .admin-toolbar .secondary-row .ghost-button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 12px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .process-list-card .chegadas-mobilebar {
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .process-list-card .chegadas-search {
+    min-height: 44px;
+    padding: 0 10px;
+    gap: 6px;
+    border-radius: var(--m-radius-field);
+    background: var(--m-fill);
+    color: var(--text-subtle);
+  }
+
+  .process-list-card .chegadas-search input {
+    font-size: var(--m-fs-body);
+  }
+
+  .process-list-card .chegadas-segmented {
+    padding: 2px;
+    border-radius: var(--m-radius-field);
+    background: var(--m-fill);
+  }
+
+  .process-list-card .chegadas-segmented__item {
+    min-height: 44px;
+    border-radius: 8px;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .process-list-card .chegadas-segmented__item--on {
+    background: var(--m-segment-on);
+    box-shadow: var(--m-shadow-segment);
+  }
+
+  /* T5: especificidade >= 0,3,0 para vencer o :hover do iOS. */
+  .process-list-card .chegadas-mobilebar .chegadas-filters-toggle {
+    min-height: 44px;
+    padding: 0 14px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .process-list-card .process-filters--panel--open {
+    border: 0;
+    box-shadow: none;
+    border-radius: var(--m-radius-group);
+    background: var(--surface);
+  }
+
+  .process-list-card .process-list {
+    gap: 0;
+    padding: 0;
+  }
+
+  .process-list-card .process-list > .process-list__section-label {
+    margin: 0;
+    padding: 22px var(--m-inset) 6px;
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+  }
+
+  .process-list-card .process-list > .process-list__section-label:first-child {
+    padding-top: 8px;
+  }
+
+  .process-list-card .process-list > .empty-state {
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* Item 4: acoes do swipe so aparecem com a linha aberta/arrastando. */
+  .process-swipe-row__actions {
+    visibility: hidden;
+    transition: visibility 0s linear 240ms;
+  }
+
+  .process-swipe-row--revealing > .process-swipe-row__actions {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  /* Grupo inset (o overflow recorta as acoes no canto arredondado). */
+  .process-list__group {
+    background: var(--surface);
+    border-radius: var(--m-radius-group);
+    overflow: hidden;
+  }
+
+  .process-list__group > .process-swipe-row {
+    border-bottom: 0;
+  }
+
+  /* A5 / T12: linha de lista navegavel. */
+  .process-list__group .process-item.process-swipe-row__content {
+    padding: 10px var(--m-inset);
+    min-height: 60px;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  .process-list__group .process-item.process-swipe-row__content:active {
+    background: var(--surface-alt);
+  }
+
+  /* O separador anda junto com o swipe (vive dentro do conteudo). */
+  .process-list__group > .process-swipe-row + .process-swipe-row > .process-swipe-row__content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--m-inset) + var(--m-leading) + 12px);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .process-list__group .process-item__leading {
+    width: var(--m-leading);
+    height: var(--m-leading);
+    border-radius: 8px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .process-list__group .process-item__leading--air {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .process-list__group .process-item__main {
+    gap: 2px;
+  }
+
+  .process-list__group .process-item__main strong {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .process-list__group .process-item__summary {
+    font-size: var(--m-fs-subhead);
+    color: var(--text-subtle);
+  }
+
+  /* T3: a variante "ETA atualizada" volta depois do recolorido. */
+  .process-list__group .process-item__summary--eta-updated {
+    color: var(--warning-700);
+    font-weight: 600;
+  }
+
+  .process-list__group .process-item__chips {
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  /* 5. Detalhe: cabecalho (item 6) ------------------------------------- */
+  .process-detail-view.list-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .process-detail-view > .process-detail-mobilebar {
+    order: -2;
+    margin: 0 calc(-1 * var(--m-inset)) 8px;
+    padding: 0 8px;
+    min-height: 44px;
+    border-radius: 0;
+    background: var(--m-bar-bg);
+    -webkit-backdrop-filter: saturate(1.8) blur(20px);
+    backdrop-filter: saturate(1.8) blur(20px);
+    border-bottom: 1px solid var(--m-separator);
+  }
+
+  .process-detail-view .process-detail-mobilebar__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 8px 0 0;
+    min-height: 44px;
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+    color: var(--primary-700);
+  }
+
+  /* O nome fica so no h2 (o elemento segue no DOM para os testes). */
+  .process-detail-view .process-detail-mobilebar__title {
+    display: none;
+  }
+
+  .process-detail-view > .process-detail-card-heading {
+    order: -1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin: 0 0 12px;
+    padding: 0 4px;
+    text-align: left;
+  }
+
+  /* T11: mesmo seletor de styles.css:7235. */
+  .process-detail-view > .process-detail-card-heading .process-detail-heading {
+    align-items: flex-start;
+    text-align: left;
+    gap: 6px;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-heading__name {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-title1);
+    font-weight: 700;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-heading__meta {
+    font-size: var(--m-fs-subhead);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  /* A6: primary = filled, ghost = tinted (T5: 0,3,0). Base de 50% - 6px =
+     no maximo 2 botoes de texto por linha. Estrela e "..." moram na barra do
+     topo no mobile (ver .process-detail-mobilebar__actions). */
+  .process-detail-view .process-detail-toolbar > .primary-button,
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 14px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .process-detail-view .process-detail-toolbar > .primary-button {
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+  }
+
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+  }
+
+  /* Rede de seguranca: se o hook de layout ainda nao trocou o DOM (1o frame),
+     estrela e "..." nao aparecem na toolbar; sem acao de texto, some a linha. */
+  .process-detail-view .process-detail-toolbar > .process-detail-fav,
+  .process-detail-view .process-detail-toolbar > .process-detail-more,
+  .process-detail-view .process-detail-toolbar:empty {
+    display: none;
+  }
+
+  /* Barra do topo (nav bar iOS): "<" Chegadas a esquerda, acoes a direita. */
+  .process-detail-view .process-detail-mobilebar__actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav {
+    position: relative;
+  }
+
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--radius-full);
+    background: none;
+    color: var(--primary-700);
+    box-shadow: none;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav:active,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger:active {
+    background: var(--m-fill);
+  }
+
+  .process-detail-view .process-detail-fav__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Menu "..." como context menu iOS. */
+  .process-detail-view .process-detail-more__menu {
+    right: 0;
+    min-width: 220px;
+    padding: 6px;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: var(--m-shadow-menu);
+    /* Opaco: o menu agora vive DENTRO da barra (que ja tem backdrop-filter);
+       backdrop-filter aninhado nao borra o conteudo da pagina. */
+    background: var(--surface);
+  }
+
+  .process-detail-view .process-detail-more__item {
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: var(--m-fs-body);
+  }
+
+  .process-detail-view .process-timeline {
+    margin: 0 0 12px;
+    padding: 14px 16px 12px;
+    background: var(--surface);
+    border-radius: var(--m-radius-group);
+  }
+
+  .process-detail-view .process-timeline__labels span {
+    font-size: var(--m-fs-caption2);
+  }
+
+  .process-detail-view .detail-tab-select {
+    margin: 0 0 12px;
+  }
+
+  /* Item 9: tira o respiro de 24px entre o seletor de abas e o painel. */
+  .process-detail-view .tab-panel-spacing {
+    margin-top: 0;
+  }
+
+  .process-detail-view .detail-tab-select__native {
+    min-height: 44px;
+    border-radius: var(--m-radius-control);
+    font-size: var(--m-fs-body);
+  }
+
+  /* 6. Detalhe: cabecalhos aninhados espremidos (item 1) --------------- */
+  .process-detail-view .detail-card > .process-detail-card-heading,
+  .process-form .process-detail-card-heading--end {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 4px 12px;
+    margin: 0;
+    text-align: left;
+  }
+
+  .process-detail-view .detail-card > .process-detail-card-heading > :first-child,
+  .process-form .process-detail-card-heading--end > :first-child {
+    justify-self: stretch;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .process-detail-view .detail-card > .process-detail-card-heading > :last-child {
+    justify-self: end;
+  }
+
+  .process-detail-view .detail-card > .process-detail-card-heading .detail-label {
+    display: block;
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+  }
+
+  .process-detail-view .detail-card > .process-detail-card-heading p {
+    margin: 2px 0 0;
+    font-size: var(--m-fs-footnote);
+    line-height: 1.35;
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .detail-card > .process-detail-card-heading .ghost-button {
+    min-height: 44px;
+    padding: 0 14px;
+    border-color: transparent;
+    border-radius: var(--radius-full);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* Formulario: cabecalho do bloco em 1 coluna, acoes embaixo. */
+  .process-form .process-detail-card-heading--end {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-form .process-detail-card-heading--end .admin-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .process-form .process-detail-card-heading--end .admin-toolbar .ghost-button {
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* 7. Detalhe: Detalhes gerais em linhas "Ajustes" (item 7) ------------ */
+  .process-detail-view .tab-panel-spacing:has(> .process-general-card) {
+    gap: 0;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: fit-content(55%) minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 2px;
+    align-items: baseline;
+    margin: 0;
+    padding: var(--m-row-pad-y) var(--m-inset);
+    min-height: var(--m-row-min);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--surface);
+    text-align: left;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child {
+    border-radius: var(--m-radius-group) var(--m-radius-group) 0 0;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:last-child {
+    border-radius: 0 0 var(--m-radius-group) var(--m-radius-group);
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child:last-child {
+    border-radius: var(--m-radius-group);
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card + .process-general-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--m-inset);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .process-detail-view .process-general-card > .detail-label {
+    grid-column: 1;
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .process-general-card > p {
+    grid-column: 2;
+    margin: 0;
+    text-align: right;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .process-detail-view .process-general-card > .field-hint {
+    grid-column: 1 / -1;
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+    text-align: left;
+  }
+
+  /* Pendentes e POs consolidadas: lista em linha inteira. */
+  .process-detail-view .tab-panel-spacing > .process-general-card--pending,
+  .process-detail-view .tab-panel-spacing > .process-general-card--consolidated-pos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-detail-view .process-general-card--pending > .detail-label {
+    color: var(--warning-700);
+    font-weight: 600;
+  }
+
+  .process-detail-view .process-general-card--pending ul,
+  .process-detail-view .process-general-card--consolidated-pos ul {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 4px;
+    font-size: var(--m-fs-subhead);
+    color: var(--ink);
+    text-align: left;
+  }
+
+  /* Identificacao: cada IdentRow vira uma linha. */
+  .process-detail-view .tab-panel-spacing > .process-general-card--ident {
+    padding-block: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-detail-view .process-general-card--ident > .detail-label {
+    display: none;
+  }
+
+  .process-detail-view .process-general-card--ident .detail-ident {
+    gap: 0;
+  }
+
+  .process-detail-view .detail-ident__row {
+    display: grid;
+    grid-template-columns: fit-content(55%) minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: baseline;
+    margin: 0;
+    padding: var(--m-row-pad-y) 0;
+    font-size: var(--m-fs-body);
+    text-align: left;
+  }
+
+  .process-detail-view .detail-ident__row + .detail-ident__row {
+    border-top: 1px solid var(--m-separator);
+  }
+
+  .process-detail-view .detail-ident__label {
+    color: var(--text-subtle);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .process-detail-view .detail-ident__sep {
+    display: none;
+  }
+
+  .process-detail-view .detail-ident__value {
+    text-align: right;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  /* ETD / ETA: duas linhas dentro do mesmo card (T9: margin-top inline). */
+  .process-detail-view .tab-panel-spacing > .process-general-card--etd-eta {
+    padding-block: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-label {
+    display: none;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split {
+    margin-top: 0 !important;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div {
+    display: grid;
+    grid-template-columns: fit-content(55%) minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: baseline;
+    margin: 0;
+    padding: var(--m-row-pad-y) 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    text-align: left;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div + div {
+    border-top: 1px solid var(--m-separator);
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split .detail-label {
+    grid-column: 1;
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+    opacity: 1;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split p {
+    grid-column: 2;
+    margin: 0;
+    text-align: right;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+  }
+
+  .process-detail-view .process-general-card--etd-eta .eta-detail-highlight .detail-label {
+    color: var(--eta-label-color);
+    font-weight: 600;
+  }
+
+  /* Itens vinculados: rotulo/contagem viram celulas; botao = linha com chevron. */
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading,
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading > div {
+    display: contents;
+  }
+
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading .detail-label {
+    grid-column: 1;
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading p {
+    grid-column: 2;
+    margin: 0;
+    text-align: right;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+  }
+
+  .process-linked-items__suffix {
+    display: none;
+  }
+
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading .ghost-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    justify-content: space-between;
+    width: calc(100% + var(--m-inset));
+    min-height: var(--m-row-min);
+    margin: var(--m-row-pad-y) calc(-1 * var(--m-inset)) calc(-1 * var(--m-row-pad-y)) 0;
+    padding: 0 var(--m-inset) 0 0;
+    border: 0;
+    border-top: 1px solid var(--m-separator);
+    border-radius: 0;
+    background: none;
+    color: var(--primary-700);
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+  }
+
+  .process-detail-view .process-general-card--linked-items > .process-detail-card-heading .ghost-button::after {
+    content: '\203A';
+    font-size: 1.375rem;
+    color: var(--text-faint);
+  }
+
+  /* 8. Detalhe: aba Processo (blocos) e conteineres (item 5) ----------- */
+  /* T1: sem `display` aqui; a guarda do placeholder repete logo abaixo. */
+  .process-detail-view .detail-block {
+    padding: 0 var(--m-inset) 4px;
+    gap: 0;
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+    text-align: left;
+  }
+
+  .process-detail-view .detail-block--placeholder {
+    display: none;
+  }
+
+  .process-detail-view .detail-block--danger {
+    background: var(--danger-50);
+  }
+
+  .process-detail-view .detail-block__head {
+    padding: 12px 0 10px;
+    gap: 6px 8px;
+    text-align: left;
+  }
+
+  /* D9: passos numerados somem no mobile. */
+  .process-detail-view .detail-block__step {
+    display: none;
+  }
+
+  .process-detail-view .detail-block__title {
+    flex: 1 1 auto;
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-detail-view .detail-dl {
+    margin: 0;
+    gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Linhas encostam na borda direita (separador recuado a esquerda). */
+  .process-detail-view .detail-dl__row,
+  .process-detail-view .detail-block__row,
+  .process-detail-view .detail-table tr {
+    margin: 0 calc(-1 * var(--m-inset)) 0 0;
+    padding: var(--m-row-pad-y) var(--m-inset) var(--m-row-pad-y) 0;
+    border-top: 1px solid var(--m-separator);
+    text-align: left;
+  }
+
+  .process-detail-view .detail-dl__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    min-height: var(--m-row-min);
+  }
+
+  .process-detail-view .detail-dl__row > dt {
+    display: block;
+    flex: 0 1 auto;
+    max-width: 55%;
+    color: var(--text-subtle);
+    font-size: var(--m-fs-body);
+  }
+
+  .process-detail-view .detail-dl__row > dd {
+    display: block;
+    flex: 1 1 0;
+    min-width: 40%;
+    text-align: right;
+    color: var(--ink);
+    font-size: var(--m-fs-body);
+    overflow-wrap: anywhere;
+  }
+
+  .process-detail-view .detail-block__row p {
+    margin: 0;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+  }
+
+  .process-detail-view .detail-block > p {
+    margin: 0 0 12px;
+    font-size: var(--m-fs-body);
+  }
+
+  /* Conteineres: 1 bloco por numero, sem rolagem lateral. */
+  .process-detail-view .detail-table__scroll {
+    margin: 0;
+    overflow: visible;
+  }
+
+  .process-detail-view .detail-table,
+  .process-detail-view .detail-table tbody,
+  .process-detail-view .detail-table tr {
+    display: block;
+    width: auto;
+  }
+
+  .process-detail-view .detail-table thead {
+    display: none;
+  }
+
+  .process-detail-view .detail-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    width: auto;
+    padding: 3px 0;
+    border: 0;
+    font-size: var(--m-fs-subhead);
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .process-detail-view .detail-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--text-subtle);
+    text-align: left;
+  }
+
+  .process-detail-view .detail-table td:first-child {
+    justify-content: flex-start;
+    padding: 0 0 4px;
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .process-detail-view .detail-table td:first-child::before {
+    content: none;
+  }
+
+  .process-detail-view .detail-table__badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .process-detail-view .process-transit__actions {
+    margin: 0;
+    padding: 12px 0;
+  }
+
+  .process-detail-view .process-transit__actions .ghost-button {
+    flex: 1 1 auto;
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* 9. Detalhe: Itens / Item relacionado / Mensagens / Historico ------- */
+  .process-detail-view .tab-panel-spacing > .detail-card:not(.process-general-card):not(.detail-block) {
+    padding: 12px var(--m-inset);
+    gap: 12px;
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+    text-align: left;
+  }
+
+  .process-detail-view .tab-panel-spacing .field .text-input[type='search'] {
+    background: var(--m-fill);
+    border-color: transparent;
+  }
+
+  /* T8: seletores >= 0,2,0 para vencer os overrides do tema escuro. */
+  .process-detail-view .process-items-list {
+    gap: 0;
+    margin: 0 calc(-1 * var(--m-inset)) -12px;
+  }
+
+  .process-detail-view .process-related-item-button {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 4px;
+    width: 100%;
+    min-height: var(--m-row-min);
+    padding: var(--m-row-pad-y) var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    text-align: left;
+  }
+
+  .process-detail-view .process-related-item-button:hover {
+    transform: none;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .process-detail-view .process-related-item-button:active {
+    background: var(--surface-alt);
+  }
+
+  .process-detail-view .process-related-item-button + .process-related-item-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--m-inset);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .process-detail-view .process-related-item-button > .process-item-display {
+    grid-column: 1;
+  }
+
+  .process-detail-view .process-related-item-button > .process-item-display--quantity {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    gap: 4px;
+    align-items: baseline;
+    justify-self: end;
+  }
+
+  .process-detail-view .process-related-item-button > .inline-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .process-detail-view .process-item-display__name {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  /* Sobrescreve o `strong { text-align: center }` de styles.css:5360. */
+  .process-detail-view .process-related-item-button > .process-item-display strong {
+    text-align: left;
+  }
+
+  .process-detail-view .process-related-item-button > .process-item-display--quantity strong {
+    text-align: right;
+  }
+
+  .process-detail-view .process-item-display .detail-label {
+    font-size: var(--m-fs-footnote);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .process-items-list > .empty-state {
+    margin: 0 var(--m-inset) 12px;
+  }
+
+  .process-detail-view .process-messages-list {
+    gap: 0;
+    margin: 0 calc(-1 * var(--m-inset));
+  }
+
+  .process-detail-view .process-message-card {
+    position: relative;
+    padding: var(--m-row-pad-y) var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    text-align: left;
+  }
+
+  .process-detail-view .process-message-card + .process-message-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--m-inset);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .process-detail-view .process-message-card__meta {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+  }
+
+  .process-detail-view .process-message-card__meta-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+  }
+
+  .process-detail-view .process-message-card__meta-content strong {
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-detail-view .process-message-card__meta-content span {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .process-message-card p {
+    margin: 4px 0 0;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+  }
+
+  .process-detail-view .process-message-card__meta-content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .process-detail-view .process-message-card .process-message-card__delete {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    margin-block: -10px;
+    padding: 0 0 0 12px;
+    border: 0;
+    background: none;
+    color: var(--danger-700);
+    font-weight: 600;
+  }
+
+  .process-detail-view .detail-card .action-row .primary-button {
+    width: 100%;
+    min-height: 44px;
+    border-radius: var(--m-radius-control);
+  }
+
+  /* 10. Dashboard (item 8) --------------------------------------------- */
+  .dashboard-heading ~ .dashboard-stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card {
+    padding: 12px 14px;
+    gap: 6px;
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__head {
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__label {
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1.25;
+    color: var(--text-subtle);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .dashboard-heading ~ .dashboard-stat-row .stat-card__value {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-title1);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  /* Barra do Rio compacta: titulo + status em pilula tinted + nota. */
+  .dashboard-heading .dashboard-bar-inline,
+  .dashboard-heading .dashboard-bar-inline--ok,
+  .dashboard-heading .dashboard-bar-inline--warn,
+  .dashboard-heading .dashboard-bar-inline--danger {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    margin: 0;
+    padding: 12px var(--m-inset);
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .dashboard-heading .dashboard-bar-inline::after {
+    display: none;
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-inline__label {
+    flex: 0 0 auto;
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 1;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* O titulo nunca quebra. O status vai a direita se couber; senao desce
+     para a propria linha (a pilula nao quebra). */
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-inline__status,
+  .dashboard-heading .dashboard-bar-inline > .dashboard-bar-card__text {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 1 auto;
+    max-width: 100%;
+    margin: 0;
+    padding: 4px 12px;
+    gap: 6px;
+    border-radius: var(--radius-full);
+    background: var(--m-fill);
+    white-space: nowrap;
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-card__text {
+    min-width: 0;
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-inline__note {
+    flex: 1 0 100%;
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+    opacity: 1;
+    text-align: left;
+  }
+
+  .dashboard-heading .dashboard-bar-inline .dashboard-bar-inline__dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    background: var(--text-faint);
+    box-shadow: none;
+  }
+
+  .dashboard-heading .dashboard-bar-inline--ok .dashboard-bar-inline__status {
+    background: var(--primary-50);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--ok .dashboard-bar-card__text {
+    color: var(--primary-700);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--ok .dashboard-bar-inline__dot {
+    background: var(--primary);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--warn .dashboard-bar-inline__status {
+    background: var(--warning-50);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--warn .dashboard-bar-card__text {
+    color: var(--warning-700);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--warn .dashboard-bar-inline__dot {
+    background: var(--warning);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--danger .dashboard-bar-inline__status {
+    background: var(--danger-50);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--danger .dashboard-bar-card__text {
+    color: var(--danger-700);
+  }
+
+  .dashboard-heading .dashboard-bar-inline--danger .dashboard-bar-inline__dot {
+    background: var(--danger);
+  }
+
+  /* Modulos: titulo A3 fora do card, conteudo em grupos inset. */
+  .dashboard-heading ~ .stagger > .list-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .dashboard-heading ~ .stagger > .list-card > .card-heading {
+    margin: 0 0 8px;
+    padding: 0 4px;
+  }
+
+  .dashboard-heading ~ .stagger > .list-card > .card-heading > div {
+    text-align: left;
+  }
+
+  .dashboard-heading ~ .stagger > .list-card > .card-heading h3 {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-title3);
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .dashboard-heading ~ .stagger .empty-state {
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .dashboard-heading ~ .stagger .announcement-list--scroll {
+    margin: 0 calc(-1 * var(--m-inset));
+    padding: 0 var(--m-inset) 4px;
+    scroll-padding-inline: var(--m-inset);
+  }
+
+  .dashboard-heading ~ .stagger .announcement-list--scroll .announcement-card {
+    padding: 14px var(--m-inset);
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+  }
+
+  /* Favoritos (A5): grupo inset com linhas. */
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-list {
+    gap: 0;
+    padding: 0;
+    background: var(--surface);
+    border-radius: var(--m-radius-group);
+    overflow: hidden;
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .dashboard-favorites-item {
+    position: relative;
+    min-height: 60px;
+    padding: 10px var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .dashboard-favorites-item + .dashboard-favorites-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--m-inset) + var(--m-leading) + 12px);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__leading {
+    width: var(--m-leading);
+    height: var(--m-leading);
+    border-radius: 8px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__main strong {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__summary {
+    font-size: var(--m-fs-subhead);
+    color: var(--text-subtle);
+  }
+
+  /* T14: "Chegadas da semana" vira lista vertical agrupada por secao. */
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-list--scroll {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section {
+    display: grid;
+    gap: 0;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section__title {
+    margin: 0;
+    padding: 22px var(--m-inset) 6px;
+    font-family: var(--m-font-text);
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section:first-child .weekly-arrivals-section__title {
+    padding-top: 0;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-item {
+    position: relative;
+    flex: none;
+    width: auto;
+    margin: 0;
+    padding: var(--m-row-pad-y) var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--surface);
+    scroll-snap-align: none;
+    text-align: left;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section__title + .process-item {
+    border-radius: var(--m-radius-group) var(--m-radius-group) 0 0;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section > .process-item:last-child {
+    border-radius: 0 0 var(--m-radius-group) var(--m-radius-group);
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section__title + .process-item:last-child {
+    border-radius: var(--m-radius-group);
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-section > .process-item + .process-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--m-inset);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-item__main strong {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-item__chips {
+    justify-content: flex-start;
+    margin: 4px 0 0;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-windows {
+    gap: 2px;
+    margin: 4px 0 0;
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-windows__item .detail-label {
+    font-size: var(--m-fs-footnote);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-subtle);
+  }
+
+  .dashboard-heading ~ .stagger .weekly-arrivals-card .weekly-arrivals-windows__date {
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* 11. Noticias ---------------------------------------------------------- */
+  .surface--news .news-list-card.list-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .surface--news .news-list-card > .card-heading {
+    margin: 0 0 12px;
+  }
+
+  .surface--news .news-list-card > .card-heading .admin-toolbar .primary-button {
+    width: 100%;
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    box-shadow: none;
+    font-size: var(--m-fs-callout);
+    font-weight: 600;
+  }
+
+  .surface--news .news-grid {
+    gap: 0;
+  }
+
+  .surface--news .news-card--featured {
+    border: 0;
+    box-shadow: none;
+    border-radius: var(--m-radius-group);
+    background: var(--surface);
+  }
+
+  .surface--news .news-card--featured .news-card__body {
+    padding: 12px var(--m-inset) 14px;
+    gap: 4px;
+  }
+
+  .surface--news .news-card--featured .news-card__body strong {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-title3);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .surface--news .news-card__summary {
+    font-size: var(--m-fs-subhead);
+    color: var(--text-subtle);
+  }
+
+  .surface--news .news-card__timestamp {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  /* "Anteriores" agrupado (.news-aside e display: contents). */
+  .surface--news .news-section-label {
+    margin: 0;
+    padding: 22px var(--m-inset) 6px;
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+  }
+
+  .surface--news .news-card--row {
+    position: relative;
+    border-top: 0;
+    border-radius: 0;
+    background: var(--surface);
+  }
+
+  .surface--news .news-section-label + .news-card--row {
+    border-radius: var(--m-radius-group) var(--m-radius-group) 0 0;
+  }
+
+  .surface--news .news-aside > .news-card--row:last-child {
+    border-radius: 0 0 var(--m-radius-group) var(--m-radius-group);
+  }
+
+  .surface--news .news-section-label + .news-card--row:last-child {
+    border-radius: var(--m-radius-group);
+  }
+
+  .surface--news .news-card--row + .news-card--row {
+    border-top: 0;
+  }
+
+  .surface--news .news-card--row + .news-card--row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--m-inset);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .surface--news .news-card--row .news-card__button {
+    padding: var(--m-row-pad-y) var(--m-inset);
+  }
+
+  .surface--news .news-card--row .news-card__body strong {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  .surface--news .news-card--row .news-card__actions {
+    padding: 0 var(--m-inset) 10px;
+  }
+
+  /* 12. Notificacoes (item 10) ------------------------------------------- */
+  .notifications-page > .section-heading {
+    margin: 0 0 4px;
+  }
+
+  .notifications-page .notifications__heading-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .notifications-page .notifications__heading-actions .ghost-button {
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--radius-full);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .notifications-page .notifications__heading-actions .notifications__mark-all {
+    flex: 1 1 auto;
+    padding: 0 16px;
+  }
+
+  .notifications-page .notifications__heading-actions .notifications__prefs,
+  .notifications-page .notifications__heading-actions .notifications__dnd {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  /* T4: o estado ativo do "Nao perturbe" volta depois do tinted. */
+  .notifications-page .notifications__heading-actions .notifications__dnd--active {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .notifications-page .notifications__heading-actions .ghost-button:disabled {
+    opacity: 0.45;
+  }
+
+  .notifications-page .notifications__filters {
+    gap: 8px;
+    padding: 2px 0 4px;
+    border: 0;
+    background: none;
+  }
+
+  .notifications-page .notifications__filters .tab-button {
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--radius-full);
+    box-shadow: none;
+    background: var(--m-fill);
+    color: var(--ink);
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .notifications-page .notifications__filters .tab-button::after {
+    display: none;
+  }
+
+  .notifications-page .notifications__filters .tab-button--active {
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+  }
+
+  /* T8: grupos inset; seletores 0,2,0 vencem os overrides do escuro. */
+  .notifications-page .notifications__section-label {
+    margin: 0;
+    padding: 22px var(--m-inset) 6px;
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+  }
+
+  .notifications-page .notifications__section:first-child .notifications__section-label {
+    padding-top: 8px;
+  }
+
+  /* Sem a linha divisoria entre secoes: o rotulo A2 ja separa. */
+  .notifications-page .notifications__section + .notifications__section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .notifications-page .notifications__group,
+  .notifications-page .notifications__group--unread {
+    margin: 0 0 12px;
+    padding: 0;
+    gap: 0;
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .notifications-page .notifications__group-header {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 12px var(--m-inset);
+    gap: 12px;
+    align-items: baseline;
+    text-align: left;
+  }
+
+  .notifications-page .notifications__group-header strong {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  .notifications-page .notifications__group-header p,
+  .notifications-page .notifications__group-header > span {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .notifications-page .notifications__group-items {
+    gap: 0;
+  }
+
+  .notifications-page .notifications__item {
+    position: relative;
+    padding: 10px var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--surface);
+    text-align: left;
+  }
+
+  .notifications-page .notifications__item:active {
+    background: var(--surface-alt);
+  }
+
+  .notifications-page .notifications__group-items > .notifications-swipe-row > .notifications__item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--m-inset) + 32px + 12px);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .notifications-page .notifications__item--unread::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 5px;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+  }
+
+  .notifications-page .notifications__item--unread .notifications__item-body strong {
+    font-weight: 700;
+  }
+
+  .notifications-page .notifications__show-more.ghost-button {
+    width: 100%;
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* Swipe (mesma correcao do item 4). */
+  .notifications-swipe-row__actions {
+    visibility: hidden;
+    transition: visibility 0s linear 240ms;
+  }
+
+  .notifications-swipe-row--revealing > .notifications-swipe-row__actions {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .notifications-page .notifications-swipe-row__action {
+    border-radius: 0;
+  }
+
+  /* 13. Admin (item 11) --------------------------------------------------- */
+  .admin-section .admin-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .admin-section .admin-filters .field--compact {
+    max-width: none;
+  }
+
+  /* T2: 0,3,0 vence `.admin-user-row--button div > span`. */
+  .admin-user-list .admin-user-row--button .admin-user-row__uid {
+    display: none;
+  }
+
+  .admin-section .admin-panel-stack > .admin-toolbar--right {
+    justify-content: flex-end;
+    margin: 0 0 -6px;
+  }
+
+  /* Item 7: o nome da secao agora e' o large title (AppLayout) com "Admin"
+     como eyebrow; o h2 do AdminLayout so repetia o titulo. */
+  .admin-section .admin-tabs__section-title {
+    display: none;
+  }
+
+  /* 14. Formulario Editar/Criar processo (item 12) ------------------------- */
+  .process-form.list-card {
+    padding: 16px;
+  }
+
+  .card-heading.process-form__header {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .process-form__header h3 {
+    order: 3;
+    flex: 1 0 100%;
+    min-width: 0;
+    margin: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-title2);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .process-form__header .inline-badge {
+    margin-left: auto;
+    max-width: none;
+  }
+
+  .process-form__header .status-tag {
+    max-width: none;
+  }
+
+  .process-form .process-form__header .ghost-button {
+    min-height: 44px;
+    padding: 0 10px 0 4px;
+    border: 0;
+    background: none;
+    color: var(--primary-700);
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+  }
+
+  .process-form .form-grid--numeric {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .process-form .form-group__title {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  .process-form .wizard-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .process-form .wizard-nav .ghost-button {
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .process-form .wizard-nav .ghost-button:disabled {
+    opacity: 0.45;
+  }
+
+  .process-form .wizard-nav .primary-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    box-shadow: none;
+    font-size: var(--m-fs-callout);
+    font-weight: 600;
+  }
+
+  /* 15. Menu (referencia, so harmoniza) ---------------------------------- */
+  .menu-page .ios-group {
+    border: 0;
+    box-shadow: none;
+    border-radius: var(--m-radius-group);
+  }
+
+  .menu-page .ios-section-label {
+    padding: 22px var(--m-inset) 6px;
+  }
+
+  .menu-page .ios-row__title {
+    font-size: var(--m-fs-body);
+    font-weight: 400;
+  }
+
+  /* 15b. Historico: titulo do evento > data e autor (footnote, 1 linha) --- */
+  .process-detail-view .process-message-card--event {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 0;
+  }
+
+  .process-detail-view .process-message-card--event .process-message-card__meta,
+  .process-detail-view .process-message-card--event .process-message-card__meta-content {
+    display: contents;
+  }
+
+  .process-detail-view .process-message-card--event strong {
+    flex: 0 0 100%;
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-detail-view .process-message-card--event .process-message-card__meta-content span,
+  .process-detail-view .process-message-card--event p {
+    margin: 0;
+    font-size: var(--m-fs-footnote);
+    font-weight: 400;
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .process-message-card--event p::before {
+    content: '\00b7';
+    margin: 0 6px;
+  }
+
+  /* 15c. Aba Documentos na linguagem do app (so' CSS; JSX e aria-labels
+     intactos). Grupo inset sem borda, cada documento uma linha. ---------- */
+  .process-detail-view .documents-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'badges update'
+      'hint hint';
+    justify-items: start;
+    row-gap: 4px;
+    padding: 0 4px;
+  }
+
+  .process-detail-view .documents-summary__badges {
+    justify-content: flex-start;
+  }
+
+  .process-detail-view .documents-summary__hint {
+    width: 100%;
+    text-align: left;
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .documents-summary .documents-summary__update {
+    justify-self: end;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--radius-full);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+  }
+
+  .process-detail-view .documents-section {
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+    background: var(--surface);
+  }
+
+  .process-detail-view .documents-section__header {
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 14px var(--m-inset) 6px;
+    text-align: left;
+  }
+
+  .process-detail-view .documents-section__title {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+  }
+
+  .process-detail-view .documents-section__subtitle {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .documents-row-group {
+    position: relative;
+  }
+
+  .process-detail-view .documents-row {
+    grid-template-columns: var(--m-leading) minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 8px;
+    padding: 10px var(--m-inset);
+    border-top: 0;
+  }
+
+  .process-detail-view .documents-row-group .documents-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--m-inset) + var(--m-leading) + 12px);
+    right: 0;
+    height: 1px;
+    background: var(--m-separator);
+  }
+
+  .process-detail-view .documents-section__rows > .documents-row-group:first-child .documents-row::before {
+    left: var(--m-inset);
+  }
+
+  .process-detail-view .documents-row__icon {
+    width: var(--m-leading);
+    height: var(--m-leading);
+    border-radius: 8px;
+  }
+
+  .process-detail-view .documents-row__label {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-detail-view .documents-row__file {
+    font-size: var(--m-fs-footnote);
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .documents-row__meta {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .documents-row__badge {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+    justify-content: flex-end;
+  }
+
+  /* Acoes compactas (tinted, em linha) no lugar das 3 caixas outline. */
+  .process-detail-view .documents-row__actions {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .process-detail-view .documents-row__actions > .documents-icon-button,
+  .process-detail-view .documents-row__actions > .primary-button,
+  .process-detail-view .documents-row__actions > .ghost-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 36px;
+    padding: 0 10px;
+    gap: 4px;
+    border-color: transparent;
+    border-radius: var(--radius-full);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+  }
+
+  .process-detail-view .documents-row__actions svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .process-detail-view .documents-row__actions > .primary-button {
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+  }
+
+  .process-detail-view .documents-row__actions > [aria-label^='Excluir'] {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .process-detail-view .documents-lock {
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .documents-row__previous {
+    padding: 0 var(--m-inset) 10px calc(var(--m-inset) + var(--m-leading) + 12px);
+    font-size: var(--m-fs-footnote);
+    color: var(--text-subtle);
+  }
+
+  .process-detail-view .documents-po-table tr {
+    margin: 0;
+    padding: 10px var(--m-inset);
+    border: 0;
+    border-top: 1px solid var(--m-separator);
+    border-radius: 0;
+  }
+
+  .process-detail-view .documents-po-table th[scope='row'] {
+    margin-bottom: 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  /* 15d. Estados vazios: texto simples, sem caixa cinza com borda. ------- */
+  .empty-state,
+  .empty-state--rich {
+    gap: 4px;
+    padding: 20px var(--m-inset);
+    border: 0;
+    border-radius: 0;
+    background: none;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .empty-state strong,
+  .empty-state__title {
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .empty-state p,
+  .empty-state__message {
+    margin: 0;
+    font-size: var(--m-fs-subhead);
+    line-height: 1.4;
+    color: var(--text-subtle);
+  }
+
+  /* Sem a ilustracao (o "cartao cinza" do SVG): texto simples centralizado. */
+  .empty-state__illustration {
+    display: none;
+  }
+
+  .empty-state__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* 15e. Admin: formularios no visual novo (titulos a esquerda, grupos inset,
+     rotulos em sentence case, sem caixa cinza aninhada). ------------------ */
+  .admin-section .list-card > .card-heading {
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 12px;
+    text-align: left;
+  }
+
+  .admin-section .list-card > .card-heading > div {
+    text-align: left;
+  }
+
+  .admin-section .list-card > .card-heading h3 {
+    margin: 0;
+    font-size: var(--m-fs-headline);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .admin-section .list-card > .card-heading p {
+    margin: 2px 0 0;
+    font-size: var(--m-fs-footnote);
+    line-height: 1.35;
+    color: var(--text-subtle);
+  }
+
+  .admin-section .detail-label {
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+  }
+
+  .admin-section .admin-feature-footer {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .admin-section .admin-table tr {
+    gap: 8px;
+    margin-bottom: 0;
+    padding: var(--m-row-pad-y) 0;
+    border: 0;
+    border-top: 1px solid var(--m-separator);
+    border-radius: 0;
+    background: none;
+  }
+
+  .admin-section .admin-table tbody tr:first-child {
+    border-top: 0;
+  }
+
+  .admin-section .admin-table td::before {
+    font-size: var(--m-fs-subhead);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+  }
+
+  .admin-section .admin-table td.admin-table__actions-cell .ghost-button {
+    width: auto;
+    min-height: 44px;
+    padding: 0 12px 0 0;
+    justify-content: flex-start;
+    border-color: transparent;
+    background: none;
+    color: var(--danger-700);
+    box-shadow: none;
+  }
+
+  .admin-section .list-card > .card-heading > .ghost-button {
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  .admin-section .stat-card {
+    border: 0;
+    border-radius: var(--m-radius-group);
+    box-shadow: none;
+  }
+
+  .admin-section .stat-card__label {
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-subtle);
+  }
+
+  .admin-section .support-ticket-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .admin-section .detail-card--soft {
+    border-radius: var(--m-radius-field);
+  }
+
+  /* 15f. Pilula de status derivado: sentence case como as demais (A7). ---- */
+  .process-derived-status-badge {
+    font-size: var(--m-fs-caption);
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 3px 9px;
+  }
+
+  /* 15g. SelectField no formulario: mesmo texto dos inputs. O gatilho e' um
+     <span> dentro de .field e herdava caixa-alta/12px de `.field span`. -- */
+  .field .select-field__trigger {
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: var(--m-radius-field);
+    font-size: var(--m-fs-callout);
+  }
+
+  .field .select-field__trigger-value,
+  .field .select-field__trigger-caret {
+    font-size: inherit;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .field .select-field__trigger-value {
+    color: var(--ink);
+  }
+
+  .field .select-field__trigger-caret {
+    color: var(--text-subtle);
+  }
+
+  /* 15h. Rodada 2 do QA ------------------------------------------------- */
+
+  /* Admin: nenhum filho do grid pode alargar a pagina (ex.: o segmented do
+     Suporte tinha min-content de 421px e levava o grid a 466px). */
+  .admin-section .admin-panel-stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-section .admin-panel-stack > * {
+    min-width: 0;
+  }
+
+  .admin-section .support-tabs-row {
+    min-width: 0;
+    margin-bottom: 12px;
+  }
+
+  .admin-section .support-tabs-row .tab-row {
+    min-width: 0;
+    margin-right: 0;
+    padding: 2px;
+    gap: 2px;
+    overflow: visible;
+    border: 0;
+    border-radius: var(--m-radius-field);
+    background: var(--m-fill);
+  }
+
+  .admin-section .support-tabs-row .tab-row .tab-button {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: none;
+    box-shadow: none;
+    color: var(--ink);
+    font-size: var(--m-fs-footnote);
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: none;
+  }
+
+  .admin-section .support-tabs-row .tab-row .tab-button--active {
+    background: var(--m-segment-on);
+    box-shadow: var(--m-shadow-segment);
+    color: var(--ink);
+  }
+
+  /* Documentos: rotulo do checkbox (o `label` global e' caixa-alta/12px). */
+  .process-detail-view .documents-combine__label {
+    align-items: center;
+    gap: 10px;
+    font-size: var(--m-fs-subhead);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .process-detail-view .documents-combine__label input {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  /* Documentos (Consolidado): icone a esquerda e nome quebrando ao lado dele;
+     o wrap do flex fica so' para as acoes/versao anterior (100%). */
+  .process-detail-view .documents-po-cell {
+    align-items: flex-start;
+    gap: 8px 12px;
+  }
+
+  .process-detail-view .documents-po-cell__icon {
+    flex: 0 0 var(--m-leading);
+    width: var(--m-leading);
+    height: var(--m-leading);
+    border-radius: 8px;
+  }
+
+  .process-detail-view .documents-po-cell__info {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .process-detail-view .documents-po-cell__name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: var(--m-fs-subhead);
+  }
+
+  /* Admin: tabelas somente-leitura (Lead time) viram linhas "Ajustes":
+     rotulo a esquerda, valor a direita, hairline entre linhas. Tabelas com
+     campos editaveis (Previsoes) mantem rotulo + input. */
+  .admin-section .admin-table td {
+    grid-template-columns: fit-content(45%) minmax(0, 1fr);
+    text-align: right;
+  }
+
+  .admin-section .admin-table td::before {
+    text-align: left;
+  }
+
+  /* Linhas editaveis (Previsoes): coluna do rotulo com largura FIXA em todas
+     as linhas, para os inputs comecarem na mesma borda e terem a mesma largura
+     (fit-content variava por rotulo: Match/Rotulo/Cutoff (h)/Min). */
+  .admin-section .admin-table td:has(input) {
+    grid-template-columns: 96px minmax(0, 1fr);
+    text-align: left;
+  }
+
+  .admin-section .admin-table:not(:has(input)) tr {
+    gap: 0;
+    margin-top: 12px;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .admin-section .admin-table:not(:has(input)) tbody tr:first-child {
+    margin-top: 0;
+  }
+
+  .admin-section .admin-table:not(:has(input)) td {
+    align-items: baseline;
+    min-height: var(--m-row-min);
+    padding: var(--m-row-pad-y) 0;
+    font-size: var(--m-fs-body);
+    color: var(--ink);
+  }
+
+  .admin-section .admin-table:not(:has(input)) td::before {
+    font-size: var(--m-fs-body);
+  }
+
+  .admin-section .admin-table:not(:has(input)) td + td {
+    border-top: 1px solid var(--m-separator);
+  }
+
+  .admin-section .admin-table:not(:has(input)) td.admin-table__actions-cell {
+    display: block;
+    text-align: left;
+  }
+
+  /* Lead time: filtro de periodo em card (rotulo + select de largura total);
+     estado vazio em card quando solto na pilha do Admin. */
+  .admin-section .admin-panel-stack > .admin-toolbar--right:has(> .field) {
+    justify-content: stretch;
+    margin: 0;
+    padding: 12px var(--m-inset);
+    border-radius: var(--m-radius-group);
+    background: var(--surface);
+  }
+
+  .admin-section .admin-toolbar--right > .field {
+    width: 100%;
+    max-width: none;
+  }
+
+  .admin-section .admin-panel-stack > .empty-state {
+    padding: 24px var(--m-inset);
+    border-radius: var(--m-radius-group);
+    background: var(--surface);
+  }
+
+  /* Previsoes: "Firestore ativo" ao lado do titulo do card (JSX por hook). */
+  .admin-section .admin-heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  /* Barra do porto: sugestao como linha do card; "Aplicar" tinted. */
+  .admin-section .suggestion-banner {
+    padding: 12px 0 0;
+    border: 0;
+    border-top: 1px solid var(--m-separator);
+    border-radius: 0;
+    background: none;
+  }
+
+  .admin-section .suggestion-banner__text {
+    font-size: var(--m-fs-subhead);
+  }
+
+  .admin-section .suggestion-banner .ghost-button {
+    min-height: 44px;
+    border-color: transparent;
+    border-radius: var(--m-radius-control);
+    background: var(--m-tint-bg);
+    color: var(--m-tint-fg);
+    box-shadow: none;
+    font-size: var(--m-fs-subhead);
+    font-weight: 600;
+  }
+
+  /* Comunicados: itens da lista a esquerda, meta em linha. */
+  .admin-section .announcement-list .announcement-card {
+    text-align: left;
+  }
+
+  .admin-section .announcement-list .announcement-card__meta {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: var(--m-fs-footnote);
+    text-align: left;
+  }
+
+  /* Comunicados: item selecionado com fundo tinted, sem anel de 2px. */
+  .admin-section .announcement-card--selected {
+    border-color: transparent;
+    box-shadow: none;
+    background: var(--m-tint-bg);
+  }
+}
+
+/* 16. Movimento reduzido ------------------------------------------------ */
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .process-swipe-row__actions,
+  .notifications-swipe-row__actions {
+    transition: none;
+  }
+}
+
+/* 17. Tablet 721-1040px: item 1 (cabecalhos de card espremidos) ----------
+   Unica regra fora do mobile alem da secao 18. Sem redesign: so troca a
+   grade 1fr auto 1fr (styles.css:2501) por minmax(0, 1fr) auto, como o
+   desktop ja faz para `--end` (styles.css:10589). Desktop >= 1041px nao e
+   tocado. */
+@media (min-width: 721px) and (max-width: 1040px) {
+  .process-detail-view .detail-card > .process-detail-card-heading,
+  .process-form .process-detail-card-heading--end {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* 18. Desktop-hide: icone do Favoritar so existe no mobile ------------- */
+@media (min-width: 721px) {
+  .process-detail-fav__icon {
+    display: none;
+  }
+}

@@ -281,16 +281,16 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
             <tbody>
               {containers.map((container) => (
                 <tr key={container.id}>
-                  <td>{container.number || 'Sem número'}</td>
-                  <td>
+                  <td data-label="Contêiner">{container.number || 'Sem número'}</td>
+                  <td data-label="Tipo">
                     {CONTAINER_TYPE_OPTIONS.find((option) => option.value === container.type)?.label ??
                       container.type ??
                       '—'}
                   </td>
-                  <td>{container.seal || '—'}</td>
-                  <td>
+                  <td data-label="Lacre">{container.seal || '—'}</td>
+                  <td data-label="Devolução do vazio">
                     {container.returnedAt ? (
-                      <>
+                      <span className="detail-table__badges">
                         {isContainerReturnPlanned(container) ? (
                           <span className="inline-badge">{`Devolução prevista para ${formatDate(container.returnedAt)}`}</span>
                         ) : (
@@ -303,7 +303,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
                             <span className="inline-badge inline-badge--warn">Lavação pendente</span>
                           )
                         ) : null}
-                      </>
+                      </span>
                     ) : (
                       '—'
                     )}
@@ -352,7 +352,8 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
 }
 
 function formatCargoUnit(quantity, singularLabel, pluralLabel) {
-  return `${quantity} ${quantity < 2 ? singularLabel : pluralLabel}`
+  const value = Number(quantity) || 0
+  return `${value} ${value === 1 ? singularLabel : pluralLabel}`
 }
 
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal

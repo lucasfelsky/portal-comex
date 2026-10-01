@@ -525,3 +525,45 @@ describe('UX-6a: alertas no card', () => {
     expect(badge).toBeTruthy()
   })
 })
+
+// Redesign mobile (PLAN.md B3): grupos "inset grouped", acoes do swipe so
+// aparecem revelando e icone aereo com modificador proprio.
+describe('ProcessListView — redesign mobile (grupos e swipe em repouso)', () => {
+  describe('mobile (≤720px)', () => {
+    beforeEach(() => stubMatchMedia(true))
+
+    it('cada secao (Em andamento, Concluidos) e um .process-list__group logo apos o rotulo', () => {
+      const { container } = renderView()
+      const groups = container.querySelectorAll('.process-list__group')
+      expect(groups).toHaveLength(2)
+      expect(container.querySelectorAll('.process-list__group .process-swipe-row')).toHaveLength(3)
+      container.querySelectorAll('.process-list__section-label').forEach((label) => {
+        expect(label.nextElementSibling.classList.contains('process-list__group')).toBe(true)
+      })
+    })
+
+    it('em repouso nenhuma linha tem .process-swipe-row--revealing', () => {
+      const { container } = renderView({ onToggleFavorite: vi.fn(), isAdmin: true, onArchiveProcess: vi.fn() })
+      expect(container.querySelectorAll('.process-swipe-row').length).toBeGreaterThan(0)
+      expect(container.querySelectorAll('.process-swipe-row--revealing')).toHaveLength(0)
+    })
+
+    it('linha aerea ganha .process-item__leading--air e a maritima nao', () => {
+      const { container } = renderView()
+      const airLeadings = container.querySelectorAll('.process-item__leading--air')
+      expect(airLeadings).toHaveLength(1)
+      expect(airLeadings[0].closest('.process-item').textContent).toContain('AWB 2')
+      expect(container.querySelectorAll('.process-item__leading')).toHaveLength(3)
+    })
+  })
+
+  describe('desktop (>720px)', () => {
+    beforeEach(() => stubMatchMedia(false))
+
+    it('nao renderiza .process-list__group (lista plana intacta)', () => {
+      const { container } = renderView()
+      expect(container.querySelectorAll('.process-list__group')).toHaveLength(0)
+      expect(container.querySelectorAll('.process-swipe-row--revealing')).toHaveLength(0)
+    })
+  })
+})

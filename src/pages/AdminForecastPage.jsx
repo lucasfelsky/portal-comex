@@ -12,6 +12,7 @@ import {
   saveForecastSettings,
 } from '../services/forecastSettingsRepository'
 import { isFirebaseConfigured } from '../lib/firebase'
+import { useMobileLayout } from '../hooks/useMobileLayout'
 import { buildActionErrorMessage } from '../utils/errorMessages'
 
 const HOUR_BOUNDS = { min: 0, max: 23 }
@@ -137,6 +138,9 @@ function summarizeUpdatedBy(settings) {
 export default function AdminForecastPage() {
   const { profile } = useAuth()
   const { settings, loading } = useForecastSettings()
+  // Mobile: o badge de origem dos dados vai pro cabecalho do 1o card, ao lado
+  // do titulo; no desktop segue na toolbar acima dos cards.
+  const isMobileLayout = useMobileLayout()
   const [draft, setDraft] = useState(() => normalizeDraft(settings))
   const [newDuimpStatus, setNewDuimpStatus] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -293,13 +297,15 @@ export default function AdminForecastPage() {
     )
   }
 
+  const sourceBadge = (
+    <span className="inline-badge">
+      {isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}
+    </span>
+  )
+
   return (
     <div className="admin-panel-stack">
-      <div className="admin-toolbar admin-toolbar--right">
-        <span className="inline-badge">
-          {isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'}
-        </span>
-      </div>
+      {isMobileLayout ? null : <div className="admin-toolbar admin-toolbar--right">{sourceBadge}</div>}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {feedback ? <div className="success-banner">{feedback}</div> : null}
@@ -318,7 +324,14 @@ export default function AdminForecastPage() {
         <article className="list-card">
           <div className="card-heading">
             <div>
-              <h3>Destinos e cutoff</h3>
+              {isMobileLayout ? (
+                <div className="admin-heading-row">
+                  <h3>Destinos e cutoff</h3>
+                  {sourceBadge}
+                </div>
+              ) : (
+                <h3>Destinos e cutoff</h3>
+              )}
               <p>Match é comparado (sem acento, case-insensitive) com o destino do processo.</p>
             </div>
             <button type="button" className="primary-button" onClick={addDestination}>

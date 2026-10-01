@@ -15,6 +15,7 @@
 // Sparkline e' uma SVG inline (sem dependencia externa) com
 // preenchimento gradiente abaixo da linha.
 
+import { useId } from 'react'
 import Icon from './Icon'
 
 const TREND_COLORS = {
@@ -70,6 +71,9 @@ export default function StatCard({
   icon,
   className = '',
 }) {
+  // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
+  // o navegador pinta a area do sparkline de PRETO (default do fill).
+  const gradientId = `sparkline-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const direction = trend ? pickTrendDirection(trend.delta) : null
   const sparklineWidth = 100
   const sparklineHeight = 28
@@ -110,12 +114,12 @@ export default function StatCard({
           aria-hidden="true"
         >
           <defs>
-            <linearGradient id={`sparkline-gradient-${label}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={stroke} stopOpacity="0.18" />
               <stop offset="100%" stopColor={stroke} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <path d={sparklineData.areaPath} fill={`url(#sparkline-gradient-${label})`} />
+          <path d={sparklineData.areaPath} fill={`url(#${gradientId})`} />
           <path
             d={sparklineData.linePath}
             fill="none"

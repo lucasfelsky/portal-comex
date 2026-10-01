@@ -77,8 +77,11 @@ function NotificationRow({
 
   const showDesktopMarkAsRead = !isMobile && onMarkAsRead && !notification.isRead
 
+  // Acoes so' visiveis com a linha aberta/arrastando (sem faixa vazando em repouso).
+  const isRevealing = isSwipeOpen || swipe.isDragging || swipe.translateX !== 0
+
   return (
-    <div className="notifications-swipe-row">
+    <div className={`notifications-swipe-row${isRevealing ? ' notifications-swipe-row--revealing' : ''}`}>
       {onMarkAsRead ? (
         <div className="notifications-swipe-row__actions" aria-hidden={!isSwipeOpen}>
           <button

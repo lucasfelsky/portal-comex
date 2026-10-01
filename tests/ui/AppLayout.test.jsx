@@ -315,6 +315,47 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
   })
 })
 
+// Mobile: o large title das sub-abas do Admin e' o nome da secao e o eyebrow
+// vira "Admin" (elementos mobile-only, escondidos no desktop via CSS).
+describe('AppLayout (large title mobile no Admin)', () => {
+  function renderAt(path) {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'admin-1', name: 'admin User', email: 'admin@sq.com', role: 'admin' },
+      logout: vi.fn(),
+      isEmailVerified: true,
+    })
+    return render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <NotificationsProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<div data-testid="page">Pagina</div>} />
+              </Route>
+            </Routes>
+          </NotificationsProvider>
+        </MemoryRouter>
+      </ToastProvider>
+    )
+  }
+
+  it('/admin/previsoes: h1 "Previsões" com eyebrow "Admin"', () => {
+    const { container } = renderAt('/admin/previsoes')
+    expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Previsões')
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Admin')
+  })
+
+  it('/admin (raiz): continua "Admin" no large title', () => {
+    const { container } = renderAt('/admin')
+    expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Admin')
+  })
+
+  it('/notifications: large title "Notificações"', () => {
+    const { container } = renderAt('/notifications')
+    expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Notificações')
+  })
+})
+
 function fireKeyDown(key, init = {}) {
   document.dispatchEvent(
     new KeyboardEvent('keydown', { key, ...init, bubbles: true, cancelable: true })
