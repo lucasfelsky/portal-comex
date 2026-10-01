@@ -6,6 +6,7 @@ import {
   deleteProcessDocument,
   downloadProcessDocumentBlob,
   listProcessDocuments,
+  renameAdditionalDocument,
   saveBlobAsFile,
   setInvoicePackingListLink,
   uploadProcessDocument,
@@ -13,13 +14,16 @@ import {
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Skeleton from '../../components/Skeleton'
 import Icon from '../../components/Icon'
+import RenameDocumentDialog from './RenameDocumentDialog'
 import {
   CONTAINER_WASH_CATEGORIES,
   DROP_MULTIPLE_FILES_MESSAGE,
+  MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH,
   MAX_DOCUMENT_MB,
   buildDocumentPendingFields,
   buildDocumentSlotKey,
   canDeleteDocument,
+  canRenameDocument,
   canUploadDocumentType,
   formatDocumentSize,
   getDocumentFileKindLabel,
@@ -122,6 +126,9 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [otherDescription, setOtherDescription] = useState('')
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [renameTarget, setRenameTarget] = useState(null)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameError, setRenameError] = useState(null)
   const [dragOverKey, setDragOverKey] = useState('')
   const [pendingCombine, setPendingCombine] = useState({})
   const [linkBusyKey, setLinkBusyKey] = useState('')
@@ -275,6 +282,16 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     focusAfterUploadRef.current = null
     substituteRefs.current[key]?.focus()
   }, [documents, isLoading, isRefreshing])
+
+  // Renomear: se o documento sumiu da lista (excluido por outro admin com o dialogo
+  // aberto), fecha o dialogo e avisa em vez de deixar um "sem permissao" enganoso.
+  useEffect(() => {
+    if (!renameTarget || isRenaming || isLoading || isRefreshing) return
+    if (documents.some((document_) => document_.id === renameTarget.id)) return
+    setRenameTarget(null)
+    setRenameError(null)
+    setLiveMessage('O documento foi removido.')
+  }, [documents, renameTarget, isRenaming, isLoading, isRefreshing])
 
   function triggerFilePicker(key) {
     fileInputsRef.current[key]?.click()
@@ -448,9 +465,46 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   }
 
   async function handleAddOtherDocument(file) {
-    const description = otherDescription.trim().slice(0, 80) || 'Documento adicional'
+    const description =
+      otherDescription.trim().slice(0, MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH) || 'Documento adicional'
     const ok = await handleUploadFile('other', 'other:new', { description }, file)
     if (ok) setOtherDescription('')
+  }
+
+  // Renomear documento adicional ("Outro"): so' o nome exibido (`description`).
+  function openRename(document_) {
+    setRenameError(null)
+    setRenameTarget(document_)
+  }
+
+  function closeRename() {
+    if (isRenaming) return
+    setRenameTarget(null)
+    setRenameError(null)
+  }
+
+  async function handleRename(next) {
+    if (!renameTarget || isRenaming) return
+    if (next === (renameTarget.description ?? '')) {
+      closeRename()
+      return
+    }
+    setRenameError(null)
+    setIsRenaming(true)
+    try {
+      await renameAdditionalDocument(processId, renameTarget.id, next, { uid: profile?.uid })
+      setRenameTarget(null)
+      setLiveMessage('Nome do documento atualizado.')
+      setReloadToken((token) => token + 1)
+    } catch (error) {
+      setRenameError(buildDocumentError('Não foi possível renomear o documento.', error))
+      // Documento excluido por outro admin com o dialogo aberto: o Firestore responde
+      // `permission-denied` (nao `not-found`). Recarrega para a lista refletir o estado
+      // real (o efeito abaixo fecha o dialogo se o documento sumiu).
+      setReloadToken((token) => token + 1)
+    } finally {
+      setIsRenaming(false)
+    }
   }
 
   async function handleDownload(document_, errorKey) {
@@ -558,6 +612,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     emptyBadgeText = 'Não enviado',
     emptyBadgeTone = 'neutral',
     onUpload,
+    onRename = null,
     extraContent = null,
     includedInInvoice = null,
   }) {
@@ -698,6 +753,19 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 <Icon name="lock" />
                 Somente o COMEX envia este documento
               </span>
+            ) : null}
+            {primary && onRename ? (
+              <button
+                type="button"
+                className="documents-icon-button ghost-button"
+                aria-label={`Renomear ${title}`}
+                title={`Renomear ${title}`}
+                disabled={isRowUploading}
+                onClick={onRename}
+              >
+                <Icon name="edit" />
+                <span className="documents-row__action-label">Renomear</span>
+              </button>
             ) : null}
             {primary && canDelete ? (
               <button
@@ -1143,6 +1211,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   group: { slotKey: document_.slotKey, primary: document_, previous: null },
                   canUpload: false,
                   canDelete: canDeleteDocument(profile, document_),
+                  onRename: canRenameDocument(profile, document_) ? () => openRename(document_) : null,
                   showBadgeOnPresent: false,
                 })
               })}
@@ -1167,7 +1236,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     <input
                       className="text-input"
                       type="text"
-                      maxLength={80}
+                      maxLength={MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH}
                       autoComplete="off"
                       placeholder="Ex.: Certificado de análise"
                       value={otherDescription}
@@ -1380,6 +1449,15 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         busy={isDeleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDeleteDoc(null)}
+      />
+
+      <RenameDocumentDialog
+        open={Boolean(renameTarget)}
+        initialValue={renameTarget?.description ?? ''}
+        busy={isRenaming}
+        error={renameError}
+        onSubmit={handleRename}
+        onCancel={closeRename}
       />
     </div>
   )

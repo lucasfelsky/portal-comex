@@ -200,6 +200,19 @@ export async function setInvoicePackingListLink(processId, documentId, included,
   })
 }
 
+// Renomeia o documento adicional (`other`): muda so' o nome exibido
+// (`description`). A rule so' aceita estas 3 chaves; o arquivo (name/storagePath) nunca muda.
+export async function renameAdditionalDocument(processId, documentId, description, actor) {
+  if (!isFirebaseConfigured || !firestore) return
+  const value = repairTextEncoding(normalizeStringValue(description))
+  if (!value) throw new Error('Informe o nome do documento.')
+  await updateDoc(doc(firestore, 'processes', processId, 'documents', documentId), {
+    description: value,
+    descriptionUpdatedAt: serverTimestamp(),
+    descriptionUpdatedById: actor?.uid ?? '',
+  })
+}
+
 // L38: download autenticado. Nenhuma URL de Storage e' gerada nem persistida
 // (D8): o cliente chama a Cloud Function HTTP `downloadProcessDocument` com o
 // ID token e salva o blob (as storage.rules negam a leitura via SDK cliente).

@@ -292,6 +292,11 @@
       "alsoPackingListUpdatedAt",
       "alsoPackingListUpdatedById"
     ],
+    "isValidAdditionalDocumentRenameUpdate": [
+      "description",
+      "descriptionUpdatedAt",
+      "descriptionUpdatedById"
+    ],
     "isValidProcessDocumentCreate": [
       "alsoPackingList",
       "containerId",

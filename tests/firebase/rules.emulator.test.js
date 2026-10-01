@@ -2757,7 +2757,222 @@ describeEmulator('firestore.rules (emulador)', () => {
       })
     })
 
-    it('update de name falha mesmo para admin (documento imutavel, exceto o vinculo Invoice->Packing List)', async () => {
+    // Renomear o documento adicional: admin muda so o nome exibido
+    // (`description`) + trilha de auditoria; nunca o arquivo nem outro tipo.
+    describe('renomear documento adicional (description)', () => {
+      const otherFields = (overrides = {}) =>
+        baseFields({
+          type: 'other',
+          slotKey: 'other:o1',
+          description: 'Certificado',
+          storagePath: 'processes/p1/documents/other/1-admin-1-cert.pdf',
+          ...overrides,
+        })
+      const renameUpdate = (overrides = {}) => ({
+        description: 'Laudo técnico',
+        descriptionUpdatedAt: serverTimestamp(),
+        descriptionUpdatedById: 'admin-1',
+        ...overrides,
+      })
+      const otherPath = 'processes/p1/documents/o1'
+
+      it('admin renomeia o documento adicional (description + carimbos)', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertSucceeds(updateDoc(doc(admin('admin-1'), otherPath), renameUpdate()))
+      })
+
+      it('admin renomeia o documento adicional no CONSOLIDADO', async () => {
+        const path = 'processes/p-consolidado/documents/o1'
+        await seed((db) =>
+          setDoc(
+            doc(db, path),
+            otherFields({ storagePath: 'processes/p-consolidado/documents/other/1-admin-1-cert.pdf' })
+          )
+        )
+        await assertSucceeds(updateDoc(doc(admin('admin-1'), path), renameUpdate()))
+      })
+
+      it('aceita description com 1 e com 120 caracteres (mesmo limite do create)', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        const ref = doc(admin('admin-1'), otherPath)
+        await assertSucceeds(updateDoc(ref, renameUpdate({ description: 'A' })))
+        await assertSucceeds(updateDoc(ref, renameUpdate({ description: 'x'.repeat(120) })))
+      })
+
+      // Base do tratamento no painel: documento excluido por outro admin com o dialogo
+      // aberto vira permission-denied (nao not-found), entao a UI recarrega a lista.
+      it('renomear documento que nao existe mais (excluido) falha', async () => {
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/gone'), renameUpdate()))
+      })
+
+      it('o mesmo update em bl falha', async () => {
+        await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), renameUpdate()))
+      })
+
+      it('o mesmo update em invoice falha', async () => {
+        await seed((db) =>
+          setDoc(
+            doc(db, 'processes/p1/documents/inv1'),
+            baseFields({
+              type: 'invoice',
+              slotKey: 'invoice',
+              storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+            })
+          )
+        )
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/inv1'), renameUpdate()))
+      })
+
+      it('o mesmo update em packingList, cargoReport, fispq e containerWash falha', async () => {
+        await seed(async (db) => {
+          await setDoc(
+            doc(db, 'processes/p1/documents/pl1'),
+            baseFields({
+              type: 'packingList',
+              slotKey: 'packingList',
+              storagePath: 'processes/p1/documents/packingList/1-admin-1-pl.pdf',
+            })
+          )
+          await setDoc(
+            doc(db, 'processes/p1/documents/cr1'),
+            baseFields({
+              type: 'cargoReport',
+              slotKey: 'cargoReport',
+              storagePath: 'processes/p1/documents/cargoReport/1-admin-1-cr.pdf',
+            })
+          )
+          await setDoc(
+            doc(db, 'processes/p1/documents/fq1'),
+            baseFields({
+              type: 'fispq',
+              slotKey: 'fispq:ITEM-1',
+              itemId: 'ITEM-1',
+              storagePath: 'processes/p1/documents/fispq/ITEM-1/1-admin-1-fispq.pdf',
+            })
+          )
+          await setDoc(
+            doc(db, 'processes/p1/documents/cw1'),
+            baseFields({
+              type: 'containerWash',
+              slotKey: 'containerWash:C-1',
+              containerId: 'C-1',
+              storagePath: 'processes/p1/documents/containerWash/C-1/1-admin-1-wash.pdf',
+            })
+          )
+        })
+        for (const id of ['pl1', 'cr1', 'fq1', 'cw1']) {
+          await assertFails(updateDoc(doc(admin('admin-1'), `processes/p1/documents/${id}`), renameUpdate()))
+        }
+      })
+
+      it('renomear junto com name, storagePath, slotKey, type ou uploadedById falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        const ref = doc(admin('admin-1'), otherPath)
+        await assertFails(updateDoc(ref, renameUpdate({ name: 'outro.pdf' })))
+        await assertFails(updateDoc(ref, renameUpdate({ storagePath: 'processes/p1/documents/other/x.pdf' })))
+        await assertFails(updateDoc(ref, renameUpdate({ slotKey: 'other:o2' })))
+        await assertFails(updateDoc(ref, renameUpdate({ type: 'bl' })))
+        await assertFails(updateDoc(ref, renameUpdate({ uploadedById: 'admin-2' })))
+      })
+
+      it('update so de name/storagePath no documento adicional falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        const ref = doc(admin('admin-1'), otherPath)
+        await assertFails(updateDoc(ref, { name: 'outro.pdf' }))
+        await assertFails(updateDoc(ref, { storagePath: 'processes/p1/documents/other/x.pdf' }))
+      })
+
+      it('description vazia, com mais de 120 caracteres ou nao string falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        const ref = doc(admin('admin-1'), otherPath)
+        await assertFails(updateDoc(ref, renameUpdate({ description: '' })))
+        await assertFails(updateDoc(ref, renameUpdate({ description: 'x'.repeat(121) })))
+        await assertFails(updateDoc(ref, renameUpdate({ description: 123 })))
+      })
+
+      it('update sem os carimbos (so description) falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), otherPath), { description: 'Laudo técnico' }))
+      })
+
+      it('update com descriptionUpdatedById de outro uid falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(
+          updateDoc(doc(admin('admin-1'), otherPath), renameUpdate({ descriptionUpdatedById: 'admin-2' }))
+        )
+      })
+
+      it('update com descriptionUpdatedAt fora do request.time falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(
+          updateDoc(doc(admin('admin-1'), otherPath), renameUpdate({ descriptionUpdatedAt: new Date('2020-01-01') }))
+        )
+      })
+
+      it('update com chave extra desconhecida falha', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(updateDoc(doc(admin('admin-1'), otherPath), renameUpdate({ extra: 'x' })))
+      })
+
+      it('misturar renome com o vinculo Invoice->Packing List falha (no other e na invoice)', async () => {
+        const mixed = {
+          alsoPackingList: true,
+          alsoPackingListUpdatedAt: serverTimestamp(),
+          alsoPackingListUpdatedById: 'admin-1',
+        }
+        await seed(async (db) => {
+          await setDoc(doc(db, otherPath), otherFields())
+          await setDoc(
+            doc(db, 'processes/p1/documents/inv1'),
+            baseFields({
+              type: 'invoice',
+              slotKey: 'invoice',
+              storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+            })
+          )
+        })
+        await assertFails(updateDoc(doc(admin('admin-1'), otherPath), renameUpdate(mixed)))
+        await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/inv1'), renameUpdate(mixed)))
+      })
+
+      it('logistica nao renomeia', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(
+          updateDoc(doc(logistics('log-1'), otherPath), renameUpdate({ descriptionUpdatedById: 'log-1' }))
+        )
+      })
+
+      it('usuario aprovado comum e anonimo nao renomeiam', async () => {
+        await seed((db) => setDoc(doc(db, otherPath), otherFields()))
+        await assertFails(
+          updateDoc(doc(approvedUser('user-1'), otherPath), renameUpdate({ descriptionUpdatedById: 'user-1' }))
+        )
+        await assertFails(updateDoc(doc(anon(), otherPath), renameUpdate()))
+      })
+
+      it('o vinculo Invoice->Packing List continua funcionando com a rule combinada', async () => {
+        await seed((db) =>
+          setDoc(
+            doc(db, 'processes/p1/documents/inv1'),
+            baseFields({
+              type: 'invoice',
+              slotKey: 'invoice',
+              storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+            })
+          )
+        )
+        await assertSucceeds(
+          updateDoc(doc(admin('admin-1'), 'processes/p1/documents/inv1'), {
+            alsoPackingList: true,
+            alsoPackingListUpdatedAt: serverTimestamp(),
+            alsoPackingListUpdatedById: 'admin-1',
+          })
+        )
+      })
+    })
+
+    it('update de name falha mesmo para admin (documento imutavel, exceto o vinculo Invoice->Packing List e o renome do documento adicional)', async () => {
       await seed((db) => setDoc(doc(db, 'processes/p1/documents/d1'), baseFields()))
       await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), { name: 'outro.pdf' }))
     })

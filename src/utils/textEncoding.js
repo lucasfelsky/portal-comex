@@ -95,7 +95,10 @@ export function repairTextEncoding(value) {
 
   try {
     const bytes = Uint8Array.from(Array.from(value, (char) => char.charCodeAt(0) & 0xff))
-    const repaired = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+    // fatal: true - texto correto com acento ("Contrato de câmbio") nao e' UTF-8 valido
+    // quando lido byte a byte; com fatal: false o decoder trocaria os acentos por U+FFFD.
+    // Sequencia invalida lanca e o catch devolve o valor original.
+    const repaired = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 
     if (!repaired) return value
     if (countMojibakeMarkers(repaired) > countMojibakeMarkers(value)) return value

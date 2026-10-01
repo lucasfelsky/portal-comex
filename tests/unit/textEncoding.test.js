@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeHtmlEntities } from '../../src/utils/textEncoding'
+import { decodeHtmlEntities, repairTextEncoding } from '../../src/utils/textEncoding'
 
 describe('decodeHtmlEntities', () => {
   it('decodifica entidades numericas decimais e hexadecimais', () => {
@@ -36,5 +36,34 @@ describe('decodeHtmlEntities', () => {
   it('string sem "&" retorna a mesma referencia', () => {
     const text = 'Sem entidades aqui'
     expect(decodeHtmlEntities(text)).toBe(text)
+  })
+})
+
+describe('repairTextEncoding', () => {
+  it('conserta mojibake de verdade (UTF-8 lido como Latin-1)', () => {
+    expect(repairTextEncoding('AÃ§Ã£o')).toBe('Ação')
+    expect(repairTextEncoding('RelatÃ³rio de anÃ¡lise')).toBe('Relatório de análise')
+    expect(repairTextEncoding('JoÃ£o')).toBe('João')
+  })
+
+  it('NAO corrompe texto correto com â/Â/Ã logo depois de letra (câmbio, Câmara, NÃO)', () => {
+    for (const text of [
+      'Contrato de câmbio',
+      'CONTRATO DE CÂMBIO',
+      'NÃO CONFORMIDADE',
+      'Laudo da Câmara técnica',
+      'Trâmite aduaneiro',
+    ]) {
+      const result = repairTextEncoding(text)
+      expect(result).toBe(text)
+      expect(result).not.toContain('\uFFFD')
+    }
+  })
+
+  it('texto sem marcador de mojibake e nao-string voltam como vieram', () => {
+    expect(repairTextEncoding('Certificado')).toBe('Certificado')
+    expect(repairTextEncoding(null)).toBeNull()
+    expect(repairTextEncoding(undefined)).toBeUndefined()
+    expect(repairTextEncoding(42)).toBe(42)
   })
 })

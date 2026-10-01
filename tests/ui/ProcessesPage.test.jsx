@@ -69,6 +69,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
   downloadProcessDocumentBlob: vi.fn(),
   saveBlobAsFile: vi.fn(),
   setInvoicePackingListLink: vi.fn(),
+  renameAdditionalDocument: vi.fn(),
 }))
 vi.mock('../../src/services/postReceiptImagesStorage', () => ({
   deletePostReceiptImages: vi.fn().mockResolvedValue(undefined),

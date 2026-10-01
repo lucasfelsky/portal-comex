@@ -614,9 +614,10 @@ service cloud.firestore {
         );
     }
 
-    // Unica mutacao permitida em documento ja criado: admin marca/desmarca
-    // que a Invoice tambem contem o Packing List. So' `invoice`, so' as 3
-    // chaves do vinculo (nunca name/storagePath/etc.), com trilha de auditoria.
+    // Mutacoes permitidas em documento ja criado (so admin): (1) marcar/
+    // desmarcar que a Invoice tambem contem o Packing List. So' `invoice`, so'
+    // as 3 chaves do vinculo (nunca name/storagePath/etc.), com trilha de
+    // auditoria; (2) renomear o documento adicional (ver abaixo).
     function isValidInvoicePackingListLinkUpdate() {
       return resource.data.type == 'invoice'
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -624,6 +625,21 @@ service cloud.firestore {
         && request.resource.data.alsoPackingList is bool
         && request.resource.data.alsoPackingListUpdatedAt == request.time
         && request.resource.data.alsoPackingListUpdatedById == request.auth.uid;
+    }
+
+    // Renomear o documento adicional (`other`): muda so' o nome exibido
+    // (`description`), nunca o arquivo (name/storagePath). Mesmo limite 1..120
+    // do create; type 'other' no doc atual E no novo; com trilha de auditoria.
+    function isValidAdditionalDocumentRenameUpdate() {
+      return resource.data.type == 'other'
+        && request.resource.data.type == 'other'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['description', 'descriptionUpdatedAt', 'descriptionUpdatedById'])
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 1
+        && request.resource.data.description.size() <= 120
+        && request.resource.data.descriptionUpdatedAt == request.time
+        && request.resource.data.descriptionUpdatedById == request.auth.uid;
     }
 
     match /processes/{processId} {
@@ -670,8 +686,10 @@ service cloud.firestore {
       // list, FISPQ por item, lavacao por conteiner, outros). Leitura so
       // admin/logistica (nunca usuario comum). Imutavel, EXCETO o vinculo
       // Invoice -> Packing List (`isValidInvoicePackingListLinkUpdate`, so
-      // admin) - "versao anterior" e' derivada por ordem de `uploadedAt`
-      // dentro do mesmo `slotKey` (D1), nunca reescrita.
+      // admin) e o nome do documento adicional
+      // (`isValidAdditionalDocumentRenameUpdate`, so admin) - "versao
+      // anterior" e' derivada por ordem de `uploadedAt` dentro do mesmo
+      // `slotKey` (D1), nunca reescrita.
       match /documents/{documentId} {
         allow read: if isAdmin() || isLogistics();
         allow create: if isValidProcessDocumentCreate(processId)
@@ -679,7 +697,7 @@ service cloud.firestore {
             isAdmin()
             || (isLogistics() && request.resource.data.type == 'containerWash')
           );
-        allow update: if isAdmin() && isValidInvoicePackingListLinkUpdate();
+        allow update: if isAdmin() && (isValidInvoicePackingListLinkUpdate() || isValidAdditionalDocumentRenameUpdate());
         allow delete: if isAdmin()
           || (isLogistics() && resource.data.uploadedById == request.auth.uid);
       }

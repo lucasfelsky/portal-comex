@@ -70,6 +70,7 @@ import {
   buildProcessDocumentDownloadEndpoint,
   downloadProcessDocumentBlob,
   listProcessDocuments,
+  renameAdditionalDocument,
   saveBlobAsFile,
   setInvoicePackingListLink,
   uploadProcessDocument,
@@ -130,6 +131,26 @@ describe('listProcessDocuments', () => {
       uploadedAt: '2026-09-20T10:00:00.000Z',
       uploadedByName: 'João',
     })
+  })
+})
+
+describe('listProcessDocuments - nome com acento', () => {
+  it('description correta com â/Ã/Â nao e corrompida na leitura', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'o1',
+          data: () => ({
+            type: 'other',
+            slotKey: 'other:o1',
+            description: 'Contrato de câmbio',
+            name: 'contrato.pdf',
+          }),
+        },
+      ],
+    })
+    const result = await listProcessDocuments('p1')
+    expect(result[0].description).toBe('Contrato de câmbio')
   })
 })
 
@@ -258,6 +279,43 @@ describe('setInvoicePackingListLink', () => {
   it('nao configurado -> nao chama updateDoc', async () => {
     firebaseConfigured = false
     await setInvoicePackingListLink('p1', 'd1', false, { uid: 'uid-1' })
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+})
+
+describe('renameAdditionalDocument', () => {
+  it('chama updateDoc so com description (aparada) e os 2 carimbos', async () => {
+    await renameAdditionalDocument('p1', 'o1', '  Laudo  ', { uid: 'uid-1' })
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1)
+    expect(mockUpdateDoc).toHaveBeenCalledWith('DOC_REF', {
+      description: 'Laudo',
+      descriptionUpdatedAt: 'SERVER_TIMESTAMP',
+      descriptionUpdatedById: 'uid-1',
+    })
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'o1')
+  })
+
+  it('nome correto com acento (câmbio, NÃO) e gravado intacto, sem U+FFFD', async () => {
+    for (const nome of ['Contrato de câmbio', 'CONTRATO DE CÂMBIO', 'NÃO CONFORMIDADE']) {
+      mockUpdateDoc.mockClear()
+      await renameAdditionalDocument('p1', 'o1', `  ${nome}  `, { uid: 'uid-1' })
+      expect(mockUpdateDoc).toHaveBeenCalledWith(
+        'DOC_REF',
+        expect.objectContaining({ description: nome })
+      )
+    }
+  })
+
+  it('nome vazio (so espacos) rejeita e nao chama updateDoc', async () => {
+    await expect(renameAdditionalDocument('p1', 'o1', '   ', { uid: 'uid-1' })).rejects.toThrow(
+      'Informe o nome do documento.'
+    )
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+
+  it('nao configurado -> nao chama updateDoc', async () => {
+    firebaseConfigured = false
+    await renameAdditionalDocument('p1', 'o1', 'Laudo', { uid: 'uid-1' })
     expect(mockUpdateDoc).not.toHaveBeenCalled()
   })
 })
