@@ -843,7 +843,25 @@ function compareStatus(makeDiff, p, shipment, warnings) {
   })
 }
 
-function compareProcess(makeDiff, p, shipment, { matchRule, categoryMismatch, index, warnings }) {
+// Casou por PEDIDO/PO (chave forte), mas o embarque tem outra categoria (ex.:
+// FCL no Portal x LCL no ERP). So' acusa: as demais comparacoes seguem normais.
+// Sem `portalCategory` no embarque (INDEFINIDO/NACIONAL/AMOSTRA) nao ha o que
+// afirmar: informativo.
+function compareIncompatibleCategory(makeDiff, category, shipment) {
+  const erpCategory = cleanCell(shipment.portalCategory)
+  if (erpCategory === '') {
+    return makeDiff({
+      field: 'category', portalFields: ['category'], portal: category, erp: cleanCell(shipment.kind),
+      kind: 'informativo', note: 'categoria do ERP indefinida',
+    })
+  }
+  return makeDiff({
+    field: 'category', portalFields: ['category'], portal: category, erp: erpCategory, erpValue: erpCategory,
+    kind: 'divergente', note: `Categoria diferente: Portal ${category} × ERP ${erpCategory}`,
+  })
+}
+
+function compareProcess(makeDiff, p, shipment, { matchRule, categoryMismatch, categoryIncompatible, index, warnings }) {
   const diffs = []
   const push = (diff) => {
     if (diff) diffs.push(diff)
@@ -857,6 +875,8 @@ function compareProcess(makeDiff, p, shipment, { matchRule, categoryMismatch, in
       field: 'category', portalFields: ['category'], portal: category, erp: 'CONSOLIDADO', erpValue: 'CONSOLIDADO',
       kind: 'divergente', note: `Consolidado gravado como ${category}.`,
     }))
+  } else if (categoryIncompatible) {
+    push(compareIncompatibleCategory(makeDiff, category, shipment))
   }
   if (!isConsolidated && !categoryMismatch) push(comparePedido(makeDiff, p, shipment, matchRule))
   push(compareStatus(makeDiff, p, shipment, warnings))
@@ -941,6 +961,9 @@ function readPortalProcess(p) {
   }
 }
 
+// `hasCompatible`: havia candidato de categoria compativel com a do processo.
+// Sem ele, o casamento segue (PEDIDO/PO sao chave forte) e quem chama acusa a
+// diferenca de categoria.
 function pickBestShipment(category, candidates) {
   let pool = candidates
   const compatible = pool.filter((shipment) => (CATEGORY_KINDS[category] ?? []).includes(shipment.kind))
@@ -948,10 +971,12 @@ function pickBestShipment(category, candidates) {
   const active = pool.filter((shipment) => shipment.active)
   if (active.length > 0) pool = active
   const sorted = [...pool].sort((a, b) => compareText(a.key, b.key) || compareText(a.kind, b.kind))
-  return { shipment: sorted[0], ambiguous: sorted.length > 1, count: sorted.length }
+  return { shipment: sorted[0], ambiguous: sorted.length > 1, count: sorted.length, hasCompatible: compatible.length > 0 }
 }
 
-// -> { shipment, rule, categoryMismatch, ambiguous, count, warnings } | null
+// -> { shipment, rule, categoryMismatch, categoryIncompatible, ambiguous, count, warnings } | null
+//   categoryMismatch: consolidado gravado com outra categoria (casou pela REF).
+//   categoryIncompatible: casou por PEDIDO/PO, mas nenhum candidato tinha categoria compativel.
 function findMatch(entry, index) {
   const warnings = []
   const { p } = entry
@@ -961,6 +986,7 @@ function findMatch(entry, index) {
       shipment: index.consolidatedByRef.get(entry.conRef),
       rule: 'consolidado:ref',
       categoryMismatch: entry.category !== 'CONSOLIDADO',
+      categoryIncompatible: false,
       ambiguous: false,
       count: 1,
       warnings,
@@ -987,7 +1013,15 @@ function findMatch(entry, index) {
         { processId: entry.id, shipmentKey: picked.shipment.key }
       )
     )
-    return { shipment: picked.shipment, rule: 'consolidado:pedidos', categoryMismatch: false, ambiguous: picked.ambiguous, count: picked.count, warnings }
+    return {
+      shipment: picked.shipment,
+      rule: 'consolidado:pedidos',
+      categoryMismatch: false,
+      categoryIncompatible: false,
+      ambiguous: picked.ambiguous,
+      count: picked.count,
+      warnings,
+    }
   }
 
   let candidates = entry.pedidoDigits ? index.shipmentsByPedido.get(entry.pedidoDigits) : undefined
@@ -1012,7 +1046,15 @@ function findMatch(entry, index) {
       )
     )
   }
-  return { shipment: picked.shipment, rule, categoryMismatch: false, ambiguous: picked.ambiguous, count: picked.count, warnings }
+  return {
+    shipment: picked.shipment,
+    rule,
+    categoryMismatch: false,
+    categoryIncompatible: !picked.hasCompatible,
+    ambiguous: picked.ambiguous,
+    count: picked.count,
+    warnings,
+  }
 }
 
 function classifyErpOnly(shipment, today) {
@@ -1037,7 +1079,8 @@ function classifyErpOnly(shipment, today) {
     stage !== null && stage >= 1 &&
     (shipment.transport.etaFinal !== '' || shipment.nfDate !== '' || (sinceEta !== null && sinceEta > RECENT_RECEIPT_DAYS))
   ) category = 'possivelmente_recebido_oculto'
-  else if (shipment.kind === 'LCL' && hubOrigin && stage === 0) category = 'a_consolidar'
+  // D-15: so' a REF `LCL - FOB SHANGHAI` (CIF/CFR SHANGHAI nao consolidam la').
+  else if (shipment.kind === 'LCL' && hubOrigin && foldText(shipment.incoterm) === 'FOB' && stage === 0) category = 'a_consolidar'
   else if (stage === 0 && !hasBookedStatus) category = 'aguardando_prontidao_pagamento'
   else if (stage === 0) category = 'aguardando_embarque'
   else if (stage === 1 || stage === 2) category = 'embarcado_sem_processo'
@@ -1124,6 +1167,7 @@ export function reconcileErp(processes, shipments, { today = '', fieldAuthority 
       diffs: compareProcess(makeDiff, entry.p, found.shipment, {
         matchRule: found.rule,
         categoryMismatch: found.categoryMismatch,
+        categoryIncompatible: found.categoryIncompatible,
         index,
         warnings,
       }),

@@ -270,6 +270,105 @@ describe('casamento', () => {
     expect(result.erpOnly).toEqual([])
   })
 
+  it('caso-real: CR-29 FCL no Portal cujo unico embarque no ERP e LCL: casa pelo PEDIDO e acusa a categoria', () => {
+    const rows = [
+      fcl({
+        itemId: '1', pedido: 9181, poRef: 'SIGMA SEA 918-26', refEmbarque: 'LCL - FOB KOBE',
+        etd: '2026-10-10', exporter: 'SIGMA TRADING',
+      }),
+    ]
+    const result = run({
+      rows,
+      processes: [portalFcl({ name: 'SIGMA SEA 918-26', processNumber: 'PO 9181', category: 'FCL', etd: '2026-10-12' })],
+    })
+    // o casamento continua: PEDIDO e' chave forte, nada vai para so-no-ERP / so-no-Portal
+    expect(result.matched).toHaveLength(1)
+    expect(result.matched[0]).toMatchObject({ processId: 'p-1', matchRule: 'pedido', shipmentKey: 'SIGMA SEA 918-26' })
+    expect(result.portalOnly).toEqual([])
+    expect(result.erpOnly).toEqual([])
+    const diff = oneDiff(result, 'p-1', 'category')
+    expect(diff).toMatchObject({
+      kind: 'divergente', counts: true, applicable: false, portal: 'FCL', erp: 'LCL', erpValue: 'LCL',
+      portalFields: ['category'],
+    })
+    expect(diff.note).toBe('Categoria diferente: Portal FCL × ERP LCL')
+    expect(result.summary).toMatchObject({ matched: 1, matchedWithDiffs: 1 })
+    // as demais comparacoes seguem rodando (PEDIDO em texto livre e ETD)
+    expect(oneDiff(result, 'p-1', 'pedido')).toMatchObject({ kind: 'formato', counts: false })
+    expect(oneDiff(result, 'p-1', 'etd')).toMatchObject({ kind: 'divergente', portal: '2026-10-12', erp: '2026-10-10' })
+    // o diff de categoria vem primeiro
+    expect(entryOf(result, 'p-1').diffs[0].field).toBe('category')
+  })
+
+  it('caso-real: CR-29 o espelho (LCL no Portal x FCL no ERP) e o PEDIDO em embarque CON tambem acusam a categoria', () => {
+    const mirror = run({
+      rows: [fcl({ itemId: '1', pedido: 9182, poRef: 'SIGMA SEA 919-26', refEmbarque: 'FCL - FOB KOBE' })],
+      processes: [portalFcl({ name: 'SIGMA SEA 919-26', processNumber: '9182', category: 'LCL' })],
+    })
+    expect(oneDiff(mirror, 'p-1', 'category')).toMatchObject({ kind: 'divergente', portal: 'LCL', erp: 'FCL' })
+    expect(oneDiff(mirror, 'p-1', 'category').note).toBe('Categoria diferente: Portal LCL × ERP FCL')
+
+    const inConsolidated = run({
+      rows: [
+        fcl({ itemId: '1', pedido: 9183, poRef: 'ALFA SEA 920-26', refEmbarque: 'CON CN 935-26' }),
+        fcl({ itemId: '2', pedido: 9184, poRef: 'BETA SEA 921-26', refEmbarque: 'CON CN 935-26' }),
+      ],
+      processes: [portalFcl({ name: 'NOME SEM REF', processNumber: '9183', category: 'FCL' })],
+    })
+    expect(inConsolidated.matched[0]).toMatchObject({ matchRule: 'pedido', shipmentKey: 'CON CN 935-26' })
+    const diff = oneDiff(inConsolidated, 'p-1', 'category')
+    expect(diff).toMatchObject({ kind: 'divergente', portal: 'FCL', erp: 'CONSOLIDADO', applicable: false })
+    expect(diff.note).toBe('Categoria diferente: Portal FCL × ERP CONSOLIDADO')
+  })
+
+  it('caso-real: CR-29 com o mesmo PEDIDO em embarque FCL e LCL, o compativel vence sem diff de categoria', () => {
+    const rows = [
+      fcl({ itemId: '1', pedido: 9185, poRef: 'ALFA SEA 922-26', refEmbarque: 'LCL - FOB KOBE' }),
+      fcl({ itemId: '2', pedido: 9185, poRef: 'ZETA SEA 922-26', refEmbarque: 'FCL - FOB KOBE' }),
+    ]
+    // FCL no Portal: pega o FCL (chave maior), nao o LCL (chave menor)
+    const asFcl = run({ rows, processes: [portalFcl({ name: 'NOME', processNumber: '9185', category: 'FCL' })] })
+    expect(asFcl.matched[0].shipmentKey).toBe('ZETA SEA 922-26')
+    expect(diffsOf(asFcl, 'p-1', 'category')).toEqual([])
+    expect(codes(asFcl)).not.toContain('match_ambiguo')
+    // LCL no Portal: pega o LCL
+    const asLcl = run({ rows, processes: [portalFcl({ name: 'NOME', processNumber: '9185', category: 'LCL' })] })
+    expect(asLcl.matched[0].shipmentKey).toBe('ALFA SEA 922-26')
+    expect(diffsOf(asLcl, 'p-1', 'category')).toEqual([])
+    expect(codes(asLcl)).not.toContain('match_ambiguo')
+    // o embarque que sobrou continua sendo so-no-ERP
+    expect(asFcl.erpOnly.map((item) => item.shipmentKey)).toEqual(['ALFA SEA 922-26'])
+  })
+
+  it('caso-real: CR-29 AEREO no Portal x AMOSTRA no ERP e compativel, sem diff de categoria', () => {
+    const result = run({
+      rows: [fcl({ itemId: '1', pedido: 9186, poRef: 'MU SAMPLE 923-26', refEmbarque: 'AMOSTRA' })],
+      processes: [portalFcl({ name: 'MU SAMPLE 923-26', processNumber: '9186', category: 'AEREO' })],
+    })
+    expect(result.matched).toHaveLength(1)
+    expect(diffsOf(result, 'p-1', 'category')).toEqual([])
+    const air = run({
+      rows: [fcl({ itemId: '1', pedido: 9187, poRef: 'MU AIR 924-26', refEmbarque: 'DAP - ITAJAI' })],
+      processes: [portalFcl({ name: 'MU AIR 924-26', processNumber: '9187', category: 'AEREO' })],
+    })
+    expect(diffsOf(air, 'p-1', 'category')).toEqual([])
+  })
+
+  it('caso-real: CR-29 embarque INDEFINIDO ou NACIONAL (sem categoria no Portal) vira diff informativo', () => {
+    for (const refEmbarque of ['REF QUALQUER', 'NACIONAL']) {
+      const result = run({
+        rows: [fcl({ itemId: '1', pedido: 9188, poRef: 'PI SEA 925-26', refEmbarque })],
+        processes: [portalFcl({ name: 'PI SEA 925-26', processNumber: '9188', category: 'FCL' })],
+      })
+      expect(result.matched, refEmbarque).toHaveLength(1)
+      expect(result.portalOnly, refEmbarque).toEqual([])
+      const diff = oneDiff(result, 'p-1', 'category')
+      expect(diff, refEmbarque).toMatchObject({ kind: 'informativo', counts: false, applicable: false, portal: 'FCL', erpValue: null })
+      expect(diff.erp, refEmbarque).toBe(refEmbarque === 'NACIONAL' ? 'NACIONAL' : 'INDEFINIDO')
+      expect(diff.note, refEmbarque).toBe('categoria do ERP indefinida')
+    }
+  })
+
   it('lista do Portal vazia com embarque ativo: bloqueia, sem "so no ERP" em massa', () => {
     const result = run({ rows: [fcl({ itemId: '1' }), fcl({ itemId: '2', pedido: 9037, poRef: 'ALFA SEA 905-26' })], processes: [] })
     expect(result.blocked).toBe('lista_portal_vazia')
@@ -1041,6 +1140,25 @@ describe('so no ERP', () => {
     expect(category('PI SEA 908-26')).toBe('aguardando_prontidao_pagamento')
     expect(category('RHO SEA 911-26')).toBe('embarcado_sem_processo')
     expect(ERP_ONLY_CATEGORIES.find((item) => item.key === 'a_consolidar').label).toBe('Aguardando consolidação (provável)')
+  })
+
+  it('caso-real: CR-30 a_consolidar exige LCL FOB SHANGHAI: CIF/CFR SHANGHAI em pre-embarque nao entram', () => {
+    const rows = [
+      fcl({ itemId: '1', pedido: 9191, poRef: 'OMICRON SEA 931-26', refEmbarque: 'LCL - CIF SHANGHAI', status: 'AG. PRONT. DA CARGA' }),
+      fcl({ itemId: '2', pedido: 9192, poRef: 'PI SEA 932-26', refEmbarque: 'LCL - CFR SHANGHAI', status: 'AG. PRONT. DA CARGA' }),
+      fcl({ itemId: '3', pedido: 9193, poRef: 'RHO SEA 933-26', refEmbarque: 'LCL - FOB SHANGHAI', status: 'AG. PRONT. DA CARGA' }),
+      fcl({ itemId: '4', pedido: 9194, poRef: 'TAU SEA 934-26', refEmbarque: 'LCL - CIF SHANGHAI', status: 'AG. EMBARQUE' }),
+    ]
+    const result = run({ rows, processes: [portalFcl({ name: 'SEM ERP', processNumber: '9999' })] })
+    const byKey = Object.fromEntries(result.erpOnly.map((item) => [item.shipmentKey, item]))
+    expect(byKey['OMICRON SEA 931-26']).toMatchObject({ kind: 'LCL', category: 'aguardando_prontidao_pagamento' })
+    expect(byKey['PI SEA 932-26']).toMatchObject({ kind: 'LCL', category: 'aguardando_prontidao_pagamento' })
+    expect(byKey['TAU SEA 934-26']).toMatchObject({ kind: 'LCL', category: 'aguardando_embarque' })
+    // CR-27 intacto: a LCL FOB SHANGHAI continua sendo a consolidar
+    expect(byKey['RHO SEA 933-26']).toMatchObject({ kind: 'LCL', category: 'a_consolidar' })
+    expect(result.summary.erpOnlyByCategory).toMatchObject({
+      a_consolidar: 1, aguardando_prontidao_pagamento: 2, aguardando_embarque: 1,
+    })
   })
 
   it('embarque inativo nunca vira so no ERP, mas participa do casamento', () => {
