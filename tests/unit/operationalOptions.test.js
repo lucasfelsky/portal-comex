@@ -7,6 +7,7 @@ import {
   FLAMMABLE_IMO_CLASSES,
   IMO_CLASS_OPTIONS,
   INCOTERM_OPTIONS,
+  getCargoHazardBadges,
   getImoClassLabel,
   getItemDangerousGoodsLabel,
   hasDangerousGoods,
@@ -250,5 +251,35 @@ describe('getItemDangerousGoodsLabel', () => {
 
   it('sem classe nem ONU', () => {
     expect(getItemDangerousGoodsLabel({})).toBe('Carga perigosa')
+  })
+})
+
+describe('getCargoHazardBadges', () => {
+  const FLAMMABLE = { label: 'Carga inflamável', tone: 'danger' }
+  const DANGEROUS = { label: 'Carga perigosa', tone: 'warn' }
+
+  it('item classe 3 devolve inflamavel e perigosa, nessa ordem', () => {
+    const process = { items: [{ id: 'i1', dangerousGoods: true, imoClass: '3' }] }
+    expect(getCargoHazardBadges(process)).toEqual([FLAMMABLE, DANGEROUS])
+  })
+
+  it('item classe 8 devolve so perigosa', () => {
+    const process = { items: [{ id: 'i1', dangerousGoods: true, imoClass: '8' }] }
+    expect(getCargoHazardBadges(process)).toEqual([DANGEROUS])
+  })
+
+  it('legado de nivel-processo (classe 2.1, sem item perigoso) devolve os dois selos', () => {
+    const process = { dangerousGoods: true, imoClass: '2.1', items: [{ id: 'i1' }] }
+    expect(getCargoHazardBadges(process)).toEqual([FLAMMABLE, DANGEROUS])
+  })
+
+  it('sem carga perigosa devolve lista vazia', () => {
+    expect(getCargoHazardBadges({ items: [{ id: 'i1', dangerousGoods: false }] })).toEqual([])
+    expect(getCargoHazardBadges({})).toEqual([])
+  })
+
+  it('process null ou undefined devolve lista vazia', () => {
+    expect(getCargoHazardBadges(null)).toEqual([])
+    expect(getCargoHazardBadges(undefined)).toEqual([])
   })
 })

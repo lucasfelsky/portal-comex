@@ -23,6 +23,7 @@ import {
   shouldShowContainerQuantity,
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
+import { getCargoHazardBadges } from '../features/processes/operationalOptions'
 import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
 import { getDashboardKpis } from '../features/processes/dashboardKpis'
 import Icon from '../components/Icon'
@@ -401,6 +402,9 @@ export default function DashboardPage() {
                           {formatPalletCount(item.palletQuantity)}
                         </span>
                       ) : null}
+                      {getCargoHazardBadges(item).map((badge) => (
+                        <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
+                      ))}
                     </div>
 
                     {showMaritimePostArrival ? (

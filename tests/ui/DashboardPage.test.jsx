@@ -658,3 +658,104 @@ describe('DashboardPage - Favoritos: sinal de chegada (data OU boolean legado)',
     expect(item.queryByText('DTA')).not.toBeInTheDocument()
   })
 })
+
+// Selos de carga ("Carga inflamável" / "Carga perigosa") nos cards compactos do
+// Dashboard: Favoritos e Chegadas da semana. Usa o operationalOptions real.
+describe('DashboardPage - selos de carga (Favoritos e Chegadas)', () => {
+  const hazardTexts = (root) =>
+    Array.from(root.querySelectorAll('.process-item__chips .inline-badge--danger, .process-item__chips .inline-badge--warn'))
+      .map((node) => node.textContent)
+      .filter((text) => text.startsWith('Carga '))
+
+  function cargoProcess(overrides) {
+    return {
+      category: 'LCL',
+      processStatus: 'Embarcado',
+      collectionStatus: 'Aguardando',
+      destination: 'Itapoa',
+      eta: '2026-07-15',
+      ...overrides,
+    }
+  }
+
+  const itemClass = (imoClass) => [
+    { id: 'i1', commercialName: 'X', dangerousGoods: true, imoClass },
+  ]
+
+  function findItemByTitle(container, title) {
+    const found = Array.from(container.querySelectorAll('.process-item')).find(
+      (node) => node.querySelector('strong')?.textContent === title
+    )
+    expect(found).toBeTruthy()
+    return found
+  }
+
+  it('Favoritos: classe 3 mostra inflamavel + perigosa; classe 8 so perigosa; sem carga perigosa nenhum', async () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'user', favoriteProcessIds: ['h-flam', 'h-dang', 'h-none'] },
+    })
+    mockListProcesses.mockResolvedValue([
+      cargoProcess({ id: 'h-flam', name: 'PO FLAM', processNumber: 'PO FLAM', items: itemClass('3') }),
+      cargoProcess({ id: 'h-dang', name: 'PO DANG', processNumber: 'PO DANG', items: itemClass('8') }),
+      cargoProcess({
+        id: 'h-none',
+        name: 'PO NONE',
+        processNumber: 'PO NONE',
+        items: [{ id: 'i1', commercialName: 'X', dangerousGoods: false }],
+      }),
+    ])
+    renderPage()
+    await waitFor(() => {
+      expect(document.querySelectorAll('.dashboard-favorites-card .process-item')).toHaveLength(3)
+    })
+    const card = document.querySelector('.dashboard-favorites-card')
+
+    const flam = findItemByTitle(card, 'PO FLAM')
+    expect(hazardTexts(flam)).toEqual(['Carga inflamável', 'Carga perigosa'])
+    expect(flam.querySelector('.process-item__chips .inline-badge--danger').textContent).toBe('Carga inflamável')
+
+    expect(hazardTexts(findItemByTitle(card, 'PO DANG'))).toEqual(['Carga perigosa'])
+    expect(hazardTexts(findItemByTitle(card, 'PO NONE'))).toEqual([])
+  })
+
+  it('Chegadas: selos em Coleta agendada e em Previsao de entrega; item sem carga perigosa nao tem chips', async () => {
+    mockListProcesses.mockResolvedValue([
+      cargoProcess({
+        id: 'p-with-window',
+        name: 'PO SCHED',
+        processNumber: 'PO SCHED',
+        category: 'FCL',
+        collectionStatus: 'Coleta Agendada',
+        items: itemClass('3'),
+      }),
+      cargoProcess({
+        id: 'p-unscheduled',
+        name: 'PO UNSCH',
+        processNumber: 'PO UNSCH',
+        collectionStatus: 'Aguardando agendamento de coleta',
+        items: itemClass('8'),
+      }),
+      cargoProcess({
+        id: 'p-in-transit',
+        name: 'PO TRANSIT',
+        processNumber: 'PO TRANSIT',
+        collectionStatus: 'Aguardando agendamento de coleta',
+        items: [{ id: 'i1', commercialName: 'X', dangerousGoods: false }],
+      }),
+    ])
+    renderPage()
+    await waitFor(() => {
+      expect(document.querySelectorAll('.weekly-arrivals-card .process-item')).toHaveLength(3)
+    })
+    const card = document.querySelector('.weekly-arrivals-card')
+    const scheduled = card.querySelector('[aria-labelledby="weekly-arrivals-scheduled-heading"]')
+    const unscheduled = card.querySelector('[aria-labelledby="weekly-arrivals-unscheduled-heading"]')
+
+    expect(hazardTexts(findItemByTitle(scheduled, 'PO SCHED'))).toEqual(['Carga inflamável', 'Carga perigosa'])
+    expect(hazardTexts(findItemByTitle(unscheduled, 'PO UNSCH'))).toEqual(['Carga perigosa'])
+
+    const plain = findItemByTitle(unscheduled, 'PO TRANSIT')
+    expect(hazardTexts(plain)).toEqual([])
+    expect(plain.querySelector('.process-item__chips')).toBeNull()
+  })
+})

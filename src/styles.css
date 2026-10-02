@@ -7118,7 +7118,7 @@ body {
   .weekly-arrivals-item .process-item__meta,
   .dashboard-favorites-item .process-item__main > p,
   .dashboard-favorites-item .process-item__line,
-  .dashboard-favorites-item .inline-badge {
+  .dashboard-favorites-item .inline-badge:not(.inline-badge--warn):not(.inline-badge--danger) {
     display: none;
   }
 
