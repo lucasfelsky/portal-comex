@@ -2764,7 +2764,40 @@
   .admin-section .admin-table:not(:has(input)) td.admin-table__actions-cell {
     display: block;
     text-align: left;
-  }}
+  }
+
+  /* Alvos de toque >= 44px (auditoria mobile 2026-10-02). So' cresce a area
+     de toque: glifo e checkbox mantem o tamanho; desktop intocado. */
+  /* Login: a margem negativa devolve os 24px extras, entao o fluxo nao muda. */
+  .auth-screen .auth-link-button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12px;
+  }
+
+  /* Documentos (normal e Consolidado): a label que envolve o checkbox e' o alvo. */
+  .process-detail-view .documents-combine__label {
+    min-height: 44px;
+  }
+
+  /* Admin > Previsoes: a label do toggle "Rolling customs" e' o alvo. */
+  .admin-section .toggle {
+    min-height: 44px;
+  }
+
+  /* Admin > Previsoes: "x" dos chips. O pseudo cresce o hit-area para 45x44
+     sem mexer no chip; -11px cabe no padding direito de 12px do .scope-chip. */
+  .admin-section .chip-remove {
+    position: relative;
+  }
+
+  .admin-section .chip-remove::before {
+    content: '';
+    position: absolute;
+    inset: -13px -11px;
+  }
+}
 
 /* ===== T: ajustes so de tablet (721px - 1040px) ===== */
 @media (min-width: 721px) and (max-width: 1040px) {

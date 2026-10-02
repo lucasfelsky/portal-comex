@@ -335,4 +335,45 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(cleaned).not.toMatch(/--glass-strong/)
     expect(cleaned).not.toMatch(/--primary-(100|200|300|400)\b/)
   })
+
+  it('T-TOQUE: alvos de toque >= 44px so na camada S (<= 720px)', () => {
+    const S = '@media (max-width: 720px)'
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const hasIn = (rules, selector, prop, value) =>
+      rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === value)
+      )
+    const has = (selector, prop, value) => hasIn(sRules, selector, prop, value)
+
+    expect(has('.auth-screen .auth-link-button', 'min-height', '44px')).toBe(true)
+    expect(has('.auth-screen .auth-link-button', 'margin-block', '-12px')).toBe(true)
+    expect(has('.process-detail-view .documents-combine__label', 'min-height', '44px')).toBe(true)
+    expect(has('.admin-section .toggle', 'min-height', '44px')).toBe(true)
+    expect(has('.admin-section .chip-remove', 'position', 'relative')).toBe(true)
+    expect(has('.admin-section .chip-remove::before', 'content', "''")).toBe(true)
+    expect(has('.admin-section .chip-remove::before', 'position', 'absolute')).toBe(true)
+    expect(has('.admin-section .chip-remove::before', 'inset', '-13px -11px')).toBe(true)
+
+    // O hit-area nao vaza para L/T/desktop.
+    const TARGETS = [
+      '.auth-screen .auth-link-button',
+      '.process-detail-view .documents-combine__label',
+      '.admin-section .toggle',
+      '.admin-section .chip-remove',
+      '.admin-section .chip-remove::before',
+    ]
+    const outside = allRules.filter((rule) => rule.media !== S)
+    for (const selector of TARGETS) {
+      for (const prop of ['min-height', 'margin-block', 'inset']) {
+        const leaked = outside.some(
+          (rule) =>
+            splitTopLevel(rule.selector, ',').includes(selector) &&
+            rule.declarations.some((declaration) => declaration.prop === prop)
+        )
+        expect(leaked, `${selector} declara ${prop} fora da camada S`).toBe(false)
+      }
+    }
+  })
 })
