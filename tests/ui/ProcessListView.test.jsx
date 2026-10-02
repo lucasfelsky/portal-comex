@@ -673,3 +673,42 @@ describe('ProcessListView — grafia "contêiner(es)"', () => {
     expect(container.textContent).not.toMatch(/\bcontainers?\b/i)
   })
 })
+
+// Conciliacao ERP (F1, somente leitura): botao so' para o admin, so' no
+// desktop (o CSS o esconde em <= 1040px) e desabilitado enquanto a lista carrega.
+describe('ProcessListView — botão "Conciliar com ERP" (F1, somente admin)', () => {
+  beforeEach(() => stubMatchMedia(false))
+
+  it('aparece só com isAdmin && onReconcileErp e tem a classe erp-reconcile-trigger', () => {
+    const { unmount } = renderView({ isAdmin: true, onReconcileErp: vi.fn() })
+    const button = screen.getByRole('button', { name: 'Conciliar com ERP' })
+    expect(button).toHaveClass('ghost-button', 'erp-reconcile-trigger')
+    expect(button).toBeEnabled()
+    unmount()
+
+    const { unmount: unmountUser } = renderView({ isAdmin: false, onReconcileErp: vi.fn() })
+    expect(screen.queryByRole('button', { name: 'Conciliar com ERP' })).not.toBeInTheDocument()
+    unmountUser()
+
+    renderView({ isAdmin: true })
+    expect(screen.queryByRole('button', { name: 'Conciliar com ERP' })).not.toBeInTheDocument()
+  })
+
+  it('o clique chama o callback', async () => {
+    const user = userEvent.setup()
+    const onReconcileErp = vi.fn()
+    renderView({ isAdmin: true, onReconcileErp })
+    await user.click(screen.getByRole('button', { name: 'Conciliar com ERP' }))
+    expect(onReconcileErp).toHaveBeenCalledTimes(1)
+  })
+
+  it('fica disabled com isLoading', async () => {
+    const user = userEvent.setup()
+    const onReconcileErp = vi.fn()
+    renderView({ isAdmin: true, onReconcileErp, isLoading: true })
+    const button = screen.getByRole('button', { name: 'Conciliar com ERP' })
+    expect(button).toBeDisabled()
+    await user.click(button)
+    expect(onReconcileErp).not.toHaveBeenCalled()
+  })
+})

@@ -43,9 +43,10 @@
     ]
   },
   "srcFeatures": {
-    "directories": 2,
+    "directories": 3,
     "_directories_list": [
       "admin",
+      "erp",
       "processes"
     ]
   },
@@ -120,11 +121,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 81,
+    "totalFiles": 82,
     "_breakdown": {
       "firebase": 4,
       "functions": 16,
-      "ui": 61
+      "ui": 62
     }
   },
   "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",

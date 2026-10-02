@@ -988,3 +988,61 @@ describe('ProcessesPage — DUIMP sob aguas (projecao por perfil)', () => {
     await waitFor(() => expect(screen.getByText('DU-SOBAGUAS-1')).toBeInTheDocument())
   })
 })
+
+// Conciliacao ERP (F1, somente leitura): o botao e o modal so' existem para o
+// admin; o modal recebe os processos ja carregados e nunca grava nada.
+describe('ProcessesPage — Conciliar com ERP (F1, somente leitura)', () => {
+  const ERP_BUTTON = { name: 'Conciliar com ERP' }
+  const EMPTY_PORTAL_MESSAGE = 'Os processos do Portal não foram carregados. Recarregue a página antes de conciliar.'
+
+  it('admin vê o botão e abre o diálogo', async () => {
+    const user = userEvent.setup()
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    const button = screen.getByRole('button', ERP_BUTTON)
+    expect(button).toBeEnabled()
+    expect(screen.queryByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })).not.toBeInTheDocument()
+
+    await user.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })
+    expect(within(dialog).getByText(/Nada é gravado/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(EMPTY_PORTAL_MESSAGE)).not.toBeInTheDocument()
+    expect(dialog.querySelector('input[type="file"]')).toHaveAttribute('accept', '.xlsx')
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+
+  it.each(['user', 'logistica'])('%s não vê o botão nem o diálogo', async (role) => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role } })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('button', ERP_BUTTON)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })).not.toBeInTheDocument()
+  })
+
+  it('com listProcesses pendente, o botão está desabilitado', async () => {
+    let resolveList
+    mockListProcesses.mockReturnValue(new Promise((resolve) => { resolveList = resolve }))
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    renderPage()
+    const button = await screen.findByRole('button', ERP_BUTTON)
+    expect(button).toBeDisabled()
+    resolveList(PROCESSES)
+    await waitFor(() => expect(screen.getByRole('button', ERP_BUTTON)).toBeEnabled())
+  })
+
+  it('com listProcesses rejeitado, o modal abre com o banner bloqueante', async () => {
+    const user = userEvent.setup()
+    mockListProcesses.mockRejectedValueOnce(new Error('boom'))
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/boom/)).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', ERP_BUTTON))
+    const dialog = await screen.findByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })
+    expect(within(dialog).getByText(EMPTY_PORTAL_MESSAGE)).toBeInTheDocument()
+    expect(dialog.querySelector('input[type="file"]')).toBeDisabled()
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+})
