@@ -190,6 +190,46 @@ describe('getProcessDerivedStatus - novo status Aguardando desembaraço (F17.1a)
   })
 })
 
+// DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao coloca o
+// processo "no porto / desembaraco"; com atracacao segue NO_PORTO.
+describe('getProcessDerivedStatus - DUIMP sob aguas (D-5)', () => {
+  it('sem atracacao + DUIMP registrada + ETA futura -> EMBARCADO (nao NO_PORTO)', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-08-01',
+      category: 'FCL',
+      shippedAt: '2026-07-01',
+      duimpRegisteredAt: '2026-07-08T09:00',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.EMBARCADO)
+  })
+
+  it('com atracacao + DUIMP registrada -> NO_PORTO (inalterado)', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-07-09',
+      category: 'FCL',
+      berthedAt: '2026-07-08T10:00',
+      duimpRegisteredAt: '2026-07-08T09:00',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.NO_PORTO)
+  })
+
+  it('ATRASADO continua antes: ETA vencida sem atracacao -> ATRASADO', () => {
+    const result = getProcessDerivedStatus({
+      eta: '2026-07-01',
+      category: 'FCL',
+      shippedAt: '2026-06-01',
+      duimpRegisteredAt: '2026-07-08T09:00',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.ATRASADO)
+  })
+})
+
 // F17.4a (D-6): valor novo + os 2 legados fundidos caem na mesma fase
 // POS_RECEBIMENTO (via isCdUnloadingOrReceivedStatus, D-1).
 describe('getProcessDerivedStatus - collectionStatus fundido (F17.4a)', () => {

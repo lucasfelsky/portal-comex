@@ -14,6 +14,8 @@ import {
 } from '../core/shared.js';
 import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
+import { getSaoPauloDateKey } from './operationalAlerts.js';
+import { canSeeCustomsBeforeArrivalMirror, projectProcessForRestrictedRecipientMirror } from './customsVisibility.js';
 export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents } from './documents.js';
 export { downloadProcessDocument } from './documentDownload.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
@@ -307,13 +309,35 @@ export const createProcessUpdateNotifications = onDocumentUpdated(
       const updateSummary = buildProcessUpdateSummary(before, after, buildMilestoneSummaryPhrases(detectMilestones(before, after)))
       const favoriteUsers = await listActiveFavoriteUsers(processId)
 
+      // DUIMP sob aguas (D-6): favorito RESTRITO (qualquer role que nao seja
+      // admin/logistica) nao recebe aviso (in-app, e-mail e push derivam da
+      // mesma notificacao) sobre DUIMP antes da atracacao/chegada. Antes e
+      // depois sao projetados com o mesmo criterio do frontend; sem mudanca
+      // visivel nao ha notificacao, e na atracacao o resumo sai normal
+      // ("atracação confirmada e DUIMP registrada.").
+      const todayKey = getSaoPauloDateKey()
+      const restrictedBefore = projectProcessForRestrictedRecipientMirror(before, todayKey)
+      const restrictedAfter = projectProcessForRestrictedRecipientMirror(after, todayKey)
+      const restrictedHasChanges = hasMeaningfulProcessChanges(restrictedBefore, restrictedAfter)
+      const restrictedSummary = restrictedHasChanges
+        ? buildProcessUpdateSummary(
+            restrictedBefore,
+            restrictedAfter,
+            buildMilestoneSummaryPhrases(detectMilestones(restrictedBefore, restrictedAfter))
+          )
+        : ''
+
       favoriteUsers.forEach((favoriteUser) => {
-        const processLabel = buildRecipientProcessLabel(process, normalizeString(favoriteUser.role))
+        const favoriteRole = normalizeString(favoriteUser.role)
+        const seesCustoms = canSeeCustomsBeforeArrivalMirror(favoriteRole)
+        if (!seesCustoms && !restrictedHasChanges) return
+
+        const processLabel = buildRecipientProcessLabel(process, favoriteRole)
         maybeAddNotification(
           favoriteUser,
           'favorite_process_updated',
           buildFavoriteProcessUpdatedTitle(processLabel),
-          `${processLabel}: ${updateSummary}`
+          `${processLabel}: ${seesCustoms ? updateSummary : restrictedSummary}`
         )
       })
     }

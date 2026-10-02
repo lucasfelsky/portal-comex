@@ -131,6 +131,55 @@ describe('getDashboardKpis', () => {
     })
   })
 
+  describe('DUIMP sob aguas (D-5)', () => {
+    it('admin: processo sob aguas com status de DUIMP e ETA futura conta em emTransito', () => {
+      const processes = [
+        {
+          id: 'p-1',
+          category: 'FCL',
+          shippedAt: '2026-07-01',
+          eta: '2026-08-01',
+          duimpRegisteredAt: '2026-07-08T09:00',
+          processStatus: 'Aguardando parametrização da DUIMP',
+        },
+      ]
+      const kpis = getDashboardKpis(processes, NOW)
+      expect(kpis.emTransito).toBe(1)
+      expect(kpis.aguardandoAtracacao).toBe(0)
+    })
+
+    it('admin: sob aguas com ETA vencida conta em aguardandoAtracacao', () => {
+      const processes = [
+        {
+          id: 'p-1',
+          category: 'FCL',
+          shippedAt: '2026-06-01',
+          eta: '2026-07-01',
+          duimpRegisteredAt: '2026-07-08T09:00',
+          processStatus: 'Aguardando parametrização da DUIMP',
+        },
+      ]
+      const kpis = getDashboardKpis(processes, NOW)
+      expect(kpis.aguardandoAtracacao).toBe(1)
+      expect(kpis.emTransito).toBe(0)
+    })
+
+    it('com atracacao a DUIMP nao conta em transito', () => {
+      const processes = [
+        {
+          id: 'p-1',
+          category: 'FCL',
+          shippedAt: '2026-07-01',
+          eta: '2026-07-05',
+          berthedAt: '2026-07-06T08:00',
+          duimpRegisteredAt: '2026-07-08T09:00',
+          processStatus: 'Aguardando parametrização da DUIMP',
+        },
+      ]
+      expect(getDashboardKpis(processes, NOW).emTransito).toBe(0)
+    })
+  })
+
   describe('aguardandoAtracacao', () => {
     it('conta "Aguardando atracação" (com acento, grafia canonica)', () => {
       const processes = [{ id: 'p-1', processStatus: 'Aguardando atracação' }]

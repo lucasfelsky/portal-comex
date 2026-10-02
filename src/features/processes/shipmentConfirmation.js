@@ -1,7 +1,9 @@
 // F17.2d-1 (D-1/D-2): "Embarque confirmado" (Q5) - SEM campo novo. O
 // checkbox e' derivado de `hasText(shippedAt)`; a acao de marcar/desmarcar
-// copia/limpa `shippedAt` a partir do ETD. Modulo ZERO imports - seguro
-// para o mock fechado de `tests/ui/ProcessesPage.test.jsx:68-125`.
+// copia/limpa `shippedAt` a partir do ETD. Unico import: `./arrivalCustoms`
+// (tambem ZERO imports) - seguro para o mock fechado de
+// `tests/ui/ProcessesPage.test.jsx:68-125`.
+import { hasArrivalSignal } from './arrivalCustoms'
 
 // D-1: mesmo padrao de `getLocalDateKey` ja usado em
 // `ProcessTransitFields.jsx:8-13` - PROIBIDO `toISOString()` (bug de fuso,
@@ -26,12 +28,17 @@ export function hasShipmentDateDivergence(p) {
 
 // `checked` com ETD vazio e' no-op (nao ha' data pra copiar); marcar copia
 // o ETD pra `shippedAt`; desmarcar e' a acao explicita que zera `shippedAt`.
+// DUIMP sob aguas: desmarcar SEM atracacao/chegada tambem devolve o status do
+// draft a "Aguardando Embarque" - o `saveProcess` deriva a partir dele (um
+// status de DUIMP gravado nao pode sustentar o "embarcado") e a sanitizacao
+// zera a DUIMP, que so' existe com embarque confirmado.
 export function applyShipmentConfirmation(draft, checked) {
   if (checked) {
     if (!String(draft?.etd ?? '').trim()) return draft
     return { ...draft, shippedAt: draft.etd }
   }
-  return { ...draft, shippedAt: '' }
+  if (hasArrivalSignal(draft)) return { ...draft, shippedAt: '' }
+  return { ...draft, shippedAt: '', processStatus: 'Aguardando Embarque' }
 }
 
 // Editar o ETD so' sincroniza `shippedAt` quando ja estava sincronizado

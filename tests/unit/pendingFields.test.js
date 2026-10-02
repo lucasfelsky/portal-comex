@@ -409,6 +409,39 @@ describe('getPendingFields - DUIMP completa (F17.3b)', () => {
     })
     expect(getPendingFields(process).map((f) => f.id)).not.toContain('customsRequirementNotes')
   })
+
+  // DUIMP sob aguas (D-4): DUIMP registrada antes da atracacao nao vira
+  // pendencia (estagio capado em "Transito"); desembaraco so' com presenca.
+  it('FCL sob aguas (DUIMP registrada, sem atracacao, sem n.) -> nenhuma pendencia de DUIMP/chegada', () => {
+    const process = completeMaritimeProcess({
+      shippedAt: '2026-01-02',
+      duimpRegisteredAt: '2026-09-20T10:00',
+      duimpNumber: '',
+    })
+    const ids = getPendingFields(process).map((f) => f.id)
+    for (const id of ['duimpNumber', 'ceMercante', 'terminalName', 'freeTimeDays']) {
+      expect(ids).not.toContain(id)
+    }
+  })
+
+  it('com atracacao SEM presenca, parametrizado Amarelo -> sem clearanceCompletedAt', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Amarelo',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('clearanceCompletedAt')
+  })
+
+  it('com atracacao e presenca, parametrizado Amarelo -> clearanceCompletedAt (regra atual intacta)', () => {
+    const process = completeMaritimeProcess({
+      berthed: true,
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-20T10:00',
+      parameterizationChannel: 'Amarelo',
+    })
+    expect(getPendingFields(process).map((f) => f.id)).toContain('clearanceCompletedAt')
+  })
 })
 
 // F17.3a (D-6): CE/terminal/free time (stage 2) + presenca de carga (stage 3).

@@ -1491,3 +1491,263 @@ describe('F17.5b - resumo nomeando marcos + L34', () => {
     expect(mockBatch.set).not.toHaveBeenCalled()
   })
 })
+
+// DUIMP sob aguas (D-6): favorito RESTRITO (qualquer role que nao seja
+// admin/logistica) nao recebe aviso de DUIMP antes da atracacao/chegada.
+// In-app, e-mail e push derivam da MESMA notificacao criada aqui: sem
+// notificacao = sem e-mail/push.
+describe('createProcessUpdateNotifications - DUIMP sob aguas', () => {
+  const USER_FAV = {
+    id: 'user-fav',
+    name: 'Usuario Comum',
+    email: 'user@sqquimica.com',
+    role: 'user',
+    status: 'Ativo',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+  const LOGISTICA_FAV = {
+    id: 'logi-fav',
+    name: 'Logistica Favorita',
+    email: 'logi-fav@sqquimica.com',
+    role: 'logistica',
+    status: 'Ativo',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+  const NO_ROLE_FAV = {
+    id: 'norole-fav',
+    name: 'Sem Role',
+    email: 'norole@sqquimica.com',
+    status: 'Ativo',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+
+  // FCL embarcado, ETA futura, sem atracacao, status gravado realista.
+  const UNDER_WATER = {
+    ...PROCESS_BASE,
+    category: 'FCL',
+    shippedAt: '2026-09-01',
+    eta: '2099-01-15',
+    processStatus: 'Embarcou',
+  }
+
+  const ACTOR = { updatedById: 'admin-1', updatedByName: 'Admin Root' }
+
+  function setupUsers() {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: USER_FAV.id, data: USER_FAV },
+        { id: LOGISTICA_FAV.id, data: LOGISTICA_FAV },
+        { id: NO_ROLE_FAV.id, data: NO_ROLE_FAV },
+      ],
+    })
+  }
+
+  function recipients() {
+    return mockBatch.set.mock.calls.map(([, payload]) => payload.recipientUserId).sort()
+  }
+
+  function bodyFor(userId) {
+    const call = mockBatch.set.mock.calls.find(([, payload]) => payload.recipientUserId === userId)
+    return call ? call[1].body : undefined
+  }
+
+  it('(a) DUIMP registrada sob aguas -> so a logistica favorita e avisada; user e sem-role nada', async () => {
+    setupUsers()
+    const before = { ...UNDER_WATER }
+    const after = {
+      ...UNDER_WATER,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      duimpNumber: 'DU-123',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(recipients()).toEqual(['logi-fav'])
+    expect(bodyFor('logi-fav')).toContain('DUIMP registrada')
+    expect(mockBatch.set.mock.calls.every(([, payload]) => payload.type === 'favorite_process_updated')).toBe(true)
+  })
+
+  it('(b) DUIMP parametrizada (Verde) sob aguas -> user nada; logistica avisada', async () => {
+    setupUsers()
+    const before = {
+      ...UNDER_WATER,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+    }
+    const after = {
+      ...before,
+      processStatus: 'Aguardando desembaraço',
+      parameterizedAt: '2026-09-19T10:00',
+      parameterizationChannel: 'Verde',
+      duimpStatus: 'Parametrizada',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(recipients()).toEqual(['logi-fav'])
+    expect(bodyFor('logi-fav')).toContain('DUIMP parametrizada')
+  })
+
+  it('(c) DUIMP + ETA mudam juntos -> user recebe "ETA atualizada" e SEM "DUIMP"', async () => {
+    setupUsers()
+    const before = { ...UNDER_WATER }
+    const after = {
+      ...UNDER_WATER,
+      eta: '2099-02-20',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(recipients()).toEqual(['logi-fav', 'norole-fav', 'user-fav'])
+    expect(bodyFor('user-fav')).toContain('ETA atualizada')
+    expect(bodyFor('user-fav')).not.toMatch(/DUIMP/)
+    expect(bodyFor('norole-fav')).not.toMatch(/DUIMP/)
+    expect(bodyFor('logi-fav')).toContain('DUIMP registrada')
+  })
+
+  it('(d) atracacao em processo que ja tinha DUIMP -> user recebe "atracação confirmada"', async () => {
+    setupUsers()
+    const before = {
+      ...UNDER_WATER,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+    }
+    const after = {
+      ...before,
+      berthedAt: '2026-09-20T08:00',
+      berthed: true,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(recipients()).toEqual(['logi-fav', 'norole-fav', 'user-fav'])
+    const [userCall] = mockBatch.set.mock.calls.filter(([, payload]) => payload.recipientUserId === 'user-fav')
+    expect(userCall[1].type).toBe('favorite_process_updated')
+    expect(userCall[1].body).toContain('atracação confirmada')
+  })
+
+  it('(e) AEREO: antes da chegada a DUIMP nao avisa o user; na chegada ele recebe o resumo normal', async () => {
+    setupUsers()
+    const air = {
+      ...UNDER_WATER,
+      category: 'AEREO',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+    }
+
+    // antes da chegada: DUIMP parametrizada nao avisa o user
+    await handler(
+      makeEvent(air, {
+        ...air,
+        parameterizedAt: '2026-09-19T10:00',
+        parameterizationChannel: 'Amarelo',
+        duimpStatus: 'Parametrizada',
+        processStatus: 'Aguardando desembaraço',
+        ...ACTOR,
+      })
+    )
+    expect(recipients()).toEqual(['logi-fav'])
+
+    vi.clearAllMocks()
+    mockFirestoreApi.batch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+    setupUsers()
+
+    // chegada: user recebe o resumo normal
+    await handler(makeEvent(air, { ...air, arrivedAt: '2026-09-20T08:00', arrived: true, ...ACTOR }))
+    expect(recipients()).toEqual(['logi-fav', 'norole-fav', 'user-fav'])
+    expect(bodyFor('user-fav')).toMatch(/chegada/)
+  })
+
+  // DUIMP antes do embarque: o gate de sanitizacao zera a DUIMP, entao o save
+  // normal nem muda o doc (sem aviso). Defesa para dado antigo/importado: se a
+  // DUIMP chegar ao doc com `shippedAt` vazio, o status de DUIMP NUNCA vira
+  // "Embarcou" para o restrito (nada de "status alterado para Embarcou").
+  it.each(['FCL', 'AEREO'])('(g) %s sem embarque: DUIMP gravada com shippedAt vazio -> user e sem-role sem aviso', async (category) => {
+    setupUsers()
+    const before = { ...UNDER_WATER, category, shippedAt: '', processStatus: 'Aguardando Embarque' }
+    const after = {
+      ...before,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      duimpNumber: 'DU-123',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(recipients()).toEqual(['logi-fav'])
+    expect(bodyFor('logi-fav')).toContain('DUIMP registrada')
+    expect(mockBatch.set.mock.calls.some(([, payload]) => /Embarcou/.test(payload.body))).toBe(false)
+  })
+
+  it.each(['FCL', 'AEREO'])('(h) %s sem embarque: save sanitizado (DUIMP zerada) nao muda o doc -> ninguem e avisado', async (category) => {
+    setupUsers()
+    const before = { ...UNDER_WATER, category, shippedAt: '', processStatus: 'Aguardando Embarque' }
+    await handler(makeEvent(before, { ...before, ...ACTOR }))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  it('(i) legado "Embarcou" sem shippedAt: save sanitizado (DUIMP zerada, status mantido) -> ninguem e avisado', async () => {
+    setupUsers()
+    const before = { ...UNDER_WATER, shippedAt: '', processStatus: 'Embarcou' }
+    await handler(makeEvent(before, { ...before, ...ACTOR }))
+    expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+
+  // Legado pre-F17.2a (sem shippedAt) gravado em status de DUIMP, atracacao
+  // desfeita: o status volta ao do HEAD ("Embarcou") e ninguem recebe o falso
+  // "status alterado para Aguardando Embarque".
+  it('(j) legado sem shippedAt: atracacao desfeita -> nenhum aviso de "Aguardando Embarque"', async () => {
+    setupUsers()
+    const before = {
+      ...UNDER_WATER,
+      shippedAt: '',
+      berthedAt: '2026-09-17T08:00',
+      berthed: true,
+      processStatus: 'Aguardando desembaraço',
+      duimpRegisteredAt: '2026-09-17T09:00',
+      parameterizedAt: '2026-09-17T10:00',
+      parameterizationChannel: 'Amarelo',
+      duimpStatus: 'Parametrizada',
+    }
+    const after = {
+      ...UNDER_WATER,
+      shippedAt: '',
+      berthedAt: '',
+      berthed: false,
+      processStatus: 'Embarcou',
+      ...ACTOR,
+    }
+    await handler(makeEvent(before, after))
+
+    expect(mockBatch.set.mock.calls.some(([, payload]) => /Aguardando Embarque/.test(payload.body))).toBe(false)
+    expect(bodyFor('user-fav')).toContain('Embarcou')
+  })
+
+  it('(f) processo ja atracado + DUIMP registrada -> user recebe "DUIMP registrada" (inalterado)', async () => {
+    setupUsers()
+    const berthed = { ...UNDER_WATER, berthedAt: '2026-09-17T08:00', berthed: true, processStatus: 'Atracação Confirmada' }
+    const after = {
+      ...berthed,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      ...ACTOR,
+    }
+    await handler(makeEvent(berthed, after))
+
+    expect(recipients()).toEqual(['logi-fav', 'norole-fav', 'user-fav'])
+    expect(bodyFor('user-fav')).toContain('DUIMP registrada')
+  })
+})

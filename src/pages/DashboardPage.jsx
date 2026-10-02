@@ -26,6 +26,7 @@ import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatu
 import { getCargoHazardBadges } from '../features/processes/operationalOptions'
 import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
 import { getDashboardKpis } from '../features/processes/dashboardKpis'
+import { projectProcessesForViewer } from '../features/processes/customsVisibility'
 import Icon from '../components/Icon'
 import StatCard from '../components/StatCard'
 import { getCollectionWindows } from '../utils/collectionWindows'
@@ -117,7 +118,14 @@ export default function DashboardPage() {
   const favoriteKey = (profile?.favoriteProcessIds ?? []).join('|')
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)
-  const [loadedProcesses, setLoadedProcesses] = useState([])
+  // DUIMP sob aguas (D-1/D-3): `rawLoadedProcesses` vem do Firestore;
+  // `loadedProcesses` e' a visao por perfil (KPIs, favoritos e semana leem
+  // esta). Admin/logistica = identidade.
+  const [rawLoadedProcesses, setLoadedProcesses] = useState([])
+  const loadedProcesses = useMemo(
+    () => projectProcessesForViewer(rawLoadedProcesses, profile?.role),
+    [rawLoadedProcesses, profile?.role]
+  )
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
   const [isLoadingBarStatus, setIsLoadingBarStatus] = useState(true)
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(true)

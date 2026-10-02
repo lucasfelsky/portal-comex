@@ -5,12 +5,15 @@
 // nenhuma logica de status/data ja existente.
 import { getWeeklyArrivalProcesses } from './WeeklyArrivalsCard'
 import { normalizeComparableText } from './processStatus'
+import { getVoyageStatus } from './customsVisibility'
+import { isDuimpUnderWater } from './arrivalCustoms'
 
 // Predicados EXATOS (semantica de produto pinada no PLAN.md, secao
 // "Passos 2a.1" — nao e' um fato do dominio, e uma decisao):
 // - chegadasNaSemana: getWeeklyArrivalProcesses -> scheduled + unscheduled.
-// - emTransito: processStatus normalizado 'embarcou' ou 'embarcado'.
-// - aguardandoAtracacao: processStatus normalizado 'aguardando atracacao'.
+// - emTransito: status da VIAGEM (`getVoyageStatus`, D-5: DUIMP sob aguas nao
+//   tira o processo de "em transito") normalizado 'embarcou' ou 'embarcado'.
+// - aguardandoAtracacao: status da viagem normalizado 'aguardando atracacao'.
 // - canalVermelho: parameterizationChannel === 'Vermelho' (trim, exato).
 // Conta sobre a lista inteira recebida (sem filtrar favorito).
 export function getDashboardKpis(processes, now = new Date()) {
@@ -24,7 +27,10 @@ export function getDashboardKpis(processes, now = new Date()) {
   let canalVermelho = 0
 
   for (const process of list) {
-    const normalizedStatus = normalizeComparableText(process?.processStatus)
+    // Fora do "sob aguas" o status gravado segue valendo (identidade para
+    // todo processo sem DUIMP antes da atracacao).
+    const status = isDuimpUnderWater(process) ? getVoyageStatus(process, now) : process?.processStatus
+    const normalizedStatus = normalizeComparableText(status)
 
     if (normalizedStatus === 'embarcou' || normalizedStatus === 'embarcado') {
       emTransito += 1

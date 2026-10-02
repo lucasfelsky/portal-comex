@@ -31,6 +31,28 @@ describe('getProcessStage', () => {
     expect(getProcessStage({ processStatus }).currentStage).toBe(expected)
   })
 
+  // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao passa de
+  // "Trânsito"; com atracacao o estagio segue o status.
+  it('DUIMP sob aguas (sem atracacao) capa o estagio em 1', () => {
+    const underWater = {
+      category: 'FCL',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      processStatus: 'Aguardando parametrização da DUIMP',
+    }
+    expect(getProcessStage(underWater).currentStage).toBe(1)
+    expect(getProcessStage({ ...underWater, processStatus: 'Aguardando desembaraço' }).currentStage).toBe(1)
+  })
+
+  it('DUIMP registrada COM atracacao -> estagio 3 (Liberação)', () => {
+    const berthed = {
+      category: 'FCL',
+      berthedAt: '2026-09-19T08:00',
+      duimpRegisteredAt: '2026-09-20T09:00',
+      processStatus: 'Aguardando parametrização da DUIMP',
+    }
+    expect(getProcessStage(berthed).currentStage).toBe(3)
+  })
+
   it('isComplete só quando carga recebida', () => {
     expect(getProcessStage({ processStatus: 'Carga recebida' }).isComplete).toBe(true)
     expect(getProcessStage({ processStatus: 'Coleta Agendada' }).isComplete).toBe(false)
