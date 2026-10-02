@@ -7,6 +7,7 @@ import {
   getImoClassLabel,
   getItemDangerousGoodsLabel,
   hasDangerousGoods,
+  hasFlammableGoods,
   isLegacyProcessDangerousGoods,
 } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
@@ -250,6 +251,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
   const containers = Array.isArray(process?.containers) ? process.containers : []
   const specialBadges = getContainerSpecialBadges(containers)
   const isDangerous = hasDangerousGoods(process)
+  const isFlammable = hasFlammableGoods(process)
 
   const badges = (
     <>
@@ -259,6 +261,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
         </span>
       ))}
       {isDangerous ? <span className="inline-badge inline-badge--danger">Carga perigosa</span> : null}
+      {isFlammable ? <span className="inline-badge inline-badge--danger">Carga inflamável</span> : null}
     </>
   )
 

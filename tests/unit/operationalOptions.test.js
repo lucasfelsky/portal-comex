@@ -4,11 +4,13 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  FLAMMABLE_IMO_CLASSES,
   IMO_CLASS_OPTIONS,
   INCOTERM_OPTIONS,
   getImoClassLabel,
   getItemDangerousGoodsLabel,
   hasDangerousGoods,
+  hasFlammableGoods,
   isLegacyProcessDangerousGoods,
   isValidUnNumber,
   itemsHaveDangerousGoods,
@@ -128,6 +130,61 @@ describe('itemsHaveDangerousGoods', () => {
     expect(itemsHaveDangerousGoods([{ dangerousGoods: false }])).toBe(false)
     expect(itemsHaveDangerousGoods([])).toBe(false)
     expect(itemsHaveDangerousGoods(undefined)).toBe(false)
+  })
+})
+
+describe('hasFlammableGoods', () => {
+  it.each(['2.1', '3', '4.1'])('item perigoso classe %s -> true', (imoClass) => {
+    expect(hasFlammableGoods({ items: [{ dangerousGoods: true, imoClass }] })).toBe(true)
+  })
+
+  it.each(['2.2', '8', ''])('item perigoso classe "%s" -> false', (imoClass) => {
+    expect(hasFlammableGoods({ items: [{ dangerousGoods: true, imoClass }] })).toBe(false)
+  })
+
+  it('item nao perigoso com classe inflamavel -> false', () => {
+    expect(hasFlammableGoods({ items: [{ dangerousGoods: false, imoClass: '3' }] })).toBe(false)
+  })
+
+  it('undefined / vazio / sem itens -> false', () => {
+    expect(hasFlammableGoods(undefined)).toBe(false)
+    expect(hasFlammableGoods({})).toBe(false)
+    expect(hasFlammableGoods({ items: [] })).toBe(false)
+  })
+
+  it('legado (flag de processo + classe inflamavel, sem item classificado) -> true', () => {
+    expect(hasFlammableGoods({ dangerousGoods: true, imoClass: '3', items: [] })).toBe(true)
+  })
+
+  it('legado com classe nao inflamavel -> false', () => {
+    expect(hasFlammableGoods({ dangerousGoods: true, imoClass: '8', items: [] })).toBe(false)
+  })
+
+  it('legado e ignorado quando ha item classificado', () => {
+    expect(
+      hasFlammableGoods({
+        dangerousGoods: true,
+        imoClass: '3',
+        items: [{ dangerousGoods: true, imoClass: '8' }],
+      })
+    ).toBe(false)
+  })
+
+  it('misto: algum item inflamavel -> true', () => {
+    expect(
+      hasFlammableGoods({
+        items: [
+          { dangerousGoods: true, imoClass: '3' },
+          { dangerousGoods: true, imoClass: '8' },
+        ],
+      })
+    ).toBe(true)
+  })
+
+  it('FLAMMABLE_IMO_CLASSES tem exatamente 2.1, 3 e 4.1, todas em IMO_CLASS_OPTIONS', () => {
+    expect([...FLAMMABLE_IMO_CLASSES].sort()).toEqual(['2.1', '3', '4.1'])
+    const values = IMO_CLASS_OPTIONS.map((option) => option.value)
+    FLAMMABLE_IMO_CLASSES.forEach((value) => expect(values).toContain(value))
   })
 })
 

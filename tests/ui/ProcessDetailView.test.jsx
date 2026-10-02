@@ -700,6 +700,43 @@ describe('ProcessDetailView — carga perigosa por item (F17.2d-1)', () => {
   })
 })
 
+// Tag "Carga inflamavel" (classes IMDG 2.1/3/4.1) no cabecalho do bloco
+// "Carga". A busca fica limitada ao head do bloco (a linha "IMO" traz texto
+// parecido: "Resina: Carga perigosa · Classe 3").
+describe('ProcessDetailView — badge "Carga inflamável" no bloco Carga', () => {
+  const renderCargoHead = (items) => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ items }),
+    })
+    const head = container.querySelector('.process-block--cargo .detail-block__head')
+    expect(head).not.toBeNull()
+    return within(head)
+  }
+
+  it('item classe 3: mostra "Carga perigosa" e "Carga inflamável" (danger)', () => {
+    const head = renderCargoHead([
+      { id: 'i1', commercialName: 'Resina', quantity: 1, dangerousGoods: true, imoClass: '3', unNumber: '1203' },
+    ])
+    expect(head.getByText('Carga perigosa')).toBeInTheDocument()
+    expect(head.getByText('Carga inflamável')).toHaveClass('inline-badge--danger')
+  })
+
+  it('item classe 8: mostra só "Carga perigosa"', () => {
+    const head = renderCargoHead([
+      { id: 'i1', commercialName: 'Acido', quantity: 1, dangerousGoods: true, imoClass: '8', unNumber: '1789' },
+    ])
+    expect(head.getByText('Carga perigosa')).toBeInTheDocument()
+    expect(head.queryByText('Carga inflamável')).not.toBeInTheDocument()
+  })
+
+  it('sem item perigoso: nenhum dos dois', () => {
+    const head = renderCargoHead([{ id: 'i1', commercialName: 'Resina', quantity: 1 }])
+    expect(head.queryByText('Carga perigosa')).not.toBeInTheDocument()
+    expect(head.queryByText('Carga inflamável')).not.toBeInTheDocument()
+  })
+})
+
 // F17.3b (D-14): card "DUIMP" completo (numero + datas + canal +
 // conferencia + exigencia/procedimento especial + desembaraco).
 describe('ProcessDetailView — DUIMP completa (F17.3b)', () => {

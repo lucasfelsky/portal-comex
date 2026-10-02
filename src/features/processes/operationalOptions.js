@@ -88,6 +88,18 @@ export function isLegacyProcessDangerousGoods(process) {
   return process?.dangerousGoods === true && !itemsHaveDangerousGoods(process?.items)
 }
 
+// 2026-10 (Lucas): classes IMDG inflamaveis - 2.1 gases, 3 liquidos, 4.1 solidos.
+// Derivado na LEITURA (nada gravado no Firestore).
+export const FLAMMABLE_IMO_CLASSES = new Set(['2.1', '3', '4.1'])
+
+export function hasFlammableGoods(process) {
+  const items = Array.isArray(process?.items) ? process.items : []
+  if (items.some((item) => item?.dangerousGoods === true && FLAMMABLE_IMO_CLASSES.has(item?.imoClass))) {
+    return true
+  }
+  return isLegacyProcessDangerousGoods(process) && FLAMMABLE_IMO_CLASSES.has(process?.imoClass)
+}
+
 // D-5: deriva a flag/trio de processo a partir dos itens (na escrita).
 // Algum item perigoso -> flag deriva dos itens (trio de processo zerado).
 // Nenhum item perigoso, mas o processo TINHA item perigoso antes (a flag
