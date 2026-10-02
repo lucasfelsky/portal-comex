@@ -6,6 +6,7 @@
 // concluído. `isComplete` = carga recebida → a timeline inteira preenche.
 
 import { canonicalizeProcessStatus } from './processStatus.js'
+import { isDuimpUnderWater } from './arrivalCustoms.js'
 
 export const PROCESS_STAGES = ['Embarque', 'Trânsito', 'Chegada', 'Liberação', 'Entrega']
 
@@ -25,6 +26,9 @@ const STAGE_BY_STATUS = {
 export function getProcessStage(process) {
   const canonical = canonicalizeProcessStatus(process?.processStatus)
   const isComplete = canonical === 'Carga recebida'
-  const currentStage = STAGE_BY_STATUS[canonical] ?? 0
+  let currentStage = STAGE_BY_STATUS[canonical] ?? 0
+  // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao leva a
+  // timeline alem de "Transito" - "Chegada" so' conclui com o navio atracado.
+  if (currentStage > 1 && isDuimpUnderWater(process)) currentStage = 1
   return { currentStage, isComplete }
 }

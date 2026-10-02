@@ -210,6 +210,57 @@ describe('applyArrivalDateEdit', () => {
   it('campo fora da lista so grava o valor', () => {
     expect(applyArrivalDateEdit({ ceMercante: '' }, 'ceMercante', 'CE-1')).toEqual({ ceMercante: 'CE-1' })
   })
+
+  // DUIMP sob aguas: o pre-preenchimento do Verde foi zerado sem presenca;
+  // ao informar a presenca, o desembaraco e' preenchido (nunca sobrescreve).
+  describe('presenca de carga + canal Verde preenche o desembaraco', () => {
+    const verde = (extra = {}) => ({
+      parameterizationChannel: 'Verde',
+      parameterizedAt: '2026-09-19T10:00',
+      clearanceCompletedAt: '',
+      ...extra,
+    })
+
+    it('presenca posterior a parametrizacao -> usa a presenca', () => {
+      const next = applyArrivalDateEdit(verde(), 'cargoPresenceInformedAt', '2026-09-21T09:30')
+      expect(next.clearanceCompletedAt).toBe('2026-09-21T09:30')
+    })
+
+    it('presenca anterior a parametrizacao -> usa a parametrizacao (maior data)', () => {
+      const next = applyArrivalDateEdit(verde(), 'cargoPresenceInformedAt', '2026-09-18T09:30')
+      expect(next.clearanceCompletedAt).toBe('2026-09-19T10:00')
+    })
+
+    it('nao sobrescreve desembaraco ja digitado', () => {
+      const next = applyArrivalDateEdit(
+        verde({ clearanceCompletedAt: '2026-09-20T15:00' }),
+        'cargoPresenceInformedAt',
+        '2026-09-21T09:30'
+      )
+      expect(next.clearanceCompletedAt).toBe('2026-09-20T15:00')
+    })
+
+    it('nao preenche fora do Verde, sem parametrizacao ou ao limpar a presenca', () => {
+      expect(
+        applyArrivalDateEdit(verde({ parameterizationChannel: 'Amarelo' }), 'cargoPresenceInformedAt', '2026-09-21T09:30')
+          .clearanceCompletedAt
+      ).toBe('')
+      expect(
+        applyArrivalDateEdit(verde({ parameterizedAt: '' }), 'cargoPresenceInformedAt', '2026-09-21T09:30')
+          .clearanceCompletedAt
+      ).toBe('')
+      expect(applyArrivalDateEdit(verde(), 'cargoPresenceInformedAt', '').clearanceCompletedAt).toBe('')
+    })
+
+    it('berthedAt/arrivedAt nao mexem no desembaraco', () => {
+      expect(applyArrivalDateEdit(verde(), 'berthedAt', '2026-09-21T09:30').clearanceCompletedAt).toBe('')
+    })
+
+    it('sobrevive a sanitizacao com presenca (fluxo do formulario)', () => {
+      const next = applyArrivalDateEdit(verde(), 'cargoPresenceInformedAt', '2026-09-21T09:30')
+      expect(sanitizeCustomsClearanceFields(next).clearanceCompletedAt).toBe('2026-09-21T09:30')
+    })
+  })
 })
 
 describe('sanitizeArrivalFields', () => {
@@ -439,8 +490,52 @@ describe('deriveDuimpStatus', () => {
 })
 
 describe('sanitizeCustomsClearanceFields', () => {
-  it('sem presenca -> tudo vazio', () => {
+  it('processo vazio -> tudo vazio', () => {
     expect(sanitizeCustomsClearanceFields({})).toEqual(EMPTY_CUSTOMS_CLEARANCE_FIELDS)
+  })
+
+  it('DUIMP sob aguas: sem presenca mantem n./datas/canal e zera so o desembaraco', () => {
+    const result = sanitizeCustomsClearanceFields({
+      duimpNumber: ' 26BR0001 ',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      parameterizedAt: '2026-09-19T10:00',
+      parameterizationChannel: 'Amarelo',
+      customsInspectionScheduledAt: '2026-09-21T10:00',
+      customsRequirement: true,
+      customsRequirementNotes: 'nota',
+      clearanceCompletedAt: '2026-09-22T10:00',
+    })
+    expect(result).toMatchObject({
+      duimpNumber: '26BR0001',
+      duimpRegisteredAt: '2026-09-18T09:00',
+      parameterizedAt: '2026-09-19T10:00',
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Amarelo',
+      customsInspectionScheduledAt: '2026-09-21T10:00',
+      customsRequirement: true,
+      customsRequirementNotes: 'nota',
+      clearanceCompletedAt: '',
+    })
+  })
+
+  it('DUIMP sob aguas: com presenca preserva o desembaraco', () => {
+    const result = sanitizeCustomsClearanceFields({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-19T10:00',
+      parameterizationChannel: 'Amarelo',
+      clearanceCompletedAt: '2026-09-22T10:00',
+    })
+    expect(result.clearanceCompletedAt).toBe('2026-09-22T10:00')
+  })
+
+  it('DUIMP sob aguas: legado "Aguardando registro" sem presenca -> duimpStatus vazio', () => {
+    const result = sanitizeCustomsClearanceFields({ duimpStatus: 'Aguardando registro da DUIMP' })
+    expect(result.duimpStatus).toBe('')
+  })
+
+  it('DUIMP sob aguas: registrada sem presenca -> Aguardando parametrização da DUIMP', () => {
+    const result = sanitizeCustomsClearanceFields({ duimpRegisteredAt: '2026-09-18T09:00' })
+    expect(result.duimpStatus).toBe(DUIMP_STATUS_WAITING_PARAMETERIZATION)
   })
 
   it('Verde zera conferencia/exigencia/notas', () => {

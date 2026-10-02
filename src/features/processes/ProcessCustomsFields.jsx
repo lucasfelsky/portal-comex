@@ -2,6 +2,7 @@ import SelectField from '../../components/SelectField'
 import {
   CUSTOMS_INSPECTION_CHANNELS,
   CUSTOMS_REQUIREMENT_CHANNELS,
+  hasCargoPresenceSignal,
   hasDuimpRegistrationSignal,
   hasParameterizationSignal,
   isLegacyDuimpRegisteredWithoutDate,
@@ -26,7 +27,11 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
   const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(channel)
   const isRequirementChannel = CUSTOMS_REQUIREMENT_CHANNELS.includes(channel)
   const isCinza = channel === 'Cinza'
-  const showClearance = hasParameterization && channel
+  // DUIMP sob aguas (D-2): registro/parametrizacao/canal liberados antes da
+  // atracacao; o desembaraco so' aparece com presenca de carga informada.
+  const hasPresence = hasCargoPresenceSignal(draft)
+  const showClearance = hasParameterization && channel && hasPresence
+  const clearanceWaitsForPresence = hasParameterization && channel && !hasPresence
 
   return (
     <div className="form-group">
@@ -113,6 +118,10 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
           </label>
         ) : null}
       </div>
+
+      {clearanceWaitsForPresence ? (
+        <small className="field-hint">Desembaraço liberado após a presença de carga.</small>
+      ) : null}
 
       {showClearance ? (
         <div className="form-grid">

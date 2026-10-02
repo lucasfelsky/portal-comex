@@ -50,7 +50,11 @@ function isDuimpRegisteredWaitingParam(process) {
 // preenchido OU, enquanto nao existir, `parameterizedAt` (data nova) OU
 // duimp parametrizada (legado) + canal Verde. Exportada para reuso no gate
 // de coleta (sanitize/form/filtro).
+// DUIMP sob aguas (D-2): o desembaraco continua EXIGINDO presenca de carga -
+// registro/parametrizacao podem existir antes da atracacao, mas desembaracar
+// (e liberar coleta) com o navio no mar nao faz sentido fisico.
 export function isCustomsCleared(process) {
+  if (!hasCargoPresenceSignal(process)) return false
   if (hasValue(process?.clearanceCompletedAt)) return true
   return (
     (hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)) &&

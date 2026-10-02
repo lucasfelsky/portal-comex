@@ -164,6 +164,13 @@ export function hasParameterizationSignal(process) {
   return getEffectiveDuimpLevel(process) >= 3
 }
 
+// DUIMP sob aguas (D-4/D-5): DUIMP registrada/parametrizada ANTES da
+// atracacao/chegada. Condicao unica usada pela timeline, fase derivada,
+// pendencias e KPIs para tratar o processo como "ainda em viagem".
+export function isDuimpUnderWater(process) {
+  return !hasArrivalSignal(process) && hasDuimpRegistrationSignal(process)
+}
+
 export function isLegacyDuimpRegisteredWithoutDate(process) {
   return getLegacyDuimpLevel(process?.duimpStatus) >= 2 && !hasDateValue(process?.duimpRegisteredAt)
 }
@@ -190,19 +197,25 @@ export function deriveDuimpStatus(process, { ignoreLegacy = false } = {}) {
 // conferencia + exigencia + desembaraco) - mesmo padrao de
 // `sanitizeArrivalFields`. So' recebe os campos que le; o chamador espalha o
 // resultado por cima do objeto normalizado.
+//
+// DUIMP sob aguas (D-2): registro (n. + data), parametrizacao (data + canal),
+// conferencia e exigencia NAO dependem mais da presenca de carga - o admin
+// pode registrar a DUIMP antes da atracacao. So' o DESEMBARACO
+// (`clearanceCompletedAt`) continua exigindo presenca; e sem presenca o
+// `duimpStatus` nunca fica "Aguardando registro da DUIMP" (presenca de carga
+// e' o que dispara esse nivel).
 export function sanitizeCustomsClearanceFields(process, { trimText = true } = {}) {
-  if (!hasCargoPresenceSignal(process)) {
-    return { ...EMPTY_CUSTOMS_CLEARANCE_FIELDS }
-  }
-
+  const hasPresence = hasCargoPresenceSignal(process)
   const duimpNumberRaw = String(process?.duimpNumber ?? '')
   const duimpNumber = trimText ? duimpNumberRaw.trim() : duimpNumberRaw
   const duimpRegisteredAt = normalizeDateTimeLocal(process?.duimpRegisteredAt)
   const parameterizedAt = normalizeDateTimeLocal(process?.parameterizedAt)
-  const duimpStatus = deriveDuimpStatus({ ...process, duimpRegisteredAt, parameterizedAt })
+  const derivedDuimpStatus = deriveDuimpStatus({ ...process, duimpRegisteredAt, parameterizedAt })
+  const duimpStatus =
+    !hasPresence && derivedDuimpStatus === DUIMP_STATUS_WAITING_REGISTRATION ? '' : derivedDuimpStatus
   const level3 = duimpStatus === DUIMP_STATUS_PARAMETERIZED
   const parameterizationChannel = level3 ? String(process?.parameterizationChannel ?? '') : ''
-  const clearanceCompletedAt = level3 ? String(process?.clearanceCompletedAt ?? '') : ''
+  const clearanceCompletedAt = level3 && hasPresence ? String(process?.clearanceCompletedAt ?? '') : ''
   const isInspectionChannel = CUSTOMS_INSPECTION_CHANNELS.includes(parameterizationChannel)
   const isRequirementChannel = CUSTOMS_REQUIREMENT_CHANNELS.includes(parameterizationChannel)
   const customsInspectionScheduledAt =
@@ -309,12 +322,36 @@ export function applyArrivalDateEdit(draft, field, value) {
     ? draft.migratedApproxFields.filter((item) => item !== field)
     : []
 
-  return {
+  const next = {
     ...draft,
     [field]: value,
     [boolField]: nextHasDate,
     migratedApproxFields,
   }
+
+  // DUIMP sob aguas: o pre-preenchimento do desembaraco no Verde e' zerado
+  // enquanto nao ha' presenca de carga. Ao informar a presenca, se o canal e'
+  // Verde, ha' parametrizacao e o desembaraco esta vazio, preenche com a maior
+  // data entre parametrizacao e presenca. Nunca sobrescreve valor digitado
+  // (mesma regra do `applyCustomsEdit`).
+  if (
+    field === 'cargoPresenceInformedAt' &&
+    nextHasDate &&
+    draft?.parameterizationChannel === 'Verde' &&
+    hasDateValue(draft?.parameterizedAt) &&
+    !hasDateValue(draft?.clearanceCompletedAt)
+  ) {
+    const parameterizedKey = normalizeDateTimeLocal(draft.parameterizedAt)
+    const presenceKey = normalizeDateTimeLocal(value)
+    next.clearanceCompletedAt =
+      presenceKey && parameterizedKey
+        ? presenceKey > parameterizedKey
+          ? presenceKey
+          : parameterizedKey
+        : presenceKey || parameterizedKey
+  }
+
+  return next
 }
 
 // D-1: limpeza por categoria dos campos novos - mesmo padrao de

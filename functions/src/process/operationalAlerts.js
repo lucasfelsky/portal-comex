@@ -215,10 +215,19 @@ export function buildOperationalAlerts(processes, { todayKey, clearanceOverdueDa
       }
     }
 
-    if (hasParameterizationSignalMirror(process) && !isCustomsClearedMirror(process)) {
+    // DUIMP sob aguas (D-7): so' conta com presenca de carga, a partir da data
+    // mais recente entre parametrizacao e presenca (evita "parametrizada ha N
+    // dias sem desembaraço" com o navio no mar).
+    if (
+      hasCargoPresenceSignalLocal(process) &&
+      hasParameterizationSignalMirror(process) &&
+      !isCustomsClearedMirror(process)
+    ) {
       const paramKey = toSaoPauloDateKey(process?.parameterizedAt)
+      const presenceKey = toSaoPauloDateKey(process?.cargoPresenceInformedAt)
+      const sinceKey = paramKey > presenceKey ? paramKey : presenceKey
       if (paramKey) {
-        const days = diffDaysBetweenKeys(paramKey, todayKey)
+        const days = diffDaysBetweenKeys(sinceKey, todayKey)
         if (days > clearanceOverdueDays) {
           alerts.push({
             kind: 'clearanceOverdue',

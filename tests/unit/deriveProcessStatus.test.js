@@ -101,6 +101,7 @@ describe('deriveProcessStatus - linha 2 (Coleta Agendada)', () => {
       collectionStatus: 'Coleta Agendada',
       collectionWindows: [],
       duimpStatus: 'Parametrizada',
+      cargoPresenceInformed: true,
       parameterizationChannel: 'Verde',
     })
     expect(deriveProcessStatus(process)).toBe('Aguardando agendamento de coleta')
@@ -111,6 +112,7 @@ describe('deriveProcessStatus - linha 2 (Coleta Agendada)', () => {
       collectionStatus: 'Coleta Agendada',
       collectionWindows: [{ scheduledAt: '' }],
       duimpStatus: 'Parametrizada',
+      cargoPresenceInformed: true,
       parameterizationChannel: 'Verde',
     })
     expect(deriveProcessStatus(process)).toBe('Aguardando agendamento de coleta')
@@ -123,6 +125,7 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
       deriveProcessStatus(
         baseMaritime({
           duimpStatus: 'Parametrizada',
+          cargoPresenceInformed: true,
           parameterizationChannel: 'Amarelo',
           clearanceCompletedAt: '2026-01-01T10:00',
           mapaStatus: 'Liberado',
@@ -136,6 +139,7 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
       deriveProcessStatus(
         baseMaritime({
           duimpStatus: 'Parametrizada',
+          cargoPresenceInformed: true,
           parameterizationChannel: 'Verde',
         })
       )
@@ -172,6 +176,7 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
       deriveProcessStatus(
         baseMaritime({
           duimpStatus: 'Parametrizada',
+          cargoPresenceInformed: true,
           parameterizationChannel: 'Verde',
           mapaStatus: '',
         })
@@ -196,6 +201,7 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
       deriveProcessStatus(
         baseAir({
           duimpStatus: 'Parametrizada',
+          cargoPresenceInformed: true,
           parameterizationChannel: 'Verde',
           licenses: [{ status: 'Deferida' }],
         })
@@ -211,6 +217,7 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
       deriveProcessStatus(
         baseMaritime({
           duimpStatus: 'Parametrizada',
+          cargoPresenceInformed: true,
           parameterizationChannel: 'Verde',
           licenses: [],
           mapaStatus: 'Aguardando MAPA',
@@ -246,11 +253,45 @@ describe('deriveProcessStatus - linha 3 (Aguardando agendamento de coleta)', () 
   it('isCollectionReleased exportada e consistente com a derivacao', () => {
     const process = baseMaritime({
       duimpStatus: 'Parametrizada',
+      cargoPresenceInformed: true,
       parameterizationChannel: 'Verde',
       licenses: [{ status: 'Deferida' }],
     })
     expect(isCollectionReleased(process)).toBe(true)
     expect(deriveProcessStatus(process)).toBe('Aguardando agendamento de coleta')
+  })
+})
+
+describe('deriveProcessStatus - DUIMP sob aguas (D-2)', () => {
+  it('FCL sem atracacao + duimpRegisteredAt -> Aguardando parametrização da DUIMP', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({ shippedAt: '2026-09-01', eta: '2099-01-01', duimpRegisteredAt: '2026-09-18T09:00' })
+      )
+    ).toBe('Aguardando parametrização da DUIMP')
+  })
+
+  it('parametrizada Verde SEM presenca -> Aguardando desembaraço (nao libera coleta)', () => {
+    const process = baseMaritime({
+      parameterizedAt: '2026-09-19T10:00',
+      parameterizationChannel: 'Verde',
+    })
+    expect(isCollectionReleased(process)).toBe(false)
+    expect(deriveProcessStatus(process)).toBe('Aguardando desembaraço')
+  })
+
+  it('com atracacao + presenca + Verde + anuencias ok -> Aguardando agendamento de coleta', () => {
+    expect(
+      deriveProcessStatus(
+        baseMaritime({
+          berthedAt: '2026-09-20T08:00',
+          cargoPresenceInformed: true,
+          parameterizedAt: '2026-09-19T10:00',
+          parameterizationChannel: 'Verde',
+          licenses: [{ status: 'Deferida' }],
+        })
+      )
+    ).toBe('Aguardando agendamento de coleta')
   })
 })
 
@@ -415,12 +456,38 @@ describe('deriveProcessStatus - linhas 8/9/10 (D-3: shippedAt encerra o select m
 
 describe('isCustomsCleared (AD-1)', () => {
   it('clearanceCompletedAt preenchido -> true mesmo sem duimp/canal', () => {
-    expect(isCustomsCleared({ clearanceCompletedAt: '2026-01-01T10:00' })).toBe(true)
+    expect(
+      isCustomsCleared({ cargoPresenceInformed: true, clearanceCompletedAt: '2026-01-01T10:00' })
+    ).toBe(true)
+  })
+
+  // DUIMP sob aguas (D-2): desembaraco exige presenca de carga.
+  it('sem presenca de carga -> false (clearanceCompletedAt, Verde legado e Verde por data)', () => {
+    expect(isCustomsCleared({ clearanceCompletedAt: '2026-01-01T10:00' })).toBe(false)
+    expect(
+      isCustomsCleared({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Verde' })
+    ).toBe(false)
+    expect(
+      isCustomsCleared({ parameterizedAt: '2026-09-20T10:00', parameterizationChannel: 'Verde' })
+    ).toBe(false)
+  })
+
+  it('presenca por data (cargoPresenceInformedAt) tambem libera o desembaraco', () => {
+    expect(
+      isCustomsCleared({
+        cargoPresenceInformedAt: '2026-09-21T09:00',
+        clearanceCompletedAt: '2026-01-01T10:00',
+      })
+    ).toBe(true)
   })
 
   it('duimp Parametrizada + canal Verde (legado) -> true', () => {
     expect(
-      isCustomsCleared({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Verde' })
+      isCustomsCleared({
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+      })
     ).toBe(true)
   })
 
@@ -435,10 +502,40 @@ describe('isCustomsCleared (AD-1)', () => {
   it('parameterizedAt (data nova) + canal Verde -> true', () => {
     expect(
       isCustomsCleared({
+        cargoPresenceInformed: true,
         parameterizedAt: '2026-09-20T10:00',
         parameterizationChannel: 'Verde',
       })
     ).toBe(true)
+  })
+})
+
+// DUIMP sob aguas: `deriveProcessStatus` NAO exclui status de DUIMP do sinal
+// legado de embarque (identico ao HEAD) - o legado pre-F17.2a, sem `shippedAt`
+// e com status de DUIMP gravado, segue contando como embarcado.
+describe('deriveProcessStatus - legado sem shippedAt com status de DUIMP gravado (identico ao HEAD)', () => {
+  const duimpStatuses = [
+    'Aguardando registro da DUIMP',
+    'Aguardando parametrização da DUIMP',
+    'Aguardando desembaraço',
+  ]
+
+  it.each(duimpStatuses)('"%s" sem shippedAt, sem dados de DUIMP: ETA futura -> Embarcou', (processStatus) => {
+    const process = baseMaritime({ processStatus, shippedAt: '', eta: '2099-01-15' })
+    expect(deriveProcessStatus(process, new Date(2026, 8, 20, 12))).toBe('Embarcou')
+  })
+
+  it.each(duimpStatuses)('"%s" sem shippedAt, sem dados de DUIMP: ETA vencida -> Aguardando atracação', (processStatus) => {
+    const process = baseMaritime({ processStatus, shippedAt: '', eta: '2026-09-10' })
+    expect(deriveProcessStatus(process, new Date(2026, 8, 20, 12))).toBe('Aguardando atracação')
+  })
+
+  it('"Atracação Confirmada" e "Coleta Agendada" sem shippedAt tambem seguem como legado embarcado', () => {
+    for (const processStatus of ['Atracação Confirmada', 'Coleta Agendada']) {
+      expect(
+        deriveProcessStatus(baseMaritime({ processStatus, shippedAt: '', eta: '2099-01-15' }))
+      ).toBe('Embarcou')
+    }
   })
 })
 

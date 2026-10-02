@@ -13,7 +13,7 @@ import {
 } from './processStatus'
 import { getStatusTagClass } from './processStatusView'
 import { deriveProcessStatus, isCollectionReleased } from './deriveProcessStatus'
-import { hasCargoPresenceSignal, FREE_TIME_CATEGORIES } from './arrivalCustoms'
+import { FREE_TIME_CATEGORIES, hasArrivalSignal } from './arrivalCustoms'
 import EmptyReturnFields from './EmptyReturnFields'
 import { getAutomaticEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getCollectionWindows } from '../../utils/collectionWindows'
@@ -412,13 +412,20 @@ export default function ProcessForm({
         </div>
       )}
 
-      {(canShowMaritimeFlow || canShowAirFlow) && hasCargoPresenceSignal(draft) ? (
-        <ProcessCustomsFields
-          draft={draft}
-          onDraftChange={onDraftChange}
-          channelOptions={channelOptions}
-          errors={fieldErrors}
-        />
+      {/* DUIMP sob aguas: registro liberado antes da atracacao, mas so' com
+          "Embarque confirmado" (`shippedAt` real - o legado sem data precisa
+          marcar o embarque) ou com atracacao/chegada. */}
+      {canShowMaritimeFlow || canShowAirFlow ? (
+        hasArrivalSignal(draft) || isShipmentConfirmed(draft) ? (
+          <ProcessCustomsFields
+            draft={draft}
+            onDraftChange={onDraftChange}
+            channelOptions={channelOptions}
+            errors={fieldErrors}
+          />
+        ) : (
+          <small className="field-hint">A DUIMP pode ser registrada após o embarque confirmado.</small>
+        )
       ) : null}
 
       <div className="form-group">

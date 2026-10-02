@@ -272,12 +272,40 @@ describe('buildOperationalAlerts', () => {
     const process = {
       id: 'p12',
       category: 'FCL',
+      cargoPresenceInformed: true,
+      cargoPresenceInformedAt: '2026-09-18T08:00',
       parameterizedAt: '2026-09-20T09:00',
       parameterizationChannel: 'Amarelo',
     }
     const alerts = build([process])
     expect(alerts).toHaveLength(1)
     expect(alerts[0]).toMatchObject({ kind: 'clearanceOverdue', days: 4 })
+  })
+
+  // DUIMP sob aguas (D-7): sem presenca de carga nao ha atraso de desembaraco.
+  it('clearanceOverdue: parametrizada SEM presenca de carga -> nada', () => {
+    const process = {
+      id: 'p12-sem-presenca',
+      category: 'FCL',
+      parameterizedAt: '2026-09-20T09:00',
+      parameterizationChannel: 'Amarelo',
+    }
+    expect(build([process])).toHaveLength(0)
+  })
+
+  it('clearanceOverdue: presenca posterior a parametrizacao -> conta a partir da presenca', () => {
+    const process = {
+      id: 'p12-presenca-posterior',
+      category: 'FCL',
+      cargoPresenceInformed: true,
+      cargoPresenceInformedAt: '2026-09-22T08:00',
+      parameterizedAt: '2026-09-20T09:00',
+      parameterizationChannel: 'Amarelo',
+    }
+    // hoje (fixture) = 24/09 -> 2 dias desde a presenca (<= limite 3): sem alerta.
+    expect(build([process])).toHaveLength(0)
+    const older = { ...process, id: 'p12-presenca-20', cargoPresenceInformedAt: '2026-09-20T08:00' }
+    expect(build([older])[0]).toMatchObject({ kind: 'clearanceOverdue', days: 4 })
   })
 
   it('canal Verde -> nada (ja desembaracado)', () => {
@@ -365,6 +393,8 @@ describe('buildOperationalAlerts', () => {
       {
         id: 'z-clearance',
         category: 'FCL',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '2026-09-18T08:00',
         parameterizedAt: '2026-09-20T09:00',
         parameterizationChannel: 'Amarelo',
       },

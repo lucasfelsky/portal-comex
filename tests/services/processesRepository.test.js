@@ -46,6 +46,7 @@ import {
   dtaStatusOptions,
   collectionStatusOptions,
 } from '../../src/services/processesRepository'
+import { applyShipmentConfirmation } from '../../src/features/processes/shipmentConfirmation'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -1088,6 +1089,32 @@ describe('F17.2d-2 - searchProcesses mascarado (AD-1)', () => {
     expect(await searchProcesses('PO-9')).toHaveLength(1)
   })
 
+  // DUIMP sob aguas: a busca global nao tem status nem campos de DUIMP no
+  // haystack - guarda contra vazamento para o usuario sem permissao.
+  it('DUIMP sob aguas: busca por numero da DUIMP / status de DUIMP nao acha o processo', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-fcl',
+          data: () => ({
+            id: 'p-fcl',
+            name: 'Importacao Secreta',
+            category: 'FCL',
+            processNumber: 'FCL-1',
+            shippedAt: '2026-09-01',
+            duimpNumber: 'DU-123',
+            duimpRegisteredAt: '2026-09-18T09:00',
+            duimpStatus: 'Aguardando parametrização da DUIMP',
+            processStatus: 'Aguardando parametrização da DUIMP',
+          }),
+        },
+      ],
+    })
+
+    expect(await searchProcesses('DU-123', { canSeeName: false })).toEqual([])
+    expect(await searchProcesses('parametriza')).toEqual([])
+  })
+
   it('CONSOLIDADO: com canSeeName acha por referencia/fornecedor da PO', async () => {
     mockGetDocs.mockResolvedValue({
       docs: [
@@ -1120,22 +1147,30 @@ describe('F17.3a - chegada com data / CE / free time / presenca', () => {
     expect(saved.berthed).toBe(true)
   })
 
-  it('(b) limpar berthedAt de doc sem bool legado -> berthed: false e cascata zera cargoPresenceInformedAt/duimpStatus', async () => {
+  // DUIMP sob aguas (D-2): a cascata sem atracacao zera presenca/coleta, mas
+  // a DUIMP registrada/parametrizada sobrevive (so' o desembaraco depende de
+  // presenca).
+  it('(b) limpar berthedAt de doc sem bool legado -> berthed: false; zera presenca/coleta e preserva a DUIMP', async () => {
     await saveProcess(
       baseMaritimeProcess({
         berthed: false,
         berthedAt: '',
         cargoPresenceInformed: true,
         cargoPresenceInformedAt: '2026-01-11T08:00',
+        shippedAt: '2026-01-02',
         duimpStatus: 'Parametrizada',
         parameterizationChannel: 'Verde',
+        collectionStatus: 'Coleta Agendada',
       })
     )
     const payload = mockSetDoc.mock.calls[0][1]
     expect(payload.berthed).toBe(false)
     expect(payload.cargoPresenceInformedAt).toBe('')
     expect(payload.cargoPresenceInformed).toBe(false)
-    expect(payload.duimpStatus).toBe('')
+    expect(payload.duimpStatus).toBe('Parametrizada')
+    expect(payload.parameterizationChannel).toBe('Verde')
+    expect(payload.collectionStatus).toBe('')
+    expect(payload.collectionWindows).toEqual([])
   })
 
   it('(c) legado berthed: true sem berthedAt -> continua true', async () => {
@@ -1265,23 +1300,208 @@ describe('F17.3b - DUIMP completa (payload)', () => {
     expect(payload.customsRequirementNotes).toBe('procedimento especial')
   })
 
-  it('(f) sem presenca -> as 6 chaves vazias e duimpNumber vazio', async () => {
+  it('(f) sem presenca -> mantem n./datas da DUIMP e zera so o desembaraco', async () => {
     await saveProcess(
       baseMaritimeProcess({
         berthed: false,
         cargoPresenceInformed: false,
+        shippedAt: '2026-01-02',
         duimpStatus: 'Parametrizada',
         parameterizationChannel: 'Verde',
         duimpNumber: 'DU-1',
+        duimpRegisteredAt: '2026-01-10T09:00',
+        parameterizedAt: '2026-01-11T10:00',
+        clearanceCompletedAt: '2026-01-12T10:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpNumber).toBe('DU-1')
+    expect(payload.duimpRegisteredAt).toBe('2026-01-10T09:00')
+    expect(payload.parameterizedAt).toBe('2026-01-11T10:00')
+    expect(payload.clearanceCompletedAt).toBe('')
+    expect(payload.customsInspectionScheduledAt).toBe('')
+    expect(payload.customsRequirement).toBe(false)
+    expect(payload.customsRequirementNotes).toBe('')
+  })
+
+  it('FCL sem atracacao + duimpRegisteredAt -> processStatus "Aguardando parametrização da DUIMP" e coleta vazia', async () => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        shippedAt: '2026-01-02',
+        duimpStatus: '',
+        parameterizationChannel: '',
+        duimpRegisteredAt: '2026-01-02T09:00',
+        collectionStatus: 'Coleta Agendada',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.processStatus).toBe('Aguardando parametrização da DUIMP')
+    expect(saved.processStatus).toBe('Aguardando parametrização da DUIMP')
+    expect(payload.collectionStatus).toBe('')
+    expect(payload.collectionWindows).toEqual([])
+  })
+
+  // DUIMP so' com embarque confirmado: sem `shippedAt` (e sem status legado
+  // pos-embarque) a DUIMP inteira e' zerada e o status segue "Aguardando Embarque".
+  it.each([
+    ['FCL', baseMaritimeProcess],
+    ['AEREO', baseAirProcess],
+  ])('%s sem embarque + DUIMP registrada -> DUIMP zerada e processStatus "Aguardando Embarque"', async (_label, factory) => {
+    const saved = await saveProcess(
+      factory({
+        berthed: false,
+        arrived: false,
+        cargoPresenceInformed: false,
+        processStatus: 'Aguardando Embarque',
+        shippedAt: '',
+        duimpStatus: '',
+        parameterizationChannel: '',
+        duimpNumber: 'DU-1',
+        duimpRegisteredAt: '2026-01-02T09:00',
+        parameterizedAt: '2026-01-03T09:00',
       })
     )
     const payload = mockSetDoc.mock.calls[0][1]
     expect(payload.duimpNumber).toBe('')
     expect(payload.duimpRegisteredAt).toBe('')
     expect(payload.parameterizedAt).toBe('')
-    expect(payload.customsInspectionScheduledAt).toBe('')
-    expect(payload.customsRequirement).toBe(false)
-    expect(payload.customsRequirementNotes).toBe('')
+    expect(payload.duimpStatus).toBe('')
+    expect(payload.processStatus).toBe('Aguardando Embarque')
+    expect(saved.processStatus).toBe('Aguardando Embarque')
+  })
+
+  // Legado sem `shippedAt` precisa marcar "Embarque confirmado" antes de
+  // registrar a DUIMP: o save zera a DUIMP e o status gravado nao regride.
+  it('legado "Embarcou" SEM shippedAt + DUIMP -> DUIMP zerada e processStatus continua "Embarcou"', async () => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        processStatus: 'Embarcou',
+        shippedAt: '',
+        eta: '2099-01-15',
+        duimpStatus: '',
+        parameterizationChannel: '',
+        duimpNumber: 'DU-1',
+        duimpRegisteredAt: '2026-01-02T09:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(payload.duimpStatus).toBe('')
+    expect(payload.processStatus).toBe('Embarcou')
+    expect(saved.processStatus).toBe('Embarcou')
+  })
+
+  // Embarque marcado -> DUIMP registrada -> embarque desmarcado
+  // (`applyShipmentConfirmation` devolve o status do draft a "Aguardando
+  // Embarque"; o save deriva dele e a sanitizacao zera a DUIMP).
+  it('embarque desmarcado com DUIMP gravada -> DUIMP zerada e processStatus volta a "Aguardando Embarque"', async () => {
+    const withDuimp = baseMaritimeProcess({
+      berthed: false,
+      cargoPresenceInformed: false,
+      processStatus: 'Aguardando parametrização da DUIMP',
+      etd: '2026-01-01',
+      shippedAt: '2026-01-01',
+      duimpStatus: 'Aguardando parametrização da DUIMP',
+      parameterizationChannel: '',
+      duimpNumber: 'DU-1',
+      duimpRegisteredAt: '2026-01-02T09:00',
+    })
+    const saved = await saveProcess(applyShipmentConfirmation(withDuimp, false))
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(payload.duimpStatus).toBe('')
+    expect(payload.shippedAt).toBe('')
+    expect(payload.processStatus).toBe('Aguardando Embarque')
+    expect(saved.processStatus).toBe('Aguardando Embarque')
+  })
+
+  // R2: o gate usa o `shippedAt` NORMALIZADO que sera gravado.
+  it('shippedAt invalido nao libera a DUIMP (zerada, status "Aguardando Embarque")', async () => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        processStatus: 'Aguardando Embarque',
+        shippedAt: 'data-invalida',
+        duimpStatus: '',
+        parameterizationChannel: '',
+        duimpNumber: 'DU-1',
+        duimpRegisteredAt: '2026-01-02T09:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.shippedAt).toBe('')
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(saved.processStatus).toBe('Aguardando Embarque')
+  })
+
+  // Legado pre-F17.2a (sem shippedAt) gravado em status de DUIMP, atracacao
+  // desfeita: o status e' o MESMO do HEAD (legado segue contando como embarcado).
+  it.each([
+    ['Aguardando registro da DUIMP', '2099-01-15', 'Embarcou'],
+    ['Aguardando parametrização da DUIMP', '2099-01-15', 'Embarcou'],
+    ['Aguardando desembaraço', '2099-01-15', 'Embarcou'],
+    ['Aguardando desembaraço', '2026-01-05', 'Aguardando atracação'],
+  ])('legado sem shippedAt, status gravado "%s", atracacao desfeita (ETA %s) -> "%s"', async (stored, eta, expected) => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        berthedAt: '',
+        cargoPresenceInformed: false,
+        processStatus: stored,
+        shippedAt: '',
+        eta,
+        duimpStatus: '',
+        parameterizationChannel: '',
+      })
+    )
+    expect(mockSetDoc.mock.calls[0][1].processStatus).toBe(expected)
+    expect(saved.processStatus).toBe(expected)
+  })
+
+  it('sem shippedAt e status de DUIMP gravado (sem passar pelo helper): DUIMP zerada e o status segue a derivacao do HEAD', async () => {
+    const saved = await saveProcess(
+      baseMaritimeProcess({
+        berthed: false,
+        cargoPresenceInformed: false,
+        processStatus: 'Aguardando parametrização da DUIMP',
+        shippedAt: '',
+        duimpStatus: 'Aguardando parametrização da DUIMP',
+        parameterizationChannel: '',
+        duimpNumber: 'DU-1',
+        duimpRegisteredAt: '2026-01-02T09:00',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.duimpNumber).toBe('')
+    expect(payload.duimpRegisteredAt).toBe('')
+    expect(payload.duimpStatus).toBe('')
+    // legado pre-F17.2a: o status gravado ainda conta como embarcado (ETA da
+    // fixture ja passou -> "Aguardando atracação").
+    expect(payload.processStatus).toBe('Aguardando atracação')
+    expect(saved.processStatus).toBe('Aguardando atracação')
+  })
+
+  it('com atracacao + presenca + Verde + collectionStatus -> coleta preservada (isCollectionReleased recebe a presenca)', async () => {
+    await saveProcess(
+      baseMaritimeProcess({
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpStatus: 'Parametrizada',
+        parameterizationChannel: 'Verde',
+        collectionStatus: 'Aguardando agendamento de coleta',
+      })
+    )
+    const payload = mockSetDoc.mock.calls[0][1]
+    expect(payload.collectionStatus).toBe('Aguardando agendamento de coleta')
+    expect(payload.processStatus).toBe('Aguardando agendamento de coleta')
   })
 
   it('(g) payload SEMPRE contem as 6 chaves novas', async () => {

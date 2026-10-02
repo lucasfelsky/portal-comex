@@ -657,4 +657,40 @@ describe('DashboardPage - Favoritos: sinal de chegada (data OU boolean legado)',
     )
     expect(item.queryByText('DTA')).not.toBeInTheDocument()
   })
+
+  // DUIMP sob aguas (D-1/D-3/D-5): o user nao ve o status de DUIMP antes da
+  // atracacao; o admin segue vendo.
+  describe('DUIMP sob aguas', () => {
+    const DUIMP_STATUS = 'Aguardando parametrização da DUIMP'
+    const underWater = () =>
+      favorite({
+        id: 'p-sob-aguas',
+        processStatus: DUIMP_STATUS,
+        shippedAt: '2026-07-01',
+        eta: '2099-01-15',
+        duimpRegisteredAt: '2026-07-07T09:00',
+        duimpNumber: 'DU-SA-1',
+      })
+
+    it('user com favorito sob aguas: badge sem o status de DUIMP', async () => {
+      const item = await renderFavorite(underWater())
+      expect(item.queryByText(DUIMP_STATUS)).not.toBeInTheDocument()
+      expect(item.getByText('Embarcou')).toBeInTheDocument()
+    })
+
+    it('admin com favorito sob aguas: badge mostra o status de DUIMP', async () => {
+      mockCategoryMode.real = true
+      const process = underWater()
+      mockUseAuth.mockReturnValue({
+        profile: { uid: 'a-1', role: 'admin', favoriteProcessIds: [process.id] },
+      })
+      mockListProcesses.mockResolvedValue([process])
+      renderPage()
+      await waitFor(() => {
+        expect(document.querySelector('.dashboard-favorites-card .process-item')).not.toBeNull()
+      })
+      const item = within(document.querySelector('.dashboard-favorites-card .process-item'))
+      expect(item.getByText(DUIMP_STATUS)).toBeInTheDocument()
+    })
+  })
 })

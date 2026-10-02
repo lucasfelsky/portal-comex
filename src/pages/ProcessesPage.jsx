@@ -45,6 +45,7 @@ import {
   isAirCategory,
 } from '../features/processes/processCategories'
 import { isCollectionReleased } from '../features/processes/deriveProcessStatus'
+import { projectProcessesForViewer } from '../features/processes/customsVisibility'
 import { getPendingFields } from '../features/processes/pendingFields'
 import {
   applyArrivalDateEdit,
@@ -68,6 +69,7 @@ import {
   applyEtdEdit,
   applyShipmentConfirmation,
   getLocalDateKey,
+  isShipmentConfirmed,
 } from '../features/processes/shipmentConfirmation'
 import { resolveProcessDangerousGoods } from '../features/processes/operationalOptions'
 import {
@@ -340,12 +342,30 @@ function extractItemsFromWorksheet(file) {
   })
 }
 
+// DUIMP sob aguas (D-2): sem presenca de carga o rascunho MANTEM n./datas/
+// canal da DUIMP (o admin registra antes da atracacao); so' o desembaraco e
+// a coleta sao zerados.
+function sanitizeCustomsWithoutPresence(draft) {
+  return sanitizeCustomsClearanceFields(
+    { ...draft, cargoPresenceInformed: false, cargoPresenceInformedAt: '' },
+    { trimText: false }
+  )
+}
+
+// Sem atracacao/chegada a DUIMP so' sobrevive com "Embarque confirmado"
+// (`shippedAt` real, `isShipmentConfirmed`); sem embarque, zera tudo.
+function sanitizeCustomsWithoutArrival(draft) {
+  if (!isShipmentConfirmed(draft)) return { ...EMPTY_CUSTOMS_CLEARANCE_FIELDS }
+  return sanitizeCustomsWithoutPresence(draft)
+}
+
 function sanitizeCustoms(draft, incomingWindows = null) {
   if (!hasCargoPresenceSignal(draft)) {
     return {
       ...draft,
+      cargoPresenceInformed: false,
       cargoPresenceInformedAt: '',
-      ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
+      ...sanitizeCustomsWithoutPresence(draft),
       collectionStatus: '',
       collectionWindows: [],
       collectionScheduledAt: '',
@@ -409,7 +429,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         ...next,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
+        ...sanitizeCustomsWithoutArrival(next),
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -428,7 +448,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
         dtaArrivalAtItajai: '',
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
+        ...sanitizeCustomsWithoutArrival(next),
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -473,7 +493,15 @@ export default function ProcessesPage() {
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
-  const [processes, setProcesses] = useState([])
+  // DUIMP sob aguas (D-1/D-3): `rawProcesses` e' o que veio do Firestore;
+  // `processes` e' a visao por perfil (roles restritos nao veem os campos
+  // aduaneiros nem o status de DUIMP antes da atracacao). Admin/logistica =
+  // identidade. Todo o resto da pagina le `processes`.
+  const [rawProcesses, setProcesses] = useState([])
+  const processes = useMemo(
+    () => projectProcessesForViewer(rawProcesses, profile?.role),
+    [rawProcesses, profile?.role]
+  )
   const [selectedProcessId, setSelectedProcessId] = useState(null)
   const [draft, setDraft] = useState(emptyDraft())
   const [viewMode, setViewMode] = useState('list')

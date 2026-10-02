@@ -1,5 +1,5 @@
 import { isMaritimeCategory, isAirCategory } from './processCategories'
-import { hasArrivalSignal } from './arrivalCustoms'
+import { hasArrivalSignal, isDuimpUnderWater } from './arrivalCustoms'
 import {
   isCdEnRouteStatus,
   isCdUnloadingOrReceivedStatus,
@@ -150,6 +150,15 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     status === 'aguardando desembaraço' ||
     status === 'aguardando agendamento de coleta'
   ) {
+    // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao coloca o
+    // processo "no porto / desembaraco" - segue Embarcado.
+    if (isDuimpUnderWater(process)) {
+      return {
+        phase: DERIVED_STATUS_PHASES.EMBARCADO,
+        label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EMBARCADO],
+        tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EMBARCADO],
+      }
+    }
     return {
       phase: DERIVED_STATUS_PHASES.NO_PORTO,
       label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.NO_PORTO],

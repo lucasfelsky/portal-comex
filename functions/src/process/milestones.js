@@ -91,7 +91,9 @@ export function hasParameterizationSignalMirror(process) {
 }
 
 // Espelho de `isCustomsCleared` (deriveProcessStatus.js:50-56, AD-1/F17.3b D-3).
+// DUIMP sob aguas (D-2): sem presenca de carga o desembaraco nao conta.
 export function isCustomsClearedMirror(process) {
+  if (!hasCargoPresenceSignalMirror(process)) return false
   if (hasValue(process?.clearanceCompletedAt)) return true
   return (
     (hasValue(process?.parameterizedAt) || isDuimpParametrizada(process)) &&

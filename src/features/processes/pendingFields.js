@@ -379,6 +379,8 @@ export const PENDING_FIELD_RULES = [
     label: 'Data do desembaraço',
     stage: 3,
     when: (p) =>
+      // DUIMP sob aguas (D-4): desembaraco so' e' cobrado com presenca de carga.
+      hasCargoPresenceSignal(p) &&
       hasParameterizationSignal(p) &&
       hasText(p?.parameterizationChannel) &&
       (p?.parameterizationChannel !== 'Verde' || deriveProcessStatus(p) !== 'Carga recebida'),
@@ -485,7 +487,9 @@ export const PENDING_FIELD_RULES = [
 
 export function getPendingFields(process) {
   const derivedStatus = deriveProcessStatus(process)
-  const { currentStage } = getProcessStage({ processStatus: derivedStatus })
+  // DUIMP sob aguas (D-4): o estagio e' capado em "Transito" (a DUIMP
+  // registrada antes da atracacao nao vira pendencia).
+  const { currentStage } = getProcessStage({ ...process, processStatus: derivedStatus })
 
   const rulePendingFields = PENDING_FIELD_RULES.filter((rule) => {
     if (rule.stage > currentStage) return false

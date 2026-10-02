@@ -917,3 +917,74 @@ describe('ProcessesPage — filtro Etapa operacional (L37: data local + berthedA
     expect(list().queryByText('Presenca Sem L37')).not.toBeInTheDocument()
   })
 })
+
+// DUIMP sob aguas (D-1/D-3/D-5): antes da atracacao a DUIMP registrada e'
+// visivel so' para admin/logistica; os demais roles veem o processo SEM os
+// campos aduaneiros e com o status da viagem. Nota: o mock de
+// deriveProcessStatus acima devolve sempre 'Aguardando Embarque'.
+describe('ProcessesPage — DUIMP sob aguas (projecao por perfil)', () => {
+  const DUIMP_STATUS = 'Aguardando parametrização da DUIMP'
+  const UNDER_WATER = {
+    id: 'p-sob-aguas',
+    name: 'Importacao Sob Aguas',
+    processNumber: 'PO-SA-1',
+    category: 'FCL',
+    channel: 'Maritima',
+    destination: 'Navegantes',
+    eta: '2099-01-15',
+    shippedAt: '2026-09-01',
+    processStatus: DUIMP_STATUS,
+    duimpStatus: DUIMP_STATUS,
+    duimpRegisteredAt: '2026-09-18T09:00',
+    duimpNumber: 'DU-SOBAGUAS-1',
+    collectionStatus: '',
+  }
+
+  beforeEach(() => {
+    mockListProcesses.mockResolvedValue([UNDER_WATER])
+  })
+
+  async function renderWithRole(role) {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role } })
+    const view = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO-SA-1/).length).toBeGreaterThan(0))
+    return view
+  }
+
+  it('user: o status de DUIMP nao aparece na lista', async () => {
+    await renderWithRole('user')
+    expect(screen.queryByText(DUIMP_STATUS)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Aguardando Embarque').length).toBeGreaterThan(0)
+  })
+
+  it('user: a busca por "parametriza" esvazia a lista', async () => {
+    const user = userEvent.setup()
+    const { container } = await renderWithRole('user')
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'parametriza')
+    await waitFor(() => expect(screen.queryAllByText(/PO-SA-1/)).toHaveLength(0))
+  })
+
+  it('user: o detalhe mostra "DUIMP ainda não registrada." e nenhum dado da DUIMP', async () => {
+    const user = userEvent.setup()
+    await renderWithRole('user')
+    await user.click(screen.getAllByText(/PO-SA-1/)[0])
+    await user.click(await screen.findByRole('button', { name: 'Processo' }))
+    await waitFor(() => expect(screen.getByText('DUIMP ainda não registrada.')).toBeInTheDocument())
+    expect(screen.queryByText('DU-SOBAGUAS-1')).not.toBeInTheDocument()
+    expect(screen.queryByText(DUIMP_STATUS)).not.toBeInTheDocument()
+  })
+
+  it.each(['admin', 'logistica'])('%s: o status de DUIMP segue visivel na lista', async (role) => {
+    await renderWithRole(role)
+    expect(screen.getAllByText(DUIMP_STATUS).length).toBeGreaterThan(0)
+  })
+
+  it.each(['admin', 'logistica'])('%s: o detalhe mostra o numero da DUIMP', async (role) => {
+    const user = userEvent.setup()
+    await renderWithRole(role)
+    await user.click(screen.getAllByText(/PO-SA-1/)[0])
+    await user.click(await screen.findByRole('button', { name: 'Processo' }))
+    await waitFor(() => expect(screen.getByText('DU-SOBAGUAS-1')).toBeInTheDocument())
+  })
+})

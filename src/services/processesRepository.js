@@ -26,6 +26,7 @@ import {
   resolveCargoReceivedAt,
   isCollectionReleased,
 } from '../features/processes/deriveProcessStatus'
+import { isShipmentConfirmed } from '../features/processes/shipmentConfirmation'
 import { getEffectiveLicenses, normalizeLicenses } from '../features/processes/licenses'
 import { isValidVesselImo, normalizeVesselImo } from '../features/processes/vesselTracking'
 import {
@@ -345,8 +346,12 @@ function sanitizeCustomsFlow(process) {
     cargoPresenceInformed,
     cargoPresenceInformedAt,
   })
+  // `isCollectionReleased` exige presenca de carga (isCustomsCleared, D-2):
+  // o objeto parcial precisa carregar os sinais de presenca ja calculados.
   const released = isCollectionReleased({
     category: process.category,
+    cargoPresenceInformed,
+    cargoPresenceInformedAt,
     ...customs,
     licenses: process.licenses,
   })
@@ -431,6 +436,18 @@ function sanitizeCargoAndTransitFields(process) {
 // propagados por esta funcao (aposentados - gravados vazios em toda
 // categoria, `normalizeProcess`/`toFirestorePayload` cuidam disso). O gate
 // de coleta usa `process.licenses` (JA normalizado pelo chamador).
+// DUIMP sob aguas: o registro antes da atracacao/chegada pressupoe o
+// "Embarque confirmado" (`shippedAt` REAL, `isShipmentConfirmed` - o legado
+// sem data nao vale). Sem embarque a DUIMP inteira e' zerada.
+function sanitizeCustomsWithoutArrival(process) {
+  if (!isShipmentConfirmed(process)) return { ...EMPTY_CUSTOMS_CLEARANCE_FIELDS }
+  return sanitizeCustomsClearanceFields({
+    ...process,
+    cargoPresenceInformed: false,
+    cargoPresenceInformedAt: '',
+  })
+}
+
 function sanitizeOperationalFields(process) {
   if (isMaritimeCategory(process.category)) {
     // F17.3a (D-14): sinal compat (`berthedAt` OU `berthed` legado) em vez
@@ -443,7 +460,10 @@ function sanitizeOperationalFields(process) {
         arrived: false,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
+        // DUIMP sob aguas (D-2): registro/parametrizacao sobrevivem sem
+        // atracacao (com embarque confirmado); desembaraco (exige presenca)
+        // e coleta continuam zerados.
+        ...sanitizeCustomsWithoutArrival(process),
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -484,7 +504,8 @@ function sanitizeOperationalFields(process) {
         arrived: false,
         cargoPresenceInformed: false,
         cargoPresenceInformedAt: '',
-        ...EMPTY_CUSTOMS_CLEARANCE_FIELDS,
+        // DUIMP sob aguas (D-2): ver ramo maritimo.
+        ...sanitizeCustomsWithoutArrival(process),
         collectionStatus: '',
         collectionWindows: [],
         collectionScheduledAt: '',
@@ -565,6 +586,9 @@ function normalizeProcess(rawProcess, fallbackId) {
     dtaStatus: rawProcess.dtaStatus,
     dtaLoadingScheduledAt: rawProcess.dtaLoadingScheduledAt,
     dtaArrivalAtItajai: rawProcess.dtaArrivalAtItajai,
+    // Gate "DUIMP so' com embarque" (`sanitizeCustomsWithoutArrival`): usa o
+    // MESMO valor normalizado que sera gravado (`shippedAt` invalido = vazio).
+    shippedAt: normalizeIsoDate(rawProcess.shippedAt),
   })
 
   if (!operationalFields.collectionStatus && shouldPreserveStockCollectionStatus(rawProcess)) {

@@ -59,8 +59,28 @@ describe('applyShipmentConfirmation', () => {
     expect(applyShipmentConfirmation(draft, true)).toBe(draft)
   })
 
-  it('desmarcar -> zera shippedAt', () => {
-    const draft = { etd: '2026-09-20', shippedAt: '2026-09-20' }
+  it('desmarcar sem chegada -> zera shippedAt e devolve o status do draft a "Aguardando Embarque"', () => {
+    const draft = {
+      category: 'FCL',
+      etd: '2026-09-20',
+      shippedAt: '2026-09-20',
+      processStatus: 'Aguardando parametrização da DUIMP',
+    }
+    expect(applyShipmentConfirmation(draft, false)).toEqual({
+      ...draft,
+      shippedAt: '',
+      processStatus: 'Aguardando Embarque',
+    })
+  })
+
+  it('desmarcar COM chegada -> zera so o shippedAt (status intacto)', () => {
+    const draft = {
+      category: 'FCL',
+      berthedAt: '2026-09-22T08:00',
+      etd: '2026-09-20',
+      shippedAt: '2026-09-20',
+      processStatus: 'Atracação Confirmada',
+    }
     expect(applyShipmentConfirmation(draft, false)).toEqual({ ...draft, shippedAt: '' })
   })
 })

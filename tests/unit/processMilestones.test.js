@@ -220,8 +220,14 @@ describe('buildMilestoneEvents - tabela D-4', () => {
   })
 
   it('cleared: Amarelo + clearanceCompletedAt preenchido usa o campo como occurredAt (field)', () => {
-    const before = baseMaritime({ duimpStatus: 'Parametrizada', parameterizationChannel: 'Amarelo', clearanceCompletedAt: '' })
+    const before = baseMaritime({
+      cargoPresenceInformed: true,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Amarelo',
+      clearanceCompletedAt: '',
+    })
     const after = baseMaritime({
+      cargoPresenceInformed: true,
       duimpStatus: 'Parametrizada',
       parameterizationChannel: 'Amarelo',
       clearanceCompletedAt: '2026-09-20T14:30',
@@ -233,8 +239,9 @@ describe('buildMilestoneEvents - tabela D-4', () => {
   })
 
   it('cleared: Verde recem-parametrizado sem clearanceCompletedAt usa updatedAt e value Canal Verde', () => {
-    const before = baseMaritime({ duimpStatus: '', parameterizationChannel: '' })
+    const before = baseMaritime({ cargoPresenceInformed: true, duimpStatus: '', parameterizationChannel: '' })
     const after = baseMaritime({
+      cargoPresenceInformed: true,
       duimpStatus: 'Parametrizada',
       parameterizationChannel: 'Verde',
       updatedAt: '2026-09-20T12:00:00.000Z',
@@ -245,9 +252,40 @@ describe('buildMilestoneEvents - tabela D-4', () => {
     expect(events[0].data.occurredAtSource).toBe('updatedAt')
   })
 
+  // DUIMP sob aguas (D-2): sem presenca de carga nao ha desembaraco.
+  it('cleared: Verde parametrizado SEM presenca de carga NAO gera cleared', () => {
+    const before = baseMaritime({ duimpRegisteredAt: '2026-09-18T09:00' })
+    const after = baseMaritime({
+      duimpRegisteredAt: '2026-09-18T09:00',
+      parameterizedAt: '2026-09-19T10:00',
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      updatedAt: '2026-09-19T12:00:00.000Z',
+    })
+    expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'cleared')).toHaveLength(0)
+  })
+
+  it('cleared: save seguinte informando a presenca dispara cleared com value Canal Verde', () => {
+    const before = baseMaritime({
+      parameterizedAt: '2026-09-19T10:00',
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+    })
+    const after = baseMaritime({
+      cargoPresenceInformed: true,
+      parameterizedAt: '2026-09-19T10:00',
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Verde',
+      updatedAt: '2026-09-21T12:00:00.000Z',
+    })
+    const events = eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'cleared')
+    expect(events).toHaveLength(1)
+    expect(events[0].data.value).toBe('Canal Verde')
+  })
+
   it('cleared: editar a data de um processo ja desembaracado NAO gera novo cleared', () => {
-    const before = baseMaritime({ clearanceCompletedAt: '2026-09-01T10:00' })
-    const after = baseMaritime({ clearanceCompletedAt: '2026-09-02T10:00' })
+    const before = baseMaritime({ cargoPresenceInformed: true, clearanceCompletedAt: '2026-09-01T10:00' })
+    const after = baseMaritime({ cargoPresenceInformed: true, clearanceCompletedAt: '2026-09-02T10:00' })
     expect(eventsOfType(buildMilestoneEvents(before, after, { processId: 'p1' }), 'cleared')).toHaveLength(0)
   })
 
@@ -581,14 +619,28 @@ describe('paridade functions/ x src/ (D-4 nota)', () => {
   const clearanceValues = ['', '2026-09-20T10:00']
   // F17.3b (D-3/D-7): `parameterizedAt` (data nova) tambem entra na matriz.
   const parameterizedValues = ['', '2026-09-20T10:00']
+  // DUIMP sob aguas (D-2): dimensao de presenca (bool x data) na matriz.
+  const presenceValues = [
+    {},
+    { cargoPresenceInformed: true },
+    { cargoPresenceInformedAt: '2026-09-21T09:00' },
+  ]
 
   it('isCustomsClearedMirror === isCustomsCleared para toda a matriz', () => {
     for (const duimpStatus of duimpValues) {
       for (const parameterizationChannel of channelValues) {
         for (const clearanceCompletedAt of clearanceValues) {
           for (const parameterizedAt of parameterizedValues) {
-            const process = { duimpStatus, parameterizationChannel, clearanceCompletedAt, parameterizedAt }
-            expect(isCustomsClearedMirror(process)).toBe(isCustomsCleared(process))
+            for (const presence of presenceValues) {
+              const process = {
+                duimpStatus,
+                parameterizationChannel,
+                clearanceCompletedAt,
+                parameterizedAt,
+                ...presence,
+              }
+              expect(isCustomsClearedMirror(process)).toBe(isCustomsCleared(process))
+            }
           }
         }
       }

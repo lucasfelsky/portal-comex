@@ -1219,6 +1219,105 @@ describe('ProcessForm — ProcessCustomsFields (F17.3b)', () => {
     expect(screen.queryByRole('combobox', { name: 'DUIMP' })).not.toBeInTheDocument()
   })
 
+  // DUIMP sob aguas (D-2): registro/parametrizacao liberados antes da
+  // atracacao; desembaraco continua exigindo presenca de carga.
+  it('sem presenca e sem atracacao, COM embarque, aparece o grupo "Liberação (DUIMP)" com "Nº da DUIMP"', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: false,
+        cargoPresenceInformed: false,
+        shippedAt: '2026-09-01',
+      }),
+    })
+    await openArrivalStep(user)
+    expect(screen.getByText('Liberação (DUIMP)')).toBeInTheDocument()
+    expect(screen.getByText('Nº da DUIMP')).toBeInTheDocument()
+    expect(screen.getByText('Registro da DUIMP (data e hora)')).toBeInTheDocument()
+  })
+
+  // DUIMP so' com embarque confirmado (ou atracacao/chegada).
+  it.each([
+    ['FCL', { category: 'FCL', canShowMaritimeFlow: true }],
+    ['AEREO', { category: 'AEREO', canShowAirFlow: true }],
+  ])('%s sem embarque e sem chegada: a secao DUIMP some', async (_label, { category, ...flags }) => {
+    const user = userEvent.setup()
+    renderForm({
+      ...flags,
+      draft: makeDraft({ category, berthed: false, arrived: false, shippedAt: '' }),
+    })
+    await openArrivalStep(user)
+    expect(screen.queryByText('Liberação (DUIMP)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nº da DUIMP')).not.toBeInTheDocument()
+    expect(screen.getByText('A DUIMP pode ser registrada após o embarque confirmado.')).toBeInTheDocument()
+  })
+
+  it('legado "Embarcou" sem shippedAt: a secao DUIMP some e o hint pede o embarque confirmado', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({ category: 'FCL', berthed: false, shippedAt: '', processStatus: 'Embarcou' }),
+    })
+    await openArrivalStep(user)
+    expect(screen.queryByText('Liberação (DUIMP)')).not.toBeInTheDocument()
+    expect(screen.getByText('A DUIMP pode ser registrada após o embarque confirmado.')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['FCL com embarque', { category: 'FCL', canShowMaritimeFlow: true }, { shippedAt: '2026-09-01' }],
+    ['AEREO com embarque', { category: 'AEREO', canShowAirFlow: true }, { shippedAt: '2026-09-01' }],
+    ['FCL atracado sem shippedAt', { category: 'FCL', canShowMaritimeFlow: true }, { berthedAt: '2026-09-10T08:00', berthed: true }],
+  ])('%s: a secao DUIMP aparece', async (_label, { category, ...flags }, extra) => {
+    const user = userEvent.setup()
+    renderForm({
+      ...flags,
+      draft: makeDraft({ category, berthed: false, arrived: false, shippedAt: '', ...extra }),
+    })
+    await openArrivalStep(user)
+    expect(screen.getByText('Liberação (DUIMP)')).toBeInTheDocument()
+  })
+
+  it('parametrizado + canal sem presenca NAO mostra "Desembaraço concluído em" e mostra o hint', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: false,
+        cargoPresenceInformed: false,
+        shippedAt: '2026-09-01',
+        duimpRegisteredAt: '2026-09-18T09:00',
+        parameterizedAt: '2026-09-19T10:00',
+        parameterizationChannel: 'Amarelo',
+      }),
+    })
+    await openArrivalStep(user)
+    expect(screen.getByText('Canal da parametrização')).toBeInTheDocument()
+    expect(screen.queryByText('Desembaraço concluído em')).not.toBeInTheDocument()
+    expect(screen.getByText('Desembaraço liberado após a presença de carga.')).toBeInTheDocument()
+    expect(screen.getByText('Exigência?')).toBeInTheDocument()
+  })
+
+  it('parametrizado + canal COM presenca mostra "Desembaraço concluído em" e esconde o hint', async () => {
+    const user = userEvent.setup()
+    renderForm({
+      canShowMaritimeFlow: true,
+      draft: makeDraft({
+        category: 'FCL',
+        berthed: true,
+        cargoPresenceInformed: true,
+        duimpRegisteredAt: '2026-09-18T09:00',
+        parameterizedAt: '2026-09-19T10:00',
+        parameterizationChannel: 'Amarelo',
+      }),
+    })
+    await openArrivalStep(user)
+    expect(screen.getByText('Desembaraço concluído em')).toBeInTheDocument()
+    expect(screen.queryByText('Desembaraço liberado após a presença de carga.')).not.toBeInTheDocument()
+  })
+
   it('Parametrização (data e hora) so aparece com sinal de registro', async () => {
     const user = userEvent.setup()
     renderForm({
