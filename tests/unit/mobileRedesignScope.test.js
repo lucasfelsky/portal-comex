@@ -377,3 +377,42 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     }
   })
 })
+
+// Chip "+N" de alertas (ProcessListView): escondido no desktop/tablet, so
+// aparece em <= 720px. `.process-item__main span { display: block }` (0,1,1)
+// vencia o seletor solto `.inline-badge--more` (0,1,0) e o "+N" vazava no
+// desktop. A regra base precisa de especificidade >= (0,2,0), abaixo da regra
+// mobile (0,3,0).
+describe('styles.css - chip "+N" dos alertas (inline-badge--more)', () => {
+  const stylesCss = stripComments(fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8'))
+  const stylesTop = readBlocks(stylesCss).blocks.map((block) => ({
+    prelude: normalizePrelude(block.prelude),
+    body: block.body,
+  }))
+  const displayOf = (body) => /(?:^|[;\s])display\s*:\s*([^;]+?)\s*(?:;|$)/.exec(body)?.[1]
+
+  it('regra base esconde o "+N" com seletor de especificidade (0,2,0)', () => {
+    const base = stylesTop.filter((block) => block.prelude === '.process-item__chips .inline-badge--more')
+    expect(base).toHaveLength(1)
+    expect(displayOf(base[0].body)).toBe('none')
+    // Nenhuma regra solta `.inline-badge--more` (0,1,0) no nivel zero.
+    expect(stylesTop.some((block) => block.prelude === '.inline-badge--more')).toBe(false)
+  })
+
+  it('em <= 720px a regra mobile (0,3,0) reativa o "+N" e vence a base', () => {
+    const media = stylesTop.find((block) => block.prelude === '@media (max-width: 720px)' && block.body.includes('.inline-badge--more'))
+    expect(media).toBeDefined()
+    const rule = readBlocks(media.body).blocks.find(
+      (block) => normalizePrelude(block.prelude) === '.process-list-card .process-item__chips .inline-badge--more'
+    )
+    expect(rule).toBeDefined()
+    expect(displayOf(rule.body)).toBe('inline-flex')
+  })
+
+  it('mobile-redesign.css nao reabre o "+N" no tablet/desktop', () => {
+    const outsideMobile = allRules.filter(
+      (rule) => rule.media !== '@media (max-width: 720px)' && rule.selector.includes('inline-badge--more')
+    )
+    expect(outsideMobile).toEqual([])
+  })
+})

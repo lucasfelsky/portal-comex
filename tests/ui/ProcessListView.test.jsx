@@ -433,6 +433,99 @@ describe('ProcessListView — badge "Carga perigosa" (F17.2d-1)', () => {
   })
 })
 
+// Tag "Carga inflamavel" (classes IMDG 2.1/3/4.1), derivada na leitura.
+// Quando o processo e' inflamavel, "Carga inflamável" tem prioridade sobre
+// "Carga perigosa" (que fica redundante e vai depois de "Dados pendentes").
+describe('ProcessListView — badge "Carga inflamável"', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  const alertLabels = (container) =>
+    [...container.querySelectorAll('.process-item__chips .inline-badge')]
+      .map((el) => el.textContent)
+      .filter((text) => /^(Anuência|Carga |Dados pendentes|\+\d)/.test(text))
+
+  const withItem = (dangerous) => ({
+    ...PROCESSES[0],
+    items: [{ id: 'i1', commercialName: 'Solvente', quantity: 1, dangerousGoods: true, ...dangerous }],
+  })
+
+  it('item perigoso classe 3: mostra "Carga inflamável" (danger) e "Carga perigosa"', () => {
+    renderView({ filteredProcesses: [withItem({ imoClass: '3' })] })
+    expect(screen.getByText('Carga perigosa')).toBeInTheDocument()
+    expect(screen.getByText('Carga inflamável')).toHaveClass('inline-badge--danger')
+  })
+
+  it('inflamável sem pendentes: "Carga inflamável" antes de "Carga perigosa"', () => {
+    const { container } = renderView({ filteredProcesses: [withItem({ imoClass: '3' })] })
+    expect(alertLabels(container)).toEqual(['Carga inflamável', 'Carga perigosa'])
+  })
+
+  it('inflamável + pendentes (admin): inflamável, pendentes, depois "Carga perigosa" (overflow)', () => {
+    const { container } = renderView({ isAdmin: true, filteredProcesses: [withItem({ imoClass: '3' })] })
+    const labels = alertLabels(container)
+    expect(labels).toHaveLength(4)
+    expect(labels[0]).toBe('Carga inflamável')
+    expect(labels[1]).toMatch(/^Dados pendentes \(\d+\)$/)
+    expect(labels[2]).toBe('Carga perigosa')
+    expect(labels[3]).toBe('+1')
+
+    // Mobile: so' os 2 primeiros visiveis; "Carga perigosa" cai no "+1".
+    const chips = container.querySelector('.process-item__chips')
+    expect(within(chips).getByText('Carga inflamável')).not.toHaveClass('inline-badge--overflow')
+    expect(within(chips).getByText(/^Dados pendentes/)).not.toHaveClass('inline-badge--overflow')
+    expect(within(chips).getByText('Carga perigosa')).toHaveClass('inline-badge--overflow')
+  })
+
+  it('perigosa NÃO inflamável + pendentes (admin): "Carga perigosa" antes de pendentes, como antes', () => {
+    const { container } = renderView({ isAdmin: true, filteredProcesses: [withItem({ imoClass: '8' })] })
+    const labels = alertLabels(container)
+    expect(labels).toHaveLength(2)
+    expect(labels[0]).toBe('Carga perigosa')
+    expect(labels[1]).toMatch(/^Dados pendentes/)
+    expect(screen.queryByText('Carga inflamável')).not.toBeInTheDocument()
+  })
+
+  it('Anuência indeferida continua em primeiro, antes de "Carga inflamável"', () => {
+    const { container } = renderView({
+      isAdmin: true,
+      filteredProcesses: [
+        { ...withItem({ imoClass: '3' }), licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }] },
+      ],
+    })
+    const labels = alertLabels(container)
+    expect(labels.slice(0, 2)).toEqual(['Anuência indeferida', 'Carga inflamável'])
+    expect(labels[2]).toMatch(/^Dados pendentes/)
+    expect(labels[3]).toBe('Carga perigosa')
+  })
+
+  it('item perigoso classe 8: mostra só "Carga perigosa"', () => {
+    renderView({
+      filteredProcesses: [
+        {
+          ...PROCESSES[0],
+          items: [{ id: 'i1', commercialName: 'Acido', quantity: 1, dangerousGoods: true, imoClass: '8' }],
+        },
+      ],
+    })
+    expect(screen.getByText('Carga perigosa')).toBeInTheDocument()
+    expect(screen.queryByText('Carga inflamável')).not.toBeInTheDocument()
+  })
+
+  it('processo sem itens perigosos: nenhum dos dois chips', () => {
+    renderView({ filteredProcesses: [PROCESSES[0]] })
+    expect(screen.queryByText('Carga perigosa')).not.toBeInTheDocument()
+    expect(screen.queryByText('Carga inflamável')).not.toBeInTheDocument()
+  })
+
+  it('legado (flag + classe 3 no processo, sem itens): mostra os dois chips', () => {
+    renderView({
+      filteredProcesses: [{ ...PROCESSES[0], dangerousGoods: true, imoClass: '3', items: [] }],
+    })
+    expect(screen.getByText('Carga perigosa')).toBeInTheDocument()
+    expect(screen.getByText('Carga inflamável')).toBeInTheDocument()
+  })
+})
+
 // F17.2d-2 (Q6/Q1): card CONSOLIDADO com POs objeto so mostra os numeros
 // (getProcessSubtitle -> formatPurchaseOrdersSummary) - referencia/fornecedor
 // nunca aparecem no card, admin ou nao.

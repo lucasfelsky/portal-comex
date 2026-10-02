@@ -3133,8 +3133,9 @@ body {
 
 /* UX-6a (item 1, D7): "+N" de alertas cortados no card mobile. Escondido
    por padrao (desktop mostra todos os alertas); o @media (max-width:720px)
-   reativa. */
-.inline-badge--more {
+   reativa. Especificidade (0,2,0): `.process-item__main span { display: block }`
+   (0,1,1) vencia o `.inline-badge--more` solto e o "+N" aparecia no desktop. */
+.process-item__chips .inline-badge--more {
   display: none;
 }
 

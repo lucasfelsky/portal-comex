@@ -17,7 +17,7 @@ import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { getPendingFields } from './pendingFields'
 import { getContainerSpecialBadges } from './containers'
 import { hasRejectedLicense } from './licenses'
-import { hasDangerousGoods } from './operationalOptions'
+import { hasDangerousGoods, hasFlammableGoods } from './operationalOptions'
 import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
 
 const getDestinationLabel = (category) =>
@@ -69,13 +69,18 @@ function ProcessRow({
   // D-E: pendencias so aparecem pro admin (compras/preenche tudo).
   const pendingFields = isAdmin ? getPendingFields(item) : []
   // UX-6a (item 1, D7): ordem de severidade — Anuência indeferida > Carga
-  // perigosa > Dados pendentes > especiais de conteiner. No mobile so' os 2
-  // primeiros ficam visiveis + "+N"; no desktop TODOS continuam visiveis
-  // (CSS-only via .inline-badge--overflow/--more).
+  // inflamável > Carga perigosa (só se NÃO inflamável) > Dados pendentes >
+  // Carga perigosa (redundante, quando também é inflamável) > especiais de
+  // conteiner. No mobile so' os 2 primeiros ficam visiveis + "+N"; no desktop
+  // TODOS continuam visiveis (CSS-only via .inline-badge--overflow/--more).
+  const isFlammable = hasFlammableGoods(item)
+  const isDangerous = hasDangerousGoods(item)
   const alerts = [
     hasRejectedLicense(item) && { label: 'Anuência indeferida', tone: 'danger' },
-    hasDangerousGoods(item) && { label: 'Carga perigosa', tone: 'warn' },
+    isFlammable && { label: 'Carga inflamável', tone: 'danger' },
+    isDangerous && !isFlammable && { label: 'Carga perigosa', tone: 'warn' },
     pendingFields.length > 0 && { label: `Dados pendentes (${pendingFields.length})`, tone: 'warn' },
+    isDangerous && isFlammable && { label: 'Carga perigosa', tone: 'warn' },
     ...getContainerSpecialBadges(item.containers).map((badge) => ({ label: badge, tone: 'warn' })),
   ].filter(Boolean)
 
