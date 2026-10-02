@@ -100,6 +100,17 @@ export function hasFlammableGoods(process) {
   return isLegacyProcessDangerousGoods(process) && FLAMMABLE_IMO_CLASSES.has(process?.imoClass)
 }
 
+// Selos de carga para cards compactos (Dashboard). Ordem fixa: inflamavel > perigosa.
+// A lista de Chegadas (ProcessListView) mantem a propria ordem, com "Dados pendentes" no meio.
+export function getCargoHazardBadges(process) {
+  const isFlammable = hasFlammableGoods(process)
+  const isDangerous = hasDangerousGoods(process)
+  return [
+    isFlammable && { label: 'Carga inflamável', tone: 'danger' },
+    isDangerous && { label: 'Carga perigosa', tone: 'warn' },
+  ].filter(Boolean)
+}
+
 // D-5: deriva a flag/trio de processo a partir dos itens (na escrita).
 // Algum item perigoso -> flag deriva dos itens (trio de processo zerado).
 // Nenhum item perigoso, mas o processo TINHA item perigoso antes (a flag

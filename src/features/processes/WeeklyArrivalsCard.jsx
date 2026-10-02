@@ -12,6 +12,7 @@ import {
   getScheduledCollectionDeliveryShift,
 } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
+import { getCargoHazardBadges } from './operationalOptions'
 
 // PR #13 (2026-07-09): helper pra extrair YYYY-MM-DD em local
 // time (nao UTC). `Date.toISOString().slice(0, 10)` sempre usa
@@ -197,6 +198,7 @@ function UnscheduledItem({ process, estimatedDelivery, canSeeName, onSelectProce
   // estranho quando o processo ja' estava em transito (a caminho
   // do CD) ou em processamento no CD.
   const statusLabel = getUnscheduledItemLabel(process)
+  const hazardBadges = getCargoHazardBadges(process)
   return (
     <div
       key={process.id}
@@ -217,6 +219,13 @@ function UnscheduledItem({ process, estimatedDelivery, canSeeName, onSelectProce
           <p>{getProcessSubtitle(process, canSeeName)}</p>
         ) : null}
         <div className="process-item__line">{process.category}</div>
+        {hazardBadges.length > 0 ? (
+          <div className="process-item__chips">
+            {hazardBadges.map((badge) => (
+              <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
+            ))}
+          </div>
+        ) : null}
         {/*
           PR #12 (2026-07-09): badge "Carga a caminho do CD" removida
           do card "Previsao de entrega no armazem" (UnscheduledItem).
@@ -268,6 +277,9 @@ function ScheduledItem({ process, windows, canSeeName, onSelectProcess }) {
         <div className="process-item__line">{process.category}</div>
         <div className="process-item__chips">
           <ProcessDerivedStatusBadge process={process} />
+          {getCargoHazardBadges(process).map((badge) => (
+            <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
+          ))}
         </div>
 
         <ul className="weekly-arrivals-windows">
