@@ -12,6 +12,8 @@ import ProcessForm from '../features/processes/ProcessForm'
 import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import ProcessListView from '../features/processes/ProcessListView'
 import ImportProcessesModal from '../features/processes/ImportProcessesModal'
+import ErpReconcileModal from '../features/erp/ErpReconcileModal'
+import { dbcorpXlsxSource } from '../features/erp/readDbcorpWorkbook'
 import Spinner from '../components/Spinner'
 import { setActiveProcess } from '../utils/activeProcessContext'
 import {
@@ -96,6 +98,10 @@ import {
 import { buildActionErrorMessage } from '../utils/errorMessages'
 import { useUnsavedChanges, useUnsavedChangesGuard } from '../contexts/UnsavedChangesContext'
 import { areProcessDraftsEquivalent } from '../features/processes/processDraftDirty'
+
+// Conciliacao ERP (F1, somente leitura): fontes injetadas no modal. A API do
+// DBCorp (F5) entra aqui como mais um objeto `ErpSource`.
+const ERP_SOURCES = [dbcorpXlsxSource]
 
 const emptyDraft = () => ({
   id: '',
@@ -561,6 +567,7 @@ export default function ProcessesPage() {
   const [etaEndDate, setEtaEndDate] = useState('')
   const [operationFilter, setOperationFilter] = useState('Todos')
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isErpReconcileOpen, setIsErpReconcileOpen] = useState(false)
 
   // F11: nºs de processo já existentes, pra o import marcar duplicatas sem
   // uma query extra (os processos já estão carregados em memória).
@@ -1616,6 +1623,7 @@ export default function ProcessesPage() {
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onNewProcess={isAdmin ? handleCreateMode : undefined}
           onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
+          onReconcileErp={isAdmin ? () => setIsErpReconcileOpen(true) : undefined}
           onExport={async () => {
             setIsExporting(true)
             try {
@@ -1639,6 +1647,15 @@ export default function ProcessesPage() {
           onClose={() => setIsImportOpen(false)}
           existingProcessNumbers={existingProcessNumbers}
           onConfirm={handleImportProcesses}
+        />
+      ) : null}
+
+      {isAdmin ? (
+        <ErpReconcileModal
+          open={isErpReconcileOpen}
+          onClose={() => setIsErpReconcileOpen(false)}
+          processes={processes}
+          sources={ERP_SOURCES}
         />
       ) : null}
 

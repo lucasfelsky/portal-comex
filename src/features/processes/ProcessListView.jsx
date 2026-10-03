@@ -282,6 +282,7 @@ export default function ProcessListView({
   onSelectProcess,
   onExport,
   onImport,
+  onReconcileErp,
   favoriteProcessIds,
   onToggleFavorite,
   archivedProcesses = [],
@@ -403,6 +404,17 @@ export default function ProcessListView({
                 onClick={onImport}
               >
                 Importar
+              </button>
+            ) : null}
+            {isAdmin && onReconcileErp ? (
+              <button
+                type="button"
+                className="ghost-button erp-reconcile-trigger"
+                disabled={isLoading}
+                title="Comparar a planilha do DBCorp com os processos carregados (não grava nada)"
+                onClick={onReconcileErp}
+              >
+                Conciliar com ERP
               </button>
             ) : null}
             <button
