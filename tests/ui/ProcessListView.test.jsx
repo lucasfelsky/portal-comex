@@ -699,6 +699,14 @@ describe('ProcessListView — botão "Importar do DBCorp" (F1 + PR 3, somente ad
     expect(screen.queryByRole('button', { name: 'Importar do DBCorp' })).not.toBeInTheDocument()
   })
 
+  it('é o único botão de importar: o "Importar" antigo (processos em lote) saiu da toolbar, mesmo com onImport', () => {
+    const { container } = renderView({ isAdmin: true, onReconcileErp: vi.fn(), onImport: vi.fn() })
+    const importButtons = screen.getAllByRole('button', { name: /^Importar/ })
+    expect(importButtons.map((button) => button.textContent)).toEqual(['Importar do DBCorp'])
+    expect(screen.queryByRole('button', { name: 'Importar' })).not.toBeInTheDocument()
+    expect(container.querySelector('[title="Criar processos em lote a partir de uma planilha"]')).toBeNull()
+  })
+
   it('o clique chama o callback', async () => {
     const user = userEvent.setup()
     const onReconcileErp = vi.fn()

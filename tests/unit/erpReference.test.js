@@ -288,6 +288,74 @@ describe('diffProcessAgainstReference - paridade com a conciliacao', () => {
   })
 })
 
+// Embarque nao consolidado com incoterm ou dica de origem diferentes entre as
+// linhas: conflito (slot vazio), nunca "o primeiro em ordem de texto".
+describe('incoterm e dica de origem em conflito (referencia e aviso)', () => {
+  const rowsOf = (refs) =>
+    refs.map((ref, index) =>
+      makeLooseRow({ itemId: `X-${index}`, pedido: 9036, poRef: 'BETA SEA 904-26', refEmbarque: ref })
+    )
+
+  it('FOB e CFR na mesma PO: o recorte leva o conflito com o slot vazio, o diff ao vivo bate com a conciliacao e o chip nao acende', () => {
+    const rows = rowsOf(['FCL - FOB HAMBURG', 'FCL - CFR HAMBURG'])
+    for (const incoterm of ['', 'FOB', 'CFR', 'CIF']) {
+      const process = portal({ incoterm })
+      const entry = entryOf(run({ rows, processes: [process] }), 'p-1')
+      expect(entry.referenceShipment.incoterm, incoterm).toBe('')
+      expect(entry.referenceShipment.conflicts, incoterm).toEqual([{ field: 'incoterm', values: ['CFR', 'FOB'] }])
+      const live = diffProcessAgainstReference(process, hintOf(entry.referenceShipment, entry.matchRule))
+      expect(live, incoterm).toEqual(entry.diffs)
+      expect(live.filter((diff) => diff.field === 'incoterm').map((diff) => diff.kind), incoterm).toEqual(['erp_conflito'])
+      expect(hintsFor(process, entry.referenceShipment, entry.matchRule).fields.incoterm, incoterm).toBeUndefined()
+    }
+  })
+
+  it('o conflito atravessa o payload e o JSON do Firestore: mesmas 12 chaves, dentro do teto de conflitos, e o mesmo diff', () => {
+    const process = portal({ incoterm: '' })
+    const entry = entryOf(run({ rows: rowsOf(['FCL - FOB HAMBURG', 'FCL - CFR HAMBURG']), processes: [process] }), 'p-1')
+    const payload = buildErpReferencePayload({
+      blocked: null,
+      sourceInfo: { source: 's', label: 'l', fileName: 'x.xlsx', fetchedAt: '', rowCount: 2, generatedOn: '2026-10-02' },
+      summary: { erpRows: 2, shipments: 1, activeShipments: 1, matched: 1, matchedArchived: 0, matchedWithDiffs: 1 },
+      matched: [entry],
+    })
+    expect(payload.skipped).toEqual([])
+    expect(payload.hints).toHaveLength(1)
+    const stored = JSON.parse(JSON.stringify(payload.hints[0].shipment))
+    expect(Object.keys(stored).sort()).toEqual(RECORTE_KEYS)
+    expect(stored.incoterm).toBe('')
+    expect(stored.conflicts).toEqual([{ field: 'incoterm', values: ['CFR', 'FOB'] }])
+    expect(stored.conflicts.length).toBeLessThanOrEqual(ERP_HINT_LIMITS.maxConflicts)
+    expect(toErpReferenceShipment(stored)).toEqual(stored)
+    expect(diffProcessAgainstReference(process, hintOf(stored))).toEqual(entry.diffs)
+  })
+
+  it('dica de origem diferente (FOB HAMBURG e FOB SANTOS): erp_conflito na origem e nenhum aviso de Origem, com Portal vazio, igual ou diferente', () => {
+    const rows = rowsOf(['FCL - FOB HAMBURG', 'FCL - FOB SANTOS'])
+    for (const originLocation of ['', 'HAMBURG', 'ROTTERDAM']) {
+      const process = portal({ originLocation })
+      const entry = entryOf(run({ rows, processes: [process] }), 'p-1')
+      expect(entry.referenceShipment.originHint, originLocation).toBe('')
+      expect(entry.referenceShipment.conflicts, originLocation).toEqual([{ field: 'originHint', values: ['HAMBURG', 'SANTOS'] }])
+      const live = diffProcessAgainstReference(process, hintOf(entry.referenceShipment, entry.matchRule))
+      expect(live, originLocation).toEqual(entry.diffs)
+      expect(live.filter((diff) => diff.field === 'origin').map((diff) => diff.kind), originLocation).toEqual(['erp_conflito'])
+      expect(hintsFor(process, entry.referenceShipment, entry.matchRule).fields.origin, originLocation).toBeUndefined()
+    }
+  })
+
+  it('controle: incoterm e dica iguais nas linhas continuam acendendo o aviso quando o Portal diverge', () => {
+    const rows = rowsOf(['FCL - FOB HAMBURG', 'FCL - FOB HAMBURG'])
+    const process = portal({ incoterm: 'CIF' })
+    const entry = entryOf(run({ rows, processes: [process] }), 'p-1')
+    expect(entry.referenceShipment).toMatchObject({ incoterm: 'FOB', originHint: 'HAMBURG', conflicts: [] })
+    expect(hintsFor(process, entry.referenceShipment, entry.matchRule).fields.incoterm).toMatchObject({
+      kind: 'divergente',
+      ariaLabel: 'Incoterm no ERP: FOB',
+    })
+  })
+})
+
 describe('scope dos diffs (chaves ja calculadas pelo nucleo)', () => {
   const conRows = [
     makeLooseRow({
@@ -514,8 +582,17 @@ describe('paridade das rules do Firestore com o cliente', () => {
     expect(new Set(literals)).toEqual(new Set(ERP_MATCH_RULES))
   })
 
-  it('os conflitos permitidos na rule do hint sao os 8 que os comparadores leem', () => {
-    expect(ERP_REFERENCE_CONFLICT_FIELDS).toEqual(['etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate'])
+  it('os conflitos do recorte sao os 8 de transporte que os comparadores leem + incoterm e originHint; a rule so limita o tamanho da lista', () => {
+    expect(ERP_REFERENCE_CONFLICT_FIELDS).toEqual([
+      'etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate', 'incoterm', 'originHint',
+    ])
+    // Cabe no teto de 20 da rule, mesmo com todos os conflitos ao mesmo tempo.
+    expect(ERP_REFERENCE_CONFLICT_FIELDS.length).toBeLessThanOrEqual(ERP_HINT_LIMITS.maxConflicts)
+    // A rule nao enumera campo de conflito (sem laco): so `is list` + teto. Qualquer
+    // campo do recorte passa; o filtro e' do cliente (toErpReferenceShipment).
+    expect(rules).toMatch(/shipment\.conflicts is list/)
+    expect(rules).not.toMatch(/shipment\.conflicts\[/)
+    expect(rules).not.toMatch(/conflicts\.hasOnly|conflicts\.hasAny/)
   })
 })
 

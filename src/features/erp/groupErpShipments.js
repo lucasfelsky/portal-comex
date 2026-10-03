@@ -121,6 +121,19 @@ function buildTransport(rows) {
   }
 }
 
+// Incoterm e dica de origem do embarque (slots da REF). Fora do CONSOLIDADO,
+// linhas do mesmo embarque com valores diferentes sao CONFLITO (como os campos de
+// transporte): o slot fica vazio e o conflito vai para `conflicts`, em vez de
+// escolher o primeiro valor em ordem de texto (que acenderia um aviso errado).
+// No CONSOLIDADO cada PO pode ter o seu incoterm/origem e o nucleo nao compara o
+// incoterm, entao la' vale o menor valor, como antes.
+function resolveShipmentSlot(kind, rows, field, conflicts) {
+  if (kind === 'CONSOLIDADO') return sortedUnique(rows.map((row) => row[field]))[0] ?? ''
+  const { value, conflict } = resolveField(rows, (row) => ({ norm: foldText(row[field]), raw: cleanCell(row[field]) }))
+  if (conflict) conflicts.push({ field, values: conflict })
+  return value
+}
+
 function buildOrders(rows) {
   const byKey = new Map()
   for (const row of rows) {
@@ -189,6 +202,8 @@ function buildShipment(kind, key, rows, warnings) {
   }
 
   const { transport, conflicts } = buildTransport(rows)
+  const incoterm = resolveShipmentSlot(kind, rows, 'incoterm', conflicts)
+  const originHint = resolveShipmentSlot(kind, rows, 'originHint', conflicts)
   for (const conflict of conflicts) {
     warnings.push(
       makeErpWarning(
@@ -248,8 +263,8 @@ function buildShipment(kind, key, rows, warnings) {
     key,
     kind,
     portalCategory: PORTAL_CATEGORY_BY_KIND[kind] ?? null,
-    incoterm: sortedUnique(rows.map((row) => row.incoterm))[0] ?? '',
-    originHint: sortedUnique(rows.map((row) => row.originHint))[0] ?? '',
+    incoterm,
+    originHint,
     statuses: sortedUnique(rows.map((row) => cleanCell(row.status))),
     statusNf: sortedUnique(rows.map((row) => cleanCell(row.statusNf))),
     stage,

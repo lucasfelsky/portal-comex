@@ -11,7 +11,6 @@ import ProcessDetailView from '../features/processes/ProcessDetailView'
 import ProcessForm from '../features/processes/ProcessForm'
 import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import ProcessListView from '../features/processes/ProcessListView'
-import ImportProcessesModal from '../features/processes/ImportProcessesModal'
 import ErpReconcileModal from '../features/erp/ErpReconcileModal'
 import { dbcorpXlsxSource } from '../features/erp/readDbcorpWorkbook'
 import { loadErpReference, saveErpReferenceSnapshot } from '../services/erpReferenceRepository'
@@ -567,7 +566,6 @@ export default function ProcessesPage() {
   const [etaStartDate, setEtaStartDate] = useState('')
   const [etaEndDate, setEtaEndDate] = useState('')
   const [operationFilter, setOperationFilter] = useState('Todos')
-  const [isImportOpen, setIsImportOpen] = useState(false)
   const [isErpReconcileOpen, setIsErpReconcileOpen] = useState(false)
   // PR 3 (Importar do DBCorp): referencia do ERP, so' admin. Lida de uma vez
   // (`latest` + hints do mesmo snapshot) e trocada pelo retorno do save. A trava
@@ -577,13 +575,6 @@ export default function ProcessesPage() {
   const erpSaveInFlightRef = useRef(false)
   const erpReferenceSeqRef = useRef(0)
   const isPageMountedRef = useRef(true)
-
-  // F11: nºs de processo já existentes, pra o import marcar duplicatas sem
-  // uma query extra (os processos já estão carregados em memória).
-  const existingProcessNumbers = useMemo(
-    () => new Set(processes.map((item) => item.processNumber).filter(Boolean)),
-    [processes]
-  )
 
   // Filtros ativos: usado pra renderizar pills de filtros com X
   const hasActiveFilters =
@@ -1290,36 +1281,27 @@ export default function ProcessesPage() {
     }
   }
 
-  // F11: cria em lote as linhas válidas (já sem duplicatas) vindas do
-  // ImportProcessesModal. Cada linha vira um processo novo via saveProcess
-  // (sem id → cria), preenchendo updatedById/Name a partir do profile. Erros
-  // por linha são coletados sem abortar o lote; ao fim, refresh + toast.
-  async function handleImportProcesses(rows) {
-    if (!isAdmin) return
-    let created = 0
-    const failures = []
-    for (const row of rows) {
-      try {
-        await saveProcess(row, profile)
-        created += 1
-      } catch (importError) {
-        failures.push({ name: row.name, error: importError })
-      }
+  // Falha do save (lote parcial ou conferencia pos-save acusando incompleto): a
+  // referencia em memoria nao e' mais confiavel (hints antigos podem ter sido
+  // sobrescritos). Por isso recarrega do servidor (`loadErpReference` ja aplica a
+  // checagem de completude); se a releitura tambem falhar, limpa a referencia
+  // (sem chips) e avisa. O seq NAO volta atras: uma leitura que estava em voo
+  // antes do save pode ter lido o estado de antes das gravacoes e e' descartada.
+  async function reloadErpReferenceAfterFailedSave(seq) {
+    let reloaded = null
+    let reloadFailed = false
+    try {
+      reloaded = await loadErpReference()
+    } catch (reloadError) {
+      reloadFailed = true
+      console.warn('Não foi possível recarregar a referência do ERP depois da falha ao salvar.', reloadError)
     }
-
-    await refreshProcesses(selectedProcessId)
-
-    if (created > 0) {
-      toast.success(`Importado${created === 1 ? '' : 's'} ${created} processo${created === 1 ? '' : 's'}.`)
-    }
-    if (failures.length > 0) {
-      console.error('Falha ao importar processos.', failures)
-      toast.error(
-        `${failures.length} processo${failures.length === 1 ? '' : 's'} não pôde${failures.length === 1 ? '' : 'ram'} ser criado${failures.length === 1 ? '' : 's'}.`
+    if (!isPageMountedRef.current || erpReferenceSeqRef.current !== seq) return
+    setErpReference(reloadFailed ? null : reloaded)
+    if (reloadFailed) {
+      toast.warning(
+        'Não foi possível confirmar a referência do ERP depois da falha ao salvar. Os avisos "ERP" foram ocultados: recarregue a página ou importe a planilha de novo.'
       )
-    }
-    if (created === 0 && failures.length === 0) {
-      toast.info('Nenhum processo novo para importar.')
     }
   }
 
@@ -1342,8 +1324,7 @@ export default function ProcessesPage() {
       if (isPageMountedRef.current && erpReferenceSeqRef.current === seq) setErpReference(saved.reference)
       return saved
     } catch (saveError) {
-      // Falha: devolve o seq para uma leitura que ja estava em voo continuar valendo.
-      if (erpReferenceSeqRef.current === seq) erpReferenceSeqRef.current = seq - 1
+      await reloadErpReferenceAfterFailedSave(seq)
       throw saveError
     } finally {
       erpSaveInFlightRef.current = false
@@ -1702,7 +1683,6 @@ export default function ProcessesPage() {
           archivedProcesses={archivedProcesses}
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onNewProcess={isAdmin ? handleCreateMode : undefined}
-          onImport={isAdmin ? () => setIsImportOpen(true) : undefined}
           onReconcileErp={isAdmin ? () => setIsErpReconcileOpen(true) : undefined}
           onExport={async () => {
             setIsExporting(true)
@@ -1718,15 +1698,6 @@ export default function ProcessesPage() {
               setIsExporting(false)
             }
           }}
-        />
-      ) : null}
-
-      {isAdmin ? (
-        <ImportProcessesModal
-          open={isImportOpen}
-          onClose={() => setIsImportOpen(false)}
-          existingProcessNumbers={existingProcessNumbers}
-          onConfirm={handleImportProcesses}
         />
       ) : null}
 

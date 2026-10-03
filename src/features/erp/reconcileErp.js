@@ -170,7 +170,12 @@ export const ERP_MATCH_RULES = ['pedido', 'po', 'po-base', 'consolidado:ref', 'c
 
 // Conflitos internos do ERP que os comparadores leem. Os de `tracking` e
 // `etaFinal` (que `groupErpShipments` tambem gera) nao entram na referencia.
-export const ERP_REFERENCE_CONFLICT_FIELDS = ['etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate']
+// `incoterm` e `originHint` (embarque nao consolidado com valores diferentes nas
+// linhas) entram: sem eles o hint gravado teria o slot vazio e pareceria "sem dado
+// no ERP", em vez de "conflito". A rule so' limita o tamanho da lista (<= 20).
+export const ERP_REFERENCE_CONFLICT_FIELDS = [
+  'etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate', 'incoterm', 'originHint',
+]
 
 const RECENT_RECEIPT_DAYS = 7
 
@@ -473,7 +478,13 @@ function compareVessel(makeDiff, p, shipment) {
 
 function compareOrigin(makeDiff, p, shipment) {
   const portalOrigin = cleanCell(p.originLocation)
-  const conflict = findConflict(shipment, 'origin')
+  // Conflito na coluna de origem OU na dica da REF (linhas do mesmo embarque com
+  // dicas diferentes: o slot `originHint` fica vazio). Sem valor unico do ERP,
+  // so' `erp_conflito`: nunca `divergente` nem `portal_sem_dado`.
+  const hintConflict = findConflict(shipment, 'originHint')
+  const conflict =
+    findConflict(shipment, 'origin') ??
+    (hintConflict ? uniqueText([shipment.transport.origin, ...hintConflict]) : null)
   const candidates = conflict ?? uniqueText([shipment.transport.origin, shipment.originHint])
   const portalFields = ['originLocation']
   if (candidates.length === 0) {
@@ -937,7 +948,8 @@ function compareProcess(makeDiff, p, shipment, { matchRule, categoryMismatch, ca
   push(compareOrigin(makeDiff, p, shipment))
   if (shipment.kind !== 'CONSOLIDADO' && !isConsolidated) {
     push(scalarDiff(makeDiff, shipment, {
-      field: 'incoterm', portalFields: ['incoterm'], portalValue: p.incoterm, erpValue: shipment.incoterm, normalize: foldText,
+      field: 'incoterm', conflictField: 'incoterm', portalFields: ['incoterm'], portalValue: p.incoterm,
+      erpValue: shipment.incoterm, normalize: foldText,
     }))
   }
   push(compareBl(makeDiff, p, shipment))

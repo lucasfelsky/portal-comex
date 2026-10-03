@@ -3992,6 +3992,19 @@ describeEmulator('firestore.rules (emulador)', () => {
       }
     })
 
+    it('erp-rules: conflitos de incoterm e originHint (slot vazio no recorte) passam; a rule so limita a lista (o filtro de campo e do cliente)', async () => {
+      const conflicts = [
+        { field: 'incoterm', values: ['CFR', 'FOB'] },
+        { field: 'originHint', values: ['HAMBURG', 'SANTOS'] },
+      ]
+      await assertSucceeds(
+        setDoc(
+          doc(admin(), 'erpProcessHints/p-conflito'),
+          validHint(SNAP, { shipment: validShipment({ incoterm: '', originHint: '', conflicts }) })
+        )
+      )
+    })
+
     it('erp-rules: meta com createdById de outro uid e com createdAt literal sao negados', async () => {
       await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { createdById: 'outro-uid' })))
       await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { createdAt: new Date() })))

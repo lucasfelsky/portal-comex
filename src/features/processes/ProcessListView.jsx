@@ -281,7 +281,6 @@ export default function ProcessListView({
   onClearAllFilters,
   onSelectProcess,
   onExport,
-  onImport,
   onReconcileErp,
   favoriteProcessIds,
   onToggleFavorite,
@@ -396,16 +395,6 @@ export default function ProcessListView({
             </button>
           ) : null}
           <div className="secondary-row">
-            {isAdmin && onImport ? (
-              <button
-                type="button"
-                className="ghost-button"
-                title="Criar processos em lote a partir de uma planilha"
-                onClick={onImport}
-              >
-                Importar
-              </button>
-            ) : null}
             {isAdmin && onReconcileErp ? (
               <button
                 type="button"
