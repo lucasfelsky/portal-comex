@@ -1,6 +1,6 @@
 // Conciliacao ERP (DBCorp) x Portal - F1: texto, colunas, parser, normalizacao e
 // adaptador .xlsx. Fixtures 100% sinteticas (tests/fixtures/erp).
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 import {
   INCOTERMS,
@@ -702,6 +702,19 @@ function buildStoredZip(entries, { withEnd = true } = {}) {
   return zip
 }
 
+// Sobrescreve o `<dimension ref="...">` da aba de um .xlsx gerado por `makeXlsx`
+// (o `XLSX.write` grava sem compressao, entao o XML esta' legivel; o CRC nao e'
+// conferido na leitura). `ref = null` apaga a tag. Mesmo tamanho em bytes.
+function patchSheetDimension(buffer, ref) {
+  let text = ''
+  for (const byte of new Uint8Array(buffer)) text += String.fromCharCode(byte)
+  const tag = text.match(/<dimension ref="[^"]*"\/>/)
+  if (!tag) throw new Error('<dimension> nao encontrada no .xlsx de teste')
+  const replacement = (ref === null ? '' : `<dimension ref="${ref}"/>`).padEnd(tag[0].length, ' ')
+  if (replacement.length !== tag[0].length) throw new Error('dimensao nova maior que a original')
+  return Uint8Array.from(text.replace(tag[0], () => replacement), (char) => char.charCodeAt(0))
+}
+
 describe('readDbcorpWorkbook (xlsx real)', () => {
   const baseMatrix = () =>
     looseRowsToMatrix([
@@ -804,6 +817,213 @@ describe('readDbcorpWorkbook (xlsx real)', () => {
       maxRows: 10,
     })
     expect(inside.rows).toHaveLength(4)
+  })
+
+  // caso-real: CR-45. Com `maxRows:10` a janela lida e' de 16 linhas fisicas
+  // (indices 0 a 15). O que importa e' nao existir linha preenchida DEPOIS dela,
+  // e nao o conteudo da ultima linha da janela.
+  const LIMIT_10 = 'A planilha passa de 10 linhas; exporte um recorte menor.'
+  const bodyRowOf = (itemId) => looseRowsToMatrix([makeLooseRow({ itemId })])[1]
+  const headAndThree = () =>
+    looseRowsToMatrix([
+      makeLooseRow({ itemId: 'B-1' }),
+      makeLooseRow({ itemId: 'B-2' }),
+      makeLooseRow({ itemId: 'B-3' }),
+    ])
+  // Indices 4 a 14 vazios; a ULTIMA linha da janela (15) e' `boundary`.
+  const gapToBoundary = (boundary) => [...Array.from({ length: 11 }, () => []), boundary]
+
+  it('caso-real: CR-45 linhas preenchidas depois de uma linha em branco na fronteira da janela: erro de limite', async () => {
+    for (const boundary of [[], [' ', '  ']]) {
+      const truncated = makeXlsx([
+        ...headAndThree(),
+        ...gapToBoundary(boundary),
+        bodyRowOf('B-4'), // indice 16: fora da janela
+        bodyRowOf('B-5'),
+      ])
+      await expect(readDbcorpWorkbook(truncated, { maxRows: 10 })).rejects.toThrow(LIMIT_10)
+
+      // Controle: o mesmo desenho sem nada alem da janela le as 3 linhas.
+      const control = await readDbcorpWorkbook(makeXlsx([...headAndThree(), ...gapToBoundary(boundary)]), {
+        maxRows: 10,
+      })
+      expect(control.rows).toHaveLength(3)
+    }
+  })
+
+  it('caso-real: CR-45 !ref inflado e celulas so com espaco alem da janela nao sao conteudo: passa', async () => {
+    const buffer = makeXlsx(
+      [
+        ...headAndThree(),
+        ...gapToBoundary([]),
+        ...Array.from({ length: 5 }, () => [' ', '', '  ']), // indices 16 a 20: celulas sem conteudo
+      ],
+      {
+        mutate: (sheet) => {
+          sheet['!ref'] = 'A1:AM20000'
+        },
+      }
+    )
+    const result = await readDbcorpWorkbook(buffer, { maxRows: 10 })
+    expect(result.rows).toHaveLength(3)
+    expect(result.meta.rowCount).toBe(3)
+  })
+
+  it('caso-real: CR-45 exatamente maxRows linhas preenchidas passa; maxRows + 1 reprova', async () => {
+    const filled = (count) =>
+      looseRowsToMatrix(Array.from({ length: count }, (_, index) => makeLooseRow({ itemId: `E-${index}` })))
+    const exact = await readDbcorpWorkbook(makeXlsx(filled(10)), { maxRows: 10 })
+    expect(exact.rows).toHaveLength(10)
+    await expect(readDbcorpWorkbook(makeXlsx(filled(11)), { maxRows: 10 })).rejects.toThrow(LIMIT_10)
+
+    // 10 preenchidas, a ultima na ULTIMA linha fisica da janela (indice 15): nada alem dela.
+    const header = filled(0)[0]
+    const nine = filled(9).slice(1)
+    const edge = await readDbcorpWorkbook(
+      makeXlsx([header, ...nine, ...Array.from({ length: 5 }, () => []), bodyRowOf('E-edge')]),
+      { maxRows: 10 }
+    )
+    expect(edge.rows).toHaveLength(10)
+    expect(edge.rows.at(-1).rowNumber).toBe(16)
+  })
+
+  it('caso-real: CR-45 dados alem da janela sem nenhuma linha em branco: erro de limite', async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => makeLooseRow({ itemId: `D-${index}` }))
+    await expect(readDbcorpWorkbook(makeXlsx(looseRowsToMatrix(rows)), { maxRows: 10 })).rejects.toThrow(LIMIT_10)
+  })
+
+  it('caso-real: CR-45 sem <dimension> ou com dimensao menor que os dados: o corte nao passa em silencio', async () => {
+    const buffer = makeXlsx([...headAndThree(), ...gapToBoundary([]), bodyRowOf('B-4'), bodyRowOf('B-5')])
+    for (const ref of [null, 'A1:AM9']) {
+      const patched = patchSheetDimension(buffer, ref)
+      // Nesses arquivos o SheetJS nao informa o corte (`!fullref` ausente com `sheetRows`).
+      const clipped = XLSX.read(patched, { type: 'array', sheetRows: 16 }).Sheets.Sheet
+      expect(clipped['!fullref']).toBeUndefined()
+      await expect(readDbcorpWorkbook(patched, { maxRows: 10 })).rejects.toThrow(LIMIT_10)
+    }
+  })
+
+  it('caso-real: CR-45 uma unica linha preenchida exatamente no indice maxRows + 6 (a 1a fora da janela), e nada depois: erro de limite', async () => {
+    // Janela = maxRows + 6 linhas (indices 0 a maxRows + 5). Cabecalho + 1 linha de dados
+    // (indices 0 e 1); o indice da linha extra e' `at`.
+    const withExtraRowAt = (at) => [
+      ...looseRowsToMatrix([makeLooseRow({ itemId: 'S-1' })]),
+      ...Array.from({ length: at - 2 }, () => []),
+      bodyRowOf('S-2'),
+    ]
+    for (const maxRows of [3, 10]) {
+      const limit = `A planilha passa de ${maxRows} linhas; exporte um recorte menor.`
+      await expect(readDbcorpWorkbook(makeXlsx(withExtraRowAt(maxRows + 6)), { maxRows })).rejects.toThrow(limit)
+      // Controle: a mesma linha no indice anterior (ultima da janela) e' lida.
+      const inside = await readDbcorpWorkbook(makeXlsx(withExtraRowAt(maxRows + 5)), { maxRows })
+      expect(inside.rows).toHaveLength(2)
+      expect(inside.rows.at(-1).rowNumber).toBe(maxRows + 6)
+    }
+  })
+
+  // caso-real: CR-46. O `!ref` declarado (<dimension>) nao decide a janela de leitura:
+  // vale a maior linha/coluna das celulas reais (tetos: janela de linhas e 64 colunas).
+  const fiveRows = () =>
+    looseRowsToMatrix(Array.from({ length: 5 }, (_, index) => makeLooseRow({ itemId: `R-${index + 1}` })))
+  const expectFiveRows = (result) => {
+    expect(result.rows.map((row) => row.itemId)).toEqual(['R-1', 'R-2', 'R-3', 'R-4', 'R-5'])
+    expect(result.rows.map((row) => row.rowNumber)).toEqual([2, 3, 4, 5, 6])
+    expect(result.meta.rowCount).toBe(5)
+  }
+
+  it('caso-real: CR-46 dimensao declarada menor que os dados (dentro da janela): le todas as linhas', async () => {
+    const buffer = makeXlsx(fiveRows()) // 6 linhas fisicas, dimensao real A1:AM6
+    for (const ref of ['A1:AM4', 'A1:AM2', 'A1:AM1']) {
+      const patched = patchSheetDimension(buffer, ref)
+      // Premissa: o SheetJS respeita a dimensao declarada (era a causa do corte silencioso).
+      expect(XLSX.read(patched, { type: 'array' }).Sheets.Sheet['!ref']).toBe(ref)
+      expectFiveRows(await readDbcorpWorkbook(patched))
+    }
+  })
+
+  it('caso-real: CR-46 dimensao menor em colunas que os dados: le as colunas reais', async () => {
+    const patched = patchSheetDimension(makeXlsx(fiveRows()), 'A1:H6')
+    expect(XLSX.read(patched, { type: 'array' }).Sheets.Sheet['!ref']).toBe('A1:H6')
+    expectFiveRows(await readDbcorpWorkbook(patched))
+  })
+
+  it('caso-real: CR-46 dimensao menor que os dados nao esconde o limite de linhas', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => makeLooseRow({ itemId: `Q-${index}` }))
+    const patched = patchSheetDimension(makeXlsx(looseRowsToMatrix(rows)), 'A1:AM4')
+    await expect(readDbcorpWorkbook(patched, { maxRows: 10 })).rejects.toThrow(LIMIT_10)
+    const ok = await readDbcorpWorkbook(patched, { maxRows: 12 })
+    expect(ok.rows).toHaveLength(12)
+  })
+
+  it('caso-real: CR-46 sem <dimension>: le todas as linhas', async () => {
+    expectFiveRows(await readDbcorpWorkbook(patchSheetDimension(makeXlsx(fiveRows()), null)))
+  })
+
+  it('caso-real: CR-46 !ref inflado (linhas e colunas) continua lendo so as linhas reais', async () => {
+    for (const ref of ['A1:AM20000', 'A1:CZ5000']) {
+      const buffer = makeXlsx(fiveRows(), {
+        mutate: (sheet) => {
+          sheet['!ref'] = ref
+        },
+      })
+      expectFiveRows(await readDbcorpWorkbook(buffer))
+    }
+  })
+
+  it('caso-real: CR-46 a janela de leitura sai das celulas reais, limitada ao teto de linhas e a 64 colunas', async () => {
+    const spy = vi.spyOn(XLSX.utils, 'sheet_to_json')
+    try {
+      const windowEnd = async (buffer, options) => {
+        spy.mockClear()
+        await readDbcorpWorkbook(buffer, options)
+        expect(spy).toHaveBeenCalledTimes(1)
+        return spy.mock.calls[0][1].range.e
+      }
+      // !ref inflado (A1:AM20000): vale o real, 6 linhas x 39 colunas (indices 5 e 38).
+      const inflated = makeXlsx(fiveRows(), {
+        mutate: (sheet) => {
+          sheet['!ref'] = 'A1:AM20000'
+        },
+      })
+      expect(await windowEnd(inflated)).toEqual({ r: 5, c: 38 })
+
+      // Celulas so com espaco bem alem: valem os tetos (maxRows + 6 -> indice 15; 64 colunas -> indice 63).
+      const far = makeXlsx(fiveRows(), {
+        mutate: (sheet) => {
+          sheet.A5000 = { t: 's', v: ' ' }
+          sheet.GS3 = { t: 's', v: ' ' }
+          sheet['!ref'] = 'A1:GS5000'
+        },
+      })
+      expect(await windowEnd(far, { maxRows: 10 })).toEqual({ r: 15, c: 63 })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('caso-real: CR-46 mais de 64 colunas reais: continua cortando em 64', async () => {
+    // Move `ItemPedCpId` (obrigatoria, a ultima) para a coluna `position` (base 1) e
+    // acrescenta `extras` colunas depois dela.
+    const withItemIdAt = (position, extras = 0) =>
+      fiveRows().map((row, index) => {
+        const head = row.slice(0, -1)
+        return [
+          ...head,
+          ...Array.from({ length: position - 1 - head.length }, () => ''),
+          row.at(-1),
+          ...Array.from({ length: extras }, () => (index === 0 ? 'COLUNA EXTRA' : 'x')),
+        ]
+      })
+
+    // 64a coluna (indice 63) ainda e' lida; as 6 colunas alem dela (70 no total) nao viram aviso.
+    const atLimit = await readDbcorpWorkbook(makeXlsx(withItemIdAt(64, 6)))
+    expectFiveRows(atLimit)
+    expect(atLimit.warnings.map((item) => item.code)).toEqual([])
+
+    // 65a coluna ja esta' fora do corte: a coluna obrigatoria some (erro atual).
+    await expect(readDbcorpWorkbook(makeXlsx(withItemIdAt(65, 5)))).rejects.toThrow(
+      'Colunas obrigatórias ausentes no DBCorp: ItemPedCpId'
+    )
   })
 
   it('CSV ou HTML com 06/10/2026 e rejeitado pela assinatura (nao e zip)', async () => {
