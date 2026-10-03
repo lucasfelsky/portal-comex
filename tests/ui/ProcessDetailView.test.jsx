@@ -74,7 +74,7 @@ function makeProcess(overrides = {}) {
   }
 }
 
-function renderDetail(props = {}) {
+function buildDetailProps(props = {}) {
   const defaultProps = {
     selectedProcess: makeProcess(),
     detailTab: 'process',
@@ -113,7 +113,11 @@ function renderDetail(props = {}) {
     onSendMessage: vi.fn(),
     onDeleteMessage: vi.fn(),
   }
-  return render(<ProcessDetailView {...defaultProps} {...props} />)
+  return { ...defaultProps, ...props }
+}
+
+function renderDetail(props = {}) {
+  return render(<ProcessDetailView {...buildDetailProps(props)} />)
 }
 
 // UX-6b-3 (passo 6): rotulos viraram `dt` (sem ":") dentro de `DetailRow`.
@@ -1638,5 +1642,343 @@ describe('ProcessDetailView — Histórico (redesign mobile)', () => {
     expect(card.querySelector('p').textContent).toBe('Lucas Gabriel Felsky')
     expect(card.querySelector('strong')).not.toBeNull()
     expect(card.querySelector('.process-message-card__meta-content span')).not.toBeNull()
+  })
+})
+
+// PR 3 (Importar do DBCorp): avisos "ERP" no detalhe, so' para o admin. A
+// referencia vem pronta (`erpReference = { snapshot, hint }`); o diff roda ao
+// vivo contra o recorte do embarque. Fixtures sinteticas.
+describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
+  const SNAPSHOT = { snapshotId: 'AAAAAAAAAAAAAAAAAAAA', updatedAtMs: new Date(2026, 9, 2, 14, 30).getTime() }
+  const STAMP = 'planilha de 02/10/2026'
+  const EMPTY_TRANSPORT = {
+    etd: '', eta: '', vessel: { name: '', raw: '', voyage: '' }, blAwb: '', origin: '', destination: '', diNumber: '', diDate: '',
+  }
+
+  function erpShipment({ transport = {}, ...overrides } = {}) {
+    return {
+      kind: 'FCL', portalCategory: 'FCL', key: 'BETA SEA 904-26', incoterm: '', originHint: '', stage: 1,
+      statuses: ['EMBARCOU'], statusNf: [], orders: [], items: [], conflicts: [],
+      transport: { ...EMPTY_TRANSPORT, ...transport },
+      ...overrides,
+    }
+  }
+
+  const referenceOf = (shipment, matchRule = 'pedido') => ({
+    snapshot: SNAPSHOT,
+    hint: { snapshotId: SNAPSHOT.snapshotId, matchRule, shipment },
+  })
+
+  const adminProps = (process, shipment, extra = {}) => ({
+    isAdmin: true,
+    canSeeName: true,
+    selectedProcess: process,
+    visibleProcessItems: process.items ?? [],
+    erpReference: shipment ? referenceOf(shipment, extra.matchRule) : null,
+    ...extra,
+  })
+
+  const erpChips = () => screen.queryAllByRole('button', { name: /no ERP/ })
+  const chip = (name) => screen.getByRole('button', { name })
+  const qChip = (name) => screen.queryByRole('button', { name })
+
+  const fclProcess = (overrides = {}) =>
+    makeProcess({
+      category: 'FCL', processNumber: '9036', destination: 'NAVEGANTES', etd: '2026-09-30', eta: '2026-10-20',
+      vesselName: 'ALFA MAERSK', voyage: '639W', masterBl: 'MBL-A', supplierName: 'ALFA CHEM', incoterm: 'FOB',
+      duimpNumber: 'DU-A', duimpRegisteredAt: '2026-10-01T10:00:00', duimpStatus: 'Parametrizada',
+      ...overrides,
+    })
+
+  const fclShipment = () =>
+    erpShipment({
+      incoterm: 'CFR',
+      orders: [{ pedido: '9036', poRef: 'BETA SEA 904-26', poBase: '', exporter: 'BETA TRADING' }],
+      transport: {
+        destination: 'ITAJAI', etd: '2026-10-06', eta: '2026-10-14', blAwb: 'MBL-B', diNumber: 'DU-B', diDate: '2026-10-20',
+        vessel: { name: 'BETA FAME', raw: 'BETA FAME 12W', voyage: '12W' },
+      },
+    })
+
+  it('FCL divergente: aviso em destino, ETD, ETA, Incoterm e Fornecedor (Detalhes gerais) e em Navio, MBL, Nº e Registro da DUIMP (aba Processo)', () => {
+    const process = fclProcess()
+    const view = renderDetail(adminProps(process, fclShipment(), { detailTab: 'general' }))
+    expect(chip('Destino no ERP: ITAJAI')).toBeInTheDocument()
+    expect(chip('ETD no ERP: 06/10/2026')).toBeInTheDocument()
+    expect(chip('ETA no ERP: 14/10/2026')).toBeInTheDocument()
+    expect(chip('Incoterm no ERP: CFR')).toBeInTheDocument()
+    expect(chip('Fornecedor no ERP: BETA TRADING')).toBeInTheDocument()
+    // O aviso do destino fica no card do destino; o do fornecedor, na linha da Identificacao.
+    expect(document.querySelector('.process-general-card--destination .erp-hint')).not.toBeNull()
+    expect(chip('Fornecedor no ERP: BETA TRADING').closest('.detail-ident__row')).toHaveTextContent(/^Fornecedor:\s*ALFA CHEM/)
+    expect(chip('ETD no ERP: 06/10/2026')).toHaveAccessibleDescription(`No ERP: 06/10/2026 · ${STAMP}`)
+    view.unmount()
+
+    renderDetail(adminProps(process, fclShipment(), { detailTab: 'process' }))
+    expect(chip('Navio no ERP: BETA FAME 12W').closest('.detail-dl__row')).toHaveTextContent('NavioALFA MAERSK')
+    expect(chip('BL no ERP: MBL-B').closest('.detail-dl__row')).toHaveTextContent('MBLMBL-A')
+    expect(chip('Nº da DUIMP no ERP: DU-B').closest('.detail-dl__row')).toHaveTextContent('Nº da DUIMPDU-A')
+    expect(chip('Registro da DUIMP no ERP: 20/10/2026')).toBeInTheDocument()
+  })
+
+  it('CON divergente: aviso no rotulo "POs consolidadas", na PO e no item da aba Itens (fora do <button>)', () => {
+    const process = makeProcess({
+      id: 'p-con', name: 'CON CN 929-26', category: 'CONSOLIDADO', processNumber: '', destination: 'NAVEGANTES',
+      purchaseOrders: [
+        { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+        { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'OUTRO' },
+      ],
+      items: [
+        { id: 'i-1', commercialName: 'SOLVENTE PI', quantity: 2000, poNumber: '9010' },
+        { id: 'i-2', commercialName: 'SOLVENTE PI', quantity: 100, poNumber: '9011' },
+      ],
+    })
+    const shipment = erpShipment({
+      kind: 'CONSOLIDADO', portalCategory: 'CONSOLIDADO', key: 'CON CN 929-26',
+      transport: { destination: 'NAVEGANTES' },
+      orders: [
+        { pedido: '9010', poRef: 'ALFA SEA 905-26', poBase: '', exporter: 'ALFA CHEM' },
+        { pedido: '9011', poRef: 'GAMA SEA 906-26', poBase: '', exporter: 'GAMA TRADING' },
+        { pedido: '9012', poRef: 'DELTA SEA 907-26', poBase: '', exporter: 'DELTA TRADING' },
+      ],
+      items: [
+        { commercialName: 'SOLVENTE PI', pedido: '9010', quantityKg: 2000 },
+        { commercialName: 'SOLVENTE PI', pedido: '9011', quantityKg: 3000 },
+      ],
+    })
+    const view = renderDetail(adminProps(process, shipment, { detailTab: 'general', matchRule: 'consolidado:ref' }))
+    const label = screen.getByText('POs consolidadas')
+    expect(label.querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('POs consolidadas no ERP: 9010, 9011, 9012')).toBeInTheDocument()
+    const poChip = chip('PO 9011 no ERP: Fornecedor GAMA TRADING')
+    expect(poChip.closest('li')).toHaveTextContent('9011')
+    expect(qChip('PO 9010 no ERP: Ref. ALFA SEA 905-26; Fornecedor ALFA CHEM')).toBeNull()
+    view.unmount()
+
+    renderDetail(adminProps(process, shipment, { detailTab: 'items', matchRule: 'consolidado:ref' }))
+    const quantityChip = chip('Quantidade de SOLVENTE PI no ERP (soma do item): 3000,000 kg')
+    const entry = quantityChip.closest('.process-items-list__entry')
+    expect(entry).not.toBeNull()
+    const button = entry.querySelector('.process-related-item-button')
+    expect(button).not.toBeNull()
+    // O aviso nunca fica dentro do <button> do item (botao aninhado e' invalido).
+    expect(button.querySelector('.erp-hint')).toBeNull()
+    expect(button.closest('.erp-hint')).toBeNull()
+    expect(erpChips()).toHaveLength(1)
+    // O item sem aviso continua um <button> direto da lista.
+    expect(document.querySelectorAll('.process-items-list > .process-related-item-button')).toHaveLength(1)
+    expect(document.querySelectorAll('.process-items-list__entry')).toHaveLength(1)
+  })
+
+  it('nao-admin com a mesma referencia: 0 avisos; valores iguais: 0 avisos; corrigir o destino apaga o aviso', () => {
+    const process = fclProcess()
+    const shipment = fclShipment()
+    for (const tab of ['general', 'process', 'items']) {
+      const view = renderDetail({ ...adminProps(process, shipment, { detailTab: tab }), isAdmin: false })
+      expect(erpChips(), `nao-admin / ${tab}`).toHaveLength(0)
+      expect(document.querySelectorAll('.erp-hint')).toHaveLength(0)
+      view.unmount()
+    }
+
+    const equal = fclProcess({
+      destination: 'ITAJAI', etd: '2026-10-06', eta: '2026-10-14', vesselName: 'BETA FAME', voyage: '12W', masterBl: 'MBL-B',
+      supplierName: 'BETA TRADING', incoterm: 'CFR', duimpNumber: 'DU-B', duimpRegisteredAt: '2026-10-20T08:00:00',
+    })
+    for (const tab of ['general', 'process']) {
+      const view = renderDetail(adminProps(equal, shipment, { detailTab: tab }))
+      expect(erpChips(), `valores iguais / ${tab}`).toHaveLength(0)
+      view.unmount()
+    }
+
+    const view = renderDetail(adminProps(process, shipment, { detailTab: 'general' }))
+    expect(qChip('Destino no ERP: ITAJAI')).not.toBeNull()
+    view.rerender(<ProcessDetailView {...buildDetailProps(adminProps(fclProcess({ destination: 'ITAJAI' }), shipment, { detailTab: 'general' }))} />)
+    expect(qChip('Destino no ERP: ITAJAI')).toBeNull()
+  })
+
+  it('sem referencia: a aba Itens tem 1 <button> por item e nenhum wrapper .process-items-list__entry', () => {
+    const items = [
+      { id: 'i-1', commercialName: 'RESINA OMEGA', quantity: 10 },
+      { id: 'i-2', commercialName: 'SOLVENTE PI', quantity: 20 },
+    ]
+    const { container } = renderDetail({ detailTab: 'items', isAdmin: true, selectedProcess: makeProcess({ items }), visibleProcessItems: items })
+    expect(container.querySelectorAll('.process-items-list > button')).toHaveLength(2)
+    expect(container.querySelector('.process-items-list__entry')).toBeNull()
+  })
+
+  it('ref-caso: R-10 ETA vazia: o aviso fica ao lado do "-" (vazio no Portal); a ETA do ERP apaga; outra data volta como divergente', () => {
+    const shipment = erpShipment({ transport: { eta: '2026-10-06' } })
+    const base = (process) => adminProps(process, shipment, { detailTab: 'general' })
+    const view = renderDetail(base(makeProcess({ eta: '' })))
+    const etaChip = chip('ETA no ERP: 06/10/2026')
+    expect(etaChip.closest('p')).toHaveTextContent('-')
+    expect(etaChip).toHaveAccessibleDescription(`No ERP: 06/10/2026 · vazio no Portal · ${STAMP}`)
+
+    view.rerender(<ProcessDetailView {...buildDetailProps(base(makeProcess({ eta: '2026-10-06' })))} />)
+    expect(qChip('ETA no ERP: 06/10/2026')).toBeNull()
+
+    view.rerender(<ProcessDetailView {...buildDetailProps(base(makeProcess({ eta: '2026-10-20' })))} />)
+    const divergent = chip('ETA no ERP: 06/10/2026')
+    expect(divergent).toHaveAccessibleDescription(`No ERP: 06/10/2026 · ${STAMP}`)
+    expect(divergent).not.toHaveAccessibleDescription(/vazio no Portal/)
+  })
+
+  it('ref-caso: R-11 FCL sem dado de transito e Navio vazio: o bloco aparece no lugar do placeholder, com a linha "Navio" — e sem linha "Viagem"', () => {
+    const shipment = erpShipment({ transport: { vessel: { name: 'BETA FAME', raw: 'BETA FAME 12W', voyage: '12W' } } })
+    const base = (process) => adminProps(process, shipment, { detailTab: 'process' })
+    const view = renderDetail(base(makeProcess()))
+    expect(screen.queryByText('Embarque ainda não registrado.')).toBeNull()
+    expect(document.querySelector('.process-block--transit:not(.detail-block--placeholder)')).not.toBeNull()
+    const row = getDefinition('Navio').closest('.detail-dl__row')
+    expect(row).toHaveTextContent('Navio—')
+    expect(row.querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('Navio no ERP: BETA FAME 12W')).toHaveAccessibleDescription(`No ERP: BETA FAME 12W · vazio no Portal · ${STAMP}`)
+    expect(screen.queryByText('Viagem', { selector: 'dt' })).toBeNull()
+    // So a linha vazia com aviso: nenhuma das outras linhas do bloco aparece.
+    expect(document.querySelectorAll('.process-block--transit .detail-dl__row')).toHaveLength(1)
+
+    view.rerender(<ProcessDetailView {...buildDetailProps(base(makeProcess({ vesselName: 'BETA FAME', voyage: '12W' })))} />)
+    expect(qChip('Navio no ERP: BETA FAME 12W')).toBeNull()
+    expect(getDefinition('Navio')).toHaveTextContent('BETA FAME')
+
+    view.rerender(<ProcessDetailView {...buildDetailProps(base(makeProcess({ vesselName: 'GAMA STAR', voyage: '1W' })))} />)
+    expect(chip('Navio no ERP: BETA FAME 12W')).toHaveAccessibleDescription(`No ERP: BETA FAME 12W · ${STAMP}`)
+  })
+
+  it('ref-caso: R-12 Origem vazia num processo sem Fornecedor, Incoterm e Agente: o card Identificacao aparece com a linha "Origem" — e o aviso', () => {
+    const shipment = erpShipment({ transport: { origin: 'HAMBURG' } })
+    renderDetail(adminProps(makeProcess({ category: 'FCL', originLocation: '' }), shipment, { detailTab: 'general' }))
+    const card = document.querySelector('.process-general-card--ident')
+    expect(card).not.toBeNull()
+    const row = screen.getByText('Origem', { exact: false, selector: '.detail-ident__label' }).closest('.detail-ident__row')
+    expect(row).toHaveTextContent(/^Origem:\s*—/)
+    expect(row.querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('Origem no ERP: HAMBURG')).toBeInTheDocument()
+    expect(card.querySelectorAll('.detail-ident__row')).toHaveLength(1)
+  })
+
+  it('ref-caso: R-13 BL vazio: FCL ganha a linha "MBL" — e AEREO a linha "MAWB" —, nenhuma linha HBL/HAWB nova', () => {
+    const fcl = renderDetail(adminProps(makeProcess({ category: 'FCL' }), erpShipment({ transport: { blAwb: 'MBL-B' } }), { detailTab: 'process' }))
+    expect(getDefinition('MBL')).toHaveTextContent('—')
+    expect(getDefinition('MBL').querySelector('.erp-hint')).not.toBeNull()
+    expect(screen.queryByText('HBL', { selector: 'dt' })).toBeNull()
+    expect(screen.queryByText('MAWB', { selector: 'dt' })).toBeNull()
+    expect(chip('BL no ERP: MBL-B')).toBeInTheDocument()
+    fcl.unmount()
+
+    renderDetail(adminProps(makeProcess({ category: 'AEREO', flightNumber: 'LA123' }), erpShipment({ kind: 'AEREO', portalCategory: 'AEREO', transport: { blAwb: 'AWB-7' } }), { detailTab: 'process' }))
+    expect(getDefinition('MAWB')).toHaveTextContent('—')
+    expect(getDefinition('MAWB').querySelector('.erp-hint')).not.toBeNull()
+    expect(screen.queryByText('HAWB', { selector: 'dt' })).toBeNull()
+    expect(screen.queryByText('MBL', { selector: 'dt' })).toBeNull()
+    expect(chip('BL no ERP: AWB-7')).toBeInTheDocument()
+  })
+
+  it('ref-caso: R-14 Nº da DUIMP vazio: o bloco Aduana aparece no lugar do placeholder; com anuencia, o passo 4 fica com a Aduana; registro legado leva o aviso na linha "sem data"', () => {
+    const shipment = erpShipment({ transport: { diNumber: 'DU-9' } })
+    const license = { id: 'LIC-1', agency: 'MAPA', lpcoNumber: '', status: 'Deferida', inspectionScheduledAt: '', deferredAt: '', notes: '' }
+
+    // Controle (sem referencia): placeholder da Aduana e o passo 4 e' das Anuencias.
+    const control = renderDetail({ detailTab: 'process', isAdmin: true, canSeeName: true, selectedProcess: makeProcess({ licenses: [license] }) })
+    expect(screen.getByText('DUIMP ainda não registrada.')).toBeInTheDocument()
+    expect(document.querySelector('.process-block--licenses .detail-block__step')).not.toBeNull()
+    control.unmount()
+
+    const view = renderDetail(adminProps(makeProcess({ licenses: [license] }), shipment, { detailTab: 'process' }))
+    expect(screen.queryByText('DUIMP ainda não registrada.')).toBeNull()
+    expect(document.querySelector('.process-block--customs:not(.detail-block--placeholder)')).not.toBeNull()
+    expect(getDefinition('Nº da DUIMP')).toHaveTextContent('—')
+    expect(getDefinition('Nº da DUIMP').querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('Nº da DUIMP no ERP: DU-9')).toBeInTheDocument()
+    // A Aduana ficou com o passo 4 (mesmo predicado dos 2 lados): as Anuencias nao repetem o numero.
+    expect(document.querySelector('.process-block--customs .detail-block__step')).toHaveTextContent('4')
+    expect(document.querySelector('.process-block--licenses .detail-block__step')).toBeNull()
+    view.unmount()
+
+    // Registro legado (status registrado, sem data): o aviso vai na linha "sem data", sem linha "—" nova.
+    renderDetail(
+      adminProps(
+        makeProcess({ duimpStatus: 'Registrada, aguardando parametrização', duimpNumber: 'DU-L' }),
+        erpShipment({ transport: { diNumber: 'DU-L', diDate: '2026-10-20' } }),
+        { detailTab: 'process' }
+      )
+    )
+    const registro = getDefinition('Registro')
+    expect(registro).toHaveTextContent('sem data (registro antigo)')
+    expect(registro.querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('Registro da DUIMP no ERP: 20/10/2026')).toBeInTheDocument()
+    expect(screen.getAllByText('Registro', { selector: 'dt' })).toHaveLength(1)
+    expect(registro).not.toHaveTextContent('—')
+  })
+
+  it('ref-caso: R-15 CON sem POs no Portal: card "POs consolidadas" com — e o aviso; POs legadas em string (o nucleo ve 0 POs) ficam sem aviso', () => {
+    const shipment = erpShipment({
+      kind: 'CONSOLIDADO', portalCategory: 'CONSOLIDADO', key: 'CON CN 929-26',
+      orders: [{ pedido: '9010', poRef: 'ALFA SEA 905-26', poBase: '', exporter: 'ALFA CHEM' }],
+    })
+    const conBase = { id: 'p-con', name: 'CON CN 929-26', category: 'CONSOLIDADO', processNumber: '' }
+    const empty = renderDetail(adminProps(makeProcess({ ...conBase, purchaseOrders: [] }), shipment, { detailTab: 'general', matchRule: 'consolidado:ref' }))
+    const card = document.querySelector('.process-general-card--consolidated-pos')
+    expect(card).not.toBeNull()
+    expect(card).toHaveTextContent('POs consolidadas')
+    expect(card.querySelector('p')).toHaveTextContent('—')
+    expect(card.querySelector('ul')).toBeNull()
+    expect(chip('POs consolidadas no ERP: 9010')).toHaveAccessibleDescription(`No ERP: 9010 · vazio no Portal · ${STAMP}`)
+    empty.unmount()
+
+    renderDetail(adminProps(makeProcess({ ...conBase, purchaseOrders: ['9010'] }), shipment, { detailTab: 'general', matchRule: 'consolidado:ref' }))
+    const legacy = document.querySelector('.process-general-card--consolidated-pos')
+    expect(legacy.querySelector('ul')).not.toBeNull()
+    expect(legacy).toHaveTextContent('9010')
+    expect(erpChips()).toHaveLength(0)
+  })
+
+  it('ref-caso: R-16 quantidade zerada no Portal: o aviso fica no item, dentro de .process-items-list__entry, com a descricao de quantidade vazia', () => {
+    const items = [{ id: 'i-1', commercialName: 'RESINA OMEGA', quantity: 0 }]
+    const shipment = erpShipment({ items: [{ commercialName: 'RESINA OMEGA', pedido: '9036', quantityKg: 1500.5 }] })
+    renderDetail(adminProps(makeProcess({ items }), shipment, { detailTab: 'items' }))
+    const quantityChip = chip('Quantidade de RESINA OMEGA no ERP (soma do item): 1500,500 kg')
+    expect(quantityChip.closest('.process-items-list__entry')).not.toBeNull()
+    expect(quantityChip).toHaveAccessibleDescription(`No ERP (soma do item): 1500,500 kg · vazio no Portal · ${STAMP}`)
+  })
+
+  it('ref-caso: R-18 sem aviso o DOM e o de sempre: admin com referencia que nao acende e nao-admin com referencia cheia de campos vazios', () => {
+    const process = makeProcess({ category: 'FCL', destination: 'ITAJAÍ' })
+    for (const tab of ['general', 'process', 'items']) {
+      // (a) admin sem referencia -> referencia so de kinds que nao acendem (formato).
+      const formatOnly = erpShipment({ transport: { destination: 'ITAJAI' } })
+      const view = renderDetail({ ...adminProps(process, null, { detailTab: tab }) })
+      const before = view.container.innerHTML
+      view.rerender(<ProcessDetailView {...buildDetailProps(adminProps(process, formatOnly, { detailTab: tab }))} />)
+      expect(view.container.innerHTML, `(a) ${tab}`).toBe(before)
+      view.unmount()
+
+      // (b) nao-admin sem referencia -> referencia cheia de portal_sem_dado.
+      const full = erpShipment({
+        incoterm: 'CFR',
+        transport: {
+          etd: '2026-10-06', eta: '2026-10-14', blAwb: 'MBL-B', origin: 'HAMBURG', diNumber: 'DU-B', diDate: '2026-10-20',
+          vessel: { name: 'BETA FAME', raw: 'BETA FAME 12W', voyage: '12W' },
+        },
+        orders: [{ pedido: '9036', poRef: 'BETA SEA 904-26', poBase: '', exporter: 'BETA TRADING' }],
+      })
+      const empty = makeProcess({ category: 'FCL', destination: '' })
+      const userView = renderDetail({ ...adminProps(empty, null, { detailTab: tab }), isAdmin: false })
+      const userBefore = userView.container.innerHTML
+      userView.rerender(<ProcessDetailView {...buildDetailProps({ ...adminProps(empty, full, { detailTab: tab }), isAdmin: false })} />)
+      expect(userView.container.innerHTML, `(b) ${tab}`).toBe(userBefore)
+      userView.unmount()
+    }
+  })
+
+  it('o aviso de ETD sem `etd` (so shippedAt) vai na linha Data de embarque; com `etd` vai no ETD dos Detalhes gerais', () => {
+    const shipment = erpShipment({ transport: { etd: '2026-10-06' } })
+    const onlyShipped = makeProcess({ etd: '', shippedAt: '2026-09-30' })
+    const general = renderDetail(adminProps(onlyShipped, shipment, { detailTab: 'general' }))
+    expect(erpChips()).toHaveLength(0)
+    general.unmount()
+    renderDetail(adminProps(onlyShipped, shipment, { detailTab: 'process' }))
+    expect(getDefinition('Data de embarque').querySelector('.erp-hint')).not.toBeNull()
+    expect(chip('ETD no ERP: 06/10/2026')).toBeInTheDocument()
   })
 })

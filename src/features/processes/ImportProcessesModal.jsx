@@ -1,3 +1,7 @@
+// SEM PONTO DE ENTRADA NA UI desde o PR do botao unico "Importar do DBCorp": o
+// botao "Importar" (criar processos em lote) saiu da lista de Processos. Este
+// modal e o parser `utils/importProcesses.js` ficam no repo, com os testes, para
+// serem reaproveitados na F3.
 import { useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import { parseProcessesFromWorkbook } from '../../utils/importProcesses'

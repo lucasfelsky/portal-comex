@@ -759,7 +759,12 @@
     background: var(--surface-alt);
   }
 
-  .process-detail-view .process-related-item-button + .process-related-item-button::before {
+  /* PR 3: o item com aviso "ERP" ganha o wrapper `.process-items-list__entry`
+     (relative, para o separador); os 3 vizinhos novos usam o mesmo separador. */
+  .process-detail-view .process-related-item-button + .process-related-item-button::before,
+  .process-detail-view .process-items-list__entry + .process-related-item-button::before,
+  .process-detail-view .process-related-item-button + .process-items-list__entry::before,
+  .process-detail-view .process-items-list__entry + .process-items-list__entry::before {
     content: '';
     position: absolute;
     top: 0;
@@ -767,6 +772,51 @@
     right: 0;
     height: 1px;
     background: var(--m-separator);
+  }
+
+  .process-detail-view .process-items-list__entry {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0;
+  }
+
+  .process-detail-view .process-items-list__entry > .process-related-item-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* O wrapper do aviso some do layout: chip ao lado do item, balao na linha de baixo. */
+  .process-detail-view .process-items-list__entry > .erp-hint {
+    display: contents;
+  }
+
+  .process-detail-view .process-items-list__entry .erp-hint__chip {
+    flex: none;
+    margin-inline-end: var(--m-inset);
+  }
+
+  .process-detail-view .process-items-list__entry .erp-hint__bubble {
+    flex: 1 0 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding-inline: var(--m-inset);
+  }
+
+  /* Aviso "ERP" (<= 1040px): o balao entra no fluxo, abaixo do valor, em vez de
+     flutuar (nao ha' folga no mobile/tablet). O wrapper vira inline para o
+     balao (bloco) abrir uma linha propria sem mover o chip. NENHUMA regra deste
+     arquivo declara `display` no balao: o `[hidden]` do styles.css continua
+     escondendo-o fechado. */
+  .process-detail-view .erp-hint {
+    display: inline;
+  }
+
+  .process-detail-view .erp-hint__bubble {
+    position: static;
+    margin-top: 4px;
+    max-width: 100%;
   }
 
   .process-detail-view .process-related-item-button > .process-item-display {
@@ -2154,6 +2204,41 @@
 
 /* ===== S: so mobile (<= 720px): chrome e estrutura que so existem la ===== */
 @media (max-width: 720px) {
+
+  /* PR 3: aviso "ERP" com alvo de toque de 44px. O chip tem 20x28: o `::before`
+     o amplia para 44x44 sem mexer no layout (mesmo padrao de `.chip-remove`). */
+  .process-detail-view .erp-hint__chip {
+    position: relative;
+  }
+
+  .process-detail-view .erp-hint__chip::before {
+    content: '';
+    position: absolute;
+    inset: -12px -8px;
+  }
+
+  /* PO do consolidado com aviso: linha de 44px; o wrapper some do layout para o
+     chip ficar ao lado do texto e o balao abrir na linha de baixo. */
+  .process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint) {
+    min-height: 44px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .process-detail-view .process-general-card--consolidated-pos li > .erp-hint {
+    display: contents;
+  }
+
+  .process-detail-view .process-general-card--consolidated-pos li .erp-hint__chip {
+    flex: none;
+    margin-inline-start: 8px;
+  }
+
+  .process-detail-view .process-general-card--consolidated-pos li .erp-hint__bubble {
+    flex: 1 0 100%;
+    margin: 4px 0 0;
+  }
 
   /* O h1 continua na arvore de acessibilidade (visualmente oculto). */
   .main-content:has(.process-detail-view, .process-form) > .mobile-page-header {

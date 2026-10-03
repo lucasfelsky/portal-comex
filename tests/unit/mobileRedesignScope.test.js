@@ -355,6 +355,14 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(has('.admin-section .chip-remove::before', 'content', "''")).toBe(true)
     expect(has('.admin-section .chip-remove::before', 'position', 'absolute')).toBe(true)
     expect(has('.admin-section .chip-remove::before', 'inset', '-13px -11px')).toBe(true)
+    // PR 3: aviso "ERP" (chip 20x28 -> alvo de 44x44) e linha de PO com aviso.
+    expect(has('.process-detail-view .erp-hint__chip', 'position', 'relative')).toBe(true)
+    expect(has('.process-detail-view .erp-hint__chip::before', 'content', "''")).toBe(true)
+    expect(has('.process-detail-view .erp-hint__chip::before', 'position', 'absolute')).toBe(true)
+    expect(has('.process-detail-view .erp-hint__chip::before', 'inset', '-12px -8px')).toBe(true)
+    expect(
+      has('.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)', 'min-height', '44px')
+    ).toBe(true)
 
     // O hit-area nao vaza para L/T/desktop.
     const TARGETS = [
@@ -363,6 +371,9 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       '.admin-section .toggle',
       '.admin-section .chip-remove',
       '.admin-section .chip-remove::before',
+      '.process-detail-view .erp-hint__chip',
+      '.process-detail-view .erp-hint__chip::before',
+      '.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)',
     ]
     const outside = allRules.filter((rule) => rule.media !== S)
     for (const selector of TARGETS) {
@@ -373,6 +384,53 @@ describe('mobile-redesign.css - guarda de escopo', () => {
             rule.declarations.some((declaration) => declaration.prop === prop)
         )
         expect(leaked, `${selector} declara ${prop} fora da camada S`).toBe(false)
+      }
+    }
+  })
+
+  it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {
+    const L = '@media (max-width: 1040px)'
+    const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)
+    const hasIn = (rules, selector, prop, value) =>
+      rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === value)
+      )
+
+    expect(hasIn(lRules, '.process-detail-view .erp-hint__bubble', 'position', 'static')).toBe(true)
+    expect(hasIn(lRules, '.process-detail-view .erp-hint__bubble', 'max-width', '100%')).toBe(true)
+    expect(hasIn(lRules, '.process-detail-view .process-items-list__entry > .erp-hint', 'display', 'contents')).toBe(true)
+
+    // O `[hidden]` do styles.css so' esconde o balao fechado se nenhuma regra mobile
+    // declarar `display` nele (o repo nao tem regra global [hidden]).
+    let bubbleRules = 0
+    for (const rule of allRules) {
+      for (const selector of splitTopLevel(rule.selector, ',')) {
+        if (!/\.erp-hint__bubble(?![\w-])/.test(selector)) continue
+        bubbleRules += 1
+        expect(rule.declarations.map((declaration) => declaration.prop), selector).not.toContain('display')
+      }
+    }
+    expect(bubbleRules).toBeGreaterThanOrEqual(2)
+
+    // Separadores da aba Itens para os 3 vizinhos novos do wrapper.
+    for (const selector of [
+      '.process-detail-view .process-items-list__entry + .process-related-item-button::before',
+      '.process-detail-view .process-related-item-button + .process-items-list__entry::before',
+      '.process-detail-view .process-items-list__entry + .process-items-list__entry::before',
+    ]) {
+      expect(hasIn(lRules, selector, 'content', "''"), selector).toBe(true)
+      expect(hasIn(lRules, selector, 'position', 'absolute'), selector).toBe(true)
+    }
+  })
+
+  it('PR 3: o CSS do aviso "ERP" no mobile nao tem literal de cor, animation nem transition', () => {
+    const erpRules = allRules.filter((rule) => /erp-hint|process-items-list__entry/.test(rule.selector))
+    expect(erpRules.length).toBeGreaterThanOrEqual(10)
+    for (const rule of erpRules) {
+      for (const declaration of rule.declarations) {
+        expect(`${rule.selector} :: ${declaration.prop}`).not.toMatch(/:: (animation|transition)$/)
       }
     }
   })

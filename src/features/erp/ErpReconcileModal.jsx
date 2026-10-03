@@ -4,6 +4,7 @@ import TabButton from '../../components/TabButton'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import { getLocalDateKey } from '../processes/shipmentConfirmation'
 import { BLOCKED_MESSAGES, ERP_ONLY_CATEGORIES, runErpReconciliation } from './reconcileErp.js'
+import { formatErpReferenceStamp } from './erpReference.js'
 import {
   ERP_DIFF_KIND_LABELS,
   ERP_FLAG_LABELS,
@@ -11,11 +12,14 @@ import {
   exportErpReconciliationToXlsx,
 } from './erpReconciliationExport.js'
 
-// Conciliacao ERP (DBCorp) x Portal - F1 (SOMENTE LEITURA). O modal recebe os
+// Importar do DBCorp (conciliacao ERP x Portal, F1 + PR 3). O modal recebe os
 // processos ja carregados na pagina e as FONTES como objetos `ErpSource`
 // (`inputKind: 'file' | 'request'`): trocar a planilha pela API do DBCorp (F5)
-// nao muda nada daqui. Nada e' gravado: so' compara e, se o admin pedir,
-// baixa o resultado em .xlsx.
+// nao muda nada daqui. Compara a fonte com os processos (nenhum dado de
+// processo e' alterado) e, logo depois, chama `onSaveReference(result)` — um
+// callback injetado pela pagina — para guardar a planilha como REFERENCIA do
+// ERP (avisos "ERP" no detalhe). O modal nao conhece o servico. Se o admin
+// pedir, baixa o resultado em .xlsx.
 
 const TABS = [
   { id: 'summary', label: 'Resumo' },
@@ -321,11 +325,46 @@ export function ErpReconcileResults({ result, showMinor = false }) {
   )
 }
 
-export default function ErpReconcileModal({ open, onClose, processes, sources }) {
+function pluralProcesses(count) {
+  return `${count} ${count === 1 ? 'processo' : 'processos'}`
+}
+
+// "Referência do ERP salva: 3 processos." (+ " K sem aviso (embarque grande demais).")
+function formatSavedReference(counts) {
+  const skipped = counts?.hintsSkipped ?? 0
+  const base = `Referência do ERP salva: ${pluralProcesses(counts?.hints ?? 0)}.`
+  return skipped > 0 ? `${base} ${skipped} sem aviso (embarque grande demais).` : base
+}
+
+// "Referência atual: planilha de DD/MM/AAAA HH:mm" — SO' a partir da prop (a
+// pagina e' a dona do estado da referencia; nao ha segunda fonte aqui).
+function formatCurrentReference(referenceInfo) {
+  if (!referenceInfo) return 'Nenhuma referência do ERP salva ainda.'
+  // Importacoes ao mesmo tempo (varios lotes) deixaram hints faltando: nenhum aviso
+  // vale ate uma nova importacao completa.
+  if (referenceInfo.incomplete) {
+    return 'A referência do ERP salva está incompleta (outra importação gravou ao mesmo tempo). Importe a planilha de novo.'
+  }
+  const stamp = formatErpReferenceStamp(referenceInfo.updatedAtMs, { withTime: true })
+  return stamp ? `Referência atual: planilha de ${stamp}` : 'Referência atual: planilha salva (sem data).'
+}
+
+export default function ErpReconcileModal({
+  open,
+  onClose,
+  processes,
+  sources,
+  onSaveReference,
+  referenceInfo = null,
+  isSavingReference = false,
+}) {
   const sourceList = Array.isArray(sources) ? sources : []
   const processList = Array.isArray(processes) ? processes : []
   const [sourceId, setSourceId] = useState(sourceList[0]?.id ?? '')
   const [phase, setPhase] = useState('idle') // idle | loading | done
+  const [savePhase, setSavePhase] = useState('idle') // idle | saving | saved | failed
+  const [saveCounts, setSaveCounts] = useState(null)
+  const [saveError, setSaveError] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [showMinor, setShowMinor] = useState(false)
@@ -349,13 +388,39 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   const source = sourceList.find((item) => item.id === sourceId) ?? sourceList[0] ?? null
   const isPortalEmpty = processList.length === 0
   const isLoading = phase === 'loading'
-  const isFileDisabled = isLoading || isPortalEmpty
+  // A trava vem da PAGINA (`isSavingReference`): o modal continua montado ao
+  // fechar, e o estado local zera no fechamento, mas a gravacao segue em voo.
+  const isSaving = savePhase === 'saving' || isSavingReference
+  const isFileDisabled = isLoading || isPortalEmpty || isSaving
+
+  // Grava a planilha como referencia do ERP. A conciliacao ja esta na tela: uma
+  // falha aqui nunca apaga o resultado.
+  async function saveReference(next, runId) {
+    setSavePhase('saving')
+    setSaveError('')
+    setSaveCounts(null)
+    try {
+      const saved = await onSaveReference(next)
+      if (!isMountedRef.current || runId !== runIdRef.current) return
+      setSaveCounts(saved?.counts ?? null)
+      setSavePhase('saved')
+    } catch (saveFailure) {
+      if (!isMountedRef.current || runId !== runIdRef.current) return
+      setSaveError(
+        buildActionErrorMessage('Conciliação ok, mas não foi possível salvar a referência do ERP.', saveFailure)
+      )
+      setSavePhase('failed')
+    }
+  }
 
   async function runSource(input) {
     if (!source || isPortalEmpty) return
     runIdRef.current += 1
     const runId = runIdRef.current
     setPhase('loading')
+    setSavePhase('idle')
+    setSaveError('')
+    setSaveCounts(null)
     setError('')
     setResult(null)
     try {
@@ -369,6 +434,8 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
       if (!isMountedRef.current || runId !== runIdRef.current) return
       setResult(next)
       setPhase('done')
+      const canSave = !next.blocked && next.summary.erpRows > 0 && processList.length > 0
+      if (canSave && typeof onSaveReference === 'function') await saveReference(next, runId)
     } catch (loadError) {
       if (!isMountedRef.current || runId !== runIdRef.current) return
       setError(buildActionErrorMessage('Não foi possível conciliar com o ERP.', loadError))
@@ -406,6 +473,9 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   function handleClose() {
     runIdRef.current += 1
     setPhase('idle')
+    setSavePhase('idle')
+    setSaveError('')
+    setSaveCounts(null)
     setError('')
     setResult(null)
     setShowMinor(false)
@@ -415,11 +485,12 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="Conciliar com ERP (DBCorp)" wide>
+    <Modal open={open} onClose={handleClose} title="Importar do DBCorp" wide>
       <div className="erp-reconcile">
         <p className="erp-reconcile__hint">
-          Nada é gravado: a tela só compara a fonte com os processos já carregados.
+          A planilha vira a referência do ERP para os avisos nos processos. Nenhum dado dos processos é alterado.
         </p>
+        <p className="erp-reconcile__hint">{formatCurrentReference(referenceInfo)}</p>
 
         {isPortalEmpty ? <div className="error-banner">{PORTAL_EMPTY_MESSAGE}</div> : null}
 
@@ -468,7 +539,7 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
               type="button"
               className="primary-button"
               onClick={() => runSource(undefined)}
-              disabled={isLoading || isPortalEmpty}
+              disabled={isLoading || isPortalEmpty || isSaving}
             >
               Carregar de {source.label}
             </button>
@@ -483,6 +554,26 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
         ) : null}
 
         {error ? <div className="error-banner">{error}</div> : null}
+
+        {savePhase === 'saving' ? (
+          <div className="empty-state" role="status">
+            <strong>Salvando a referência do ERP…</strong>
+          </div>
+        ) : null}
+
+        {savePhase === 'idle' && isSavingReference ? (
+          <div className="empty-state" role="status">
+            <strong>Uma importação anterior ainda está salvando a referência do ERP.</strong>
+          </div>
+        ) : null}
+
+        {savePhase === 'saved' ? (
+          <div className="success-banner" role="status">
+            {formatSavedReference(saveCounts)}
+          </div>
+        ) : null}
+
+        {savePhase === 'failed' ? <div className="error-banner">{saveError}</div> : null}
 
         {phase === 'done' && result ? (
           <>

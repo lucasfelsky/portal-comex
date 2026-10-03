@@ -281,7 +281,6 @@ export default function ProcessListView({
   onClearAllFilters,
   onSelectProcess,
   onExport,
-  onImport,
   onReconcileErp,
   favoriteProcessIds,
   onToggleFavorite,
@@ -396,25 +395,15 @@ export default function ProcessListView({
             </button>
           ) : null}
           <div className="secondary-row">
-            {isAdmin && onImport ? (
-              <button
-                type="button"
-                className="ghost-button"
-                title="Criar processos em lote a partir de uma planilha"
-                onClick={onImport}
-              >
-                Importar
-              </button>
-            ) : null}
             {isAdmin && onReconcileErp ? (
               <button
                 type="button"
                 className="ghost-button erp-reconcile-trigger"
                 disabled={isLoading}
-                title="Comparar a planilha do DBCorp com os processos carregados (não grava nada)"
+                title="Anexar a planilha do DBCorp: concilia com os processos e salva como referência do ERP"
                 onClick={onReconcileErp}
               >
-                Conciliar com ERP
+                Importar do DBCorp
               </button>
             ) : null}
             <button

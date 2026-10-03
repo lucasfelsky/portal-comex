@@ -21,7 +21,19 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const RULES_PATH = join(HERE, '..', '..', 'firestore.rules')
@@ -3680,6 +3692,388 @@ describeEmulator('firestore.rules (emulador)', () => {
           ],
           updatedAt: 'now',
         })
+      )
+    })
+  })
+
+  // ----------------------------------------------------------------
+  // PR 3 (Importar do DBCorp): referencia do ERP. Colecoes SO admin; o hint e o
+  // meta nao tem `delete`; o `latest` so' aponta para um meta que existe.
+  // ----------------------------------------------------------------
+  describe('erpSnapshots e erpProcessHints (PR 3)', () => {
+    const SNAP = 'AbCdEfGhIjKlMnOpQrSt'
+    const SNAP2 = 'ZyXwVuTsRqPoNmLkJiHg'
+    const ADMIN_UID = 'admin-1'
+
+    const validShipment = (overrides = {}) => ({
+      kind: 'FCL',
+      portalCategory: 'FCL',
+      key: 'ALFA SEA 900-26',
+      incoterm: 'CFR',
+      originHint: '',
+      stage: 1,
+      statuses: ['EMBARCOU'],
+      statusNf: ['Pendente'],
+      orders: [{ pedido: '9000', poRef: 'ALFA SEA 900-26', poBase: '', exporter: 'ALFA CHEM' }],
+      items: [{ commercialName: 'RESINA OMEGA', pedido: '9000', quantityKg: 1000 }],
+      transport: {
+        etd: '2026-10-06',
+        eta: '2026-10-14',
+        vessel: { name: 'ALFA MAERSK', raw: 'ALFA MAERSK 639W', voyage: '639W' },
+        blAwb: '',
+        origin: '',
+        destination: '',
+        diNumber: '',
+        diDate: '',
+      },
+      conflicts: [],
+      ...overrides,
+    })
+
+    const validCounts = () => ({
+      erpRows: 10,
+      shipments: 6,
+      activeShipments: 5,
+      matched: 2,
+      matchedArchived: 0,
+      matchedWithDiffs: 1,
+      erpOnly: 3,
+      portalOnly: 1,
+      warnings: 4,
+      hints: 2,
+      hintsSkipped: 0,
+    })
+
+    const validMeta = (snapshotId = SNAP, overrides = {}) => ({
+      snapshotId,
+      createdAt: serverTimestamp(),
+      createdById: ADMIN_UID,
+      createdByName: 'Admin',
+      sourceInfo: {
+        source: 'dbcorp-xlsx',
+        label: 'DBCorp (.xlsx)',
+        fileName: 'planilha.xlsx',
+        fetchedAt: '',
+        rowCount: 10,
+        generatedOn: '2026-10-02',
+      },
+      counts: validCounts(),
+      ...overrides,
+    })
+
+    const validLatest = (snapshotId = SNAP, overrides = {}) => ({
+      snapshotId,
+      updatedAt: serverTimestamp(),
+      updatedById: ADMIN_UID,
+      updatedByName: 'Admin',
+      fileName: 'planilha.xlsx',
+      hints: 2,
+      ...overrides,
+    })
+
+    const validHint = (snapshotId = SNAP, overrides = {}) => ({
+      snapshotId,
+      savedAt: serverTimestamp(),
+      savedById: ADMIN_UID,
+      matchRule: 'pedido',
+      shipment: validShipment(),
+      ...overrides,
+    })
+
+    // Seed (sem rules) de uma referencia completa ja existente.
+    const seedReference = (snapshotId = SNAP) =>
+      seed(async (db) => {
+        await setDoc(doc(db, `erpSnapshots/${snapshotId}`), validMeta(snapshotId))
+        await setDoc(doc(db, 'erpSnapshots/latest'), validLatest(snapshotId))
+        await setDoc(doc(db, 'erpProcessHints/p-1'), validHint(snapshotId))
+      })
+
+    // `ops` = [[caminho, dados], ...] num unico batch, como o servico grava.
+    const commitBatch = (db, ops) => {
+      const batch = writeBatch(db)
+      for (const [path, data] of ops) batch.set(doc(db, path), data)
+      return batch.commit()
+    }
+
+    it('erp-rules: admin grava meta + 2 hints + latest num writeBatch e le os 4 e a query por snapshotId', async () => {
+      const db = admin()
+      await assertSucceeds(
+        commitBatch(db, [
+          [`erpSnapshots/${SNAP}`, validMeta()],
+          ['erpProcessHints/p-1', validHint()],
+          ['erpProcessHints/p-2', validHint(SNAP, { matchRule: 'consolidado:ref' })],
+          ['erpSnapshots/latest', validLatest()],
+        ])
+      )
+      await assertSucceeds(getDoc(doc(db, `erpSnapshots/${SNAP}`)))
+      await assertSucceeds(getDoc(doc(db, 'erpSnapshots/latest')))
+      await assertSucceeds(getDoc(doc(db, 'erpProcessHints/p-1')))
+      await assertSucceeds(getDoc(doc(db, 'erpProcessHints/p-2')))
+      const found = await assertSucceeds(
+        getDocs(query(collection(db, 'erpProcessHints'), where('snapshotId', '==', SNAP)))
+      )
+      if (found.size !== 2) throw new Error(`esperava 2 hints, veio ${found.size}`)
+    })
+
+    it('erp-rules: logistica nao le nem grava', async () => {
+      await seedReference()
+      const db = logistics()
+      await assertFails(getDoc(doc(db, `erpSnapshots/${SNAP}`)))
+      await assertFails(getDoc(doc(db, 'erpSnapshots/latest')))
+      await assertFails(getDoc(doc(db, 'erpProcessHints/p-1')))
+      await assertFails(setDoc(doc(db, 'erpProcessHints/p-9'), validHint(SNAP, { savedById: 'log-1' })))
+      await assertFails(setDoc(doc(db, `erpSnapshots/${SNAP2}`), validMeta(SNAP2, { createdById: 'log-1' })))
+    })
+
+    it('erp-rules: user aprovado nao le nem grava', async () => {
+      await seedReference()
+      const db = approvedUser('user-1')
+      await assertFails(getDoc(doc(db, `erpSnapshots/${SNAP}`)))
+      await assertFails(getDoc(doc(db, 'erpSnapshots/latest')))
+      await assertFails(getDoc(doc(db, 'erpProcessHints/p-1')))
+      await assertFails(setDoc(doc(db, 'erpProcessHints/p-9'), validHint(SNAP, { savedById: 'user-1' })))
+      await assertFails(setDoc(doc(db, `erpSnapshots/${SNAP2}`), validMeta(SNAP2, { createdById: 'user-1' })))
+    })
+
+    it('erp-rules: anonimo nao le nem grava', async () => {
+      await seedReference()
+      const db = anon()
+      await assertFails(getDoc(doc(db, `erpSnapshots/${SNAP}`)))
+      await assertFails(getDoc(doc(db, 'erpSnapshots/latest')))
+      await assertFails(getDoc(doc(db, 'erpProcessHints/p-1')))
+      await assertFails(setDoc(doc(db, 'erpProcessHints/p-9'), validHint()))
+      await assertFails(setDoc(doc(db, `erpSnapshots/${SNAP2}`), validMeta(SNAP2)))
+    })
+
+    it('erp-rules: admin Pendente e admin com e-mail fora de @sqquimica.com nao gravam', async () => {
+      // Controle: o admin valido grava o mesmo hint.
+      await assertSucceeds(setDoc(doc(admin(), 'erpProcessHints/p-ok'), validHint()))
+      const pending = admin('admin-1', { status: 'Pendente' })
+      await assertFails(setDoc(doc(pending, 'erpProcessHints/p-1'), validHint()))
+      await assertFails(setDoc(doc(pending, `erpSnapshots/${SNAP2}`), validMeta(SNAP2)))
+      const external = admin('admin-1', { email: 'alguem@gmail.com' })
+      await assertFails(setDoc(doc(external, 'erpProcessHints/p-1'), validHint()))
+      await assertFails(setDoc(doc(external, `erpSnapshots/${SNAP2}`), validMeta(SNAP2)))
+    })
+
+    it('erp-rules: hint com campo extra e negado', async () => {
+      await assertFails(setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { total: 987654.32 })))
+      await assertSucceeds(setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint()))
+    })
+
+    it('erp-rules: shipment com chave extra (total) e negado', async () => {
+      await assertFails(
+        setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { shipment: validShipment({ total: 987654.32 }) }))
+      )
+      await assertFails(
+        setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { shipment: validShipment({ nfDate: '2099-12-31' }) }))
+      )
+    })
+
+    it('erp-rules: transport com chave extra e vessel com chave extra sao negados', async () => {
+      const base = validShipment()
+      await assertFails(
+        setDoc(
+          doc(admin(), 'erpProcessHints/p-1'),
+          validHint(SNAP, { shipment: { ...base, transport: { ...base.transport, tracking: 'X' } } })
+        )
+      )
+      await assertFails(
+        setDoc(
+          doc(admin(), 'erpProcessHints/p-1'),
+          validHint(SNAP, {
+            shipment: {
+              ...base,
+              transport: { ...base.transport, vessel: { ...base.transport.vessel, imo: '1234567' } },
+            },
+          })
+        )
+      )
+    })
+
+    it('erp-rules: 301 itens negado e 300 passa', async () => {
+      const items = (count) =>
+        Array.from({ length: count }, (_, index) => ({ commercialName: `ITEM ${index}`, pedido: '9000', quantityKg: 1 }))
+      await assertFails(
+        setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { shipment: validShipment({ items: items(301) }) }))
+      )
+      await assertSucceeds(
+        setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { shipment: validShipment({ items: items(300) }) }))
+      )
+    })
+
+    it('erp-rules: savedById de outro uid e savedAt literal sao negados', async () => {
+      await assertFails(setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { savedById: 'outro-uid' })))
+      await assertFails(setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint(SNAP, { savedAt: new Date() })))
+      await assertSucceeds(setDoc(doc(admin(), 'erpProcessHints/p-1'), validHint()))
+    })
+
+    it('erp-rules: meta com campo extra e meta com snapshotId diferente do id do doc sao negados', async () => {
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { total: 1 })))
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP2)))
+      await assertSucceeds(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta()))
+    })
+
+    it('erp-rules: update do meta (imutavel) e negado', async () => {
+      await seedReference()
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta()))
+      await assertFails(updateDoc(doc(admin(), `erpSnapshots/${SNAP}`), { createdByName: 'Outro' }))
+    })
+
+    it('erp-rules: latest (create) apontando para snapshot inexistente e latest com campo extra sao negados', async () => {
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP)))
+      // Controle: com o meta no mesmo batch, o mesmo latest passa.
+      await assertSucceeds(
+        commitBatch(admin(), [
+          [`erpSnapshots/${SNAP}`, validMeta()],
+          ['erpSnapshots/latest', validLatest(SNAP)],
+        ])
+      )
+      await seed((db) => setDoc(doc(db, `erpSnapshots/${SNAP2}`), validMeta(SNAP2)))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP2, { total: 1 })))
+    })
+
+    it('erp-rules: delete do admin em meta, latest e hint e negado; matchRule fora da lista e negado', async () => {
+      await seedReference()
+      await assertFails(deleteDoc(doc(admin(), `erpSnapshots/${SNAP}`)))
+      await assertFails(deleteDoc(doc(admin(), 'erpSnapshots/latest')))
+      await assertFails(deleteDoc(doc(admin(), 'erpProcessHints/p-1')))
+      await assertFails(setDoc(doc(admin(), 'erpProcessHints/p-2'), validHint(SNAP, { matchRule: 'xyz' })))
+      for (const matchRule of ['pedido', 'po', 'po-base', 'consolidado:ref', 'consolidado:pedidos']) {
+        await assertSucceeds(setDoc(doc(admin(), `erpProcessHints/p-${matchRule}`), validHint(SNAP, { matchRule })))
+      }
+    })
+
+    it('erp-rules: caminho de UPDATE: um 2o writeBatch (meta2 + hint sobrescrito + latest para meta2) passa', async () => {
+      await seedReference(SNAP)
+      await assertSucceeds(
+        commitBatch(admin(), [
+          [`erpSnapshots/${SNAP2}`, validMeta(SNAP2)],
+          ['erpProcessHints/p-1', validHint(SNAP2, { matchRule: 'po' })],
+          ['erpSnapshots/latest', validLatest(SNAP2)],
+        ])
+      )
+      const latest = await assertSucceeds(getDoc(doc(admin(), 'erpSnapshots/latest')))
+      if (latest.data().snapshotId !== SNAP2) throw new Error('latest nao apontou para o novo snapshot')
+      const hint = await assertSucceeds(getDoc(doc(admin(), 'erpProcessHints/p-1')))
+      if (hint.data().snapshotId !== SNAP2) throw new Error('hint nao foi sobrescrito')
+    })
+
+    it('erp-rules: update do latest para meta inexistente e negado', async () => {
+      await seedReference(SNAP)
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP2)))
+      await assertFails(updateDoc(doc(admin(), 'erpSnapshots/latest'), { snapshotId: SNAP2, updatedAt: serverTimestamp() }))
+      // Controle: com o meta2 criado antes, o update passa.
+      await seed((db) => setDoc(doc(db, `erpSnapshots/${SNAP2}`), validMeta(SNAP2)))
+      await assertSucceeds(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP2)))
+    })
+
+    it('erp-rules: orders 101, conflicts 21, statuses 21 e statusNf 11 sao negados (100/20/20/10 passam)', async () => {
+      const many = (count, make) => Array.from({ length: count }, (_, index) => make(index))
+      const order = (index) => ({ pedido: String(9000 + index), poRef: '', poBase: '', exporter: 'ALFA' })
+      const conflict = (index) => ({ field: 'eta', values: [`2026-10-${String((index % 28) + 1).padStart(2, '0')}`] })
+      const text = (index) => `S${index}`
+      const cases = [
+        ['orders', order, 100],
+        ['conflicts', conflict, 20],
+        ['statuses', text, 20],
+        ['statusNf', text, 10],
+      ]
+      for (const [field, make, max] of cases) {
+        await assertSucceeds(
+          setDoc(doc(admin(), 'erpProcessHints/p-ok'), validHint(SNAP, { shipment: validShipment({ [field]: many(max, make) }) }))
+        )
+        await assertFails(
+          setDoc(
+            doc(admin(), 'erpProcessHints/p-big'),
+            validHint(SNAP, { shipment: validShipment({ [field]: many(max + 1, make) }) })
+          )
+        )
+      }
+    })
+
+    it('erp-rules: conflitos de incoterm e originHint (slot vazio no recorte) passam; a rule so limita a lista (o filtro de campo e do cliente)', async () => {
+      const conflicts = [
+        { field: 'incoterm', values: ['CFR', 'FOB'] },
+        { field: 'originHint', values: ['HAMBURG', 'SANTOS'] },
+      ]
+      await assertSucceeds(
+        setDoc(
+          doc(admin(), 'erpProcessHints/p-conflito'),
+          validHint(SNAP, { shipment: validShipment({ incoterm: '', originHint: '', conflicts }) })
+        )
+      )
+    })
+
+    it('erp-rules: meta com createdById de outro uid e com createdAt literal sao negados', async () => {
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { createdById: 'outro-uid' })))
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { createdAt: new Date() })))
+      await assertSucceeds(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta()))
+    })
+
+    it('erp-rules: latest com updatedById de outro uid e negado', async () => {
+      await seed((db) => setDoc(doc(db, `erpSnapshots/${SNAP}`), validMeta()))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { updatedById: 'outro-uid' })))
+      await assertSucceeds(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP)))
+    })
+
+    it('erp-rules: latest exige hints inteiro >= 0 (sem o campo, negativo, fracionario ou texto sao negados; 0 passa)', async () => {
+      await seed((db) => setDoc(doc(db, `erpSnapshots/${SNAP}`), validMeta()))
+      const withoutHints = validLatest(SNAP)
+      delete withoutHints.hints
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), withoutHints))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { hints: -1 })))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { hints: 1.5 })))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { hints: '2' })))
+      await assertSucceeds(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { hints: 0 })))
+      await assertSucceeds(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { hints: 1000 })))
+    })
+
+    it('erp-rules: latest com payload de meta e id curto (erpSnapshots/abc) com payload de meta sao negados', async () => {
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validMeta()))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/abc'), validMeta('abc')))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/abc'), validMeta(SNAP)))
+    })
+
+    it('erp-rules: processId de 129 caracteres e negado e 128 passa', async () => {
+      await assertFails(setDoc(doc(admin(), `erpProcessHints/${'a'.repeat(129)}`), validHint()))
+      await assertSucceeds(setDoc(doc(admin(), `erpProcessHints/${'a'.repeat(128)}`), validHint()))
+    })
+
+    it('erp-rules: getDocs com query e getDocs da colecao sao negados para logistica e user', async () => {
+      await seedReference()
+      for (const db of [logistics(), approvedUser('user-1')]) {
+        await assertFails(getDocs(query(collection(db, 'erpProcessHints'), where('snapshotId', '==', SNAP))))
+        await assertFails(getDocs(collection(db, 'erpProcessHints')))
+        await assertFails(getDocs(collection(db, 'erpSnapshots')))
+      }
+      await assertSucceeds(getDocs(collection(admin(), 'erpSnapshots')))
+    })
+
+    it('erp-rules: batch de 450 operacoes (meta + 448 hints + latest) passa', async () => {
+      const ops = [[`erpSnapshots/${SNAP}`, validMeta()]]
+      for (let index = 0; index < 448; index += 1) ops.push([`erpProcessHints/p-${index}`, validHint()])
+      ops.push(['erpSnapshots/latest', validLatest()])
+      if (ops.length !== 450) throw new Error(`esperava 450 operacoes, montei ${ops.length}`)
+      await assertSucceeds(commitBatch(admin(), ops))
+    })
+
+    it('erp-rules: fileName de 256 (meta e latest) e createdByName/updatedByName de 121 sao negados', async () => {
+      const longName = 'x'.repeat(256)
+      const sourceInfo = { ...validMeta().sourceInfo, fileName: longName }
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { sourceInfo })))
+      await assertFails(setDoc(doc(admin(), `erpSnapshots/${SNAP}`), validMeta(SNAP, { createdByName: 'x'.repeat(121) })))
+      // Controle: 255 e 120 passam.
+      await assertSucceeds(
+        setDoc(
+          doc(admin(), `erpSnapshots/${SNAP}`),
+          validMeta(SNAP, { sourceInfo: { ...sourceInfo, fileName: 'x'.repeat(255) }, createdByName: 'x'.repeat(120) })
+        )
+      )
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { fileName: longName })))
+      await assertFails(setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { updatedByName: 'x'.repeat(121) })))
+      await assertSucceeds(
+        setDoc(doc(admin(), 'erpSnapshots/latest'), validLatest(SNAP, { fileName: 'x'.repeat(255), updatedByName: 'x'.repeat(120) }))
       )
     })
   })

@@ -243,6 +243,59 @@ describe('groupErpShipments - estado, estagio e conflitos', () => {
     expect(different.shipments[0].conflicts[0].field).toBe('vessel')
     expect(different.shipments[0].transport.vessel).toEqual({ raw: '', name: '', voyage: '' })
   })
+
+  it('incoterm diferente nas linhas do mesmo embarque (FOB e CFR): conflito, slot vazio e aviso; a ordem das linhas nao importa', () => {
+    const rows = [
+      makeLooseRow({ itemId: '1', poRef: 'ALFA SEA 927-26', refEmbarque: 'FCL - FOB HAMBURG' }),
+      makeLooseRow({ itemId: '2', poRef: 'ALFA SEA 927-26', refEmbarque: 'FCL - CFR HAMBURG' }),
+    ]
+    const { shipments, warnings } = group(rows)
+    expect(shipments).toHaveLength(1)
+    expect(shipments[0].incoterm).toBe('')
+    expect(shipments[0].conflicts).toEqual([{ field: 'incoterm', values: ['CFR', 'FOB'] }])
+    // A dica de origem so' vem da linha FOB (CFR e' destino): valor unico, sem conflito.
+    expect(shipments[0].originHint).toBe('HAMBURG')
+    expect(
+      warnings.filter((warning) => warning.code === 'conflito_no_grupo').map((warning) => warning.message)
+    ).toEqual([expect.stringContaining('incoterm com valores diferentes nas linhas (CFR | FOB)')])
+    expect(group([...rows].reverse()).shipments[0].conflicts).toEqual(shipments[0].conflicts)
+  })
+
+  it('dica de origem diferente nas linhas do mesmo embarque (FOB HAMBURG e FOB SANTOS): conflito e slot vazio', () => {
+    const { shipments, warnings } = group([
+      makeLooseRow({ itemId: '1', poRef: 'ALFA SEA 928-26', refEmbarque: 'LCL - FOB SANTOS' }),
+      makeLooseRow({ itemId: '2', poRef: 'ALFA SEA 928-26', refEmbarque: 'LCL - FOB HAMBURG' }),
+    ])
+    expect(shipments[0].incoterm).toBe('FOB')
+    expect(shipments[0].originHint).toBe('')
+    expect(shipments[0].conflicts).toEqual([{ field: 'originHint', values: ['HAMBURG', 'SANTOS'] }])
+    expect(codes(warnings)).toContain('conflito_no_grupo')
+  })
+
+  it('incoterm e dica iguais, ou so numa linha, continuam valendo (os vazios nao conflitam)', () => {
+    const same = group([
+      makeLooseRow({ itemId: '1', poRef: 'ALFA SEA 929-26', refEmbarque: 'FCL - FOB HAMBURG' }),
+      makeLooseRow({ itemId: '2', poRef: 'ALFA SEA 929-26', refEmbarque: 'FCL - FOB HAMBURG' }),
+    ])
+    expect(same.shipments[0]).toMatchObject({ incoterm: 'FOB', originHint: 'HAMBURG', conflicts: [] })
+    const onlyOne = group([
+      makeLooseRow({ itemId: '1', poRef: 'ALFA SEA 930-26', refEmbarque: 'FCL - FOB HAMBURG' }),
+      makeLooseRow({ itemId: '2', poRef: 'ALFA SEA 930-26', refEmbarque: 'FCL' }),
+    ])
+    expect(onlyOne.shipments).toHaveLength(1)
+    expect(onlyOne.shipments[0]).toMatchObject({ incoterm: 'FOB', originHint: 'HAMBURG', conflicts: [] })
+    expect(codes(onlyOne.warnings)).not.toContain('conflito_no_grupo')
+  })
+
+  it('CONSOLIDADO: incoterm/dica diferentes entre as POs nao viram conflito (vale o menor, como antes)', () => {
+    const slots = { shipmentKind: 'CONSOLIDADO', consolidatedRef: 'CON CN 931-26' }
+    const { shipments, warnings } = group([
+      makeLooseRow({ itemId: '1', pedido: 9310, poRef: 'ALFA SEA 931-26', ...slots, incoterm: 'FOB', originHint: 'SHANGHAI' }),
+      makeLooseRow({ itemId: '2', pedido: 9311, poRef: 'BETA SEA 932-26', ...slots, incoterm: 'CFR', originHint: 'NINGBO' }),
+    ])
+    expect(shipments[0]).toMatchObject({ kind: 'CONSOLIDADO', incoterm: 'CFR', originHint: 'NINGBO', conflicts: [] })
+    expect(codes(warnings)).not.toContain('conflito_no_grupo')
+  })
 })
 
 describe('groupErpShipments - avisos', () => {

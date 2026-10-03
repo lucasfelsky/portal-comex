@@ -23,6 +23,8 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
+import * as XLSX from 'xlsx'
+import { looseRowsToMatrix, makeLooseRow } from '../fixtures/erp/dbcorpSynthetic.js'
 
 const mockUseAuth = vi.fn()
 const mockListProcesses = vi.fn()
@@ -33,6 +35,8 @@ const mockSaveProcessCollectionStatus = vi.fn()
 const mockSaveProcessPostReceiptNotes = vi.fn()
 const mockCreateProcessMessage = vi.fn()
 const mockDeleteProcessMessage = vi.fn()
+const mockLoadErpReference = vi.fn()
+const mockSaveErpReferenceSnapshot = vi.fn()
 
 vi.mock('../../src/hooks/useAuth', () => ({
   default: () => mockUseAuth(),
@@ -54,6 +58,12 @@ vi.mock('../../src/services/processMessagesRepository', () => ({
   listProcessMessages: (...args) => mockListProcessMessages(...args),
   createProcessMessage: (...args) => mockCreateProcessMessage(...args),
   deleteProcessMessage: (...args) => mockDeleteProcessMessage(...args),
+}))
+// PR 3 (Importar do DBCorp): referencia do ERP. Mock obrigatorio: sem ele o
+// admin falaria com o Firestore de verdade (leitura ao montar, gravacao ao importar).
+vi.mock('../../src/services/erpReferenceRepository', () => ({
+  loadErpReference: (...args) => mockLoadErpReference(...args),
+  saveErpReferenceSnapshot: (...args) => mockSaveErpReferenceSnapshot(...args),
 }))
 // F17.1b: defensivo — a pagina renderiza o ProcessDetailView, que agora
 // tem a aba "Histórico" (ProcessHistoryPanel se autocarrega).
@@ -190,9 +200,12 @@ beforeEach(() => {
   mockUseAuth.mockReset()
   mockListProcesses.mockReset()
   mockListProcessMessages.mockReset()
+  mockLoadErpReference.mockReset()
+  mockSaveErpReferenceSnapshot.mockReset()
   mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
   mockListProcesses.mockResolvedValue(PROCESSES)
   mockListProcessMessages.mockResolvedValue([])
+  mockLoadErpReference.mockResolvedValue(null)
 })
 
 afterEach(() => {
@@ -989,10 +1002,10 @@ describe('ProcessesPage — DUIMP sob aguas (projecao por perfil)', () => {
   })
 })
 
-// Conciliacao ERP (F1, somente leitura): o botao e o modal so' existem para o
-// admin; o modal recebe os processos ja carregados e nunca grava nada.
-describe('ProcessesPage — Conciliar com ERP (F1, somente leitura)', () => {
-  const ERP_BUTTON = { name: 'Conciliar com ERP' }
+// "Importar do DBCorp" (F1 + PR 3): o botao e o modal so' existem para o admin;
+// o modal recebe os processos ja carregados e nunca grava em `processes`.
+describe('ProcessesPage — Importar do DBCorp (F1 + PR 3)', () => {
+  const ERP_BUTTON = { name: 'Importar do DBCorp' }
   const EMPTY_PORTAL_MESSAGE = 'Os processos do Portal não foram carregados. Recarregue a página antes de conciliar.'
 
   it('admin vê o botão e abre o diálogo', async () => {
@@ -1003,11 +1016,14 @@ describe('ProcessesPage — Conciliar com ERP (F1, somente leitura)', () => {
 
     const button = screen.getByRole('button', ERP_BUTTON)
     expect(button).toBeEnabled()
-    expect(screen.queryByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })).not.toBeInTheDocument()
+    // Botao unico: o "Importar" antigo (criar processos em lote) saiu da lista.
+    expect(screen.getAllByRole('button', { name: /^Importar/ })).toEqual([button])
+    expect(screen.queryByRole('button', { name: 'Importar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Importar do DBCorp' })).not.toBeInTheDocument()
 
     await user.click(button)
-    const dialog = await screen.findByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })
-    expect(within(dialog).getByText(/Nada é gravado/)).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: 'Importar do DBCorp' })
+    expect(within(dialog).getByText(/A planilha vira a referência do ERP/)).toBeInTheDocument()
     expect(within(dialog).queryByText(EMPTY_PORTAL_MESSAGE)).not.toBeInTheDocument()
     expect(dialog.querySelector('input[type="file"]')).toHaveAttribute('accept', '.xlsx')
     expect(mockSaveProcess).not.toHaveBeenCalled()
@@ -1018,7 +1034,8 @@ describe('ProcessesPage — Conciliar com ERP (F1, somente leitura)', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
     expect(screen.queryByRole('button', ERP_BUTTON)).not.toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button', { name: /^Importar/ })).toHaveLength(0)
+    expect(screen.queryByRole('dialog', { name: 'Importar do DBCorp' })).not.toBeInTheDocument()
   })
 
   it('com listProcesses pendente, o botão está desabilitado', async () => {
@@ -1040,9 +1057,354 @@ describe('ProcessesPage — Conciliar com ERP (F1, somente leitura)', () => {
     await waitFor(() => expect(screen.getByText(/boom/)).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', ERP_BUTTON))
-    const dialog = await screen.findByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })
+    const dialog = await screen.findByRole('dialog', { name: 'Importar do DBCorp' })
     expect(within(dialog).getByText(EMPTY_PORTAL_MESSAGE)).toBeInTheDocument()
     expect(dialog.querySelector('input[type="file"]')).toBeDisabled()
     expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+})
+
+// PR 3: referencia do ERP na pagina (leitura, chip no detalhe, gravacao e corrida).
+describe('ProcessesPage — referencia do ERP (PR 3)', () => {
+  const ERP_BUTTON = { name: 'Importar do DBCorp' }
+  const SNAPSHOT_A = 'AAAAAAAAAAAAAAAAAAAA'
+  const SNAPSHOT_B = 'BBBBBBBBBBBBBBBBBBBB'
+  const UPDATED_AT = new Date(2026, 9, 2, 14, 30).getTime()
+
+  const shipmentWithDestination = (destination) => ({
+    kind: 'FCL',
+    portalCategory: 'FCL',
+    key: 'ALFA SEA 900-26',
+    incoterm: '',
+    originHint: '',
+    stage: 1,
+    statuses: ['EMBARCOU'],
+    statusNf: [],
+    orders: [],
+    items: [],
+    transport: {
+      etd: '',
+      eta: '',
+      vessel: { name: '', raw: '', voyage: '' },
+      blAwb: '',
+      origin: '',
+      destination,
+      diNumber: '',
+      diDate: '',
+    },
+    conflicts: [],
+  })
+
+  const referenceWith = (snapshotId, destination) => ({
+    snapshot: { snapshotId, updatedAtMs: UPDATED_AT, updatedByName: 'Admin', fileName: 'planilha.xlsx' },
+    hintsByProcessId: {
+      'p-1': { snapshotId, matchRule: 'pedido', shipment: shipmentWithDestination(destination) },
+    },
+  })
+
+  const savedWith = (reference) => ({
+    snapshotId: reference.snapshot.snapshotId,
+    counts: { hints: 1, hintsSkipped: 0 },
+    skipped: [],
+    reference,
+  })
+
+  // File do jsdom 25 nao tem `arrayBuffer`: define na instancia (o leitor real da planilha a usa).
+  function buildErpWorkbookFile(name = 'teste.xlsx') {
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet(looseRowsToMatrix([makeLooseRow({ itemId: 'W-1', pedido: 9500, poRef: 'ALFA SEA 950-26' })])),
+      'Sheet'
+    )
+    const written = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+    const bytes =
+      written instanceof ArrayBuffer ? written : written.buffer.slice(written.byteOffset, written.byteOffset + written.byteLength)
+    const file = new File([bytes], name)
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes })
+    return file
+  }
+
+  const asAdmin = () => mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin', name: 'Admin Teste' } })
+
+  async function openDetail(user) {
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    await user.click(screen.getAllByText(/PO 12345/)[0])
+  }
+
+  async function openImportModal(user) {
+    await user.click(screen.getByRole('button', ERP_BUTTON))
+    const dialog = await screen.findByRole('dialog', { name: 'Importar do DBCorp' })
+    return dialog
+  }
+
+  it('admin chama loadErpReference 1x e ve o aviso ERP no detalhe', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    mockLoadErpReference.mockResolvedValue(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+    renderPage()
+    await openDetail(user)
+    expect(await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI' })).toBeInTheDocument()
+    expect(mockLoadErpReference).toHaveBeenCalledTimes(1)
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+
+  it.each(['user', 'logistica'])('%s nao chama loadErpReference e nao ve aviso ERP', async (role) => {
+    const user = userEvent.setup()
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role } })
+    mockLoadErpReference.mockResolvedValue(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+    renderPage()
+    await openDetail(user)
+    await screen.findByText('Porto de Atracação')
+    expect(mockLoadErpReference).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+  })
+
+  it('loadErpReference rejeitado: pagina normal, sem error-banner e sem aviso', async () => {
+    const user = userEvent.setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    asAdmin()
+    mockLoadErpReference.mockRejectedValue(new Error('sem permissao no erp'))
+    renderPage()
+    await openDetail(user)
+    await screen.findByText('Porto de Atracação')
+    await waitFor(() => expect(mockLoadErpReference).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(warn).toHaveBeenCalled())
+    expect(document.querySelector('.error-banner')).toBeNull()
+    expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('referencia incompleta (importacoes concorrentes): o modal pede nova importacao e o detalhe fica sem aviso', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    mockLoadErpReference.mockResolvedValue({
+      snapshot: { snapshotId: SNAPSHOT_A, updatedAtMs: UPDATED_AT, updatedByName: 'Admin', fileName: 'planilha.xlsx', incomplete: true },
+      hintsByProcessId: {},
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const dialog = await openImportModal(user)
+    expect(await within(dialog).findByText(/A referência do ERP salva está incompleta/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Referência atual/)).not.toBeInTheDocument()
+
+    await user.click(dialog.querySelector('.erp-reconcile__actions .ghost-button'))
+    await user.click(screen.getAllByText(/PO 12345/)[0])
+    await screen.findByText('Porto de Atracação')
+    expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+
+  it('importar chama saveErpReferenceSnapshot com o resultado e o profile, e o aviso aparece sem recarregar', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    mockSaveErpReferenceSnapshot.mockResolvedValue(savedWith(referenceWith(SNAPSHOT_B, 'SANTOS')))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const dialog = await openImportModal(user)
+    expect(within(dialog).getByText('Nenhuma referência do ERP salva ainda.')).toBeInTheDocument()
+    await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile())
+    expect(await within(dialog).findByText('Referência do ERP salva: 1 processo.')).toBeInTheDocument()
+    expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+    const [result, actor] = mockSaveErpReferenceSnapshot.mock.calls[0]
+    expect(result.blocked).toBeNull()
+    expect(result.summary.erpRows).toBe(1)
+    expect(actor).toMatchObject({ role: 'admin', name: 'Admin Teste' })
+    expect(within(dialog).getByText('Referência atual: planilha de 02/10/2026 14:30')).toBeInTheDocument()
+
+    await user.click(dialog.querySelector('.erp-reconcile__actions .ghost-button'))
+    await user.click(screen.getAllByText(/PO 12345/)[0])
+    expect(await screen.findByRole('button', { name: 'Destino no ERP: SANTOS' })).toBeInTheDocument()
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+
+  it('corrida: fechar no meio do save e reabrir mantem o input desabilitado; o 2o save so comeca depois do 1o', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    let resolveFirst
+    mockSaveErpReferenceSnapshot.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirst = resolve })
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    let dialog = await openImportModal(user)
+    await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile('um.xlsx'))
+    await waitFor(() => expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1))
+    expect(await within(dialog).findByText('Salvando a referência do ERP…')).toBeInTheDocument()
+
+    // Fecha no meio do save e reabre: a trava e' da pagina, nao do modal.
+    await user.click(dialog.querySelector('.erp-reconcile__actions .ghost-button'))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Importar do DBCorp' })).not.toBeInTheDocument())
+    dialog = await openImportModal(user)
+    expect(dialog.querySelector('input[type="file"]')).toBeDisabled()
+    expect(within(dialog).getByText('Uma importação anterior ainda está salvando a referência do ERP.')).toBeInTheDocument()
+    expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+
+    mockSaveErpReferenceSnapshot.mockResolvedValueOnce(savedWith(referenceWith(SNAPSHOT_B, 'SANTOS')))
+    resolveFirst(savedWith(referenceWith(SNAPSHOT_A, 'ITAJAI')))
+    await waitFor(() => expect(dialog.querySelector('input[type="file"]')).not.toBeDisabled())
+    expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+
+    await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile('dois.xlsx'))
+    await waitFor(() => expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(2))
+    expect(await within(dialog).findByText('Referência do ERP salva: 1 processo.')).toBeInTheDocument()
+  })
+
+  it('loadErpReference lento que resolve DEPOIS de um save: a referencia mostrada e a do save', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    let resolveLoad
+    mockLoadErpReference.mockReturnValue(new Promise((resolve) => { resolveLoad = resolve }))
+    mockSaveErpReferenceSnapshot.mockResolvedValue(savedWith(referenceWith(SNAPSHOT_B, 'SANTOS')))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    const dialog = await openImportModal(user)
+    await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile())
+    expect(await within(dialog).findByText('Referência do ERP salva: 1 processo.')).toBeInTheDocument()
+
+    // A leitura antiga (mais velha que o save) chega por ultimo e e' descartada.
+    resolveLoad(referenceWith(SNAPSHOT_A, 'ZZZ-ANTIGO'))
+    await Promise.resolve()
+    await Promise.resolve()
+    await user.click(dialog.querySelector('.erp-reconcile__actions .ghost-button'))
+    await user.click(screen.getAllByText(/PO 12345/)[0])
+    expect(await screen.findByRole('button', { name: 'Destino no ERP: SANTOS' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Destino no ERP: ZZZ-ANTIGO' })).not.toBeInTheDocument()
+  })
+
+  // Falha do save (Codex, PR #233): o catch so' rebobinava a sequencia e mantinha a
+  // referencia antiga em memoria, e o detalhe seguia com chips "completos" ate
+  // recarregar a pagina. Agora toda falha recarrega a referencia (loadErpReference
+  // ja aplica a checagem de completude) e, se a releitura falhar, limpa e avisa.
+  describe('falha ao salvar a referencia', () => {
+    // `buildActionErrorMessage` registra a falha com console.error: silencia o ruido.
+    let errorSpy
+    beforeEach(() => {
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+    afterEach(() => {
+      errorSpy.mockRestore()
+    })
+
+    const SAVE_FAILURE_BANNER = /Conciliação ok, mas não foi possível salvar a referência do ERP/
+    const incompleteReference = (snapshotId) => ({
+      snapshot: { snapshotId, updatedAtMs: UPDATED_AT, updatedByName: 'Admin', fileName: 'planilha.xlsx', incomplete: true },
+      hintsByProcessId: {},
+    })
+
+    async function backToList(user) {
+      await user.click(screen.getByRole('button', { name: 'Voltar para Chegadas' }))
+      await screen.findByRole('button', ERP_BUTTON)
+    }
+
+    async function importAndFail(user) {
+      const dialog = await openImportModal(user)
+      await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile())
+      expect(await within(dialog).findByText(SAVE_FAILURE_BANNER)).toBeInTheDocument()
+      return dialog
+    }
+
+    async function closeModalAndOpenDetail(user, dialog) {
+      await user.click(dialog.querySelector('.erp-reconcile__actions .ghost-button'))
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Importar do DBCorp' })).not.toBeInTheDocument())
+      await user.click(screen.getAllByText(/PO 12345/)[0])
+      await screen.findByText('Porto de Atracação')
+    }
+
+    it('falha no lote 2: recarrega, os chips da referencia antiga somem e o estado incompleto aparece sem recarregar a pagina', async () => {
+      const user = userEvent.setup()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      asAdmin()
+      mockLoadErpReference.mockResolvedValueOnce(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+      // Depois da falha parcial, `loadErpReference` acusa incompleta (hints do snapshot A sobrescritos).
+      mockLoadErpReference.mockResolvedValueOnce(incompleteReference(SNAPSHOT_A))
+      mockSaveErpReferenceSnapshot.mockRejectedValue(new Error('lote 2 de 3 falhou'))
+      renderPage()
+      await openDetail(user)
+      // Antes: a referencia A acende o chip.
+      expect(await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI' })).toBeInTheDocument()
+      await backToList(user)
+
+      const dialog = await importAndFail(user)
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+      expect(mockLoadErpReference).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByText(/A referência do ERP salva está incompleta/)).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Referência atual/)).not.toBeInTheDocument()
+
+      // Depois: o detalhe nao mostra mais o chip da referencia antiga.
+      await closeModalAndOpenDetail(user, dialog)
+      expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+      expect(mockLoadErpReference).toHaveBeenCalledTimes(2)
+      expect(mockSaveProcess).not.toHaveBeenCalled()
+      warn.mockRestore()
+    })
+
+    it('falha antes de qualquer lote (nada gravado): a releitura devolve a mesma referencia e o chip continua', async () => {
+      const user = userEvent.setup()
+      asAdmin()
+      mockLoadErpReference.mockResolvedValue(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+      mockSaveErpReferenceSnapshot.mockRejectedValue(new Error('lote 1 falhou'))
+      renderPage()
+      await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+      const dialog = await importAndFail(user)
+      expect(mockLoadErpReference).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByText('Referência atual: planilha de 02/10/2026 14:30')).toBeInTheDocument()
+
+      await closeModalAndOpenDetail(user, dialog)
+      expect(await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI' })).toBeInTheDocument()
+      expect(mockSaveProcess).not.toHaveBeenCalled()
+    })
+
+    it('a releitura tambem falha: limpa a referencia em memoria (sem chips) e mostra o aviso', async () => {
+      const user = userEvent.setup()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      asAdmin()
+      mockLoadErpReference.mockResolvedValueOnce(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+      mockLoadErpReference.mockRejectedValueOnce(new Error('sem rede'))
+      mockSaveErpReferenceSnapshot.mockRejectedValue(new Error('lote 2 de 3 falhou'))
+      renderPage()
+      await openDetail(user)
+      expect(await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI' })).toBeInTheDocument()
+      await backToList(user)
+
+      const dialog = await importAndFail(user)
+      expect(mockLoadErpReference).toHaveBeenCalledTimes(2)
+      expect(await screen.findByText(/Não foi possível confirmar a referência do ERP depois da falha ao salvar/)).toBeInTheDocument()
+      expect(warn).toHaveBeenCalled()
+
+      await closeModalAndOpenDetail(user, dialog)
+      expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+      expect(document.querySelector('.error-banner')).toBeNull()
+      expect(mockSaveProcess).not.toHaveBeenCalled()
+      warn.mockRestore()
+    })
+
+    it('uma leitura inicial lenta que resolve DEPOIS da falha do save e descartada (nao ressuscita a referencia antiga)', async () => {
+      const user = userEvent.setup()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      asAdmin()
+      let resolveInitialLoad
+      mockLoadErpReference.mockReturnValueOnce(new Promise((resolve) => { resolveInitialLoad = resolve }))
+      mockLoadErpReference.mockResolvedValueOnce(incompleteReference(SNAPSHOT_A))
+      mockSaveErpReferenceSnapshot.mockRejectedValue(new Error('lote 2 de 3 falhou'))
+      renderPage()
+      await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+      const dialog = await importAndFail(user)
+      expect(mockLoadErpReference).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByText(/A referência do ERP salva está incompleta/)).toBeInTheDocument()
+
+      // A leitura antiga (anterior as gravacoes parciais) chega por ultimo e nao vale.
+      resolveInitialLoad(referenceWith(SNAPSHOT_A, 'ZZZ-ANTIGO'))
+      await Promise.resolve()
+      await Promise.resolve()
+      await closeModalAndOpenDetail(user, dialog)
+      expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+      warn.mockRestore()
+    })
   })
 })

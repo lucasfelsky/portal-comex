@@ -1001,6 +1001,62 @@ describe('diferencas por campo', () => {
     expect(diffsOf(con, 'p-con', 'incoterm')).toEqual([])
   })
 
+  it('incoterm em conflito (2 linhas da mesma PO com FOB e CFR): so erp_conflito, nunca divergente nem portal_sem_dado', () => {
+    const rows = [
+      fcl({ itemId: '1', refEmbarque: 'FCL - FOB HAMBURG' }),
+      fcl({ itemId: '2', refEmbarque: 'FCL - CFR HAMBURG' }),
+    ]
+    // Portal bate com um dos valores do ERP: conflito, mas nao conta.
+    const equal = oneDiff(run({ rows, processes: [portalFcl({ incoterm: 'CFR' })] }), 'p-1', 'incoterm')
+    expect(equal).toMatchObject({ kind: 'erp_conflito', counts: false, erp: 'CFR | FOB', erpValue: null })
+    // Portal diferente dos dois: conta.
+    const different = oneDiff(run({ rows, processes: [portalFcl({ incoterm: 'CIF' })] }), 'p-1', 'incoterm')
+    expect(different).toMatchObject({ kind: 'erp_conflito', counts: true })
+    // Portal vazio: continua conflito (sem valor unico do ERP nao ha portal_sem_dado).
+    const empty = oneDiff(run({ rows, processes: [portalFcl({ incoterm: '' })] }), 'p-1', 'incoterm')
+    expect(empty).toMatchObject({ kind: 'erp_conflito', counts: true })
+    // O aviso do embarque agrupado nao some: o conflito vira aviso de grupo.
+    expect(codes(run({ rows, processes: [portalFcl({ incoterm: 'CFR' })] }))).toContain('conflito_no_grupo')
+  })
+
+  it('dica de origem em conflito (FOB HAMBURG e FOB SANTOS): erp_conflito na origem, nunca portal_sem_dado nem informativo', () => {
+    const rows = [
+      fcl({ itemId: '1', refEmbarque: 'FCL - FOB HAMBURG' }),
+      fcl({ itemId: '2', refEmbarque: 'FCL - FOB SANTOS' }),
+    ]
+    const empty = oneDiff(run({ rows, processes: [portalFcl({ originLocation: '' })] }), 'p-1', 'origin')
+    expect(empty).toMatchObject({ kind: 'erp_conflito', counts: true, erp: 'HAMBURG | SANTOS', erpValue: null })
+    const related = oneDiff(run({ rows, processes: [portalFcl({ originLocation: 'Hamburg, Alemanha' })] }), 'p-1', 'origin')
+    expect(related).toMatchObject({ kind: 'erp_conflito', counts: false })
+    const different = oneDiff(run({ rows, processes: [portalFcl({ originLocation: 'ROTTERDAM' })] }), 'p-1', 'origin')
+    expect(different).toMatchObject({ kind: 'erp_conflito', counts: true })
+    // Origem unica na coluna (POL) + dicas em conflito: o conjunto de candidatos inclui a coluna.
+    const withColumn = [
+      fcl({ itemId: '3', origin: 'SHANGHAI', refEmbarque: 'FCL - FOB HAMBURG' }),
+      fcl({ itemId: '4', origin: 'SHANGHAI', refEmbarque: 'FCL - FOB SANTOS' }),
+    ]
+    expect(oneDiff(run({ rows: withColumn, processes: [portalFcl({ originLocation: '' })] }), 'p-1', 'origin')).toMatchObject({
+      kind: 'erp_conflito', erp: 'SHANGHAI | HAMBURG | SANTOS',
+    })
+  })
+
+  it('a_consolidar com incoterm ou dica de origem em conflito: nao entra em a_consolidar', () => {
+    const rowOf = (itemId, refEmbarque) =>
+      fcl({
+        itemId, pedido: 9172, poRef: 'OMICRON SEA 907-26', exporter: 'OMICRON TRADING', refEmbarque,
+        status: 'AG. PRONT. DA CARGA',
+      })
+    const processes = [portalFcl({ id: 'p-outro', name: 'OUTRA PO', processNumber: '9999' })]
+    const categoryOf = (refs) =>
+      run({ rows: refs.map((ref, index) => rowOf(String(index + 1), ref)), processes }).erpOnly[0].category
+    // Controle: sem conflito (FOB SHANGHAI nas duas linhas) continua a consolidar.
+    expect(categoryOf(['LCL - FOB SHANGHAI', 'LCL - FOB SHANGHAI'])).toBe('a_consolidar')
+    // Incoterm FOB x CFR: sem valor unico, nao ha como afirmar "FOB".
+    expect(categoryOf(['LCL - FOB SHANGHAI', 'LCL - CFR SHANGHAI'])).toBe('aguardando_prontidao_pagamento')
+    // Dica SHANGHAI x TIANJIN: sem valor unico, nao ha como afirmar o hub (o menor em ordem de texto, SHANGHAI, a faria consolidar).
+    expect(categoryOf(['LCL - FOB SHANGHAI', 'LCL - FOB TIANJIN'])).toBe('aguardando_prontidao_pagamento')
+  })
+
   it('BL: casa com houseBl (matchedField), com mawb no AEREO; divergente e portal_sem_dado', () => {
     const rows = [fcl({ itemId: '1', blAwb: 'ab-123 / 45' })]
     const house = oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'OUTRO99', houseBl: 'AB12345' })] }), 'p-1', 'bl')
