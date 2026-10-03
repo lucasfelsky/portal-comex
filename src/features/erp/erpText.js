@@ -14,6 +14,10 @@ export const INCOTERMS = [
   'EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP',
 ]
 
+// Incoterms em que o local da REF e' a origem (grupos E e F). Nos grupos C e D
+// o local e' o destino e nao serve de dica de origem.
+export const ORIGIN_INCOTERMS = ['EXW', 'FCA', 'FAS', 'FOB']
+
 const MS_PER_DAY = 86400000
 // Serial do Excel (sistema 1900) para 1970-01-01.
 const UNIX_EPOCH_SERIAL = 25569
@@ -108,8 +112,12 @@ export function parseErpDate(value) {
 
   match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text)
   if (match) {
-    const date = buildCalendarDate(Number(match[3]), Number(match[2]), Number(match[1]))
-    return date ? { date, warning: null } : { date: '', warning: 'data_invalida' }
+    const day = Number(match[1])
+    const month = Number(match[2])
+    const date = buildCalendarDate(Number(match[3]), month, day)
+    if (!date) return { date: '', warning: 'data_invalida' }
+    // Dia <= 12 admite a leitura MM/DD; com dia = mes as duas leituras coincidem.
+    return { date, warning: day <= 12 && day !== month ? 'data_ambigua' : null }
   }
 
   match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(text)
@@ -141,15 +149,22 @@ export function daysBetween(isoA, isoB) {
 export function parseQuantityKg(value) {
   const invalid = { value: null, warning: 'quantidade_invalida' }
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? { value, warning: null } : invalid
+    return Number.isFinite(value) && value >= 0 ? { value, warning: null } : invalid
   }
   let text = cleanCell(value).replace(/\s/g, '')
   if (text === '') return invalid
-  // pt-BR: '1.234,56' -> remove o separador de milhar e troca a virgula.
-  if (text.includes(',')) text = text.replace(/\./g, '').replace(',', '.')
-  if (!/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(text)) return invalid
+  if (text.includes(',')) {
+    // pt-BR: '1.234,56' -> remove o separador de milhar e troca a virgula.
+    text = text.replace(/\./g, '').replace(',', '.')
+  } else if (/^[1-9]\d{0,2}(\.\d{3})+$/.test(text)) {
+    // Sem virgula, so' grupos de 3 digitos apos o ponto: milhar ('1.234' -> 1234).
+    // '0.500' e '1.5' nao casam e seguem como decimal.
+    text = text.replace(/\./g, '')
+  }
+  // Quantidade nunca e' negativa: o sinal '-' nao e' aceito.
+  if (!/^\+?(?:\d+\.?\d*|\.\d+)$/.test(text)) return invalid
   const parsed = Number(text)
-  return Number.isFinite(parsed) ? { value: parsed, warning: null } : invalid
+  return Number.isFinite(parsed) && parsed >= 0 ? { value: parsed, warning: null } : invalid
 }
 
 // Taxas (IPI/II): fracao como numero. Vazio ou invalido -> null.
@@ -218,11 +233,13 @@ export function parseRefEmbarque(ref, poRef = '') {
   if (modal) {
     const rest = modal[2].replace(/^\s*[-–—]?\s*/, '')
     const incotermMatch = new RegExp(`^(${INCOTERMS.join('|')})(?:\\s+(.*))?$`).exec(rest)
+    // O local so' e' origem nos incoterms de origem (E/F); nos C/D e' destino.
+    const hasOrigin = incotermMatch && ORIGIN_INCOTERMS.includes(incotermMatch[1])
     return {
       ...base,
       shipmentKind: modal[1],
       incoterm: incotermMatch ? incotermMatch[1] : '',
-      originHint: incotermMatch && incotermMatch[2] ? incotermMatch[2].trim() : '',
+      originHint: hasOrigin && incotermMatch[2] ? incotermMatch[2].trim() : '',
     }
   }
 

@@ -20,6 +20,7 @@ import {
   buildScenarioLooseRows,
   buildScenarioPortalProcesses,
   makeLooseRow,
+  makePortalProcess,
 } from '../fixtures/erp/dbcorpSynthetic.js'
 
 const FIXED_NOTE = 'Nada é gravado: a tela só compara a fonte com os processos já carregados.'
@@ -101,6 +102,73 @@ describe('ErpReconcileModal - fonte de arquivo', () => {
     const input = document.querySelector('input[type="file"]')
     expect(input).toHaveAttribute('accept', '.xlsx')
     expect(input).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Exportar resultado' })).toBeDisabled()
+  })
+
+  it('caso-real: CR-32 seletor de arquivo estilizado: input por clip (focavel), botao em label, nome do arquivo no status', async () => {
+    const user = userEvent.setup()
+    renderModal()
+    const input = screen.getByLabelText('Arquivo (Planilha de teste)')
+    expect(input).toBe(document.querySelector('input[type="file"]'))
+    expect(input).toHaveClass('file-picker__input')
+    // Oculto por clip no CSS, nunca por hidden/display:none (continua focavel).
+    expect(input).not.toHaveAttribute('hidden')
+    expect(input.style.display).not.toBe('none')
+    input.focus()
+    expect(input).toHaveFocus()
+
+    const button = input.closest('label')
+    expect(button).toHaveClass('ghost-button', 'file-picker__button')
+    expect(button).not.toHaveClass('file-picker__button--disabled')
+    expect(button).toHaveTextContent('Escolher arquivo')
+
+    const status = document.getElementById(input.getAttribute('aria-describedby'))
+    expect(status).toHaveClass('file-picker__status')
+    expect(status).toHaveTextContent('Nenhum arquivo escolhido')
+
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+    expect(status).toHaveTextContent('teste.xlsx')
+    expect(status).not.toHaveTextContent('Nenhum arquivo escolhido')
+
+    // Fechar limpa o nome do arquivo.
+    await user.click(document.querySelector('.erp-reconcile__actions .ghost-button'))
+    expect(status).toHaveTextContent('Nenhum arquivo escolhido')
+  })
+
+  it('caso-real: CR-32 sem processos do Portal, o botao do seletor fica desabilitado (label e input)', () => {
+    renderModal({ processes: [] })
+    const input = screen.getByLabelText('Arquivo (Planilha de teste)')
+    expect(input).toBeDisabled()
+    expect(input.closest('label')).toHaveClass('file-picker__button--disabled')
+  })
+
+  it('caso-real: CR-31 pelo modal, o processo arquivado que casa aparece no Resumo como "1 (1 arquivado)"', async () => {
+    const user = userEvent.setup()
+    const load = vi.fn().mockResolvedValue({
+      rows: [{ ...makeLooseRow({ itemId: 'A-1', pedido: 9036, poRef: 'BETA SEA 904-26' }), rowNumber: 2 }],
+      warnings: [],
+      meta: { fileName: 'teste.xlsx', rowCount: 1 },
+    })
+    renderModal({
+      processes: [
+        makePortalProcess({ id: 'p-arch', name: 'VELHO', processNumber: '9036', category: 'FCL', archived: true }),
+      ],
+      sources: [makeFileSource(load)],
+    })
+    await uploadFile(user)
+    expect((await summaryMetrics()).matched).toBe('1 (1 arquivado)')
+  })
+
+  it('caso-real: CR-33 planilha so com o cabecalho: banner "so o cabecalho" e exportar desabilitado', async () => {
+    const user = userEvent.setup()
+    const load = vi.fn().mockResolvedValue({ rows: [], warnings: [], meta: { fileName: 'vazia.xlsx', rowCount: 0 } })
+    renderModal({ sources: [makeFileSource(load)] })
+    await uploadFile(user)
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    expect(document.querySelector('.error-banner')).toHaveTextContent('só o cabeçalho')
+    expect(screen.queryByText('Processos casados')).not.toBeInTheDocument()
+    expect(screen.queryByText('Só no Portal (não encontrado nesta planilha)')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar resultado' })).toBeDisabled()
   })
 
@@ -310,6 +378,128 @@ describe('ErpReconcileResults', () => {
       'Resumo', 'Divergências (0)', 'Só no ERP (0)', 'Só no Portal (0)', 'Avisos (0)',
     ])
     expect(screen.getByText('Fonte X')).toBeInTheDocument()
+  })
+
+  const baseResult = (overrides = {}, summaryOverrides = {}) => ({
+    blocked: null,
+    blockedMessage: '',
+    sourceInfo: { source: 'x', label: 'Fonte X', fileName: '', fetchedAt: '', rowCount: 0, generatedOn: '2026-10-02' },
+    summary: {
+      erpRows: 0, shipments: 0, activeShipments: 0, matched: 0, matchedArchived: 0, matchedWithDiffs: 0,
+      erpMissingFields: 0, erpOnly: 0, erpOnlyByCategory: {}, portalOnly: 0, portalOnlyArchived: 0, warnings: 0,
+      warningsByCode: {}, ...summaryOverrides,
+    },
+    matched: [],
+    erpOnly: [],
+    portalOnly: [],
+    warnings: [],
+    ...overrides,
+  })
+
+  const makeWarning = (code, message, concludedShipment) => ({
+    code,
+    message,
+    ref: { rowNumber: null, itemId: '', pedido: '', shipmentKey: '', processId: '' },
+    concludedShipment,
+  })
+
+  it('caso-real: CR-31 Resumo: "27 (1 arquivado)", "27 (2 arquivados)" e so "27" sem arquivados', () => {
+    const { rerender } = render(
+      <ErpReconcileResults result={baseResult({}, { matched: 27, matchedArchived: 1 })} />
+    )
+    expect(metric('Processos casados')).toBe('27 (1 arquivado)')
+    rerender(<ErpReconcileResults result={baseResult({}, { matched: 27, matchedArchived: 2 })} />)
+    expect(metric('Processos casados')).toBe('27 (2 arquivados)')
+    rerender(<ErpReconcileResults result={baseResult({}, { matched: 27, matchedArchived: 0 })} />)
+    expect(metric('Processos casados')).toBe('27')
+    // Resultado sem o campo (versao antiga): so o total.
+    const legacy = baseResult({}, { matched: 3 })
+    delete legacy.summary.matchedArchived
+    rerender(<ErpReconcileResults result={legacy} />)
+    expect(metric('Processos casados')).toBe('3')
+  })
+
+  it('caso-real: CR-41 avisos de embarques concluidos ficam ocultos por padrao; o checkbox mostra todos', async () => {
+    const user = userEvent.setup()
+    const warnings = [
+      makeWarning('aereo_inferido', 'embarque ativo', false),
+      makeWarning('conflito_no_grupo', 'embarque concluido A', true),
+      makeWarning('ref_desconhecida', 'embarque concluido B', true),
+    ]
+    render(<ErpReconcileResults result={baseResult({ warnings }, { warnings: 3 })} />)
+    // O "Avisos" do Resumo continua sendo o total.
+    expect(metric('Avisos')).toBe('3')
+
+    await user.click(screen.getByRole('button', { name: 'Avisos (1)' }))
+    expect(screen.getByText('embarque ativo')).toBeInTheDocument()
+    expect(screen.queryByText('embarque concluido A')).not.toBeInTheDocument()
+    expect(screen.queryByText('embarque concluido B')).not.toBeInTheDocument()
+    expect(screen.getByText('2 avisos de embarques concluídos ocultos.')).toBeInTheDocument()
+
+    const toggle = screen.getByRole('checkbox', { name: 'Mostrar avisos de embarques concluídos (2)' })
+    expect(toggle).not.toBeChecked()
+    await user.click(toggle)
+    expect(screen.getByRole('button', { name: 'Avisos (3)' })).toBeInTheDocument()
+    expect(screen.getByText('embarque ativo')).toBeInTheDocument()
+    expect(screen.getByText('embarque concluido A')).toBeInTheDocument()
+    expect(screen.getByText('embarque concluido B')).toBeInTheDocument()
+    expect(screen.queryByText(/avisos de embarques concluídos ocultos/)).not.toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(screen.getByRole('button', { name: 'Avisos (1)' })).toBeInTheDocument()
+    expect(screen.queryByText('embarque concluido A')).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-41 singular, tudo oculto e sem avisos concluidos', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <ErpReconcileResults
+        result={baseResult({ warnings: [makeWarning('conflito_no_grupo', 'so concluido', true)] }, { warnings: 1 })}
+      />
+    )
+    await user.click(screen.getByRole('button', { name: 'Avisos (0)' }))
+    expect(screen.getByText('1 aviso de embarque concluído oculto.')).toBeInTheDocument()
+    expect(screen.getByText('Nenhum aviso de embarque ativo.')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Mostrar avisos de embarques concluídos (1)' })).toBeInTheDocument()
+
+    // Sem nenhum aviso concluido (inclusive sem a marca): sem checkbox e nada muda.
+    rerender(
+      <ErpReconcileResults
+        result={baseResult({ warnings: [{ ...makeWarning('aereo_inferido', 'ativo', false), concludedShipment: undefined }] }, { warnings: 1 })}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Avisos (1)' })).toBeInTheDocument()
+    expect(screen.getByText('ativo')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByText(/oculto/)).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-41 pelo modal: concluidos ocultos na aba Avisos, e o export leva todos os avisos', async () => {
+    const user = userEvent.setup()
+    const loose = [
+      makeLooseRow({ itemId: 'C1', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46301 }),
+      makeLooseRow({ itemId: 'C2', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46281 }),
+      makeLooseRow({ itemId: 'C4', pedido: 9803, poRef: 'GAMA SEA 983-26', status: 'EMBARCOU', refEmbarque: 'DAP - ITAJAI' }),
+    ].map((row, index) => ({ ...row, rowNumber: index + 2 }))
+    const load = vi.fn().mockResolvedValue({ rows: loose, warnings: [], meta: { fileName: 'teste.xlsx', rowCount: 3 } })
+    renderModal({ sources: [makeFileSource(load)] })
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+
+    await user.click(screen.getByRole('button', { name: /^Avisos/ }))
+    expect(screen.getByText('aereo_inferido')).toBeInTheDocument()
+    expect(screen.queryByText('conflito_no_grupo')).not.toBeInTheDocument()
+    expect(screen.getByText('1 aviso de embarque concluído oculto.')).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Mostrar avisos de embarques concluídos (1)' }))
+    expect(screen.getByText('conflito_no_grupo')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Exportar resultado' }))
+    await waitFor(() => expect(exportErpReconciliationToXlsx).toHaveBeenCalledTimes(1))
+    const [result] = vi.mocked(exportErpReconciliationToXlsx).mock.calls[0]
+    expect(result.warnings.map((warning) => [warning.code, warning.concludedShipment]).sort()).toEqual([
+      ['aereo_inferido', false],
+      ['conflito_no_grupo', true],
+    ])
   })
 
   it('sem resultado nao renderiza nada; bloqueado mostra so a mensagem', () => {

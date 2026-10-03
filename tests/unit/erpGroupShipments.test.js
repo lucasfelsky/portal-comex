@@ -183,6 +183,31 @@ describe('groupErpShipments - estado, estagio e conflitos', () => {
     expect(warning.message).toContain('EM TRANSITO')
   })
 
+  it('caso-real: CR-36 coluna STATUS irreconhecivel (mais de 50% vazio ou fora do vocabulario, a partir de 5 linhas) bloqueia', () => {
+    const rows = (statuses) =>
+      statuses.map((status, index) =>
+        makeLooseRow({ itemId: `S-${index}`, status, poRef: `ALFA SEA 93${index}-26` })
+      )
+    // 6 linhas, 4 ruins (vazio e fora do vocabulario): bloqueia.
+    const blocked = group(rows(['', 'EM TRANSITO', '', 'EM TRANSITO', 'EMBARCOU', 'CONCLUÍDO']))
+    expect(blocked.blocking).toMatchObject({ code: 'coluna_status_irreconhecivel', column: 'STATUS' })
+    expect(blocked.blocking.message).toContain('4 de 6')
+    expect(blocked.blocking.message).toContain('STATUS')
+    // Os avisos por embarque continuam saindo.
+    expect(codes(blocked.warnings)).toContain('status_desconhecido')
+    expect(blocked.shipments).toHaveLength(6)
+    // Exatamente 50% (3 de 6) nao bloqueia.
+    expect(group(rows(['', 'EM TRANSITO', '', 'EMBARCOU', 'EMBARCOU', 'CONCLUÍDO'])).blocking).toBeNull()
+    // Abaixo do minimo de 5 linhas (4 de 4 ruins) nao bloqueia.
+    expect(group(rows(['', '', 'EM TRANSITO', 'XYZ'])).blocking).toBeNull()
+    // Vocabulario valido (com acento e caixa diferentes): sem bloqueio.
+    expect(
+      group(rows(['embarcou', 'Concluido', 'AG. EMBARQUE', 'ag. pagamento (ant)', 'ATRAC. AG. LIBERACAO'])).blocking
+    ).toBeNull()
+    // Sem linhas: sem bloqueio aqui (a planilha vazia e' bloqueada no runner).
+    expect(groupErpShipments([]).blocking).toBeNull()
+  })
+
   it('conflito interno com 2 ETDs reais: transport.etd vazio + conflicts + aviso', () => {
     const { shipments, warnings } = group([
       makeLooseRow({ itemId: '1', poRef: 'ALFA SEA 923-26', etd: 46301 }),

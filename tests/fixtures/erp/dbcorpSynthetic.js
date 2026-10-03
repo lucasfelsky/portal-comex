@@ -211,7 +211,7 @@ export function buildScenarioEntries() {
     refEmbarque: 'FCL - CFR HAMBURG', blAwb: 'BL9036', origin: 'HAMBURG', destination: 'ITAJAI',
     vesselRaw: 'ALFA MAERSK 639W', etd: 46301, eta: 46309, commercialName: 'RESINA OMEGA',
   }
-  const fclSlots = { ...NO_SLOTS, shipmentKind: 'FCL', incoterm: 'CFR', originHint: 'HAMBURG', vesselName: 'ALFA MAERSK', voyage: '639W' }
+  const fclSlots = { ...NO_SLOTS, shipmentKind: 'FCL', incoterm: 'CFR', originHint: '', vesselName: 'ALFA MAERSK', voyage: '639W' }
   const con = {
     status: 'EMBARCOU', refEmbarque: 'CON CN 901-26', blAwb: 'CONBL901', origin: 'SHANGHAI',
     destination: 'NAVEGANTES', vesselRaw: 'DELTA BRIDGE/105W', etd: 46301, eta: 46309,

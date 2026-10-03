@@ -308,7 +308,23 @@ function buildCrossWarnings(rows) {
   return warnings
 }
 
-// -> { shipments: ErpShipment[], warnings }
+// Coluna STATUS com mais de 50% das linhas vazias ou fora do vocabulario do
+// DBCorp (a partir de 5 linhas): o formato mudou, nao adianta conciliar.
+const STATUS_BLOCKING_MIN_ROWS = 5
+
+function detectStatusBlocking(list) {
+  if (list.length < STATUS_BLOCKING_MIN_ROWS) return null
+  const unrecognized = list.filter((row) => !STAGE_BY_FOLDED_STATUS.has(foldText(row.status))).length
+  if (unrecognized * 2 <= list.length) return null
+  return {
+    code: 'coluna_status_irreconhecivel',
+    column: 'STATUS',
+    message: `A coluna STATUS tem ${unrecognized} de ${list.length} linhas vazias ou fora do vocabulário do DBCorp. Exporte o .xlsx do DBCorp com a coluna STATUS preenchida.`,
+  }
+}
+
+// -> { shipments: ErpShipment[], warnings, blocking }
+//   blocking: null | { code: 'coluna_status_irreconhecivel', column, message }
 export function groupErpShipments(rows) {
   const list = Array.isArray(rows) ? rows : []
   const warnings = buildCrossWarnings(list)
@@ -326,5 +342,5 @@ export function groupErpShipments(rows) {
     .sort((a, b) => compareText(`${a.kind}|${a.key}`, `${b.kind}|${b.key}`))
     .map((group) => buildShipment(group.kind, group.key, group.rows, warnings))
 
-  return { shipments, warnings }
+  return { shipments, warnings, blocking: detectStatusBlocking(list) }
 }

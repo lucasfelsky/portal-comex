@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 import {
   INCOTERMS,
+  ORIGIN_INCOTERMS,
   cleanCell,
   daysBetween,
   digitsOnly,
@@ -28,7 +29,13 @@ import {
   normalizeErpItemRows,
   validateErpItemRow,
 } from '../../src/features/erp/erpItemRow.js'
-import { dbcorpXlsxSource, readDbcorpWorkbook } from '../../src/features/erp/readDbcorpWorkbook.js'
+import {
+  MAX_EXPANSION_RATIO,
+  MAX_UNCOMPRESSED_BYTES,
+  dbcorpXlsxSource,
+  inspectZipExpansion,
+  readDbcorpWorkbook,
+} from '../../src/features/erp/readDbcorpWorkbook.js'
 import { INCOTERM_OPTIONS } from '../../src/features/processes/operationalOptions.js'
 import {
   DBCORP_HEADERS,
@@ -110,10 +117,26 @@ describe('erpText - parseErpDate', () => {
 
   it('texto: YYYY-MM-DD, DD/MM/YYYY e datetime sem fuso', () => {
     expect(parseErpDate('2026-10-06')).toEqual({ date: '2026-10-06', warning: null })
-    expect(parseErpDate('06/10/2026')).toEqual({ date: '2026-10-06', warning: null })
+    expect(parseErpDate('06/10/2026')).toEqual({ date: '2026-10-06', warning: 'data_ambigua' })
     expect(parseErpDate('2026-10-06T00:00:00')).toEqual({ date: '2026-10-06', warning: null })
     expect(parseErpDate('2026-10-06T23:59')).toEqual({ date: '2026-10-06', warning: null })
     expect(parseErpDate('2026-10-06T08:30:15.250')).toEqual({ date: '2026-10-06', warning: null })
+  })
+
+  it('caso-real: CR-39 texto DD/MM/AAAA com dia ate 12 e ambiguo (dia/mes) e avisa; dia > 12 ou dia = mes nao', () => {
+    expect(parseErpDate('06/10/2026')).toEqual({ date: '2026-10-06', warning: 'data_ambigua' })
+    expect(parseErpDate('01/12/2026')).toEqual({ date: '2026-12-01', warning: 'data_ambigua' })
+    expect(parseErpDate('12/01/2026')).toEqual({ date: '2026-01-12', warning: 'data_ambigua' })
+    // dia > 12: so' pode ser dia/mes.
+    expect(parseErpDate('13/10/2026')).toEqual({ date: '2026-10-13', warning: null })
+    // dia = mes: as duas leituras dao a mesma data.
+    expect(parseErpDate('10/10/2026')).toEqual({ date: '2026-10-10', warning: null })
+    expect(parseErpDate('05/05/2026')).toEqual({ date: '2026-05-05', warning: null })
+    // Data invalida continua invalida (sem aviso de ambiguidade).
+    expect(parseErpDate('31/02/2026')).toEqual({ date: '', warning: 'data_invalida' })
+    // Serial do Excel e ISO nao sao ambiguos.
+    expect(parseErpDate(46301)).toEqual({ date: '2026-10-06', warning: null })
+    expect(parseErpDate('2026-10-06')).toEqual({ date: '2026-10-06', warning: null })
   })
 
   it('texto com fuso (Z ou offset): vazio + data_com_fuso', () => {
@@ -163,6 +186,24 @@ describe('erpText - quantidade, navio e fornecedor', () => {
     expect(parseQuantityKg(null)).toEqual({ value: null, warning: 'quantidade_invalida' })
     expect(parseQuantityKg('abc')).toEqual({ value: null, warning: 'quantidade_invalida' })
     expect(parseQuantityKg(Number.POSITIVE_INFINITY)).toEqual({ value: null, warning: 'quantidade_invalida' })
+  })
+
+  it('caso-real: CR-38 quantidade: milhar so com grupos de 3 digitos, zero a esquerda e negativo nao viram milhar/valor', () => {
+    // Milhar com ponto (sem virgula): grupos de exatamente 3 digitos.
+    expect(parseQuantityKg('1.234')).toEqual({ value: 1234, warning: null })
+    expect(parseQuantityKg('12.345.678')).toEqual({ value: 12345678, warning: null })
+    // Decimais continuam decimais.
+    expect(parseQuantityKg('1.5')).toEqual({ value: 1.5, warning: null })
+    expect(parseQuantityKg('0.500')).toEqual({ value: 0.5, warning: null })
+    expect(parseQuantityKg('1.234,5')).toEqual({ value: 1234.5, warning: null })
+    expect(parseQuantityKg('+800')).toEqual({ value: 800, warning: null })
+    // Quantidade negativa e' invalida, em texto e em numero.
+    expect(parseQuantityKg('-5')).toEqual({ value: null, warning: 'quantidade_invalida' })
+    expect(parseQuantityKg(-5)).toEqual({ value: null, warning: 'quantidade_invalida' })
+    expect(parseQuantityKg('-1.234,5')).toEqual({ value: null, warning: 'quantidade_invalida' })
+    // Numero nao negativo segue valido (zero inclusive).
+    expect(parseQuantityKg(0)).toEqual({ value: 0, warning: null })
+    expect(parseQuantityKg(1234)).toEqual({ value: 1234, warning: null })
   })
 
   it('caso-real: CR-15 navio em 5 formatos separa nome e viagem', () => {
@@ -222,9 +263,25 @@ describe('erpText - parseRefEmbarque', () => {
       shipmentKind: 'LCL', consolidatedRef: '', incoterm: 'FOB', originHint: 'SHANGHAI', warning: null,
     })
     expect(parseRefEmbarque('FCL - CFR HAMBURG')).toMatchObject({
-      shipmentKind: 'FCL', incoterm: 'CFR', originHint: 'HAMBURG',
+      shipmentKind: 'FCL', incoterm: 'CFR', originHint: '',
     })
     expect(parseRefEmbarque('LCL - FOB BUENOS AIRES').originHint).toBe('BUENOS AIRES')
+  })
+
+  it('caso-real: CR-40 originHint so nos incoterms de origem (EXW/FCA/FAS/FOB); nos grupos C e D o local e destino', () => {
+    for (const incoterm of INCOTERMS) {
+      const parsed = parseRefEmbarque(`FCL - ${incoterm} PORTO`)
+      expect(parsed.incoterm, incoterm).toBe(incoterm)
+      expect(parsed.shipmentKind, incoterm).toBe('FCL')
+      expect(parsed.originHint, incoterm).toBe(ORIGIN_INCOTERMS.includes(incoterm) ? 'PORTO' : '')
+    }
+    expect(ORIGIN_INCOTERMS).toEqual(['EXW', 'FCA', 'FAS', 'FOB'])
+    expect(INCOTERMS.filter((incoterm) => ORIGIN_INCOTERMS.includes(incoterm))).toEqual(ORIGIN_INCOTERMS)
+    for (const incoterm of ['CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP']) {
+      expect(parseRefEmbarque(`FCL - ${incoterm} PORTO`).originHint, incoterm).toBe('')
+    }
+    expect(parseRefEmbarque('LCL - FOB SHANGHAI')).toMatchObject({ incoterm: 'FOB', originHint: 'SHANGHAI' })
+    expect(parseRefEmbarque('LCL - CIF SANTOS')).toMatchObject({ incoterm: 'CIF', originHint: '' })
   })
 
   it('AMOSTRA, COURIER e NACIONAL pela REF', () => {
@@ -485,6 +542,21 @@ describe('normalizeErpItemRows', () => {
     expect(blocking.message).toContain('ETD (EMBARQUE)')
   })
 
+  it('caso-real: CR-39 6 ETDs ambiguas em texto: avisa por celula, preenche a data e nao bloqueia', () => {
+    const rows = Array.from({ length: 6 }, (_, index) =>
+      makeLooseRow({ itemId: `AMB-${index}`, etd: '06/10/2026' })
+    )
+    const { rows: normalized, warnings, blocking } = normalizeErpItemRows(rows)
+    expect(blocking).toBeNull()
+    expect(normalized.every((row) => row.etd === '2026-10-06')).toBe(true)
+    const ambiguous = warnings.filter((item) => item.code === 'data_ambigua')
+    expect(ambiguous).toHaveLength(6)
+    expect(warnings).toHaveLength(6)
+    expect(ambiguous[0].message).toContain('ETD (EMBARQUE)')
+    expect(ambiguous[0].message).toContain('dia até 12')
+    expect(ambiguous[0].message).toContain('"06/10/2026"')
+  })
+
   it('nao bloqueia com menos de 5 celulas preenchidas, nem com exatamente 50%', () => {
     const few = Array.from({ length: 4 }, (_, index) => makeLooseRow({ itemId: `C-${index}`, eta: '10/6/26' }))
     expect(normalizeErpItemRows(few).blocking).toBeNull()
@@ -574,6 +646,62 @@ describe('normalizeErpItemRows', () => {
   })
 })
 
+// Zip montado a mao (STORE, CRC 0: a inspecao so' le cabecalhos). O tamanho
+// descompactado DECLARADO e' parametrizavel por entrada (`declaredSize`).
+function buildStoredZip(entries, { withEnd = true } = {}) {
+  const encoder = new TextEncoder()
+  const locals = []
+  const centrals = []
+  let offset = 0
+  for (const entry of entries) {
+    const name = encoder.encode(entry.name)
+    const data = entry.data ?? new Uint8Array(0)
+    const declared = entry.declaredSize ?? data.length
+
+    const local = new Uint8Array(30 + name.length)
+    const localView = new DataView(local.buffer)
+    localView.setUint32(0, 0x04034b50, true)
+    localView.setUint16(4, 20, true)
+    localView.setUint32(18, data.length, true)
+    localView.setUint32(22, declared, true)
+    localView.setUint16(26, name.length, true)
+    local.set(name, 30)
+
+    const central = new Uint8Array(46 + name.length)
+    const centralView = new DataView(central.buffer)
+    centralView.setUint32(0, 0x02014b50, true)
+    centralView.setUint16(4, 20, true)
+    centralView.setUint16(6, 20, true)
+    centralView.setUint32(20, data.length, true)
+    centralView.setUint32(24, declared, true)
+    centralView.setUint16(28, name.length, true)
+    centralView.setUint32(42, offset, true)
+    central.set(name, 46)
+
+    locals.push(local, data)
+    centrals.push(central)
+    offset += local.length + data.length
+  }
+  const centralSize = centrals.reduce((sum, part) => sum + part.length, 0)
+  const end = new Uint8Array(22)
+  if (withEnd) {
+    const endView = new DataView(end.buffer)
+    endView.setUint32(0, 0x06054b50, true)
+    endView.setUint16(8, entries.length, true)
+    endView.setUint16(10, entries.length, true)
+    endView.setUint32(12, centralSize, true)
+    endView.setUint32(16, offset, true)
+  }
+  const parts = [...locals, ...centrals, ...(withEnd ? [end] : [])]
+  const zip = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
+  let cursor = 0
+  for (const part of parts) {
+    zip.set(part, cursor)
+    cursor += part.length
+  }
+  return zip
+}
+
 describe('readDbcorpWorkbook (xlsx real)', () => {
   const baseMatrix = () =>
     looseRowsToMatrix([
@@ -655,6 +783,29 @@ describe('readDbcorpWorkbook (xlsx real)', () => {
     )
   }, 60000)
 
+  it('caso-real: CR-34 conteudo na ultima linha da janela lida vira erro de limite, nao truncamento silencioso', async () => {
+    const bodyRow = (itemId) => looseRowsToMatrix([makeLooseRow({ itemId })])[1]
+    const head = looseRowsToMatrix([
+      makeLooseRow({ itemId: 'T-1' }),
+      makeLooseRow({ itemId: 'T-2' }),
+      makeLooseRow({ itemId: 'T-3' }),
+    ])
+    const blanks = Array.from({ length: 11 }, () => [])
+    // maxRows:10 -> janela de 16 linhas (indices 0 a 15); dados nos indices 15 a 17.
+    const overflowing = makeXlsx([...head, ...blanks, bodyRow('T-4'), bodyRow('T-5'), bodyRow('T-6')])
+    await expect(readDbcorpWorkbook(overflowing, { maxRows: 10 })).rejects.toThrow(
+      'A planilha passa de 10 linhas; exporte um recorte menor.'
+    )
+    // Controle: sem conteudo na ultima linha da janela, le as 3 linhas.
+    const control = await readDbcorpWorkbook(makeXlsx([...head, ...blanks]), { maxRows: 10 })
+    expect(control.rows).toHaveLength(3)
+    // Controle 2: conteudo ate a penultima linha da janela (indice 14) nao e corte.
+    const inside = await readDbcorpWorkbook(makeXlsx([...head, ...blanks.slice(0, 10), bodyRow('T-4')]), {
+      maxRows: 10,
+    })
+    expect(inside.rows).toHaveLength(4)
+  })
+
   it('CSV ou HTML com 06/10/2026 e rejeitado pela assinatura (nao e zip)', async () => {
     const encoder = new TextEncoder()
     const csv = encoder.encode('PEDIDO,ETD (EMBARQUE)\n9012,06/10/2026\n')
@@ -697,5 +848,114 @@ describe('readDbcorpWorkbook (xlsx real)', () => {
     const loaded = await dbcorpXlsxSource.load(makeXlsx(baseMatrix()))
     expect(loaded.rows).toHaveLength(2)
     expect(loaded.meta.rowCount).toBe(2)
+  })
+})
+
+describe('inspectZipExpansion (zip bomb)', () => {
+  const MB = 1024 * 1024
+  const smallData = () => new Uint8Array(1000).fill(65)
+  const matrix = () =>
+    looseRowsToMatrix([
+      makeLooseRow({ itemId: 'Z-1', etd: 46301, eta: 46309 }),
+      makeLooseRow({ itemId: 'Z-2', etd: 46281, eta: 46309 }),
+    ])
+
+  it('caso-real: CR-35 xlsx real (STORE e DEFLATE) passa: ok, com entradas e dentro dos limites', () => {
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(matrix()), 'Sheet')
+    for (const compression of [false, true]) {
+      const bytes = new Uint8Array(XLSX.write(workbook, { type: 'array', bookType: 'xlsx', compression }))
+      const inspection = inspectZipExpansion(bytes)
+      expect(inspection, `compression=${compression}`).toMatchObject({ ok: true, reason: null })
+      expect(inspection.entries).toBeGreaterThan(0)
+      expect(inspection.uncompressedBytes).toBeGreaterThan(0)
+      expect(inspection.uncompressedBytes).toBeLessThanOrEqual(MAX_EXPANSION_RATIO * bytes.byteLength)
+    }
+    expect(MAX_UNCOMPRESSED_BYTES).toBe(60 * MB)
+    expect(MAX_EXPANSION_RATIO).toBe(20)
+  })
+
+  it('caso-real: CR-35 zip montado a mao: soma os tamanhos declarados', () => {
+    const zip = buildStoredZip([
+      { name: 'a.xml', data: smallData() },
+      { name: 'b/c.xml', data: smallData(), declaredSize: 3000 },
+    ])
+    expect(inspectZipExpansion(zip)).toEqual({ ok: true, reason: null, entries: 2, uncompressedBytes: 4000 })
+  })
+
+  it('caso-real: CR-35 acima de 60 MB declarados (31 MB + 30 MB): acima_do_limite', () => {
+    const zip = buildStoredZip([
+      { name: 'a.xml', data: smallData(), declaredSize: 31 * MB },
+      { name: 'b.xml', data: smallData(), declaredSize: 30 * MB },
+    ])
+    expect(inspectZipExpansion(zip)).toMatchObject({
+      ok: false, reason: 'acima_do_limite', entries: 2, uncompressedBytes: 61 * MB,
+    })
+    // O limite e' parametrizavel: 4000 bytes passam por 5000 e caem por 3999.
+    const small = buildStoredZip([{ name: 'a.xml', data: smallData(), declaredSize: 4000 }])
+    expect(inspectZipExpansion(small, { maxUncompressedBytes: 5000 }).ok).toBe(true)
+    expect(inspectZipExpansion(small, { maxUncompressedBytes: 3999 }).reason).toBe('acima_do_limite')
+  })
+
+  it('caso-real: CR-35 arquivo de N bytes declarando 21 x N (abaixo de 60 MB): taxa_de_expansao', () => {
+    const entry = { name: 'a.xml', data: smallData() }
+    const length = buildStoredZip([entry]).byteLength
+    const bomb = buildStoredZip([{ ...entry, declaredSize: 21 * length }])
+    expect(bomb.byteLength).toBe(length)
+    expect(21 * length).toBeLessThan(MAX_UNCOMPRESSED_BYTES)
+    expect(inspectZipExpansion(bomb)).toMatchObject({
+      ok: false, reason: 'taxa_de_expansao', entries: 1, uncompressedBytes: 21 * length,
+    })
+    // Exatamente 20 x N ainda passa.
+    const limit = buildStoredZip([{ ...entry, declaredSize: 20 * length }])
+    expect(inspectZipExpansion(limit).ok).toBe(true)
+  })
+
+  it('caso-real: CR-35 sem EOCD, truncado ou pequeno demais: zip_invalido', () => {
+    const noEnd = buildStoredZip([{ name: 'a.xml', data: smallData() }], { withEnd: false })
+    expect(inspectZipExpansion(noEnd)).toMatchObject({ ok: false, reason: 'zip_invalido' })
+    expect(inspectZipExpansion(new Uint8Array(10))).toMatchObject({ ok: false, reason: 'zip_invalido' })
+    expect(inspectZipExpansion(null)).toMatchObject({ ok: false, reason: 'zip_invalido' })
+    // Diretorio central apontando para fora do arquivo.
+    const broken = buildStoredZip([{ name: 'a.xml', data: smallData() }])
+    new DataView(broken.buffer).setUint32(broken.byteLength - 22 + 16, broken.byteLength + 100, true)
+    expect(inspectZipExpansion(broken)).toMatchObject({ ok: false, reason: 'zip_invalido' })
+    // Assinatura da entrada do diretorio central corrompida.
+    const badEntry = buildStoredZip([{ name: 'a.xml', data: smallData() }])
+    const centralOffset = new DataView(badEntry.buffer).getUint32(badEntry.byteLength - 22 + 16, true)
+    new DataView(badEntry.buffer).setUint32(centralOffset, 0, true)
+    expect(inspectZipExpansion(badEntry)).toMatchObject({ ok: false, reason: 'zip_invalido' })
+  })
+
+  it('caso-real: CR-35 tamanho 0xFFFFFFFF na entrada ou no fim do diretorio: zip64', () => {
+    const entry64 = buildStoredZip([{ name: 'a.xml', data: smallData(), declaredSize: 0xffffffff }])
+    expect(inspectZipExpansion(entry64)).toMatchObject({ ok: false, reason: 'zip64' })
+    const end64 = buildStoredZip([{ name: 'a.xml', data: smallData() }])
+    new DataView(end64.buffer).setUint32(end64.byteLength - 22 + 16, 0xffffffff, true)
+    expect(inspectZipExpansion(end64)).toMatchObject({ ok: false, reason: 'zip64' })
+  })
+
+  it('caso-real: CR-35 readDbcorpWorkbook rejeita antes de ler o xlsx, com mensagem clara por motivo', async () => {
+    const overLimit = buildStoredZip([
+      { name: 'a.xml', data: smallData(), declaredSize: 31 * MB },
+      { name: 'b.xml', data: smallData(), declaredSize: 30 * MB },
+    ])
+    await expect(readDbcorpWorkbook(overLimit)).rejects.toThrow('60 MB')
+    await expect(readDbcorpWorkbook(overLimit)).rejects.toThrow('descompactado teria 61 MB')
+
+    const entry = { name: 'a.xml', data: smallData() }
+    const length = buildStoredZip([entry]).byteLength
+    const ratioBomb = buildStoredZip([{ ...entry, declaredSize: 21 * length }])
+    await expect(readDbcorpWorkbook(ratioBomb)).rejects.toThrow('limite 20×')
+
+    const zip64 = buildStoredZip([{ ...entry, declaredSize: 0xffffffff }])
+    await expect(readDbcorpWorkbook(zip64)).rejects.toThrow('ZIP64')
+
+    const noEnd = buildStoredZip([entry], { withEnd: false })
+    await expect(readDbcorpWorkbook(noEnd)).rejects.toThrow('não é um .xlsx válido')
+
+    // O xlsx de verdade continua sendo lido.
+    const real = await readDbcorpWorkbook(makeXlsx(matrix()))
+    expect(real.rows).toHaveLength(2)
   })
 })

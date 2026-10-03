@@ -1,11 +1,13 @@
 // Guarda estatica da conciliacao ERP (DBCorp) x Portal - F1 (SOMENTE LEITURA).
-// Le `src/features/erp/**` como TEXTO (depois de remover comentarios) e prova
-// que o nucleo e o modal nao gravam, nao usam rede/armazenamento, nao importam
-// servicos nem os modulos que o `ProcessesPage.test.jsx` mocka com lista
-// fechada, e que o CSS do botao e o vocabulario das fixtures seguem o plano.
+// Le `src/features/erp/**` como TEXTO (depois de remover comentarios com o
+// tokenizador do esbuild, que respeita literais) e prova que o nucleo e o modal
+// nao gravam, nao usam rede/armazenamento, nao importam servicos nem os
+// modulos que o `ProcessesPage.test.jsx` mocka com lista fechada, e que o CSS
+// do botao e o vocabulario das fixtures seguem o plano.
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { transformWithEsbuild } from 'vite'
 import {
   DBCORP_HEADERS,
   SYNTHETIC_VOCABULARY,
@@ -18,8 +20,23 @@ import {
 const ROOT = process.cwd()
 const ERP_DIR = path.resolve(ROOT, 'src/features/erp')
 
-function stripComments(source) {
+// Remocao de comentarios por REGEX: so' para o CSS e para os exports de
+// `src/services` (nao ha literal com `//` ali). O codigo do ERP passa pelo
+// tokenizador (`stripCommentsTokenized`): um literal `'//'` nao esconde o resto.
+function stripCommentsRegex(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+}
+
+// Esbuild: tira `//`, `/* */` e `/*! */` (legalComments: 'none'), preserva o
+// JSX e os literais. Ele imprime aspas duplas; as regex abaixo aceitam as duas.
+async function stripCommentsTokenized(raw, file) {
+  const { code } = await transformWithEsbuild(raw, file, {
+    loader: file.endsWith('.jsx') ? 'jsx' : 'js',
+    jsx: 'preserve',
+    legalComments: 'none',
+    charset: 'utf8',
+  })
+  return code
 }
 
 function walk(dir) {
@@ -32,9 +49,16 @@ function walk(dir) {
   return found
 }
 
+// Chave do indice: caminho relativo a `src/features/erp`, com `/` (dois
+// arquivos de mesmo nome em pastas diferentes nao se sobrepoem).
+const toKey = (file) => path.relative(ERP_DIR, file).split(path.sep).join('/')
+
 const erpFiles = walk(ERP_DIR).sort()
-const rawSources = Object.fromEntries(erpFiles.map((file) => [path.basename(file), fs.readFileSync(file, 'utf8')]))
-const sources = Object.fromEntries(Object.entries(rawSources).map(([name, raw]) => [name, stripComments(raw)]))
+const sources = Object.fromEntries(
+  await Promise.all(
+    erpFiles.map(async (file) => [toKey(file), await stripCommentsTokenized(fs.readFileSync(file, 'utf8'), file)])
+  )
+)
 const isUi = (name) => name.endsWith('.jsx')
 const nonUiNames = Object.keys(sources).filter((name) => !isUi(name))
 
@@ -65,7 +89,7 @@ function readServiceExports() {
   const dir = path.resolve(ROOT, 'src/services')
   const names = new Set()
   for (const file of fs.readdirSync(dir).filter((entry) => /\.jsx?$/.test(entry))) {
-    const text = stripComments(fs.readFileSync(path.join(dir, file), 'utf8'))
+    const text = stripCommentsRegex(fs.readFileSync(path.join(dir, file), 'utf8'))
     for (const match of text.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm)) {
       names.add(match[1])
     }
@@ -94,7 +118,16 @@ const FORBIDDEN_IDENTIFIERS = [
   ['sessionStorage', /\bsessionStorage\b/],
   ['indexedDB', /\bindexedDB\b/],
   ['dangerouslySetInnerHTML', /\bdangerouslySetInnerHTML\b/],
-  ['toISOString(', /\btoISOString\s*\(/],
+  ['toISOString/toJSON', /\btoISOString\b|\btoJSON\b/],
+  ['XMLHttpRequest', /\bXMLHttpRequest\b/],
+  ['WebSocket', /\bWebSocket\b/],
+  ['EventSource', /\bEventSource\b/],
+  ['new Image', /\bnew\s+Image\b/],
+  ['navigator.serviceWorker', /\bnavigator\s*\.\s*serviceWorker\b/],
+  ['caches.', /\bcaches\s*\./],
+  ['document.cookie', /\bdocument\s*\.\s*cookie\b/],
+  ['window.open', /\bwindow\s*\.\s*open\b/],
+  ['postMessage', /\bpostMessage\b/],
 ]
 
 const MODAL_ALLOWLIST = [
@@ -202,6 +235,8 @@ describe('erpReadOnlyGuard - especificadores de import', () => {
 
   it('modulos nao-UI importam estaticamente so ./*.js, dentro das camadas do plano', () => {
     for (const name of nonUiNames) {
+      // Arquivo novo em src/features/erp sem camada declarada reprova aqui.
+      expect(Object.keys(ALLOWED_STATIC_IMPORTS), `${name}: sem camada em ALLOWED_STATIC_IMPORTS`).toContain(name)
       const { statics } = readSpecifiers(sources[name])
       for (const specifier of statics) {
         expect(specifier, name).toMatch(/^\.\/[A-Za-z0-9_]+\.js$/)
@@ -264,21 +299,39 @@ describe('erpReadOnlyGuard - import dinamico so em lista de permitidos', () => {
     }
   })
 
-  it('nenhum literal de texto do nucleo contem // ou /* (o stripComments esconderia o codigo seguinte)', () => {
-    const offenders = []
-    for (const [name, raw] of Object.entries(rawSources)) {
-      raw.split(/\r?\n/).forEach((line, index) => {
-        if (/^\s*(\/\/|\/\*|\*)/.test(line)) return
-        if (/(['"`])(?:(?!\1)[^\\\n]|\\.)*\/[/*](?:(?!\1)[^\\\n]|\\.)*\1/.test(line)) offenders.push(`${name}:${index + 1}`)
-      })
-    }
-    expect(offenders).toEqual([])
+  it('caso-real: CR-42 controle do tokenizador: tira comentarios (//, /* */, /*! */) mas um literal "//" NAO esconde o codigo seguinte', async () => {
+    expect(await stripCommentsTokenized('const a = 1 // fetch(url)\nconst b = 2', 'x.js')).not.toContain('fetch')
+    expect(await stripCommentsTokenized('/* fetch(url) */ const b = 2', 'x.js')).not.toContain('fetch')
+    expect(await stripCommentsTokenized('/*! fetch(x) */ const b = 2', 'x.js')).not.toContain('fetch')
+    expect(await stripCommentsTokenized("const s = '//'; fetch(u)", 'x.js')).toContain('fetch')
+    expect(await stripCommentsTokenized("const s = '/*'; fetch(u) // fim", 'x.js')).toContain('fetch(u)')
+    // O JSX (modal) passa intacto pelo tokenizador.
+    expect(await stripCommentsTokenized('const a = <div>{/* x */}ok</div>', 'x.jsx')).toContain('<div>')
   })
 
-  it('controle do stripComments: remove comentarios; um literal com // esconderia a cauda da linha (por isso o teste anterior)', () => {
-    expect(stripComments('const a = 1 // fetch(url)\nconst b = 2')).not.toContain('fetch')
-    expect(stripComments('/* fetch(url) */ const b = 2')).not.toContain('fetch')
-    expect(stripComments("const s = '//'; fetch(u)")).not.toContain('fetch')
+  it('caso-real: CR-42 indice por caminho relativo: arquivos de mesmo nome em pastas diferentes nao se sobrepoem', () => {
+    expect(toKey(path.join(ERP_DIR, 'sub', 'erpText.js'))).toBe('sub/erpText.js')
+    expect(toKey(path.join(ERP_DIR, 'erpText.js'))).toBe('erpText.js')
+    expect(Object.keys(sources)).toContain('erpText.js')
+    expect(Object.keys(sources).every((name) => !name.includes('\\'))).toBe(true)
+  })
+
+  it('caso-real: CR-42 os novos identificadores proibidos pegam o uso real (e nao o texto de comentario)', async () => {
+    const hit = (label, code) => FORBIDDEN_IDENTIFIERS.find(([name]) => name === label)[1].test(code)
+    expect(hit('XMLHttpRequest', 'const r = new XMLHttpRequest()')).toBe(true)
+    expect(hit('WebSocket', 'new WebSocket(url)')).toBe(true)
+    expect(hit('EventSource', 'new EventSource(url)')).toBe(true)
+    expect(hit('new Image', 'const i = new Image()')).toBe(true)
+    expect(hit('navigator.serviceWorker', 'navigator . serviceWorker.register(x)')).toBe(true)
+    expect(hit('caches.', 'await caches.open("x")')).toBe(true)
+    expect(hit('document.cookie', 'document.cookie = "a=1"')).toBe(true)
+    expect(hit('window.open', 'window.open(url)')).toBe(true)
+    expect(hit('postMessage', 'worker.postMessage(1)')).toBe(true)
+    expect(hit('toISOString/toJSON', 'date.toISOString()')).toBe(true)
+    expect(hit('toISOString/toJSON', 'const f = date.toJSON')).toBe(true)
+    // Comentario nao conta (o tokenizador o remove antes da varredura).
+    expect(hit('postMessage', await stripCommentsTokenized('// postMessage(1)\nconst a = 1', 'x.js'))).toBe(false)
+    expect(hit('new Image', 'const i = new ImageData(1, 1)')).toBe(false)
   })
 
   it('nenhuma funcao/constante exportada por src/services/* aparece no nucleo (repositorios, audits, storage...)', () => {
@@ -317,14 +370,14 @@ describe('erpReadOnlyGuard - bloco ERP-RECONCILE do styles.css', () => {
   })
 
   it('sem literal de cor (#hex, rgb(, hsl()', () => {
-    const code = stripComments(block)
+    const code = stripCommentsRegex(block)
     expect(code).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     expect(code).not.toMatch(/rgba?\(/)
     expect(code).not.toMatch(/hsla?\(/)
   })
 
   it('so usa tokens ja definidos no tema', () => {
-    const used = [...new Set([...stripComments(block).matchAll(/var\((--[a-z0-9-]+)\)/g)].map((match) => match[1]))]
+    const used = [...new Set([...stripCommentsRegex(block).matchAll(/var\((--[a-z0-9-]+)\)/g)].map((match) => match[1]))]
     expect(used.length).toBeGreaterThan(0)
     for (const token of used) {
       expect(css, token).toMatch(new RegExp(`${token}\\s*:`))
@@ -332,10 +385,24 @@ describe('erpReadOnlyGuard - bloco ERP-RECONCILE do styles.css', () => {
   })
 
   it('esconde o botao em <= 1040px com display: none', () => {
-    const code = stripComments(block)
+    const code = stripCommentsRegex(block)
     expect(code).toMatch(/@media \(max-width: 1040px\)\s*\{[^{}]*\.ghost-button\.erp-reconcile-trigger\s*\{\s*display:\s*none;\s*\}\s*\}/)
     expect(code).toContain('.erp-reconcile-trigger')
     expect(code).toContain('display: none')
+  })
+
+  it('caso-real: CR-32 seletor de arquivo: o input do padrao UX-6a fica oculto por clip (nunca display: none) e o modal tem o seu bloco', () => {
+    const rules = [...css.matchAll(/\.file-picker__input\s*\{([^}]*)\}/g)].map((match) => match[1])
+    expect(rules.length).toBeGreaterThan(0)
+    for (const body of rules) {
+      expect(body).toContain('clip')
+      expect(body).not.toMatch(/display\s*:\s*none/)
+    }
+    const code = stripCommentsRegex(block)
+    expect(code).toContain('.erp-reconcile__file .file-picker__button')
+    expect(code).toContain('.erp-reconcile__file .file-picker__status')
+    // O modal nao esconde o input por conta propria.
+    expect(code).not.toMatch(/file-picker__input\s*\{[^}]*display\s*:\s*none/)
   })
 })
 
