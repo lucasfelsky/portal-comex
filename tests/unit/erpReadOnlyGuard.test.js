@@ -11,6 +11,7 @@ import { transformWithEsbuild } from 'vite'
 import {
   DBCORP_HEADERS,
   SYNTHETIC_VOCABULARY,
+  buildCreationScenarioLooseRows,
   buildScenarioApiRows,
   buildScenarioLooseRows,
   buildScenarioPortalProcesses,
@@ -139,6 +140,9 @@ const MODAL_ALLOWLIST = [
   './reconcileErp.js',
   './erpReference.js',
   './erpReconciliationExport.js',
+  // F3: a aba "Criar processos" e o nucleo puro do rascunho.
+  './ErpCreateProcessesPanel.jsx',
+  './erpProcessDraft.js',
 ]
 
 // Camadas: erpText <- dbcorpColumns <- parseDbcorpRows <- readDbcorpWorkbook;
@@ -155,6 +159,8 @@ const ALLOWED_STATIC_IMPORTS = {
   'erpReconciliationExport.js': [],
   // PR 3: modulo puro da referencia do ERP (payload, lotes e avisos do detalhe).
   'erpReference.js': ['./erpText.js', './reconcileErp.js'],
+  // F3: rascunho de processo a partir do embarque do ERP (puro, sem dado financeiro).
+  'erpProcessDraft.js': ['./erpText.js', './reconcileErp.js'],
 }
 
 const mockedByProcessesPage = [
@@ -166,13 +172,15 @@ const mockedByProcessesPage = [
 const stripExtension = (file) => file.replace(/\.(jsx?|mjs)$/, '')
 
 describe('erpReadOnlyGuard - escopo dos arquivos', () => {
-  it('src/features/erp tem exatamente os 11 arquivos do plano', () => {
+  it('src/features/erp tem exatamente os 13 arquivos do plano', () => {
     expect(Object.keys(sources).sort()).toEqual(
       [
+        'ErpCreateProcessesPanel.jsx',
         'ErpHint.jsx',
         'ErpReconcileModal.jsx',
         'dbcorpColumns.js',
         'erpItemRow.js',
+        'erpProcessDraft.js',
         'erpReconciliationExport.js',
         'erpReference.js',
         'erpText.js',
@@ -184,8 +192,8 @@ describe('erpReadOnlyGuard - escopo dos arquivos', () => {
     )
   })
 
-  it('o mock fechado do ProcessesPage tem 16 modulos (a lista que a guarda vigia)', () => {
-    expect(mockedByProcessesPage).toHaveLength(16)
+  it('o mock fechado do ProcessesPage tem 17 modulos (a lista que a guarda vigia)', () => {
+    expect(mockedByProcessesPage).toHaveLength(17)
   })
 })
 
@@ -255,7 +263,7 @@ describe('erpReadOnlyGuard - especificadores de import', () => {
     expect(readSpecifiers(sources['erpReconciliationExport.js']).statics).toEqual([])
   })
 
-  it('o modal importa so da allowlist e de nenhum dos 16 modulos mockados no ProcessesPage', () => {
+  it('o modal importa so da allowlist e de nenhum dos 17 modulos mockados no ProcessesPage', () => {
     const { statics, dynamics } = readSpecifiers(sources['ErpReconcileModal.jsx'])
     expect(dynamics).toEqual([])
     for (const specifier of statics) {
@@ -464,6 +472,45 @@ describe('erpReadOnlyGuard - escrita da referencia (PR 3)', () => {
   })
 })
 
+describe('erpReadOnlyGuard - criar processos (F3)', () => {
+  it('o painel importa so react e ./erpProcessDraft.js (nenhum import dinamico)', () => {
+    const { statics, dynamics } = readSpecifiers(sources['ErpCreateProcessesPanel.jsx'])
+    expect([...statics].sort()).toEqual(['./erpProcessDraft.js', 'react'])
+    expect(dynamics).toEqual([])
+  })
+
+  it('o modal recebe a criacao por callback injetado (onCreateProcesses) e nao cita nenhum servico', () => {
+    expect(sources['ErpReconcileModal.jsx']).toContain('onCreateProcesses')
+    expect(sources['ErpReconcileModal.jsx']).not.toMatch(/processesRepository|auditRepository|erpReferenceRepository/)
+    expect(sources['ErpCreateProcessesPanel.jsx']).not.toMatch(/processesRepository|auditRepository|erpReferenceRepository/)
+  })
+
+  it('o nucleo puro do rascunho nao importa a pasta de processos nem nenhum modulo mockado', () => {
+    const { statics, dynamics } = readSpecifiers(sources['erpProcessDraft.js'])
+    expect([...statics].sort()).toEqual(['./erpText.js', './reconcileErp.js'])
+    expect(dynamics).toEqual([])
+  })
+
+  it('o CSS do painel (.erp-create) fica dentro do bloco ERP-RECONCILE e nao tem animation nem transition', () => {
+    const css = fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8')
+    const start = css.indexOf('/* ERP-RECONCILE:START */')
+    const end = css.indexOf('/* ERP-RECONCILE:END */')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const outside = css.slice(0, start) + css.slice(end)
+    expect(outside).not.toContain('.erp-create')
+    const block = stripCommentsRegex(css.slice(start, end))
+    expect(block).toContain('.erp-create')
+    // So' o trecho `.erp-create*` (cada regra ate o fechamento) e' varrido.
+    const rules = [...block.matchAll(/(^|\n)(\.erp-create[^{]*)\{([^}]*)\}/g)].map((match) => match[3])
+    expect(rules.length).toBeGreaterThan(0)
+    for (const body of rules) {
+      expect(body).not.toMatch(/\banimation\b/)
+      expect(body).not.toMatch(/\btransition\b/)
+    }
+  })
+})
+
 describe('erpReadOnlyGuard - bloco ERP-HINT do styles.css (PR 3)', () => {
   const css = fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8')
   const START = '/* ERP-HINT:START */'
@@ -508,7 +555,12 @@ describe('erpReadOnlyGuard - bloco ERP-HINT do styles.css (PR 3)', () => {
 })
 
 describe('erpReadOnlyGuard - fixtures sinteticas (guarda positiva)', () => {
-  const rows = [...buildScenarioLooseRows(), ...buildScenarioApiRows(), makeLooseRow()]
+  const rows = [
+    ...buildScenarioLooseRows(),
+    ...buildScenarioApiRows(),
+    ...buildCreationScenarioLooseRows(),
+    makeLooseRow(),
+  ]
 
   it('os 39 cabecalhos exatos, com "NF\'S " (espaco no fim)', () => {
     expect(DBCORP_HEADERS).toHaveLength(39)

@@ -3,10 +3,12 @@
 // "Embarque confirmado" no passo "Embarque" (`shipmentConfirmation.js`,
 // deriva de `shippedAt`). Regra de import: nenhum modulo mockado por
 // tests/ui/ProcessesPage.test.jsx - este arquivo so' ganha `../../utils/fieldErrors`
-// (UX-3b, tambem nao mockado).
+// (UX-3b) e `./houseBl.js` (D-F3-1, puro e sem import), ambos nao mockados.
 // UX-6b-1: grupos "Navio e documentos" (recebe o Agente de carga, movido de
 // ProcessForm.jsx) e "Transbordo", em `.form-group`/`.form-grid`.
+// D-F3-1: nos maritimos o BL e' um campo so' ("House BL"); AEREO tem MAWB/HAWB.
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import { getHouseBlInputValue } from './houseBl.js'
 
 export default function ProcessTransitFields({ draft, onDraftChange, errors = {} }) {
   const isMaritime =
@@ -67,25 +69,13 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
             </>
           ) : null}
 
-          {draft.category === 'FCL' ? (
+          {isMaritime ? (
             <label className="field">
-              <span>Master BL (MBL)</span>
+              <span>House BL</span>
               <input
                 className="text-input"
                 type="text"
-                value={draft.masterBl}
-                onChange={(event) => onDraftChange('masterBl', event.target.value)}
-              />
-            </label>
-          ) : null}
-
-          {draft.category === 'LCL' || draft.category === 'CONSOLIDADO' ? (
-            <label className="field">
-              <span>House BL (HBL)</span>
-              <input
-                className="text-input"
-                type="text"
-                value={draft.houseBl}
+                value={getHouseBlInputValue(draft)}
                 onChange={(event) => onDraftChange('houseBl', event.target.value)}
               />
             </label>

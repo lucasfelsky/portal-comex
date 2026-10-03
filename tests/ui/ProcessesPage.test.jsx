@@ -24,7 +24,13 @@ import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
 import * as XLSX from 'xlsx'
-import { looseRowsToMatrix, makeLooseRow } from '../fixtures/erp/dbcorpSynthetic.js'
+import {
+  CREATION_SCENARIO_KEYS,
+  FINANCIAL_SENTINEL_STRINGS,
+  buildCreationScenarioLooseRows,
+  looseRowsToMatrix,
+  makeLooseRow,
+} from '../fixtures/erp/dbcorpSynthetic.js'
 
 const mockUseAuth = vi.fn()
 const mockListProcesses = vi.fn()
@@ -37,6 +43,7 @@ const mockCreateProcessMessage = vi.fn()
 const mockDeleteProcessMessage = vi.fn()
 const mockLoadErpReference = vi.fn()
 const mockSaveErpReferenceSnapshot = vi.fn()
+const mockCreateAuditEvent = vi.fn()
 
 vi.mock('../../src/hooks/useAuth', () => ({
   default: () => mockUseAuth(),
@@ -64,6 +71,12 @@ vi.mock('../../src/services/processMessagesRepository', () => ({
 vi.mock('../../src/services/erpReferenceRepository', () => ({
   loadErpReference: (...args) => mockLoadErpReference(...args),
   saveErpReferenceSnapshot: (...args) => mockSaveErpReferenceSnapshot(...args),
+}))
+// F3 (criar processos do DBCorp): o audit do lote sai pela pagina. Mock obrigatorio: sem ele
+// o teste falaria com o Firestore de verdade. Os 2 exports do servico sao mockados.
+vi.mock('../../src/services/auditRepository', () => ({
+  createAuditEvent: (...args) => mockCreateAuditEvent(...args),
+  listAuditEvents: vi.fn().mockResolvedValue([]),
 }))
 // F17.1b: defensivo — a pagina renderiza o ProcessDetailView, que agora
 // tem a aba "Histórico" (ProcessHistoryPanel se autocarrega).
@@ -202,6 +215,8 @@ beforeEach(() => {
   mockListProcessMessages.mockReset()
   mockLoadErpReference.mockReset()
   mockSaveErpReferenceSnapshot.mockReset()
+  mockCreateAuditEvent.mockReset()
+  mockCreateAuditEvent.mockResolvedValue({})
   mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
   mockListProcesses.mockResolvedValue(PROCESSES)
   mockListProcessMessages.mockResolvedValue([])
@@ -1110,13 +1125,13 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
   })
 
   // File do jsdom 25 nao tem `arrayBuffer`: define na instancia (o leitor real da planilha a usa).
-  function buildErpWorkbookFile(name = 'teste.xlsx') {
+  // `rows` (F3): linhas soltas do cenario; a matriz vem de `looseRowsToMatrix`, logo com as sentinelas financeiras.
+  function buildErpWorkbookFile(
+    name = 'teste.xlsx',
+    rows = [makeLooseRow({ itemId: 'W-1', pedido: 9500, poRef: 'ALFA SEA 950-26' })]
+  ) {
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet(looseRowsToMatrix([makeLooseRow({ itemId: 'W-1', pedido: 9500, poRef: 'ALFA SEA 950-26' })])),
-      'Sheet'
-    )
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(looseRowsToMatrix(rows)), 'Sheet')
     const written = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
     const bytes =
       written instanceof ArrayBuffer ? written : written.buffer.slice(written.byteOffset, written.byteOffset + written.byteLength)
@@ -1406,5 +1421,584 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
       expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
       warn.mockRestore()
     })
+  })
+
+  // F3: criar processos a partir do DBCorp. Relogio fixo: so' `Date` e' falso (meio-dia local
+  // = SCENARIO_TODAY em qualquer fuso); os setTimeout reais seguem andando.
+  describe('criar processos (F3)', () => {
+    const K = CREATION_SCENARIO_KEYS
+    const BATCH_ACTION = 'Processos criados via DBCorp'
+    let created
+    let errorSpy
+    let warnSpy
+
+    // Cenario do CR-60: FCL AG. EMBARQUE + CON AG. EMBARQUE + FCL EMBARCOU com DI.
+    const threeRows = () =>
+      buildCreationScenarioLooseRows().filter(
+        (row) => row.poRef === K.fclAgEmbarque || row.refEmbarque === K.con || row.poRef === K.fclEmbarcouComDi
+      )
+
+    const savedNames = () => mockSaveProcess.mock.calls.map(([payload]) => payload.name)
+    const savedIds = () => mockSaveProcess.mock.calls.map(([payload]) => payload.id)
+    const savedPayload = (name) => mockSaveProcess.mock.calls.map(([payload]) => payload).find((payload) => payload.name === name)
+
+    // Cada save devolve o processo com id PROC-t<n> e o poe na lista que o servico "devolve" depois.
+    function useRecordingBackend() {
+      mockListProcesses.mockImplementation(async () => [...PROCESSES, ...created])
+      mockSaveProcess.mockImplementation(async (payload) => {
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(2026, 9, 2, 12, 0, 0))
+      created = []
+      asAdmin()
+      mockSaveProcess.mockReset()
+      useRecordingBackend()
+      mockSaveErpReferenceSnapshot.mockResolvedValue(savedWith(referenceWith(SNAPSHOT_B, 'SANTOS')))
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      mockSaveProcess.mockReset()
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    })
+
+    async function uploadScenario(user, rows = threeRows()) {
+      await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+      const dialog = await openImportModal(user)
+      await user.upload(dialog.querySelector('input[type="file"]'), buildErpWorkbookFile('criar.xlsx', rows))
+      expect(await within(dialog).findByText('Referência do ERP salva: 1 processo.')).toBeInTheDocument()
+      return dialog
+    }
+
+    async function openCreateTab(user, dialog, count) {
+      await user.click(within(dialog).getByRole('button', { name: new RegExp(`^Criar processos \\(${count}\\)`) }))
+    }
+
+    async function selectAll(user, dialog) {
+      for (const box of within(dialog).getAllByRole('checkbox', { name: /^Selecionar todos de/ })) {
+        await user.click(box)
+      }
+    }
+
+    async function confirm(user, dialog, count) {
+      await user.click(within(dialog).getByRole('button', { name: count === 1 ? 'Criar 1 processo' : `Criar ${count} processos` }))
+      await user.click(within(dialog).getByRole('button', { name: 'Confirmar criação' }))
+    }
+
+    async function createAllThree(user) {
+      renderPage()
+      const dialog = await uploadScenario(user)
+      await openCreateTab(user, dialog, 3)
+      await selectAll(user, dialog)
+      await confirm(user, dialog, 3)
+      return dialog
+    }
+
+    it('caso-real: CR-60 so o upload da planilha nao cria nada (a referencia e salva, processes nao)', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      const dialog = await uploadScenario(user)
+      await openCreateTab(user, dialog, 3)
+      expect(mockSaveProcess).not.toHaveBeenCalled()
+      expect(mockCreateAuditEvent).not.toHaveBeenCalled()
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+    })
+
+    it('caso-real: CR-60 caminho feliz: 3 processos salvos pelo mesmo caminho do Novo processo, 1 audit do lote e a referencia regravada', async () => {
+      const user = userEvent.setup()
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      expect(savedNames().sort()).toEqual([K.fclAgEmbarque, K.fclEmbarcouComDi, 'CON DG 964-26'].sort())
+      for (const [payload, actor] of mockSaveProcess.mock.calls) {
+        expect(payload.id).toBe('')
+        expect(payload.etaOriginal).toBe(payload.eta)
+        expect(actor).toMatchObject({ role: 'admin', name: 'Admin Teste' })
+      }
+      expect(savedPayload(K.fclAgEmbarque)).toMatchObject({
+        category: 'FCL', processNumber: '9620', purchaseOrders: [], supplierName: 'ALFA CHEM', destination: 'ITAJAÍ',
+        incoterm: 'FOB', originLocation: 'KOBE', etd: '2026-10-20', eta: '2026-11-25', etaOriginal: '2026-11-25',
+        shippedAt: '', duimpNumber: '', duimpRegisteredAt: '', houseBl: 'HBL-962', masterBl: '',
+      })
+      expect(savedPayload(K.fclAgEmbarque).items.map(({ commercialName, quantity }) => ({ commercialName, quantity }))).toEqual([
+        { commercialName: 'RESINA OMEGA', quantity: 1000 },
+        { commercialName: 'SOLVENTE PI', quantity: 500.5 },
+      ])
+      const con = savedPayload('CON DG 964-26')
+      expect(con).toMatchObject({ category: 'CONSOLIDADO', processNumber: '', supplierName: '', houseBl: 'HBL-964', masterBl: '' })
+      expect(con.purchaseOrders.map((order) => order.po)).toEqual(['9640', '9641', '9642'])
+      expect(con.items.map((item) => item.poNumber)).toEqual(['9640', '9641', '9642'])
+      expect(savedPayload(K.fclEmbarcouComDi)).toMatchObject({
+        category: 'FCL', shippedAt: '2026-09-28', etd: '2026-09-28', eta: '2026-10-20',
+        duimpNumber: '25/1234567-8', duimpRegisteredAt: '2026-10-01T00:00', houseBl: 'HBL-967', masterBl: '',
+      })
+
+      // A lista do servidor e' lida antes do 1o save e de novo depois do ultimo.
+      const listOrders = mockListProcesses.mock.invocationCallOrder
+      const saveOrders = mockSaveProcess.mock.invocationCallOrder
+      expect(listOrders.filter((order) => order < Math.min(...saveOrders)).length).toBeGreaterThanOrEqual(2)
+      expect(Math.max(...listOrders)).toBeGreaterThan(Math.max(...saveOrders))
+
+      // 1 audit do lote, com os nomes e os ids; mais a referencia regravada (D-F3-3).
+      expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1)
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.action).toBe(BATCH_ACTION)
+      // O audit individual de cada criado e' o "Processo criado" do saveProcess: o payload vai SEM id
+      // (com id o saveProcess gravaria "Processo atualizado") e a pagina so' grava o do lote.
+      expect(mockSaveProcess.mock.calls.every(([payload]) => payload.id === '')).toBe(true)
+      expect(mockCreateAuditEvent.mock.calls.map(([audit]) => audit.action)).toEqual([BATCH_ACTION])
+      expect(event.actor).toBe('Admin Teste')
+      expect(event.target.startsWith('3 processos: ')).toBe(true)
+      for (const name of [K.fclAgEmbarque, K.fclEmbarcouComDi, 'CON DG 964-26']) expect(event.target).toContain(name)
+      expect(event.target).toMatch(/\(PROC-t1\)/)
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(2)
+
+      // Nada financeiro atravessa a fronteira de escrita (a matriz do xlsx tinha as sentinelas).
+      for (const sentinel of FINANCIAL_SENTINEL_STRINGS) {
+        expect(JSON.stringify(mockSaveProcess.mock.calls)).not.toContain(sentinel)
+        expect(JSON.stringify(mockCreateAuditEvent.mock.calls)).not.toContain(sentinel)
+      }
+
+      // Depois de criar o modal concilia de novo: os 3 passam a casados e saem da aba.
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(0\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-60 os saves rodam em sequencia: o 2o so comeca depois que o 1o resolve', async () => {
+      const user = userEvent.setup()
+      let releaseFirst
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementationOnce(
+        (payload) =>
+          new Promise((resolve) => {
+            releaseFirst = () => {
+              const saved = { ...payload, id: 'PROC-t1' }
+              created.push(saved)
+              resolve(saved)
+            }
+          })
+      )
+      mockSaveProcess.mockImplementation(async (payload) => {
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+      const dialog = await createAllThree(user)
+      await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+      // Tempo real passa e o 2o save nao comeca enquanto o 1o esta pendente.
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      expect(mockSaveProcess).toHaveBeenCalledTimes(1)
+      expect(within(dialog).getByText('Criando 1 de 3…')).toBeInTheDocument()
+
+      releaseFirst()
+      await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(3))
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-60 saveProcess devolvendo undefined: o lote conclui sem TypeError', async () => {
+      const user = userEvent.setup()
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockResolvedValue(undefined)
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1)
+      expect(within(dialog).queryByText(/TypeError/)).not.toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 lista fresca que ja tem o PEDIDO do FCL: so os outros sao salvos e o FCL aparece em Pulados', async () => {
+      const user = userEvent.setup()
+      const existing = { id: 'p-ja', name: K.fclAgEmbarque, processNumber: '9620', category: 'FCL' }
+      mockListProcesses.mockReset()
+      mockListProcesses
+        .mockResolvedValueOnce(PROCESSES)
+        .mockResolvedValueOnce([...PROCESSES, existing])
+        .mockImplementation(async () => [...PROCESSES, existing, ...created])
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 1 pulado · 0 com erro')).toBeInTheDocument()
+      expect(savedNames().sort()).toEqual([K.fclEmbarcouComDi, 'CON DG 964-26'].sort())
+      expect(within(dialog).getByText(`${K.fclAgEmbarque} — já existe: ${K.fclAgEmbarque}`)).toBeInTheDocument()
+      expect(within(dialog).getByRole('heading', { name: 'Resultado da criação' })).toHaveFocus()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).not.toContain(K.fclAgEmbarque)
+    })
+
+    it('caso-real: CR-68 um saveProcess rejeitado: os outros sao criados, "Com erro" mostra a mensagem e o audit lista so os criados', async () => {
+      const user = userEvent.setup()
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementation(async (payload) => {
+        if (payload.name === 'CON DG 964-26') throw new Error('falha-ao-gravar')
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      const failedItem = within(dialog).getByText(/^CON DG 964-26: Não foi possível salvar o processo\./)
+      expect(failedItem).toHaveTextContent('falha-ao-gravar')
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).not.toContain('CON DG 964-26')
+      // O que falhou continua candidato (ainda e' criavel).
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
+    })
+
+    // `afterWrite`: grava o documento (poe na lista que o servico devolve, com id gerado pelo "servico") e so'
+    // depois rejeita, como um save cuja resposta falha depois da gravacao. `beforeWrite`: rejeita SEM gravar.
+    function rejectSaves({ afterWrite = [], beforeWrite = [] }) {
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementation(async (payload) => {
+        if (beforeWrite.includes(payload.name)) throw new Error('falha-ao-gravar')
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        if (afterWrite.includes(payload.name)) throw new Error('audit-fora')
+        return saved
+      })
+    }
+    const createdId = (name) => created.find((item) => item.name === name)?.id
+
+    it('caso-real: CR-68 save rejeita DEPOIS de gravar (CON) e outro rejeita SEM gravar (FCL): o 1o vira "Criado (falha só no registro de auditoria)", o 2o continua "Com erro"; ids gerados pelo saveProcess', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: ['CON DG 964-26'], beforeWrite: [K.fclEmbarcouComDi] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      // A pagina nao define o id: o saveProcess gera e audita "Processo criado".
+      expect(savedIds()).toEqual(['', '', ''])
+      const conId = createdId('CON DG 964-26')
+      expect(conId).toMatch(/^PROC-t\d$/)
+
+      expect(within(dialog).getByRole('heading', { name: 'Criados (2)' })).toBeInTheDocument()
+      expect(
+        within(dialog).getByText(`CON DG 964-26 (${conId}) — Criado (falha só no registro de auditoria)`)
+      ).toBeInTheDocument()
+      expect(within(dialog).getByRole('heading', { name: 'Com erro (1)' })).toBeInTheDocument()
+      const failedItem = within(dialog).getByText(new RegExp(`^${K.fclEmbarcouComDi}: Não foi possível salvar o processo\\.`))
+      expect(failedItem).toHaveTextContent('falha-ao-gravar')
+      expect(within(dialog).queryByText(/Não foi possível salvar o processo\..*audit-fora/)).not.toBeInTheDocument()
+
+      // O audit do lote lista os 2 criados, o recuperado com a observacao, e nao o que falhou de verdade.
+      expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1)
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.action).toBe(BATCH_ACTION)
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).toContain(`CON DG 964-26 (${conId}; falha só no registro de auditoria)`)
+      expect(event.target).toContain(K.fclAgEmbarque)
+      expect(event.target).not.toContain(K.fclEmbarcouComDi)
+
+      // D-F3-3: houve criados, entao a referencia e regravada; o CON recuperado passa a casado e o que
+      // falhou de verdade continua candidato.
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 mesmo cenario com os papeis trocados: o FCL que rejeita DEPOIS de gravar e recuperado (casa por PEDIDO/nome) e o CON que rejeita SEM gravar continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: [K.fclEmbarcouComDi], beforeWrite: ['CON DG 964-26'] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      const fclId = createdId(K.fclEmbarcouComDi)
+      expect(within(dialog).getByText(`${K.fclEmbarcouComDi} (${fclId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      expect(within(dialog).getByText(/^CON DG 964-26: Não foi possível salvar o processo\./)).toHaveTextContent('falha-ao-gravar')
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).toContain(`${K.fclEmbarcouComDi} (${fclId}; falha só no registro de auditoria)`)
+      expect(event.target).not.toContain('CON DG 964-26')
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 2 saves rejeitam depois de gravar no mesmo lote: cada um e recuperado com o SEU processo (nenhum processo e contado 2 vezes)', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: ['CON DG 964-26', K.fclAgEmbarque] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+      const conId = createdId('CON DG 964-26')
+      const fclId = createdId(K.fclAgEmbarque)
+      expect(conId).not.toBe(fclId)
+      expect(within(dialog).getByText(`CON DG 964-26 (${conId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      expect(within(dialog).getByText(`${K.fclAgEmbarque} (${fclId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('3 processos: ')).toBe(true)
+      expect(event.target).toContain(`(${conId}; falha só no registro de auditoria)`)
+      expect(event.target).toContain(`(${fclId}; falha só no registro de auditoria)`)
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(0\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 save rejeitou depois de gravar mas a releitura da lista falha: nao da para confirmar e o item continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      // 1a: carga da pagina; 2a: lista fresca; 3a (a releitura): rejeitada.
+      mockListProcesses.mockReset()
+      mockListProcesses
+        .mockResolvedValueOnce(PROCESSES)
+        .mockResolvedValueOnce(PROCESSES)
+        .mockRejectedValueOnce(new Error('sem rede'))
+      rejectSaves({ afterWrite: ['CON DG 964-26'] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(within(dialog).getByText(/^CON DG 964-26: Não foi possível salvar o processo\./)).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).not.toContain('CON DG 964-26')
+    })
+
+    it('caso-real: CR-68 save rejeitou SEM gravar e a lista recarregada traz so processos que nao casam com o rascunho: continua "Com erro" e nao entra no audit do lote', async () => {
+      const user = userEvent.setup()
+      const other = { id: 'p-outro', name: 'OUTRO PROCESSO NOVO', processNumber: '4242', category: 'FCL' }
+      mockListProcesses.mockImplementation(async () => [...PROCESSES, ...created, ...(created.length > 0 ? [other] : [])])
+      rejectSaves({ beforeWrite: [K.fclAgEmbarque] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque}: Não foi possível salvar o processo\\.`))).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).not.toContain(K.fclAgEmbarque)
+    })
+
+    it('caso-real: CR-68 lista fresca vazia: nenhum save, nenhum audit e o erro aparece', async () => {
+      const user = userEvent.setup()
+      mockListProcesses.mockReset()
+      mockListProcesses.mockResolvedValueOnce(PROCESSES).mockResolvedValueOnce([])
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText(/Não foi possível criar os processos\./)).toBeInTheDocument()
+      expect(within(dialog).getByText(/veio vazia/)).toBeInTheDocument()
+      expect(mockSaveProcess).not.toHaveBeenCalled()
+      expect(mockCreateAuditEvent).not.toHaveBeenCalled()
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(1)
+    })
+
+    it('caso-real: CR-68 lista fresca com o FCL gravado como consolidado (sem embarque casado, mesmo PEDIDO): o FCL e pulado e nao e salvo', async () => {
+      const user = userEvent.setup()
+      // O processo do Portal nao casa com o embarque FCL (portalOnly), mas tem o PEDIDO 9620 nas POs: criar de novo duplicaria.
+      const legacy = {
+        id: 'p-leg', name: 'PROCESSO LEGADO', processNumber: '', category: 'CONSOLIDADO',
+        purchaseOrders: [{ po: '9620', reference: '', supplierName: '' }],
+      }
+      mockListProcesses.mockReset()
+      mockListProcesses
+        .mockResolvedValueOnce(PROCESSES)
+        .mockResolvedValueOnce([...PROCESSES, legacy])
+        .mockImplementation(async () => [...PROCESSES, legacy, ...created])
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 1 pulado · 0 com erro')).toBeInTheDocument()
+      expect(savedNames().sort()).toEqual([K.fclEmbarcouComDi, 'CON DG 964-26'].sort())
+      expect(within(dialog).getByText(`${K.fclAgEmbarque} — já existe: PROCESSO LEGADO`)).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 id repetido devolvido pelo saveProcess: so o 1o conta como criado, os outros caem em "Com erro" com o id e o nome do anterior', async () => {
+      const user = userEvent.setup()
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementation(async (payload) => ({ ...payload, id: 'PROC-same' }))
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('1 processo criado · 0 pulados · 2 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      const repeated = within(dialog).getAllByText(/Id repetido \(PROC-same\): confira o processo /)
+      expect(repeated).toHaveLength(2)
+      const firstName = savedNames()[0]
+      for (const item of repeated) expect(item).toHaveTextContent(`confira o processo ${firstName}`)
+    })
+
+    it('caso-real: CR-68 FCL e LCL do mesmo PEDIDO e PO no mesmo lote: o 2o e pulado (so 1 save), mesmo sem o recheck acusar', async () => {
+      const user = userEvent.setup()
+      const twinRows = ['FCL - FOB KOBE', 'LCL - FOB NINGBO'].map((refEmbarque, index) =>
+        makeLooseRow({
+          itemId: `TW-${index + 1}`, status: 'AG. EMBARQUE', exporter: 'ALFA CHEM', pedido: 9620, poRef: K.fclAgEmbarque,
+          refEmbarque, commercialName: 'RESINA OMEGA', quantityKg: 1000,
+        })
+      )
+      renderPage()
+      const dialog = await uploadScenario(user, twinRows)
+      await openCreateTab(user, dialog, 2)
+      await selectAll(user, dialog)
+      await confirm(user, dialog, 2)
+      expect(await within(dialog).findByText('1 processo criado · 1 pulado · 0 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(1)
+      expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque} — já existe: ${K.fclAgEmbarque}$`))).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 gemeo no mesmo lote: o 1o rejeita SEM gravar e o 2o (mesma identidade) grava: o 1o NAO toma o processo do 2o, continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      const twinRows = ['FCL - FOB KOBE', 'LCL - FOB NINGBO'].map((refEmbarque, index) =>
+        makeLooseRow({
+          itemId: `TW-${index + 1}`, status: 'AG. EMBARQUE', exporter: 'ALFA CHEM', pedido: 9620, poRef: K.fclAgEmbarque,
+          refEmbarque, commercialName: 'RESINA OMEGA', quantityKg: 1000,
+        })
+      )
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockRejectedValueOnce(new Error('falha-ao-gravar')).mockImplementation(async (payload) => {
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+      renderPage()
+      const dialog = await uploadScenario(user, twinRows)
+      await openCreateTab(user, dialog, 2)
+      await selectAll(user, dialog)
+      await confirm(user, dialog, 2)
+      expect(await within(dialog).findByText('1 processo criado · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque}: Não foi possível salvar o processo\\.`))).toHaveTextContent('falha-ao-gravar')
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).toBe(`1 processo: ${K.fclAgEmbarque} (PROC-t1)`)
+    })
+
+    it('caso-real: CR-68 audit do lote rejeitado: os criados ficam, sem erro de lote (so um aviso)', async () => {
+      const user = userEvent.setup()
+      mockCreateAuditEvent.mockRejectedValue(new Error('audit-fora'))
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+      expect(within(dialog).getByText(/registro de auditoria do lote não foi gravado/)).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Não foi possível criar os processos/)).not.toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      expect(warnSpy).toHaveBeenCalled()
+    })
+
+    it('caso-real: CR-68 o refresh da lista falha: aviso (toast) e o modal concilia com a lista local', async () => {
+      const user = userEvent.setup()
+      // 1a: carga da pagina; 2a: lista fresca; 3a (o refresh): rejeitada.
+      mockListProcesses.mockReset()
+      mockListProcesses
+        .mockResolvedValueOnce(PROCESSES)
+        .mockResolvedValueOnce(PROCESSES)
+        .mockRejectedValueOnce(new Error('sem rede'))
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+      expect(await screen.findByText(/A lista de processos não foi recarregada/)).toBeInTheDocument()
+      expect(within(dialog).getByText(/A lista de processos não pôde ser recarregada/)).toBeInTheDocument()
+      // O modal conciliou com a lista local (fresca + criados): os 3 casaram.
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(0\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 trava de modulo: com o lote em voo, sair e voltar da pagina recusa um 2o lote', async () => {
+      const user = userEvent.setup()
+      let releaseFirst
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementationOnce(
+        (payload) =>
+          new Promise((resolve) => {
+            releaseFirst = () => {
+              const saved = { ...payload, id: 'PROC-t1' }
+              created.push(saved)
+              resolve(saved)
+            }
+          })
+      )
+      mockSaveProcess.mockImplementation(async (payload) => {
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+      // 1o lote: so 1 embarque escolhido (com o save pendente), para o fim ser previsivel.
+      const first = renderPage()
+      const dialog = await uploadScenario(user)
+      await openCreateTab(user, dialog, 3)
+      await user.click(within(dialog).getByRole('checkbox', { name: K.fclAgEmbarque }))
+      await confirm(user, dialog, 1)
+      await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+      first.unmount()
+
+      // 2a montagem: a trava e' do MODULO, entao o 2o lote e' recusado e nada novo e' salvo.
+      renderPage()
+      const dialog2 = await uploadScenario(user)
+      await openCreateTab(user, dialog2, 3)
+      await user.click(within(dialog2).getByRole('checkbox', { name: 'CON DG 964-26' }))
+      await confirm(user, dialog2, 1)
+      expect(await within(dialog2).findByText(/Outra criação de processos ainda está em andamento\./)).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(1)
+
+      // Resolve o save pendente (a trava vazaria para o teste seguinte) e espera o fim do lote.
+      releaseFirst()
+      await waitFor(() => expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(mockListProcesses.mock.calls.length).toBeGreaterThanOrEqual(4))
+    })
+  })
+})
+
+// D-F3-1: House BL unico na edicao pela pagina (o campo mostra houseBl || masterBl; editar limpa o
+// masterBl legado; voltar ao valor original restaura o par; salvar sem tocar no campo nao migra nada).
+describe('ProcessesPage — House BL unico (D-F3-1)', () => {
+  const LEGACY = {
+    id: 'p-leg',
+    name: 'ALFA SEA 962-26',
+    processNumber: '9620',
+    category: 'FCL',
+    status: 'Em Andamento',
+    destination: 'Navegantes',
+    eta: '2026-07-15',
+    containers: [],
+    masterBl: 'MBL-1',
+    houseBl: '',
+    items: [{ id: 'it-1', commercialName: 'RESINA OMEGA', quantity: 10 }],
+  }
+
+  async function openEdit(user) {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin', name: 'Admin Teste' } })
+    mockListProcesses.mockResolvedValue([LEGACY])
+    mockSaveProcess.mockReset()
+    mockSaveProcess.mockImplementation(async (payload) => ({ ...payload, id: payload.id || 'PROC-x' }))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/ALFA SEA 962-26/).length).toBeGreaterThan(0))
+    await user.click(container.querySelector('.process-item--button'))
+    await user.click(await screen.findByRole('button', { name: 'Editar processo' }))
+    await screen.findByRole('heading', { name: 'Editar processo' })
+    // O campo do BL fica no passo "Embarque" do wizard.
+    await user.click(within(screen.getByLabelText('Etapas do cadastro')).getByRole('button', { name: /Embarque/ }))
+    return screen.getByRole('textbox', { name: 'House BL' })
+  }
+
+  afterEach(() => {
+    mockSaveProcess.mockReset()
+  })
+
+  it('caso-real: CR-71 FCL legado: o campo mostra o MBL antigo; trocar para HBL-9 e salvar grava houseBl e limpa o masterBl', async () => {
+    const user = userEvent.setup()
+    const field = await openEdit(user)
+    expect(field).toHaveValue('MBL-1')
+    await user.clear(field)
+    await user.type(field, 'HBL-9')
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+    expect(mockSaveProcess.mock.calls[0][0]).toMatchObject({ houseBl: 'HBL-9', masterBl: '' })
+  })
+
+  it('caso-real: CR-71 apagar o campo e digitar o MBL antigo de novo restaura o par (masterBl) ao salvar', async () => {
+    const user = userEvent.setup()
+    const field = await openEdit(user)
+    await user.clear(field)
+    expect(field).toHaveValue('')
+    await user.type(field, 'MBL-1')
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+    expect(mockSaveProcess.mock.calls[0][0]).toMatchObject({ masterBl: 'MBL-1', houseBl: '' })
+  })
+
+  it('caso-real: CR-71 mudar so outro campo (Observações) e salvar nao migra o BL: masterBl e houseBl como estavam', async () => {
+    const user = userEvent.setup()
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin', name: 'Admin Teste' } })
+    mockListProcesses.mockResolvedValue([LEGACY])
+    mockSaveProcess.mockReset()
+    mockSaveProcess.mockImplementation(async (payload) => ({ ...payload, id: payload.id || 'PROC-x' }))
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/ALFA SEA 962-26/).length).toBeGreaterThan(0))
+    await user.click(container.querySelector('.process-item--button'))
+    await user.click(await screen.findByRole('button', { name: 'Editar processo' }))
+    await screen.findByRole('heading', { name: 'Editar processo' })
+    await user.click(within(screen.getByLabelText('Etapas do cadastro')).getByRole('button', { name: /Carga/ }))
+    const notes = screen.getByLabelText('Observações do processo')
+    await user.type(notes, 'nota')
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+    await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
+    expect(mockSaveProcess.mock.calls[0][0]).toMatchObject({ masterBl: 'MBL-1', houseBl: '' })
   })
 })

@@ -11,6 +11,7 @@ import {
   isLegacyProcessDangerousGoods,
 } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
+import { getHouseBl } from './houseBl'
 import { getProcessPurchaseOrders } from './purchaseOrders'
 import ErpHint from '../erp/ErpHint'
 import { getEffectiveLicenses, isLicenseDeferred, isLicenseRejected } from './licenses'
@@ -435,24 +436,25 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal
 // de embarque ou transbordo).
 // BL/AWB (PR 3): o aviso vai na 1a linha PREENCHIDA do par do diff; com o par
-// vazio, a linha nova leva o rotulo do 1o campo (MBL ou MAWB).
-const BL_ROW_LABELS = { masterBl: 'MBL', houseBl: 'HBL', mawb: 'MAWB', hawb: 'HAWB' }
+// vazio, a linha nova leva o rotulo do 1o campo (House BL ou MAWB). D-F3-1: nos
+// maritimos o BL e' uma linha so' ("House BL", leitura `houseBl || masterBl`).
+const BL_ROW_LABELS = { houseBl: 'House BL', masterBl: 'House BL', mawb: 'MAWB', hawb: 'HAWB' }
 
 export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, erpHints }) {
   const trackingTarget = getVesselTrackingTarget(process)
   const fields = erpHints?.fields
+  const houseBl = getHouseBl(process)
   const hasTransit =
     trackingTarget ||
     process?.shippedAt ||
     process?.vesselName ||
     process?.voyage ||
     process?.flightNumber ||
-    process?.masterBl ||
-    process?.houseBl ||
+    houseBl ||
     process?.mawb ||
     process?.hawb
 
-  // Avisos do ERP (so' admin): linha nova (`—`) de Navio e de MBL/MAWB vazios e
+  // Avisos do ERP (so' admin): linha nova (`—`) de Navio e de House BL/MAWB vazios e
   // aviso nas linhas que ja existem. Sem aviso, nada muda.
   const emptyVesselHint = getErpEmptyRowHint(fields?.vessel, process)
   const emptyBlHint = getErpEmptyRowHint(fields?.bl, process)
@@ -468,6 +470,7 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, e
   const vesselRowHint = vesselHint && process?.vesselName ? vesselHint : null
   const hasErpRows = Boolean(emptyVesselHint || (emptyBlHint && blEmptyLabel))
   const blRowHint = (field) => (blHint && blFirstFilled === field ? blHint : null)
+  const houseBlRowHint = blRowHint('houseBl') ?? blRowHint('masterBl')
 
   if (!hasTransit && !process?.transshipment && !hasErpRows) {
     return showEmptyPlaceholder ? (
@@ -504,18 +507,13 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, e
         ) : null}
         {trackingTarget?.imo ? <DetailRow label="IMO do navio">{trackingTarget.imo}</DetailRow> : null}
         {process?.flightNumber ? <DetailRow label="Voo">{process.flightNumber}</DetailRow> : null}
-        {process?.masterBl ? (
-          <DetailRow label="MBL" hint={blRowHint('masterBl')}>
-            {process.masterBl}
+        {houseBl ? (
+          <DetailRow label="House BL" hint={houseBlRowHint}>
+            {houseBl}
           </DetailRow>
-        ) : emptyBlHint && blEmptyLabel === 'MBL' ? (
-          <DetailRow label="MBL" hint={emptyBlHint}>
+        ) : emptyBlHint && blEmptyLabel === 'House BL' ? (
+          <DetailRow label="House BL" hint={emptyBlHint}>
             {EMPTY_ROW_VALUE}
-          </DetailRow>
-        ) : null}
-        {process?.houseBl ? (
-          <DetailRow label="HBL" hint={blRowHint('houseBl')}>
-            {process.houseBl}
           </DetailRow>
         ) : null}
         {process?.mawb ? (

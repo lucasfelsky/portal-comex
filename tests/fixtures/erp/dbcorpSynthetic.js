@@ -299,3 +299,160 @@ export function buildScenarioPortalProcesses() {
     makePortalProcess({ id: 'p-arch', name: 'SIGMA SEA 998-26', processNumber: '9998', category: 'FCL', archived: true }),
   ]
 }
+
+// ---------------------------------------------------------------------------
+// Cenario da CRIACAO de processos (F3). Datas relativas a `SCENARIO_TODAY`
+// ('2026-10-02'), escritas como serial do Excel (o formato real da planilha).
+// Nomes, POs, REFs e BLs sao sinteticos (prefixo grego, PEDIDO 9nnn, REF
+// `CON DG 9nn-26`, BL `HBL-9nn`).
+// ---------------------------------------------------------------------------
+const MS_PER_DAY = 86400000
+const EXCEL_EPOCH_SERIAL = 25569
+
+// 'YYYY-MM-DD' -> serial do Excel (so' aritmetica em UTC, sem Date a partir de texto).
+export function isoToExcelSerial(iso) {
+  const [year, month, day] = iso.split('-').map(Number)
+  return Math.round(Date.UTC(year, month - 1, day) / MS_PER_DAY) + EXCEL_EPOCH_SERIAL
+}
+
+// Chave do embarque (PO ou REF) de cada linha do cenario.
+export const CREATION_SCENARIO_KEYS = {
+  fclAgEmbarque: 'ALFA SEA 962-26',
+  lclAgEmbarque: 'BETA SEA 963-26',
+  con: 'CON DG 964-26',
+  fclEmbarcouComDi: 'ZETA SEA 967-26',
+  fclAtracado: 'TETA SEA 968-26',
+  fclConflito: 'IOTA SEA 969-26',
+  fclDoisPedidos: 'KAPPA SEA 984-26',
+  fclSemEta: 'LAMBDA SEA 985-26',
+  aConsolidar: 'MU SEA 986-26',
+  aguardandoProntidao: 'NU SEA 987-26',
+  amostra: 'XI SAMPLE 988-26',
+  nacional: 'OMICRON SEA 989-26',
+  erpDesatualizado: 'PI SEA 990-26',
+  possivelmenteRecebido: 'RHO SEA 991-26',
+  indefinido: 'SIGMA SEA 992-26',
+  aereo: 'TAU AIR 993-26',
+}
+
+// 8 embarques criaveis (4 em aguardando_embarque e 4 em embarcado_sem_processo), 7 de
+// categorias excluidas e 1 AEREO (nao criavel). Datas de etd/eta/diDate entram como
+// YYYY-MM-DD e saem como serial do Excel.
+export function buildCreationScenarioLooseRows() {
+  let sequence = 0
+  const row = (overrides) => {
+    sequence += 1
+    const next = { ...overrides }
+    for (const key of ['etd', 'eta', 'diDate']) {
+      if (typeof next[key] === 'string' && next[key] !== '') next[key] = isoToExcelSerial(next[key])
+    }
+    return makeLooseRow({ itemId: `C-${String(sequence).padStart(3, '0')}`, ...next })
+  }
+  const K = CREATION_SCENARIO_KEYS
+  return [
+    // FCL AG. EMBARQUE: FOB com local (ORIGEM vazia -> origem pela dica), BL, ETD futuro.
+    row({
+      status: 'AG. EMBARQUE', exporter: 'ALFA CHEM', pedido: 9620, poRef: K.fclAgEmbarque,
+      refEmbarque: 'FCL - FOB KOBE', blAwb: 'HBL-962', destination: 'Itajaí', etd: '2026-10-20',
+      eta: '2026-11-25', commercialName: 'RESINA OMEGA', quantityKg: 1000,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'ALFA CHEM', pedido: 9620, poRef: K.fclAgEmbarque,
+      refEmbarque: 'FCL - FOB KOBE', blAwb: 'HBL-962', destination: 'Itajaí', etd: '2026-10-20',
+      eta: '2026-11-25', commercialName: 'SOLVENTE PI', quantityKg: 500.5,
+    }),
+    // LCL AG. EMBARQUE: FOB fora do hub SHANGHAI.
+    row({
+      status: 'AG. EMBARQUE', exporter: 'BETA TRADING', pedido: 9630, poRef: K.lclAgEmbarque,
+      refEmbarque: 'LCL - FOB NINGBO', blAwb: 'HBL-963', destination: 'Navegantes', etd: '2026-10-18',
+      eta: '2026-11-22', commercialName: 'GLICOL UPSILON', quantityKg: 800,
+    }),
+    // CON: 3 PEDIDOs, 3 exportadores, BL, e itens de mesmo nome em 2 PEDIDOs.
+    row({
+      status: 'AG. EMBARQUE', exporter: 'GAMA TRADING', pedido: 9640, poRef: 'GAMA SEA 964-26',
+      refEmbarque: K.con, blAwb: 'HBL-964', origin: 'SHANGHAI', destination: 'NAVEGANTES',
+      etd: '2026-10-15', eta: '2026-11-20', commercialName: 'SOLVENTE PI', quantityKg: 2000,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'DELTA CHEM', pedido: 9641, poRef: 'DELTA SEA 965-26',
+      refEmbarque: K.con, blAwb: 'HBL-964', origin: 'SHANGHAI', destination: 'NAVEGANTES',
+      etd: '2026-10-15', eta: '2026-11-20', commercialName: 'SOLVENTE PI', quantityKg: 1500,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'EPSILON TRADING', pedido: 9642, poRef: 'EPSILON SEA 966-26',
+      refEmbarque: K.con, blAwb: 'HBL-964', origin: 'SHANGHAI', destination: 'NAVEGANTES',
+      etd: '2026-10-15', eta: '2026-11-20', commercialName: 'ACIDO PSI', quantityKg: 800,
+    }),
+    // FCL EMBARCOU: ETD passado, ETA futura, Nº DI, DATA DI e BL.
+    row({
+      status: 'EMBARCOU', exporter: 'ZETA TRADING', pedido: 9670, poRef: K.fclEmbarcouComDi,
+      refEmbarque: 'FCL - CFR HAMBURG', blAwb: 'HBL-967', origin: 'HAMBURG', destination: 'ITAJAI',
+      vesselRaw: 'ALFA MAERSK 639W', etd: '2026-09-28', eta: '2026-10-20',
+      diNumber: '25/1234567-8', diDate: '2026-10-01', commercialName: 'OLEO FI', quantityKg: 700,
+    }),
+    // FCL ATRAC. AG. LIBERACAO: ETA ha 2 dias (<= 7), sem NF recebida.
+    row({
+      status: 'ATRAC. AG. LIBERAÇÃO', exporter: 'TETA TRADING', pedido: 9680, poRef: K.fclAtracado,
+      refEmbarque: 'FCL - FOB BUSAN', blAwb: 'HBL-968', vesselRaw: 'BETA FAME 12W', etd: '2026-09-10',
+      eta: '2026-09-30', commercialName: 'RESINA QUI', quantityKg: 300,
+    }),
+    // FCL com 2 ETDs e 2 navios (conflito).
+    row({
+      status: 'EMBARCOU', exporter: 'IOTA TRADING', pedido: 9690, poRef: K.fclConflito,
+      refEmbarque: 'FCL - CFR HAMBURG', blAwb: 'HBL-969', vesselRaw: 'ALFA MAERSK 639W',
+      etd: '2026-09-25', eta: '2026-10-25', commercialName: 'RESINA OMEGA', quantityKg: 1200,
+    }),
+    row({
+      status: 'EMBARCOU', exporter: 'IOTA TRADING', pedido: 9690, poRef: K.fclConflito,
+      refEmbarque: 'FCL - CFR HAMBURG', blAwb: 'HBL-969', vesselRaw: 'BETA FAME 12W',
+      etd: '2026-09-26', eta: '2026-10-25', commercialName: 'SOLVENTE PI', quantityKg: 400,
+    }),
+    // FCL com 2 PEDIDOs e 2 exportadores (mesma PO).
+    row({
+      status: 'AG. EMBARQUE', exporter: 'KAPPA CHEM', pedido: 9841, poRef: K.fclDoisPedidos,
+      refEmbarque: 'FCL - FOB KOBE', etd: '2026-10-22', eta: '2026-11-27', commercialName: 'ACIDO PSI', quantityKg: 600,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'KAPPA TRADING', pedido: 9840, poRef: K.fclDoisPedidos,
+      refEmbarque: 'FCL - FOB KOBE', etd: '2026-10-22', eta: '2026-11-27', commercialName: 'SAL TAU', quantityKg: 250,
+    }),
+    // FCL EMBARCOU sem ETA (needsReview).
+    row({
+      status: 'EMBARCOU', exporter: 'LAMBDA TRADING', pedido: 9850, poRef: K.fclSemEta,
+      refEmbarque: 'FCL - CFR HAMBURG', blAwb: 'HBL-985', etd: '2026-09-29', commercialName: 'SAL TAU', quantityKg: 900,
+    }),
+    // Um embarque por categoria excluida (7) e o AEREO.
+    row({
+      status: 'AG. PRONT. DA CARGA', exporter: 'MU TRADING', pedido: 9860, poRef: K.aConsolidar,
+      refEmbarque: 'LCL - FOB SHANGHAI', etd: '2026-10-10', commercialName: 'ACIDO PSI', quantityKg: 100,
+    }),
+    row({
+      status: 'AG. PAGAMENTO (ANT)', exporter: 'NU TRADING', pedido: 9870, poRef: K.aguardandoProntidao,
+      refEmbarque: 'FCL - FOB BUSAN', commercialName: 'RESINA QUI', quantityKg: 110,
+    }),
+    row({
+      status: 'EMBARCOU', exporter: 'XI TRADING', pedido: 9880, poRef: K.amostra,
+      refEmbarque: 'AMOSTRA', vesselRaw: 'AMOSTRA', commercialName: 'AMOSTRA SIGMA', quantityKg: 5,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'OMICRON TRADING', pedido: 9890, poRef: K.nacional,
+      refEmbarque: 'NACIONAL', commercialName: 'SAL TAU', quantityKg: 120,
+    }),
+    row({
+      status: 'ATRAC. AG. LIBERAÇÃO', statusNf: 'Recebido Total', exporter: 'PI TRADING', pedido: 9900,
+      poRef: K.erpDesatualizado, refEmbarque: 'FCL - FOB BUSAN', commercialName: 'OLEO FI', quantityKg: 130,
+    }),
+    row({
+      status: 'EMBARCOU', exporter: 'RHO TRADING', pedido: 9910, poRef: K.possivelmenteRecebido,
+      refEmbarque: 'FCL - FOB KOBE', etd: '2026-09-01', eta: '2026-09-15', commercialName: 'RESINA OMEGA', quantityKg: 140,
+    }),
+    row({
+      status: 'EM TRANSITO', exporter: 'SIGMA TRADING', pedido: 9920, poRef: K.indefinido,
+      refEmbarque: 'FCL - FOB KOBE', commercialName: 'GLICOL UPSILON', quantityKg: 150,
+    }),
+    row({
+      status: 'AG. EMBARQUE', exporter: 'TAU TRADING', pedido: 9930, poRef: K.aereo,
+      refEmbarque: 'DAP - ITAJAI', commercialName: 'AMOSTRA SIGMA', quantityKg: 160,
+    }),
+  ]
+}

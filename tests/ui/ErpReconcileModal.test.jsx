@@ -5,7 +5,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('../../src/features/erp/erpReconciliationExport', async (importOriginal) => ({
@@ -16,6 +16,8 @@ vi.mock('../../src/features/erp/erpReconciliationExport', async (importOriginal)
 import ErpReconcileModal, { ErpReconcileResults } from '../../src/features/erp/ErpReconcileModal.jsx'
 import { exportErpReconciliationToXlsx } from '../../src/features/erp/erpReconciliationExport'
 import {
+  CREATION_SCENARIO_KEYS,
+  buildCreationScenarioLooseRows,
   buildScenarioApiRows,
   buildScenarioLooseRows,
   buildScenarioPortalProcesses,
@@ -691,5 +693,468 @@ describe('ErpReconcileResults', () => {
     rerender(<ErpReconcileResults result={{ blocked: 'lista_portal_vazia', blockedMessage: EMPTY_PORTAL_MESSAGE }} />)
     expect(screen.getByText(EMPTY_PORTAL_MESSAGE)).toBeInTheDocument()
     expect(screen.queryByRole('group')).not.toBeInTheDocument()
+  })
+})
+
+// F3: aba "Criar processos". O modal recebe a criacao por callback (`onCreateProcesses`) e nunca
+// grava processo. Relogio fixo (so' `Date`): meio-dia local de 2026-10-02 = SCENARIO_TODAY em qualquer fuso.
+describe('ErpReconcileModal - criar processos (F3)', () => {
+  const K = CREATION_SCENARIO_KEYS
+  const NEW_NOTE =
+    'A planilha vira a referência do ERP para os avisos. Processos existentes não são alterados; novos processos só são criados na aba Criar processos, depois da sua confirmação.'
+  const FILLER = makePortalProcess({ id: 'p-filler', name: 'OMEGA SEA 999-26', processNumber: '9999', category: 'FCL' })
+  const savedOutcome = (hints) => ({ snapshotId: 'S', counts: { hints, hintsSkipped: 0 }, skipped: [] })
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 2, 12, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function creationSource(rows = buildCreationScenarioLooseRows()) {
+    const loose = rows.map((row, index) => ({ ...row, rowNumber: index + 2 }))
+    return makeFileSource(vi.fn().mockResolvedValue({ rows: loose, warnings: [], meta: { fileName: 'criar.xlsx', rowCount: loose.length } }))
+  }
+
+  // Resultado do callback no formato da pagina: `created` com id e a lista nova de processos.
+  function outcomeFor(drafts, { skipped = [], failed = [] } = {}) {
+    const entries = drafts.map((draft, index) => ({
+      ...makePortalProcess({ id: `PROC-t${index + 1}` }),
+      ...draft.process,
+      items: draft.process.items.map((item, itemIndex) => ({ id: `it-${index}-${itemIndex}`, ...item })),
+    }))
+    return {
+      created: entries.map((entry, index) => ({ key: drafts[index].key, id: entry.id, name: entry.name })),
+      skipped,
+      failed,
+      processes: [FILLER, ...entries],
+      auditFailed: false,
+      refreshFailed: false,
+    }
+  }
+
+  const PROCESSES = [FILLER]
+
+  function modalProps(overrides = {}) {
+    return {
+      processes: PROCESSES,
+      sources: [creationSource()],
+      onCreateProcesses: vi.fn(),
+      ...overrides,
+    }
+  }
+
+  async function openCreateTab(user, view = null) {
+    await uploadFile(user, view?.container ?? document.body)
+    await screen.findByText('Processos casados')
+    await user.click(screen.getByRole('button', { name: /^Criar processos/ }))
+  }
+
+  const checkbox = (name) => screen.getByRole('checkbox', { name })
+  const createButton = (count) => screen.getByRole('button', { name: count === 1 ? 'Criar 1 processo' : `Criar ${count} processos` })
+
+  it('caso-real: CR-59 a aba so existe com onCreateProcesses e mostra "Criar processos (N)"; com a prop o texto fixo muda; sem a prop nada muda', async () => {
+    const user = userEvent.setup()
+    const view = renderModal(modalProps())
+    expect(screen.getByText(NEW_NOTE)).toBeInTheDocument()
+    expect(screen.queryByText(FIXED_NOTE)).not.toBeInTheDocument()
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+    const group = screen.getByRole('group', { name: 'Seções do resultado' })
+    expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Resumo', 'Divergências (0)', 'Só no ERP (16)', 'Criar processos (8)', 'Só no Portal (1)', 'Avisos (6)',
+    ])
+    view.unmount()
+
+    renderModal({ processes: [FILLER], sources: [creationSource()] })
+    expect(screen.getByText(FIXED_NOTE)).toBeInTheDocument()
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+    expect(screen.queryByRole('button', { name: /^Criar processos/ })).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-59 selos, grupos por categoria e a secao "Não criáveis" com o motivo', async () => {
+    const user = userEvent.setup()
+    renderModal(modalProps())
+    await openCreateTab(user)
+    const headings = screen.getAllByRole('heading', { level: 4 }).map((heading) => heading.textContent)
+    expect(headings).toContain('Aguardando embarque (4)')
+    expect(headings).toContain('Embarcado sem processo no Portal (4)')
+    expect(headings).toContain('Não criáveis (1)')
+    // LAMBDA (embarcou, ETD unico), TETA (atracado) e ZETA (embarcou com DI).
+    expect(screen.getAllByText('Embarque confirmado')).toHaveLength(3)
+    expect(screen.getAllByText('DUIMP')).toHaveLength(1)
+    expect(screen.getAllByText('Conferir antes')).toHaveLength(1)
+    for (const badge of ['FCL', 'LCL', 'CON']) expect(screen.getAllByText(badge).length).toBeGreaterThan(0)
+
+    const row = checkbox(K.fclAgEmbarque).closest('li')
+    expect(row).toHaveTextContent('Fornecedor: ALFA CHEM')
+    expect(row).toHaveTextContent('ETD: 20/10/2026')
+    expect(row).toHaveTextContent('ETA: 25/11/2026')
+    expect(row).toHaveTextContent('PEDIDO 9620')
+    expect(row).toHaveTextContent('2 itens · 1.500,5 kg')
+    expect(checkbox(K.fclEmbarcouComDi).closest('li')).toHaveTextContent('ALFA MAERSK / 639W')
+
+    const blocked = screen.getByRole('heading', { name: 'Não criáveis (1)' }).closest('section')
+    expect(within(blocked).getByText(K.aereo)).toBeInTheDocument()
+    expect(within(blocked).getByText(/Tipo não criável a partir do DBCorp/)).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: K.aereo })).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-59 o filtro "Tipo" esconde linhas; a selecao escondida continua contada e a confirmacao lista todos', async () => {
+    const user = userEvent.setup()
+    renderModal(modalProps())
+    await openCreateTab(user)
+    await user.click(checkbox(K.fclAgEmbarque))
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'LCL')
+    expect(screen.queryByRole('checkbox', { name: K.fclAgEmbarque })).not.toBeInTheDocument()
+    expect(checkbox(K.lclAgEmbarque)).toBeChecked()
+    expect(screen.getByText('1 selecionado oculto pelo filtro.')).toBeInTheDocument()
+    expect(createButton(2)).toBeEnabled()
+
+    await user.click(createButton(2))
+    const list = screen.getByRole('heading', { name: 'Confirme os processos a criar' }).parentElement
+    expect(within(list).getByText(K.fclAgEmbarque)).toBeInTheDocument()
+    expect(within(list).getByText(K.lclAgEmbarque)).toBeInTheDocument()
+    expect(within(list).getByText('Serão criados 2 processos no Portal.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('caso-real: CR-59 "Selecionar todos" marca so as linhas visiveis, criaveis e sem "Conferir antes"; selecao parcial deixa indeterminate', async () => {
+    const user = userEvent.setup()
+    renderModal(modalProps())
+    await openCreateTab(user)
+    // Embarcado sem processo: 4 linhas, 1 delas "Conferir antes" -> o botao conta 3.
+    const embarcados = screen.getByRole('checkbox', { name: 'Selecionar todos de Embarcado sem processo no Portal (3)' })
+    expect(embarcados).not.toBeChecked()
+    await user.click(embarcados)
+    expect(embarcados).toBeChecked()
+    expect(checkbox(K.fclConflito)).toBeChecked()
+    expect(checkbox(K.fclAtracado)).toBeChecked()
+    expect(checkbox(K.fclEmbarcouComDi)).toBeChecked()
+    expect(checkbox(K.fclSemEta)).not.toBeChecked()
+    expect(createButton(3)).toBeEnabled()
+
+    // Parcial: 1 de 4 elegiveis em "Aguardando embarque".
+    const aguardando = screen.getByRole('checkbox', { name: 'Selecionar todos de Aguardando embarque (4)' })
+    await user.click(checkbox(K.fclAgEmbarque))
+    expect(aguardando).not.toBeChecked()
+    expect(aguardando.indeterminate).toBe(true)
+    await user.click(aguardando)
+    expect(aguardando).toBeChecked()
+    expect(aguardando.indeterminate).toBe(false)
+    expect(createButton(7)).toBeEnabled()
+    await user.click(aguardando)
+    expect(createButton(3)).toBeEnabled()
+
+    // Com o filtro, so' as visiveis entram: LCL tem 1.
+    await user.click(embarcados)
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'LCL')
+    expect(screen.getByRole('checkbox', { name: 'Selecionar todos de Aguardando embarque (1)' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /Selecionar todos de Embarcado/ })).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-59 com 1 selecionado: "Criar 1 processo", confirmacao no singular, foco no titulo e "Voltar" devolve o foco ao botao sem chamar o callback', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn()
+    renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    expect(createButton(0)).toBeDisabled()
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    const title = screen.getByRole('heading', { name: 'Confirme os processos a criar' })
+    expect(title).toHaveFocus()
+    expect(screen.getByText(/Será criado 1 processo no Portal\./)).toBeInTheDocument()
+    expect(screen.getByText(/Processos existentes não são alterados\./, { selector: 'p' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Voltar' }))
+    expect(createButton(1)).toHaveFocus()
+    expect(onCreateProcesses).not.toHaveBeenCalled()
+  })
+
+  it('caso-real: CR-59 "Confirmar criação" chama o callback 1x com { key, process } sem id e com onProgress e recheck; clique duplo = 1 chamada', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn(() => new Promise(() => {}))
+    renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.dblClick(screen.getByRole('button', { name: 'Confirmar criação' }))
+    expect(onCreateProcesses).toHaveBeenCalledTimes(1)
+    const [drafts, options] = onCreateProcesses.mock.calls[0]
+    expect(drafts).toHaveLength(1)
+    expect(Object.keys(drafts[0]).sort()).toEqual(['key', 'process'])
+    expect(drafts[0].key).toBe(`LCL|${K.lclAgEmbarque}`)
+    expect(drafts[0].process).toMatchObject({ name: K.lclAgEmbarque, category: 'LCL', houseBl: 'HBL-963', masterBl: '' })
+    expect(drafts[0].process).not.toHaveProperty('id')
+    expect(typeof options.onProgress).toBe('function')
+    expect(typeof options.recheck).toBe('function')
+  })
+
+  it('caso-real: CR-59 o recheck reconcilia a MESMA planilha com a lista fresca e marca o casado', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn(() => new Promise(() => {}))
+    renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    const { recheck } = onCreateProcesses.mock.calls[0][1]
+    const fresh = [FILLER, makePortalProcess({ id: 'p-novo', name: K.fclAgEmbarque, processNumber: '9620', category: 'FCL' })]
+    const status = recheck(fresh)
+    expect(status.get(`FCL|${K.fclAgEmbarque}`)).toEqual({ creatable: false, reason: 'casado', existingName: K.fclAgEmbarque })
+    expect(status.get(`LCL|${K.lclAgEmbarque}`)).toEqual({ creatable: true, reason: '', existingName: '' })
+    expect(recheck([]).size).toBe(0)
+  })
+
+  it('caso-real: CR-59 durante a gravacao da referencia o botao Criar fica desabilitado; com isCreatingProcesses o input da planilha e o botao tambem', async () => {
+    const user = userEvent.setup()
+    const props = { ...modalProps(), onSaveReference: vi.fn().mockResolvedValue(savedOutcome(3)) }
+    const onClose = vi.fn()
+    const { rerender } = render(<ErpReconcileModal open onClose={onClose} {...props} />)
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    expect(createButton(1)).toBeEnabled()
+
+    rerender(<ErpReconcileModal open onClose={onClose} {...props} isSavingReference />)
+    expect(createButton(1)).toBeDisabled()
+    rerender(<ErpReconcileModal open onClose={onClose} {...props} />)
+    expect(createButton(1)).toBeEnabled()
+
+    rerender(<ErpReconcileModal open onClose={onClose} {...props} isCreatingProcesses />)
+    expect(createButton(1)).toBeDisabled()
+    expect(document.querySelector('input[type="file"]')).toBeDisabled()
+    expect(checkbox(K.lclAgEmbarque)).toBeDisabled()
+  })
+
+  it('caso-real: CR-59 progresso "Criando 1 de 2…" antes de qualquer onProgress e "Criando 2 de 2…" depois de { done: 1, total: 2 }', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn(() => new Promise(() => {}))
+    renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(checkbox(K.fclAgEmbarque))
+    await user.click(createButton(2))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    const status = await screen.findByText('Criando 1 de 2…')
+    expect(status.closest('[role="status"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Criar 2 processos' })).toBeDisabled()
+
+    act(() => onCreateProcesses.mock.calls[0][1].onProgress({ done: 1, total: 2 }))
+    expect(await screen.findByText('Criando 2 de 2…')).toBeInTheDocument()
+  })
+
+  it('caso-real: CR-59 resultado parcial com as 3 listas (criados, pulados, com erro) e o titulo focado', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn().mockResolvedValue({
+      created: [{ key: `LCL|${K.lclAgEmbarque}`, id: 'PROC-t1', name: K.lclAgEmbarque }],
+      skipped: [{ key: `FCL|${K.fclAgEmbarque}`, name: K.fclAgEmbarque, existingName: 'ALFA JA EXISTENTE' }],
+      failed: [{ key: `CONSOLIDADO|${K.con}`, name: 'CON DG 964-26', message: 'Rascunho inválido (etd)' }],
+    })
+    renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    const title = await screen.findByRole('heading', { name: 'Resultado da criação' })
+    expect(title).toHaveFocus()
+    expect(screen.getByText('1 processo criado · 1 pulado · 1 com erro')).toBeInTheDocument()
+    expect(screen.getByText('1 processo criado · 1 pulado · 1 com erro').closest('[role="status"]')).not.toBeNull()
+    const region = title.closest('section')
+    expect(within(region).getByRole('heading', { name: 'Criados (1)' })).toBeInTheDocument()
+    expect(within(region).getByText(`${K.lclAgEmbarque} (PROC-t1)`)).toBeInTheDocument()
+    expect(within(region).getByRole('heading', { name: 'Pulados (já existiam) (1)' })).toBeInTheDocument()
+    expect(within(region).getByText(`${K.fclAgEmbarque} — já existe: ALFA JA EXISTENTE`)).toBeInTheDocument()
+    expect(within(region).getByRole('heading', { name: 'Com erro (1)' })).toBeInTheDocument()
+    expect(within(region).getByText('CON DG 964-26: Rascunho inválido (etd)')).toBeInTheDocument()
+  })
+
+  it('caso-real: CR-66 o aviso de processos do Portal sem embarque casado aparece na aba e na confirmacao com a contagem; sem nenhum, nao aparece', async () => {
+    const user = userEvent.setup()
+    // FILLER nao casa com nenhum embarque da planilha: 1 em "Só no Portal".
+    const view = renderModal(modalProps())
+    await openCreateTab(user)
+    const notice = screen.getByRole('note')
+    expect(notice).toHaveTextContent('1 processo do Portal não casou com nenhum embarque desta planilha (aba "Só no Portal")')
+    expect(notice).toHaveTextContent('criar de novo duplica o processo: confira antes.')
+    // O aviso nao bloqueia: a linha continua marcavel.
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    expect(screen.getByRole('heading', { name: 'Confirme os processos a criar' })).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent('1 processo do Portal não casou com nenhum embarque')
+    view.unmount()
+
+    // 2 sem embarque casado: plural.
+    const other = makePortalProcess({ id: 'p-outro', name: 'OUTRO PROCESSO', processNumber: '9998', category: 'FCL' })
+    const second = renderModal(modalProps({ processes: [FILLER, other] }))
+    await openCreateTab(user)
+    expect(screen.getByRole('note')).toHaveTextContent('2 processos do Portal não casaram com nenhum embarque')
+    second.unmount()
+
+    // Todos os processos do Portal casam com a planilha: portalOnly = 0, sem aviso.
+    const matched = makePortalProcess({ id: 'p-casado', name: K.fclAgEmbarque, processNumber: '9620', category: 'FCL' })
+    renderModal(modalProps({ processes: [matched] }))
+    await openCreateTab(user)
+    expect(screen.getByRole('button', { name: /^Só no Portal \(0\)/ })).toBeInTheDocument()
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('caso-real: CR-66 FCL ja gravado no Portal como consolidado (sem embarque casado, mesmo PEDIDO) vai para "Não criáveis" com o nome do processo e sai da contagem', async () => {
+    const user = userEvent.setup()
+    const legacy = makePortalProcess({
+      id: 'p-legado', name: 'PROCESSO LEGADO', category: 'CONSOLIDADO', processNumber: '',
+      purchaseOrders: [{ po: '9620', reference: '', supplierName: '' }],
+    })
+    renderModal(modalProps({ processes: [FILLER, legacy] }))
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+    // 8 criaveis do cenario - o FCL ja existente = 7.
+    expect(screen.getByRole('button', { name: /^Criar processos \(7\)/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Criar processos/ }))
+    expect(screen.queryByRole('checkbox', { name: K.fclAgEmbarque })).not.toBeInTheDocument()
+    const blocked = screen.getByRole('heading', { name: 'Não criáveis (2)' }).closest('section')
+    const card = within(blocked).getByText(K.fclAgEmbarque).closest('li')
+    expect(card).toHaveTextContent('Já tem processo no Portal com o mesmo PEDIDO ou nome da PO.')
+    expect(card).toHaveTextContent('já existe: PROCESSO LEGADO')
+  })
+
+  it('caso-real: CR-61 com o callback devolvendo os processos criados: o Resumo sobe, as linhas somem da aba e a referencia e regravada com o resultado novo', async () => {
+    const user = userEvent.setup()
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(3))
+    const onCreateProcesses = vi.fn(async (drafts) => outcomeFor(drafts))
+    renderModal(modalProps({ onCreateProcesses, onSaveReference }))
+    await uploadFile(user)
+    expect((await summaryMetrics()).matched).toBe('0')
+    expect(onSaveReference).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: /^Criar processos/ }))
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(checkbox(K.fclAgEmbarque))
+    await user.click(createButton(2))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+
+    expect(await screen.findByText('2 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+    expect(onCreateProcesses).toHaveBeenCalledTimes(1)
+    // D-F3-3: a referencia e regravada com a conciliacao nova (2 casados).
+    await waitFor(() => expect(onSaveReference).toHaveBeenCalledTimes(2))
+    expect(onSaveReference.mock.calls[1][0].summary.matched).toBe(2)
+    expect(onSaveReference.mock.calls[0][0].summary.matched).toBe(0)
+    // As linhas criadas somem da aba e a contagem cai.
+    expect(screen.queryByRole('checkbox', { name: K.lclAgEmbarque })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: K.fclAgEmbarque })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Criar processos \(6\)/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Resumo/ }))
+    expect(metric('Processos casados')).toBe('2')
+  })
+
+  it('caso-real: CR-61 callback rejeitado: error-banner e nenhuma 2a gravacao da referencia', async () => {
+    const user = userEvent.setup()
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(3))
+    const onCreateProcesses = vi.fn().mockRejectedValue(new Error('lista vazia'))
+    renderModal(modalProps({ onCreateProcesses, onSaveReference }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    expect(document.querySelector('.error-banner')).toHaveTextContent('Não foi possível criar os processos.')
+    expect(document.querySelector('.error-banner')).toHaveTextContent('lista vazia')
+    expect(onSaveReference).toHaveBeenCalledTimes(1)
+    // A conciliacao continua na tela e da' para tentar de novo.
+    expect(screen.getByRole('button', { name: /^Criar processos \(8\)/ })).toBeInTheDocument()
+    expect(checkbox(K.lclAgEmbarque)).toBeEnabled()
+  })
+
+  // Lote em andamento: o modal nao fecha. Fechar incrementaria o run, o guard do fim do lote ficaria falso e a
+  // reconciliacao + a regravacao da referencia (D-F3-3) seriam puladas, embora a pagina continue criando.
+  it('caso-real: CR-61 com a criacao em andamento Fechar fica desabilitado e Esc, backdrop e o x do cabecalho nao fecham; o callback da referencia roda no fim e so entao fecha', async () => {
+    const user = userEvent.setup()
+    let resolveBatch
+    const onCreateProcesses = vi.fn(() => new Promise((resolve) => { resolveBatch = resolve }))
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(3))
+    const { onClose } = renderModal(modalProps({ onCreateProcesses, onSaveReference }))
+    await openCreateTab(user)
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeEnabled()
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    expect(await screen.findByText('Criando 1 de 1…')).toBeInTheDocument()
+
+    // Em andamento: texto de aviso, Fechar desabilitado e nenhum dos 4 caminhos de fechar chama o onClose.
+    expect(screen.getByText('Criando processos… aguarde terminar')).toBeInTheDocument()
+    expect(closeButton).toBeDisabled()
+    expect(closeButton).toHaveAccessibleDescription('Criando processos… aguarde terminar')
+    await user.click(closeButton)
+    await user.keyboard('{Escape}')
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Importar do DBCorp' })).toBeInTheDocument()
+    expect(screen.getByText('Criando 1 de 1…')).toBeInTheDocument()
+
+    // O lote termina no MESMO run: o resultado entra, a conciliacao refaz e a referencia e' regravada.
+    await act(async () => {
+      resolveBatch(outcomeFor(onCreateProcesses.mock.calls[0][0]))
+    })
+    expect(await screen.findByText('1 processo criado · 0 pulados · 0 com erro')).toBeInTheDocument()
+    await waitFor(() => expect(onSaveReference).toHaveBeenCalledTimes(2))
+    expect(onSaveReference.mock.calls[0][0].summary.matched).toBe(0)
+    expect(onSaveReference.mock.calls[1][0].summary.matched).toBe(1)
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // Depois do termino o modal fecha normalmente (Fechar, Esc, backdrop e o x).
+    expect(closeButton).toBeEnabled()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledTimes(2)
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    expect(onClose).toHaveBeenCalledTimes(3)
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).toHaveBeenCalledTimes(4)
+  })
+
+  it('caso-real: CR-61 com isCreatingProcesses vindo da pagina (lote em voo sem estado local) Fechar, Esc, backdrop e o x tambem nao fecham; ao soltar a trava, fecha', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const props = modalProps()
+    const { rerender } = render(<ErpReconcileModal open onClose={onClose} {...props} isCreatingProcesses />)
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeDisabled()
+    expect(screen.getByText('Criando processos… aguarde terminar')).toBeInTheDocument()
+    await user.click(closeButton)
+    await user.keyboard('{Escape}')
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).not.toHaveBeenCalled()
+
+    rerender(<ErpReconcileModal open onClose={onClose} {...props} />)
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    expect(closeButton).toBeEnabled()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('caso-real: CR-61 callback rejeitado solta a trava: Fechar volta a funcionar', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn().mockRejectedValue(new Error('lista vazia'))
+    const { onClose } = renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeEnabled()
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

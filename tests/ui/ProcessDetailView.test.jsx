@@ -173,6 +173,23 @@ describe('ProcessDetailView — Rastrear navio', () => {
   })
 })
 
+// D-F3-1: nos maritimos o BL e' uma linha so' ("House BL", leitura houseBl || masterBl).
+describe('ProcessDetailView — House BL unico (D-F3-1)', () => {
+  it('caso-real: CR-72 FCL legado so com masterBl: linha "House BL" com o valor e nenhum dt MBL/HBL', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'FCL', vesselName: 'ALFA MAERSK', masterBl: 'MBL-1', houseBl: '' }) })
+    expect(getDefinition('House BL')).toHaveTextContent('MBL-1')
+    expect(screen.queryByText('MBL', { selector: 'dt' })).toBeNull()
+    expect(screen.queryByText('HBL', { selector: 'dt' })).toBeNull()
+  })
+
+  it('caso-real: CR-72 com masterBl e houseBl preenchidos, so o houseBl aparece', () => {
+    renderDetail({ selectedProcess: makeProcess({ category: 'LCL', vesselName: 'ALFA MAERSK', masterBl: 'MBL-OCULTO', houseBl: 'HBL-2' }) })
+    expect(getDefinition('House BL')).toHaveTextContent('HBL-2')
+    expect(screen.queryByText('MBL-OCULTO')).toBeNull()
+    expect(screen.getAllByText('House BL', { selector: 'dt' })).toHaveLength(1)
+  })
+})
+
 describe('ProcessDetailView — card "Transportadora" (aba Processo)', () => {
   it('coleta agendada + carrierName preenchido: mostra rótulo e valor', () => {
     renderDetail({
@@ -1700,7 +1717,7 @@ describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
       },
     })
 
-  it('FCL divergente: aviso em destino, ETD, ETA, Incoterm e Fornecedor (Detalhes gerais) e em Navio, MBL, Nº e Registro da DUIMP (aba Processo)', () => {
+  it('FCL divergente: aviso em destino, ETD, ETA, Incoterm e Fornecedor (Detalhes gerais) e em Navio, House BL, Nº e Registro da DUIMP (aba Processo)', () => {
     const process = fclProcess()
     const view = renderDetail(adminProps(process, fclShipment(), { detailTab: 'general' }))
     expect(chip('Destino no ERP: ITAJAI')).toBeInTheDocument()
@@ -1716,7 +1733,7 @@ describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
 
     renderDetail(adminProps(process, fclShipment(), { detailTab: 'process' }))
     expect(chip('Navio no ERP: BETA FAME 12W').closest('.detail-dl__row')).toHaveTextContent('NavioALFA MAERSK')
-    expect(chip('BL no ERP: MBL-B').closest('.detail-dl__row')).toHaveTextContent('MBLMBL-A')
+    expect(chip('BL no ERP: MBL-B').closest('.detail-dl__row')).toHaveTextContent('House BLMBL-A')
     expect(chip('Nº da DUIMP no ERP: DU-B').closest('.detail-dl__row')).toHaveTextContent('Nº da DUIMPDU-A')
     expect(chip('Registro da DUIMP no ERP: 20/10/2026')).toBeInTheDocument()
   })
@@ -1857,10 +1874,11 @@ describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
     expect(card.querySelectorAll('.detail-ident__row')).toHaveLength(1)
   })
 
-  it('ref-caso: R-13 BL vazio: FCL ganha a linha "MBL" — e AEREO a linha "MAWB" —, nenhuma linha HBL/HAWB nova', () => {
+  it('ref-caso: R-13 BL vazio: FCL ganha a linha "House BL" — e AEREO a linha "MAWB" —, nenhuma linha MBL/HBL/HAWB nova', () => {
     const fcl = renderDetail(adminProps(makeProcess({ category: 'FCL' }), erpShipment({ transport: { blAwb: 'MBL-B' } }), { detailTab: 'process' }))
-    expect(getDefinition('MBL')).toHaveTextContent('—')
-    expect(getDefinition('MBL').querySelector('.erp-hint')).not.toBeNull()
+    expect(getDefinition('House BL')).toHaveTextContent('—')
+    expect(getDefinition('House BL').querySelector('.erp-hint')).not.toBeNull()
+    expect(screen.queryByText('MBL', { selector: 'dt' })).toBeNull()
     expect(screen.queryByText('HBL', { selector: 'dt' })).toBeNull()
     expect(screen.queryByText('MAWB', { selector: 'dt' })).toBeNull()
     expect(chip('BL no ERP: MBL-B')).toBeInTheDocument()
@@ -1871,6 +1889,7 @@ describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
     expect(getDefinition('MAWB').querySelector('.erp-hint')).not.toBeNull()
     expect(screen.queryByText('HAWB', { selector: 'dt' })).toBeNull()
     expect(screen.queryByText('MBL', { selector: 'dt' })).toBeNull()
+    expect(screen.queryByText('House BL', { selector: 'dt' })).toBeNull()
     expect(chip('BL no ERP: AWB-7')).toBeInTheDocument()
   })
 

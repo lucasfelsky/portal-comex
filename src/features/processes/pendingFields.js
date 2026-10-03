@@ -13,6 +13,7 @@ import {
 } from './purchaseOrders.js'
 import { isLegacyProcessDangerousGoods } from './operationalOptions.js'
 import { getDocumentPendingFields } from './processDocuments.js'
+import { getHouseBl } from './houseBl.js'
 import {
   CE_HOUSE_CATEGORIES,
   CUSTOMS_INSPECTION_CHANNELS,
@@ -227,21 +228,14 @@ export const PENDING_FIELD_RULES = [
     stage: 1,
     isMissing: (p) => !hasText(p?.shippedAt),
   },
-  {
-    id: 'masterBl',
-    field: 'masterBl',
-    label: 'MBL',
-    stage: 1,
-    categories: ['FCL'],
-    isMissing: (p) => !hasText(p?.masterBl),
-  },
+  // D-F3-1: BL unico nos maritimos; o `masterBl` legado conta como preenchido.
   {
     id: 'houseBl',
     field: 'houseBl',
-    label: 'HBL',
+    label: 'House BL',
     stage: 1,
-    categories: ['LCL', 'CONSOLIDADO'],
-    isMissing: (p) => !hasText(p?.houseBl),
+    categories: ['FCL', 'LCL', 'CONSOLIDADO'],
+    isMissing: (p) => getHouseBl(p) === '',
   },
   {
     id: 'mawb',

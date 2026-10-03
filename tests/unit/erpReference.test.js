@@ -861,7 +861,7 @@ describe('buildErpFieldHints - quando o aviso acende', () => {
     expect(hints.fields.duimpRegisteredAt.ariaLabel).toBe('Registro da DUIMP no ERP: 20/10/2026')
     expect(hints.fields.duimpNumber.ariaLabel).toBe('Nº da DUIMP no ERP: DI-9036')
     expect(hints.fields.supplier.ariaLabel).toBe('Fornecedor no ERP: BETA TRADING')
-    expect(hints.fields.bl.portalFields).toEqual(['masterBl', 'houseBl'])
+    expect(hints.fields.bl.portalFields).toEqual(['houseBl', 'masterBl'])
     expect(hints.fields.etd.portalFields).toEqual(['etd', 'shippedAt'])
   })
 
