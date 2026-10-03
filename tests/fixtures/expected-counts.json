@@ -54,12 +54,13 @@
     "count": 12
   },
   "srcServices": {
-    "count": 19,
+    "count": 20,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
       "authRepository.js",
       "barStatusRepository.js",
+      "erpReferenceRepository.js",
       "exchangeRatesRepository.js",
       "externalNewsRepository.js",
       "fcmService.js",
@@ -98,12 +99,14 @@
     ]
   },
   "firestore": {
-    "topLevelCollections": 12,
+    "topLevelCollections": 14,
     "subcollections": 3,
     "_topLevel_list": [
       "announcements",
       "audits",
       "barra",
+      "erpProcessHints",
+      "erpSnapshots",
       "externalNews",
       "externalNewsDlq",
       "forecastSettings",
@@ -121,11 +124,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 82,
+    "totalFiles": 83,
     "_breakdown": {
       "firebase": 4,
       "functions": 16,
-      "ui": 62
+      "ui": 63
     }
   },
   "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",
@@ -314,6 +317,29 @@
       "uploadedById",
       "uploadedByName",
       "uploadedByRole"
+    ],
+    "isValidErpSnapshotMeta": [
+      "counts",
+      "createdAt",
+      "createdById",
+      "createdByName",
+      "snapshotId",
+      "sourceInfo"
+    ],
+    "isValidErpLatestPointer": [
+      "fileName",
+      "hints",
+      "snapshotId",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
+    ],
+    "isValidErpProcessHint": [
+      "matchRule",
+      "savedAt",
+      "savedById",
+      "shipment",
+      "snapshotId"
     ]
   },
   "routes": {
@@ -367,7 +393,9 @@
       "userCredentials",
       "archivedBy",
       "collectionWindows",
-      "statusTone"
+      "statusTone",
+      "erpSnapshots",
+      "erpProcessHints"
     ]
   },
   "vaultMustNotMention": {

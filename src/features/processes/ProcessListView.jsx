@@ -411,10 +411,10 @@ export default function ProcessListView({
                 type="button"
                 className="ghost-button erp-reconcile-trigger"
                 disabled={isLoading}
-                title="Comparar a planilha do DBCorp com os processos carregados (não grava nada)"
+                title="Anexar a planilha do DBCorp: concilia com os processos e salva como referência do ERP"
                 onClick={onReconcileErp}
               >
-                Conciliar com ERP
+                Importar do DBCorp
               </button>
             ) : null}
             <button

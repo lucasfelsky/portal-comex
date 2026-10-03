@@ -68,6 +68,9 @@ describe('firestore.rules structure', () => {
       'userCredentials',
       'audits',
       'supportTickets',
+      // PR 3 (Importar do DBCorp): referencia do ERP, so admin.
+      'erpSnapshots',
+      'erpProcessHints',
     ]
 
     for (const collection of expectedCollections) {
@@ -432,6 +435,78 @@ describe('firestore.rules structure', () => {
   describe('F18b-1 — documentIndex (B1)', () => {
     it('firestore.rules NAO contem "documentIndex" (gravado SO pelo trigger, nunca pelo cliente)', () => {
       expect(rules).not.toMatch(/documentIndex/)
+    })
+  })
+
+  describe('PR 3 — referência do ERP (erpSnapshots / erpProcessHints)', () => {
+    const readFunction = (name) => {
+      const match = rules.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\s{4}\\}`))
+      expect(match, `function ${name} nao encontrada`).not.toBeNull()
+      return match[1]
+    }
+    const readMatch = (collection) => {
+      const match = rules.match(new RegExp(`match\\s+/${collection}/\\{[a-zA-Z]+\\}\\s*\\{([\\s\\S]*?)\\n\\s{4}\\}`))
+      expect(match, `match /${collection} nao encontrado`).not.toBeNull()
+      return match[1]
+    }
+
+    it('erpSnapshots: read so isAdmin(), update so no latest e delete: if false', () => {
+      const body = readMatch('erpSnapshots')
+      expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*;/)
+      expect(body).toMatch(
+        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*snapshotId\s*==\s*'latest'\s*&&\s*isValidErpLatestPointer\s*\(\s*\)/
+      )
+      expect(body).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('erpProcessHints: read so isAdmin(), teto de 128 no id e delete: if false', () => {
+      const body = readMatch('erpProcessHints')
+      expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*;/)
+      expect(body).toMatch(
+        /allow\s+create,\s*update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*processId\.size\(\)\s*<=\s*128\s*&&\s*isValidErpProcessHint\s*\(\s*\)/
+      )
+      expect(body).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('isValidErpProcessHint: hasOnly das 5 chaves, tetos de 300 itens e 100 pedidos, transport e vessel fechados', () => {
+      const body = readFunction('isValidErpProcessHint')
+      expect(body).toMatch(
+        /keys\(\)\.hasOnly\(\[\s*'snapshotId',\s*'savedAt',\s*'savedById',\s*'matchRule',\s*'shipment',?\s*\]\)/
+      )
+      expect(body).toMatch(/shipment\.items\.size\(\)\s*<=\s*300/)
+      expect(body).toMatch(/shipment\.orders\.size\(\)\s*<=\s*100/)
+      expect(body).toMatch(/shipment\.transport\.keys\(\)\.hasOnly\(/)
+      expect(body).toMatch(/shipment\.transport\.vessel\.keys\(\)\.hasOnly\(\['name',\s*'raw',\s*'voyage'\]\)/)
+    })
+
+    it('isValidErpLatestPointer: hasOnly/hasAll das 6 chaves (com hints inteiro >= 0, contra importacoes concorrentes)', () => {
+      const body = readFunction('isValidErpLatestPointer')
+      const keys = String.raw`'snapshotId',\s*'updatedAt',\s*'updatedById',\s*'updatedByName',\s*'fileName',\s*'hints',?`
+      expect(body).toMatch(new RegExp(String.raw`keys\(\)\.hasOnly\(\[\s*${keys}\s*\]\)`))
+      expect(body).toMatch(new RegExp(String.raw`keys\(\)\.hasAll\(\[\s*${keys}\s*\]\)`))
+      expect(body).toMatch(/request\.resource\.data\.hints\s+is\s+int/)
+      expect(body).toMatch(/request\.resource\.data\.hints\s*>=\s*0/)
+    })
+
+    it('isValidErpLatestPointer usa existsAfter apontando para o meta do snapshot', () => {
+      const body = readFunction('isValidErpLatestPointer')
+      expect(body).toMatch(
+        /existsAfter\(\s*\/databases\/\$\(database\)\/documents\/erpSnapshots\/\$\(request\.resource\.data\.snapshotId\)\s*\)/
+      )
+    })
+
+    it('todo allow dentro dos 2 match novos e "if false" ou comeca com "if isAdmin()"', () => {
+      for (const collection of ['erpSnapshots', 'erpProcessHints']) {
+        const body = readMatch(collection)
+        // Cada `allow` termina em ';' (as condicoes podem quebrar linha).
+        const conditions = [...body.matchAll(/allow\s+[a-z, ]+:\s*if\s+([^;]*);/g)].map((match) =>
+          match[1].replace(/\s+/g, ' ').trim()
+        )
+        expect(conditions.length, collection).toBeGreaterThanOrEqual(3)
+        for (const condition of conditions) {
+          expect(condition === 'false' || condition.startsWith('isAdmin()'), `${collection}: ${condition}`).toBe(true)
+        }
+      }
     })
   })
 })

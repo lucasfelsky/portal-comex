@@ -1,4 +1,4 @@
-// Modal "Conciliar com ERP (DBCorp)" - F1 (somente leitura). As fontes entram
+// Modal "Importar do DBCorp" (F1 + PR 3: concilia e grava a referencia do ERP). As fontes entram
 // como objetos `ErpSource` injetados (`load: vi.fn()`), sem mock do leitor de
 // planilha. So' o modulo de exportacao e' mockado (nao baixa arquivo no teste).
 //
@@ -23,7 +23,8 @@ import {
   makePortalProcess,
 } from '../fixtures/erp/dbcorpSynthetic.js'
 
-const FIXED_NOTE = 'Nada é gravado: a tela só compara a fonte com os processos já carregados.'
+const FIXED_NOTE =
+  'A planilha vira a referência do ERP para os avisos nos processos. Nenhum dado dos processos é alterado.'
 const EMPTY_PORTAL_MESSAGE = 'Os processos do Portal não foram carregados. Recarregue a página antes de conciliar.'
 
 function scenarioLoaded() {
@@ -95,9 +96,9 @@ afterEach(() => {
 })
 
 describe('ErpReconcileModal - fonte de arquivo', () => {
-  it('mostra o titulo, o aviso fixo de que nada e gravado e o input .xlsx', () => {
+  it('mostra o titulo "Importar do DBCorp", o aviso fixo da referencia do ERP e o input .xlsx', () => {
     renderModal()
-    expect(screen.getByRole('dialog', { name: 'Conciliar com ERP (DBCorp)' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Importar do DBCorp' })).toBeInTheDocument()
     expect(screen.getByText(FIXED_NOTE)).toBeInTheDocument()
     const input = document.querySelector('input[type="file"]')
     expect(input).toHaveAttribute('accept', '.xlsx')
@@ -354,6 +355,188 @@ describe('ErpReconcileModal - erros e bloqueios', () => {
     expect(screen.queryByText('Processos casados')).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exportar resultado' })).toBeDisabled()
+  })
+})
+
+describe('ErpReconcileModal - referencia do ERP (PR 3, Importar do DBCorp)', () => {
+  const savedOutcome = (hints, hintsSkipped = 0) => ({ snapshotId: 'S', counts: { hints, hintsSkipped }, skipped: [] })
+  const REFERENCE_AT = new Date(2026, 9, 2, 14, 30).getTime()
+
+  function pendingSave() {
+    let resolveSave
+    let rejectSave
+    const onSaveReference = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          resolveSave = resolve
+          rejectSave = reject
+        })
+    )
+    return { onSaveReference, resolveSave: (value) => resolveSave(value), rejectSave: (error) => rejectSave(error) }
+  }
+
+  it('onSaveReference recebe 1x o MESMO resultado que o modal renderiza e exporta (toBe) e o banner confirma', async () => {
+    const user = userEvent.setup()
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(3))
+    renderModal({ onSaveReference })
+    await uploadFile(user)
+    expect(await screen.findByText('Referência do ERP salva: 3 processos.')).toBeInTheDocument()
+    expect(onSaveReference).toHaveBeenCalledTimes(1)
+    const [result] = onSaveReference.mock.calls[0]
+    expect(result.blocked).toBeNull()
+    expect(result.summary.matched).toBe(3)
+    // O Resumo continua na tela e o export leva o mesmo objeto que foi salvo.
+    await screen.findByText('Processos casados')
+    await user.click(screen.getByRole('button', { name: 'Exportar resultado' }))
+    await waitFor(() => expect(exportErpReconciliationToXlsx).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(exportErpReconciliationToXlsx).mock.calls[0][0]).toBe(result)
+  })
+
+  it('singular, plural e " K sem aviso (embarque grande demais)." so com K > 0', async () => {
+    const user = userEvent.setup()
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(1))
+    const first = renderModal({ onSaveReference })
+    await uploadFile(user)
+    expect(await screen.findByText('Referência do ERP salva: 1 processo.')).toBeInTheDocument()
+    expect(screen.queryByText(/sem aviso/)).not.toBeInTheDocument()
+    first.unmount()
+
+    renderModal({ onSaveReference: vi.fn().mockResolvedValue(savedOutcome(1, 2)) })
+    await uploadFile(user)
+    expect(
+      await screen.findByText('Referência do ERP salva: 1 processo. 2 sem aviso (embarque grande demais).')
+    ).toBeInTheDocument()
+  })
+
+  it('"Referência atual" vem so da prop referenceInfo (rerender atualiza a linha)', () => {
+    const props = { open: true, onClose: vi.fn(), processes: buildScenarioPortalProcesses(), sources: [makeFileSource()] }
+    const { rerender } = render(<ErpReconcileModal {...props} />)
+    expect(screen.getByText('Nenhuma referência do ERP salva ainda.')).toBeInTheDocument()
+    expect(screen.queryByText(/Referência atual/)).not.toBeInTheDocument()
+
+    rerender(<ErpReconcileModal {...props} referenceInfo={{ snapshotId: 'A', updatedAtMs: REFERENCE_AT }} />)
+    expect(screen.getByText('Referência atual: planilha de 02/10/2026 14:30')).toBeInTheDocument()
+    expect(screen.queryByText('Nenhuma referência do ERP salva ainda.')).not.toBeInTheDocument()
+
+    rerender(
+      <ErpReconcileModal {...props} referenceInfo={{ snapshotId: 'B', updatedAtMs: new Date(2026, 9, 3, 9, 5).getTime() }} />
+    )
+    expect(screen.getByText('Referência atual: planilha de 03/10/2026 09:05')).toBeInTheDocument()
+
+    rerender(<ErpReconcileModal {...props} referenceInfo={null} />)
+    expect(screen.getByText('Nenhuma referência do ERP salva ainda.')).toBeInTheDocument()
+  })
+
+  it('referencia incompleta (importacoes concorrentes): a linha pede nova importacao em vez de mostrar a data', () => {
+    const props = { open: true, onClose: vi.fn(), processes: buildScenarioPortalProcesses(), sources: [makeFileSource()] }
+    const { rerender } = render(
+      <ErpReconcileModal {...props} referenceInfo={{ snapshotId: 'A', updatedAtMs: REFERENCE_AT, incomplete: true }} />
+    )
+    expect(
+      screen.getByText(
+        'A referência do ERP salva está incompleta (outra importação gravou ao mesmo tempo). Importe a planilha de novo.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Referência atual/)).not.toBeInTheDocument()
+
+    rerender(<ErpReconcileModal {...props} referenceInfo={{ snapshotId: 'B', updatedAtMs: REFERENCE_AT }} />)
+    expect(screen.getByText('Referência atual: planilha de 02/10/2026 14:30')).toBeInTheDocument()
+    expect(screen.queryByText(/incompleta/)).not.toBeInTheDocument()
+  })
+
+  it('resultado bloqueado nao chama onSaveReference', async () => {
+    const user = userEvent.setup()
+    const rows = Array.from({ length: 6 }, (_, index) => ({
+      ...makeLooseRow({ itemId: `B-${index}`, pedido: 9600 + index, poRef: `ALFA SEA 96${index}-26`, etd: '10/6/26' }),
+      rowNumber: index + 2,
+    }))
+    const load = vi.fn().mockResolvedValue({ rows, warnings: [], meta: { fileName: 'ruim.xlsx', rowCount: 6 } })
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(0))
+    renderModal({ sources: [makeFileSource(load)], onSaveReference })
+    await uploadFile(user)
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    expect(onSaveReference).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Referência do ERP salva/)).not.toBeInTheDocument()
+  })
+
+  it('processes=[] (lista do Portal vazia) nao chama onSaveReference nem a fonte', async () => {
+    const fileLoad = vi.fn().mockResolvedValue(scenarioLoaded())
+    const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(0))
+    renderModal({ processes: [], sources: [makeFileSource(fileLoad)], onSaveReference })
+    const input = document.querySelector('input[type="file"]')
+    fireEvent.change(input, { target: { files: [new File(['x'], 'teste.xlsx')] } })
+    await Promise.resolve()
+    expect(fileLoad).not.toHaveBeenCalled()
+    expect(onSaveReference).not.toHaveBeenCalled()
+  })
+
+  it('sem onSaveReference nada quebra: so o Resumo e nenhum banner de gravacao', async () => {
+    const user = userEvent.setup()
+    renderModal()
+    await uploadFile(user)
+    await screen.findByText('Processos casados')
+    expect(screen.queryByText(/Referência do ERP salva/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Salvando a referência do ERP…')).not.toBeInTheDocument()
+    expect(document.querySelector('.error-banner')).toBeNull()
+  })
+
+  it('callback rejeitado vira error-banner "Conciliação ok, mas..." e o Resumo continua', async () => {
+    const user = userEvent.setup()
+    const onSaveReference = vi.fn().mockRejectedValue(new Error('falhou'))
+    renderModal({ onSaveReference })
+    await uploadFile(user)
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    expect(document.querySelector('.error-banner')).toHaveTextContent(
+      'Conciliação ok, mas não foi possível salvar a referência do ERP.'
+    )
+    expect(screen.getByText('Processos casados')).toBeInTheDocument()
+    expect(screen.queryByText(/Referência do ERP salva/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar resultado' })).toBeEnabled()
+    expect(document.querySelector('input[type="file"]')).not.toBeDisabled()
+  })
+
+  it('durante a gravacao: status "Salvando...", input e label desabilitados; depois do save, habilita de novo', async () => {
+    const user = userEvent.setup()
+    const { onSaveReference, resolveSave } = pendingSave()
+    renderModal({ onSaveReference })
+    await uploadFile(user)
+    expect(await screen.findByText('Salvando a referência do ERP…')).toBeInTheDocument()
+    expect(screen.getByText('Salvando a referência do ERP…').closest('[role="status"]')).not.toBeNull()
+    const input = document.querySelector('input[type="file"]')
+    expect(input).toBeDisabled()
+    expect(input.closest('label')).toHaveClass('file-picker__button--disabled')
+    // A conciliacao ja esta na tela enquanto grava.
+    expect(screen.getByText('Processos casados')).toBeInTheDocument()
+
+    resolveSave(savedOutcome(3))
+    expect(await screen.findByText('Referência do ERP salva: 3 processos.')).toBeInTheDocument()
+    expect(screen.queryByText('Salvando a referência do ERP…')).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).not.toBeDisabled()
+  })
+
+  it('isSavingReference (gravacao em voo da pagina) desabilita input e botao da fonte e avisa, com a fase local idle', () => {
+    renderModal({ isSavingReference: true })
+    expect(document.querySelector('input[type="file"]')).toBeDisabled()
+    expect(document.querySelector('input[type="file"]').closest('label')).toHaveClass('file-picker__button--disabled')
+    expect(screen.getByText('Uma importação anterior ainda está salvando a referência do ERP.')).toBeInTheDocument()
+
+    renderModal({ isSavingReference: true, sources: [makeRequestSource()] })
+    expect(screen.getByRole('button', { name: 'Carregar de API de teste' })).toBeDisabled()
+  })
+
+  it('fechar no meio da gravacao zera o estado local (sem banner) e o save atrasado nao escreve de volta', async () => {
+    const user = userEvent.setup()
+    const { onSaveReference, resolveSave } = pendingSave()
+    const { onClose } = renderModal({ onSaveReference })
+    await uploadFile(user)
+    await screen.findByText('Salvando a referência do ERP…')
+    await user.click(document.querySelector('.erp-reconcile__actions .ghost-button'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Salvando a referência do ERP…')).not.toBeInTheDocument()
+    resolveSave(savedOutcome(3))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(screen.queryByText(/Referência do ERP salva/)).not.toBeInTheDocument()
   })
 })
 

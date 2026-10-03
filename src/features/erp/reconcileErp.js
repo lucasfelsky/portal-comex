@@ -164,6 +164,14 @@ const CATEGORY_KINDS = {
   AEREO: ['AEREO', 'AMOSTRA'],
 }
 
+// Regras de casamento que `findMatch` produz (a regra das rules do Firestore e o
+// teste de paridade usam esta lista).
+export const ERP_MATCH_RULES = ['pedido', 'po', 'po-base', 'consolidado:ref', 'consolidado:pedidos']
+
+// Conflitos internos do ERP que os comparadores leem. Os de `tracking` e
+// `etaFinal` (que `groupErpShipments` tambem gera) nao entram na referencia.
+export const ERP_REFERENCE_CONFLICT_FIELDS = ['etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate']
+
 const RECENT_RECEIPT_DAYS = 7
 
 function compareText(a, b) {
@@ -194,6 +202,11 @@ function orderKey(value) {
   return digitsOnly(value) || foldText(value)
 }
 
+// A UI compara a PO exibida com `scope.poKey` por esta mesma funcao.
+export function erpOrderKey(value) {
+  return orderKey(value)
+}
+
 // Categoria do Portal comparavel (fold: 'fcl' e 'aéreo' valem como 'FCL' e
 // 'AEREO'). Vazia quando o processo nao tem categoria.
 function portalCategoryOf(p) {
@@ -222,6 +235,7 @@ function createDiffFactory(authority) {
     counts,
     targets,
     matchedField,
+    scope,
   }) {
     const writeTargets = targets ?? FIELD_WRITE_TARGETS[field] ?? []
     const fieldAuthority = authority[field] ?? 'a_definir'
@@ -240,6 +254,8 @@ function createDiffFactory(authority) {
       authorityLabel: AUTHORITY_LABELS[fieldAuthority] ?? AUTHORITY_LABELS.a_definir,
     }
     if (matchedField !== undefined) diff.matchedField = matchedField
+    // Chaves ja calculadas aqui (PO/item): a UI nao recalcula, so' compara.
+    if (scope !== undefined) diff.scope = scope
     return diff
   }
 }
@@ -584,24 +600,24 @@ function looksLikePoNumber(value, pedidoDigits) {
   return Boolean(prefixed) && pedidoDigits.has(digitsOnly(prefixed[1]))
 }
 
-function supplierDiff(makeDiff, { portalValue, exporters, pedidoDigits, label, notePrefix, targets }) {
+function supplierDiff(makeDiff, { portalValue, exporters, pedidoDigits, label, notePrefix, targets, scope }) {
   const portalText = cleanCell(portalValue)
   const portalFields = ['supplierName']
   const prefix = notePrefix ? `${notePrefix}: ` : ''
   if (exporters.length === 0) {
     if (portalText === '') return null
-    return makeDiff({ field: 'supplier', label, portalFields, portal: portalText, kind: 'erp_sem_dado', targets })
+    return makeDiff({ field: 'supplier', label, portalFields, portal: portalText, kind: 'erp_sem_dado', targets, scope })
   }
   const erpDisplay = exporters.join(' / ')
   if (portalText === '') {
     return makeDiff({
-      field: 'supplier', label, portalFields, erp: erpDisplay, erpValue: exporters[0], kind: 'portal_sem_dado', targets,
+      field: 'supplier', label, portalFields, erp: erpDisplay, erpValue: exporters[0], kind: 'portal_sem_dado', targets, scope,
     })
   }
   if (looksLikePoNumber(portalText, pedidoDigits)) {
     return makeDiff({
       field: 'supplier', label, portalFields, portal: portalText, erp: erpDisplay, erpValue: exporters[0],
-      kind: 'divergente', targets, note: `${prefix}fornecedor preenchido com o número da PO.`,
+      kind: 'divergente', targets, scope, note: `${prefix}fornecedor preenchido com o número da PO.`,
     })
   }
   const results = exporters.map((exporter) => supplierMatches(portalText, exporter))
@@ -609,7 +625,7 @@ function supplierDiff(makeDiff, { portalValue, exporters, pedidoDigits, label, n
   const kind = results.includes('formato') ? 'formato' : 'divergente'
   const best = exporters[results.includes('formato') ? results.indexOf('formato') : 0]
   return makeDiff({
-    field: 'supplier', label, portalFields, portal: portalText, erp: erpDisplay, erpValue: best, kind, targets,
+    field: 'supplier', label, portalFields, portal: portalText, erp: erpDisplay, erpValue: best, kind, targets, scope,
     note: kind === 'formato' ? `${prefix}mesmo fornecedor com sufixo ou complemento diferente.` : '',
   })
 }
@@ -681,16 +697,17 @@ function comparePurchaseOrders(makeDiff, p, shipment, index) {
 
     const erpRefs = uniqueText(orders.map((order) => order.poRef))
     const accepted = new Set(orders.flatMap((order) => [foldText(order.poRef), order.poBase]).filter((value) => value !== ''))
+    const scope = { po: entry.po, poKey: key }
     if (erpRefs.length > 0) {
       if (entry.reference === '') {
         diffs.push(makeDiff({
           field: 'poReference', label: `Ref. da PO (${label})`, portalFields: ['purchaseOrders'],
-          erp: erpRefs.join(' / '), erpValue: erpRefs[0], kind: 'portal_sem_dado',
+          erp: erpRefs.join(' / '), erpValue: erpRefs[0], kind: 'portal_sem_dado', scope,
         }))
       } else if (!accepted.has(foldText(entry.reference))) {
         diffs.push(makeDiff({
           field: 'poReference', label: `Ref. da PO (${label})`, portalFields: ['purchaseOrders'],
-          portal: entry.reference, erp: erpRefs.join(' / '), erpValue: erpRefs[0], kind: 'divergente',
+          portal: entry.reference, erp: erpRefs.join(' / '), erpValue: erpRefs[0], kind: 'divergente', scope,
         }))
       }
     }
@@ -702,10 +719,19 @@ function comparePurchaseOrders(makeDiff, p, shipment, index) {
       label: `Fornecedor (${label})`,
       notePrefix: label,
       targets: ['purchaseOrders'],
+      scope,
     })
     if (supplier) diffs.push(supplier)
   }
   return diffs
+}
+
+// Chave do grupo de itens do Portal: nome dobrado e, no consolidado, a PO. E' a
+// MESMA expressao do agrupamento abaixo; a UI a usa para achar o item do chip.
+export function erpItemGroupKey(item, isConsolidated) {
+  const name = cleanCell(item?.commercialName ?? item?.name)
+  const po = isConsolidated ? cleanCell(item?.poNumber) : ''
+  return `${isConsolidated ? orderKey(po) : ''}|${foldText(name)}`
 }
 
 // Agrupa itens por nome (e por PO, no consolidado).
@@ -715,7 +741,7 @@ function groupPortalItems(items, isConsolidated) {
     const name = cleanCell(item?.commercialName ?? item?.name)
     if (name === '') continue
     const po = isConsolidated ? cleanCell(item?.poNumber) : ''
-    const key = `${isConsolidated ? orderKey(po) : ''}|${foldText(name)}`
+    const key = erpItemGroupKey(item, isConsolidated)
     if (!map.has(key)) map.set(key, { key, name, nameKey: foldText(name), po, poKey: isConsolidated ? orderKey(po) : '', sum: 0 })
     const entry = map.get(key)
     const quantity = Number(item?.quantity)
@@ -786,20 +812,21 @@ function compareItems(makeDiff, p, shipment, isConsolidated) {
     if (!portalEntry) continue
     if (isConsolidated && entry.poKey === '') continue
     const label = `Quantidade (kg): ${entry.name}`
+    const scope = { po: entry.po, poKey: entry.poKey, nameKey: entry.nameKey }
     const poNote = isConsolidated ? `PO ${entry.po}: ` : ''
     const nullNote = entry.nulls > 0 ? ` ${entry.nulls} ${entry.nulls === 1 ? 'linha sem quantidade' : 'linhas sem quantidade'} no ERP.` : ''
     const portalTotal = Math.round(portalEntry.sum * 1000)
     const erpTotal = Math.round(entry.sum * 1000)
     if (entry.nulls === entry.count) {
       diffs.push(makeDiff({
-        field: 'quantity', label, portalFields, portal: formatKg(portalEntry.sum), kind: 'erp_sem_dado',
+        field: 'quantity', label, portalFields, portal: formatKg(portalEntry.sum), kind: 'erp_sem_dado', scope,
         note: `${poNote}O ERP não informa quantidade para este item.`,
       }))
       continue
     }
     if (portalTotal === 0 && erpTotal > 0) {
       diffs.push(makeDiff({
-        field: 'quantity', label, portalFields, erp: formatKg(entry.sum), erpValue: erpTotal / 1000, kind: 'portal_sem_dado',
+        field: 'quantity', label, portalFields, erp: formatKg(entry.sum), erpValue: erpTotal / 1000, kind: 'portal_sem_dado', scope,
         note: `${poNote}Quantidade zerada no Portal.${nullNote}`,
       }))
       continue
@@ -808,13 +835,13 @@ function compareItems(makeDiff, p, shipment, isConsolidated) {
     const difference = formatKg((erpTotal - portalTotal) / 1000)
     if (entry.nulls > 0) {
       diffs.push(makeDiff({
-        field: 'quantity', label, portalFields, portal: formatKg(portalEntry.sum), erp: formatKg(entry.sum), kind: 'informativo',
+        field: 'quantity', label, portalFields, portal: formatKg(portalEntry.sum), erp: formatKg(entry.sum), kind: 'informativo', scope,
         note: `${poNote}Soma parcial do ERP (${formatKg(entry.sum)} kg) difere do Portal (${formatKg(portalEntry.sum)} kg); o total do ERP é desconhecido.${nullNote}`,
       }))
     } else {
       diffs.push(makeDiff({
         field: 'quantity', label, portalFields, portal: formatKg(portalEntry.sum), erp: formatKg(entry.sum),
-        erpValue: erpTotal / 1000, kind: 'divergente',
+        erpValue: erpTotal / 1000, kind: 'divergente', scope,
         note: `${poNote}Portal ${formatKg(portalEntry.sum)} kg × ERP ${formatKg(entry.sum)} kg (diferença ${difference} kg).`,
       }))
     }
@@ -994,6 +1021,24 @@ function pickBestShipment(category, candidates) {
   return { shipment: sorted[0], ambiguous: sorted.length > 1, count: sorted.length, hasCompatible: compatible.length > 0 }
 }
 
+// Flags de categoria de um casamento (uma unica copia da regra: `findMatch` e
+// a comparacao ao vivo contra a referencia gravada usam esta funcao).
+//   consolidado:ref     -> mismatch quando o Portal nao esta como CONSOLIDADO;
+//   consolidado:pedidos -> nenhum;
+//   demais              -> incompativel quando o embarque escolhido nao esta em
+//                          CATEGORY_KINDS[categoria] (`pickBestShipment` so' escolhe
+//                          incompativel quando nao ha compativel).
+export function categoryFlagsFor(rule, category, shipment) {
+  if (rule === 'consolidado:ref') {
+    return { categoryMismatch: category !== 'CONSOLIDADO', categoryIncompatible: false }
+  }
+  if (rule === 'consolidado:pedidos') return { categoryMismatch: false, categoryIncompatible: false }
+  return {
+    categoryMismatch: false,
+    categoryIncompatible: !(CATEGORY_KINDS[category] ?? []).includes(shipment?.kind),
+  }
+}
+
 // -> { shipment, rule, categoryMismatch, categoryIncompatible, ambiguous, count, warnings } | null
 //   categoryMismatch: consolidado gravado com outra categoria (casou pela REF).
 //   categoryIncompatible: casou por PEDIDO/PO, mas nenhum candidato tinha categoria compativel.
@@ -1002,11 +1047,11 @@ function findMatch(entry, index) {
   const { p } = entry
 
   if (entry.conRef && index.consolidatedByRef.has(entry.conRef)) {
+    const shipment = index.consolidatedByRef.get(entry.conRef)
     return {
-      shipment: index.consolidatedByRef.get(entry.conRef),
+      shipment,
       rule: 'consolidado:ref',
-      categoryMismatch: entry.category !== 'CONSOLIDADO',
-      categoryIncompatible: false,
+      ...categoryFlagsFor('consolidado:ref', entry.category, shipment),
       ambiguous: false,
       count: 1,
       warnings,
@@ -1036,8 +1081,7 @@ function findMatch(entry, index) {
     return {
       shipment: picked.shipment,
       rule: 'consolidado:pedidos',
-      categoryMismatch: false,
-      categoryIncompatible: false,
+      ...categoryFlagsFor('consolidado:pedidos', entry.category, picked.shipment),
       ambiguous: picked.ambiguous,
       count: picked.count,
       warnings,
@@ -1069,11 +1113,105 @@ function findMatch(entry, index) {
   return {
     shipment: picked.shipment,
     rule,
-    categoryMismatch: false,
-    categoryIncompatible: !picked.hasCompatible,
+    ...categoryFlagsFor(rule, entry.category, picked.shipment),
     ambiguous: picked.ambiguous,
     count: picked.count,
     warnings,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Referencia do ERP (recorte do embarque + diff ao vivo)
+// ---------------------------------------------------------------------------
+
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+const referenceText = (value) => (typeof value === 'string' ? value : '')
+const referenceList = (value) => (Array.isArray(value) ? value : [])
+const referenceTexts = (value) => referenceList(value).filter((entry) => typeof entry === 'string')
+const referenceNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+
+// Recorte do embarque que a referencia guarda: SO' o que `compareProcess` le
+// (nada de linha da planilha, item/NCM/codigo SQ, rastreio nem financeiro).
+// Defensivo e idempotente: aceita o embarque agrupado E o recorte vindo do
+// Firestore; campo ausente ou de tipo errado vira '', [] ou null, nunca
+// `undefined`. E' o unico normalizador (o diff ao vivo tambem passa por ele).
+export function toErpReferenceShipment(shipment) {
+  const source = isRecord(shipment) ? shipment : {}
+  const transport = isRecord(source.transport) ? source.transport : {}
+  const vessel = isRecord(transport.vessel) ? transport.vessel : {}
+  return {
+    kind: referenceText(source.kind),
+    portalCategory: referenceText(source.portalCategory),
+    key: referenceText(source.key),
+    incoterm: referenceText(source.incoterm),
+    originHint: referenceText(source.originHint),
+    stage: referenceNumber(source.stage),
+    statuses: referenceTexts(source.statuses),
+    statusNf: referenceTexts(source.statusNf),
+    orders: referenceList(source.orders)
+      .filter(isRecord)
+      .map((order) => ({
+        pedido: referenceText(order.pedido),
+        poRef: referenceText(order.poRef),
+        poBase: referenceText(order.poBase),
+        exporter: referenceText(order.exporter),
+      })),
+    items: referenceList(source.items)
+      .filter(isRecord)
+      .map((item) => ({
+        commercialName: referenceText(item.commercialName),
+        pedido: referenceText(item.pedido),
+        quantityKg: referenceNumber(item.quantityKg),
+      })),
+    transport: {
+      etd: referenceText(transport.etd),
+      eta: referenceText(transport.eta),
+      vessel: {
+        name: referenceText(vessel.name),
+        raw: referenceText(vessel.raw),
+        voyage: referenceText(vessel.voyage),
+      },
+      blAwb: referenceText(transport.blAwb),
+      origin: referenceText(transport.origin),
+      destination: referenceText(transport.destination),
+      diNumber: referenceText(transport.diNumber),
+      diDate: referenceText(transport.diDate),
+    },
+    conflicts: referenceList(source.conflicts)
+      .filter((conflict) => isRecord(conflict) && ERP_REFERENCE_CONFLICT_FIELDS.includes(conflict.field))
+      .map((conflict) => ({ field: conflict.field, values: referenceTexts(conflict.values) }))
+      .filter((conflict) => conflict.values.length > 0),
+  }
+}
+
+// Documento do Firestore com a forma esperada? (Doc truncado ou de outra
+// versao nao gera aviso: melhor nenhum chip do que um chip errado.)
+function hasReferenceShape(shipment) {
+  return (
+    isRecord(shipment) &&
+    isRecord(shipment.transport) &&
+    isRecord(shipment.transport.vessel) &&
+    ['orders', 'items', 'conflicts', 'statuses', 'statusNf'].every((name) => Array.isArray(shipment[name]))
+  )
+}
+
+// Mesma comparacao do `compareProcess`, ao vivo, contra o embarque guardado na
+// referencia: `hint = { matchRule, shipment }`. Nao recebe `today` e nunca
+// lanca: erro, regra desconhecida ou forma invalida devolvem [].
+export function diffProcessAgainstReference(process, hint, { fieldAuthority } = {}) {
+  try {
+    if (!isRecord(process) || !isRecord(hint)) return []
+    if (!ERP_MATCH_RULES.includes(hint.matchRule) || !hasReferenceShape(hint.shipment)) return []
+    const shipment = toErpReferenceShipment(hint.shipment)
+    const makeDiff = createDiffFactory({ ...FIELD_AUTHORITY, ...(fieldAuthority ?? {}) })
+    return compareProcess(makeDiff, process, shipment, {
+      matchRule: hint.matchRule,
+      ...categoryFlagsFor(hint.matchRule, portalCategoryOf(process), shipment),
+      index: buildIndex([shipment]),
+      warnings: [],
+    })
+  } catch {
+    return []
   }
 }
 
@@ -1194,6 +1332,7 @@ export function reconcileErp(processes, shipments, { today = '', fieldAuthority 
       archived: entry.archived,
       shipmentKey: found.shipment.key,
       matchRule: found.rule,
+      referenceShipment: toErpReferenceShipment(found.shipment),
       diffs: compareProcess(makeDiff, entry.p, found.shipment, {
         matchRule: found.rule,
         categoryMismatch: found.categoryMismatch,

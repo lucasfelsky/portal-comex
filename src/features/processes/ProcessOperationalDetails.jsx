@@ -11,6 +11,8 @@ import {
   isLegacyProcessDangerousGoods,
 } from './operationalOptions'
 import { canShowProcessName } from './processLabels'
+import { getProcessPurchaseOrders } from './purchaseOrders'
+import ErpHint from '../erp/ErpHint'
 import { getEffectiveLicenses, isLicenseDeferred, isLicenseRejected } from './licenses'
 import { formatDateTime } from '../../utils/dateFormat'
 import {
@@ -47,7 +49,8 @@ import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
 // `isLicenseRejected`), `../../utils/dateFormat` (so' `formatDateTime`), `../../utils/cargoUnits` (puro),
 // `./arrivalCustoms`, `./processCategories`, `./receiptDivergence` (so'
 // `hasReceiptDivergence`), `./VesselTrackingButton` (+ `./vesselTracking`, puro,
-// sem imports). A funcao de tom de canal de `./processStatusView`
+// sem imports), `./purchaseOrders` (puro; so' `getProcessPurchaseOrders`) e
+// `../erp/ErpHint` (PR 3: aviso "ERP" do admin; so' importa `react`). A funcao de tom de canal de `./processStatusView`
 // NAO e' mais importada aqui: a DUIMP virou neutra (canal e' badge, nao
 // card colorido) — a funcao continua exportada la' pro Dashboard.
 //
@@ -112,13 +115,39 @@ export function DetailList({ children }) {
   return <dl className="detail-dl">{children}</dl>
 }
 
-export function DetailRow({ label, children }) {
+// `hint` (PR 3, so' admin): aviso "ERP" depois do valor.
+export function DetailRow({ label, children, hint }) {
   return (
     <div className="detail-dl__row">
       <dt>{label}</dt>
-      <dd>{children}</dd>
+      <dd>
+        {children}
+        {hint ? <ErpHint hint={hint} /> : null}
+      </dd>
     </div>
   )
+}
+
+// PR 3 (D-P3-1): linha de campo VAZIO no Portal so' existe quando ha' aviso do
+// ERP. O nucleo decide o `kind`; a view decide a linha: o aviso `portal_sem_dado`
+// so' vale quando TODO campo do Portal a que ele se refere esta' vazio aqui. Se
+// a view tem valor e o nucleo diz vazio (ex.: POs legadas em string), sem aviso.
+// -> o proprio hint ou null.
+export function getErpEmptyRowHint(hint, process) {
+  if (!hint || hint.kind !== 'portal_sem_dado') return null
+  const fields = Array.isArray(hint.portalFields) ? hint.portalFields : []
+  if (fields.length === 0) return null
+  if (fields.includes('purchaseOrders')) {
+    return getProcessPurchaseOrders(process).length === 0 ? hint : null
+  }
+  return fields.every((name) => String(process?.[name] ?? '').trim() === '') ? hint : null
+}
+
+// Aviso de uma linha que ja existe (mostra o valor ou o `-` de vazio): o
+// divergente vale sempre; o `portal_sem_dado` so' com o campo vazio de fato.
+export function getErpRowHint(hint, process) {
+  if (!hint) return null
+  return hint.kind === 'divergente' ? hint : getErpEmptyRowHint(hint, process)
 }
 
 // UX-6b-3 (D6): predicados puros de "tem conteudo" — extraidos dos proprios
@@ -137,7 +166,10 @@ export function hasArrivalDetails(process) {
   return Boolean(hasArrival || process?.ceMercante || process?.ceHouse || process?.terminalName || hasDtaContent)
 }
 
-export function hasCustomsDetails(process) {
+// `erpHints` (PR 3, opcional): com aviso de DUIMP vazia no Portal o bloco passa
+// a existir (so' admin chega aqui com hints). Sem o 2o parametro, o
+// comportamento e' o de sempre.
+export function hasCustomsDetails(process, erpHints) {
   const isMaritime = isMaritimeCategory(process?.category)
   const isAir = isAirCategory(process?.category)
   if (!isMaritime && !isAir) return false
@@ -147,7 +179,9 @@ export function hasCustomsDetails(process) {
       process?.duimpNumber ||
       process?.duimpRegisteredAt ||
       process?.parameterizedAt ||
-      process?.clearanceCompletedAt
+      process?.clearanceCompletedAt ||
+      getErpEmptyRowHint(erpHints?.fields?.duimpNumber, process) ||
+      getErpEmptyRowHint(erpHints?.fields?.duimpRegisteredAt, process)
   )
 }
 
@@ -204,25 +238,44 @@ export function ProcessLicensesDetails({ process, step, showEmptyPlaceholder = f
   )
 }
 
-function IdentRow({ label, children }) {
+// O aviso fica DENTRO do valor (span): a linha e' um <p>, entao o chip e o
+// balao so' podem ser <span>.
+function IdentRow({ label, children, hint }) {
   return (
     <p className="detail-ident__row">
       <span className="detail-ident__label">
         {label}
         <span className="detail-ident__sep">:</span>
       </span>{' '}
-      <span className="detail-ident__value">{children}</span>
+      <span className="detail-ident__value">
+        {children}
+        {hint ? <ErpHint hint={hint} /> : null}
+      </span>
     </p>
   )
 }
 
-export function ProcessIdentificationDetails({ process, canSeeName }) {
-  const showSupplier =
-    canShowProcessName(process, canSeeName) &&
-    process?.category !== 'CONSOLIDADO' &&
-    process?.supplierName
+const EMPTY_ROW_VALUE = '—'
+
+// `erpHints` (PR 3, opcional, so' admin): avisos do ERP. As linhas de campo
+// vazio (`—`) so' existem quando ha' aviso; sem aviso o DOM e' o de sempre.
+export function ProcessIdentificationDetails({ process, canSeeName, erpHints }) {
+  const fields = erpHints?.fields
+  const canShowName = canShowProcessName(process, canSeeName)
+  const isConsolidated = process?.category === 'CONSOLIDADO'
+  const showSupplier = canShowName && !isConsolidated && process?.supplierName
+  const emptySupplierHint =
+    !showSupplier && canShowName && !isConsolidated ? getErpEmptyRowHint(fields?.supplier, process) : null
+  const emptyOriginHint = !process?.originLocation ? getErpEmptyRowHint(fields?.origin, process) : null
+  const emptyIncotermHint = !process?.incoterm ? getErpEmptyRowHint(fields?.incoterm, process) : null
   const hasContent =
-    showSupplier || process?.originLocation || process?.incoterm || process?.forwarderName
+    showSupplier ||
+    process?.originLocation ||
+    process?.incoterm ||
+    process?.forwarderName ||
+    emptySupplierHint ||
+    emptyOriginHint ||
+    emptyIncotermHint
 
   if (!hasContent) return null
 
@@ -230,9 +283,33 @@ export function ProcessIdentificationDetails({ process, canSeeName }) {
     <div className="detail-card process-general-card process-general-card--ident">
       <span className="detail-label">Identificação</span>
       <div className="detail-stack detail-stack--compact detail-ident">
-        {showSupplier ? <IdentRow label="Fornecedor">{process.supplierName}</IdentRow> : null}
-        {process?.originLocation ? <IdentRow label="Origem">{process.originLocation}</IdentRow> : null}
-        {process?.incoterm ? <IdentRow label="Incoterm">{process.incoterm}</IdentRow> : null}
+        {showSupplier ? (
+          <IdentRow label="Fornecedor" hint={getErpRowHint(fields?.supplier, process)}>
+            {process.supplierName}
+          </IdentRow>
+        ) : emptySupplierHint ? (
+          <IdentRow label="Fornecedor" hint={emptySupplierHint}>
+            {EMPTY_ROW_VALUE}
+          </IdentRow>
+        ) : null}
+        {process?.originLocation ? (
+          <IdentRow label="Origem" hint={getErpRowHint(fields?.origin, process)}>
+            {process.originLocation}
+          </IdentRow>
+        ) : emptyOriginHint ? (
+          <IdentRow label="Origem" hint={emptyOriginHint}>
+            {EMPTY_ROW_VALUE}
+          </IdentRow>
+        ) : null}
+        {process?.incoterm ? (
+          <IdentRow label="Incoterm" hint={getErpRowHint(fields?.incoterm, process)}>
+            {process.incoterm}
+          </IdentRow>
+        ) : emptyIncotermHint ? (
+          <IdentRow label="Incoterm" hint={emptyIncotermHint}>
+            {EMPTY_ROW_VALUE}
+          </IdentRow>
+        ) : null}
         {process?.forwarderName ? <IdentRow label="Agente de carga">{process.forwarderName}</IdentRow> : null}
       </div>
     </div>
@@ -357,8 +434,13 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
 
 // UX-6b-3 (D7.2): bloco "Embarque e trânsito" (step 2, so' quando ha' sinal
 // de embarque ou transbordo).
-export function ProcessTransitDetails({ process, showEmptyPlaceholder = false }) {
+// BL/AWB (PR 3): o aviso vai na 1a linha PREENCHIDA do par do diff; com o par
+// vazio, a linha nova leva o rotulo do 1o campo (MBL ou MAWB).
+const BL_ROW_LABELS = { masterBl: 'MBL', houseBl: 'HBL', mawb: 'MAWB', hawb: 'HAWB' }
+
+export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, erpHints }) {
   const trackingTarget = getVesselTrackingTarget(process)
+  const fields = erpHints?.fields
   const hasTransit =
     trackingTarget ||
     process?.shippedAt ||
@@ -370,7 +452,24 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false })
     process?.mawb ||
     process?.hawb
 
-  if (!hasTransit && !process?.transshipment) {
+  // Avisos do ERP (so' admin): linha nova (`—`) de Navio e de MBL/MAWB vazios e
+  // aviso nas linhas que ja existem. Sem aviso, nada muda.
+  const emptyVesselHint = getErpEmptyRowHint(fields?.vessel, process)
+  const emptyBlHint = getErpEmptyRowHint(fields?.bl, process)
+  const vesselHint = fields?.vessel?.kind === 'divergente' ? fields.vessel : null
+  const blHint = fields?.bl?.kind === 'divergente' ? fields.bl : null
+  const blPortalFields = Array.isArray(fields?.bl?.portalFields) ? fields.bl.portalFields : []
+  const blFirstFilled = blPortalFields.find((name) => String(process?.[name] ?? '').trim() !== '')
+  const blEmptyLabel = BL_ROW_LABELS[blPortalFields[0]]
+  // Divergente de ETD sem `etd` (so' `shippedAt`): o aviso vai na Data de embarque.
+  const shippedHint = fields?.etd?.kind === 'divergente' && !process?.etd && process?.shippedAt ? fields.etd : null
+  // Divergente de navio sem `vesselName`: a linha Viagem leva o aviso.
+  const voyageHint = vesselHint && !process?.vesselName && process?.voyage ? vesselHint : null
+  const vesselRowHint = vesselHint && process?.vesselName ? vesselHint : null
+  const hasErpRows = Boolean(emptyVesselHint || (emptyBlHint && blEmptyLabel))
+  const blRowHint = (field) => (blHint && blFirstFilled === field ? blHint : null)
+
+  if (!hasTransit && !process?.transshipment && !hasErpRows) {
     return showEmptyPlaceholder ? (
       <DetailBlockPlaceholder
         title="Embarque e trânsito"
@@ -384,15 +483,55 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false })
   return (
     <DetailBlock step={2} title="Embarque e trânsito" wide className="process-block--transit">
       <DetailList>
-        {process?.shippedAt ? <DetailRow label="Data de embarque">{formatDate(process.shippedAt)}</DetailRow> : null}
-        {process?.vesselName ? <DetailRow label="Navio">{process.vesselName}</DetailRow> : null}
-        {process?.voyage ? <DetailRow label="Viagem">{process.voyage}</DetailRow> : null}
+        {process?.shippedAt ? (
+          <DetailRow label="Data de embarque" hint={shippedHint}>
+            {formatDate(process.shippedAt)}
+          </DetailRow>
+        ) : null}
+        {process?.vesselName ? (
+          <DetailRow label="Navio" hint={vesselRowHint}>
+            {process.vesselName}
+          </DetailRow>
+        ) : emptyVesselHint ? (
+          <DetailRow label="Navio" hint={emptyVesselHint}>
+            {EMPTY_ROW_VALUE}
+          </DetailRow>
+        ) : null}
+        {process?.voyage ? (
+          <DetailRow label="Viagem" hint={voyageHint}>
+            {process.voyage}
+          </DetailRow>
+        ) : null}
         {trackingTarget?.imo ? <DetailRow label="IMO do navio">{trackingTarget.imo}</DetailRow> : null}
         {process?.flightNumber ? <DetailRow label="Voo">{process.flightNumber}</DetailRow> : null}
-        {process?.masterBl ? <DetailRow label="MBL">{process.masterBl}</DetailRow> : null}
-        {process?.houseBl ? <DetailRow label="HBL">{process.houseBl}</DetailRow> : null}
-        {process?.mawb ? <DetailRow label="MAWB">{process.mawb}</DetailRow> : null}
-        {process?.hawb ? <DetailRow label="HAWB">{process.hawb}</DetailRow> : null}
+        {process?.masterBl ? (
+          <DetailRow label="MBL" hint={blRowHint('masterBl')}>
+            {process.masterBl}
+          </DetailRow>
+        ) : emptyBlHint && blEmptyLabel === 'MBL' ? (
+          <DetailRow label="MBL" hint={emptyBlHint}>
+            {EMPTY_ROW_VALUE}
+          </DetailRow>
+        ) : null}
+        {process?.houseBl ? (
+          <DetailRow label="HBL" hint={blRowHint('houseBl')}>
+            {process.houseBl}
+          </DetailRow>
+        ) : null}
+        {process?.mawb ? (
+          <DetailRow label="MAWB" hint={blRowHint('mawb')}>
+            {process.mawb}
+          </DetailRow>
+        ) : emptyBlHint && blEmptyLabel === 'MAWB' ? (
+          <DetailRow label="MAWB" hint={emptyBlHint}>
+            {EMPTY_ROW_VALUE}
+          </DetailRow>
+        ) : null}
+        {process?.hawb ? (
+          <DetailRow label="HAWB" hint={blRowHint('hawb')}>
+            {process.hawb}
+          </DetailRow>
+        ) : null}
         {process?.transshipment ? (
           <DetailRow label="Transbordo">
             {`${process?.transshipmentPort ? `Sim — ${process.transshipmentPort}` : 'Sim'}${process?.transshipmentEtd ? ` · ETD ${formatDate(process.transshipmentEtd)}` : ''}`}
@@ -542,8 +681,10 @@ const CHANNEL_BADGE_TONE = {
 // So' renderiza se maritimo/aereo e ha algum dado preenchido. Visivel a
 // todos os aprovados (nenhum campo identifica o processo; mascara de nome
 // intocada).
-export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = false }) {
-  if (!hasCustomsDetails(process)) {
+export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = false, erpHints }) {
+  // `hasCustomsDetails(process, erpHints)` e' o unico predicado (o pai o usa para
+  // a numeracao das Anuências): com aviso de DUIMP vazia o bloco passa a existir.
+  if (!hasCustomsDetails(process, erpHints)) {
     return showEmptyPlaceholder && (isMaritimeCategory(process?.category) || isAirCategory(process?.category)) ? (
       <DetailBlockPlaceholder
         title="Aduana (DUIMP)"
@@ -559,16 +700,35 @@ export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = fa
   const channelBadge = channel ? (
     <span className={`inline-badge ${CHANNEL_BADGE_TONE[channel] ?? ''}`.trim()}>{`Canal ${channel}`}</span>
   ) : null
+  const fields = erpHints?.fields
+  const emptyNumberHint = !process?.duimpNumber ? getErpEmptyRowHint(fields?.duimpNumber, process) : null
+  const registeredHint = getErpRowHint(fields?.duimpRegisteredAt, process)
 
   return (
     <DetailBlock step={step} title="Aduana (DUIMP)" className="process-block--customs" badges={channelBadge}>
       <DetailList>
         {process?.duimpStatus ? <DetailRow label="Status">{process.duimpStatus}</DetailRow> : null}
-        {process?.duimpNumber ? <DetailRow label="Nº da DUIMP">{process.duimpNumber}</DetailRow> : null}
+        {process?.duimpNumber ? (
+          <DetailRow label="Nº da DUIMP" hint={getErpRowHint(fields?.duimpNumber, process)}>
+            {process.duimpNumber}
+          </DetailRow>
+        ) : emptyNumberHint ? (
+          <DetailRow label="Nº da DUIMP" hint={emptyNumberHint}>
+            {EMPTY_ROW_VALUE}
+          </DetailRow>
+        ) : null}
         {isLegacyDuimpRegisteredWithoutDate(process) ? (
-          <DetailRow label="Registro">sem data (registro antigo)</DetailRow>
+          <DetailRow label="Registro" hint={registeredHint}>
+            sem data (registro antigo)
+          </DetailRow>
         ) : process?.duimpRegisteredAt ? (
-          <DetailRow label="Registro">{formatDateTime(process.duimpRegisteredAt)}</DetailRow>
+          <DetailRow label="Registro" hint={registeredHint}>
+            {formatDateTime(process.duimpRegisteredAt)}
+          </DetailRow>
+        ) : registeredHint ? (
+          <DetailRow label="Registro" hint={registeredHint}>
+            {EMPTY_ROW_VALUE}
+          </DetailRow>
         ) : null}
         {isLegacyParameterizedWithoutDate(process) ? (
           <DetailRow label="Parametrização">sem data (registro antigo)</DetailRow>

@@ -3355,7 +3355,7 @@ body {
   background: var(--surface);
 }
 
-/* D-1: o botao "Conciliar com ERP" so' existe no desktop. A especificidade
+/* D-1: o botao "Importar do DBCorp" so' existe no desktop. A especificidade
    (0,2,0) vence o display:inline-flex do .ghost-button (0,1,0). */
 @media (max-width: 1040px) {
   .ghost-button.erp-reconcile-trigger {
@@ -3363,6 +3363,98 @@ body {
   }
 }
 /* ERP-RECONCILE:END */
+
+/* ERP-HINT:START */
+/* PR 3: aviso "ERP" do detalhe do processo (so' admin). Chip pequeno + balao
+   (tooltip). O balao esta sempre no DOM e fecha por `hidden`: o repo nao tem
+   regra global `[hidden]`, entao o `display: block` abaixo anularia o atributo
+   sem a regra `[hidden]` desta secao. Nenhuma cor literal, nenhuma animacao. As
+   regras de <= 1040px (balao no fluxo) e o alvo de toque de 44px ficam em
+   `mobile-redesign.css`. O chip e o balao zeram a tipografia herdada de
+   `.detail-label` (caixa alta, tracking, peso 700). */
+.erp-hint {
+  display: inline-flex;
+  vertical-align: middle;
+  position: relative;
+  margin-inline-start: 6px;
+}
+
+.erp-hint__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--warning-50);
+  color: var(--warning-700);
+  font-family: inherit;
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  line-height: 20px;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.erp-hint__chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.erp-hint__bubble {
+  display: block;
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 4rem));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  font-size: var(--fs-footnote);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.erp-hint__bubble[data-align='end'] {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+}
+
+.erp-hint__bubble[hidden] {
+  display: none;
+}
+
+/* Aba Itens: o <button> do item nao pode conter o chip (botao aninhado); so'
+   com aviso o item ganha este wrapper (sem aviso o DOM e' o de sempre). */
+.process-items-list__entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.process-items-list__entry > .process-related-item-button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.process-items-list__entry > .erp-hint {
+  flex: none;
+}
+/* ERP-HINT:END */
 
 .admin-user-list,
 .announcement-list,

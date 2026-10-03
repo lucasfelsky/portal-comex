@@ -436,6 +436,120 @@ service cloud.firestore {
           || request.resource.data.notificationPreferences is map);
     }
 
+    // PR 3 (Importar do DBCorp): referencia do ERP, SO' admin. `erpSnapshots`
+    // guarda 1 doc de meta por importacao (id automatico, imutavel) e o ponteiro
+    // `latest`; `erpProcessHints/{processId}` guarda o recorte do embarque casado
+    // com cada processo (sobrescrito a cada importacao). Nada financeiro entra:
+    // o recorte e' montado no cliente (`src/features/erp/erpReference.js`) e as
+    // rules fecham as chaves de topo, de `shipment`, `transport` e `vessel` e os
+    // tetos de cada lista. LIMITE: rules nao tem laco, entao os ELEMENTOS de
+    // orders/items/conflicts/statuses/statusNf e os tipos dentro de counts e
+    // sourceInfo nao sao validados aqui (a barreira e' o recorte + os testes).
+    // Os tetos e a lista de matchRule espelham `ERP_HINT_LIMITS` e
+    // `ERP_MATCH_RULES` (teste de paridade em tests/unit/erpReference.test.js).
+    // So' o `latest` usa existsAfter (aponta para o meta do mesmo batch); o hint
+    // nao usa get()/existsAfter (limite de acessos por request num batch grande).
+    // O `latest` tambem guarda `hints` (quantos hints a importacao gravou): duas
+    // importacoes concorrentes em varios lotes sobrescrevem os mesmos docs de
+    // hint, e a leitura compara esse numero com os docs do snapshot para tratar a
+    // divergencia como referencia incompleta (pede nova importacao).
+    function isValidErpSnapshotMeta(snapshotId) {
+      return request.resource.data.keys().hasOnly([
+        'snapshotId', 'createdAt', 'createdById', 'createdByName', 'sourceInfo', 'counts',
+      ])
+        && request.resource.data.keys().hasAll([
+          'snapshotId', 'createdAt', 'createdById', 'createdByName', 'sourceInfo', 'counts',
+        ])
+        && snapshotId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.snapshotId == snapshotId
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdById == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByName.size() <= 120
+        && request.resource.data.sourceInfo is map
+        && request.resource.data.sourceInfo.keys().hasOnly([
+          'source', 'label', 'fileName', 'fetchedAt', 'rowCount', 'generatedOn',
+        ])
+        && request.resource.data.sourceInfo.fileName is string
+        && request.resource.data.sourceInfo.fileName.size() <= 255
+        && request.resource.data.counts is map
+        && request.resource.data.counts.keys().hasOnly([
+          'erpRows', 'shipments', 'activeShipments', 'matched', 'matchedArchived',
+          'matchedWithDiffs', 'erpOnly', 'portalOnly', 'warnings', 'hints', 'hintsSkipped',
+        ]);
+    }
+
+    function isValidErpLatestPointer() {
+      return request.resource.data.keys().hasOnly([
+        'snapshotId', 'updatedAt', 'updatedById', 'updatedByName', 'fileName', 'hints',
+      ])
+        && request.resource.data.keys().hasAll([
+          'snapshotId', 'updatedAt', 'updatedById', 'updatedByName', 'fileName', 'hints',
+        ])
+        && request.resource.data.snapshotId is string
+        && request.resource.data.snapshotId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedById == request.auth.uid
+        && request.resource.data.updatedByName is string
+        && request.resource.data.updatedByName.size() <= 120
+        && request.resource.data.fileName is string
+        && request.resource.data.fileName.size() <= 255
+        && request.resource.data.hints is int
+        && request.resource.data.hints >= 0
+        && existsAfter(/databases/$(database)/documents/erpSnapshots/$(request.resource.data.snapshotId));
+    }
+
+    function isValidErpProcessHint() {
+      return request.resource.data.keys().hasOnly([
+        'snapshotId', 'savedAt', 'savedById', 'matchRule', 'shipment',
+      ])
+        && request.resource.data.keys().hasAll([
+          'snapshotId', 'savedAt', 'savedById', 'matchRule', 'shipment',
+        ])
+        && request.resource.data.snapshotId is string
+        && request.resource.data.snapshotId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.savedAt == request.time
+        && request.resource.data.savedById == request.auth.uid
+        && request.resource.data.matchRule in [
+          'pedido', 'po', 'po-base', 'consolidado:ref', 'consolidado:pedidos',
+        ]
+        && request.resource.data.shipment is map
+        && request.resource.data.shipment.keys().hasOnly([
+          'kind', 'portalCategory', 'key', 'incoterm', 'originHint', 'stage', 'statuses',
+          'statusNf', 'orders', 'items', 'transport', 'conflicts',
+        ])
+        && request.resource.data.shipment.orders is list
+        && request.resource.data.shipment.orders.size() <= 100
+        && request.resource.data.shipment.items is list
+        && request.resource.data.shipment.items.size() <= 300
+        && request.resource.data.shipment.conflicts is list
+        && request.resource.data.shipment.conflicts.size() <= 20
+        && request.resource.data.shipment.statuses is list
+        && request.resource.data.shipment.statuses.size() <= 20
+        && request.resource.data.shipment.statusNf is list
+        && request.resource.data.shipment.statusNf.size() <= 10
+        && request.resource.data.shipment.transport is map
+        && request.resource.data.shipment.transport.keys().hasOnly([
+          'etd', 'eta', 'vessel', 'blAwb', 'origin', 'destination', 'diNumber', 'diDate',
+        ])
+        && request.resource.data.shipment.transport.vessel is map
+        && request.resource.data.shipment.transport.vessel.keys().hasOnly(['name', 'raw', 'voyage']);
+    }
+
+    match /erpSnapshots/{snapshotId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && (snapshotId == 'latest' ? isValidErpLatestPointer() : isValidErpSnapshotMeta(snapshotId));
+      allow update: if isAdmin() && snapshotId == 'latest' && isValidErpLatestPointer();
+      allow delete: if false;
+    }
+
+    match /erpProcessHints/{processId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && processId.size() <= 128 && isValidErpProcessHint();
+      allow delete: if false;
+    }
+
     match /announcements/{docId} {
       allow read: if isApprovedUser();
       allow create, update: if isAdmin() && isAdminAnnouncementUpdate();

@@ -137,6 +137,7 @@ const MODAL_ALLOWLIST = [
   '../../utils/errorMessages',
   '../processes/shipmentConfirmation',
   './reconcileErp.js',
+  './erpReference.js',
   './erpReconciliationExport.js',
 ]
 
@@ -152,6 +153,8 @@ const ALLOWED_STATIC_IMPORTS = {
   'groupErpShipments.js': ['./erpText.js'],
   'reconcileErp.js': ['./erpText.js', './erpItemRow.js', './groupErpShipments.js'],
   'erpReconciliationExport.js': [],
+  // PR 3: modulo puro da referencia do ERP (payload, lotes e avisos do detalhe).
+  'erpReference.js': ['./erpText.js', './reconcileErp.js'],
 }
 
 const mockedByProcessesPage = [
@@ -163,13 +166,15 @@ const mockedByProcessesPage = [
 const stripExtension = (file) => file.replace(/\.(jsx?|mjs)$/, '')
 
 describe('erpReadOnlyGuard - escopo dos arquivos', () => {
-  it('src/features/erp tem exatamente os 9 arquivos do plano', () => {
+  it('src/features/erp tem exatamente os 11 arquivos do plano', () => {
     expect(Object.keys(sources).sort()).toEqual(
       [
+        'ErpHint.jsx',
         'ErpReconcileModal.jsx',
         'dbcorpColumns.js',
         'erpItemRow.js',
         'erpReconciliationExport.js',
+        'erpReference.js',
         'erpText.js',
         'groupErpShipments.js',
         'parseDbcorpRows.js',
@@ -179,8 +184,8 @@ describe('erpReadOnlyGuard - escopo dos arquivos', () => {
     )
   })
 
-  it('o mock fechado do ProcessesPage tem 15 modulos (a lista que a guarda vigia)', () => {
-    expect(mockedByProcessesPage).toHaveLength(15)
+  it('o mock fechado do ProcessesPage tem 16 modulos (a lista que a guarda vigia)', () => {
+    expect(mockedByProcessesPage).toHaveLength(16)
   })
 })
 
@@ -250,7 +255,7 @@ describe('erpReadOnlyGuard - especificadores de import', () => {
     expect(readSpecifiers(sources['erpReconciliationExport.js']).statics).toEqual([])
   })
 
-  it('o modal importa so da allowlist e de nenhum dos 15 modulos mockados no ProcessesPage', () => {
+  it('o modal importa so da allowlist e de nenhum dos 16 modulos mockados no ProcessesPage', () => {
     const { statics, dynamics } = readSpecifiers(sources['ErpReconcileModal.jsx'])
     expect(dynamics).toEqual([])
     for (const specifier of statics) {
@@ -403,6 +408,102 @@ describe('erpReadOnlyGuard - bloco ERP-RECONCILE do styles.css', () => {
     expect(code).toContain('.erp-reconcile__file .file-picker__status')
     // O modal nao esconde o input por conta propria.
     expect(code).not.toMatch(/file-picker__input\s*\{[^}]*display\s*:\s*none/)
+  })
+})
+
+describe('erpReadOnlyGuard - ErpHint.jsx (PR 3)', () => {
+  it('ErpHint.jsx importa so react (nenhum import dinamico)', () => {
+    const { statics, dynamics } = readSpecifiers(sources['ErpHint.jsx'])
+    expect(statics).toEqual(['react'])
+    expect(dynamics).toEqual([])
+  })
+})
+
+describe('erpReadOnlyGuard - escrita da referencia (PR 3)', () => {
+  const serviceFile = path.resolve(ROOT, 'src/services/erpReferenceRepository.js')
+
+  // Exports (funcao/constante/classe e `export { ... }`) de UM arquivo de servico.
+  function readExportsOf(file) {
+    const text = stripCommentsRegex(fs.readFileSync(file, 'utf8'))
+    const names = new Set()
+    for (const match of text.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm)) {
+      names.add(match[1])
+    }
+    for (const match of text.matchAll(/^export\s*\{([^}]*)\}/gm)) {
+      for (const part of match[1].split(',')) {
+        const exported = part.trim().split(/\s+as\s+/).pop().trim()
+        if (exported) names.add(exported)
+      }
+    }
+    return [...names].sort()
+  }
+
+  it('o servico da referencia nunca referencia a colecao de processos (aspas simples, duplas, crase ou caminho)', () => {
+    const text = fs.readFileSync(serviceFile, 'utf8')
+    expect(text).not.toMatch(/['"`]processes['"`/]/)
+    expect(text).not.toContain("'processes'")
+    expect(text).not.toContain('"processes"')
+    expect(text).not.toContain('`processes')
+  })
+
+  it('nenhuma function (functions/src) cita erpSnapshots nem erpProcessHints', () => {
+    const files = walk(path.resolve(ROOT, 'functions/src')).filter((file) => file.endsWith('.js'))
+    expect(files.length).toBeGreaterThan(5)
+    const offenders = files.filter((file) => /erpSnapshots|erpProcessHints/.test(fs.readFileSync(file, 'utf8')))
+    expect(offenders.map((file) => path.basename(file))).toEqual([])
+  })
+
+  it('o modal recebe a gravacao por callback injetado (onSaveReference) e nao importa o servico', () => {
+    expect(sources['ErpReconcileModal.jsx']).toContain('onSaveReference')
+    expect(sources['ErpReconcileModal.jsx']).not.toMatch(/erpReferenceRepository/)
+  })
+
+  it('o servico exporta exatamente saveErpReferenceSnapshot e loadErpReference (e a guarda os enxerga)', () => {
+    expect(readServiceExports()).toEqual(expect.arrayContaining(['saveErpReferenceSnapshot', 'loadErpReference']))
+    expect(readExportsOf(serviceFile)).toEqual(['loadErpReference', 'saveErpReferenceSnapshot'])
+  })
+})
+
+describe('erpReadOnlyGuard - bloco ERP-HINT do styles.css (PR 3)', () => {
+  const css = fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8')
+  const START = '/* ERP-HINT:START */'
+  const END = '/* ERP-HINT:END */'
+  const start = css.indexOf(START)
+  const end = css.indexOf(END)
+  const block = start >= 0 && end > start ? css.slice(start, end) : ''
+  const code = stripCommentsRegex(block)
+
+  it('o bloco existe uma unica vez, entre marcadores, depois do bloco ERP-RECONCILE', () => {
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(css.split(START)).toHaveLength(2)
+    expect(css.split(END)).toHaveLength(2)
+    expect(start).toBeGreaterThan(css.indexOf('/* ERP-RECONCILE:END */'))
+  })
+
+  it('sem literal de cor (#hex, rgb(, hsl()', () => {
+    expect(code).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    expect(code).not.toMatch(/rgba?\(/)
+    expect(code).not.toMatch(/hsla?\(/)
+  })
+
+  it('so usa tokens ja definidos no tema', () => {
+    const used = [...new Set([...code.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((match) => match[1]))]
+    expect(used.length).toBeGreaterThan(0)
+    for (const token of used) {
+      expect(css, token).toMatch(new RegExp(`${token}\\s*:`))
+    }
+  })
+
+  it('sem animation nem transition', () => {
+    expect(code).not.toMatch(/\banimation\b/)
+    expect(code).not.toMatch(/\btransition\b/)
+  })
+
+  it('o balao fechado some por [hidden] (display: none) e o chip tem :focus-visible', () => {
+    expect(code).toMatch(/\.erp-hint__bubble\[hidden\]\s*\{\s*display:\s*none;\s*\}/)
+    expect(code).toContain('.erp-hint__chip:focus-visible')
+    expect(code).toContain('var(--focus-ring)')
   })
 })
 

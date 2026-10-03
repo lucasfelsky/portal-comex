@@ -674,31 +674,36 @@ describe('ProcessListView — grafia "contêiner(es)"', () => {
   })
 })
 
-// Conciliacao ERP (F1, somente leitura): botao so' para o admin, so' no
-// desktop (o CSS o esconde em <= 1040px) e desabilitado enquanto a lista carrega.
-describe('ProcessListView — botão "Conciliar com ERP" (F1, somente admin)', () => {
+// "Importar do DBCorp" (antes "Conciliar com ERP"; F1 + PR 3): botao so' para o
+// admin, so' no desktop (o CSS o esconde em <= 1040px) e desabilitado enquanto
+// a lista carrega.
+describe('ProcessListView — botão "Importar do DBCorp" (F1 + PR 3, somente admin)', () => {
   beforeEach(() => stubMatchMedia(false))
 
   it('aparece só com isAdmin && onReconcileErp e tem a classe erp-reconcile-trigger', () => {
     const { unmount } = renderView({ isAdmin: true, onReconcileErp: vi.fn() })
-    const button = screen.getByRole('button', { name: 'Conciliar com ERP' })
+    const button = screen.getByRole('button', { name: 'Importar do DBCorp' })
     expect(button).toHaveClass('ghost-button', 'erp-reconcile-trigger')
     expect(button).toBeEnabled()
+    expect(button).toHaveAttribute(
+      'title',
+      'Anexar a planilha do DBCorp: concilia com os processos e salva como referência do ERP'
+    )
     unmount()
 
     const { unmount: unmountUser } = renderView({ isAdmin: false, onReconcileErp: vi.fn() })
-    expect(screen.queryByRole('button', { name: 'Conciliar com ERP' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Importar do DBCorp' })).not.toBeInTheDocument()
     unmountUser()
 
     renderView({ isAdmin: true })
-    expect(screen.queryByRole('button', { name: 'Conciliar com ERP' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Importar do DBCorp' })).not.toBeInTheDocument()
   })
 
   it('o clique chama o callback', async () => {
     const user = userEvent.setup()
     const onReconcileErp = vi.fn()
     renderView({ isAdmin: true, onReconcileErp })
-    await user.click(screen.getByRole('button', { name: 'Conciliar com ERP' }))
+    await user.click(screen.getByRole('button', { name: 'Importar do DBCorp' }))
     expect(onReconcileErp).toHaveBeenCalledTimes(1)
   })
 
@@ -706,7 +711,7 @@ describe('ProcessListView — botão "Conciliar com ERP" (F1, somente admin)', (
     const user = userEvent.setup()
     const onReconcileErp = vi.fn()
     renderView({ isAdmin: true, onReconcileErp, isLoading: true })
-    const button = screen.getByRole('button', { name: 'Conciliar com ERP' })
+    const button = screen.getByRole('button', { name: 'Importar do DBCorp' })
     expect(button).toBeDisabled()
     await user.click(button)
     expect(onReconcileErp).not.toHaveBeenCalled()

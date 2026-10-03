@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
@@ -30,11 +30,15 @@ import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
 import { canViewProcessRecords, getDocumentPendingFields, normalizeDocumentIndex } from './processDocuments'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import ErpHint from '../erp/ErpHint'
+import { EMPTY_ERP_HINTS, buildErpFieldHints, erpItemGroupKey, erpOrderKey } from '../erp/erpReference'
 import {
   DetailBlock,
   DetailBlockPlaceholder,
   DetailList,
   DetailRow,
+  getErpEmptyRowHint,
+  getErpRowHint,
   hasArrivalDetails,
   hasCustomsDetails,
   ProcessCargoDetails,
@@ -82,6 +86,7 @@ export default function ProcessDetailView({
   relatedActiveProcesses,
   selectedProcessPostReceiptImages,
   profile,
+  erpReference = null,
   itemsSectionRef,
   onDetailTabChange,
   onSetItemSearchTerm,
@@ -215,7 +220,15 @@ export default function ProcessDetailView({
   // quando renderizam; senao ele passa pro bloco seguinte (Free time/
   // Anuências).
   const showArrivalBlock = hasArrivalDetails(selectedProcess)
-  const showCustomsBlock = hasCustomsDetails(selectedProcess)
+  // PR 3: avisos "ERP" (so' admin, a partir da referencia gravada). O mesmo
+  // `erpHints` alimenta a Aduana e o predicado da numeracao, para as Anuências
+  // nao ficarem com o mesmo numero quando a Aduana passa a existir por causa de
+  // uma linha vazia com aviso.
+  const erpHints = useMemo(
+    () => (isAdmin && erpReference ? buildErpFieldHints(selectedProcess, erpReference) : EMPTY_ERP_HINTS),
+    [isAdmin, erpReference, selectedProcess]
+  )
+  const showCustomsBlock = hasCustomsDetails(selectedProcess, erpHints)
 
   // UX-6b-3 (D7.5): bloco 5 "Coleta" — badge de status + janelas +
   // transportadora, cada parte com a SUA condicao de hoje.
@@ -230,6 +243,34 @@ export default function ProcessDetailView({
   const showCollectionBlock = showCollectionStatusBadge || showCollectionWindows || showCarrier
   const isFavorite = favoriteProcessIds.includes(selectedProcess.id)
   const linkedItemsCount = selectedProcess.items?.length ?? 0
+
+  // PR 3 (so' admin): avisos que dependem da view. POs consolidadas (aviso no
+  // rotulo ou card novo `—` quando o Portal esta sem POs) e ETD (o divergente
+  // de quem so' tem `shippedAt` vai na linha Data de embarque, no bloco 2).
+  const isConsolidatedProcess = selectedProcess.category === 'CONSOLIDADO'
+  const consolidatedOrders = isConsolidatedProcess ? getProcessPurchaseOrders(selectedProcess) : []
+  const poSetHint = erpHints.fields.poSet?.kind === 'divergente' ? erpHints.fields.poSet : null
+  const emptyPoSetHint =
+    isConsolidatedProcess && consolidatedOrders.length === 0
+      ? getErpEmptyRowHint(erpHints.fields.poSet, selectedProcess)
+      : null
+  const etdHint =
+    erpHints.fields.etd?.kind === 'divergente' && !selectedProcess.etd
+      ? null
+      : getErpRowHint(erpHints.fields.etd, selectedProcess)
+
+  // Aviso de quantidade: 1 por grupo (nome, e PO no consolidado), no 1o item
+  // VISIVEL do grupo. A chave vem do nucleo (`erpItemGroupKey`), sem recalcular.
+  const quantityHintByItem = new Map()
+  const claimedItemGroups = new Set()
+  for (const item of visibleProcessItems ?? []) {
+    const groupKey = erpItemGroupKey(item, isConsolidatedProcess)
+    const groupHint = erpHints.quantity[groupKey]
+    if (groupHint && !claimedItemGroups.has(groupKey)) {
+      claimedItemGroups.add(groupKey)
+      quantityHintByItem.set(item, groupHint)
+    }
+  }
 
   const favoriteButton = (
     <button
@@ -447,30 +488,54 @@ export default function ProcessDetailView({
                 </ul>
               </div>
             ) : null}
-            {selectedProcess.category === 'CONSOLIDADO' && getProcessPurchaseOrders(selectedProcess).length > 0 ? (
+            {isConsolidatedProcess && consolidatedOrders.length > 0 ? (
               <div className="detail-card process-general-card process-general-card--consolidated-pos">
-                <span className="detail-label">POs consolidadas</span>
+                <span className="detail-label">
+                  POs consolidadas
+                  <ErpHint hint={poSetHint} />
+                </span>
                 <ul className="detail-stack detail-stack--compact">
-                  {getProcessPurchaseOrders(selectedProcess).map((order) => (
+                  {consolidatedOrders.map((order) => (
                     <li key={order.po}>
                       {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
+                      <ErpHint hint={erpHints.po[erpOrderKey(order.po)]} />
                     </li>
                   ))}
                 </ul>
               </div>
+            ) : emptyPoSetHint ? (
+              <div className="detail-card process-general-card process-general-card--consolidated-pos">
+                <span className="detail-label">
+                  POs consolidadas
+                  <ErpHint hint={emptyPoSetHint} />
+                </span>
+                <p>—</p>
+              </div>
             ) : null}
-            <div className="detail-card process-general-card process-general-card--destination"><span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span><p>{selectedProcess.destination || '-'}</p></div>
-            <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} />
+            <div className="detail-card process-general-card process-general-card--destination">
+              <span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span>
+              <p>
+                {selectedProcess.destination || '-'}
+                <ErpHint hint={getErpRowHint(erpHints.fields.destination, selectedProcess)} />
+              </p>
+            </div>
+            <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} erpHints={erpHints} />
             <div className="detail-card process-general-card process-general-card--etd-eta">
               <span className="detail-label">ETD / ETA</span>
               <div className="detail-card--split" style={{ marginTop: '8px' }}>
                 <div>
                   <span className="detail-label detail-label--muted">ETD</span>
-                  <p>{formatDate(selectedProcess.etd)}</p>
+                  <p>
+                    {formatDate(selectedProcess.etd)}
+                    <ErpHint hint={etdHint} />
+                  </p>
                 </div>
                 <div className={getEtaDisplayClassName(selectedProcess)}>
                   <span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span>
-                  <p>{formatDate(selectedProcess.eta)}</p>
+                  <p>
+                    {formatDate(selectedProcess.eta)}
+                    <ErpHint hint={getErpRowHint(erpHints.fields.eta, selectedProcess)} />
+                  </p>
                 </div>
               </div>
             </div>
@@ -506,10 +571,10 @@ export default function ProcessDetailView({
               showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
               containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
             />
-            <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder />
+            <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder erpHints={erpHints} />
             <ProcessArrivalDetails process={selectedProcess} step={3} showEmptyPlaceholder />
             <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} showEmptyPlaceholder />
-            <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder />
+            <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder erpHints={erpHints} />
             <ProcessLicensesDetails
               process={selectedProcess}
               step={showCustomsBlock ? null : 4}
@@ -615,7 +680,9 @@ export default function ProcessDetailView({
             </label>
             <div className="process-items-list">
               {visibleProcessItems.length > 0 ? (
-                visibleProcessItems.map((item) => (
+                visibleProcessItems.map((item) => {
+                  const itemHint = quantityHintByItem.get(item)
+                  const itemButton = (
                   <button
                     key={item.id}
                     type="button"
@@ -648,7 +715,18 @@ export default function ProcessDetailView({
                       )
                     ) : null}
                   </button>
-                ))
+                  )
+                  // O aviso fica FORA do <button> (botao aninhado e' invalido): so' com
+                  // aviso o item ganha o wrapper; sem aviso o DOM e' o de sempre.
+                  return itemHint ? (
+                    <div className="process-items-list__entry" key={item.id}>
+                      {itemButton}
+                      <ErpHint hint={itemHint} />
+                    </div>
+                  ) : (
+                    itemButton
+                  )
+                })
               ) : (
                 <div className="empty-state" role="status">
                   <strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong>

@@ -14,6 +14,7 @@ import ProcessListView from '../features/processes/ProcessListView'
 import ImportProcessesModal from '../features/processes/ImportProcessesModal'
 import ErpReconcileModal from '../features/erp/ErpReconcileModal'
 import { dbcorpXlsxSource } from '../features/erp/readDbcorpWorkbook'
+import { loadErpReference, saveErpReferenceSnapshot } from '../services/erpReferenceRepository'
 import Spinner from '../components/Spinner'
 import { setActiveProcess } from '../utils/activeProcessContext'
 import {
@@ -568,6 +569,14 @@ export default function ProcessesPage() {
   const [operationFilter, setOperationFilter] = useState('Todos')
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isErpReconcileOpen, setIsErpReconcileOpen] = useState(false)
+  // PR 3 (Importar do DBCorp): referencia do ERP, so' admin. Lida de uma vez
+  // (`latest` + hints do mesmo snapshot) e trocada pelo retorno do save. A trava
+  // de gravacao e' da PAGINA (o modal continua montado ao fechar).
+  const [erpReference, setErpReference] = useState(null)
+  const [isSavingErpReference, setIsSavingErpReference] = useState(false)
+  const erpSaveInFlightRef = useRef(false)
+  const erpReferenceSeqRef = useRef(0)
+  const isPageMountedRef = useRef(true)
 
   // F11: nºs de processo já existentes, pra o import marcar duplicatas sem
   // uma query extra (os processos já estão carregados em memória).
@@ -632,6 +641,38 @@ export default function ProcessesPage() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    isPageMountedRef.current = true
+    return () => {
+      isPageMountedRef.current = false
+    }
+  }, [])
+
+  // PR 3: le a referencia do ERP (so' admin). Falha de leitura nao usa o `error`
+  // da pagina: so' o console, e o detalhe segue sem aviso. O resultado so' vale
+  // se nenhuma gravacao comecou depois do inicio da leitura (seq).
+  useEffect(() => {
+    if (!isAdmin) return undefined
+    let isMounted = true
+    const seqAtStart = erpReferenceSeqRef.current
+
+    async function loadReference() {
+      try {
+        const loaded = await loadErpReference()
+        if (!isMounted || erpReferenceSeqRef.current !== seqAtStart) return
+        setErpReference(loaded)
+      } catch (loadError) {
+        console.warn('Não foi possível carregar a referência do ERP.', loadError)
+      }
+    }
+
+    loadReference()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     latestDraftPostReceiptImagesRef.current = draft.postReceiptImages
@@ -733,6 +774,17 @@ export default function ProcessesPage() {
 
   const selectedProcess =
     processes.find((item) => item.id === selectedProcessId) ?? filteredProcesses[0] ?? null
+
+  // PR 3: referencia do ERP do processo aberto (so' admin): o snapshot vigente +
+  // o hint dele. `useMemo` mantem a identidade enquanto nada muda.
+  const detailErpReference = useMemo(
+    () =>
+      isAdmin && erpReference && selectedProcess
+        ? { snapshot: erpReference.snapshot, hint: erpReference.hintsByProcessId[selectedProcess.id] ?? null }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- so' o id do processo importa
+    [isAdmin, erpReference, selectedProcess?.id]
+  )
 
   // Atualiza o contexto de processo ativo para o SupportButton
   useEffect(() => {
@@ -1271,6 +1323,34 @@ export default function ProcessesPage() {
     }
   }
 
+  // PR 3 ("Importar do DBCorp"): grava a planilha ja conciliada como referencia
+  // do ERP. Chamado pelo modal logo apos a conciliacao. A trava fica AQUI: o
+  // modal continua montado e zera o estado local ao fechar, mas o save segue em
+  // voo; um 2o save e' recusado ate o 1o terminar. Nada em `processes/{id}` e'
+  // gravado: so' as colecoes da referencia (via servico).
+  async function handleSaveErpReference(result) {
+    if (!isAdmin) throw new Error('Somente administradores podem salvar a referência do ERP.')
+    if (erpSaveInFlightRef.current) {
+      throw new Error('Outra importação ainda está salvando a referência do ERP. Aguarde e importe de novo.')
+    }
+    erpSaveInFlightRef.current = true
+    erpReferenceSeqRef.current += 1
+    const seq = erpReferenceSeqRef.current
+    setIsSavingErpReference(true)
+    try {
+      const saved = await saveErpReferenceSnapshot(result, profile)
+      if (isPageMountedRef.current && erpReferenceSeqRef.current === seq) setErpReference(saved.reference)
+      return saved
+    } catch (saveError) {
+      // Falha: devolve o seq para uma leitura que ja estava em voo continuar valendo.
+      if (erpReferenceSeqRef.current === seq) erpReferenceSeqRef.current = seq - 1
+      throw saveError
+    } finally {
+      erpSaveInFlightRef.current = false
+      if (isPageMountedRef.current) setIsSavingErpReference(false)
+    }
+  }
+
   async function handleSaveCollectionStatus() {
     if (!canEditCollectionStatus || !selectedProcess) return
     setIsSaving(true)
@@ -1656,6 +1736,9 @@ export default function ProcessesPage() {
           onClose={() => setIsErpReconcileOpen(false)}
           processes={processes}
           sources={ERP_SOURCES}
+          onSaveReference={handleSaveErpReference}
+          referenceInfo={erpReference?.snapshot ?? null}
+          isSavingReference={isSavingErpReference}
         />
       ) : null}
 
@@ -1747,6 +1830,7 @@ export default function ProcessesPage() {
           relatedActiveProcesses={relatedActiveProcesses}
           selectedProcessPostReceiptImages={selectedProcessPostReceiptImages}
           profile={profile}
+          erpReference={detailErpReference}
           itemsSectionRef={itemsSectionRef}
           onDetailTabChange={handleDetailTabChange}
           onSetItemSearchTerm={setItemSearchTerm}
