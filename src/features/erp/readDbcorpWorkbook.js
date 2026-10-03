@@ -4,9 +4,11 @@
 // Unico import estatico: `./parseDbcorpRows.js`.
 //
 // Limites contra arquivo hostil/enorme: 10 MB, assinatura zip, tamanho
-// descompactado declarado (60 MB e 20x o arquivo), `sheetRows`, recorte de 64
-// colunas, `maxRows`. Aceita so' `.xlsx` de verdade: `.xls`, CSV e HTML
-// interpretariam texto de data em padrao US.
+// descompactado declarado (60 MB e 20x o arquivo), recorte de 64 colunas,
+// `maxRows`. Sem `sheetRows`: a leitura e' completa para que nenhuma linha
+// preenchida alem da janela seja descartada em silencio. A janela de leitura sai
+// das celulas reais, nunca do `!ref` declarado. Aceita so' `.xlsx` de
+// verdade: `.xls`, CSV e HTML interpretariam texto de data em padrao US.
 import { parseDbcorpRows } from './parseDbcorpRows.js'
 
 const MAX_BYTES = 10 * 1024 * 1024
@@ -139,6 +141,28 @@ function expansionError(inspection, byteLength) {
   }
 }
 
+// Varre as CELULAS, nao o `!ref`: a dimensao e' opcional no .xlsx, pode estar
+// inflada pela formatacao e pode mentir (menor que os dados). A leitura e'
+// completa (sem `sheetRows`, que descartaria justamente estas linhas), entao toda
+// celula esta' no objeto.
+// -> { lastRow, lastColumn, hasContentBeyondWindow }: maior linha/coluna (indice,
+// base 0) entre as celulas presentes (-1 sem celulas) e se alguma celula COM
+// conteudo esta' na linha `windowRows` ou depois (so' espaco nao e' conteudo).
+function scanSheetCells(sheet, windowRows, utils) {
+  let lastRow = -1
+  let lastColumn = -1
+  for (const address of Object.keys(sheet)) {
+    if (address.charCodeAt(0) === 33) continue // '!ref', '!cols', '!merges'...
+    const { r, c } = utils.decode_cell(address)
+    if (r > lastRow) lastRow = r
+    if (c > lastColumn) lastColumn = c
+    if (r >= windowRows && String(sheet[address]?.v ?? '').trim() !== '') {
+      return { lastRow, lastColumn, hasContentBeyondWindow: true }
+    }
+  }
+  return { lastRow, lastColumn, hasContentBeyondWindow: false }
+}
+
 // -> { rows: looseRows, warnings, meta: { fileName, sheetName, rowCount } }
 export async function readDbcorpWorkbook(file, { maxRows = 5000 } = {}) {
   const bytes = await toBytes(file)
@@ -148,12 +172,9 @@ export async function readDbcorpWorkbook(file, { maxRows = 5000 } = {}) {
   const inspection = inspectZipExpansion(bytes)
   if (!inspection.ok) throw expansionError(inspection, bytes.byteLength)
 
+  const windowRows = maxRows + EXTRA_ROWS
   const { read, utils } = await import('xlsx')
-  const workbook = read(bytes, {
-    type: 'array',
-    cellDates: false,
-    sheetRows: maxRows + EXTRA_ROWS,
-  })
+  const workbook = read(bytes, { type: 'array', cellDates: false })
 
   if (workbook.Workbook?.WBProps?.date1904) {
     throw new Error(
@@ -165,29 +186,34 @@ export async function readDbcorpWorkbook(file, { maxRows = 5000 } = {}) {
   if (!sheetName) throw new Error('A planilha não possui abas válidas.')
   const sheet = workbook.Sheets[sheetName]
 
-  let matrix = []
-  if (sheet && sheet['!ref']) {
-    const range = utils.decode_range(sheet['!ref'])
-    // A partir de A1 (as linhas em branco do topo contam): o indice da matriz
-    // + 1 e' o numero da linha na planilha, como o admin enxerga no Excel.
-    const clipped = {
-      s: { r: 0, c: 0 },
-      e: {
-        r: Math.min(range.e.r, maxRows + EXTRA_ROWS - 1),
-        c: Math.min(range.e.c, MAX_COLUMNS - 1),
-      },
-    }
-    matrix = utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', range: clipped })
-  }
-
   const limitError = () =>
     new Error(`A planilha passa de ${formatLimit(maxRows)} linhas; exporte um recorte menor.`)
 
-  // Conteudo na ULTIMA linha da janela lida: o `sheetRows` pode ter cortado
-  // dados, e o corte nao pode ser silencioso.
-  const edgeRow = matrix[maxRows + EXTRA_ROWS - 1]
-  if (Array.isArray(edgeRow) && edgeRow.some((cell) => String(cell ?? '').trim() !== '')) {
-    throw limitError()
+  const scan = sheet
+    ? scanSheetCells(sheet, windowRows, utils)
+    : { lastRow: -1, lastColumn: -1, hasContentBeyondWindow: false }
+
+  // Nenhuma linha preenchida alem da janela lida: o corte nao pode ser
+  // silencioso, nem com uma linha em branco na fronteira.
+  if (scan.hasContentBeyondWindow) throw limitError()
+
+  let matrix = []
+  if (scan.lastRow >= 0) {
+    // A janela de leitura vem das celulas REAIS, nao do `!ref` declarado: uma
+    // dimensao menor que os dados descartaria linhas/colunas em silencio, e uma
+    // inflada (ou ausente) nao pode mudar o resultado. Tetos: `windowRows` e 64
+    // colunas. A partir de A1 (as linhas em branco do topo contam): o indice da
+    // matriz + 1 e' o numero da linha na planilha, como o admin enxerga no Excel.
+    const clipped = {
+      s: { r: 0, c: 0 },
+      e: {
+        r: Math.min(scan.lastRow, windowRows - 1),
+        c: Math.min(scan.lastColumn, MAX_COLUMNS - 1),
+      },
+    }
+    // `sheet_to_json` exige `!ref`; a aba e' local desta leitura.
+    sheet['!ref'] = utils.encode_range(clipped)
+    matrix = utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', range: clipped })
   }
 
   // `parseDbcorpRows` pula as linhas totalmente vazias (inclusive as de um
