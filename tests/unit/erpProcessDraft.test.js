@@ -709,6 +709,29 @@ describe('pickErpDraftProcess e textos', () => {
     expect(formatErpCreationAuditTarget(many.slice(0, 5))).not.toMatch(/\(\+\d+\)$/)
   })
 
+  it('caso-real: CR-67 o alvo do audit do lote leva a observacao do criado com falha so no registro de auditoria e continua dentro de 1500', () => {
+    const note = 'falha só no registro de auditoria'
+    expect(
+      formatErpCreationAuditTarget([
+        { key: 'a', id: 'PROC-1', name: 'ALFA SEA 962-26' },
+        { key: 'b', id: 'PROC-2', name: 'BETA SEA 963-26', note },
+      ])
+    ).toBe(`2 processos: ALFA SEA 962-26 (PROC-1); BETA SEA 963-26 (PROC-2; ${note})`)
+    // Sem id, a observacao continua visivel; nota vazia nao muda nada.
+    expect(formatErpCreationAuditTarget([{ name: 'ALFA SEA 962-26', note }])).toBe(`1 processo: ALFA SEA 962-26 (${note})`)
+    expect(formatErpCreationAuditTarget([{ id: 'PROC-1', name: 'ALFA SEA 962-26', note: '  ' }])).toBe(
+      '1 processo: ALFA SEA 962-26 (PROC-1)'
+    )
+
+    const many = Array.from({ length: 60 }, (_, index) => ({
+      key: `k${index}`, id: `PROC-${1700000000000 + index}`, name: `GAMA SEA ${900 + index}-26 ${'X'.repeat(30)}`, note,
+    }))
+    const target = formatErpCreationAuditTarget(many)
+    expect(target.length).toBeLessThanOrEqual(1500)
+    expect(target).toMatch(/ \(\+\d+\)$/)
+    expect(target).toContain(`; ${note})`)
+  })
+
   it('formatKgBr: pt-BR com ate 3 casas e sem zeros a direita', () => {
     expect(formatKgBr(0)).toBe('0')
     expect(formatKgBr(1000)).toBe('1.000')

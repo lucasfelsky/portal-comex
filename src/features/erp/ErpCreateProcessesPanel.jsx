@@ -120,7 +120,13 @@ function ResultRegion({ summary, titleRef }) {
         Resultado da criação
       </h4>
       <p className="erp-reconcile__note" role="status">{formatResultSummary(summary)}</p>
-      <ResultList title="Criados" entries={summary.created} describe={(entry) => `${entry.name} (${entry.id})`} />
+      <ResultList
+        title="Criados"
+        entries={summary.created}
+        describe={(entry) =>
+          entry.note ? `${entry.name} (${entry.id}) — Criado (${entry.note})` : `${entry.name} (${entry.id})`
+        }
+      />
       <ResultList
         title="Pulados (já existiam)"
         entries={summary.skipped}

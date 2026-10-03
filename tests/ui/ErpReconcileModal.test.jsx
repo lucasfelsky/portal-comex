@@ -1067,53 +1067,94 @@ describe('ErpReconcileModal - criar processos (F3)', () => {
     expect(checkbox(K.lclAgEmbarque)).toBeEnabled()
   })
 
-  it('caso-real: CR-61 fechar no meio da criacao e reabrir: entrada e botao desabilitados; o onProgress e o resultado antigos nao escrevem no run novo', async () => {
+  // Lote em andamento: o modal nao fecha. Fechar incrementaria o run, o guard do fim do lote ficaria falso e a
+  // reconciliacao + a regravacao da referencia (D-F3-3) seriam puladas, embora a pagina continue criando.
+  it('caso-real: CR-61 com a criacao em andamento Fechar fica desabilitado e Esc, backdrop e o x do cabecalho nao fecham; o callback da referencia roda no fim e so entao fecha', async () => {
     const user = userEvent.setup()
-    let resolveOld
-    const onCreateProcesses = vi.fn(() => new Promise((resolve) => { resolveOld = resolve }))
+    let resolveBatch
+    const onCreateProcesses = vi.fn(() => new Promise((resolve) => { resolveBatch = resolve }))
     const onSaveReference = vi.fn().mockResolvedValue(savedOutcome(3))
-    const onClose = vi.fn()
-    const props = { processes: PROCESSES, sources: [creationSource()], onCreateProcesses, onSaveReference }
-    const { rerender } = render(<ErpReconcileModal open onClose={onClose} {...props} />)
+    const { onClose } = renderModal(modalProps({ onCreateProcesses, onSaveReference }))
     await openCreateTab(user)
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeEnabled()
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
     await user.click(checkbox(K.lclAgEmbarque))
     await user.click(createButton(1))
     await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
     expect(await screen.findByText('Criando 1 de 1…')).toBeInTheDocument()
-    const { onProgress } = onCreateProcesses.mock.calls[0][1]
 
-    // Fecha no meio: o resultado some, mas a trava (da pagina) segue de pe.
-    await user.click(document.querySelector('.erp-reconcile__actions .ghost-button'))
-    expect(onClose).toHaveBeenCalledTimes(1)
-    rerender(<ErpReconcileModal open onClose={onClose} {...props} isCreatingProcesses />)
-    expect(document.querySelector('input[type="file"]')).toBeDisabled()
-    expect(screen.queryByText('Processos casados')).not.toBeInTheDocument()
+    // Em andamento: texto de aviso, Fechar desabilitado e nenhum dos 4 caminhos de fechar chama o onClose.
+    expect(screen.getByText('Criando processos… aguarde terminar')).toBeInTheDocument()
+    expect(closeButton).toBeDisabled()
+    expect(closeButton).toHaveAccessibleDescription('Criando processos… aguarde terminar')
+    await user.click(closeButton)
+    await user.keyboard('{Escape}')
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Importar do DBCorp' })).toBeInTheDocument()
+    expect(screen.getByText('Criando 1 de 1…')).toBeInTheDocument()
 
-    // O callback antigo termina: a trava solta e nada do run antigo aparece.
+    // O lote termina no MESMO run: o resultado entra, a conciliacao refaz e a referencia e' regravada.
     await act(async () => {
-      resolveOld(outcomeFor([{ key: `LCL|${K.lclAgEmbarque}`, process: { ...buildDraftProcess() } }]))
+      resolveBatch(outcomeFor(onCreateProcesses.mock.calls[0][0]))
     })
-    rerender(<ErpReconcileModal open onClose={onClose} {...props} />)
-    await waitFor(() => expect(document.querySelector('input[type="file"]')).not.toBeDisabled())
-    expect(onSaveReference).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('1 processo criado · 0 pulados · 0 com erro')).toBeInTheDocument()
+    await waitFor(() => expect(onSaveReference).toHaveBeenCalledTimes(2))
+    expect(onSaveReference.mock.calls[0][0].summary.matched).toBe(0)
+    expect(onSaveReference.mock.calls[1][0].summary.matched).toBe(1)
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
 
-    // Run novo: o onProgress do run antigo nao escreve e nao ha resultado herdado.
-    await uploadFile(user)
-    await screen.findByText('Processos casados')
-    await user.click(screen.getByRole('button', { name: /^Criar processos/ }))
-    act(() => onProgress({ done: 1, total: 1 }))
-    expect(screen.queryByText(/^Criando \d de \d…$/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Resultado da criação' })).not.toBeInTheDocument()
-    expect(onSaveReference).toHaveBeenCalledTimes(2)
+    // Depois do termino o modal fecha normalmente (Fechar, Esc, backdrop e o x).
+    expect(closeButton).toBeEnabled()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledTimes(2)
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    expect(onClose).toHaveBeenCalledTimes(3)
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).toHaveBeenCalledTimes(4)
   })
 
-  // Rascunho minimo de um LCL valido (o conteudo nao importa: o callback antigo so' devolve processos).
-  function buildDraftProcess() {
-    return {
-      name: K.lclAgEmbarque, category: 'LCL', processNumber: '9630', purchaseOrders: [], supplierName: 'BETA TRADING',
-      originLocation: 'NINGBO', destination: 'NAVEGANTES', incoterm: 'FOB', vesselName: '', voyage: '', etd: '2026-10-18',
-      eta: '2026-11-22', shippedAt: '', masterBl: '', houseBl: 'HBL-963', duimpNumber: '', duimpRegisteredAt: '',
-      items: [{ commercialName: 'GLICOL UPSILON', quantity: 800 }],
-    }
-  }
+  it('caso-real: CR-61 com isCreatingProcesses vindo da pagina (lote em voo sem estado local) Fechar, Esc, backdrop e o x tambem nao fecham; ao soltar a trava, fecha', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const props = modalProps()
+    const { rerender } = render(<ErpReconcileModal open onClose={onClose} {...props} isCreatingProcesses />)
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeDisabled()
+    expect(screen.getByText('Criando processos… aguarde terminar')).toBeInTheDocument()
+    await user.click(closeButton)
+    await user.keyboard('{Escape}')
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    await user.click(document.querySelector('.modal__close'))
+    expect(onClose).not.toHaveBeenCalled()
+
+    rerender(<ErpReconcileModal open onClose={onClose} {...props} />)
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    expect(closeButton).toBeEnabled()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('caso-real: CR-61 callback rejeitado solta a trava: Fechar volta a funcionar', async () => {
+    const user = userEvent.setup()
+    const onCreateProcesses = vi.fn().mockRejectedValue(new Error('lista vazia'))
+    const { onClose } = renderModal(modalProps({ onCreateProcesses }))
+    await openCreateTab(user)
+    await user.click(checkbox(K.lclAgEmbarque))
+    await user.click(createButton(1))
+    await user.click(screen.getByRole('button', { name: 'Confirmar criação' }))
+    await waitFor(() => expect(document.querySelector('.error-banner')).toBeInTheDocument())
+    const closeButton = document.querySelector('.erp-reconcile__actions .ghost-button')
+    expect(closeButton).toBeEnabled()
+    expect(screen.queryByText('Criando processos… aguarde terminar')).not.toBeInTheDocument()
+    await user.click(closeButton)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })

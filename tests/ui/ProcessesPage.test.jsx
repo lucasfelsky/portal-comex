@@ -1439,6 +1439,7 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
       )
 
     const savedNames = () => mockSaveProcess.mock.calls.map(([payload]) => payload.name)
+    const savedIds = () => mockSaveProcess.mock.calls.map(([payload]) => payload.id)
     const savedPayload = (name) => mockSaveProcess.mock.calls.map(([payload]) => payload).find((payload) => payload.name === name)
 
     // Cada save devolve o processo com id PROC-t<n> e o poe na lista que o servico "devolve" depois.
@@ -1552,6 +1553,10 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
       expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1)
       const [event] = mockCreateAuditEvent.mock.calls[0]
       expect(event.action).toBe(BATCH_ACTION)
+      // O audit individual de cada criado e' o "Processo criado" do saveProcess: o payload vai SEM id
+      // (com id o saveProcess gravaria "Processo atualizado") e a pagina so' grava o do lote.
+      expect(mockSaveProcess.mock.calls.every(([payload]) => payload.id === '')).toBe(true)
+      expect(mockCreateAuditEvent.mock.calls.map(([audit]) => audit.action)).toEqual([BATCH_ACTION])
       expect(event.actor).toBe('Admin Teste')
       expect(event.target.startsWith('3 processos: ')).toBe(true)
       for (const name of [K.fclAgEmbarque, K.fclEmbarcouComDi, 'CON DG 964-26']) expect(event.target).toContain(name)
@@ -1649,6 +1654,117 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
       expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
     })
 
+    // `afterWrite`: grava o documento (poe na lista que o servico devolve, com id gerado pelo "servico") e so'
+    // depois rejeita, como um save cuja resposta falha depois da gravacao. `beforeWrite`: rejeita SEM gravar.
+    function rejectSaves({ afterWrite = [], beforeWrite = [] }) {
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockImplementation(async (payload) => {
+        if (beforeWrite.includes(payload.name)) throw new Error('falha-ao-gravar')
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        if (afterWrite.includes(payload.name)) throw new Error('audit-fora')
+        return saved
+      })
+    }
+    const createdId = (name) => created.find((item) => item.name === name)?.id
+
+    it('caso-real: CR-68 save rejeita DEPOIS de gravar (CON) e outro rejeita SEM gravar (FCL): o 1o vira "Criado (falha só no registro de auditoria)", o 2o continua "Com erro"; ids gerados pelo saveProcess', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: ['CON DG 964-26'], beforeWrite: [K.fclEmbarcouComDi] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(3)
+      // A pagina nao define o id: o saveProcess gera e audita "Processo criado".
+      expect(savedIds()).toEqual(['', '', ''])
+      const conId = createdId('CON DG 964-26')
+      expect(conId).toMatch(/^PROC-t\d$/)
+
+      expect(within(dialog).getByRole('heading', { name: 'Criados (2)' })).toBeInTheDocument()
+      expect(
+        within(dialog).getByText(`CON DG 964-26 (${conId}) — Criado (falha só no registro de auditoria)`)
+      ).toBeInTheDocument()
+      expect(within(dialog).getByRole('heading', { name: 'Com erro (1)' })).toBeInTheDocument()
+      const failedItem = within(dialog).getByText(new RegExp(`^${K.fclEmbarcouComDi}: Não foi possível salvar o processo\\.`))
+      expect(failedItem).toHaveTextContent('falha-ao-gravar')
+      expect(within(dialog).queryByText(/Não foi possível salvar o processo\..*audit-fora/)).not.toBeInTheDocument()
+
+      // O audit do lote lista os 2 criados, o recuperado com a observacao, e nao o que falhou de verdade.
+      expect(mockCreateAuditEvent).toHaveBeenCalledTimes(1)
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.action).toBe(BATCH_ACTION)
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).toContain(`CON DG 964-26 (${conId}; falha só no registro de auditoria)`)
+      expect(event.target).toContain(K.fclAgEmbarque)
+      expect(event.target).not.toContain(K.fclEmbarcouComDi)
+
+      // D-F3-3: houve criados, entao a referencia e regravada; o CON recuperado passa a casado e o que
+      // falhou de verdade continua candidato.
+      expect(mockSaveErpReferenceSnapshot).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 mesmo cenario com os papeis trocados: o FCL que rejeita DEPOIS de gravar e recuperado (casa por PEDIDO/nome) e o CON que rejeita SEM gravar continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: [K.fclEmbarcouComDi], beforeWrite: ['CON DG 964-26'] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      const fclId = createdId(K.fclEmbarcouComDi)
+      expect(within(dialog).getByText(`${K.fclEmbarcouComDi} (${fclId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      expect(within(dialog).getByText(/^CON DG 964-26: Não foi possível salvar o processo\./)).toHaveTextContent('falha-ao-gravar')
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).toContain(`${K.fclEmbarcouComDi} (${fclId}; falha só no registro de auditoria)`)
+      expect(event.target).not.toContain('CON DG 964-26')
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(1\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 2 saves rejeitam depois de gravar no mesmo lote: cada um e recuperado com o SEU processo (nenhum processo e contado 2 vezes)', async () => {
+      const user = userEvent.setup()
+      rejectSaves({ afterWrite: ['CON DG 964-26', K.fclAgEmbarque] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('3 processos criados · 0 pulados · 0 com erro')).toBeInTheDocument()
+      const conId = createdId('CON DG 964-26')
+      const fclId = createdId(K.fclAgEmbarque)
+      expect(conId).not.toBe(fclId)
+      expect(within(dialog).getByText(`CON DG 964-26 (${conId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      expect(within(dialog).getByText(`${K.fclAgEmbarque} (${fclId}) — Criado (falha só no registro de auditoria)`)).toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('3 processos: ')).toBe(true)
+      expect(event.target).toContain(`(${conId}; falha só no registro de auditoria)`)
+      expect(event.target).toContain(`(${fclId}; falha só no registro de auditoria)`)
+      expect(within(dialog).getByRole('button', { name: /^Criar processos \(0\)/ })).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 save rejeitou depois de gravar mas a releitura da lista falha: nao da para confirmar e o item continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      // 1a: carga da pagina; 2a: lista fresca; 3a (a releitura): rejeitada.
+      mockListProcesses.mockReset()
+      mockListProcesses
+        .mockResolvedValueOnce(PROCESSES)
+        .mockResolvedValueOnce(PROCESSES)
+        .mockRejectedValueOnce(new Error('sem rede'))
+      rejectSaves({ afterWrite: ['CON DG 964-26'] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(within(dialog).getByText(/^CON DG 964-26: Não foi possível salvar o processo\./)).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).not.toContain('CON DG 964-26')
+    })
+
+    it('caso-real: CR-68 save rejeitou SEM gravar e a lista recarregada traz so processos que nao casam com o rascunho: continua "Com erro" e nao entra no audit do lote', async () => {
+      const user = userEvent.setup()
+      const other = { id: 'p-outro', name: 'OUTRO PROCESSO NOVO', processNumber: '4242', category: 'FCL' }
+      mockListProcesses.mockImplementation(async () => [...PROCESSES, ...created, ...(created.length > 0 ? [other] : [])])
+      rejectSaves({ beforeWrite: [K.fclAgEmbarque] })
+      const dialog = await createAllThree(user)
+      expect(await within(dialog).findByText('2 processos criados · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque}: Não foi possível salvar o processo\\.`))).toBeInTheDocument()
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target.startsWith('2 processos: ')).toBe(true)
+      expect(event.target).not.toContain(K.fclAgEmbarque)
+    })
+
     it('caso-real: CR-68 lista fresca vazia: nenhum save, nenhum audit e o erro aparece', async () => {
       const user = userEvent.setup()
       mockListProcesses.mockReset()
@@ -1708,6 +1824,33 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
       expect(await within(dialog).findByText('1 processo criado · 1 pulado · 0 com erro')).toBeInTheDocument()
       expect(mockSaveProcess).toHaveBeenCalledTimes(1)
       expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque} — já existe: ${K.fclAgEmbarque}$`))).toBeInTheDocument()
+    })
+
+    it('caso-real: CR-68 gemeo no mesmo lote: o 1o rejeita SEM gravar e o 2o (mesma identidade) grava: o 1o NAO toma o processo do 2o, continua "Com erro"', async () => {
+      const user = userEvent.setup()
+      const twinRows = ['FCL - FOB KOBE', 'LCL - FOB NINGBO'].map((refEmbarque, index) =>
+        makeLooseRow({
+          itemId: `TW-${index + 1}`, status: 'AG. EMBARQUE', exporter: 'ALFA CHEM', pedido: 9620, poRef: K.fclAgEmbarque,
+          refEmbarque, commercialName: 'RESINA OMEGA', quantityKg: 1000,
+        })
+      )
+      mockSaveProcess.mockReset()
+      mockSaveProcess.mockRejectedValueOnce(new Error('falha-ao-gravar')).mockImplementation(async (payload) => {
+        const saved = { ...payload, id: `PROC-t${created.length + 1}` }
+        created.push(saved)
+        return saved
+      })
+      renderPage()
+      const dialog = await uploadScenario(user, twinRows)
+      await openCreateTab(user, dialog, 2)
+      await selectAll(user, dialog)
+      await confirm(user, dialog, 2)
+      expect(await within(dialog).findByText('1 processo criado · 0 pulados · 1 com erro')).toBeInTheDocument()
+      expect(mockSaveProcess).toHaveBeenCalledTimes(2)
+      expect(within(dialog).getByText(new RegExp(`^${K.fclAgEmbarque}: Não foi possível salvar o processo\\.`))).toHaveTextContent('falha-ao-gravar')
+      expect(within(dialog).queryByText(/Criado \(falha só no registro de auditoria\)/)).not.toBeInTheDocument()
+      const [event] = mockCreateAuditEvent.mock.calls[0]
+      expect(event.target).toBe(`1 processo: ${K.fclAgEmbarque} (PROC-t1)`)
     })
 
     it('caso-real: CR-68 audit do lote rejeitado: os criados ficam, sem erro de lote (so um aviso)', async () => {

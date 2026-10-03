@@ -521,14 +521,17 @@ export function pickErpDraftProcess(process) {
 }
 
 // "3 processos: ALFA SEA 962-26 (PROC-1); ..." com no maximo 1500 caracteres;
-// cortado, termina em " (+K)" (K = nomes omitidos).
+// cortado, termina em " (+K)" (K = nomes omitidos). Entrada com `note` (ex.: criado, mas
+// com falha so' no registro de auditoria) leva a observacao: "NOME (PROC-1; nota)".
 export function formatErpCreationAuditTarget(created) {
   const list = Array.isArray(created) ? created.filter(isRecord) : []
   const head = `${formatProcessCount(list.length)}: `
   const parts = list.map((entry) => {
     const name = cleanCell(entry.name)
     const id = cleanCell(entry.id)
-    return id === '' ? name : `${name} (${id})`
+    const note = cleanCell(entry.note)
+    const detail = [id, note].filter((value) => value !== '').join('; ')
+    return detail === '' ? name : `${name} (${detail})`
   })
   const full = `${head}${parts.join('; ')}`
   if (full.length <= MAX_AUDIT_TARGET_LENGTH) return full

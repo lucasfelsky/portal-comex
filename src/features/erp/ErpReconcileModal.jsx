@@ -401,6 +401,7 @@ export default function ErpReconcileModal({
   const lastRunRef = useRef(null)
   const fileLabelId = useId()
   const fileStatusId = useId()
+  const closeHintId = useId()
   const fileInputRef = useRef(null)
   const runIdRef = useRef(0)
   const isMountedRef = useRef(true)
@@ -577,6 +578,11 @@ export default function ErpReconcileModal({
   }
 
   function handleClose() {
+    // Lote em andamento: nao fecha. Fechar incrementaria `runIdRef`, o guard
+    // `isCurrentRun()` ficaria falso e a reconciliacao + a regravacao da referencia
+    // (D-F3-3) seriam puladas, embora a pagina continue criando. Vale para Fechar,
+    // Esc, clique no backdrop e o "x" do cabecalho: o Modal so' chama `onClose`.
+    if (creatingRef.current || isCreatingProcesses) return
     runIdRef.current += 1
     setPhase('idle')
     setSavePhase('idle')
@@ -587,7 +593,7 @@ export default function ErpReconcileModal({
     setShowMinor(false)
     setIsExporting(false)
     setSelectedFileName('')
-    // A criacao em voo continua na pagina: aqui so' some o que o modal mostrava.
+    // Sem lote em voo (acima): zera o resultado da criacao que o modal mostrava.
     setCreateProgress(null)
     setCreateSummary(null)
     setCreateError('')
@@ -727,7 +733,18 @@ export default function ErpReconcileModal({
         ) : null}
 
         <div className="erp-reconcile__actions">
-          <button type="button" className="ghost-button" onClick={handleClose}>
+          {isCreating ? (
+            <span className="erp-reconcile__muted" id={closeHintId}>
+              Criando processos… aguarde terminar
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={handleClose}
+            disabled={isCreating}
+            aria-describedby={isCreating ? closeHintId : undefined}
+          >
             Fechar
           </button>
           <button

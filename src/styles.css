@@ -3355,6 +3355,10 @@ body {
   background: var(--surface);
 }
 
+.erp-reconcile__actions .erp-reconcile__muted {
+  align-self: center;
+}
+
 /* F3: aba "Criar processos" (so' tokens do tema; sem animation nem transition). */
 .erp-create {
   gap: 12px;

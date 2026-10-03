@@ -115,6 +115,10 @@ const ERP_SOURCES = [dbcorpXlsxSource]
 // nem 2 admins (o Firestore lite nao tem transacao aqui).
 let erpCreateInFlight = false
 
+// Observacao do processo que existe no servidor mas cujo `saveProcess` rejeitou
+// (o documento foi gravado; so' o que veio depois falhou, como o registro de auditoria).
+const ERP_AUDIT_FAILURE_NOTE = 'falha só no registro de auditoria'
+
 const emptyDraft = () => ({
   id: '',
   name: '',
@@ -1377,11 +1381,15 @@ export default function ProcessesPage() {
       const skipped = []
       const failed = []
       let savesStarted = 0
+      // Saves que rejeitaram (com o rascunho): so' viram "Com erro" se a lista recarregada nao
+      // tiver um processo novo que case com o rascunho (mesma regra da reconferencia).
+      const rejectedSaves = []
 
       for (let index = 0; index < requested.length; index += 1) {
         const draft = requested[index]
         const key = String(draft?.key ?? '')
         let name = String(draft?.process?.name ?? '').trim() || key
+        let attemptedDraft = null
         try {
           const shape = pickErpDraftProcess(draft?.process)
           if (!shape.ok) {
@@ -1411,7 +1419,9 @@ export default function ProcessesPage() {
                 // Id = PROC-<ms>: um 2o create no mesmo milissegundo sobrescreveria o 1o.
                 if (savesStarted > 0) await new Promise((resolve) => setTimeout(resolve, 1))
                 savesStarted += 1
+                attemptedDraft = { ...draft, process: shape.process }
                 const saved = await saveProcess(payload, profile)
+                attemptedDraft = null
                 const entry = saved && typeof saved === 'object' ? saved : { ...payload, id: '' }
                 const clash = entry.id ? known.find((item) => item.id === entry.id) : null
                 if (clash) {
@@ -1429,9 +1439,48 @@ export default function ProcessesPage() {
             }
           }
         } catch (itemError) {
-          failed.push({ key, name, message: buildActionErrorMessage('Não foi possível salvar o processo.', itemError) })
+          const failure = { key, name, message: buildActionErrorMessage('Não foi possível salvar o processo.', itemError) }
+          failed.push(failure)
+          if (attemptedDraft) rejectedSaves.push({ failure, draft: attemptedDraft })
         }
         onProgress?.({ done: index + 1, total: requested.length })
+      }
+
+      let processes = known
+      let refreshFailed = false
+      try {
+        processes = await refreshProcesses(selectedProcessId)
+      } catch (refreshError) {
+        refreshFailed = true
+        console.warn('Não foi possível recarregar a lista depois de criar os processos.', refreshError)
+        if (isPageMountedRef.current) setProcesses(known)
+      }
+
+      // Save que rejeitou depois de gravar o documento (o `setDoc` confirmou e o que veio
+      // depois falhou, como o registro de auditoria): a reconferencia ja garantiu que nao
+      // havia processo para o embarque, entao um processo NOVO na lista recarregada que case
+      // com o rascunho (mesma regra da reconferencia, `findExistingProcessForErpDraft`) foi
+      // criado neste lote e entra em `created` com a observacao. Ja' contados (lista fresca,
+      // criados do lote e recuperados antes) nao valem. Sem casamento, ou sem a releitura
+      // para confirmar, o item continua "Com erro".
+      if (!refreshFailed && rejectedSaves.length > 0) {
+        const reloaded = Array.isArray(processes) ? processes : []
+        const claimedIds = new Set(known.map((item) => String(item?.id ?? '').trim()))
+        for (const rejected of rejectedSaves) {
+          const candidates = reloaded.filter((item) => !claimedIds.has(String(item?.id ?? '').trim()))
+          const match = findExistingProcessForErpDraft(rejected.draft, candidates)
+          if (!match) continue
+          const matchId = String(match.id ?? '').trim()
+          claimedIds.add(matchId)
+          const failureIndex = failed.indexOf(rejected.failure)
+          if (failureIndex >= 0) failed.splice(failureIndex, 1)
+          created.push({
+            key: rejected.failure.key,
+            id: matchId,
+            name: String(match.name ?? '').trim() || rejected.failure.name,
+            note: ERP_AUDIT_FAILURE_NOTE,
+          })
+        }
       }
 
       // 1 audit do lote (alem do "Processo criado" de cada um, que o saveProcess grava).
@@ -1447,16 +1496,6 @@ export default function ProcessesPage() {
           auditFailed = true
           console.warn('Não foi possível registrar o audit do lote de criação via DBCorp.', auditError)
         }
-      }
-
-      let processes = known
-      let refreshFailed = false
-      try {
-        processes = await refreshProcesses(selectedProcessId)
-      } catch (refreshError) {
-        refreshFailed = true
-        console.warn('Não foi possível recarregar a lista depois de criar os processos.', refreshError)
-        if (isPageMountedRef.current) setProcesses(known)
       }
 
       if (isPageMountedRef.current) {
