@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProcessForm from '../../src/features/processes/ProcessForm'
+import ProcessTransitFields from '../../src/features/processes/ProcessTransitFields'
 
 function makeDraft(overrides = {}) {
   return {
@@ -1756,5 +1757,48 @@ describe('ProcessForm — validacao inline (UX-3b)', () => {
     const backButton = screen.getByRole('button', { name: 'Voltar para lista' })
     expect(backButton).toBeInTheDocument()
     expect(backButton).toHaveTextContent('Voltar')
+  })
+})
+
+// D-F3-1: nos maritimos o BL e' um campo so' ("House BL"); AEREO segue com MAWB/HAWB.
+describe('ProcessTransitFields — House BL unico (D-F3-1)', () => {
+  function renderTransit(draftOverrides = {}) {
+    const onDraftChange = vi.fn()
+    const utils = render(<ProcessTransitFields draft={makeDraft(draftOverrides)} onDraftChange={onDraftChange} />)
+    return { ...utils, onDraftChange }
+  }
+
+  it.each(['FCL', 'LCL', 'CONSOLIDADO'])(
+    'caso-real: CR-70 %s tem exatamente 1 campo "House BL" e nenhum texto Master BL/MBL',
+    (category) => {
+      renderTransit({ category })
+      expect(screen.getAllByRole('textbox', { name: 'House BL' })).toHaveLength(1)
+      expect(screen.queryByText(/Master BL|MBL/)).not.toBeInTheDocument()
+      expect(screen.queryByText('House Air Waybill (HAWB)')).not.toBeInTheDocument()
+    }
+  )
+
+  it('caso-real: CR-70 FCL legado (so masterBl) mostra o MBL antigo no campo; com os dois, mostra o houseBl', () => {
+    const legacy = renderTransit({ category: 'FCL', masterBl: 'MBL-1', houseBl: '' })
+    expect(screen.getByRole('textbox', { name: 'House BL' })).toHaveValue('MBL-1')
+    legacy.unmount()
+
+    renderTransit({ category: 'FCL', masterBl: 'MBL-1', houseBl: 'HBL-2' })
+    expect(screen.getByRole('textbox', { name: 'House BL' })).toHaveValue('HBL-2')
+  })
+
+  it('caso-real: CR-70 digitar chama onDraftChange("houseBl", ...) e nunca onDraftChange("masterBl", ...)', async () => {
+    const user = userEvent.setup()
+    const { onDraftChange } = renderTransit({ category: 'FCL' })
+    await user.type(screen.getByRole('textbox', { name: 'House BL' }), 'H')
+    expect(onDraftChange).toHaveBeenCalledWith('houseBl', 'H')
+    expect(onDraftChange.mock.calls.some(([field]) => field === 'masterBl')).toBe(false)
+  })
+
+  it('caso-real: CR-70 AEREO mostra MAWB e HAWB como antes, sem "House BL"', () => {
+    renderTransit({ category: 'AEREO' })
+    expect(screen.getByRole('textbox', { name: 'Master Air Waybill (MAWB)' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'House Air Waybill (HAWB)' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'House BL' })).not.toBeInTheDocument()
   })
 })

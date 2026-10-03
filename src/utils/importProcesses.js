@@ -61,8 +61,9 @@ const NEW_COLUMN_ALIASES = {
   originLocation: ['origem', 'porto de origem', 'aeroporto de origem', 'local de origem', 'origin', 'pol'],
   incoterm: ['incoterm', 'incoterms'],
   forwarderName: ['agente de carga', 'agente', 'forwarder'],
-  masterBl: ['mbl', 'master bl', 'bl master', 'bl'],
-  houseBl: ['hbl', 'house bl', 'bl house'],
+  // D-F3-1: so' House BL; colunas MBL antigas seguem em masterBl e aparecem como House BL quando o HBL esta vazio
+  masterBl: ['mbl', 'master bl', 'bl master'],
+  houseBl: ['hbl', 'house bl', 'bl house', 'bl'],
   mawb: ['mawb', 'awb master', 'awb'],
   hawb: ['hawb', 'awb house'],
   vesselName: ['navio', 'nome do navio', 'vessel'],

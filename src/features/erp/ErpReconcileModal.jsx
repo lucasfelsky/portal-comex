@@ -1,10 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import TabButton from '../../components/TabButton'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import { getLocalDateKey } from '../processes/shipmentConfirmation'
 import { BLOCKED_MESSAGES, ERP_ONLY_CATEGORIES, runErpReconciliation } from './reconcileErp.js'
 import { formatErpReferenceStamp } from './erpReference.js'
+import ErpCreateProcessesPanel from './ErpCreateProcessesPanel.jsx'
+import { buildErpCreationCandidates, buildErpCreationRecheck } from './erpProcessDraft.js'
 import {
   ERP_DIFF_KIND_LABELS,
   ERP_FLAG_LABELS,
@@ -20,6 +22,12 @@ import {
 // callback injetado pela pagina — para guardar a planilha como REFERENCIA do
 // ERP (avisos "ERP" no detalhe). O modal nao conhece o servico. Se o admin
 // pedir, baixa o resultado em .xlsx.
+//
+// F3 (criar processos): com o callback `onCreateProcesses` (injetado pela pagina,
+// que e' a dona do servico) o modal ganha a aba "Criar processos". O modal monta
+// os rascunhos pelo nucleo puro, entrega ao callback os escolhidos (com a funcao
+// `recheck`, que reconcilia de novo com a lista fresca) e, no fim, concilia de novo
+// e regrava a referencia do ERP. Nada aqui grava processo.
 
 const TABS = [
   { id: 'summary', label: 'Resumo' },
@@ -40,6 +48,9 @@ const KIND_BADGE_CLASS = {
 }
 
 const PORTAL_EMPTY_MESSAGE = BLOCKED_MESSAGES.lista_portal_vazia
+
+// Lista vazia estavel (a mesma referencia a cada render: entra nas dependencias do useMemo).
+const NO_PROCESSES = []
 
 function isVisibleDiff(diff, showMinor) {
   return diff.counts || diff.kind === 'erp_sem_dado' || showMinor
@@ -278,7 +289,9 @@ function WarningsTab({ totalCount, visibleWarnings, concludedCount, showConclude
 }
 
 // So' renderiza o resultado (sem estado de fonte/arquivo): abas por TabButton.
-export function ErpReconcileResults({ result, showMinor = false }) {
+// `createTab` (F3, opcional): { count, content } acrescenta a aba "Criar processos"
+// depois de "Só no ERP"; sem ele nada muda.
+export function ErpReconcileResults({ result, showMinor = false, createTab = null }) {
   const [tab, setTab] = useState('summary')
   const [showConcludedWarnings, setShowConcludedWarnings] = useState(false)
 
@@ -296,12 +309,16 @@ export function ErpReconcileResults({ result, showMinor = false }) {
     erpOnly: result.erpOnly.length,
     portalOnly: result.portalOnly.length,
     warnings: visibleWarnings.length,
+    create: createTab ? createTab.count : undefined,
   }
+  const tabs = createTab
+    ? [...TABS.slice(0, 3), { id: 'create', label: 'Criar processos' }, ...TABS.slice(3)]
+    : TABS
 
   return (
     <div className="erp-reconcile__results">
       <div className="erp-reconcile__tabs" role="group" aria-label="Seções do resultado">
-        {TABS.map((item) => (
+        {tabs.map((item) => (
           <TabButton key={item.id} active={tab === item.id} onClick={() => setTab(item.id)}>
             {item.label}
             {counts[item.id] !== undefined ? ` (${counts[item.id]})` : ''}
@@ -311,6 +328,7 @@ export function ErpReconcileResults({ result, showMinor = false }) {
       {tab === 'summary' ? <SummaryTab result={result} /> : null}
       {tab === 'diffs' ? <DiffsTab result={result} showMinor={showMinor} /> : null}
       {tab === 'erpOnly' ? <ErpOnlyTab result={result} /> : null}
+      {tab === 'create' && createTab ? createTab.content : null}
       {tab === 'portalOnly' ? <PortalOnlyTab result={result} /> : null}
       {tab === 'warnings' ? (
         <WarningsTab
@@ -357,9 +375,11 @@ export default function ErpReconcileModal({
   onSaveReference,
   referenceInfo = null,
   isSavingReference = false,
+  onCreateProcesses,
+  isCreatingProcesses = false,
 }) {
   const sourceList = Array.isArray(sources) ? sources : []
-  const processList = Array.isArray(processes) ? processes : []
+  const processList = Array.isArray(processes) ? processes : NO_PROCESSES
   const [sourceId, setSourceId] = useState(sourceList[0]?.id ?? '')
   const [phase, setPhase] = useState('idle') // idle | loading | done
   const [savePhase, setSavePhase] = useState('idle') // idle | saving | saved | failed
@@ -370,6 +390,15 @@ export default function ErpReconcileModal({
   const [showMinor, setShowMinor] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [selectedFileName, setSelectedFileName] = useState('')
+  // F3: criacao de processos (so' com `onCreateProcesses`).
+  const [isCreatingLocal, setIsCreatingLocal] = useState(false)
+  const [createProgress, setCreateProgress] = useState(null)
+  const [createSummary, setCreateSummary] = useState(null)
+  const [createError, setCreateError] = useState('')
+  const creatingRef = useRef(false)
+  // Ultima conciliacao bem-sucedida: a planilha lida, a fonte e o dia. Reconferir e
+  // conciliar de novo depois de criar usa a MESMA planilha com a lista fresca.
+  const lastRunRef = useRef(null)
   const fileLabelId = useId()
   const fileStatusId = useId()
   const fileInputRef = useRef(null)
@@ -391,7 +420,18 @@ export default function ErpReconcileModal({
   // A trava vem da PAGINA (`isSavingReference`): o modal continua montado ao
   // fechar, e o estado local zera no fechamento, mas a gravacao segue em voo.
   const isSaving = savePhase === 'saving' || isSavingReference
-  const isFileDisabled = isLoading || isPortalEmpty || isSaving
+  // A trava de criacao tambem vem da PAGINA (`isCreatingProcesses`): ao reabrir o
+  // modal com o lote ainda em voo, o estado local ja zerou.
+  const isCreating = isCreatingLocal || isCreatingProcesses
+  const isFileDisabled = isLoading || isPortalEmpty || isSaving || isCreating
+  const canCreateProcesses = typeof onCreateProcesses === 'function' && Boolean(result) && !result.blocked
+  const creationCandidates = useMemo(
+    () =>
+      canCreateProcesses
+        ? buildErpCreationCandidates(result, { today: result.sourceInfo?.generatedOn ?? '', processes: processList })
+        : [],
+    [canCreateProcesses, result, processList]
+  )
 
   // Grava a planilha como referencia do ERP. A conciliacao ja esta na tela: uma
   // falha aqui nunca apaga o resultado.
@@ -423,15 +463,21 @@ export default function ErpReconcileModal({
     setSaveCounts(null)
     setError('')
     setResult(null)
+    setCreateProgress(null)
+    setCreateSummary(null)
+    setCreateError('')
+    lastRunRef.current = null
     try {
       const loaded = await source.load(input)
+      const today = getLocalDateKey(new Date())
       const next = runErpReconciliation({
         loaded,
         processes: processList,
-        today: getLocalDateKey(new Date()),
+        today,
         source,
       })
       if (!isMountedRef.current || runId !== runIdRef.current) return
+      lastRunRef.current = { loaded, source, today }
       setResult(next)
       setPhase('done')
       const canSave = !next.blocked && next.summary.erpRows > 0 && processList.length > 0
@@ -452,6 +498,66 @@ export default function ErpReconcileModal({
     } finally {
       // Permite escolher o mesmo arquivo de novo.
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  // Cria os processos escolhidos pelo callback da pagina. O modal nao conhece o
+  // servico: entrega `{ key, process }` por rascunho e a funcao `recheck`, que
+  // reconcilia a MESMA planilha com a lista fresca que a pagina acabou de ler.
+  async function handleCreateProcesses(drafts) {
+    const snapshot = lastRunRef.current
+    if (typeof onCreateProcesses !== 'function' || !snapshot) return
+    if (creatingRef.current || isCreatingProcesses) return
+    creatingRef.current = true
+    setIsCreatingLocal(true)
+    const runId = runIdRef.current
+    const list = Array.isArray(drafts) ? drafts : []
+    const isCurrentRun = () => isMountedRef.current && runId === runIdRef.current
+    setCreateError('')
+    setCreateSummary(null)
+    setCreateProgress({ done: 0, total: list.length })
+
+    const recheck = (fresh) =>
+      buildErpCreationRecheck(
+        runErpReconciliation({ loaded: snapshot.loaded, processes: fresh, today: snapshot.today, source: snapshot.source }),
+        { today: snapshot.today, processes: fresh }
+      )
+    const onProgress = (value) => {
+      if (isCurrentRun()) setCreateProgress(value)
+    }
+
+    try {
+      const outcome = await onCreateProcesses(
+        list.map((draft) => ({ key: draft.key, process: draft.process })),
+        { onProgress, recheck }
+      )
+      if (isCurrentRun()) {
+        setCreateSummary(outcome)
+        if (Array.isArray(outcome?.processes) && outcome.processes.length > 0) {
+          const next = runErpReconciliation({
+            loaded: snapshot.loaded,
+            processes: outcome.processes,
+            today: snapshot.today,
+            source: snapshot.source,
+          })
+          setResult(next)
+          // D-F3-3: os criados passam a ter aviso "ERP" e deixam de contar como "so' no ERP".
+          const created = Array.isArray(outcome.created) ? outcome.created.length : 0
+          if (created > 0 && typeof onSaveReference === 'function' && !next.blocked) {
+            await saveReference(next, runId)
+          }
+        }
+      }
+    } catch (createFailure) {
+      if (isCurrentRun()) {
+        setCreateError(buildActionErrorMessage('Não foi possível criar os processos.', createFailure))
+      }
+    } finally {
+      creatingRef.current = false
+      if (isMountedRef.current) {
+        setIsCreatingLocal(false)
+        if (runId === runIdRef.current) setCreateProgress(null)
+      }
     }
   }
 
@@ -481,6 +587,11 @@ export default function ErpReconcileModal({
     setShowMinor(false)
     setIsExporting(false)
     setSelectedFileName('')
+    // A criacao em voo continua na pagina: aqui so' some o que o modal mostrava.
+    setCreateProgress(null)
+    setCreateSummary(null)
+    setCreateError('')
+    lastRunRef.current = null
     onClose?.()
   }
 
@@ -488,7 +599,9 @@ export default function ErpReconcileModal({
     <Modal open={open} onClose={handleClose} title="Importar do DBCorp" wide>
       <div className="erp-reconcile">
         <p className="erp-reconcile__hint">
-          A planilha vira a referência do ERP para os avisos nos processos. Nenhum dado dos processos é alterado.
+          {typeof onCreateProcesses === 'function'
+            ? 'A planilha vira a referência do ERP para os avisos. Processos existentes não são alterados; novos processos só são criados na aba Criar processos, depois da sua confirmação.'
+            : 'A planilha vira a referência do ERP para os avisos nos processos. Nenhum dado dos processos é alterado.'}
         </p>
         <p className="erp-reconcile__hint">{formatCurrentReference(referenceInfo)}</p>
 
@@ -539,7 +652,7 @@ export default function ErpReconcileModal({
               type="button"
               className="primary-button"
               onClick={() => runSource(undefined)}
-              disabled={isLoading || isPortalEmpty || isSaving}
+              disabled={isLoading || isPortalEmpty || isSaving || isCreating}
             >
               Carregar de {source.label}
             </button>
@@ -587,7 +700,29 @@ export default function ErpReconcileModal({
                 <span>Mostrar diferenças de formato/informativas</span>
               </label>
             )}
-            <ErpReconcileResults result={result} showMinor={showMinor} />
+            <ErpReconcileResults
+              result={result}
+              showMinor={showMinor}
+              createTab={
+                canCreateProcesses
+                  ? {
+                      count: creationCandidates.filter((draft) => draft.creatable).length,
+                      content: (
+                        <ErpCreateProcessesPanel
+                          candidates={creationCandidates}
+                          disabled={isLoading || isSaving || isPortalEmpty || isCreating}
+                          isCreating={isCreating}
+                          progress={createProgress}
+                          summary={createSummary}
+                          error={createError}
+                          portalOnlyCount={result.portalOnly.length}
+                          onConfirm={handleCreateProcesses}
+                        />
+                      ),
+                    }
+                  : null
+              }
+            />
           </>
         ) : null}
 

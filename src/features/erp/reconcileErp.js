@@ -223,6 +223,11 @@ function conRefFromName(name) {
   return match ? `CON ${match[1]} ${match[2]}-${match[3]}` : ''
 }
 
+// F3: o criador de processos usa a mesma REF canonica do casamento.
+export function erpConRefFromName(name) {
+  return conRefFromName(name)
+}
+
 // ---------------------------------------------------------------------------
 // Diffs
 // ---------------------------------------------------------------------------
@@ -518,8 +523,47 @@ function compareOrigin(makeDiff, p, shipment) {
   })
 }
 
+// D-F3-1: nos maritimos o Portal tem um BL so' (House BL; o `masterBl` legado so'
+// vale quando o House BL esta vazio). A regra `houseBl || masterBl` e' repetida
+// aqui: o nucleo nao importa de `src/features/processes` (guarda).
+function compareMaritimeBl(makeDiff, p, shipment) {
+  const portalFields = ['houseBl', 'masterBl']
+  const targets = ['houseBl']
+  const houseBl = cleanCell(p.houseBl)
+  const portalBl = houseBl || cleanCell(p.masterBl)
+  const sourceField = houseBl ? 'houseBl' : 'masterBl'
+  const erpBl = shipment.transport.blAwb
+  const conflict = findConflict(shipment, 'blAwb')
+  if (conflict) {
+    const normalizedPortal = normalizeDocNumber(portalBl)
+    const hasEqual = normalizedPortal !== '' && conflict.some((value) => normalizeDocNumber(value) === normalizedPortal)
+    return makeDiff({
+      field: 'bl', portalFields, portal: portalBl, erp: conflict.join(' | '), kind: 'erp_conflito',
+      counts: !hasEqual, targets,
+      note: `O ERP tem ${conflict.length} documentos diferentes neste embarque.${hasEqual ? ' O Portal bate com um deles.' : ''}`,
+    })
+  }
+  if (erpBl === '') {
+    if (portalBl === '') return null
+    return makeDiff({ field: 'bl', portalFields, portal: portalBl, kind: 'erp_sem_dado', targets })
+  }
+  if (portalBl === '') {
+    return makeDiff({ field: 'bl', portalFields, erp: erpBl, erpValue: erpBl, kind: 'portal_sem_dado', targets })
+  }
+  if (normalizeDocNumber(portalBl) === normalizeDocNumber(erpBl)) {
+    return makeDiff({
+      field: 'bl', portalFields, portal: portalBl, erp: erpBl, erpValue: erpBl, kind: 'informativo',
+      targets, matchedField: sourceField, note: 'O documento do ERP corresponde ao House BL do Portal.',
+    })
+  }
+  return makeDiff({
+    field: 'bl', portalFields, portal: portalBl, erp: erpBl, erpValue: erpBl, kind: 'divergente', targets,
+  })
+}
+
 function compareBl(makeDiff, p, shipment) {
-  const portalFields = portalCategoryOf(p) === 'AEREO' ? ['mawb', 'hawb'] : ['masterBl', 'houseBl']
+  if (portalCategoryOf(p) !== 'AEREO') return compareMaritimeBl(makeDiff, p, shipment)
+  const portalFields = ['mawb', 'hawb']
   const portalValues = portalFields.map((name) => cleanCell(p[name]))
   const portalDisplay = uniqueText(portalValues).join(' / ')
   const erpBl = shipment.transport.blAwb
@@ -1385,6 +1429,8 @@ export function reconcileErp(processes, shipments, { today = '', fieldAuthority 
       statusNf: shipment.statusNf,
       etd: shipment.transport.etd,
       eta: shipment.transport.eta,
+      // F3: recorte (sem nada financeiro) de que o rascunho do processo precisa.
+      referenceShipment: toErpReferenceShipment(shipment),
     })
   }
   result.erpOnly.sort(

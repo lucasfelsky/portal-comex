@@ -3355,6 +3355,49 @@ body {
   background: var(--surface);
 }
 
+/* F3: aba "Criar processos" (so' tokens do tema; sem animation nem transition). */
+.erp-create {
+  gap: 12px;
+}
+
+.erp-create__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.erp-create__row input[type='checkbox'] {
+  flex: none;
+}
+
+.erp-create__warnings,
+.erp-create__result-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-subhead);
+}
+
+.erp-create__warnings {
+  color: var(--text-muted);
+}
+
+.erp-create__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.erp-create__result {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-alt);
+}
+
 /* D-1: o botao "Importar do DBCorp" so' existe no desktop. A especificidade
    (0,2,0) vence o display:inline-flex do .ghost-button (0,1,0). */
 @media (max-width: 1040px) {

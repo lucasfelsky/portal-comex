@@ -256,6 +256,34 @@ describe('importProcesses — parseProcessesFromWorkbook', () => {
       expect(row.containerQuantity).toBe(2)
     })
 
+    it('caso-real: CR-75 cabecalho "BL" grava houseBl (masterBl vazio); MBL segue em masterBl e HBL em houseBl', async () => {
+      const bl = makeFile([
+        ['Nome', 'Categoria', 'BL'],
+        ['Importação Atlas', 'FCL', 'BL-9'],
+      ])
+      const { validRows: blRows, errors: blErrors } = await parseProcessesFromWorkbook(bl)
+      expect(blErrors).toHaveLength(0)
+      expect(blRows[0].houseBl).toBe('BL-9')
+      expect(blRows[0].masterBl).toBe('')
+
+      const both = makeFile([
+        ['Nome', 'Categoria', 'MBL', 'HBL'],
+        ['Importação Atlas', 'FCL', 'MBL-1', 'HBL-1'],
+      ])
+      const { validRows } = await parseProcessesFromWorkbook(both)
+      expect(validRows[0].masterBl).toBe('MBL-1')
+      expect(validRows[0].houseBl).toBe('HBL-1')
+
+      // Compat: so a coluna MBL antiga -> masterBl (a tela mostra como House BL quando o HBL esta vazio).
+      const onlyMbl = makeFile([
+        ['Nome', 'Categoria', 'Master BL'],
+        ['Importação Atlas', 'FCL', 'MBL-3'],
+      ])
+      const { validRows: mblRows } = await parseProcessesFromWorkbook(onlyMbl)
+      expect(mblRows[0].masterBl).toBe('MBL-3')
+      expect(mblRows[0].houseBl).toBe('')
+    })
+
     it('"Porto de origem" + "Destino" -> origem e destino corretos (sem roubo de coluna)', async () => {
       const file = makeFile([
         ['Nome', 'Categoria', 'Porto de origem', 'Destino'],

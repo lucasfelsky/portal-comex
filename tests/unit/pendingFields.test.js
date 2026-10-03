@@ -4,7 +4,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
-import { getPendingFields } from '../../src/features/processes/pendingFields.js'
+import { PENDING_FIELD_RULES, getPendingFields } from '../../src/features/processes/pendingFields.js'
 
 function completeMaritimeProcess(overrides = {}) {
   return {
@@ -183,30 +183,54 @@ describe('getPendingFields - estágio 1 (so aparece com currentStage >= 1)', () 
     })
   }
 
-  it('processo em Aguardando Embarque (estágio 0) NAO cobra shippedAt/masterBl', () => {
-    const process = completeMaritimeProcess({ shippedAt: '', masterBl: '' })
+  it('processo em Aguardando Embarque (estágio 0) NAO cobra shippedAt/houseBl', () => {
+    const process = completeMaritimeProcess({ shippedAt: '', masterBl: '', houseBl: '' })
     const ids = getPendingFields(process).map((f) => f.id)
     expect(ids).not.toContain('shippedAt')
-    expect(ids).not.toContain('masterBl')
+    expect(ids).not.toContain('houseBl')
   })
 
   it('processo embarcado (estágio 1) completo -> sem pendencias novas de estagio 1', () => {
     const process = shippedMaritimeProcess()
     const ids = getPendingFields(process).map((f) => f.id)
     expect(ids).not.toContain('shippedAt')
-    expect(ids).not.toContain('masterBl')
+    expect(ids).not.toContain('houseBl')
     expect(ids).not.toContain('vesselName')
     expect(ids).not.toContain('voyage')
   })
 
-  it('processo embarcado sem masterBl (FCL) -> pendencia MBL', () => {
-    const process = shippedMaritimeProcess({ masterBl: '' })
-    expect(getPendingFields(process).map((f) => f.id)).toContain('masterBl')
+  it('caso-real: CR-73 FCL embarcado sem nenhum BL -> pendencia houseBl (rotulo "House BL")', () => {
+    const process = shippedMaritimeProcess({ masterBl: '', houseBl: '' })
+    const pending = getPendingFields(process).find((f) => f.id === 'houseBl')
+    expect(pending).toBeDefined()
+    expect(pending.label).toBe('House BL')
   })
 
-  it('LCL/CONSOLIDADO embarcado sem houseBl -> pendencia HBL', () => {
-    const process = shippedMaritimeProcess({ category: 'LCL', masterBl: '', houseBl: '' })
-    expect(getPendingFields(process).map((f) => f.id)).toContain('houseBl')
+  it('caso-real: CR-73 FCL embarcado so com masterBl legado (shippedMaritimeProcess) -> sem pendencia houseBl', () => {
+    const process = shippedMaritimeProcess()
+    expect(process.masterBl).toBe('MBL-1')
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('houseBl')
+  })
+
+  it('caso-real: CR-73 FCL so com houseBl -> sem pendencia de BL', () => {
+    const process = shippedMaritimeProcess({ masterBl: '', houseBl: 'HBL-1' })
+    expect(getPendingFields(process).map((f) => f.id)).not.toContain('houseBl')
+  })
+
+  it.each(['LCL', 'CONSOLIDADO'])(
+    'caso-real: CR-73 %s embarcado so com masterBl legado -> sem pendencia de BL; sem nenhum -> houseBl',
+    (category) => {
+      const legacy = shippedMaritimeProcess({ category, masterBl: 'MBL-1', houseBl: '' })
+      expect(getPendingFields(legacy).map((f) => f.id)).not.toContain('houseBl')
+      const empty = shippedMaritimeProcess({ category, masterBl: '', houseBl: '' })
+      expect(getPendingFields(empty).map((f) => f.id)).toContain('houseBl')
+    }
+  )
+
+  it('caso-real: CR-73 a regra masterBl saiu (BL unico) e houseBl vale para os 3 maritimos', () => {
+    expect(PENDING_FIELD_RULES.some((rule) => rule.id === 'masterBl')).toBe(false)
+    const rule = PENDING_FIELD_RULES.find((entry) => entry.id === 'houseBl')
+    expect(rule.categories).toEqual(['FCL', 'LCL', 'CONSOLIDADO'])
   })
 
   it('AEREO chegado sem mawb/flightNumber -> pendencias', () => {

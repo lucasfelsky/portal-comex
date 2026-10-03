@@ -1057,10 +1057,11 @@ describe('diferencas por campo', () => {
     expect(categoryOf(['LCL - FOB SHANGHAI', 'LCL - FOB TIANJIN'])).toBe('aguardando_prontidao_pagamento')
   })
 
-  it('BL: casa com houseBl (matchedField), com mawb no AEREO; divergente e portal_sem_dado', () => {
+  it('caso-real: CR-74 BL: casa com houseBl (matchedField), com masterBl so quando o House esta vazio, com mawb no AEREO; divergente e portal_sem_dado', () => {
     const rows = [fcl({ itemId: '1', blAwb: 'ab-123 / 45' })]
     const house = oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'OUTRO99', houseBl: 'AB12345' })] }), 'p-1', 'bl')
     expect(house).toMatchObject({ kind: 'informativo', counts: false, matchedField: 'houseBl' })
+    expect(house.note).toBe('O documento do ERP corresponde ao House BL do Portal.')
     const master = oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'AB12345' })] }), 'p-1', 'bl')
     expect(master.matchedField).toBe('masterBl')
     const air = oneDiff(
@@ -1071,6 +1072,49 @@ describe('diferencas por campo', () => {
     expect(air.matchedField).toBe('mawb')
     expect(oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'XYZ' })] }), 'p-1', 'bl')).toMatchObject({ kind: 'divergente', counts: true })
     expect(oneDiff(run({ rows, processes: [portalFcl({})] }), 'p-1', 'bl').kind).toBe('portal_sem_dado')
+  })
+
+  it('caso-real: CR-74 BL unico: houseBl diferente do ERP e masterBl igual ao ERP vira divergente (mostra so o House BL)', () => {
+    const rows = [fcl({ itemId: '1', blAwb: 'MBL-77' })]
+    const diff = oneDiff(run({ rows, processes: [portalFcl({ houseBl: 'HBL-7', masterBl: 'MBL-77' })] }), 'p-1', 'bl')
+    expect(diff).toMatchObject({ kind: 'divergente', counts: true, portal: 'HBL-7', erp: 'MBL-77' })
+    expect(diff.portalFields).toEqual(['houseBl', 'masterBl'])
+    expect(diff.note).toBe('')
+    // Controle: o mesmo ERP bate com o House BL igual.
+    const same = oneDiff(run({ rows, processes: [portalFcl({ houseBl: 'MBL-77', masterBl: 'OUTRO' })] }), 'p-1', 'bl')
+    expect(same).toMatchObject({ kind: 'informativo', counts: false, matchedField: 'houseBl', portal: 'MBL-77' })
+  })
+
+  it('caso-real: CR-74 BL unico: House BL vazio usa o masterBl legado; sem nenhum, portal_sem_dado; o AEREO nao muda', () => {
+    const rows = [fcl({ itemId: '1', blAwb: 'ab-123' })]
+    const legacy = oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'AB123', houseBl: '  ' })] }), 'p-1', 'bl')
+    expect(legacy).toMatchObject({ kind: 'informativo', matchedField: 'masterBl', portal: 'AB123' })
+    expect(legacy.portalFields).toEqual(['houseBl', 'masterBl'])
+    const empty = oneDiff(run({ rows, processes: [portalFcl({})] }), 'p-1', 'bl')
+    expect(empty).toMatchObject({ kind: 'portal_sem_dado', portal: '' })
+    expect(empty.portalFields).toEqual(['houseBl', 'masterBl'])
+    const noErp = oneDiff(run({ rows: [fcl({ itemId: '1' })], processes: [portalFcl({ masterBl: 'XYZ' })] }), 'p-1', 'bl')
+    expect(noErp).toMatchObject({ kind: 'erp_sem_dado', portal: 'XYZ' })
+    expect(run({ rows: [fcl({ itemId: '1' })], processes: [portalFcl({})] }).matched[0].diffs.some((diff) => diff.field === 'bl')).toBe(false)
+    const air = oneDiff(
+      run({ rows: [fcl({ itemId: '1', refEmbarque: 'DAP - ITAJAI', blAwb: '123-4567' })], processes: [portalFcl({ category: 'AEREO', mawb: '1234567', houseBl: 'NAO-USA' })] }),
+      'p-1',
+      'bl'
+    )
+    expect(air.portalFields).toEqual(['mawb', 'hawb'])
+    expect(air.matchedField).toBe('mawb')
+  })
+
+  it('caso-real: CR-74 BL em conflito no ERP compara com o BL unico do Portal (houseBl || masterBl)', () => {
+    const rows = [fcl({ itemId: '1', blAwb: 'BL-A' }), fcl({ itemId: '2', blAwb: 'BL-B' })]
+    const related = oneDiff(run({ rows, processes: [portalFcl({ houseBl: 'BL-A', masterBl: 'BL-B' })] }), 'p-1', 'bl')
+    expect(related).toMatchObject({ kind: 'erp_conflito', counts: false, portal: 'BL-A' })
+    const legacy = oneDiff(run({ rows, processes: [portalFcl({ masterBl: 'BL-B' })] }), 'p-1', 'bl')
+    expect(legacy).toMatchObject({ kind: 'erp_conflito', counts: false })
+    const other = oneDiff(run({ rows, processes: [portalFcl({ houseBl: 'BL-Z' })] }), 'p-1', 'bl')
+    expect(other).toMatchObject({ kind: 'erp_conflito', counts: true })
+    const none = oneDiff(run({ rows, processes: [portalFcl({})] }), 'p-1', 'bl')
+    expect(none).toMatchObject({ kind: 'erp_conflito', counts: true })
   })
 
   it('DI/DUIMP: diferencas saem com applicable false (nunca candidatas da F2)', () => {

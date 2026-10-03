@@ -13,7 +13,13 @@ import PostReceiptEditView from '../features/processes/PostReceiptEditView'
 import ProcessListView from '../features/processes/ProcessListView'
 import ErpReconcileModal from '../features/erp/ErpReconcileModal'
 import { dbcorpXlsxSource } from '../features/erp/readDbcorpWorkbook'
+import {
+  findExistingProcessForErpDraft,
+  formatErpCreationAuditTarget,
+  pickErpDraftProcess,
+} from '../features/erp/erpProcessDraft'
 import { loadErpReference, saveErpReferenceSnapshot } from '../services/erpReferenceRepository'
+import { createAuditEvent } from '../services/auditRepository'
 import Spinner from '../components/Spinner'
 import { setActiveProcess } from '../utils/activeProcessContext'
 import {
@@ -98,10 +104,16 @@ import {
 import { buildActionErrorMessage } from '../utils/errorMessages'
 import { useUnsavedChanges, useUnsavedChangesGuard } from '../contexts/UnsavedChangesContext'
 import { areProcessDraftsEquivalent } from '../features/processes/processDraftDirty'
+import { applyHouseBlInput } from '../features/processes/houseBl'
 
 // Conciliacao ERP (F1, somente leitura): fontes injetadas no modal. A API do
 // DBCorp (F5) entra aqui como mais um objeto `ErpSource`.
 const ERP_SOURCES = [dbcorpXlsxSource]
+
+// F3 (criar processos a partir do DBCorp): trava de MODULO (nao de instancia), para
+// sobreviver a sair e voltar da pagina com o lote ainda em voo. Nao cobre 2 abas
+// nem 2 admins (o Firestore lite nao tem transacao aqui).
+let erpCreateInFlight = false
 
 const emptyDraft = () => ({
   id: '',
@@ -572,6 +584,7 @@ export default function ProcessesPage() {
   // de gravacao e' da PAGINA (o modal continua montado ao fechar).
   const [erpReference, setErpReference] = useState(null)
   const [isSavingErpReference, setIsSavingErpReference] = useState(false)
+  const [isCreatingErpProcesses, setIsCreatingErpProcesses] = useState(false)
   const erpSaveInFlightRef = useRef(false)
   const erpReferenceSeqRef = useRef(0)
   const isPageMountedRef = useRef(true)
@@ -940,6 +953,9 @@ export default function ProcessesPage() {
         })
       }
       if (field === 'destination') return { ...current, destination: String(value ?? '').toUpperCase() }
+      // D-F3-1: campo unico "House BL" nos maritimos (limpa o `masterBl` legado e
+      // restaura o par original se o valor voltar ao de antes).
+      if (field === 'houseBl') return applyHouseBlInput(current, value, baselineRef.current)
       if (field === 'containerQuantity' || field === 'palletQuantity') {
         return { ...current, [field]: Math.max(0, Number(value) || 0) }
       }
@@ -1332,6 +1348,142 @@ export default function ProcessesPage() {
     }
   }
 
+  // F3 ("Criar processos" do Importar do DBCorp): cria os rascunhos escolhidos pelo
+  // MESMO caminho do "Novo processo" (sanitizeDraft + validateProcessDraft +
+  // saveProcess), um por vez. Antes de gravar, le a lista do servidor e reconfere
+  // os embarques com ela (`recheck`, do modal): o que ja foi coberto e' pulado.
+  // Nada financeiro entra: o rascunho so' tem as 18 chaves do nucleo puro, e
+  // `pickErpDraftProcess` barra qualquer outra.
+  async function handleCreateErpProcesses(drafts, { onProgress, recheck } = {}) {
+    if (!isAdmin) throw new Error('Somente administradores podem criar processos a partir do DBCorp.')
+    if (erpCreateInFlight) throw new Error('Outra criação de processos ainda está em andamento.')
+    erpCreateInFlight = true
+    setIsCreatingErpProcesses(true)
+    try {
+      const requested = Array.isArray(drafts) ? drafts : []
+      // Lista fresca do servidor: vazia levaria a duplicar em massa, entao nao cria nada.
+      const fresh = await listProcesses()
+      if (!Array.isArray(fresh) || fresh.length === 0) {
+        throw new Error('A lista de processos do servidor veio vazia: nada foi criado.')
+      }
+      const status = typeof recheck === 'function' ? recheck(fresh) : null
+      if (!(status instanceof Map) || status.size === 0) {
+        throw new Error('Não foi possível reconferir os embarques com a lista atual.')
+      }
+
+      const known = [...fresh]
+      const createdEntries = []
+      const created = []
+      const skipped = []
+      const failed = []
+      let savesStarted = 0
+
+      for (let index = 0; index < requested.length; index += 1) {
+        const draft = requested[index]
+        const key = String(draft?.key ?? '')
+        let name = String(draft?.process?.name ?? '').trim() || key
+        try {
+          const shape = pickErpDraftProcess(draft?.process)
+          if (!shape.ok) {
+            failed.push({ key, name, message: 'Rascunho inválido (forma)' })
+          } else {
+            name = String(shape.process.name).trim()
+            const state = status.get(key)
+            const twin = state?.creatable
+              ? findExistingProcessForErpDraft({ ...draft, process: shape.process }, createdEntries)
+              : null
+            if (!state?.creatable) {
+              skipped.push({ key, name, existingName: state?.existingName ?? '' })
+            } else if (twin) {
+              skipped.push({ key, name, existingName: String(twin.name ?? '') })
+            } else {
+              const payload = sanitizeDraft({
+                ...emptyDraft(),
+                ...shape.process,
+                id: '',
+                items: sanitizeProcessItems(shape.process.items),
+              })
+              payload.etaOriginal = shape.process.eta
+              const invalidKey = validateProcessDraft(payload).firstKey
+              if (invalidKey) {
+                failed.push({ key, name, message: `Rascunho inválido (${invalidKey})` })
+              } else {
+                // Id = PROC-<ms>: um 2o create no mesmo milissegundo sobrescreveria o 1o.
+                if (savesStarted > 0) await new Promise((resolve) => setTimeout(resolve, 1))
+                savesStarted += 1
+                const saved = await saveProcess(payload, profile)
+                const entry = saved && typeof saved === 'object' ? saved : { ...payload, id: '' }
+                const clash = entry.id ? known.find((item) => item.id === entry.id) : null
+                if (clash) {
+                  failed.push({
+                    key,
+                    name,
+                    message: `Id repetido (${entry.id}): confira o processo ${clash.name ?? ''}`.trim(),
+                  })
+                } else {
+                  known.push(entry)
+                  createdEntries.push(entry)
+                  created.push({ key, id: entry.id ?? '', name: entry.name ?? name })
+                }
+              }
+            }
+          }
+        } catch (itemError) {
+          failed.push({ key, name, message: buildActionErrorMessage('Não foi possível salvar o processo.', itemError) })
+        }
+        onProgress?.({ done: index + 1, total: requested.length })
+      }
+
+      // 1 audit do lote (alem do "Processo criado" de cada um, que o saveProcess grava).
+      let auditFailed = false
+      if (created.length > 0) {
+        try {
+          await createAuditEvent({
+            action: 'Processos criados via DBCorp',
+            actor: profile?.name ?? profile?.email ?? 'Sistema',
+            target: formatErpCreationAuditTarget(created),
+          })
+        } catch (auditError) {
+          auditFailed = true
+          console.warn('Não foi possível registrar o audit do lote de criação via DBCorp.', auditError)
+        }
+      }
+
+      let processes = known
+      let refreshFailed = false
+      try {
+        processes = await refreshProcesses(selectedProcessId)
+      } catch (refreshError) {
+        refreshFailed = true
+        console.warn('Não foi possível recarregar a lista depois de criar os processos.', refreshError)
+        if (isPageMountedRef.current) setProcesses(known)
+      }
+
+      if (isPageMountedRef.current) {
+        if (created.length > 0 && failed.length === 0) {
+          toast.success(
+            created.length === 1
+              ? '1 processo criado via DBCorp.'
+              : `${created.length} processos criados via DBCorp.`
+          )
+        }
+        if (failed.length > 0) {
+          toast.warning(
+            `${created.length} criado(s), ${failed.length} com erro. Veja o resultado na aba Criar processos.`
+          )
+        }
+        if (refreshFailed) {
+          toast.warning('A lista de processos não foi recarregada. Recarregue a página para ver os criados.')
+        }
+      }
+
+      return { created, skipped, failed, processes, auditFailed, refreshFailed }
+    } finally {
+      erpCreateInFlight = false
+      if (isPageMountedRef.current) setIsCreatingErpProcesses(false)
+    }
+  }
+
   async function handleSaveCollectionStatus() {
     if (!canEditCollectionStatus || !selectedProcess) return
     setIsSaving(true)
@@ -1710,6 +1862,8 @@ export default function ProcessesPage() {
           onSaveReference={handleSaveErpReference}
           referenceInfo={erpReference?.snapshot ?? null}
           isSavingReference={isSavingErpReference}
+          onCreateProcesses={handleCreateErpProcesses}
+          isCreatingProcesses={isCreatingErpProcesses}
         />
       ) : null}
 
