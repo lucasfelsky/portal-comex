@@ -80,6 +80,7 @@ export function buildErpReconciliationSheets(result) {
     { Indicador: 'Embarques no ERP', Valor: summary.shipments ?? 0 },
     { Indicador: 'Embarques ativos', Valor: summary.activeShipments ?? 0 },
     { Indicador: 'Processos casados', Valor: summary.matched ?? 0 },
+    { Indicador: '  dos quais arquivados (casados)', Valor: summary.matchedArchived ?? 0 },
     { Indicador: 'Casados com divergências', Valor: summary.matchedWithDiffs ?? 0 },
     { Indicador: 'Campos sem dado no ERP', Valor: summary.erpMissingFields ?? 0 },
     { Indicador: 'Só no ERP', Valor: summary.erpOnly ?? 0 }
@@ -147,6 +148,7 @@ export function buildErpReconciliationSheets(result) {
     Pedido: warning.ref?.pedido ?? '',
     Embarque: warning.ref?.shipmentKey ?? '',
     Processo: warning.ref?.processId ?? '',
+    'Embarque concluído': yesNo(warning.concludedShipment),
   }))
 
   const sheet = (name, columns, rows) => ({ name, columns, rows })
@@ -171,7 +173,7 @@ export function buildErpReconciliationSheets(result) {
     sheet(SHEET_NAMES.portalOnly, ['Processo', 'Categoria', 'Arquivado', 'Observação'], portalOnlyRows),
     sheet(
       SHEET_NAMES.warnings,
-      ['Código', 'Mensagem', 'Linha', 'ItemPedCpId', 'Pedido', 'Embarque', 'Processo'],
+      ['Código', 'Mensagem', 'Linha', 'ItemPedCpId', 'Pedido', 'Embarque', 'Processo', 'Embarque concluído'],
       warningRows
     ),
   ]

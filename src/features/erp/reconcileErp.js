@@ -94,6 +94,8 @@ export const CONSOLIDATION_HUB_ORIGINS = ['SHANGHAI']
 export const BLOCKED_MESSAGES = {
   lista_portal_vazia:
     'Os processos do Portal não foram carregados. Recarregue a página antes de conciliar.',
+  planilha_sem_linhas:
+    'A planilha não tem linhas de dados (só o cabeçalho). Exporte de novo o relatório do DBCorp com os pedidos.',
 }
 
 const FIELD_LABELS = {
@@ -190,6 +192,12 @@ function shipmentId(shipment) {
 // Chave de comparacao de PEDIDO/PO: os digitos; sem digitos, o texto dobrado.
 function orderKey(value) {
   return digitsOnly(value) || foldText(value)
+}
+
+// Categoria do Portal comparavel (fold: 'fcl' e 'aéreo' valem como 'FCL' e
+// 'AEREO'). Vazia quando o processo nao tem categoria.
+function portalCategoryOf(p) {
+  return foldText(p?.category)
 }
 
 function conRefFromName(name) {
@@ -391,7 +399,7 @@ function classifyPartialVoyage(portalName, portalVoyage, erpVessel) {
 }
 
 function compareVessel(makeDiff, p, shipment) {
-  if (cleanCell(p.category) === 'AEREO') return null
+  if (portalCategoryOf(p) === 'AEREO') return null
   const portalName = cleanCell(p.vesselName)
   const portalVoyage = cleanCell(p.voyage)
   const portalCombined = cleanCell(`${portalName} ${portalVoyage}`)
@@ -484,7 +492,7 @@ function compareOrigin(makeDiff, p, shipment) {
 }
 
 function compareBl(makeDiff, p, shipment) {
-  const portalFields = cleanCell(p.category) === 'AEREO' ? ['mawb', 'hawb'] : ['masterBl', 'houseBl']
+  const portalFields = portalCategoryOf(p) === 'AEREO' ? ['mawb', 'hawb'] : ['masterBl', 'houseBl']
   const portalValues = portalFields.map((name) => cleanCell(p[name]))
   const portalDisplay = uniqueText(portalValues).join(' / ')
   const erpBl = shipment.transport.blAwb
@@ -843,12 +851,22 @@ function compareStatus(makeDiff, p, shipment, warnings) {
   })
 }
 
+// Processo sem categoria no Portal: nao ha o que comparar. Informativo, sem
+// valor para a F2 e sem entrar em `matchedWithDiffs`.
+function emptyPortalCategoryDiff(makeDiff, erp) {
+  return makeDiff({
+    field: 'category', portalFields: ['category'], portal: '', erp, erpValue: null,
+    kind: 'informativo', counts: false, note: 'categoria do Portal vazia',
+  })
+}
+
 // Casou por PEDIDO/PO (chave forte), mas o embarque tem outra categoria (ex.:
 // FCL no Portal x LCL no ERP). So' acusa: as demais comparacoes seguem normais.
 // Sem `portalCategory` no embarque (INDEFINIDO/NACIONAL/AMOSTRA) nao ha o que
 // afirmar: informativo.
 function compareIncompatibleCategory(makeDiff, category, shipment) {
   const erpCategory = cleanCell(shipment.portalCategory)
+  if (category === '') return emptyPortalCategoryDiff(makeDiff, erpCategory || cleanCell(shipment.kind))
   if (erpCategory === '') {
     return makeDiff({
       field: 'category', portalFields: ['category'], portal: category, erp: cleanCell(shipment.kind),
@@ -866,15 +884,17 @@ function compareProcess(makeDiff, p, shipment, { matchRule, categoryMismatch, ca
   const push = (diff) => {
     if (diff) diffs.push(diff)
   }
-  const category = cleanCell(p.category)
+  const category = portalCategoryOf(p)
   const isConsolidated = category === 'CONSOLIDADO'
   const perPo = !categoryMismatch
 
   if (categoryMismatch) {
-    push(makeDiff({
-      field: 'category', portalFields: ['category'], portal: category, erp: 'CONSOLIDADO', erpValue: 'CONSOLIDADO',
-      kind: 'divergente', note: `Consolidado gravado como ${category}.`,
-    }))
+    push(category === ''
+      ? emptyPortalCategoryDiff(makeDiff, 'CONSOLIDADO')
+      : makeDiff({
+        field: 'category', portalFields: ['category'], portal: category, erp: 'CONSOLIDADO', erpValue: 'CONSOLIDADO',
+        kind: 'divergente', note: `Consolidado gravado como ${category}.`,
+      }))
   } else if (categoryIncompatible) {
     push(compareIncompatibleCategory(makeDiff, category, shipment))
   }
@@ -954,7 +974,7 @@ function readPortalProcess(p) {
     id: String(p.id ?? ''),
     name: cleanCell(p.name),
     foldName: foldText(p.name),
-    category: cleanCell(p.category),
+    category: portalCategoryOf(p),
     archived: Boolean(p.archived),
     pedidoDigits: digitsOnly(p.processNumber),
     conRef: conRefFromName(p.name),
@@ -1128,8 +1148,18 @@ export function reconcileErp(processes, shipments, { today = '', fieldAuthority 
   for (const [, claimants] of claims) {
     const live = claimants.filter((claimant) => !claimant.entry.archived)
     const kept = live.length > 0 ? live : claimants
+    // Quem perde o embarque e' sempre um arquivado (ha processo vivo): nao vai
+    // para `portalOnly`, porque o embarque existe e foi casado; o aviso mostra.
     for (const claimant of claimants) {
-      if (!kept.includes(claimant)) unmatched.push(claimant.entry)
+      if (kept.includes(claimant)) continue
+      const keptNames = kept.map((item) => item.entry.name || item.entry.id).join('; ')
+      warnings.push(
+        makeErpWarning(
+          'processo_arquivado_preterido',
+          `Processo arquivado "${claimant.entry.name || claimant.entry.id}" também casava com o embarque ${claimant.found.shipment.key}; o embarque ficou com o processo ativo "${keptNames}".`,
+          { processId: claimant.entry.id, shipmentKey: claimant.found.shipment.key }
+        )
+      )
     }
     if (kept.length > 1) {
       const shipment = kept[0].found.shipment
@@ -1228,6 +1258,7 @@ function buildSummary({ erpRows, shipments, matched, erpOnly, portalOnly, warnin
     shipments: shipments.length,
     activeShipments: shipments.filter((shipment) => shipment.active).length,
     matched: matched.length,
+    matchedArchived: matched.filter((entry) => entry.archived).length,
     matchedWithDiffs: matched.filter((entry) => entry.diffs.some((diff) => diff.counts)).length,
     erpMissingFields: matched.reduce(
       (total, entry) => total + entry.diffs.filter((diff) => diff.kind === 'erp_sem_dado').length,
@@ -1239,6 +1270,54 @@ function buildSummary({ erpRows, shipments, matched, erpOnly, portalOnly, warnin
     portalOnlyArchived: portalOnly.filter((entry) => entry.archived).length,
     warnings: warnings.length,
     warningsByCode,
+  }
+}
+
+// Embarques a que o aviso se refere. A 1a busca que achar embarque decide:
+// shipmentKey, rowNumber, itemId e pedido (nessa ordem).
+function findWarningShipments(ref, shipments) {
+  if (ref.shipmentKey !== '') {
+    const byKey = shipments.filter((shipment) => shipment.key === ref.shipmentKey)
+    if (byKey.length > 0) return byKey
+  }
+  if (ref.rowNumber !== null) {
+    const byRow = shipments.filter((shipment) => shipment.rowNumbers.includes(ref.rowNumber))
+    if (byRow.length > 0) return byRow
+  }
+  if (ref.itemId !== '') {
+    const byItem = shipments.filter((shipment) => shipment.items.some((item) => item.itemId === ref.itemId))
+    if (byItem.length > 0) return byItem
+  }
+  const pedidoKey = orderKey(ref.pedido)
+  if (pedidoKey !== '') {
+    return shipments.filter((shipment) => shipment.orders.some((order) => orderKey(order.pedido) === pedidoKey))
+  }
+  return []
+}
+
+// `concludedShipment`: o aviso e' de um embarque (ou so' de embarques) ja
+// concluido no ERP. A UI esconde esses avisos por padrao; o `ref` nao muda.
+function markConcludedShipmentWarnings(warnings, shipments) {
+  return warnings.map((warning) => {
+    const found = findWarningShipments(warning.ref, shipments)
+    return { ...warning, concludedShipment: found.length > 0 && found.every((shipment) => !shipment.active) }
+  })
+}
+
+// Resultado bloqueado: nada e' conciliado; so' o resumo dos avisos e o motivo.
+function blockedResult({ code, message, sourceInfo, erpRows, warnings }) {
+  const sorted = markConcludedShipmentWarnings([...warnings].sort(compareErpWarnings), [])
+  return {
+    blocked: code,
+    blockedMessage: message,
+    sourceInfo,
+    summary: buildSummary({
+      erpRows, shipments: [], matched: [], erpOnly: [], portalOnly: [], warnings: sorted,
+    }),
+    matched: [],
+    erpOnly: [],
+    portalOnly: [],
+    warnings: sorted,
   }
 }
 
@@ -1257,31 +1336,51 @@ export function runErpReconciliation({ loaded, processes, today = '', fieldAutho
     rowCount: typeof meta.rowCount === 'number' ? meta.rowCount : normalized.rows.length,
     generatedOn: today,
   }
+  const loadedWarnings = loaded?.warnings ?? []
+
+  // Ordem dos bloqueios: planilha sem linhas, datas, STATUS e, por fim, a
+  // lista do Portal (dentro do `reconcileErp`).
+  if (normalized.rows.length === 0) {
+    return blockedResult({
+      code: 'planilha_sem_linhas',
+      message: BLOCKED_MESSAGES.planilha_sem_linhas,
+      sourceInfo,
+      erpRows: 0,
+      warnings: [...loadedWarnings, ...normalized.warnings],
+    })
+  }
 
   if (normalized.blocking) {
-    const warnings = [...(loaded?.warnings ?? []), ...normalized.warnings].sort(compareErpWarnings)
-    return {
-      blocked: normalized.blocking.code,
-      blockedMessage: normalized.blocking.message,
+    return blockedResult({
+      code: normalized.blocking.code,
+      message: normalized.blocking.message,
       sourceInfo,
-      summary: buildSummary({
-        erpRows: normalized.rows.length, shipments: [], matched: [], erpOnly: [], portalOnly: [], warnings,
-      }),
-      matched: [],
-      erpOnly: [],
-      portalOnly: [],
-      warnings,
-    }
+      erpRows: normalized.rows.length,
+      warnings: [...loadedWarnings, ...normalized.warnings],
+    })
   }
 
   const grouped = groupErpShipments(normalized.rows)
+  if (grouped.blocking) {
+    return blockedResult({
+      code: grouped.blocking.code,
+      message: grouped.blocking.message,
+      sourceInfo,
+      erpRows: normalized.rows.length,
+      warnings: [...loadedWarnings, ...normalized.warnings, ...grouped.warnings],
+    })
+  }
+
   const reconciled = reconcileErp(processes, grouped.shipments, { today, fieldAuthority })
-  const warnings = [
-    ...(loaded?.warnings ?? []),
-    ...normalized.warnings,
-    ...grouped.warnings,
-    ...reconciled.warnings,
-  ].sort(compareErpWarnings)
+  const warnings = markConcludedShipmentWarnings(
+    [
+      ...loadedWarnings,
+      ...normalized.warnings,
+      ...grouped.warnings,
+      ...reconciled.warnings,
+    ].sort(compareErpWarnings),
+    grouped.shipments
+  )
 
   return {
     blocked: reconciled.blocked,

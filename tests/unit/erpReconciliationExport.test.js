@@ -23,6 +23,7 @@ import {
   buildScenarioPortalProcesses,
   looseRowsToMatrix,
   makeLooseRow,
+  makePortalProcess,
 } from '../fixtures/erp/dbcorpSynthetic.js'
 
 function scenarioResult() {
@@ -70,6 +71,59 @@ describe('buildErpReconciliationSheets', () => {
     expect(value('  Aguardando consolidação (provável)')).toBe(1)
     expect(value('Só no Portal (não encontrados nesta planilha)')).toBe(2)
     expect(value('  dos quais arquivados')).toBe(1)
+  })
+
+  it('caso-real: CR-31 o Resumo traz "dos quais arquivados (casados)" logo apos os casados, distinto do dos arquivados so no Portal', () => {
+    const archived = runErpReconciliation({
+      loaded: {
+        rows: [{ ...makeLooseRow({ itemId: 'A-1', pedido: 9036, poRef: 'BETA SEA 904-26' }), rowNumber: 2 }],
+        warnings: [],
+        meta: {},
+      },
+      processes: [
+        makePortalProcess({ id: 'p-arch', name: 'VELHO', processNumber: '9036', category: 'FCL', archived: true }),
+        makePortalProcess({ id: 'p-solto', name: 'SEM ERP', processNumber: '9999', category: 'FCL', archived: true }),
+      ],
+      today: SCENARIO_TODAY,
+      source: { id: 'teste', label: 'Teste' },
+    })
+    expect(archived.summary).toMatchObject({ matched: 1, matchedArchived: 1, portalOnly: 1, portalOnlyArchived: 1 })
+    const sheet = buildErpReconciliationSheets(archived)[0]
+    const labels = sheet.rows.map((row) => row.Indicador)
+    expect(labels.indexOf('  dos quais arquivados (casados)')).toBe(labels.indexOf('Processos casados') + 1)
+    expect(sheet.rows.find((row) => row.Indicador === '  dos quais arquivados (casados)').Valor).toBe(1)
+    expect(sheet.rows.find((row) => row.Indicador === '  dos quais arquivados').Valor).toBe(1)
+    // Sem resumo (entrada vazia): 0.
+    expect(buildErpReconciliationSheets(null)[0].rows.find((row) => row.Indicador === '  dos quais arquivados (casados)').Valor).toBe(0)
+  })
+
+  it('caso-real: CR-41 a aba Avisos tem a coluna final "Embarque concluido" e exporta TODOS os avisos', () => {
+    const rows = [
+      { ...makeLooseRow({ itemId: 'E-1', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO' }), rowNumber: 2 },
+      { ...makeLooseRow({ itemId: 'E-2', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46301 }), rowNumber: 3 },
+      { ...makeLooseRow({ itemId: 'E-3', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46281 }), rowNumber: 4 },
+      { ...makeLooseRow({ itemId: 'E-4', pedido: 9803, poRef: 'GAMA SEA 983-26', status: 'EMBARCOU', refEmbarque: 'DAP - ITAJAI' }), rowNumber: 5 },
+    ]
+    const result = runErpReconciliation({
+      loaded: { rows, warnings: [], meta: {} },
+      processes: [makePortalProcess({ id: 'p-x', name: 'SEM ERP', processNumber: '9999' })],
+      today: SCENARIO_TODAY,
+      source: { id: 'teste', label: 'Teste' },
+    })
+    const sheet = buildErpReconciliationSheets(result).find((item) => item.name === 'Avisos')
+    expect(sheet.columns).toEqual([
+      'Código', 'Mensagem', 'Linha', 'ItemPedCpId', 'Pedido', 'Embarque', 'Processo', 'Embarque concluído',
+    ])
+    expect(sheet.rows).toHaveLength(result.warnings.length)
+    for (const row of sheet.rows) expect(Object.keys(row)).toEqual(sheet.columns)
+    const flagOf = (code) => sheet.rows.filter((row) => row.Código === code).map((row) => row['Embarque concluído'])
+    expect(flagOf('conflito_no_grupo')).toEqual(['Sim'])
+    expect(flagOf('aereo_inferido')).toEqual(['Não'])
+    // Aviso sem a marca (resultado antigo): "Nao".
+    const legacy = buildErpReconciliationSheets({
+      warnings: [{ code: 'x', message: 'm', ref: { rowNumber: 1, itemId: '', pedido: '', shipmentKey: '', processId: '' } }],
+    }).find((item) => item.name === 'Avisos')
+    expect(legacy.rows[0]['Embarque concluído']).toBe('Não')
   })
 
   it('cada diff, embarque so no ERP, processo so no Portal e aviso vira uma linha', () => {

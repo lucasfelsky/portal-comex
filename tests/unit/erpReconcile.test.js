@@ -10,6 +10,7 @@ import {
   reconcileErp,
   runErpReconciliation,
 } from '../../src/features/erp/reconcileErp.js'
+import { makeErpWarning } from '../../src/features/erp/erpText.js'
 import { processStatusOptions } from '../../src/features/processes/processStatus.js'
 import {
   FINANCIAL_SENTINEL_STRINGS,
@@ -369,6 +370,77 @@ describe('casamento', () => {
     }
   })
 
+  it('caso-real: CR-44 categoria do Portal em minusculas ("fcl") vale como FCL: casa compativel, sem diff de categoria', () => {
+    const result = run({
+      rows: [fcl({ itemId: '1' })],
+      processes: [portalFcl({ category: 'fcl' })],
+    })
+    expect(result.matched).toHaveLength(1)
+    expect(result.matched[0].category).toBe('FCL')
+    expect(diffsOf(result, 'p-1', 'category')).toEqual([])
+    // Com acento e espacos: 'Aéreo ' = AEREO (compativel com AMOSTRA).
+    const air = run({
+      rows: [fcl({ itemId: '1', pedido: 9186, poRef: 'MU SAMPLE 923-26', refEmbarque: 'AMOSTRA' })],
+      processes: [portalFcl({ name: 'MU SAMPLE 923-26', processNumber: '9186', category: ' Aéreo ' })],
+    })
+    expect(air.matched[0].category).toBe('AEREO')
+    expect(diffsOf(air, 'p-1', 'category')).toEqual([])
+    // Processo so' no Portal tambem sai com a categoria normalizada.
+    const only = run({
+      rows: [fcl({ itemId: '1' })],
+      processes: [portalFcl(), portalFcl({ id: 'p-x', name: 'SEM ERP', processNumber: '9999', category: 'lcl' })],
+    })
+    expect(only.portalOnly.map((entry) => entry.category)).toEqual(['LCL'])
+  })
+
+  it('caso-real: CR-44 categoria do Portal vazia: informativo "categoria do Portal vazia", sem nota "Portal  × ERP" e sem contar', () => {
+    const lcl = run({
+      rows: [fcl({ itemId: '1', refEmbarque: 'LCL - FOB KOBE' })],
+      processes: [portalFcl({ category: '' })],
+    })
+    const diff = oneDiff(lcl, 'p-1', 'category')
+    expect(diff).toMatchObject({
+      kind: 'informativo', counts: false, applicable: false, portal: '', erp: 'LCL', erpValue: null,
+      note: 'categoria do Portal vazia',
+    })
+    for (const item of lcl.matched[0].diffs) expect(item.note).not.toMatch(/Portal\s+×/)
+    expect(lcl.matched[0].diffs.filter((item) => item.field === 'category' && item.counts)).toEqual([])
+
+    // Embarque sem categoria no ERP (INDEFINIDO) + Portal vazio: a pendencia e' a do Portal.
+    const undefinedErp = run({
+      rows: [fcl({ itemId: '1', refEmbarque: 'REF QUALQUER' })],
+      processes: [portalFcl({ category: '' })],
+    })
+    expect(oneDiff(undefinedErp, 'p-1', 'category')).toMatchObject({
+      kind: 'informativo', counts: false, erp: 'INDEFINIDO', note: 'categoria do Portal vazia',
+    })
+
+    // Consolidado casado pela REF no nome, com categoria vazia no Portal.
+    const con = run({
+      rows: [fcl({ itemId: '1', pedido: 9010, poRef: 'ALFA SEA 905-26', refEmbarque: 'CON CN 901-26' })],
+      processes: [makePortalProcess({ id: 'p-con', name: 'CON CN 901-26', category: '', purchaseOrders: [{ po: '9010' }] })],
+    })
+    const conDiff = oneDiff(con, 'p-con', 'category')
+    expect(conDiff).toMatchObject({
+      kind: 'informativo', counts: false, portal: '', erp: 'CONSOLIDADO', erpValue: null,
+      note: 'categoria do Portal vazia',
+    })
+    expect(JSON.stringify(con.matched[0].diffs)).not.toContain('Consolidado gravado como')
+  })
+
+  it('caso-real: CR-44 AEREO em minusculas: sem diff de navio e o BL e comparado pelo mawb', () => {
+    const result = run({
+      rows: [fcl({ itemId: '1', refEmbarque: 'DAP - ITAJAI', blAwb: '123-4567', vesselRaw: 'ALFA MAERSK 639W' })],
+      processes: [portalFcl({ category: 'aereo', mawb: '1234567', vesselName: 'OUTRO NAVIO' })],
+    })
+    expect(result.matched[0].category).toBe('AEREO')
+    expect(diffsOf(result, 'p-1', 'vessel')).toEqual([])
+    expect(diffsOf(result, 'p-1', 'category')).toEqual([])
+    const bl = oneDiff(result, 'p-1', 'bl')
+    expect(bl).toMatchObject({ kind: 'informativo', matchedField: 'mawb' })
+    expect(bl.portalFields).toEqual(['mawb', 'hawb'])
+  })
+
   it('lista do Portal vazia com embarque ativo: bloqueia, sem "so no ERP" em massa', () => {
     const result = run({ rows: [fcl({ itemId: '1' }), fcl({ itemId: '2', pedido: 9037, poRef: 'ALFA SEA 905-26' })], processes: [] })
     expect(result.blocked).toBe('lista_portal_vazia')
@@ -406,26 +478,54 @@ describe('casamento', () => {
     expect(codes(result)).toContain('match_ambiguo')
   })
 
-  it('desempate por nao arquivado: o processo vivo fica com o embarque, o arquivado vira so no Portal', () => {
+  it('caso-real: CR-37 desempate por nao arquivado: o processo vivo fica com o embarque; o arquivado preterido vira aviso, nao "so no Portal"', () => {
     const processes = [
       portalFcl({ id: 'p-arch', name: 'VELHO', processNumber: '9036', archived: true }),
       portalFcl({ id: 'p-live', name: 'NOVO', processNumber: '9036', archived: false }),
     ]
     const result = run({ rows: [fcl({ itemId: '1' })], processes })
     expect(result.matched.map((entry) => entry.processId)).toEqual(['p-live'])
-    expect(result.portalOnly).toEqual([
-      { processId: 'p-arch', processName: 'VELHO', category: 'FCL', archived: true },
-    ])
-    expect(result.summary).toMatchObject({ portalOnly: 1, portalOnlyArchived: 1 })
+    expect(result.portalOnly).toEqual([])
+    expect(result.summary).toMatchObject({ portalOnly: 0, portalOnlyArchived: 0, matched: 1, matchedArchived: 0 })
+    const warning = result.warnings.find((item) => item.code === 'processo_arquivado_preterido')
+    expect(warning).toBeTruthy()
+    expect(warning.ref).toEqual({
+      rowNumber: null, itemId: '', pedido: '', shipmentKey: 'BETA SEA 904-26', processId: 'p-arch',
+    })
+    expect(warning.message).toContain('"VELHO"')
+    expect(warning.message).toContain('BETA SEA 904-26')
+    expect(warning.message).toContain('processo ativo "NOVO"')
+    expect(codes(result).filter((code) => code === 'processo_arquivado_preterido')).toHaveLength(1)
     expect(codes(result)).not.toContain('embarque_em_varios_processos')
+    // So' o arquivado que perdeu o embarque gera o aviso; os demais, nao.
+    expect(codes(run({ rows: [fcl({ itemId: '1' })], processes: [processes[1]] }))).not.toContain(
+      'processo_arquivado_preterido'
+    )
   })
 
-  it('arquivado sozinho ainda casa; 2 processos vivos no mesmo embarque geram embarque_em_varios_processos', () => {
+  it('caso-real: CR-37 arquivado preterido por 2 processos vivos: o aviso lista os nomes dos ativos', () => {
+    const processes = [
+      portalFcl({ id: 'p-arch', name: 'VELHO', processNumber: '9036', archived: true }),
+      portalFcl({ id: 'p-a', name: 'A', processNumber: '9036' }),
+      portalFcl({ id: 'p-b', name: 'B', processNumber: '9036' }),
+    ]
+    const result = run({ rows: [fcl({ itemId: '1' })], processes })
+    expect(result.matched.map((entry) => entry.processId)).toEqual(['p-a', 'p-b'])
+    expect(result.portalOnly).toEqual([])
+    expect(result.warnings.find((item) => item.code === 'processo_arquivado_preterido').message).toContain(
+      'processo ativo "A; B"'
+    )
+    expect(codes(result)).toContain('embarque_em_varios_processos')
+  })
+
+  it('caso-real: CR-31 arquivado sozinho ainda casa e entra em matchedArchived; 2 processos vivos no mesmo embarque geram embarque_em_varios_processos', () => {
     const alone = run({
       rows: [fcl({ itemId: '1' })],
       processes: [portalFcl({ id: 'p-arch', name: 'VELHO', processNumber: '9036', archived: true })],
     })
     expect(alone.matched.map((entry) => [entry.processId, entry.archived])).toEqual([['p-arch', true]])
+    expect(alone.summary).toMatchObject({ matched: 1, matchedArchived: 1 })
+    expect(codes(alone)).not.toContain('processo_arquivado_preterido')
 
     const both = run({
       rows: [fcl({ itemId: '1' })],
@@ -744,6 +844,28 @@ describe('diferencas por campo', () => {
     expect(longerName.kind).toBe('divergente')
   })
 
+  it('caso-real: CR-43 viagem no meio do navio do Portal nao e "viagem parcial": o trecho do ERP so vale no comeco ou como trecho inteiro', () => {
+    const vesselDiff = (vesselRaw, portal) =>
+      oneDiff(run({ rows: [fcl({ itemId: '1', vesselRaw })], processes: [portalFcl(portal)] }), 'p-1', 'vessel')
+
+    // 'DOXE1' esta no MEIO de '0BDOXE1MA': nao e comeco nem trecho (mata o mutante `includes`).
+    const middle = vesselDiff('ALFA OSMIUM/DOXE1', { vesselName: 'ALFA OSMIUM', voyage: '0BDOXE1MA' })
+    expect(middle).toMatchObject({ kind: 'divergente', counts: true, applicable: true })
+    // Viagem composta: 'DOYW1' esta no meio de '0BDOYW1MA', que e' um trecho de '0BDOYW1MA/008W'.
+    const segmentMiddle = vesselDiff('DELTA SHIPPING CHILE/DOYW1', {
+      vesselName: 'DELTA SHIPPING CHILE',
+      voyage: '0BDOYW1MA/008W',
+    })
+    expect(segmentMiddle).toMatchObject({ kind: 'divergente', counts: true, applicable: true })
+    // Controles: o comeco da viagem continua informativo; o trecho inteiro, formato.
+    expect(vesselDiff('ALFA OSMIUM/0BDOX', { vesselName: 'ALFA OSMIUM', voyage: '0BDOXE1MA' })).toMatchObject({
+      kind: 'informativo', counts: false,
+    })
+    expect(vesselDiff('DELTA SHIPPING CHILE/0BDOYW1MA', { vesselName: 'DELTA SHIPPING CHILE', voyage: '0BDOYW1MA/008W' })).toMatchObject({
+      kind: 'formato', counts: false,
+    })
+  })
+
   it('erpValue do navio nunca leva voyage vazio (so o que o ERP informa)', () => {
     const noVoyageOnPortalEmpty = oneDiff(
       run({ rows: [fcl({ itemId: '1', vesselRaw: 'ZETA LONE' })], processes: [portalFcl()] }),
@@ -832,9 +954,39 @@ describe('diferencas por campo', () => {
     expect(oneDiff(run({ rows, processes: [portalFcl({ originLocation: 'Hamburg, Alemanha' })] }), 'p-1', 'origin').kind).toBe('formato')
     const informative = oneDiff(run({ rows, processes: [portalFcl({ originLocation: 'SANTOS' })] }), 'p-1', 'origin')
     expect(informative).toMatchObject({ kind: 'informativo', counts: false })
-    // sem origem na coluna, usa a dica da REF
-    const hinted = run({ rows: [fcl({ itemId: '1', origin: '', refEmbarque: 'FCL - CFR HAMBURG' })], processes: [portalFcl({ originLocation: 'HAMBURG' })] })
+    // sem origem na coluna, usa a dica da REF (so' nos incoterms de origem: FOB)
+    const hinted = run({ rows: [fcl({ itemId: '1', origin: '', refEmbarque: 'FCL - FOB HAMBURG' })], processes: [portalFcl({ originLocation: 'HAMBURG' })] })
     expect(diffsOf(hinted, 'p-1', 'origin')).toEqual([])
+  })
+
+  it('caso-real: CR-40 REF de incoterm C/D (CFR HAMBURG) nao vira dica de origem: sem origem na coluna e erp_sem_dado, sem contar', () => {
+    const cfr = run({
+      rows: [fcl({ itemId: '1', origin: '', refEmbarque: 'FCL - CFR HAMBURG' })],
+      processes: [portalFcl({ originLocation: 'HAMBURG' })],
+    })
+    expect(oneDiff(cfr, 'p-1', 'origin')).toMatchObject({ kind: 'erp_sem_dado', counts: false, portal: 'HAMBURG', erp: '' })
+    // Com a origem na coluna (POL), nada muda.
+    const column = run({
+      rows: [fcl({ itemId: '1', origin: 'HAMBURG', refEmbarque: 'FCL - CFR HAMBURG' })],
+      processes: [portalFcl({ originLocation: 'HAMBURG' })],
+    })
+    expect(diffsOf(column, 'p-1', 'origin')).toEqual([])
+    // LCL - FOB SHANGHAI continua sendo a consolidar (a dica FOB vale).
+    const hub = run({
+      rows: [
+        fcl({ itemId: '2', pedido: 9172, poRef: 'OMICRON SEA 907-26', exporter: 'OMICRON TRADING', refEmbarque: 'LCL -  FOB SHANGHAI', status: 'AG. PRONT. DA CARGA' }),
+      ],
+      processes: [portalFcl({ id: 'p-outro', name: 'OUTRA PO', processNumber: '9999' })],
+    })
+    expect(hub.erpOnly.map((item) => [item.shipmentKey, item.category])).toEqual([['OMICRON SEA 907-26', 'a_consolidar']])
+    // CIF SHANGHAI (grupo C) nao consolida la: deixa de ser a consolidar.
+    const cif = run({
+      rows: [
+        fcl({ itemId: '3', pedido: 9173, poRef: 'OMICRON SEA 908-26', exporter: 'OMICRON TRADING', refEmbarque: 'LCL - CIF SHANGHAI', status: 'AG. PRONT. DA CARGA' }),
+      ],
+      processes: [portalFcl({ id: 'p-outro', name: 'OUTRA PO', processNumber: '9999' })],
+    })
+    expect(cif.erpOnly[0].category).not.toBe('a_consolidar')
   })
 
   it('incoterm: diferente divergente, Portal vazio portal_sem_dado, igual ok; nao se aplica ao CON', () => {
@@ -1186,11 +1338,12 @@ describe('contrato do resultado', () => {
       source: 'teste', label: 'Fonte de teste', fileName: 'teste.xlsx', fetchedAt: '', rowCount: rows.length, generatedOn: SCENARIO_TODAY,
     })
     expect(Object.keys(result.summary)).toEqual([
-      'erpRows', 'shipments', 'activeShipments', 'matched', 'matchedWithDiffs', 'erpMissingFields', 'erpOnly',
-      'erpOnlyByCategory', 'portalOnly', 'portalOnlyArchived', 'warnings', 'warningsByCode',
+      'erpRows', 'shipments', 'activeShipments', 'matched', 'matchedArchived', 'matchedWithDiffs',
+      'erpMissingFields', 'erpOnly', 'erpOnlyByCategory', 'portalOnly', 'portalOnlyArchived', 'warnings',
+      'warningsByCode',
     ])
     expect(result.summary).toMatchObject({
-      erpRows: 10, shipments: 8, activeShipments: 7, matched: 3, matchedWithDiffs: 1, erpOnly: 5,
+      erpRows: 10, shipments: 8, activeShipments: 7, matched: 3, matchedArchived: 0, matchedWithDiffs: 1, erpOnly: 5,
       portalOnly: 2, portalOnlyArchived: 1,
     })
     for (const diff of result.matched.flatMap((entry) => entry.diffs)) {
@@ -1227,6 +1380,128 @@ describe('contrato do resultado', () => {
     expect(result.matched).toEqual([])
     expect(result.erpOnly).toEqual([])
     expect(result.portalOnly).toEqual([])
+  })
+
+  it('caso-real: CR-33 planilha so com o cabecalho: bloqueia com planilha_sem_linhas, sem "so no Portal" em massa', () => {
+    const processes = [portalFcl(), portalFcl({ id: 'p-2', name: 'OUTRO', processNumber: '9037', archived: true })]
+    const empty = run({ rows: [], processes })
+    expect(empty.blocked).toBe('planilha_sem_linhas')
+    expect(empty.blockedMessage).toBe(
+      'A planilha não tem linhas de dados (só o cabeçalho). Exporte de novo o relatório do DBCorp com os pedidos.'
+    )
+    expect(empty.matched).toEqual([])
+    expect(empty.erpOnly).toEqual([])
+    expect(empty.portalOnly).toEqual([])
+    expect(empty.summary).toMatchObject({ erpRows: 0, shipments: 0, matched: 0, erpOnly: 0, portalOnly: 0 })
+    expect(Object.keys(empty)).toEqual([
+      'blocked', 'blockedMessage', 'sourceInfo', 'summary', 'matched', 'erpOnly', 'portalOnly', 'warnings',
+    ])
+
+    // Do xlsx de verdade: cabecalho sem nenhuma linha de dados.
+    const parsed = parseDbcorpRows(looseRowsToMatrix([]))
+    expect(parsed.rows).toEqual([])
+    const fromHeaderOnly = runErpReconciliation({
+      loaded: { rows: parsed.rows, warnings: parsed.warnings, meta: { fileName: 'cabecalho.xlsx', rowCount: 0 } },
+      processes,
+      today: TODAY,
+      source: SOURCE,
+    })
+    expect(fromHeaderOnly.blocked).toBe('planilha_sem_linhas')
+    expect(fromHeaderOnly.portalOnly).toEqual([])
+    expect(fromHeaderOnly.summary.portalOnly).toBe(0)
+    expect(fromHeaderOnly.sourceInfo.fileName).toBe('cabecalho.xlsx')
+
+    // O nucleo direto, sem embarques, segue sem bloqueio (so' o runner bloqueia).
+    expect(reconcileErp(processes, [], { today: TODAY }).blocked).toBeNull()
+  })
+
+  it('caso-real: CR-36 coluna STATUS irreconhecivel: bloqueia com coluna_status_irreconhecivel e mensagem com STATUS', () => {
+    const rows = ['', 'EM TRANSITO', '', 'EM TRANSITO', 'EMBARCOU', 'CONCLUÍDO'].map((status, index) =>
+      fcl({ itemId: `ST-${index}`, pedido: 9700 + index, poRef: `ALFA SEA 97${index}-26`, status })
+    )
+    const result = run({ rows, processes: [portalFcl()] })
+    expect(result.blocked).toBe('coluna_status_irreconhecivel')
+    expect(result.blockedMessage).toContain('STATUS')
+    expect(result.blockedMessage).toContain('4 de 6')
+    expect(result.matched).toEqual([])
+    expect(result.erpOnly).toEqual([])
+    expect(result.portalOnly).toEqual([])
+    expect(result.summary).toMatchObject({ erpRows: 6, shipments: 0, portalOnly: 0 })
+    // Os avisos por embarque seguem na saida, marcados como "nao concluido" (sem embarques no bloqueio).
+    const unknown = result.warnings.filter((warning) => warning.code === 'status_desconhecido')
+    expect(unknown.length).toBeGreaterThan(0)
+    expect(unknown.every((warning) => warning.concludedShipment === false)).toBe(true)
+
+    // Metade ou menos nao bloqueia.
+    const ok = ['', 'EM TRANSITO', '', 'EMBARCOU', 'EMBARCOU', 'CONCLUÍDO'].map((status, index) =>
+      fcl({ itemId: `ST-${index}`, pedido: 9700 + index, poRef: `ALFA SEA 97${index}-26`, status })
+    )
+    expect(run({ rows: ok, processes: [portalFcl()] }).blocked).toBeNull()
+  })
+
+  it('caso-real: CR-41 avisos de embarque concluido saem com concludedShipment true; os de embarque ativo, false', () => {
+    const rows = [
+      // CONCLUIDO com 2 ETDs: conflito_no_grupo (pela shipmentKey).
+      fcl({ itemId: 'C1', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46301 }),
+      fcl({ itemId: 'C2', pedido: 9801, poRef: 'ALFA SEA 981-26', status: 'CONCLUÍDO', etd: 46281 }),
+      // CONCLUIDO com REF desconhecida: ref_desconhecida (pelo rowNumber da linha).
+      fcl({ itemId: 'C3', pedido: 9802, poRef: 'BETA SEA 982-26', status: 'CONCLUÍDO', refEmbarque: 'XYZ' }),
+      // Ativo, REF aerea inferida: aereo_inferido.
+      fcl({ itemId: 'C4', pedido: 9803, poRef: 'GAMA SEA 983-26', status: 'EMBARCOU', refEmbarque: 'DAP - ITAJAI' }),
+    ]
+    const result = run({ rows, processes: [portalFcl({ name: 'SEM ERP', processNumber: '9999' })] })
+    const flagOf = (code) => result.warnings.filter((warning) => warning.code === code).map((warning) => warning.concludedShipment)
+    expect(flagOf('conflito_no_grupo')).toEqual([true])
+    expect(flagOf('ref_desconhecida')).toEqual([true])
+    expect(flagOf('aereo_inferido')).toEqual([false])
+    for (const warning of result.warnings) {
+      expect(typeof warning.concludedShipment, warning.code).toBe('boolean')
+      // O `ref` continua com as 5 chaves.
+      expect(Object.keys(warning.ref)).toEqual(['rowNumber', 'itemId', 'pedido', 'shipmentKey', 'processId'])
+    }
+    // Todos os avisos continuam na saida (o filtro e' da tela).
+    expect(result.summary.warnings).toBe(result.warnings.length)
+  })
+
+  it('caso-real: CR-41 a 1a busca que achar embarque decide (chave, linha, item, pedido); varios embarques: so true se todos concluidos', () => {
+    // pedido_com_varias_pos: o aviso so tem o PEDIDO; 2 POs no mesmo PEDIDO = 2 embarques.
+    const both = (statusB) => [
+      fcl({ itemId: 'P1', pedido: 9810, poRef: 'ALFA SEA 991-26', status: 'CONCLUÍDO' }),
+      fcl({ itemId: 'P2', pedido: 9810, poRef: 'BETA SEA 992-26', status: statusB }),
+    ]
+    const processes = [portalFcl({ name: 'SEM ERP', processNumber: '9999' })]
+    const flagOf = (rows, code) =>
+      run({ rows, processes }).warnings.filter((warning) => warning.code === code).map((warning) => warning.concludedShipment)
+    expect(flagOf(both('CONCLUÍDO'), 'pedido_com_varias_pos')).toEqual([true])
+    expect(flagOf(both('EMBARCOU'), 'pedido_com_varias_pos')).toEqual([false])
+
+    // Avisos montados a mao (como os do leitor), para exercitar cada busca.
+    const loose = [
+      { rowNumber: 2, ...fcl({ itemId: 'R1', pedido: 9820, poRef: 'ALFA SEA 982-26', status: 'CONCLUÍDO' }) },
+      { rowNumber: 3, ...fcl({ itemId: 'R2', pedido: 9821, poRef: 'BETA SEA 983-26', status: 'EMBARCOU' }) },
+    ]
+    const flagFor = (ref) =>
+      runErpReconciliation({
+        loaded: { rows: loose, warnings: [makeErpWarning('aviso_de_teste', 'aviso de teste', ref)], meta: {} },
+        processes,
+        today: TODAY,
+        source: SOURCE,
+      }).warnings.find((warning) => warning.code === 'aviso_de_teste').concludedShipment
+    expect(flagFor({ shipmentKey: 'ALFA SEA 982-26' })).toBe(true)
+    expect(flagFor({ shipmentKey: 'BETA SEA 983-26' })).toBe(false)
+    // A chave que nao existe cai para a linha; a chave que existe decide sozinha.
+    expect(flagFor({ shipmentKey: 'NAO EXISTE', rowNumber: 2 })).toBe(true)
+    expect(flagFor({ shipmentKey: 'BETA SEA 983-26', rowNumber: 2 })).toBe(false)
+    expect(flagFor({ rowNumber: 2 })).toBe(true)
+    expect(flagFor({ rowNumber: 3 })).toBe(false)
+    expect(flagFor({ itemId: 'R1' })).toBe(true)
+    expect(flagFor({ itemId: 'R2' })).toBe(false)
+    expect(flagFor({ pedido: 'PO-9820' })).toBe(true)
+    expect(flagFor({ pedido: '9821' })).toBe(false)
+    // Sem embarque correspondente (ou sem referencia): false.
+    expect(flagFor({ rowNumber: 99 })).toBe(false)
+    expect(flagFor({ itemId: 'NAO-EXISTE', pedido: '1234' })).toBe(false)
+    expect(flagFor({})).toBe(false)
   })
 
   it('saida ordenada e deterministica: embaralhar linhas e processos nao muda o resultado', () => {

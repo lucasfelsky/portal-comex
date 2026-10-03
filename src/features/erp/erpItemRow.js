@@ -51,6 +51,7 @@ const DATE_WARNING_TEXT = {
   data_fora_do_intervalo: 'data fora do intervalo (2000 a 2099)',
   data_com_hora: 'data com hora (a hora foi descartada)',
   data_com_fuso: 'data com fuso horário (não interpretada)',
+  data_ambigua: 'data em texto DD/MM/AAAA com dia até 12 (lida como dia/mês)',
 }
 
 function describeRow(rowNumber, itemId) {

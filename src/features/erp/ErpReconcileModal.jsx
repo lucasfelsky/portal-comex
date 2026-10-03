@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Modal from '../../components/Modal'
 import TabButton from '../../components/TabButton'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
@@ -50,6 +50,13 @@ function SummaryItem({ label, value, muted = false }) {
   )
 }
 
+// "27" ou, com casados arquivados, "27 (1 arquivado)" / "27 (2 arquivados)".
+function formatMatched(summary) {
+  const archived = summary.matchedArchived ?? 0
+  if (archived <= 0) return summary.matched
+  return `${summary.matched} (${archived} ${archived === 1 ? 'arquivado' : 'arquivados'})`
+}
+
 function SummaryTab({ result }) {
   const { summary, sourceInfo } = result
   return (
@@ -64,7 +71,7 @@ function SummaryTab({ result }) {
         <SummaryItem label="Linhas do ERP" value={summary.erpRows} />
         <SummaryItem label="Embarques no ERP" value={summary.shipments} />
         <SummaryItem label="Embarques ativos" value={summary.activeShipments} />
-        <SummaryItem label="Processos casados" value={summary.matched} />
+        <SummaryItem label="Processos casados" value={formatMatched(summary)} />
         <SummaryItem label="Casados com divergências" value={summary.matchedWithDiffs} />
         <SummaryItem label="Campos sem dado no ERP" value={summary.erpMissingFields} />
         <SummaryItem label="Só no ERP" value={summary.erpOnly} />
@@ -217,42 +224,74 @@ function PortalOnlyTab({ result }) {
   )
 }
 
-function WarningsTab({ result }) {
-  if (result.warnings.length === 0) {
-    return (
+// Avisos de embarques ja concluidos no ERP ficam ocultos por padrao (ruido do
+// historico); o export leva todos. `visibleWarnings` ja vem filtrada.
+function WarningsTab({ totalCount, visibleWarnings, concludedCount, showConcluded, onToggleConcluded }) {
+  const hiddenCount = showConcluded ? 0 : concludedCount
+  let list
+  if (visibleWarnings.length === 0) {
+    list = (
       <div className="empty-state" role="status">
-        <strong>Nenhum aviso.</strong>
+        <strong>{totalCount === 0 ? 'Nenhum aviso.' : 'Nenhum aviso de embarque ativo.'}</strong>
       </div>
     )
+  } else {
+    list = (
+      <ul className="erp-reconcile__list">
+        {visibleWarnings.map((warning, index) => (
+          <li key={`${warning.code}-${index}`} className="erp-reconcile__card">
+            <div className="erp-reconcile__card-head">
+              <span className="inline-badge inline-badge--warn">{warning.code}</span>
+              <span>{warning.message}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
   }
+  if (concludedCount === 0) return list
+
   return (
-    <ul className="erp-reconcile__list">
-      {result.warnings.map((warning, index) => (
-        <li key={`${warning.code}-${index}`} className="erp-reconcile__card">
-          <div className="erp-reconcile__card-head">
-            <span className="inline-badge inline-badge--warn">{warning.code}</span>
-            <span>{warning.message}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="erp-reconcile__section">
+      {hiddenCount > 0 ? (
+        <p className="erp-reconcile__muted">
+          {hiddenCount === 1
+            ? '1 aviso de embarque concluído oculto.'
+            : `${hiddenCount} avisos de embarques concluídos ocultos.`}
+        </p>
+      ) : null}
+      <label className="erp-reconcile__toggle">
+        <input
+          type="checkbox"
+          checked={showConcluded}
+          onChange={(event) => onToggleConcluded(event.target.checked)}
+        />
+        <span>Mostrar avisos de embarques concluídos ({concludedCount})</span>
+      </label>
+      {list}
+    </div>
   )
 }
 
 // So' renderiza o resultado (sem estado de fonte/arquivo): abas por TabButton.
 export function ErpReconcileResults({ result, showMinor = false }) {
   const [tab, setTab] = useState('summary')
+  const [showConcludedWarnings, setShowConcludedWarnings] = useState(false)
 
   if (!result) return null
   if (result.blocked) {
     return <div className="error-banner">{result.blockedMessage || PORTAL_EMPTY_MESSAGE}</div>
   }
 
+  const concludedCount = result.warnings.filter((warning) => warning.concludedShipment).length
+  const visibleWarnings = result.warnings.filter(
+    (warning) => showConcludedWarnings || !warning.concludedShipment
+  )
   const counts = {
     diffs: result.matched.filter((entry) => entry.diffs.some((diff) => isVisibleDiff(diff, showMinor))).length,
     erpOnly: result.erpOnly.length,
     portalOnly: result.portalOnly.length,
-    warnings: result.warnings.length,
+    warnings: visibleWarnings.length,
   }
 
   return (
@@ -269,7 +308,15 @@ export function ErpReconcileResults({ result, showMinor = false }) {
       {tab === 'diffs' ? <DiffsTab result={result} showMinor={showMinor} /> : null}
       {tab === 'erpOnly' ? <ErpOnlyTab result={result} /> : null}
       {tab === 'portalOnly' ? <PortalOnlyTab result={result} /> : null}
-      {tab === 'warnings' ? <WarningsTab result={result} /> : null}
+      {tab === 'warnings' ? (
+        <WarningsTab
+          totalCount={result.warnings.length}
+          visibleWarnings={visibleWarnings}
+          concludedCount={concludedCount}
+          showConcluded={showConcludedWarnings}
+          onToggleConcluded={setShowConcludedWarnings}
+        />
+      ) : null}
     </div>
   )
 }
@@ -283,6 +330,9 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   const [result, setResult] = useState(null)
   const [showMinor, setShowMinor] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [selectedFileName, setSelectedFileName] = useState('')
+  const fileLabelId = useId()
+  const fileStatusId = useId()
   const fileInputRef = useRef(null)
   const runIdRef = useRef(0)
   const isMountedRef = useRef(true)
@@ -299,6 +349,7 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   const source = sourceList.find((item) => item.id === sourceId) ?? sourceList[0] ?? null
   const isPortalEmpty = processList.length === 0
   const isLoading = phase === 'loading'
+  const isFileDisabled = isLoading || isPortalEmpty
 
   async function runSource(input) {
     if (!source || isPortalEmpty) return
@@ -328,6 +379,7 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
   async function handleFileChange(event) {
     const file = event.target.files?.[0]
     if (!file) return
+    setSelectedFileName(file.name || '')
     try {
       await runSource(file)
     } finally {
@@ -358,6 +410,7 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
     setResult(null)
     setShowMinor(false)
     setIsExporting(false)
+    setSelectedFileName('')
     onClose?.()
   }
 
@@ -385,16 +438,29 @@ export default function ErpReconcileModal({ open, onClose, processes, sources })
           ) : null}
 
           {source && source.inputKind === 'file' ? (
-            <label className="erp-reconcile__field">
-              <span>Arquivo ({source.label})</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={source.accept}
-                onChange={handleFileChange}
-                disabled={isLoading || isPortalEmpty}
-              />
-            </label>
+            <div className="erp-reconcile__field erp-reconcile__file">
+              <span id={fileLabelId}>Arquivo ({source.label})</span>
+              <div className="file-picker">
+                <label
+                  className={`ghost-button file-picker__button${isFileDisabled ? ' file-picker__button--disabled' : ''}`}
+                >
+                  <input
+                    className="file-picker__input"
+                    ref={fileInputRef}
+                    type="file"
+                    accept={source.accept}
+                    onChange={handleFileChange}
+                    disabled={isFileDisabled}
+                    aria-labelledby={fileLabelId}
+                    aria-describedby={fileStatusId}
+                  />
+                  Escolher arquivo
+                </label>
+                <span className="file-picker__status" id={fileStatusId}>
+                  {selectedFileName || 'Nenhum arquivo escolhido'}
+                </span>
+              </div>
+            </div>
           ) : null}
 
           {source && source.inputKind === 'request' ? (
