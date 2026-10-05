@@ -12733,3 +12733,28 @@ body {
     margin-top: 0;
   }
 }
+
+/* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
+   complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
+   AppLayout); nada depende de animationend/transitionend. Fica no fim para
+   vencer .toast/.toast--closing (mesma especificidade). */
+@media (min-width: 1041px) and (prefers-reduced-motion: reduce) {
+  .notifications__panel,
+  .notifications-backdrop,
+  .modal-backdrop,
+  .news-modal-backdrop,
+  .modal,
+  .toast {
+    animation: none;
+  }
+
+  .notifications__panel--closing,
+  .notifications-backdrop--closing,
+  .modal--sheet-closing,
+  .modal-backdrop--closing,
+  .toast--closing {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
