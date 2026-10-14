@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ERP_FORM_APPLY_FIELDS,
+  allowedErpApplyOperations,
   buildErpFieldHints,
   buildErpFormHints,
 } from '../../src/features/erp/erpReference.js'
@@ -457,5 +458,47 @@ describe('buildErpFormHints - sem referencia utilizavel e sem mutacao', () => {
       'destination', 'etd', 'eta', 'vesselName', 'voyage', 'houseBl', 'duimpNumber',
       'duimpRegisteredAt', 'incoterm', 'supplierName', 'originLocation', 'purchaseOrders', 'items',
     ])
+  })
+})
+
+describe('allowedErpApplyOperations', () => {
+  it('todas validas -> devolve o PROPRIO array (mesma referencia)', () => {
+    const apply = [
+      { field: 'vesselName', value: 'NAVIO TESTE' },
+      { field: 'voyage', value: '001E' },
+    ]
+    expect(allowedErpApplyOperations(apply)).toBe(apply)
+  })
+
+  it('mistura -> so as operacoes da allowlist', () => {
+    const apply = [
+      { field: 'processStatus', value: 'Entregue' },
+      { field: 'category', value: 'FCL' },
+      { field: 'processNumber', value: '9999' },
+      { field: 'demurrageDailyRateUsd', value: 100 },
+      { field: 'eta', value: '2026-10-20' },
+    ]
+    expect(allowedErpApplyOperations(apply)).toEqual([{ field: 'eta', value: '2026-10-20' }])
+  })
+
+  it('operacoes malformadas -> null', () => {
+    for (const bad of [null, 'eta', { value: 'x' }, { field: 42, value: 'x' }, { field: 'eta' }, ['eta', 'x'], { field: '__proto__', value: {} }]) {
+      expect(allowedErpApplyOperations([bad])).toBeNull()
+    }
+  })
+
+  it('apply nao-array -> null', () => {
+    for (const bad of [null, undefined, {}, { field: 'eta', value: 'x' }, 'eta']) {
+      expect(allowedErpApplyOperations(bad)).toBeNull()
+    }
+  })
+
+  it('lista so de proibidos -> null', () => {
+    expect(
+      allowedErpApplyOperations([
+        { field: 'processStatus', value: 'Entregue' },
+        { field: 'category', value: 'FCL' },
+      ])
+    ).toBeNull()
   })
 })

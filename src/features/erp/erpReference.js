@@ -423,6 +423,24 @@ export const ERP_FORM_APPLY_FIELDS = [
   'items',
 ]
 
+const ERP_FORM_APPLY_FIELD_SET = new Set(ERP_FORM_APPLY_FIELDS)
+
+// Defesa em profundidade do clique no chip: so' operacoes `{ field, value }`
+// bem formadas e com `field` na allowlist. Todas validas -> o PROPRIO array;
+// nenhuma valida (ou `apply` nao-array) -> null (= so' aviso).
+export function allowedErpApplyOperations(apply) {
+  if (!Array.isArray(apply)) return null
+  const allowed = apply.filter(
+    (operation) =>
+      isRecord(operation) &&
+      typeof operation.field === 'string' &&
+      ERP_FORM_APPLY_FIELD_SET.has(operation.field) &&
+      operation.value !== undefined
+  )
+  if (allowed.length === 0) return null
+  return allowed.length === apply.length ? apply : allowed
+}
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const SUFFIX_BAD_DATE = ' · data do ERP em formato inesperado'
 const SUFFIX_AIR_BL = ' · Aéreo: confira se é MAWB ou HAWB e preencha à mão'
