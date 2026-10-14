@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import ErpHint from '../erp/ErpHint'
+import { allowedErpApplyOperations } from '../erp/erpReference'
 import { focusField } from '../../utils/fieldErrors'
 
 // Aviso "ERP" do formulario de edicao (so' admin): envolve UM campo e mostra o
@@ -7,6 +8,8 @@ import { focusField } from '../../utils/fieldErrors'
 // (`onDraftChange`, o mesmo callback de cada campo); nada e' persistido ate o
 // "Salvar alterações". O chip fica FORA do <label>: o <button> e' rotulavel e,
 // dentro do label, viraria o controle rotulado (o input perderia o nome).
+// A allowlist de campos (`ERP_FORM_APPLY_FIELDS`) e' reaplicada aqui, no clique:
+// so' o que passa por `allowedErpApplyOperations` e' gravado; sem nada valido, o chip vira so' aviso.
 //
 // `active` = o formulario esta com referencia do ERP (modo edicao). Ativo, o
 // wrapper existe SEMPRE (com ou sem aviso): trocar a arvore quando o chip
@@ -40,7 +43,7 @@ function ErpFormFieldHintView({ hint, onDraftChange, children }) {
     else target.focus()
   })
 
-  const apply = Array.isArray(hint?.apply) ? hint.apply : null
+  const apply = allowedErpApplyOperations(hint?.apply)
 
   function handleApply() {
     if (!apply) return
