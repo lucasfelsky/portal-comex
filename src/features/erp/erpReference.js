@@ -4,7 +4,7 @@
 // avisos "ERP" do detalhe do processo. Nao le rede, nao grava e nao importa
 // servico (guarda em `erpReadOnlyGuard.test.js`). Camada: erpText + reconcileErp
 // <- erpReference.
-import { cleanCell } from './erpText.js'
+import { cleanCell, foldText } from './erpText.js'
 import {
   ERP_MATCH_RULES,
   ERP_REFERENCE_CONFLICT_FIELDS,
@@ -344,11 +344,22 @@ function purchaseOrderHint(po, parts, stampText) {
 //   hint = { kind, ariaLabel, text, portalFields }
 // Hint de outro snapshot, sem referencia ou sem diferenca acesa -> mapas vazios.
 export function buildErpFieldHints(process, reference) {
-  const empty = () => ({ fields: {}, po: {}, quantity: {} })
+  const scan = scanErpHints(process, reference)
+  if (!scan) return { fields: {}, po: {}, quantity: {} }
+  const base = (entries) =>
+    Object.fromEntries(Object.entries(entries).map(([key, entry]) => [key, entry.hint]))
+  return { fields: base(scan.fields), po: base(scan.po), quantity: base(scan.quantity) }
+}
+
+// Varredura unica dos diffs acesos, usada pelo detalhe (`buildErpFieldHints`) e
+// pelo formulario (`buildErpFormHints`). Cada entrada guarda o aviso base e os
+// diffs de origem (o formulario deriva o valor aplicavel deles). null = sem
+// referencia utilizavel (outro snapshot, hint ausente, processo invalido).
+function scanErpHints(process, reference) {
   const snapshot = reference?.snapshot
   const hint = reference?.hint
-  if (!isRecord(process) || !isRecord(snapshot) || !isRecord(hint)) return empty()
-  if (typeof hint.snapshotId !== 'string' || hint.snapshotId !== snapshot.snapshotId) return empty()
+  if (!isRecord(process) || !isRecord(snapshot) || !isRecord(hint)) return null
+  if (typeof hint.snapshotId !== 'string' || hint.snapshotId !== snapshot.snapshotId) return null
 
   const stamp = formatErpReferenceStamp(snapshot.updatedAtMs)
   const stampText = stamp ? ` · planilha de ${stamp}` : ''
@@ -359,25 +370,230 @@ export function buildErpFieldHints(process, reference) {
   for (const diff of diffProcessAgainstReference(process, hint)) {
     if (!ERP_HINT_KINDS.includes(diff.kind)) continue
     if (diff.field === 'quantity') {
-      if (diff.scope) quantity[`${diff.scope.poKey}|${diff.scope.nameKey}`] = quantityHint(diff, stampText)
+      if (diff.scope) {
+        quantity[`${diff.scope.poKey}|${diff.scope.nameKey}`] = { hint: quantityHint(diff, stampText), diff }
+      }
       continue
     }
     if ((diff.field === 'poReference' || diff.field === 'supplier') && diff.scope) {
       const poKey = diff.scope.poKey
-      if (!poParts.has(poKey)) poParts.set(poKey, { po: diff.scope.po, parts: [] })
+      if (!poParts.has(poKey)) poParts.set(poKey, { po: diff.scope.po, parts: [], diffs: [] })
       const prefix = diff.field === 'poReference' ? 'Ref.' : 'Fornecedor'
-      poParts.get(poKey).parts.push({
+      const group = poParts.get(poKey)
+      group.parts.push({
         text: `${prefix} ${clipForDisplay(diff.erp)}`,
         isEmpty: diff.kind === 'portal_sem_dado',
       })
+      group.diffs.push(diff)
       continue
     }
     const target = fieldTargetOf(diff)
-    if (target) fields[target] = fieldHint(diff, target, stampText)
+    if (target) fields[target] = { hint: fieldHint(diff, target, stampText), diff, target }
   }
 
   const po = Object.fromEntries(
-    [...poParts].map(([poKey, group]) => [poKey, purchaseOrderHint(group.po, group.parts, stampText)])
+    [...poParts].map(([poKey, group]) => [
+      poKey,
+      { hint: purchaseOrderHint(group.po, group.parts, stampText), diffs: group.diffs },
+    ])
   )
-  return { fields, po, quantity }
+  return { fields, po, quantity, shipment: toErpReferenceShipment(hint.shipment) }
+}
+
+// ---------------------------------------------------------------------------
+// Avisos "ERP" do formulario de edicao (clique preenche o campo)
+// ---------------------------------------------------------------------------
+
+// Campos do rascunho que o clique no chip pode gravar (o `handleDraftChange` da
+// pagina cuida dos efeitos colaterais de cada um). Nunca status, categoria, nº
+// do processo/pedido, MAWB/HAWB nem campo financeiro.
+export const ERP_FORM_APPLY_FIELDS = [
+  'destination',
+  'etd',
+  'eta',
+  'vesselName',
+  'voyage',
+  'houseBl',
+  'duimpNumber',
+  'duimpRegisteredAt',
+  'incoterm',
+  'supplierName',
+  'originLocation',
+  'purchaseOrders',
+  'items',
+]
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+const SUFFIX_BAD_DATE = ' · data do ERP em formato inesperado'
+const SUFFIX_AIR_BL = ' · Aéreo: confira se é MAWB ou HAWB e preencha à mão'
+const SUFFIX_DUIMP_HOUR = ' · a hora entra como 00:00; ajuste se precisar'
+const SUFFIX_INCOTERM = ' · fora da lista de Incoterms do Portal'
+const SUFFIX_PO_EXTRA = ' · sobram POs no Portal: remova à mão se for o caso'
+
+const hasValue = (value) => typeof value === 'string' && cleanCell(value) !== ''
+const op = (field, value) => ({ field, value })
+
+// Resultado de um alvo: `apply` (ou null = so' aviso) e o texto extra do motivo.
+const applicable = (apply, suffix = '') => ({ apply, suffix })
+const notApplicable = (suffix = '') => ({ apply: null, suffix })
+
+function purchaseOrderKeyOf(entry) {
+  return erpOrderKey(typeof entry === 'string' ? entry : entry?.po)
+}
+
+function purchaseOrderListOf(draft) {
+  return Array.isArray(draft?.purchaseOrders) ? draft.purchaseOrders : []
+}
+
+// Pedidos do ERP ausentes no Portal -> POs novas (ref. e fornecedor ja' preenchidos).
+function missingPurchaseOrders(draft, shipment) {
+  const portalKeys = new Set(purchaseOrderListOf(draft).map(purchaseOrderKeyOf))
+  const byKey = new Map()
+  for (const order of shipment.orders) {
+    const key = erpOrderKey(order.pedido)
+    if (key === '') continue
+    if (!byKey.has(key)) byKey.set(key, [])
+    byKey.get(key).push(order)
+  }
+  const missing = []
+  for (const [key, orders] of byKey) {
+    if (portalKeys.has(key)) continue
+    missing.push({
+      po: cleanCell(orders[0].pedido),
+      reference: cleanCell(orders.find((order) => hasValue(order.poRef))?.poRef),
+      supplierName: cleanCell(orders.find((order) => hasValue(order.exporter))?.exporter),
+    })
+  }
+  return { missing }
+}
+
+// Valor aplicavel de um campo simples (alvos de `fieldTargetOf`).
+function applyForTarget(entry, draft, shipment, incotermOptions) {
+  const { target, diff } = entry
+  const erpValue = diff.erpValue
+  switch (target) {
+    case 'destination':
+      return hasValue(erpValue) ? applicable([op('destination', erpValue)]) : notApplicable()
+    case 'etd':
+    case 'eta':
+      return typeof erpValue === 'string' && ISO_DATE.test(erpValue)
+        ? applicable([op(target, erpValue)])
+        : notApplicable(SUFFIX_BAD_DATE)
+    case 'vessel': {
+      const ops = []
+      if (isRecord(erpValue) && hasValue(erpValue.vesselName)) ops.push(op('vesselName', erpValue.vesselName))
+      // Nunca manda `voyage: ''`: so' leva a viagem que o ERP informa.
+      if (isRecord(erpValue) && hasValue(erpValue.voyage)) ops.push(op('voyage', erpValue.voyage))
+      return ops.length > 0 ? applicable(ops) : notApplicable()
+    }
+    case 'bl':
+      // O ERP tem uma coluna so' (BL/AWB): no aereo nao da' para saber se e' MAWB ou HAWB.
+      if (foldText(draft.category) === 'AEREO') return notApplicable(SUFFIX_AIR_BL)
+      return hasValue(erpValue) ? applicable([op('houseBl', erpValue)]) : notApplicable()
+    case 'duimpNumber':
+      return hasValue(erpValue) ? applicable([op('duimpNumber', erpValue)]) : notApplicable()
+    case 'duimpRegisteredAt': {
+      if (typeof erpValue !== 'string' || !ISO_DATE.test(erpValue)) return notApplicable(SUFFIX_BAD_DATE)
+      const hour = /T(\d{2}:\d{2})/.exec(cleanCell(draft.duimpRegisteredAt))
+      return hour
+        ? applicable([op('duimpRegisteredAt', `${erpValue}T${hour[1]}`)])
+        : applicable([op('duimpRegisteredAt', `${erpValue}T00:00`)], SUFFIX_DUIMP_HOUR)
+    }
+    case 'incoterm': {
+      const option = (Array.isArray(incotermOptions) ? incotermOptions : []).find(
+        (candidate) => foldText(candidate) === foldText(erpValue)
+      )
+      return option ? applicable([op('incoterm', option)]) : notApplicable(SUFFIX_INCOTERM)
+    }
+    case 'supplier':
+      return hasValue(erpValue) ? applicable([op('supplierName', erpValue)]) : notApplicable()
+    case 'origin':
+      return hasValue(erpValue) ? applicable([op('originLocation', erpValue)]) : notApplicable()
+    case 'poSet': {
+      // So' acrescenta as POs que faltam; as que sobram nao sao removidas (remover
+      // desvincula itens e a sobra pode ser legitima).
+      const { missing } = missingPurchaseOrders(draft, shipment)
+      if (missing.length > 0) return applicable([op('purchaseOrders', [...purchaseOrderListOf(draft), ...missing])])
+      return notApplicable(SUFFIX_PO_EXTRA)
+    }
+    default:
+      return notApplicable()
+  }
+}
+
+// Ref./fornecedor de UMA PO do consolidado: troca so' a PO alvo e so' os campos acesos.
+function applyForPurchaseOrder(poKey, entry, draft) {
+  const changes = {}
+  for (const diff of entry.diffs) {
+    if (!hasValue(diff.erpValue)) continue
+    changes[diff.field === 'poReference' ? 'reference' : 'supplierName'] = diff.erpValue
+  }
+  if (Object.keys(changes).length === 0) return notApplicable()
+  const list = purchaseOrderListOf(draft)
+  if (!list.some((order) => purchaseOrderKeyOf(order) === poKey)) return notApplicable()
+  let done = false
+  const next = list.map((order) => {
+    if (done || purchaseOrderKeyOf(order) !== poKey) return order
+    done = true
+    return {
+      po: typeof order === 'string' ? order : order.po,
+      reference: typeof order === 'string' ? '' : order?.reference ?? '',
+      supplierName: typeof order === 'string' ? '' : order?.supplierName ?? '',
+      ...changes,
+    }
+  })
+  return applicable([op('purchaseOrders', next)])
+}
+
+// Quantidade: o ERP da' a SOMA do item. Com 1 linha so' no grupo preenche essa
+// linha; com 2 ou mais nao distribui (inventaria dado por lote/contêiner).
+function applyForQuantity(groupKey, entry, draft) {
+  const erpValue = entry.diff.erpValue
+  if (typeof erpValue !== 'number' || !Number.isFinite(erpValue)) return notApplicable()
+  const isConsolidated = foldText(draft.category) === 'CONSOLIDADO'
+  const items = Array.isArray(draft.items) ? draft.items : []
+  const lines = []
+  items.forEach((item, index) => {
+    if (cleanCell(item?.commercialName ?? item?.name) === '') return
+    if (erpItemGroupKey(item, isConsolidated) === groupKey) lines.push(index)
+  })
+  if (lines.length === 0) return notApplicable()
+  if (lines.length > 1) return notApplicable(` · o Portal tem ${lines.length} linhas deste item: ajuste à mão`)
+  const target = lines[0]
+  return applicable([op('items', items.map((item, index) => (index === target ? { ...item, quantity: erpValue } : item)))])
+}
+
+function withApply(hint, { apply, suffix }) {
+  return { ...hint, text: `${hint.text}${suffix}`, apply }
+}
+
+// Mesmo mapa de `buildErpFieldHints`, para o RASCUNHO do formulario, com o que o
+// clique no chip grava: cada aviso ganha `apply: Array<{ field, value }> | null`
+// (null = so' aviso; o texto ganha o motivo). Recalculado a cada alteracao do
+// rascunho, entao o chip some quando o campo passa a bater com o ERP. Nunca muta
+// `draft`. `incotermOptions` = lista de Incoterms do formulario.
+export function buildErpFormHints(draft, reference, { incotermOptions = [] } = {}) {
+  const scan = scanErpHints(draft, reference)
+  if (!scan) return { fields: {}, po: {}, quantity: {} }
+  const { shipment } = scan
+  return {
+    fields: Object.fromEntries(
+      Object.entries(scan.fields).map(([target, entry]) => [
+        target,
+        withApply(entry.hint, applyForTarget(entry, draft, shipment, incotermOptions)),
+      ])
+    ),
+    po: Object.fromEntries(
+      Object.entries(scan.po).map(([poKey, entry]) => [
+        poKey,
+        { ...entry.hint, apply: applyForPurchaseOrder(poKey, entry, draft).apply },
+      ])
+    ),
+    quantity: Object.fromEntries(
+      Object.entries(scan.quantity).map(([groupKey, entry]) => [
+        groupKey,
+        withApply(entry.hint, applyForQuantity(groupKey, entry, draft)),
+      ])
+    ),
+  }
 }

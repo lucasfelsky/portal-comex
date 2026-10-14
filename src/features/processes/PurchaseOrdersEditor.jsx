@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MAX_PURCHASE_ORDERS, getPurchaseOrderNumbers, normalizePurchaseOrders } from './purchaseOrders'
 import { getFieldErrorId } from '../../utils/fieldErrors'
+import ErpFormFieldHint from './ErpFormFieldHint'
 
 // F17.2d-2 (D-7): editor de `purchaseOrders[]` (POs do CONSOLIDADO) - cada
 // PO agora e' um objeto `{ po, reference, supplierName }`. Linha de adicao
@@ -10,7 +11,17 @@ import { getFieldErrorId } from '../../utils/fieldErrors'
 // editaveis in-place (rename de `po` fora de escopo) + "Remover" por `po`.
 // Emite a lista CRUA (a pagina normaliza com `trimText: false`). So' importa
 // de `./purchaseOrders` (mesma regra de import de `LicensesEditor.jsx`).
-export default function PurchaseOrdersEditor({ value, onChange, disabled = false, errors = {} }) {
+// `erpHintFor(po) -> hint | null` e `onErpApply(field, value)` (opcionais, so' admin
+// em edicao): aviso "ERP" de Ref./Fornecedor de cada PO, abaixo da linha dela.
+export default function PurchaseOrdersEditor({
+  value,
+  onChange,
+  disabled = false,
+  errors = {},
+  erpHintFor = null,
+  onErpApply,
+}) {
+  const erpActive = typeof erpHintFor === 'function'
   const purchaseOrders = Array.isArray(value) ? value : []
   const groupDomId = 'process-field-purchaseOrders'
   const groupError = errors.purchaseOrders
@@ -152,37 +163,43 @@ export default function PurchaseOrdersEditor({ value, onChange, disabled = false
             const supplierName = typeof order === 'string' ? '' : order?.supplierName ?? ''
             return (
               <li key={po} className="collection-windows-editor__item">
-                <div className="collection-windows-editor__row">
-                  <span>{po}</span>
-                  <label className="field">
-                    <span>Referência</span>
-                    <input
-                      className="text-input"
-                      type="text"
-                      value={reference}
-                      onChange={(event) => handleFieldChange(po, 'reference', event.target.value)}
+                <ErpFormFieldHint
+                  active={erpActive}
+                  hint={erpActive ? erpHintFor(po) : null}
+                  onDraftChange={onErpApply}
+                >
+                  <div className="collection-windows-editor__row">
+                    <span>{po}</span>
+                    <label className="field">
+                      <span>Referência</span>
+                      <input
+                        className="text-input"
+                        type="text"
+                        value={reference}
+                        onChange={(event) => handleFieldChange(po, 'reference', event.target.value)}
+                        disabled={disabled}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Fornecedor</span>
+                      <input
+                        className="text-input"
+                        type="text"
+                        value={supplierName}
+                        onChange={(event) => handleFieldChange(po, 'supplierName', event.target.value)}
+                        disabled={disabled}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="ghost-button collection-windows-editor__remove"
+                      onClick={() => handleRemove(po)}
                       disabled={disabled}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Fornecedor</span>
-                    <input
-                      className="text-input"
-                      type="text"
-                      value={supplierName}
-                      onChange={(event) => handleFieldChange(po, 'supplierName', event.target.value)}
-                      disabled={disabled}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost-button collection-windows-editor__remove"
-                    onClick={() => handleRemove(po)}
-                    disabled={disabled}
-                  >
-                    Remover
-                  </button>
-                </div>
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </ErpFormFieldHint>
               </li>
             )
           })}

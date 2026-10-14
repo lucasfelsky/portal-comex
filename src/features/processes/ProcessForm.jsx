@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSwipe } from '../../hooks/useSwipe'
 import Spinner from '../../components/Spinner'
 import SelectField from '../../components/SelectField'
@@ -27,7 +27,9 @@ import ProcessCustomsFields from './ProcessCustomsFields'
 import ProcessItemDangerousGoodsFields from './ProcessItemDangerousGoodsFields'
 import LicensesEditor from './LicensesEditor'
 import PurchaseOrdersEditor from './PurchaseOrdersEditor'
+import ErpFormFieldHint from './ErpFormFieldHint'
 import { getProcessPurchaseOrders, getPurchaseOrderNumbers } from './purchaseOrders'
+import { EMPTY_ERP_HINTS, buildErpFormHints, erpItemGroupKey, erpOrderKey } from '../erp/erpReference'
 import {
   hasShipmentDateDivergence,
   isFutureShipment,
@@ -58,6 +60,11 @@ const EMPTY_RETURN_EDITABLE_STATUSES = [
 // fonte de sempre: `deriveProcessStatus`/`getStatusTagClass`/
 // `getDisplayedProcessStatus`). Os campos continuam os mesmos — só
 // reagrupados/reordenados; nenhuma condição de exibição mudou.
+//
+// `erpReference` (só admin, só em edição; `{ snapshot, hint }`): chip "ERP" ao
+// lado dos campos que divergem do ERP ou estão vazios. O clique grava o valor
+// do ERP no RASCUNHO (`onDraftChange`); os avisos são recalculados a cada
+// alteração do rascunho (o chip some quando o campo passa a bater com o ERP).
 export default function ProcessForm({
   viewMode,
   draft,
@@ -80,7 +87,23 @@ export default function ProcessForm({
   onClickCapture,
   fieldErrors = {},
   focusRequest = null,
+  erpReference = null,
 }) {
+  // Avisos "ERP" ao vivo a partir do rascunho (não do processo salvo). O
+  // consolidado passa pela mesma normalização de POs que o detalhe usa (POs
+  // legadas em string não podem parecer "vazio no Portal"). `erpActive` fixa a
+  // árvore dos campos (wrapper sempre presente) enquanto há referência.
+  const erpActive = viewMode === 'edit' && Boolean(erpReference?.hint)
+  const erpHints = useMemo(() => {
+    if (viewMode !== 'edit' || !erpReference || !draft) return EMPTY_ERP_HINTS
+    const erpDraftView =
+      draft.category === 'CONSOLIDADO'
+        ? { ...draft, purchaseOrders: getProcessPurchaseOrders(draft) }
+        : draft
+    return buildErpFormHints(erpDraftView, erpReference, { incotermOptions: INCOTERM_OPTIONS })
+  }, [viewMode, erpReference, draft])
+  const erpHintsForFields = erpActive ? erpHints : null
+
   const formatDate = (value) => {
     if (!value) return '-'
     const date = new Date(`${value}T00:00:00`)
@@ -166,68 +189,80 @@ export default function ProcessForm({
             ))}
           </SelectField>
         </label>
-        <label className="field">
-          <span>Destino</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.destination}
-            onChange={(event) => onDraftChange('destination', event.target.value)}
-            placeholder="Porto ou aeroporto de destino"
-          />
-        </label>
+        <ErpFormFieldHint active={erpActive} hint={erpHints.fields.destination} onDraftChange={onDraftChange}>
+          <label className="field">
+            <span>Destino</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.destination}
+              onChange={(event) => onDraftChange('destination', event.target.value)}
+              placeholder="Porto ou aeroporto de destino"
+            />
+          </label>
+        </ErpFormFieldHint>
       </div>
 
       <div className="form-grid">
         {draft.category !== 'CONSOLIDADO' ? (
+          <ErpFormFieldHint active={erpActive} hint={erpHints.fields.supplier} onDraftChange={onDraftChange}>
+            <label className="field">
+              <span>Fornecedor</span>
+              <input
+                className="text-input"
+                type="text"
+                value={draft.supplierName}
+                onChange={(event) => onDraftChange('supplierName', event.target.value)}
+              />
+            </label>
+          </ErpFormFieldHint>
+        ) : null}
+        <ErpFormFieldHint active={erpActive} hint={erpHints.fields.origin} onDraftChange={onDraftChange}>
           <label className="field">
-            <span>Fornecedor</span>
+            <span>Origem</span>
             <input
               className="text-input"
               type="text"
-              value={draft.supplierName}
-              onChange={(event) => onDraftChange('supplierName', event.target.value)}
+              value={draft.originLocation}
+              onChange={(event) => onDraftChange('originLocation', event.target.value)}
             />
           </label>
-        ) : null}
-        <label className="field">
-          <span>Origem</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.originLocation}
-            onChange={(event) => onDraftChange('originLocation', event.target.value)}
-          />
-        </label>
+        </ErpFormFieldHint>
       </div>
 
-      <label className="field">
-        <span>Incoterm</span>
-        <SelectField
-          className="text-input"
-          value={draft.incoterm}
-          onChange={(event) => onDraftChange('incoterm', event.target.value)}
-          {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
-        >
-          <option value="">Selecione o Incoterm</option>
-          {INCOTERM_OPTIONS.map((item) => (
-            <option key={item} value={item}>{item}</option>
-          ))}
-        </SelectField>
-        {fieldErrors.incoterm ? (
-          <small className="field-error" id={getFieldErrorId('process-field-incoterm')} aria-hidden="true">
-            {fieldErrors.incoterm}
-          </small>
-        ) : null}
-      </label>
+      <ErpFormFieldHint active={erpActive} hint={erpHints.fields.incoterm} onDraftChange={onDraftChange}>
+        <label className="field">
+          <span>Incoterm</span>
+          <SelectField
+            className="text-input"
+            value={draft.incoterm}
+            onChange={(event) => onDraftChange('incoterm', event.target.value)}
+            {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
+          >
+            <option value="">Selecione o Incoterm</option>
+            {INCOTERM_OPTIONS.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </SelectField>
+          {fieldErrors.incoterm ? (
+            <small className="field-error" id={getFieldErrorId('process-field-incoterm')} aria-hidden="true">
+              {fieldErrors.incoterm}
+            </small>
+          ) : null}
+        </label>
+      </ErpFormFieldHint>
 
       {draft.category === 'CONSOLIDADO' ? (
-        <PurchaseOrdersEditor
-          value={draft.purchaseOrders}
-          onChange={(value) => onDraftChange('purchaseOrders', value)}
-          disabled={isSaving}
-          errors={fieldErrors}
-        />
+        <ErpFormFieldHint active={erpActive} hint={erpHints.fields.poSet} onDraftChange={onDraftChange}>
+          <PurchaseOrdersEditor
+            value={draft.purchaseOrders}
+            onChange={(value) => onDraftChange('purchaseOrders', value)}
+            disabled={isSaving}
+            errors={fieldErrors}
+            erpHintFor={erpActive ? (po) => erpHints.po[erpOrderKey(po)] ?? null : null}
+            onErpApply={onDraftChange}
+          />
+        </ErpFormFieldHint>
       ) : null}
     </>
   )
@@ -241,21 +276,23 @@ export default function ProcessForm({
         <h4 className="form-group__title">Datas</h4>
         <div className="form-grid">
           <div className="field">
-            <label className="field">
-              <span>ETD</span>
-              <input
-                className="text-input"
-                type="date"
-                value={draft.etd}
-                onChange={(event) => onDraftChange('etd', event.target.value)}
-                {...getFieldA11yProps('process-field-etd', fieldErrors.etd)}
-              />
-              {fieldErrors.etd ? (
-                <small className="field-error" id={getFieldErrorId('process-field-etd')} aria-hidden="true">
-                  {fieldErrors.etd}
-                </small>
-              ) : null}
-            </label>
+            <ErpFormFieldHint active={erpActive} hint={erpHints.fields.etd} onDraftChange={onDraftChange}>
+              <label className="field">
+                <span>ETD</span>
+                <input
+                  className="text-input"
+                  type="date"
+                  value={draft.etd}
+                  onChange={(event) => onDraftChange('etd', event.target.value)}
+                  {...getFieldA11yProps('process-field-etd', fieldErrors.etd)}
+                />
+                {fieldErrors.etd ? (
+                  <small className="field-error" id={getFieldErrorId('process-field-etd')} aria-hidden="true">
+                    {fieldErrors.etd}
+                  </small>
+                ) : null}
+              </label>
+            </ErpFormFieldHint>
             <label className="checkbox-field">
               <input
                 type="checkbox"
@@ -289,21 +326,23 @@ export default function ProcessForm({
             ) : null}
           </div>
           <div className="field">
-            <label className="field">
-              <span>ETA</span>
-              <input
-                className="text-input"
-                type="date"
-                value={draft.eta}
-                onChange={(event) => onDraftChange('eta', event.target.value)}
-                {...getFieldA11yProps('process-field-eta', fieldErrors.eta)}
-              />
-              {fieldErrors.eta ? (
-                <small className="field-error" id={getFieldErrorId('process-field-eta')} aria-hidden="true">
-                  {fieldErrors.eta}
-                </small>
-              ) : null}
-            </label>
+            <ErpFormFieldHint active={erpActive} hint={erpHints.fields.eta} onDraftChange={onDraftChange}>
+              <label className="field">
+                <span>ETA</span>
+                <input
+                  className="text-input"
+                  type="date"
+                  value={draft.eta}
+                  onChange={(event) => onDraftChange('eta', event.target.value)}
+                  {...getFieldA11yProps('process-field-eta', fieldErrors.eta)}
+                />
+                {fieldErrors.eta ? (
+                  <small className="field-error" id={getFieldErrorId('process-field-eta')} aria-hidden="true">
+                    {fieldErrors.eta}
+                  </small>
+                ) : null}
+              </label>
+            </ErpFormFieldHint>
             {viewMode === 'edit' && draft.etaOriginal ? (
               <small className="field-hint">ETA original: {formatDate(draft.etaOriginal)}</small>
             ) : null}
@@ -311,7 +350,12 @@ export default function ProcessForm({
         </div>
       </div>
 
-      <ProcessTransitFields draft={draft} onDraftChange={onDraftChange} errors={fieldErrors} />
+      <ProcessTransitFields
+        draft={draft}
+        onDraftChange={onDraftChange}
+        errors={fieldErrors}
+        erpHints={erpHintsForFields}
+      />
     </>
   )
 
@@ -422,6 +466,7 @@ export default function ProcessForm({
             onDraftChange={onDraftChange}
             channelOptions={channelOptions}
             errors={fieldErrors}
+            erpHints={erpHintsForFields}
           />
         ) : (
           <small className="field-hint">A DUIMP pode ser registrada após o embarque confirmado.</small>
@@ -550,6 +595,21 @@ export default function ProcessForm({
 
   const isConsolidatedItems = draft.category === 'CONSOLIDADO'
 
+  // Aviso "ERP" de quantidade: 1 por grupo (nome e, no consolidado, PO), na 1ª
+  // linha do grupo (igual ao detalhe). A chave vem do núcleo (`erpItemGroupKey`).
+  const erpQuantityHintByItemId = new Map()
+  if (erpActive) {
+    const claimedGroups = new Set()
+    for (const item of draft.items ?? []) {
+      const groupKey = erpItemGroupKey(item, isConsolidatedItems)
+      const groupHint = erpHints.quantity[groupKey]
+      if (groupHint && !claimedGroups.has(groupKey)) {
+        claimedGroups.add(groupKey)
+        erpQuantityHintByItemId.set(item.id, groupHint)
+      }
+    }
+  }
+
   const renderItemsStep = () => (
     <div className="form-group">
       <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
@@ -625,29 +685,35 @@ export default function ProcessForm({
               </label>
             ) : null}
             <div className="process-item-editor__actions">
-              <label className="field">
-                <span className="editor-row__label">Quantidade</span>
-                <input
-                  className="text-input"
-                  type="number"
-                  min="0"
-                  value={item.quantity}
-                  onChange={(event) => onItemChange(item.id, 'quantity', event.target.value)}
-                  {...getFieldA11yProps(
-                    `process-field-items-${item.id}-quantity`,
-                    fieldErrors[`items.${item.id}.quantity`]
-                  )}
-                />
-                {fieldErrors[`items.${item.id}.quantity`] ? (
-                  <small
-                    className="field-error"
-                    id={getFieldErrorId(`process-field-items-${item.id}-quantity`)}
-                    aria-hidden="true"
-                  >
-                    {fieldErrors[`items.${item.id}.quantity`]}
-                  </small>
-                ) : null}
-              </label>
+              <ErpFormFieldHint
+                active={erpActive}
+                hint={erpQuantityHintByItemId.get(item.id)}
+                onDraftChange={onDraftChange}
+              >
+                <label className="field">
+                  <span className="editor-row__label">Quantidade</span>
+                  <input
+                    className="text-input"
+                    type="number"
+                    min="0"
+                    value={item.quantity}
+                    onChange={(event) => onItemChange(item.id, 'quantity', event.target.value)}
+                    {...getFieldA11yProps(
+                      `process-field-items-${item.id}-quantity`,
+                      fieldErrors[`items.${item.id}.quantity`]
+                    )}
+                  />
+                  {fieldErrors[`items.${item.id}.quantity`] ? (
+                    <small
+                      className="field-error"
+                      id={getFieldErrorId(`process-field-items-${item.id}-quantity`)}
+                      aria-hidden="true"
+                    >
+                      {fieldErrors[`items.${item.id}.quantity`]}
+                    </small>
+                  ) : null}
+                </label>
+              </ErpFormFieldHint>
             </div>
             <ProcessItemDangerousGoodsFields
               item={item}

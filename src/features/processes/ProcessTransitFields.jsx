@@ -9,8 +9,12 @@
 // D-F3-1: nos maritimos o BL e' um campo so' ("House BL"); AEREO tem MAWB/HAWB.
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import { getHouseBlInputValue } from './houseBl.js'
+import ErpFormFieldHint from './ErpFormFieldHint'
 
-export default function ProcessTransitFields({ draft, onDraftChange, errors = {} }) {
+// `erpHints` (opcional, so' admin em edicao): avisos "ERP" do formulario
+// (`buildErpFormHints`). Sem ele o DOM e' o de sempre.
+export default function ProcessTransitFields({ draft, onDraftChange, errors = {}, erpHints = null }) {
+  const erpActive = Boolean(erpHints)
   const isMaritime =
     draft.category === 'FCL' || draft.category === 'LCL' || draft.category === 'CONSOLIDADO'
   const isAereo = draft.category === 'AEREO'
@@ -22,15 +26,17 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
         <div className="form-grid">
           {isMaritime ? (
             <>
-              <label className="field">
-                <span>Navio</span>
-                <input
-                  className="text-input"
-                  type="text"
-                  value={draft.vesselName}
-                  onChange={(event) => onDraftChange('vesselName', event.target.value)}
-                />
-              </label>
+              <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.vessel} onDraftChange={onDraftChange}>
+                <label className="field">
+                  <span>Navio</span>
+                  <input
+                    className="text-input"
+                    type="text"
+                    value={draft.vesselName}
+                    onChange={(event) => onDraftChange('vesselName', event.target.value)}
+                  />
+                </label>
+              </ErpFormFieldHint>
               <label className="field">
                 <span>Viagem</span>
                 <input
@@ -70,15 +76,17 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
           ) : null}
 
           {isMaritime ? (
-            <label className="field">
-              <span>House BL</span>
-              <input
-                className="text-input"
-                type="text"
-                value={getHouseBlInputValue(draft)}
-                onChange={(event) => onDraftChange('houseBl', event.target.value)}
-              />
-            </label>
+            <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.bl} onDraftChange={onDraftChange}>
+              <label className="field">
+                <span>House BL</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={getHouseBlInputValue(draft)}
+                  onChange={(event) => onDraftChange('houseBl', event.target.value)}
+                />
+              </label>
+            </ErpFormFieldHint>
           ) : null}
 
           {isAereo ? (
@@ -92,15 +100,17 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
                   onChange={(event) => onDraftChange('flightNumber', event.target.value)}
                 />
               </label>
-              <label className="field">
-                <span>Master Air Waybill (MAWB)</span>
-                <input
-                  className="text-input"
-                  type="text"
-                  value={draft.mawb}
-                  onChange={(event) => onDraftChange('mawb', event.target.value)}
-                />
-              </label>
+              <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.bl} onDraftChange={onDraftChange}>
+                <label className="field">
+                  <span>Master Air Waybill (MAWB)</span>
+                  <input
+                    className="text-input"
+                    type="text"
+                    value={draft.mawb}
+                    onChange={(event) => onDraftChange('mawb', event.target.value)}
+                  />
+                </label>
+              </ErpFormFieldHint>
               <label className="field">
                 <span>House Air Waybill (HAWB)</span>
                 <input

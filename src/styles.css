@@ -3501,6 +3501,44 @@ body {
 .process-items-list__entry > .erp-hint {
   flex: none;
 }
+
+/* Formulario de edicao (admin): o chip fica FORA do <label> (um <button> dentro
+   do label viraria o controle rotulado), logo abaixo do controle. */
+.erp-form-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.erp-form-field > .erp-hint {
+  justify-self: start;
+  margin-inline-start: 0;
+}
+
+/* 2a linha do balao quando o chip aplica o valor ao clicar. */
+.erp-hint__action {
+  display: block;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* Dentro de `.field` (ETD/ETA do ProcessForm) a regra global `.field span`
+   (0,1,1) vence `.erp-hint__bubble`/`.erp-hint__action` (0,1,0) e devolveria
+   caixa alta, peso 700, tracking e cor apagada. Estes seletores (0,2,0)
+   repoem a tipografia do balao. Sem `display` no balao (ver `[hidden]`). */
+.erp-form-field .erp-hint__bubble {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.erp-form-field .erp-hint__action {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
 /* ERP-HINT:END */
 
 .admin-user-list,

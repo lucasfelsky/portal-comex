@@ -241,3 +241,97 @@ describe('ErpHint - lado do balao (desktop)', () => {
     expect(getBubble()).toHaveAttribute('data-align', 'start')
   })
 })
+
+describe('ErpHint - onApply (formulario de edicao)', () => {
+  const getApplyChip = () => screen.getByRole('button', { name: /ETA no ERP/ })
+
+  it('o nome acessivel termina em "(usar este valor)" e continua contendo "ERP"; sem onApply nao muda', () => {
+    const { unmount } = render(<ErpHint hint={FILLED_HINT} onApply={() => {}} />)
+    expect(getApplyChip()).toHaveAccessibleName('ETA no ERP: 06/10/2026 (usar este valor)')
+    expect(getApplyChip().getAttribute('aria-label')).toContain('ERP')
+    unmount()
+    render(<ErpHint hint={FILLED_HINT} />)
+    expect(getChip()).toHaveAccessibleName('ETA no ERP: 06/10/2026')
+    expect(document.querySelector('.erp-hint__action')).toBeNull()
+  })
+
+  it('o balao ganha a 2a linha da acao e a descricao acessivel a inclui', () => {
+    render(<ErpHint hint={FILLED_HINT} onApply={() => {}} />)
+    expect(document.querySelector('.erp-hint__action')).toHaveTextContent('Clique em ERP para usar este valor.')
+    expect(getApplyChip()).toHaveAccessibleDescription(
+      'No ERP: 06/10/2026 · planilha de 02/10/2026 Clique em ERP para usar este valor.'
+    )
+    expect(getBubble().querySelector('button, a, input')).toBeNull()
+  })
+
+  it('mouse: o hover abre e o clique chama onApply uma vez e fecha', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    render(<ErpHint hint={FILLED_HINT} onApply={onApply} />)
+    await user.hover(getApplyChip())
+    expect(isOpen()).toBe(true)
+    await user.click(getApplyChip())
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(isOpen()).toBe(false)
+  })
+
+  it('teclado: Tab abre, Enter chama onApply, Esc fecha sem chamar', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    render(<ErpHint hint={FILLED_HINT} onApply={onApply} />)
+    await user.tab()
+    expect(isOpen()).toBe(true)
+    await user.keyboard('{Escape}')
+    expect(isOpen()).toBe(false)
+    expect(onApply).not.toHaveBeenCalled()
+
+    await user.keyboard('{Enter}')
+    expect(onApply).toHaveBeenCalledTimes(1)
+    await user.keyboard(' ')
+    expect(onApply).toHaveBeenCalledTimes(2)
+  })
+
+  it('toque: o 1o toque abre e mostra "Toque em ERP de novo" sem aplicar; o 2o aplica', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    render(<ErpHint hint={FILLED_HINT} onApply={onApply} />)
+    await user.pointer({ keys: '[TouchA]', target: getApplyChip() })
+    expect(onApply).not.toHaveBeenCalled()
+    expect(isOpen()).toBe(true)
+    expect(document.querySelector('.erp-hint__action')).toHaveTextContent(
+      'Toque em ERP de novo para usar este valor.'
+    )
+    await user.pointer({ keys: '[TouchA]', target: getApplyChip() })
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(isOpen()).toBe(false)
+  })
+
+  it('toque: 1o toque + toque fora fecha e nao aplica', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    render(
+      <div>
+        <ErpHint hint={FILLED_HINT} onApply={onApply} />
+        <p>fora</p>
+      </div>
+    )
+    await user.pointer({ keys: '[TouchA]', target: getApplyChip() })
+    expect(isOpen()).toBe(true)
+    await user.pointer({ keys: '[TouchA]', target: screen.getByText('fora') })
+    expect(isOpen()).toBe(false)
+    expect(onApply).not.toHaveBeenCalled()
+    // Fechado, o proximo toque volta a so abrir (o texto da acao e' o de toque de novo).
+    await user.pointer({ keys: '[TouchA]', target: getApplyChip() })
+    expect(onApply).not.toHaveBeenCalled()
+    expect(isOpen()).toBe(true)
+  })
+
+  it('depois de fechar, o clique de mouse volta a mostrar a acao de clique', async () => {
+    const user = userEvent.setup()
+    render(<ErpHint hint={FILLED_HINT} onApply={() => {}} />)
+    await user.pointer({ keys: '[TouchA]', target: getApplyChip() })
+    await user.keyboard('{Escape}')
+    await user.hover(getApplyChip())
+    expect(document.querySelector('.erp-hint__action')).toHaveTextContent('Clique em ERP para usar este valor.')
+  })
+})

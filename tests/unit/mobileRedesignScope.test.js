@@ -363,6 +363,12 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(
       has('.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)', 'min-height', '44px')
     ).toBe(true)
+    // Formulario de edicao: o mesmo chip (alvo de 44px) e respiro entre chip e campo de baixo.
+    expect(has('.process-form .erp-hint__chip', 'position', 'relative')).toBe(true)
+    expect(has('.process-form .erp-hint__chip::before', 'content', "''")).toBe(true)
+    expect(has('.process-form .erp-hint__chip::before', 'position', 'absolute')).toBe(true)
+    expect(has('.process-form .erp-hint__chip::before', 'inset', '-12px -8px')).toBe(true)
+    expect(has('.process-form .erp-form-field', 'gap', '12px')).toBe(true)
 
     // O hit-area nao vaza para L/T/desktop.
     const TARGETS = [
@@ -374,6 +380,8 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       '.process-detail-view .erp-hint__chip',
       '.process-detail-view .erp-hint__chip::before',
       '.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)',
+      '.process-form .erp-hint__chip',
+      '.process-form .erp-hint__chip::before',
     ]
     const outside = allRules.filter((rule) => rule.media !== S)
     for (const selector of TARGETS) {
@@ -400,6 +408,10 @@ describe('mobile-redesign.css - guarda de escopo', () => {
 
     expect(hasIn(lRules, '.process-detail-view .erp-hint__bubble', 'position', 'static')).toBe(true)
     expect(hasIn(lRules, '.process-detail-view .erp-hint__bubble', 'max-width', '100%')).toBe(true)
+    // Formulario de edicao: as MESMAS regras (balao no fluxo, wrapper inline), sem `display` no balao.
+    expect(hasIn(lRules, '.process-form .erp-hint', 'display', 'inline')).toBe(true)
+    expect(hasIn(lRules, '.process-form .erp-hint__bubble', 'position', 'static')).toBe(true)
+    expect(hasIn(lRules, '.process-form .erp-hint__bubble', 'max-width', '100%')).toBe(true)
     expect(hasIn(lRules, '.process-detail-view .process-items-list__entry > .erp-hint', 'display', 'contents')).toBe(true)
 
     // O `[hidden]` do styles.css so' esconde o balao fechado se nenhuma regra mobile
@@ -472,5 +484,36 @@ describe('styles.css - chip "+N" dos alertas (inline-badge--more)', () => {
       (rule) => rule.media !== '@media (max-width: 720px)' && rule.selector.includes('inline-badge--more')
     )
     expect(outsideMobile).toEqual([])
+  })
+})
+
+// Balao do chip "ERP" dentro de `.field` (ETD/ETA do ProcessForm): `.field span`
+// (0,1,1) vence `.erp-hint__bubble` (0,1,0) e herdava caixa alta, peso 700,
+// tracking e cor apagada. Os seletores `.erp-form-field .erp-hint__*` (0,2,0)
+// repoem a tipografia e nao podem declarar `display` (guarda do `[hidden]`).
+describe('styles.css - balao do chip ERP dentro de .field (ETD/ETA)', () => {
+  const stylesCss = stripComments(fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8'))
+  const stylesTop = readBlocks(stylesCss).blocks.map((block) => ({
+    prelude: normalizePrelude(block.prelude),
+    body: block.body,
+  }))
+  const prop = (body, name) => new RegExp(`(?:^|[;\\s])${name}\\s*:\\s*([^;]+?)\\s*(?:;|$)`).exec(body)?.[1]
+
+  it.each([
+    ['.erp-form-field .erp-hint__bubble', '400'],
+    ['.erp-form-field .erp-hint__action', '600'],
+  ])('%s repoe text-transform, letter-spacing, font-weight e cor, sem display', (selector, weight) => {
+    const rules = stylesTop.filter((block) => block.prelude === selector)
+    expect(rules).toHaveLength(1)
+    const { body } = rules[0]
+    expect(prop(body, 'text-transform')).toBe('none')
+    expect(prop(body, 'letter-spacing')).toBe('normal')
+    expect(prop(body, 'font-weight')).toBe(weight)
+    expect(prop(body, 'color')).toMatch(/^var\(--[\w-]+\)$/)
+    expect(prop(body, 'display')).toBeUndefined()
+  })
+
+  it('a regra global `.field span` continua existindo (o motivo da reposicao)', () => {
+    expect(stylesTop.some((block) => block.prelude.split(',').map((s) => s.trim()).includes('.field span'))).toBe(true)
   })
 })

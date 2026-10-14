@@ -9,6 +9,7 @@ import {
   isLegacyParameterizedWithoutDate,
 } from './arrivalCustoms'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import ErpFormFieldHint from './ErpFormFieldHint'
 
 // F17.3a (D-10 item 2): DUIMP + canal + "Desembaraço concluído em" - JSX
 // movido de `ProcessForm.jsx` (renderFlowStep, duplicado maritimo/aereo)
@@ -20,7 +21,16 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // UX-6b-1: grupo "Liberação (DUIMP)" com os pares Nº|Canal, Registro|
 // Parametrização e Desembaraço|Exigência; conferência e as textareas ficam
 // em linha cheia. As condicoes de exibicao de cada campo NAO mudam.
-export default function ProcessCustomsFields({ draft, onDraftChange, channelOptions, errors = {} }) {
+// `erpHints` (opcional, so' admin em edicao): avisos "ERP" do formulario
+// (`buildErpFormHints`). Sem ele o DOM e' o de sempre.
+export default function ProcessCustomsFields({
+  draft,
+  onDraftChange,
+  channelOptions,
+  errors = {},
+  erpHints = null,
+}) {
+  const erpActive = Boolean(erpHints)
   const hasRegistrationSignal = hasDuimpRegistrationSignal(draft)
   const hasParameterization = hasParameterizationSignal(draft)
   const channel = draft.parameterizationChannel
@@ -38,15 +48,17 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
       <h4 className="form-group__title">Liberação (DUIMP)</h4>
 
       <div className="form-grid">
-        <label className="field">
-          <span>Nº da DUIMP</span>
-          <input
-            className="text-input"
-            type="text"
-            value={draft.duimpNumber}
-            onChange={(event) => onDraftChange('duimpNumber', event.target.value)}
-          />
-        </label>
+        <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.duimpNumber} onDraftChange={onDraftChange}>
+          <label className="field">
+            <span>Nº da DUIMP</span>
+            <input
+              className="text-input"
+              type="text"
+              value={draft.duimpNumber}
+              onChange={(event) => onDraftChange('duimpNumber', event.target.value)}
+            />
+          </label>
+        </ErpFormFieldHint>
 
         {hasParameterization ? (
           <label className="field">
@@ -66,30 +78,36 @@ export default function ProcessCustomsFields({ draft, onDraftChange, channelOpti
       </div>
 
       <div className="form-grid">
-        <label className="field">
-          <span>Registro da DUIMP (data e hora)</span>
-          <input
-            className="text-input"
-            type="datetime-local"
-            value={draft.duimpRegisteredAt}
-            onChange={(event) => onDraftChange('duimpRegisteredAt', event.target.value)}
-            {...getFieldA11yProps('process-field-duimpRegisteredAt', errors.duimpRegisteredAt)}
-          />
-          {errors.duimpRegisteredAt ? (
-            <small
-              className="field-error"
-              id={getFieldErrorId('process-field-duimpRegisteredAt')}
-              aria-hidden="true"
-            >
-              {errors.duimpRegisteredAt}
-            </small>
-          ) : null}
-          {isLegacyDuimpRegisteredWithoutDate(draft) ? (
-            <small className="field-hint">
-              DUIMP registrada sem data (registro antigo) — informe a data e hora.
-            </small>
-          ) : null}
-        </label>
+        <ErpFormFieldHint
+          active={erpActive}
+          hint={erpHints?.fields?.duimpRegisteredAt}
+          onDraftChange={onDraftChange}
+        >
+          <label className="field">
+            <span>Registro da DUIMP (data e hora)</span>
+            <input
+              className="text-input"
+              type="datetime-local"
+              value={draft.duimpRegisteredAt}
+              onChange={(event) => onDraftChange('duimpRegisteredAt', event.target.value)}
+              {...getFieldA11yProps('process-field-duimpRegisteredAt', errors.duimpRegisteredAt)}
+            />
+            {errors.duimpRegisteredAt ? (
+              <small
+                className="field-error"
+                id={getFieldErrorId('process-field-duimpRegisteredAt')}
+                aria-hidden="true"
+              >
+                {errors.duimpRegisteredAt}
+              </small>
+            ) : null}
+            {isLegacyDuimpRegisteredWithoutDate(draft) ? (
+              <small className="field-hint">
+                DUIMP registrada sem data (registro antigo) — informe a data e hora.
+              </small>
+            ) : null}
+          </label>
+        </ErpFormFieldHint>
 
         {hasRegistrationSignal ? (
           <label className="field">
