@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 // Aviso "ERP" (PR 3): chip pequeno ao lado do campo cujo valor difere do da
 // referencia do ERP (ou esta' vazio no Portal). Padrao TOOLTIP, nao disclosure:
@@ -16,32 +16,45 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 //   - Esc (em qualquer foco) e o toque/clique fora fecham; Esc nao move o foco.
 // Em <= 1040px o balao vai para o fluxo (CSS); no desktop o lado e' medido ao
 // abrir e vira `data-align="end"` quando passaria da borda direita.
-export default function ErpHint({ hint, className = '' }) {
+//
+// `onApply` (opcional, formulario de edicao): o chip passa a APLICAR o valor do
+// ERP. Sem a prop, tudo acima vale como descrito. Com ela:
+//   - mouse: o hover abre e o clique chama `onApply()` e fecha;
+//   - teclado: Tab abre, Enter/Espaco chama `onApply()`, Esc fecha;
+//   - toque/caneta: o 1o toque abre fixado (mostra o valor), o 2o aplica; o
+//     toque fora fecha sem aplicar (nao ha' hover no toque).
+// O balao continua sem conteudo interativo; a 2a linha explica a acao.
+export default function ErpHint({ hint, className = '', onApply }) {
   if (!hint) return null
-  return <ErpHintView hint={hint} className={className} />
+  return <ErpHintView hint={hint} className={className} onApply={onApply} />
 }
 
-function ErpHintView({ hint, className }) {
+function ErpHintView({ hint, className, onApply }) {
   const bubbleId = useId()
   const wrapperRef = useRef(null)
   const chipRef = useRef(null)
   const bubbleRef = useRef(null)
   const pointerInitiatedRef = useRef(false)
+  // pointerType do ultimo pointerdown no chip ('' = o clique veio do teclado).
+  const pointerTypeRef = useRef('')
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [keyboardFocused, setKeyboardFocused] = useState(false)
+  const [touchOpened, setTouchOpened] = useState(false)
   const [align, setAlign] = useState('start')
   const open = pinned || hovered || keyboardFocused
+  const canApply = typeof onApply === 'function'
+
+  const closeAll = useCallback(() => {
+    setPinned(false)
+    setHovered(false)
+    setKeyboardFocused(false)
+    setTouchOpened(false)
+  }, [])
 
   // Esc fecha com o foco em qualquer lugar; toque/clique fora tambem.
   useEffect(() => {
     if (!open) return undefined
-
-    function closeAll() {
-      setPinned(false)
-      setHovered(false)
-      setKeyboardFocused(false)
-    }
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') closeAll()
@@ -59,7 +72,7 @@ function ErpHintView({ hint, className }) {
       document.removeEventListener('mousedown', handleOutside)
       document.removeEventListener('touchstart', handleOutside)
     }
-  }, [open])
+  }, [open, closeAll])
 
   // Lado do balao (desktop): mede com o alinhamento padrao e, se passaria da
   // borda direita do conteudo, alinha pela direita do chip.
@@ -75,6 +88,23 @@ function ErpHintView({ hint, className }) {
   }, [open])
 
   function handleClick() {
+    const pointerType = pointerTypeRef.current
+    pointerTypeRef.current = ''
+    pointerInitiatedRef.current = false
+
+    if (canApply) {
+      const isTouch = pointerType !== '' && pointerType !== 'mouse'
+      // Toque/caneta: o 1o toque so' mostra o valor; o 2o (aberto) aplica.
+      if (isTouch && !(open && pinned)) {
+        setPinned(true)
+        setTouchOpened(true)
+        return
+      }
+      closeAll()
+      onApply()
+      return
+    }
+
     if (open && pinned) {
       setPinned(false)
       setHovered(false)
@@ -82,7 +112,6 @@ function ErpHintView({ hint, className }) {
     } else {
       setPinned(true)
     }
-    pointerInitiatedRef.current = false
   }
 
   return (
@@ -100,16 +129,18 @@ function ErpHintView({ hint, className }) {
         type="button"
         className="erp-hint__chip"
         ref={chipRef}
-        aria-label={hint.ariaLabel}
+        aria-label={canApply ? `${hint.ariaLabel} (usar este valor)` : hint.ariaLabel}
         aria-describedby={bubbleId}
-        onPointerDown={() => {
+        onPointerDown={(event) => {
           pointerInitiatedRef.current = true
+          pointerTypeRef.current = event.pointerType ?? ''
         }}
         onFocus={() => {
           if (!pointerInitiatedRef.current) setKeyboardFocused(true)
         }}
         onBlur={() => {
           pointerInitiatedRef.current = false
+          pointerTypeRef.current = ''
           setKeyboardFocused(false)
         }}
         onClick={handleClick}
@@ -118,6 +149,14 @@ function ErpHintView({ hint, className }) {
       </button>
       <span role="tooltip" id={bubbleId} className="erp-hint__bubble" hidden={!open} data-align={align} ref={bubbleRef}>
         {hint.text}
+        {canApply ? (
+          <>
+            {' '}
+            <span className="erp-hint__action">
+              {touchOpened ? 'Toque em ERP de novo para usar este valor.' : 'Clique em ERP para usar este valor.'}
+            </span>
+          </>
+        ) : null}
       </span>
     </span>
   )

@@ -809,11 +809,13 @@
      balao (bloco) abrir uma linha propria sem mover o chip. NENHUMA regra deste
      arquivo declara `display` no balao: o `[hidden]` do styles.css continua
      escondendo-o fechado. */
-  .process-detail-view .erp-hint {
+  .process-detail-view .erp-hint,
+  .process-form .erp-hint {
     display: inline;
   }
 
-  .process-detail-view .erp-hint__bubble {
+  .process-detail-view .erp-hint__bubble,
+  .process-form .erp-hint__bubble {
     position: static;
     margin-top: 4px;
     max-width: 100%;
@@ -2207,14 +2209,22 @@
 
   /* PR 3: aviso "ERP" com alvo de toque de 44px. O chip tem 20x28: o `::before`
      o amplia para 44x44 sem mexer no layout (mesmo padrao de `.chip-remove`). */
-  .process-detail-view .erp-hint__chip {
+  .process-detail-view .erp-hint__chip,
+  .process-form .erp-hint__chip {
     position: relative;
   }
 
-  .process-detail-view .erp-hint__chip::before {
+  .process-detail-view .erp-hint__chip::before,
+  .process-form .erp-hint__chip::before {
     content: '';
     position: absolute;
     inset: -12px -8px;
+  }
+
+  /* Formulario: mais respiro entre o chip e o campo de baixo (a area de toque
+     de 44px nao invade o input). */
+  .process-form .erp-form-field {
+    gap: 12px;
   }
 
   /* PO do consolidado com aviso: linha de 44px; o wrapper some do layout para o

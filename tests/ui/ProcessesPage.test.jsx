@@ -1164,6 +1164,37 @@ describe('ProcessesPage — referencia do ERP (PR 3)', () => {
     expect(mockSaveProcess).not.toHaveBeenCalled()
   })
 
+  it('admin em "Editar processo" ve o chip no Destino e o clique preenche o input sem salvar', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    mockLoadErpReference.mockResolvedValue(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+    renderPage()
+    await openDetail(user)
+    await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI' })
+    await user.click(screen.getByRole('button', { name: 'Editar processo' }))
+    await screen.findByRole('heading', { name: 'Editar processo' })
+
+    const chip = await screen.findByRole('button', { name: 'Destino no ERP: ITAJAI (usar este valor)' })
+    expect(screen.getByLabelText('Destino')).toHaveValue('Navegantes')
+    await user.click(chip)
+    expect(screen.getByLabelText('Destino')).toHaveValue('ITAJAI')
+    expect(screen.queryByRole('button', { name: /Destino no ERP/ })).not.toBeInTheDocument()
+    expect(mockSaveProcess).not.toHaveBeenCalled()
+  })
+
+  it('"Criar processo" nao mostra chip ERP', async () => {
+    const user = userEvent.setup()
+    asAdmin()
+    mockLoadErpReference.mockResolvedValue(referenceWith(SNAPSHOT_A, 'ITAJAI'))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(mockLoadErpReference).toHaveBeenCalledTimes(1))
+    await user.click(screen.getByRole('button', { name: 'Novo processo' }))
+    await screen.findByRole('heading', { name: 'Criar processo' })
+    expect(screen.queryByRole('button', { name: /no ERP/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.erp-form-field')).toBeNull()
+  })
+
   it.each(['user', 'logistica'])('%s nao chama loadErpReference e nao ve aviso ERP', async (role) => {
     const user = userEvent.setup()
     mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role } })

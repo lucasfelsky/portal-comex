@@ -794,6 +794,16 @@ export default function ProcessesPage() {
     [isAdmin, erpReference, selectedProcess?.id]
   )
 
+  // Mesma referencia, para o formulario de edicao (so' admin e so' em edicao):
+  // o chip "ERP" preenche o campo do rascunho. Mesmo shape do `detailErpReference`.
+  const formErpReference = useMemo(
+    () =>
+      isAdmin && viewMode === 'edit' && erpReference && draft?.id
+        ? { snapshot: erpReference.snapshot, hint: erpReference.hintsByProcessId[draft.id] ?? null }
+        : null,
+    [isAdmin, viewMode, erpReference, draft?.id]
+  )
+
   // Atualiza o contexto de processo ativo para o SupportButton
   useEffect(() => {
     setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination } : null)
@@ -1929,6 +1939,7 @@ export default function ProcessesPage() {
           onClickCapture={handlePostReceiptDetailClick}
           fieldErrors={processFieldErrors}
           focusRequest={processFocusRequest}
+          erpReference={formErpReference}
         />
       ) : null}
 
