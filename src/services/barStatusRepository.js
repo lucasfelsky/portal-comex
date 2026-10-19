@@ -1,5 +1,6 @@
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { firestore, isFirebaseConfigured } from '../lib/firebase'
+import { repairTextEncoding } from '../utils/textEncoding'
 import { createAuditEvent } from './auditRepository'
 
 const STORAGE_KEY = 'sq-comex-bar-status'
@@ -76,13 +77,23 @@ export async function getBarStatus() {
   })
 }
 
-// F13 (backlog 2026-07-12): le a SUGESTAO gravada pelo cron syncBarStatus.mjs
-// em `barra/suggestion` (via service account/REST). Read admin-only nas rules.
-// Retorna null quando nao ha sugestao, quando o Firebase nao esta configurado,
-// ou quando o status sugerido nao bate com o enum conhecido (defensivo — o
-// admin nunca deve poder "aplicar" um status invalido). NUNCA toca
-// barra/current — a decisao de aplicar continua humana (botao Aplicar no
-// AdminBarStatusPanel chama saveBarStatus).
+// Converte timestamp do Firestore (toDate) em ISO; string passa direto; resto vira null.
+function toIsoOrNull(value) {
+  if (value && typeof value.toDate === 'function') return value.toDate().toISOString()
+  if (typeof value === 'string' && value) return value
+  return null
+}
+
+// F13: le a leitura gravada pelo cron syncBarStatus.mjs em `barra/suggestion`
+// (via service account/REST). Read admin-only nas rules. O script le o
+// `cond_barra` da Praticagem ZP21, grava aqui a leitura + campos de saude
+// (lastAttemptAt/lastSuccessAt/lastError) e APLICA em barra/current quando o
+// status do site muda (o botao Aplicar do AdminBarStatusPanel segue disponivel
+// via saveBarStatus). Retorna null quando o Firebase nao esta configurado ou o
+// doc nao existe. Com doc existente devolve SEMPRE um objeto (mesmo so com campos
+// de falha, para o alerta aparecer antes da 1a leitura boa); status/label/tone
+// ficam null quando o status gravado nao bate com o enum conhecido (defensivo —
+// o admin nunca deve poder "aplicar" um status invalido).
 export async function getBarSuggestion() {
   if (!isFirebaseConfigured || !firestore) {
     return null
@@ -96,21 +107,22 @@ export async function getBarSuggestion() {
 
   const data = snapshot.data()
   const statusMeta = BAR_STATUS_OPTIONS.find((option) => option.value === data.status)
-
-  if (!statusMeta) {
-    return null
-  }
+  const fetchedAt = toIsoOrNull(data.fetchedAt)
 
   return {
-    status: statusMeta.value,
-    label: statusMeta.label,
-    tone: statusMeta.tone,
+    status: statusMeta?.value ?? null,
+    label: statusMeta?.label ?? null,
+    tone: statusMeta?.tone ?? null,
     sourceName: data.sourceName ?? 'Fonte externa',
     sourceUrl: data.sourceUrl ?? '',
-    fetchedAt:
-      typeof data.fetchedAt?.toDate === 'function'
-        ? data.fetchedAt.toDate().toISOString()
-        : data.fetchedAt ?? null,
+    fetchedAt,
+    siteDescription: repairTextEncoding(data.siteDescription ?? '') || '',
+    restriction: repairTextEncoding(data.restriction ?? '') || '',
+    lastAttemptAt: toIsoOrNull(data.lastAttemptAt),
+    lastSuccessAt: toIsoOrNull(data.lastSuccessAt) ?? fetchedAt,
+    lastError: repairTextEncoding(data.lastError ?? '') || '',
+    lastErrorStage: data.lastErrorStage ?? '',
+    lastAppliedAt: toIsoOrNull(data.lastAppliedAt),
   }
 }
 
