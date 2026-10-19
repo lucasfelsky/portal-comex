@@ -551,6 +551,34 @@ body {
   transform: translate(2px, -2px);
 }
 
+.sidebar-intelliquote-link + .sidebar-intelliquote-link {
+  margin-top: 8px;
+}
+
+/* Logo do IntelliQuote no card "Fazer uma cotação": chip sempre branco
+   (o PNG é colorido), independente do tema. */
+.sidebar-intelliquote-link__logo {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: #ffffff;
+}
+
+.sidebar-intelliquote-link__logo img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.sidebar-intelliquote-link__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .sidebar__brandmark-image {
   display: block;
   width: 100%;
@@ -2247,6 +2275,87 @@ body {
   line-height: 1;
 }
 
+/* Card de destaque "Fazer uma cotação" (Comercial + admin) no topo da
+   Dashboard. Fundo teal escuro fixo + texto branco: invariante ao tema. */
+.quote-request-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 16px 18px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(135deg, #0a5f50, #063f38);
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.quote-request-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(0, 40, 40, 0.16);
+  text-decoration: none;
+}
+
+.quote-request-card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.quote-request-card__logo {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: #ffffff;
+}
+
+.quote-request-card__logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.quote-request-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quote-request-card__eyebrow {
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.quote-request-card__title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.quote-request-card__sub {
+  font-size: var(--fs-footnote);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.quote-request-card__cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
 /* Ciclo 2a (redesign Fase 2): eyebrow do hero do Dashboard. So' visivel
    no desktop (revelado dentro de @media (min-width: 1041px), bloco no
    final do arquivo) — no mobile o hero continua o TIDE CARD (F16.3),
@@ -2974,7 +3083,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .tab-button,
-  .tab-button--active {
+  .tab-button--active,
+  .quote-request-card,
+  .quote-request-card:hover {
     transition: none;
     transform: none;
   }
@@ -9039,6 +9150,16 @@ body {
   justify-content: center;
   color: #fff;
   flex-shrink: 0;
+}
+
+.ios-row__icon--logo {
+  background: #ffffff;
+}
+
+.ios-row__icon--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .ios-row__body {

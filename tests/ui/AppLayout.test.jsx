@@ -38,10 +38,10 @@ import { NotificationsProvider } from '../../src/contexts/NotificationsContext.j
 import NotificationsPage from '../../src/pages/NotificationsPage.jsx'
 import { NOTIFICATIONS_CHANGED_EVENT, listNotifications } from '../../src/services/notificationsRepository.js'
 
-function renderWithRole(role) {
+function renderWithRole(role, { area } = {}) {
   mockUseAuth.mockReturnValue({
     profile: role
-      ? { uid: `${role}-1`, name: `${role} User`, email: `${role}@sq.com`, role }
+      ? { uid: `${role}-1`, name: `${role} User`, email: `${role}@sq.com`, role, area }
       : null,
     logout: vi.fn(),
     isEmailVerified: true,
@@ -131,6 +131,51 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
     await screen.findAllByText(/Dashboard/i)
     // IntelliQuote nao deve aparecer (sidebar nem command palette)
     expect(screen.queryAllByText(/IntelliQuote/i)).toHaveLength(0)
+  })
+
+  describe('botao "Fazer uma cotacao" (Comercial + admin)', () => {
+    it('user + Comercial: ve o card com href de solicitacoes e nao ve o card admin', () => {
+      renderWithRole('user', { area: 'Comercial' })
+      const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      expect(link.tagName).toBe('A')
+      expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+      expect(screen.queryByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeNull()
+    })
+
+    it('user + Importacao: NAO ve o card', () => {
+      renderWithRole('user', { area: 'Importação' })
+      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+    })
+
+    it('logistica + Comercial: NAO ve o card', () => {
+      renderWithRole('logistica', { area: 'Comercial' })
+      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+    })
+
+    it('admin: ve os dois cards, o novo antes do antigo no DOM', () => {
+      renderWithRole('admin')
+      const quote = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      const admin = screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)
+      expect(quote.compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('paleta: user + Comercial abre a URL de solicitacoes em nova aba', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+      try {
+        renderWithRole('user', { area: 'Comercial' })
+        act(() => {
+          fireKeyDown('k', { ctrlKey: true })
+        })
+        const option = await screen.findByRole('option', { name: /Fazer uma cotação/i })
+        const user = userEvent.setup()
+        await user.click(option)
+        expect(openSpy).toHaveBeenCalledWith('https://intelliquote.portal-comex.com/solicitacoes', '_blank', 'noopener,noreferrer')
+      } finally {
+        openSpy.mockRestore()
+      }
+    })
   })
 
   describe('tab bar do redesign iOS (F16.2)', () => {
