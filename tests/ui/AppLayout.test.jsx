@@ -133,7 +133,7 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
     expect(screen.queryAllByText(/IntelliQuote/i)).toHaveLength(0)
   })
 
-  describe('botao "Fazer uma cotacao" (Comercial + admin)', () => {
+  describe('botao "Fazer uma cotacao" (so user da area Comercial)', () => {
     it('user + Comercial: ve o card com href de solicitacoes e nao ve o card admin', () => {
       renderWithRole('user', { area: 'Comercial' })
       const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
@@ -162,11 +162,34 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
     })
 
-    it('admin: ve os dois cards, o novo antes do antigo no DOM', () => {
+    it('admin: vê só o card IntelliQuote, sem "Fazer uma cotação"', () => {
       renderWithRole('admin')
-      const quote = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
-      const admin = screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)
-      expect(quote.compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeInTheDocument()
+      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+    })
+
+    it('admin + Comercial: continua só com o card IntelliQuote', () => {
+      renderWithRole('admin', { area: 'Comercial' })
+      expect(screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeInTheDocument()
+      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+    })
+
+    it('paleta: admin tem "IntelliQuote" e não tem "Fazer uma cotação"', async () => {
+      renderWithRole('admin')
+      act(() => {
+        fireKeyDown('k', { ctrlKey: true })
+      })
+      expect(await screen.findByRole('option', { name: /IntelliQuote/i })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /Fazer uma cotação/i })).toBeNull()
+    })
+
+    it('paleta: user + Comercial tem "Fazer uma cotação" e não tem "IntelliQuote (suite SQ)"', async () => {
+      renderWithRole('user', { area: 'Comercial' })
+      act(() => {
+        fireKeyDown('k', { ctrlKey: true })
+      })
+      expect(await screen.findByRole('option', { name: /Fazer uma cotação/i })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: /IntelliQuote \(suite SQ\)/i })).toBeNull()
     })
 
     it('paleta: user + Comercial abre a URL de solicitacoes em nova aba', async () => {

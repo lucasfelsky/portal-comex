@@ -574,10 +574,6 @@ body {
   transform: translate(2px, -2px);
 }
 
-.sidebar-intelliquote-link + .sidebar-intelliquote-link {
-  margin-top: 8px;
-}
-
 /* Card "Fazer uma cotação": eyebrow "IntelliQuote" sobre o título, empilhados
    à esquerda (a seta vai à direita via margin-left:auto). */
 .sidebar-intelliquote-link__body {
