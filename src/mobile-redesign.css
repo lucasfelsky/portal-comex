@@ -959,11 +959,6 @@
     box-shadow: none;
   }
 
-  /* Card "Fazer uma cotação" (IntelliQuote): mesmo raio dos cards da home. */
-  .dashboard-heading ~ .quote-request-card {
-    border-radius: var(--m-radius-group);
-  }
-
   .dashboard-heading ~ .dashboard-stat-row .stat-card__head {
     gap: 6px;
     align-items: flex-start;
