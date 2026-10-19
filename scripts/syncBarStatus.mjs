@@ -1,19 +1,31 @@
-// F13 (backlog 2026-07-12): sync semi-automático do status da Barra do Rio
-// Itajaí/Navegantes. A fonte oficial é a Praticagem ZP21 — o status de
-// praticabilidade é publicado como uma imagem (barra-praticavel.jpg) no
-// site praticoszp21.com.br. Este script baixa a imagem, faz OCR com
-// tesseract.js, mapeia o texto extraído pro enum de 3 valores do Portal
-// COMEX e grava a SUGESTÃO em `barra/suggestion` (Firestore). NUNCA toca
-// `barra/current` — a decisão de aplicar continua humana (admin clica
-// "Aplicar" no AdminBarStatusPanel, que chama saveBarStatus).
+// Sync do status da Barra do Rio Itajai/Navegantes (fonte oficial: Praticagem
+// ZP21, https://praticoszp21.com.br/).
 //
-// Molde exato: scripts/syncExternalNews.mjs (GitHub Actions cron horário
-// + REST + DLQ + service account bypassa rules). A collection
-// `barra/suggestion` é read admin-only, write fechado (só service
-// account), igual `externalNewsDlq`.
+// Fluxo atual (substitui o OCR da imagem, removido):
+//   1. baixa o HTML da home da praticagem;
+//   2. le o JSON inline `cond_barra` (o mesmo que o JS do site usa para escolher
+//      a imagem exibida ao publico) e mapeia o CODIGO para o enum do Portal COMEX;
+//   3. valida codigo x descricao (so por contradicao) e grava a leitura em
+//      `barra/suggestion`, com campos de saude (lastAttemptAt/lastSuccessAt/lastError);
+//   4. quando o status DO SITE muda (edge-triggered) e difere de `barra/current`,
+//      APLICA em `barra/current` (so `status` + `updatedAt`, preservando `notes`)
+//      e registra o evento em `audits`.
+//
+// Causa raiz do OCR antigo: o <img> estatico da pagina SEMPRE aponta para
+// barra-praticavel.jpg; o navegador troca o src pelo codigo de `cond_barra`.
+// Ler a imagem estatica (ou fazer OCR dela) dizia PRATICAVEL mesmo com a barra
+// impraticavel. O codigo do JSON e a fonte da verdade.
+//
+// Falhas (fetch, parse, codigo desconhecido, leitura de estado) NUNCA aplicam
+// nada: vao para a DLQ (`externalNewsDlq`) + `lastError` na suggestion, saem com
+// exit 0 + `::warning::` (96 execucoes/dia: exit 1 geraria e-mail a cada 15 min).
+// O alerta e o painel Admin -> Barra. Falta de env/OAuth -> exit 1.
+//
+// Molde: scripts/syncExternalNews.mjs (GitHub Actions cron + REST + DLQ +
+// service account bypassa rules). So imports `node:*` (o workflow nao roda npm ci).
 
 import crypto from 'node:crypto'
-import { createWorker } from 'tesseract.js'
+import { fileURLToPath } from 'node:url'
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL
@@ -37,55 +49,112 @@ const FIRESTORE_REST_BASE = FIRESTORE_EMULATOR_HOST
   ? `http://${FIRESTORE_EMULATOR_HOST}/v1`
   : 'https://firestore.googleapis.com/v1'
 
-// URL da imagem oficial da Praticagem ZP21 com o status da barra. Pode
-// ser sobrescrita por env (testes com imagem fixture).
-const BAR_STATUS_IMAGE_URL =
-  process.env.BAR_STATUS_IMAGE_URL ??
-  'https://praticoszp21.com.br/wp-content/uploads/2023/10/barra-praticavel.jpg'
+// Pagina oficial da Praticagem ZP21. Pode ser sobrescrita por env (testes).
+export const BAR_STATUS_PAGE_URL = process.env.BAR_STATUS_PAGE_URL ?? 'https://praticoszp21.com.br/'
 
-// Mapeamento do texto extraído pelo OCR pro enum do Portal COMEX
-// (src/services/barStatusRepository.js). O OCR retorna o texto da imagem
-// ("PRATICÁVEL", "PRATICÁVEL C/ RESTRIÇÕES", "IMPRATICÁVEL"); este map
-// normaliza acentos/case pra cair no value canonico.
-const BAR_STATUS_BY_TEXT = {
-  praticavel: { value: 'PRATICAVEL', label: 'PRATICAVEL', tone: 'ok' },
-  praticavel_restricoes: {
-    value: 'PRATICAVEL_RESTRICOES',
-    label: 'PRATICAVEL C/ RESTRICOES',
-    tone: 'warn',
-  },
-  impraticavel: { value: 'IMPRATICAVEL', label: 'IMPRATICAVEL', tone: 'danger' },
+const REQUEST_TIMEOUT_MS = 20000
+
+const SOURCE_NAME = 'Praticagem ZP21'
+const AUDIT_ACTOR = 'Praticagem ZP21 (automático)'
+
+// Mesmos { value, label, tone } de BAR_STATUS_OPTIONS (src/services/barStatusRepository.js).
+// Labels SEM acento: sao o enum persistido; nao mudar.
+const STATUS_PRATICAVEL = { value: 'PRATICAVEL', label: 'PRATICAVEL', tone: 'ok' }
+const STATUS_PRATICAVEL_RESTRICOES = {
+  value: 'PRATICAVEL_RESTRICOES',
+  label: 'PRATICAVEL C/ RESTRICOES',
+  tone: 'warn',
+}
+const STATUS_IMPRATICAVEL = { value: 'IMPRATICAVEL', label: 'IMPRATICAVEL', tone: 'danger' }
+
+export const BAR_STATUS_BY_CODE = {
+  1: STATUS_PRATICAVEL,
+  2: STATUS_IMPRATICAVEL,
+  3: STATUS_PRATICAVEL_RESTRICOES,
+  4: STATUS_PRATICAVEL_RESTRICOES,
+  5: STATUS_PRATICAVEL_RESTRICOES,
 }
 
-function normalizeOcrText(value) {
+function normalizeComparable(value) {
   return String(value ?? '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove acentos
-    .replace(/[^a-zA-Z0-9\s/]/g, ' ') // mantém só alfanuméricos, espaço e barra
-    .replace(/\s+/g, ' ')
-    .trim()
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 }
 
-export function mapOcrTextToStatus(rawText) {
-  const normalized = normalizeOcrText(rawText)
-  if (!normalized) return null
+// Quebras de linha viram espaco: texto vindo do site vai para stdout/stderr e
+// lastError; sem isso, uma linha iniciando com "::error::" injetaria comandos
+// de workflow do GitHub Actions.
+function singleLine(value) {
+  return String(value ?? '').replace(/[\r\n]+/g, ' ')
+}
 
-  // Ordem importa: "praticavel c/ restricoes" deve ser checado antes de
-  // "praticavel" sozinho (subset).
-  if (
-    normalized.includes('praticavel') &&
-    (normalized.includes('restricoes') || normalized.includes('restricao'))
-  ) {
-    return BAR_STATUS_BY_TEXT.praticavel_restricoes
+export function clip(value, max) {
+  return singleLine(value).trim().slice(0, max)
+}
+
+// O codigo e a fonte da verdade. So rejeita a contradicao PERIGOSA: codigo 1
+// (praticavel) com descricao "impraticavel". Codigos 2/3/4/5 nunca sao
+// rejeitados pela descricao (direcao cautelosa); "restri" no codigo 1 tambem nao
+// (ex.: "Praticavel sem restricoes").
+function isContradictory(code, description) {
+  return code === '1' && normalizeComparable(description).includes('impraticavel')
+}
+
+export function parseBarConditionFromHtml(html) {
+  const matches = [...String(html ?? '').matchAll(/\bcond_barra\s*=\s*(\[[\s\S]*?\])\s*;/g)]
+  if (matches.length === 0) {
+    return { ok: false, stage: 'parse-status', error: 'Variável cond_barra não encontrada na página da praticagem.' }
   }
-  if (normalized.includes('impraticavel')) {
-    return BAR_STATUS_BY_TEXT.impraticavel
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      stage: 'parse-status',
+      error: `cond_barra aparece ${matches.length} vezes na página da praticagem.`,
+    }
   }
-  if (normalized.includes('praticavel')) {
-    return BAR_STATUS_BY_TEXT.praticavel
+  const match = matches[0]
+
+  let parsed
+  try {
+    parsed = JSON.parse(match[1])
+  } catch {
+    return { ok: false, stage: 'parse-status', error: 'JSON de cond_barra inválido.' }
   }
-  return null
+
+  const item = Array.isArray(parsed) ? parsed[0] : undefined
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return { ok: false, stage: 'parse-status', error: 'cond_barra vazio ou em formato inesperado.' }
+  }
+
+  const code = String(item.condicao_barra ?? '').trim()
+  const siteDescription = clip(item.desc_condicao_barra, 200)
+  const restriction = clip(item.restricao, 200)
+
+  if (!Object.prototype.hasOwnProperty.call(BAR_STATUS_BY_CODE, code)) {
+    return {
+      ok: false,
+      stage: 'unknown-code',
+      error: `Código de condição da barra desconhecido: "${clip(code, 40)}" (descrição: "${clip(siteDescription, 80)}").`,
+    }
+  }
+
+  if (isContradictory(code, siteDescription)) {
+    return {
+      ok: false,
+      stage: 'inconsistent-status',
+      error: `Código ${code} contradiz a descrição do site: "${clip(siteDescription, 80)}".`,
+    }
+  }
+
+  return { ok: true, code, status: BAR_STATUS_BY_CODE[code], siteDescription, restriction }
+}
+
+// Edge-triggered: so aplica quando o status do SITE mudou desde a ultima leitura
+// bem-sucedida E difere do que ja esta em barra/current. Um override manual do
+// admin vale ate a proxima mudanca do site.
+export function decideAutoApply({ siteStatus, previousSiteStatus, currentStatus }) {
+  return siteStatus !== (previousSiteStatus ?? null) && siteStatus !== (currentStatus ?? null)
 }
 
 function ensureEnvironment() {
@@ -111,37 +180,25 @@ function ensureEnvironment() {
   }
 }
 
-async function fetchBarStatusImage() {
-  const response = await fetch(BAR_STATUS_IMAGE_URL, {
+async function fetchBarStatusPage() {
+  const response = await fetch(BAR_STATUS_PAGE_URL, {
     headers: {
-      Accept: 'image/jpeg, image/png, image/*',
+      Accept: 'text/html',
       'User-Agent': 'Portal-COMEX-BarStatus-Bot/1.0',
     },
     redirect: 'follow',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
   if (!response.ok) {
-    throw new Error(`Falha ao baixar imagem da barra (HTTP ${response.status}).`)
+    throw new Error(`Falha ao baixar a página da praticagem (HTTP ${response.status}).`)
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer())
-  if (buffer.length === 0) {
-    throw new Error('Imagem da barra baixada esta vazia.')
+  const html = await response.text()
+  if (!html.trim()) {
+    throw new Error('Página da praticagem baixada está vazia.')
   }
-  return buffer
-}
-
-async function ocrBarStatusImage(imageBuffer) {
-  // tesseract.js carrega os modelos de linguagem no primeiro run; em
-  // CI isso pode demorar ~10-20s. Usamos 'por' (português) porque a
-  // imagem tem acentuação ("PRATICÁVEL").
-  const worker = await createWorker('por')
-  try {
-    const { data } = await worker.recognize(imageBuffer)
-    return data.text ?? ''
-  } finally {
-    await worker.terminate()
-  }
+  return html
 }
 
 function base64UrlEncode(value) {
@@ -174,10 +231,11 @@ async function getAccessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
   if (!response.ok) {
-    throw new Error('Falha ao obter token OAuth para gravar sugestao da barra.')
+    throw new Error('Falha ao obter token OAuth para gravar o status da barra.')
   }
 
   const payloadResponse = await response.json()
@@ -188,6 +246,8 @@ function toFirestoreValue(value) {
   if (Array.isArray(value)) {
     return { arrayValue: { values: value.map((item) => toFirestoreValue(item)) } }
   }
+  if (value instanceof Date) return { timestampValue: value.toISOString() }
+  if (value === null) return { nullValue: null }
   if (typeof value === 'boolean') return { booleanValue: value }
   if (typeof value === 'number') {
     return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value }
@@ -203,23 +263,83 @@ function toFirestoreDocument(data) {
   }
 }
 
-async function upsertBarSuggestion(suggestion, accessToken) {
-  // Grava em barra/suggestion (doc unico "current"). O script NUNCA toca
-  // barra/current — a decisao de aplicar continua humana.
-  const requestUrl = `${FIRESTORE_REST_BASE}/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/barra/suggestion`
+function fromFirestoreValue(value) {
+  if (!value || typeof value !== 'object') return null
+  if ('stringValue' in value) return value.stringValue
+  if ('integerValue' in value) return Number(value.integerValue)
+  if ('doubleValue' in value) return value.doubleValue
+  if ('booleanValue' in value) return value.booleanValue
+  if ('nullValue' in value) return null
+  if ('timestampValue' in value) return value.timestampValue
+  if ('arrayValue' in value) {
+    return (value.arrayValue.values ?? []).map((item) => fromFirestoreValue(item))
+  }
+  if ('mapValue' in value) {
+    return Object.fromEntries(
+      Object.entries(value.mapValue.fields ?? {}).map(([key, item]) => [key, fromFirestoreValue(item)])
+    )
+  }
+  return null
+}
 
-  const response = await fetch(requestUrl, {
+function fromFirestoreDocument(document) {
+  const id = String(document.name ?? '').split('/').pop()
+  const data = Object.fromEntries(
+    Object.entries(document.fields ?? {}).map(([key, value]) => [key, fromFirestoreValue(value)])
+  )
+  return { id, ...data }
+}
+
+function documentsUrl(path) {
+  return `${FIRESTORE_REST_BASE}/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`
+}
+
+async function readDocument(path, accessToken) {
+  const response = await fetch(documentsUrl(path), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error(`Falha ao ler ${path} (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`)
+  }
+  return fromFirestoreDocument(await response.json())
+}
+
+// PATCH com updateMask: so os campos listados sao escritos. Campo listado na
+// mascara e ausente do corpo e APAGADO pelo Firestore (usado p/ remover o
+// rawOcrText legado).
+async function patchDocument(path, data, fieldPaths, accessToken) {
+  const mask = fieldPaths.map((field) => `updateMask.fieldPaths=${encodeURIComponent(field)}`).join('&')
+  const response = await fetch(`${documentsUrl(path)}?${mask}`, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(toFirestoreDocument(suggestion)),
+    body: JSON.stringify(toFirestoreDocument(data)),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
   if (!response.ok) {
-    const errorPayload = await response.text()
-    throw new Error(`Falha ao gravar sugestao da barra: ${errorPayload}`)
+    throw new Error(`Falha ao gravar ${path} (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`)
+  }
+}
+
+async function createAuditDocument(data, accessToken) {
+  const response = await fetch(documentsUrl('audits'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(toFirestoreDocument(data)),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Falha ao gravar evento de auditoria (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`)
   }
 }
 
@@ -230,8 +350,8 @@ async function recordDlqEntry(entry, accessToken) {
   const requestUrl = `${FIRESTORE_REST_BASE}/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/externalNewsDlq/${encodeURIComponent(dlqId)}`
   const payload = {
     sourceId: 'bar-status-sync',
-    sourceName: 'Praticagem ZP21',
-    stage: entry.stage, // 'fetch-image' | 'ocr' | 'map-status' | 'upsert-suggestion'
+    sourceName: SOURCE_NAME,
+    stage: entry.stage,
     error: String(entry.error ?? '').slice(0, 4000),
     failedAt: new Date().toISOString(),
   }
@@ -244,10 +364,32 @@ async function recordDlqEntry(entry, accessToken) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(toFirestoreDocument(payload)),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (dlqError) {
     console.error('Falha ao gravar DLQ do bar-status:', dlqError)
   }
+}
+
+// Registra a falha: DLQ + campos de saude na suggestion (mascara exata, nunca
+// toca siteStatus/status/lastSuccessAt) + ::warning::. Melhor-esforco.
+async function recordFailure(stage, message, accessToken) {
+  const text = singleLine(message)
+  console.error(`[${stage}] ${text}`)
+  await recordDlqEntry({ stage, error: text }, accessToken)
+
+  try {
+    await patchDocument(
+      'barra/suggestion',
+      { lastAttemptAt: new Date(), lastError: text.slice(0, 500), lastErrorStage: stage },
+      ['lastAttemptAt', 'lastError', 'lastErrorStage'],
+      accessToken
+    )
+  } catch (healthError) {
+    console.error('Falha ao gravar o estado de falha da barra:', healthError.message)
+  }
+
+  console.log(`::warning::Sync da barra falhou (${stage}): ${text.slice(0, 200)} (registrado na DLQ e na suggestion).`)
 }
 
 async function main() {
@@ -255,66 +397,133 @@ async function main() {
 
   const accessToken = await getAccessToken()
 
-  // 1. Baixa a imagem
-  let imageBuffer
+  // 1. Baixa a pagina
+  let html
   try {
-    imageBuffer = await fetchBarStatusImage()
+    html = await fetchBarStatusPage()
   } catch (fetchError) {
-    console.error(fetchError.message)
-    await recordDlqEntry({ stage: 'fetch-image', error: fetchError.message }, accessToken)
-    console.log('::warning::Falha ao baixar imagem da barra (registrada na DLQ).')
+    await recordFailure('fetch-page', fetchError.message, accessToken)
     return
   }
 
-  // 2. OCR
-  let rawOcrText
+  // 2. Le e valida cond_barra
+  const parsed = parseBarConditionFromHtml(html)
+  if (!parsed.ok) {
+    await recordFailure(parsed.stage, parsed.error, accessToken)
+    return
+  }
+
+  // 3. Estado atual (nao aplica sem saber o estado)
+  let suggestion
+  let current
   try {
-    rawOcrText = await ocrBarStatusImage(imageBuffer)
-  } catch (ocrError) {
-    console.error(ocrError.message)
-    await recordDlqEntry({ stage: 'ocr', error: ocrError.message }, accessToken)
-    console.log('::warning::Falha no OCR da imagem da barra (registrada na DLQ).')
+    suggestion = await readDocument('barra/suggestion', accessToken)
+    current = await readDocument('barra/current', accessToken)
+  } catch (readError) {
+    await recordFailure('read-state', readError.message, accessToken)
     return
   }
 
-  console.log('OCR output:', JSON.stringify(rawOcrText.trim()))
+  // 4. Decide
+  const shouldApply = decideAutoApply({
+    siteStatus: parsed.status.value,
+    previousSiteStatus: suggestion?.siteStatus ?? null,
+    currentStatus: current?.status ?? null,
+  })
 
-  // 3. Mapeia pro enum
-  const matchedStatus = mapOcrTextToStatus(rawOcrText)
-  if (!matchedStatus) {
-    const errorMessage = `OCR nao matched nenhum status conhecido. Texto: ${rawOcrText.trim().slice(0, 200)}`
-    console.error(errorMessage)
-    await recordDlqEntry({ stage: 'map-status', error: errorMessage }, accessToken)
-    console.log('::warning::Nao foi possivel mapear o texto extraido pro enum de status (registrado na DLQ).')
-    return
+  const now = new Date()
+
+  // 5. Aplica em barra/current (so status + updatedAt; notes preservado)
+  if (shouldApply) {
+    try {
+      await patchDocument(
+        'barra/current',
+        { status: parsed.status.value, updatedAt: now },
+        ['status', 'updatedAt'],
+        accessToken
+      )
+    } catch (applyError) {
+      // Sem atualizar siteStatus: o proximo run tenta de novo.
+      await recordFailure('apply-current', applyError.message, accessToken)
+      return
+    }
+
+    try {
+      await createAuditDocument(
+        {
+          action: 'Status da barra atualizado',
+          actor: AUDIT_ACTOR,
+          target: parsed.status.label,
+          createdAt: now,
+        },
+        accessToken
+      )
+    } catch (auditError) {
+      const auditMessage = singleLine(auditError.message)
+      console.error(auditMessage)
+      await recordDlqEntry({ stage: 'audit', error: auditMessage }, accessToken)
+      console.log('::warning::Falha ao registrar o evento de auditoria da barra (registrada na DLQ).')
+    }
   }
 
-  // 4. Grava sugestao em barra/suggestion
-  const suggestion = {
-    status: matchedStatus.value,
-    label: matchedStatus.label,
-    tone: matchedStatus.tone,
-    sourceName: 'Praticagem ZP21',
-    sourceUrl: BAR_STATUS_IMAGE_URL,
-    rawOcrText: rawOcrText.trim().slice(0, 500),
-    fetchedAt: new Date().toISOString(),
+  // 6. Grava a leitura bem-sucedida na suggestion
+  const suggestionData = {
+    status: parsed.status.value,
+    label: parsed.status.label,
+    tone: parsed.status.tone,
+    siteCode: parsed.code,
+    siteStatus: parsed.status.value,
+    siteDescription: parsed.siteDescription,
+    restriction: parsed.restriction,
+    sourceName: SOURCE_NAME,
+    sourceUrl: BAR_STATUS_PAGE_URL,
+    fetchedAt: now,
+    lastAttemptAt: now,
+    lastSuccessAt: now,
+    lastError: '',
+    lastErrorStage: '',
+  }
+  const suggestionMask = [
+    'status',
+    'label',
+    'tone',
+    'siteCode',
+    'siteStatus',
+    'siteDescription',
+    'restriction',
+    'sourceName',
+    'sourceUrl',
+    'fetchedAt',
+    'lastAttemptAt',
+    'lastSuccessAt',
+    'lastError',
+    'lastErrorStage',
+    'rawOcrText', // ausente do corpo: apaga o campo legado do OCR
+  ]
+  if (shouldApply) {
+    suggestionData.lastAppliedAt = now
+    suggestionData.lastAppliedStatus = parsed.status.value
+    suggestionMask.push('lastAppliedAt', 'lastAppliedStatus')
   }
 
   try {
-    await upsertBarSuggestion(suggestion, accessToken)
+    await patchDocument('barra/suggestion', suggestionData, suggestionMask, accessToken)
   } catch (upsertError) {
-    console.error(upsertError.message)
-    await recordDlqEntry({ stage: 'upsert-suggestion', error: upsertError.message }, accessToken)
-    console.log('::warning::Falha ao gravar sugestao da barra (registrada na DLQ).')
+    // recordFailure grava DLQ + lastError/lastErrorStage/lastAttemptAt (melhor-esforco),
+    // para o painel mostrar "failing".
+    await recordFailure('upsert-suggestion', upsertError.message, accessToken)
     return
   }
 
-  console.log(`Sugestao da barra gravada: ${matchedStatus.label} (tom: ${matchedStatus.tone}).`)
+  console.log(
+    shouldApply
+      ? `Barra: ${parsed.status.label} (código ${parsed.code}) — aplicado automaticamente em barra/current.`
+      : `Barra: ${parsed.status.label} (código ${parsed.code}) — sem mudança no site; barra/current mantido.`
+  )
 }
 
 // Roda o main() apenas quando executado diretamente (node scripts/syncBarStatus.mjs),
 // nao quando importado por testes unitarios.
-import { fileURLToPath } from 'node:url'
 const IS_MAIN = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
 
 if (IS_MAIN) {

@@ -11,6 +11,32 @@ import useAuth from '../../hooks/useAuth'
 import { formatRelativeTime } from '../../utils/dateFormat'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 
+// Sem leitura bem-sucedida da Praticagem ZP21 por mais de 8 h = robô parado/bloqueado
+// (o cron roda 4x/hora; atraso normal do GitHub não chega perto disso).
+const BAR_SYNC_STALE_AFTER_MS = 8 * 60 * 60 * 1000
+
+function toTime(value) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+// 'failing' = última tentativa falhou; 'stale' = leitura velha/inexistente; 'ok' = nada a alertar.
+function getBarSyncHealth(suggestion, now = Date.now()) {
+  if (!suggestion) return 'ok'
+
+  const lastSuccess = toTime(suggestion.lastSuccessAt)
+  const lastAttempt = toTime(suggestion.lastAttemptAt)
+
+  if (suggestion.lastError && (lastSuccess === null || (lastAttempt !== null && lastAttempt > lastSuccess))) {
+    return 'failing'
+  }
+  if (lastSuccess === null || now - lastSuccess > BAR_SYNC_STALE_AFTER_MS) {
+    return 'stale'
+  }
+  return 'ok'
+}
+
 export default function AdminBarStatusPanel() {
   const { profile } = useAuth()
   const [barStatusDraft, setBarStatusDraft] = useState({
@@ -92,7 +118,7 @@ export default function AdminBarStatusPanel() {
   }
 
   async function handleApplySuggestion() {
-    if (!barSuggestion) return
+    if (!barSuggestion?.status) return
 
     setIsSavingBarStatus(true)
     setError('')
@@ -118,7 +144,8 @@ export default function AdminBarStatusPanel() {
   }
 
   const suggestionMatchesCurrent =
-    barSuggestion && barStatusMeta && barSuggestion.status === barStatusMeta.status
+    barSuggestion?.status && barStatusMeta && barSuggestion.status === barStatusMeta.status
+  const barSyncHealth = getBarSyncHealth(barSuggestion)
 
   return (
     <>
@@ -173,31 +200,62 @@ export default function AdminBarStatusPanel() {
               </button>
             </div>
 
-            {barSuggestion ? (
+            {barSyncHealth === 'failing' ? (
+              <div className="error-banner" role="alert">
+                Falha na última leitura da Praticagem ZP21 ({formatRelativeTime(barSuggestion.lastAttemptAt)}):{' '}
+                {barSuggestion.lastError.replace(/[.\s]+$/, '')}. O status abaixo pode estar desatualizado.
+              </div>
+            ) : null}
+
+            {barSyncHealth === 'stale' ? (
+              <div className="error-banner" role="alert">
+                {barSuggestion.lastSuccessAt
+                  ? `A última leitura bem-sucedida da Praticagem ZP21 foi ${formatRelativeTime(barSuggestion.lastSuccessAt)}. O robô pode estar atrasado ou parado — confira o site da praticagem e ajuste manualmente se preciso.`
+                  : 'Ainda não houve leitura bem-sucedida da Praticagem ZP21.'}
+              </div>
+            ) : null}
+
+            {barSuggestion?.status ? (
               <div className={`suggestion-banner suggestion-banner--${barSuggestion.tone}`}>
                 <div className="suggestion-banner__text">
-                  <strong>{barSuggestion.sourceName}</strong> sugere:{' '}
+                  <strong>{barSuggestion.sourceName}</strong>:{' '}
                   <span className={`status-tag status-tag--${barSuggestion.tone}`}>
                     {barSuggestion.label}
                   </span>
-                  {barSuggestion.fetchedAt ? (
+                  {barSuggestion.lastSuccessAt ?? barSuggestion.fetchedAt ? (
                     <span className="suggestion-banner__time">
                       {' '}
-                      ({formatRelativeTime(barSuggestion.fetchedAt)})
+                      ({formatRelativeTime(barSuggestion.lastSuccessAt ?? barSuggestion.fetchedAt)})
                     </span>
+                  ) : null}
+                  {barSuggestion.siteDescription ? (
+                    <div className="suggestion-banner__time">
+                      Texto do site: {barSuggestion.siteDescription}
+                      {barSuggestion.restriction ? ` — restrição: ${barSuggestion.restriction}` : ''}
+                    </div>
                   ) : null}
                 </div>
                 {suggestionMatchesCurrent ? (
-                  <span className="suggestion-banner__match">Coincide com o status atual.</span>
+                  <span className="suggestion-banner__match">
+                    Coincide com o status atual.
+                    {barSuggestion.lastAppliedAt
+                      ? ` Aplicado automaticamente ${formatRelativeTime(barSuggestion.lastAppliedAt)}.`
+                      : ''}
+                  </span>
                 ) : (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={handleApplySuggestion}
-                    disabled={isSavingBarStatus}
-                  >
-                    Aplicar
-                  </button>
+                  <>
+                    <span className="suggestion-banner__match">
+                      Status manual difere do site. Volta a seguir a praticagem na próxima mudança do site.
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={handleApplySuggestion}
+                      disabled={isSavingBarStatus}
+                    >
+                      Aplicar
+                    </button>
+                  </>
                 )}
               </div>
             ) : null}
