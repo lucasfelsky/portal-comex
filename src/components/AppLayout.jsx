@@ -18,11 +18,10 @@ import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
+import intelliquoteLogo from '../../assets/intelliquote.png'
+import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
-
-const INTELLIQUOTE_WEB_URL =
-  import.meta.env.VITE_INTELLIQUOTE_WEB_URL ?? 'https://intelliquote.portal-comex.com'
 
 // Iniciais para o avatar da topbar (Sprint 11 / polish).
 // Pega ate 2 letras do primeiro + ultimo nome. Fallback '?'.
@@ -196,12 +195,24 @@ export default function AppLayout() {
             { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
             { id: 'go-admin-lead-time', label: 'Lead time', group: 'Admin', to: '/admin/lead-time', icon: 'sparkle' },
             { id: 'go-admin-support', label: 'Suporte', group: 'Admin', to: '/admin/suporte', icon: 'help', keywords: ['chamado', 'bug', 'ticket'] },
-            { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', to: INTELLIQUOTE_WEB_URL, icon: 'external', keywords: ['quote', 'cotacao'] },
+            { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', action: () => window.open(INTELLIQUOTE_WEB_URL, '_blank', 'noopener,noreferrer'), icon: 'external', keywords: ['quote', 'cotacao'] },
+          ]
+        : []),
+      ...(canRequestQuote(profile)
+        ? [
+            {
+              id: 'go-quote-request',
+              label: 'Fazer uma cotação',
+              group: 'Externo',
+              icon: 'external',
+              keywords: ['cotação', 'cotacao', 'solicitação', 'solicitacao', 'pedido', 'intelliquote', 'quote'],
+              action: () => window.open(INTELLIQUOTE_REQUESTS_URL, '_blank', 'noopener,noreferrer'),
+            },
           ]
         : []),
       { id: 'action-logout', label: 'Sair', group: 'Conta', icon: 'logout', action: () => requestLeave(logout) },
     ],
-    [profile?.role, requestLeave, logout]
+    [profile?.role, profile?.area, requestLeave, logout]
   )
 
   const meta = pageMeta[location.pathname] ?? pageMeta[location.pathname.startsWith('/admin') ? '/admin' : '/']
@@ -555,6 +566,27 @@ export default function AppLayout() {
               </NavLink>
             ))}
           </nav>
+
+          {canRequestQuote(profile) ? (
+            <a
+              className="sidebar-intelliquote-link sidebar-intelliquote-link--quote"
+              href={INTELLIQUOTE_REQUESTS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
+            >
+              <span className="sidebar-intelliquote-link__logo" aria-hidden="true">
+                <img src={intelliquoteLogo} alt="" />
+              </span>
+              <span className="sidebar-intelliquote-link__body">
+                <span className="sidebar-intelliquote-link__eyebrow">IntelliQuote</span>
+                <strong className="sidebar-intelliquote-link__title">Fazer uma cotação</strong>
+              </span>
+              <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
+                <Icon name="external" size={16} />
+              </span>
+            </a>
+          ) : null}
 
           {profile?.role === 'admin' ? (
             <a

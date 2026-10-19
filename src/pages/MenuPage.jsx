@@ -1,5 +1,6 @@
 // F16.2 (redesign iOS): tela Menu do mobile — substitui o drawer lateral
-// na tab bar (perfil, tema, suporte, admin, IntelliQuote, sair). No
+// na tab bar (perfil, tema, suporte, admin, IntelliQuote, "Fazer uma cotação"
+// pro Comercial, sair). No
 // desktop a rota existe mas não é linkada (a sidebar cobre tudo).
 
 import { useState } from 'react'
@@ -9,9 +10,8 @@ import { useTheme } from '../hooks/useTheme'
 import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
-
-const INTELLIQUOTE_WEB_URL =
-  import.meta.env.VITE_INTELLIQUOTE_WEB_URL ?? 'https://intelliquote.portal-comex.com'
+import intelliquoteLogo from '../../assets/intelliquote.png'
+import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 
 // Detecção de plataforma pro guia "Instalar como app". Inline (sem util novo —
 // audit:vault trava a contagem de src/utils). iPadOS 13+ se disfarça de Mac,
@@ -51,6 +51,7 @@ export default function MenuPage() {
   const theme = useTheme()
   const navigate = useNavigate()
   const isAdmin = profile?.role === 'admin'
+  const canQuote = canRequestQuote(profile)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const platform = detectPlatform()
   const alreadyInstalled = isStandalone()
@@ -132,24 +133,48 @@ export default function MenuPage() {
               <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
             </button>
           </div>
+        </>
+      ) : null}
 
+      {isAdmin || canQuote ? (
+        <>
           <div className="ios-section-label">Suite SQ</div>
           <div className="ios-group">
-            <a
-              className="ios-row"
-              href={INTELLIQUOTE_WEB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
-                <Icon name="external" size={15} aria-hidden="true" />
-              </span>
-              <span className="ios-row__body">
-                <span className="ios-row__title">IntelliQuote</span>
-                <span className="ios-row__sub">Cotações de fornecedores</span>
-              </span>
-              <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
-            </a>
+            {canQuote ? (
+              <a
+                className="ios-row"
+                href={INTELLIQUOTE_REQUESTS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
+              >
+                <span className="ios-row__icon ios-row__icon--logo" aria-hidden="true">
+                  <img src={intelliquoteLogo} alt="" />
+                </span>
+                <span className="ios-row__body">
+                  <span className="ios-row__title">Fazer uma cotação</span>
+                  <span className="ios-row__sub">Pedidos de cotação fora do forecast</span>
+                </span>
+                <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
+              </a>
+            ) : null}
+            {isAdmin ? (
+              <a
+                className="ios-row"
+                href={INTELLIQUOTE_WEB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
+                  <Icon name="external" size={15} aria-hidden="true" />
+                </span>
+                <span className="ios-row__body">
+                  <span className="ios-row__title">IntelliQuote</span>
+                  <span className="ios-row__sub">Cotações de fornecedores</span>
+                </span>
+                <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />
+              </a>
+            ) : null}
           </div>
         </>
       ) : null}

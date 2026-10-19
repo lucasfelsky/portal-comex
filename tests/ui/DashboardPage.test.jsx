@@ -269,6 +269,43 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+describe('DashboardPage - card "Fazer uma cotação"', () => {
+  it('user + Comercial: ve o card com href de solicitacoes e rel seguro', () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'user', area: 'Comercial', favoriteProcessIds: [] },
+    })
+    renderPage()
+    const link = screen.getByRole('link', { name: /Fazer uma cotação no IntelliQuote/i })
+    expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('user com area Geral: NAO ve o card', () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'user', area: 'Geral', favoriteProcessIds: [] },
+    })
+    renderPage()
+    expect(screen.queryByRole('link', { name: /Fazer uma cotação no IntelliQuote/i })).toBeNull()
+  })
+
+  it('compras + Comercial: NAO ve o card', () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'compras', area: 'Comercial', favoriteProcessIds: [] },
+    })
+    renderPage()
+    expect(screen.queryByRole('link', { name: /Fazer uma cotação no IntelliQuote/i })).toBeNull()
+  })
+
+  it('admin: ve o card', () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'admin', favoriteProcessIds: [] },
+    })
+    renderPage()
+    expect(screen.getByRole('link', { name: /Fazer uma cotação no IntelliQuote/i })).toBeInTheDocument()
+  })
+})
+
 describe('DashboardPage', () => {
   it('render inicial: heading "Visao geral"', async () => {
     renderPage()

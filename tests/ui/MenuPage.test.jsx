@@ -28,9 +28,9 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 import MenuPage from '../../src/pages/MenuPage.jsx'
 
-function renderWithRole(role, { themePreference = 'auto' } = {}) {
+function renderWithRole(role, { themePreference = 'auto', area } = {}) {
   mockUseAuth.mockReturnValue({
-    profile: { uid: `${role}-1`, name: 'Lucas Felsky', email: `${role}@sq.com`, role },
+    profile: { uid: `${role}-1`, name: 'Lucas Felsky', email: `${role}@sq.com`, role, area },
     logout: mockLogout,
   })
   mockUseTheme.mockReturnValue({
@@ -98,9 +98,32 @@ describe('MenuPage (F16.2)', () => {
 
   it('admin vê IntelliQuote e abre em nova aba com rel seguro', () => {
     renderWithRole('admin')
-    const link = screen.getByRole('link', { name: /intelliquote/i })
+    const link = screen.getByRole('link', { name: /^IntelliQuote/ })
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('user + Comercial vê "Fazer uma cotação" mas não Administração nem a linha IntelliQuote', () => {
+    renderWithRole('user', { area: 'Comercial' })
+    expect(screen.getByText('Suite SQ')).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /Fazer uma cotação/ })
+    expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.queryByText(/painel administrativo/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^IntelliQuote/ })).not.toBeInTheDocument()
+  })
+
+  it('admin vê as duas linhas da Suite SQ', () => {
+    renderWithRole('admin')
+    expect(screen.getByRole('link', { name: /Fazer uma cotação/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^IntelliQuote/ })).toBeInTheDocument()
+  })
+
+  it('logistica + Comercial NÃO vê a Suite SQ', () => {
+    renderWithRole('logistica', { area: 'Comercial' })
+    expect(screen.queryByText('Suite SQ')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
   })
 
   it('user comum NÃO vê IntelliQuote', () => {
