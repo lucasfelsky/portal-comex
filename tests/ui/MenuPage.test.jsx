@@ -116,10 +116,17 @@ describe('MenuPage (F16.2)', () => {
     expect(screen.queryByRole('link', { name: /^IntelliQuote/ })).not.toBeInTheDocument()
   })
 
-  it('admin vê as duas linhas da Suite SQ', () => {
+  it('admin vê só a linha IntelliQuote da Suite SQ, sem "Fazer uma cotação"', () => {
     renderWithRole('admin')
-    expect(screen.getByRole('link', { name: /Fazer uma cotação/ })).toBeInTheDocument()
+    expect(screen.getByText('Suite SQ')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /^IntelliQuote/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
+  })
+
+  it('admin + Comercial continua só com a linha IntelliQuote', () => {
+    renderWithRole('admin', { area: 'Comercial' })
+    expect(screen.getByRole('link', { name: /^IntelliQuote/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
   })
 
   it('logistica + Comercial NÃO vê a Suite SQ', () => {

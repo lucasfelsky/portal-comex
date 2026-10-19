@@ -1,5 +1,6 @@
 // Tests de src/lib/intelliquote.js: regra de visibilidade do botão
-// "Fazer uma cotação" (admin + role user da área Comercial) e URLs.
+// "Fazer uma cotação" (só role user da área Comercial; admin fica de fora
+// porque já tem o card IntelliQuote) e URLs.
 //
 // @vitest-environment node
 
@@ -12,8 +13,8 @@ import {
 } from '../../src/lib/intelliquote.js'
 
 describe('canRequestQuote', () => {
-  it('admin sempre pode (mesmo com área Geral)', () => {
-    expect(canRequestQuote({ role: 'admin', area: 'Geral' })).toBe(true)
+  it.each(['Geral', 'Comercial'])('admin com área %s não pode (já tem o card IntelliQuote)', (area) => {
+    expect(canRequestQuote({ role: 'admin', area })).toBe(false)
   })
 
   it.each(['Comercial', ' comercial ', 'COMERCIAL', 'Comercial Sul', 'Comercial  Sul'])(

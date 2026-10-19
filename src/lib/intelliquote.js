@@ -1,5 +1,6 @@
 // Integração com o IntelliQuote (suite SQ): URLs e regra de visibilidade do
-// botão "Fazer uma cotação". Mora em src/lib (e não em src/utils) porque o
+// botão "Fazer uma cotação" (só role `user` da área Comercial; o admin/COMEX
+// já tem o card IntelliQuote). Mora em src/lib (e não em src/utils) porque o
 // audit:vault trava a contagem de src/utils, src/components e src/pages.
 // Módulo puro: sem React e sem import de PNG (o logo é importado pelos
 // consumidores).
@@ -19,10 +20,10 @@ export function isCommercialArea(area) {
   return normalized === 'comercial' || normalized.startsWith('comercial ')
 }
 
-// Admin sempre; role `user` apenas se a área for Comercial. logistica,
-// compras e viewer têm função própria e nunca veem o botão.
+// Apenas role `user` da área Comercial. O admin (o COMEX, não existe papel
+// "comex" no Portal) fica de fora porque já tem o card IntelliQuote completo:
+// ninguém vê os dois. logistica, compras e viewer têm função própria e nunca
+// veem o botão.
 export function canRequestQuote(profile) {
-  if (!profile) return false
-  if (profile.role === 'admin') return true
-  return profile.role === 'user' && isCommercialArea(profile.area)
+  return profile?.role === 'user' && isCommercialArea(profile.area)
 }
