@@ -109,6 +109,29 @@
      no index.html). Fallback pra Manrope (corpo) se a webfont nao carregar. */
   --font-heading: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
 
+  /* Ciclo login-arte: cores da arte do login (LoginArt.jsx); contraparte em
+     :root[data-theme='dark']. */
+  --login-art-line: #007864;
+  --login-art-mark: #00ae91;
+  --login-art-ink: #0b2530;
+  --login-art-hull: #0b2530;
+  --login-art-bridge: #123845;
+  --login-art-foam: #7fe3cf;
+  --login-art-cargo-b: #2f6f7c;
+  --login-art-cargo-c: #7fc9bb;
+  --login-art-cargo-d: #007864;
+  --login-art-sea-top: #123845;
+  --login-art-sea-bottom: #0b2530;
+  --login-port-cargo-teal: #2f6f7c;
+  --login-port-cargo-deep: #1d4f5c;
+  --login-port-cargo-pale: #e3f5f0;
+  --login-port-cargo-green: #007864;
+  --login-port-window: #0b2530;
+  --login-port-hull: #061820;
+  --login-port-water-top: #0e3a46;
+  --login-port-water-bottom: #071a22;
+  --login-head-ink: #0b2530;
+
   color: var(--ink);
   background: var(--bg);
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -8584,6 +8607,29 @@ body {
     --glass-soft: rgba(22, 29, 27, 0.55);
     --glass-grad: linear-gradient(180deg, rgba(28, 36, 34, 0.98), rgba(18, 25, 23, 0.96));
     --glass-tint: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.04));
+
+    /* Ciclo login-arte: arte do login (LoginArt.jsx). Todos redeclarados, mesmo
+       os de valor igual ao claro (precedente: --sidebar-ink). */
+    --login-art-line: #14b89a;
+    --login-art-mark: #00ae91;
+    --login-art-ink: #cfe3de;
+    --login-art-hull: #6f9aa3;
+    --login-art-bridge: #3f7f8c;
+    --login-art-foam: #7fe3cf;
+    --login-art-cargo-b: #4b97a5;
+    --login-art-cargo-c: #7fc9bb;
+    --login-art-cargo-d: #14b89a;
+    --login-art-sea-top: #0c2029;
+    --login-art-sea-bottom: #071820;
+    --login-port-cargo-teal: #2f6f7c;
+    --login-port-cargo-deep: #1d4f5c;
+    --login-port-cargo-pale: #e3f5f0;
+    --login-port-cargo-green: #007864;
+    --login-port-window: #071820;
+    --login-port-hull: #04121a;
+    --login-port-water-top: #0a2c36;
+    --login-port-water-bottom: #04121a;
+    --login-head-ink: var(--ink);
 }
 
 /* Toast: no claro era ink(escuro)+texto branco. No dark --ink vira claro,
@@ -11290,8 +11336,9 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    margin-top: auto;
-    padding-top: 32px;
+    /* login-arte: feats sobem; o pe do painel e da cena do porto */
+    margin-top: 32px;
+    margin-bottom: 24px;
   }
 
   .auth-brand__feat {
@@ -11377,6 +11424,535 @@ body {
     letter-spacing: 0.14em;
   }
 }
+
+/* LOGIN-ART:START */
+/* ============================================================
+   Ciclo login-arte -- fundo ilustrado da tela de login
+   (src/components/LoginArt.jsx, montado so' em src/pages/LoginPage.jsx).
+   D1: `.auth-screen` e' usado por 7 telas; todo seletor aqui comeca por
+   `.auth-screen--login` ou e' classe exclusiva (`.login-*`). Verify/Pending/
+   NotFound/DebugClaims nao mudam.
+   D2: <=1040 o proprio <aside class="auth-brand"> vira cabecalho claro
+   (esconde p, feats e a cena do porto): um unico h1 e um unico logo na arvore.
+   ATENCAO: `.auth-brand` agora aparece tambem <=1040; regra futura em
+   `.auth-brand` sem media query vaza para o mobile.
+   D3: movimento e' opt-in -- `animation:` so' existe dentro de
+   `(min-width: 1041px) and (prefers-reduced-motion: no-preference)`. O estado
+   base e' estatico (navios em posicoes fixas e visiveis). Nao criar bloco
+   `reduce` novo (tests/unit/desktopReducedMotion.test.js trava a contagem).
+   D4: carta nautica em camadas px-nativas (SVG sem viewBox, 1 unidade = 1px):
+   o painel tem largura fixa, entao as coordenadas X valem 1:1 ancoradas a
+   esquerda. Card (>=1041): esquerda = 50vw + 80px, direita = 50vw + 520px.
+   D5: a cena do porto e' o ultimo item flex do aside (sangra ate as bordas),
+   viewBox estendido + `xMidYMax slice`. So' tokens (--login-*, --primary,
+   --sidebar-ink); nenhum hex neste bloco.
+   ============================================================ */
+
+.auth-screen--login {
+  position: relative;
+  isolation: isolate;
+}
+
+.login-chart,
+.login-waves,
+.login-port-scene {
+  display: none;
+  pointer-events: none;
+}
+
+/* Cores (valem em qualquer breakpoint; so' tokens) */
+.login-art-stroke--line {
+  stroke: var(--login-art-line);
+}
+
+.login-art-stroke--mark {
+  stroke: var(--login-art-mark);
+}
+
+.login-art-stroke--ink {
+  stroke: var(--login-art-ink);
+}
+
+.login-art-fill--ink {
+  fill: var(--login-art-ink);
+}
+
+.login-art-fill--mark {
+  fill: var(--login-art-mark);
+}
+
+.login-art-cargo--a {
+  fill: var(--login-art-mark);
+}
+
+.login-art-cargo--b {
+  fill: var(--login-art-cargo-b);
+}
+
+.login-art-cargo--c {
+  fill: var(--login-art-cargo-c);
+}
+
+.login-art-cargo--d {
+  fill: var(--login-art-cargo-d);
+}
+
+.login-chart__hull {
+  fill: var(--login-art-hull);
+}
+
+.login-chart__bridge {
+  fill: var(--login-art-bridge);
+}
+
+.login-chart__window {
+  fill: var(--login-art-foam);
+}
+
+.login-chart__wake {
+  stroke: var(--login-art-line);
+}
+
+.login-chart__buoy-body {
+  fill: var(--login-art-ink);
+}
+
+.login-chart__buoy-base,
+.login-chart__buoy-light {
+  fill: var(--login-art-mark);
+}
+
+.login-chart__lon text,
+.login-chart__lat text {
+  font: 700 10px 'Manrope', system-ui, sans-serif;
+  letter-spacing: 1.2px;
+  fill: var(--login-art-line);
+  fill-opacity: 0.45;
+}
+
+.login-chart__north {
+  font: 700 11px 'Manrope', system-ui, sans-serif;
+  fill: var(--login-art-ink);
+}
+
+.login-port-scene__sun {
+  fill: var(--primary);
+}
+
+.login-port-scene__stacks,
+.login-port-scene__quay {
+  fill: var(--sidebar-ink);
+}
+
+.login-port-scene__cranes {
+  stroke: var(--sidebar-ink);
+}
+
+.login-port-scene__spreaders {
+  fill: var(--login-art-foam);
+}
+
+.login-port-scene__cables {
+  stroke: var(--login-art-foam);
+}
+
+.login-port-scene__cargo--a,
+.login-port-scene__funnel,
+.login-port-scene__stripe {
+  fill: var(--primary);
+}
+
+.login-port-scene__cargo--b {
+  fill: var(--login-port-cargo-teal);
+}
+
+.login-port-scene__cargo--c {
+  fill: var(--login-art-foam);
+}
+
+.login-port-scene__cargo--d {
+  fill: var(--login-port-cargo-deep);
+}
+
+.login-port-scene__cargo--e,
+.login-port-scene__bridge {
+  fill: var(--login-port-cargo-pale);
+}
+
+.login-port-scene__cargo--f {
+  fill: var(--login-port-cargo-green);
+}
+
+.login-port-scene__window {
+  fill: var(--login-port-window);
+}
+
+.login-port-scene__hull {
+  fill: var(--login-port-hull);
+}
+
+.login-port-scene__waves {
+  stroke: var(--login-art-foam);
+}
+
+.login-port-scene__water-top {
+  stop-color: var(--login-port-water-top);
+}
+
+.login-port-scene__water-bottom {
+  stop-color: var(--login-port-water-bottom);
+}
+
+.login-waves__sea-top {
+  stop-color: var(--login-art-sea-top);
+}
+
+.login-waves__sea-bottom {
+  stop-color: var(--login-art-sea-bottom);
+}
+
+.login-waves__crest {
+  stroke: var(--login-art-foam);
+}
+
+.login-waves__hull {
+  fill: var(--login-art-hull);
+}
+
+@media (min-width: 1041px) {
+  .auth-screen--login .auth-brand {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .auth-screen--login .auth-panel {
+    position: relative;
+    z-index: 1;
+  }
+
+  .login-port-scene {
+    display: block;
+    flex: 1 1 0;
+    min-height: 120px;
+    max-height: 382px;
+    width: calc(100% + 88px);
+    margin: auto -44px -48px;
+  }
+
+  .login-chart {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .login-chart > svg {
+    position: absolute;
+    display: block;
+    overflow: hidden;
+  }
+
+  .login-chart__grid {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .login-chart__lon {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    -webkit-mask-image: linear-gradient(to left, transparent 24px, black 120px);
+    mask-image: linear-gradient(to left, transparent 24px, black 120px);
+  }
+
+  .login-chart__lat {
+    top: 0;
+    right: 0;
+    width: 140px;
+    height: 100%;
+  }
+
+  .login-chart__lane {
+    left: 0;
+    width: 100%;
+  }
+
+  .login-chart__lane--top {
+    top: 0;
+    height: 280px;
+  }
+
+  .login-chart__lane--mid {
+    top: calc(65% - 200px);
+    height: 280px;
+  }
+
+  .login-chart__lane--bottom {
+    bottom: 0;
+    height: 240px;
+  }
+
+  /* Posicoes estaticas (base, valem sem animacao): meio da folga ESQUERDA do
+     card (painel termina em 584; card comeca em 50vw + 80) = 25vw + 332. A
+     direita do card, abaixo de 1440, a folga e' estreita e os rotulos de
+     latitude (coluna de 140px na borda) ficam por baixo do navio. */
+  .login-chart__ship--out {
+    transform: translateX(calc(25vw + 332px));
+  }
+
+  .login-chart__ship--far {
+    transform: translateX(calc((25vw + 332px) / 0.75));
+  }
+
+  .login-chart__ship--back {
+    transform: translateX(calc(-25vw - 352px));
+  }
+
+  .login-chart__compass {
+    top: 180px;
+    right: 40px;
+    width: 120px;
+    height: 125px;
+  }
+}
+
+@media (min-width: 1248px) and (max-width: 1439px) {
+  .login-chart__compass {
+    top: 200px;
+    width: 72px;
+    height: 75px;
+    right: calc(25vw - 296px);
+  }
+}
+
+@media (min-width: 1041px) and (max-width: 1247px) {
+  .login-chart__compass {
+    display: none;
+  }
+}
+
+/* >=1440: a folga direita (>=200px) comporta o navio parado entre o card e os
+   rotulos de latitude (hull ate ~1317 em 1440; rotulos a partir de ~100vw - 75). */
+@media (min-width: 1440px) {
+  .login-chart__ship--out {
+    transform: translateX(calc(50vw + 566px));
+  }
+
+  .login-chart__ship--far {
+    transform: translateX(calc((50vw + 560px) / 0.75));
+  }
+}
+
+@media (min-width: 1041px) and (prefers-reduced-motion: no-preference) {
+  .login-port-scene__ship {
+    animation: login-port-ship 6s ease-in-out infinite alternate;
+  }
+
+  .login-port-scene__waves {
+    animation: login-port-waves 9s linear infinite;
+  }
+
+  .login-chart__ship--out {
+    animation: login-chart-out 80s linear -34s infinite;
+  }
+
+  .login-chart__ship--back {
+    animation: login-chart-back 95s linear -25s infinite;
+  }
+
+  .login-chart__ship--far {
+    animation: login-chart-out-far 130s linear -70s infinite;
+  }
+
+  .login-chart__bob {
+    animation: login-chart-bob 4s ease-in-out infinite alternate;
+  }
+
+  .login-chart__buoy-light {
+    animation: login-chart-buoy 3s ease-in-out infinite;
+  }
+}
+
+@keyframes login-port-ship {
+  to {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes login-port-waves {
+  to {
+    transform: translateX(-40px);
+  }
+}
+
+@keyframes login-chart-out {
+  from {
+    transform: translateX(560px);
+  }
+
+  to {
+    transform: translateX(calc(100vw + 60px));
+  }
+}
+
+@keyframes login-chart-back {
+  from {
+    transform: translateX(calc(-100vw - 60px));
+  }
+
+  to {
+    transform: translateX(-560px);
+  }
+}
+
+@keyframes login-chart-out-far {
+  from {
+    transform: translateX(747px);
+  }
+
+  to {
+    transform: translateX(calc((100vw + 60px) / 0.75));
+  }
+}
+
+@keyframes login-chart-bob {
+  to {
+    transform: translateY(-1.5px);
+  }
+}
+
+@keyframes login-chart-buoy {
+  0%,
+  60%,
+  100% {
+    opacity: 0.15;
+  }
+
+  75% {
+    opacity: 0.9;
+  }
+}
+
+@media (max-width: 1040px) {
+  .auth-screen--login {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 24px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-top: max(52px, env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .auth-screen--login .auth-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: min(100%, 440px);
+    position: relative;
+    z-index: 1;
+  }
+
+  .auth-screen--login .auth-brand__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth-screen--login .auth-brand__logo img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+  }
+
+  .auth-screen--login .auth-brand__eyebrow {
+    margin-top: 20px;
+    font-size: var(--fs-caption-2);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .auth-screen--login .auth-brand h1 {
+    margin: 6px 0 0;
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--login-head-ink);
+  }
+
+  .auth-screen--login .auth-brand p,
+  .auth-screen--login .auth-brand__feats {
+    display: none;
+  }
+
+  .auth-screen--login .auth-panel {
+    width: min(100%, 440px);
+    position: relative;
+    z-index: 1;
+  }
+
+  .auth-screen--login .auth-panel .brand__eyebrow {
+    display: none;
+  }
+
+  .login-waves {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .login-waves > svg {
+    position: absolute;
+    display: block;
+  }
+
+  .login-waves__swell {
+    top: 50px;
+    right: -10px;
+    width: 250px;
+    height: 70px;
+  }
+
+  .login-waves__sea {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 244px;
+  }
+
+  /* A crista (82% da largura) fica em y 739 do viewBox, 105px acima do rodape
+     da caixa do mar (altura fixa): casco 1-2px dentro da crista. Inclinado
+     como a onda (pivo no meio da quilha). */
+  .login-waves__ship {
+    left: calc(82% - 24px);
+    bottom: 101px;
+    width: 48px;
+    height: 24px;
+    transform: rotate(-8deg);
+    transform-origin: 50% 96%;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1040px) {
+  .auth-screen--login {
+    justify-content: center;
+  }
+}
+/* LOGIN-ART:END */
 
 /* ============================================================
    Ciclo 4a (redesign Fase 4) — Centro Administrativo: SHELL (tabs

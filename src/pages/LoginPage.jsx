@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import Icon from '../components/Icon'
+import { LoginPortScene, LoginSeaChart, LoginWaves } from '../components/LoginArt'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
 
 export default function LoginPage() {
@@ -87,7 +88,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen--login">
+      <LoginSeaChart />
+      <LoginWaves />
       <aside className="auth-brand">
         <span className="auth-brand__logo">
           <img src={sqQuimicaLogo} alt="SQ Química" />
@@ -115,6 +118,7 @@ export default function LoginPage() {
             </span>
           </div>
         </div>
+        <LoginPortScene />
       </aside>
       <div className="auth-panel">
       <form className="auth-card auth-card--form" onSubmit={handleSubmit}>
