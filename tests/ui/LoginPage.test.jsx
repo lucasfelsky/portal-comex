@@ -284,3 +284,68 @@ describe('LoginPage', () => {
     })
   })
 })
+
+describe('arte do login', () => {
+  it('a raiz tem auth-screen e auth-screen--login', () => {
+    const { container } = renderPage()
+    const root = container.firstElementChild
+    expect(root).toHaveClass('auth-screen')
+    expect(root).toHaveClass('auth-screen--login')
+  })
+
+  it('carta, ondas e cena do porto existem, decorativas, e a cena fica dentro de aside.auth-brand', () => {
+    const { container } = renderPage()
+    const chart = container.querySelector('.login-chart')
+    const waves = container.querySelector('.login-waves')
+    const port = container.querySelector('.login-port-scene')
+    expect(chart).not.toBeNull()
+    expect(waves).not.toBeNull()
+    expect(port).not.toBeNull()
+    expect(chart).toHaveAttribute('aria-hidden', 'true')
+    expect(waves).toHaveAttribute('aria-hidden', 'true')
+    expect(port).toHaveAttribute('aria-hidden', 'true')
+    expect(container.querySelector('aside.auth-brand .login-port-scene')).not.toBeNull()
+  })
+
+  it('todo svg da arte tem focusable="false"', () => {
+    const { container } = renderPage()
+    const svgs = [
+      ...container.querySelectorAll('.login-chart svg'),
+      ...container.querySelectorAll('.login-waves svg'),
+      container.querySelector('svg.login-port-scene'),
+    ]
+    expect(svgs.length).toBeGreaterThan(3)
+    svgs.forEach((svg) => {
+      expect(svg).toHaveAttribute('focusable', 'false')
+    })
+  })
+
+  it('nao duplica h1 nem logo na arvore (cabecalho mobile = o proprio aside)', () => {
+    renderPage()
+    expect(screen.getAllByRole('heading', { level: 1, name: 'Portal COMEX' })).toHaveLength(1)
+    expect(screen.getAllByAltText('SQ Química')).toHaveLength(1)
+  })
+
+  it('o eyebrow do card continua no DOM', () => {
+    const { container } = renderPage()
+    const eyebrow = container.querySelector('.auth-panel .brand__eyebrow')
+    expect(eyebrow).not.toBeNull()
+    expect(eyebrow).toHaveTextContent('Portal COMEX')
+  })
+
+  it('coordenadas da carta ficam dentro de .login-chart e sao decorativas', () => {
+    const { container } = renderPage()
+    ;['46°40′W', '24°05′S'].forEach((label) => {
+      const el = screen.getByText(label)
+      expect(container.querySelector('.login-chart')).toContainElement(el)
+      expect(el.closest('[aria-hidden="true"]')).not.toBeNull()
+    })
+  })
+
+  it('renderiza os 3 navios da carta', () => {
+    const { container } = renderPage()
+    expect(container.querySelector('.login-chart__ship--out')).not.toBeNull()
+    expect(container.querySelector('.login-chart__ship--back')).not.toBeNull()
+    expect(container.querySelector('.login-chart__ship--far')).not.toBeNull()
+  })
+})
