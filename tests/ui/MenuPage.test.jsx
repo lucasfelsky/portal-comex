@@ -110,6 +110,8 @@ describe('MenuPage (F16.2)', () => {
     expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link.querySelector('img')).toBeNull()
+    expect(link.querySelector('.ios-row__icon svg')).not.toBeNull()
     expect(screen.queryByText(/painel administrativo/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /^IntelliQuote/ })).not.toBeInTheDocument()
   })

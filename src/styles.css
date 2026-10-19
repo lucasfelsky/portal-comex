@@ -555,27 +555,12 @@ body {
   margin-top: 8px;
 }
 
-/* Logo do IntelliQuote no card "Fazer uma cotação": chip sempre branco
-   (o PNG é colorido), independente do tema. */
-.sidebar-intelliquote-link__logo {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border-radius: var(--radius-xs);
-  background: #ffffff;
-}
-
-.sidebar-intelliquote-link__logo img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-}
-
+/* Card "Fazer uma cotação": eyebrow "IntelliQuote" sobre o título, empilhados
+   à esquerda (a seta vai à direita via margin-left:auto). */
 .sidebar-intelliquote-link__body {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -2282,7 +2267,7 @@ body {
   align-items: center;
   gap: 14px;
   min-height: 64px;
-  padding: 16px 18px;
+  padding: 16px 20px;
   border-radius: var(--radius-xs);
   background: linear-gradient(135deg, #0a5f50, #063f38);
   color: #ffffff;
@@ -2302,22 +2287,6 @@ body {
 .quote-request-card:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-
-.quote-request-card__logo {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border-radius: var(--radius-xs);
-  background: #ffffff;
-}
-
-.quote-request-card__logo img {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
 }
 
 .quote-request-card__body {
@@ -9150,16 +9119,6 @@ body {
   justify-content: center;
   color: #fff;
   flex-shrink: 0;
-}
-
-.ios-row__icon--logo {
-  background: #ffffff;
-}
-
-.ios-row__icon--logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 
 .ios-row__body {

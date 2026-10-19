@@ -28,7 +28,6 @@ import WeeklyArrivalsCard from '../features/processes/WeeklyArrivalsCard'
 import { getDashboardKpis } from '../features/processes/dashboardKpis'
 import { projectProcessesForViewer } from '../features/processes/customsVisibility'
 import Icon from '../components/Icon'
-import intelliquoteLogo from '../../assets/intelliquote.png'
 import { INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 import StatCard from '../components/StatCard'
 import { getCollectionWindows } from '../utils/collectionWindows'
@@ -310,9 +309,6 @@ export default function DashboardPage() {
           rel="noopener noreferrer"
           aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
         >
-          <span className="quote-request-card__logo" aria-hidden="true">
-            <img src={intelliquoteLogo} alt="" />
-          </span>
           <span className="quote-request-card__body">
             <span className="quote-request-card__eyebrow">IntelliQuote</span>
             <strong className="quote-request-card__title">Fazer uma cotação</strong>

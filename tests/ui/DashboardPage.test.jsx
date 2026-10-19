@@ -281,6 +281,18 @@ describe('DashboardPage - card "Fazer uma cotação"', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
+  it('card sem logo: nome IntelliQuote em cima + titulo, sem <img>', () => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role: 'user', area: 'Comercial', favoriteProcessIds: [] },
+    })
+    renderPage()
+    const link = screen.getByRole('link', { name: /Fazer uma cotação no IntelliQuote/i })
+    expect(link.querySelector('img')).toBeNull()
+    expect(within(link).getByText('IntelliQuote')).toBeInTheDocument()
+    expect(within(link).getByText('Fazer uma cotação')).toBeInTheDocument()
+    expect(within(link).getByText('Pedidos de cotação fora do forecast')).toBeInTheDocument()
+  })
+
   it('user com area Geral: NAO ve o card', () => {
     mockUseAuth.mockReturnValue({
       profile: { uid: 'u-1', role: 'user', area: 'Geral', favoriteProcessIds: [] },

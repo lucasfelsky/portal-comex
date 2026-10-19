@@ -144,6 +144,14 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(screen.queryByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeNull()
     })
 
+    it('card sem logo: nome IntelliQuote em cima + titulo, sem <img>', () => {
+      renderWithRole('user', { area: 'Comercial' })
+      const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      expect(link.querySelector('img')).toBeNull()
+      expect(within(link).getByText('IntelliQuote')).toBeInTheDocument()
+      expect(within(link).getByText('Fazer uma cotação')).toBeInTheDocument()
+    })
+
     it('user + Importacao: NAO ve o card', () => {
       renderWithRole('user', { area: 'Importação' })
       expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()

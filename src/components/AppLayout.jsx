@@ -18,7 +18,6 @@ import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
-import intelliquoteLogo from '../../assets/intelliquote.png'
 import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 
 const NOTIFICATION_PANEL_ANIMATION_MS = 220
@@ -575,9 +574,6 @@ export default function AppLayout() {
               rel="noopener noreferrer"
               aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
             >
-              <span className="sidebar-intelliquote-link__logo" aria-hidden="true">
-                <img src={intelliquoteLogo} alt="" />
-              </span>
               <span className="sidebar-intelliquote-link__body">
                 <span className="sidebar-intelliquote-link__eyebrow">IntelliQuote</span>
                 <strong className="sidebar-intelliquote-link__title">Fazer uma cotação</strong>

@@ -10,7 +10,6 @@ import { useTheme } from '../hooks/useTheme'
 import Icon from '../components/Icon'
 import Modal from '../components/Modal'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
-import intelliquoteLogo from '../../assets/intelliquote.png'
 import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 
 // Detecção de plataforma pro guia "Instalar como app". Inline (sem util novo —
@@ -148,8 +147,8 @@ export default function MenuPage() {
                 rel="noopener noreferrer"
                 aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
               >
-                <span className="ios-row__icon ios-row__icon--logo" aria-hidden="true">
-                  <img src={intelliquoteLogo} alt="" />
+                <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
+                  <Icon name="file" size={15} aria-hidden="true" />
                 </span>
                 <span className="ios-row__body">
                   <span className="ios-row__title">Fazer uma cotação</span>
