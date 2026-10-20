@@ -128,3 +128,32 @@ describe('StatCard', () => {
     expect(container.querySelector('.stat-card.meu-stat')).toBeInTheDocument()
   })
 })
+
+// F4a (Dashboard desktop): nota do KPI (12/600, tom por significado).
+describe('StatCard - nota (F4a)', () => {
+  it('renderiza a nota com o tom pedido', () => {
+    const { container } = render(
+      <StatCard label="Chegadas na semana" value="17" note="+4 vs. semana passada" noteTone="success" />
+    )
+    const note = screen.getByText('+4 vs. semana passada')
+    expect(note).toHaveClass('stat-card__note', 'stat-card__note--success')
+    expect(container.querySelectorAll('.stat-card__note')).toHaveLength(1)
+  })
+
+  it('tom padrao e neutral', () => {
+    render(<StatCard label="Em trânsito" value="9" note="embarcados, a caminho" />)
+    expect(screen.getByText('embarcados, a caminho')).toHaveClass('stat-card__note--neutral')
+  })
+
+  it('nota vazia ("") continua renderizada (o card nao muda de altura em caso de erro)', () => {
+    const { container } = render(<StatCard label="X" value="—" note="" />)
+    const note = container.querySelector('.stat-card__note')
+    expect(note).toBeInTheDocument()
+    expect(note.textContent).toBe('')
+  })
+
+  it('sem a prop note nada muda (admin e mobile)', () => {
+    const { container } = render(<StatCard label="X" value="0" />)
+    expect(container.querySelector('.stat-card__note')).toBeNull()
+  })
+})

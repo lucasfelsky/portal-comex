@@ -6,7 +6,15 @@
 // 2026-07-06 (seg) .. 2026-07-12 (dom)) pra `chegadasNaSemana` ser
 // deterministico sem depender do relogio real.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDashboardKpis } from '../../src/features/processes/dashboardKpis'
+import {
+  ANNOUNCEMENT_SUMMARY_MAX,
+  formatBarStatusLabel,
+  getAnnouncementDayLabel,
+  getDashboardKpiNotes,
+  getDashboardKpis,
+  getPreviousWeekArrivalsCount,
+  summarizeAnnouncement,
+} from '../../src/features/processes/dashboardKpis'
 
 const NOW = new Date('2026-07-09T14:00:00-03:00')
 
@@ -253,5 +261,103 @@ describe('getDashboardKpis', () => {
       aguardandoAtracacao: 1,
       canalVermelho: 1,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4a (Dashboard desktop): nota "+N vs. semana passada", rotulo da barra,
+// resumo de comunicado (D10) e "Hoje / Ontem / dd/mm".
+// ---------------------------------------------------------------------------
+describe('getPreviousWeekArrivalsCount (D12)', () => {
+  const lastWeek = (id) => ({
+    id,
+    processStatus: 'Embarcou',
+    collectionStatus: 'Aguardando agendamento de coleta',
+    collectionWindows: [],
+    // semana anterior: quinta 2026-07-02 .. domingo 2026-07-05
+    warehouseDeliveryDateOverride: '2026-07-03',
+  })
+  const thisWeek = (id) => ({ ...lastWeek(id), warehouseDeliveryDateOverride: '2026-07-10' })
+
+  it('conta so as chegadas previstas para a semana anterior (mesma regra da semana atual)', () => {
+    const processes = [lastWeek('a'), lastWeek('b'), thisWeek('c')]
+    expect(getPreviousWeekArrivalsCount(processes, NOW)).toBe(2)
+    expect(getDashboardKpis(processes, NOW).chegadasNaSemana).toBe(1)
+  })
+
+  it('lista vazia, null e undefined dao 0', () => {
+    expect(getPreviousWeekArrivalsCount([], NOW)).toBe(0)
+    expect(getPreviousWeekArrivalsCount(null, NOW)).toBe(0)
+    expect(getPreviousWeekArrivalsCount(undefined, NOW)).toBe(0)
+  })
+})
+
+describe('getDashboardKpiNotes (D12)', () => {
+  const kpis = { chegadasNaSemana: 17, emTransito: 9, aguardandoAtracacao: 4, canalVermelho: 1 }
+
+  it('chegadas: "+N vs. semana passada" em success; queda e igualdade em neutral', () => {
+    expect(getDashboardKpiNotes(kpis, 13, 'warn').chegadasNaSemana).toEqual({
+      text: '+4 vs. semana passada',
+      tone: 'success',
+    })
+    expect(getDashboardKpiNotes(kpis, 20, 'warn').chegadasNaSemana).toEqual({
+      text: '−3 vs. semana passada',
+      tone: 'neutral',
+    })
+    expect(getDashboardKpiNotes(kpis, 17, 'warn').chegadasNaSemana).toEqual({
+      text: 'igual à semana passada',
+      tone: 'neutral',
+    })
+  })
+
+  it('em transito e fixo; atracacao segue o tom da barra; canal vermelho exige acao so quando ha', () => {
+    const notes = getDashboardKpiNotes(kpis, 13, 'warn')
+    expect(notes.emTransito).toEqual({ text: 'embarcados, a caminho', tone: 'neutral' })
+    expect(notes.aguardandoAtracacao).toEqual({ text: 'barra com restrições', tone: 'warning' })
+    expect(notes.canalVermelho).toEqual({ text: 'exige ação', tone: 'danger' })
+
+    expect(getDashboardKpiNotes(kpis, 13, 'danger').aguardandoAtracacao.tone).toBe('danger')
+    expect(getDashboardKpiNotes(kpis, 13, 'ok').aguardandoAtracacao).toEqual({
+      text: 'barra praticável',
+      tone: 'success',
+    })
+    expect(getDashboardKpiNotes(kpis, 13, undefined).aguardandoAtracacao.tone).toBe('neutral')
+    expect(getDashboardKpiNotes({ ...kpis, canalVermelho: 0 }, 13, 'ok').canalVermelho.tone).toBe('neutral')
+  })
+})
+
+describe('formatBarStatusLabel', () => {
+  it('acentua os 3 status; desconhecido cai no rotulo do repositorio', () => {
+    expect(formatBarStatusLabel({ status: 'PRATICAVEL' })).toBe('Praticável')
+    expect(formatBarStatusLabel({ status: 'PRATICAVEL_RESTRICOES' })).toBe('Praticável c/ restrições')
+    expect(formatBarStatusLabel({ status: 'IMPRATICAVEL' })).toBe('Impraticável')
+    expect(formatBarStatusLabel({ status: 'OUTRO', label: 'OUTRO' })).toBe('OUTRO')
+    expect(formatBarStatusLabel(null)).toBe('')
+  })
+})
+
+describe('summarizeAnnouncement (D10)', () => {
+  it('texto curto passa inteiro; espacos e quebras de linha colapsam', () => {
+    expect(summarizeAnnouncement('  Reunião\n\nmensal   de COMEX ')).toBe('Reunião mensal de COMEX')
+    expect(summarizeAnnouncement(undefined)).toBe('')
+  })
+
+  it('140 primeiros caracteres + reticencias; exatamente 140 nao trunca', () => {
+    const exact = 'a'.repeat(140)
+    expect(summarizeAnnouncement(exact)).toBe(exact)
+    const long = `${'b'.repeat(140)}cdef`
+    expect(summarizeAnnouncement(long)).toBe(`${'b'.repeat(140)}…`)
+    expect(ANNOUNCEMENT_SUMMARY_MAX).toBe(140)
+  })
+})
+
+describe('getAnnouncementDayLabel', () => {
+  it('Hoje / Ontem / dd/mm (com ano quando de outro ano), pela data local', () => {
+    expect(getAnnouncementDayLabel({ updatedAt: '2026-07-09T08:00:00' }, NOW)).toBe('Hoje')
+    expect(getAnnouncementDayLabel({ updatedAt: '2026-07-08T23:30:00' }, NOW)).toBe('Ontem')
+    expect(getAnnouncementDayLabel({ updatedAt: '2026-07-01T10:00:00' }, NOW)).toBe('01/07')
+    expect(getAnnouncementDayLabel({ updatedAt: '2025-12-31T10:00:00' }, NOW)).toBe('31/12/2025')
+    expect(getAnnouncementDayLabel({ createdAt: '2026-07-09T01:00:00' }, NOW)).toBe('Hoje')
+    expect(getAnnouncementDayLabel({}, NOW)).toBe('')
   })
 })

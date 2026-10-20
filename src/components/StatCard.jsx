@@ -9,6 +9,8 @@
 //     trend={{ delta: 12, period: 'vs. semana passada' }}
 //     sparkline={[10, 14, 12, 18, 22, 19, 25, 30]}
 //     icon="dashboard"     // opcional
+//     note="+4 vs. semana passada"   // opcional (Dashboard desktop, F4a)
+//     noteTone="success"             // success | warning | danger | neutral
 //   />
 //
 // Trend positive (up + cor primary-700), trend negative (down + danger).
@@ -70,6 +72,8 @@ export default function StatCard({
   trend,
   sparkline,
   icon,
+  note,
+  noteTone = 'neutral',
   className = '',
 }) {
   // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
@@ -135,6 +139,12 @@ export default function StatCard({
       ) : null}
 
       {trend?.period ? <p className="stat-card__period">{trend.period}</p> : null}
+
+      {/* Nota do KPI (Dashboard.dc.html: 12/600, tom por significado). Renderiza
+          mesmo vazia ('' = erro de carga) para o card nao mudar de altura. */}
+      {note !== undefined && note !== null ? (
+        <p className={`stat-card__note stat-card__note--${noteTone}`}>{note}</p>
+      ) : null}
     </article>
   )
 }
