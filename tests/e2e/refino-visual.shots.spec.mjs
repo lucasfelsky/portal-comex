@@ -28,7 +28,9 @@
 // vazio, carregando), Notificacoes (10 filtros, grupos, Anteriores, silenciado, vazio),
 // Preferencias, notebook, tablet e mobile; F5b: Login (padrao, foco, senha visivel, cadastrar, redefinir
 // senha, erro, carregando), Verificar e-mail, Acesso pendente/bloqueado/reprovado (com diagnostico),
-// 404 e "Pagina inicial indisponivel", notebook, 1100, tablet e mobile).
+// 404 e "Pagina inicial indisponivel", notebook, 1100, tablet e mobile; F6a: Admin — Usuarios (lista, detalhe,
+// novo, filtros, fila, vazio, confirmacoes), Comunicados (lista, editor, novo, vazio) e Barra do porto (cada
+// status e os avisos do robo ZP21: coincide, difere, falha, atrasado), notebook, 1100, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -1552,6 +1554,328 @@ PHASES.f5b = [
     afterShot: restoreViewport,
   })),
 ]
+// --- F6a: Admin — Usuarios, Comunicados e Barra do porto ---------------------------------------
+// Prancheta de 1440x1060 (a dos mocks AdminUsuarios/AdminComunicados/AdminBarra). A rolagem e do
+// .main-content, entao cada captura usa a altura da prancheta; os estados com dado (barra, vazio)
+// regravam o doc no emulador antes da navegacao e restauram depois.
+const adminShot = (extra) => async (page) => {
+  await resizeTo(1440, 1060)(page)
+  if (extra) await extra(page)
+  await page.waitForTimeout(300)
+}
+const usersReady = (page) => page.locator('.admin-panel--users').first()
+const usersLegacyReady = (page) => page.getByRole('heading', { name: 'Gestão de usuários' })
+const annReady = (page) => page.locator('.admin-panel--announcements').first()
+const annLegacyReady = (page) => page.getByRole('heading', { name: 'Comunicados internos' })
+const barReady = (page) => page.locator('.admin-panel--bar').first()
+const barLegacyReady = (page) => page.getByRole('heading', { name: 'Barra Itajaí/Navegantes' })
+const clickUserRow = (name) => async (page) => {
+  await page.locator('.au-row', { hasText: name }).click()
+  await expect(page.locator('.au-row--selected', { hasText: name })).toBeVisible()
+}
+const clickAnnouncement = (title) => async (page) => {
+  await page.locator('.ac-row', { hasText: title }).click()
+  await expect(page.locator('.ac-row--selected', { hasText: title })).toBeVisible()
+}
+const confirmDialogOpen = (opener) => async (page) => {
+  await page.getByRole('button', { name: opener }).click()
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await page.waitForTimeout(500)
+}
+const closeDialog = async (page) => {
+  const cancel = page.getByRole('alertdialog').getByRole('button', { name: 'Cancelar' })
+  if (await cancel.count()) await cancel.click()
+  await restoreViewport(page)
+}
+const barStatusState = (status, suggestion) => async () => {
+  await putDoc('barra', 'current', { status, notes: 'Restrição de calado para navios acima de 12 m.', updatedAt: isoMinutesAgo(25) })
+  if (suggestion === null) await deleteDocFs('barra', 'suggestion')
+  else if (suggestion) await putDoc('barra', 'suggestion', suggestion)
+}
+const zp21 = (overrides) => ({
+  sourceName: 'Praticagem ZP21',
+  sourceUrl: 'https://www.praticagem-zp21.example/cond-barra',
+  fetchedAt: isoMinutesAgo(12),
+  lastAttemptAt: isoMinutesAgo(12),
+  lastSuccessAt: isoMinutesAgo(12),
+  lastError: '',
+  lastAppliedAt: isoMinutesAgo(12),
+  ...overrides,
+})
+const PRATICAVEL_COM_RESTRICOES = {
+  status: 'PRATICAVEL_RESTRICOES',
+  siteDescription: 'PRATICÁVEL COM RESTRIÇÕES',
+  restriction: 'calado máximo de 11,5 m e janela de maré',
+}
+const restoreBarDefault = barStatusState('PRATICAVEL_RESTRICOES', zp21(PRATICAVEL_COM_RESTRICOES))
+const sized = [
+  ['notebook-1366x768', 1366, 768],
+  ['notebook-1280x552', 1280, 552],
+  ['1100x800', 1100, 800],
+  ['tablet-900', 900, 1300],
+  ['mobile-390', 390, 1500],
+]
+PHASES.f6a = [
+  // --- Usuarios ---------------------------------------------------------------------------------
+  { name: 'usuarios-lista', route: '/admin/usuarios', ready: usersReady, action: adminShot(), afterShot: restoreViewport },
+  {
+    name: 'usuarios-detalhe-bloqueado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(clickUserRow('Daniela Martins')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-detalhe-reprovado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(clickUserRow('Eduardo Ferraz')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-novo',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo usuário' }).click()
+      await expect(page.getByRole('heading', { name: 'Novo usuário' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-filtro-bloqueado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.locator('.au-filters select').selectOption('Bloqueado')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-busca-sem-resultado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByPlaceholder('Nome, email, perfil ou ID').fill('zzz')
+      await expect(page.getByText('Nenhum usuário encontrado')).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-senha-visivel',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Senha').fill('NovaSenha#2026')
+      await expect(page.getByRole('button', { name: 'Ocultar senha' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-foco-teclado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByPlaceholder('Nome, email, perfil ou ID').focus()
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-confirmar-bloqueio',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(confirmDialogOpen('Bloquear usuário')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'usuarios-fila-vazia',
+    route: '/admin/usuarios',
+    beforeGoto: async () => {
+      for (const id of ['shot-pending-1', 'shot-pending-2']) await patchFields('users', id, { status: 'Ativo', statusTone: 'ok' })
+    },
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Nenhum cadastro pendente')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      for (const id of ['shot-pending-1', 'shot-pending-2']) await patchFields('users', id, { status: 'Pendente', statusTone: 'warn' })
+      await restoreViewport(page)
+    },
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `usuarios-${suffix}`,
+    route: '/admin/usuarios',
+    ready: width > 1040 ? usersReady : usersLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Comunicados ------------------------------------------------------------------------------
+  { name: 'comunicados-lista', route: '/admin/comunicados', ready: annReady, action: adminShot(), afterShot: restoreViewport },
+  {
+    name: 'comunicados-editar-resumo-longo',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(clickAnnouncement('Mudança no horário de corte')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-novo',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo comunicado' }).first().click()
+      await expect(page.getByRole('heading', { name: 'Novo comunicado' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-novo-digitando',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo comunicado' }).first().click()
+      await page.getByLabel('Título').fill('Atualização do prazo de armazenagem')
+      await page.getByLabel('Mensagem').fill('A partir de segunda-feira, o prazo de armazenagem gratuita no terminal passa de 5 para 7 dias úteis para cargas FCL. Confirme as datas com a logística antes de reagendar coletas.')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-confirmar-exclusao',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(confirmDialogOpen('Excluir comunicado')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'comunicados-vazio',
+    route: '/admin/comunicados',
+    beforeGoto: async () => {
+      for (const id of ['shot-ann-1', 'shot-ann-2', 'shot-ann-3', 'shot-ann-4']) await deleteDocFs('announcements', id)
+    },
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Nenhum comunicado publicado')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await seedAnnouncementsF6a()
+      await restoreViewport(page)
+    },
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `comunicados-${suffix}`,
+    route: '/admin/comunicados',
+    ready: width > 1040 ? annReady : annLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Barra do porto ---------------------------------------------------------------------------
+  {
+    name: 'barra-praticavel',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('PRATICAVEL', zp21({ status: 'PRATICAVEL', siteDescription: 'PRATICÁVEL', restriction: '' })),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-restricoes',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-impraticavel',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('IMPRATICAVEL', zp21({ status: 'IMPRATICAVEL', siteDescription: 'IMPRATICÁVEL', restriction: 'ressaca na barra' })),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-difere',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({ status: 'IMPRATICAVEL', siteDescription: 'IMPRATICÁVEL', restriction: 'ressaca na barra', lastAppliedAt: null })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-falha',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({
+        ...PRATICAVEL_COM_RESTRICOES,
+        lastAttemptAt: isoMinutesAgo(20),
+        lastSuccessAt: isoMinutesAgo(60 * 3),
+        lastError: 'Falha ao ler o site da Praticagem ZP21 (HTTP 503).',
+        lastAppliedAt: null,
+      })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-atrasado',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({ ...PRATICAVEL_COM_RESTRICOES, lastAttemptAt: isoMinutesAgo(60 * 9 + 10), lastSuccessAt: isoMinutesAgo(60 * 9 + 10), lastAppliedAt: null })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-sem-robo',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('PRATICAVEL_RESTRICOES', null),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-selecao-nao-salva',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('radio', { name: 'Impraticável' }).check({ force: true })
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-foco-teclado',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('radio', { name: 'Praticável c/ restrições' }).focus()
+      await page.keyboard.press('ArrowDown')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `barra-${suffix}`,
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: width > 1040 ? barReady : barLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
 const PHASE = process.env.REFINO_PHASE || 'f4c'
 
 // --- helpers de seed -------------------------------------------------------
@@ -2256,6 +2580,91 @@ async function seedAccessUsers() {
   }
 }
 
+// F6a: usuarios em todos os status/papeis, comunicados (um com mensagem de mais de 140 caracteres) e a
+// leitura do robo da Praticagem ZP21 (barra/suggestion).
+async function deleteDocFs(collection, id) {
+  const response = await fetch(`${DOCS}/${collection}/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer owner' },
+  })
+  if (!response.ok && response.status !== 404) throw new Error(`delete ${collection}/${id}: ${await response.text()}`)
+}
+
+async function seedAnnouncementsF6a() {
+  const announcements = [
+    {
+      id: 'shot-ann-1',
+      title: 'Janela de manutenção do sistema de câmbio',
+      content: 'O sistema de câmbio ficará indisponível entre 22h e 23h desta sexta-feira. Planeje as remessas com antecedência.',
+      channel: 'Operação',
+      createdAt: isoMinutesAgo(90),
+      updatedAt: isoMinutesAgo(90),
+    },
+    {
+      id: 'shot-ann-2',
+      title: 'Novo prazo de free time no terminal de Itajaí',
+      content: 'O terminal passou a conceder 7 dias de free time para cargas de importação a partir do próximo mês.',
+      channel: 'Banner interno',
+      createdAt: isoMinutesAgo(60 * 26),
+      updatedAt: isoMinutesAgo(60 * 26),
+    },
+    {
+      id: 'shot-ann-3',
+      title: 'Reunião mensal de COMEX',
+      content: 'A reunião mensal acontece na quinta-feira, às 10h, na sala de operações.',
+      channel: 'Operação',
+      createdAt: isoMinutesAgo(60 * 24 * 6),
+      updatedAt: isoMinutesAgo(60 * 24 * 6),
+    },
+    {
+      id: 'shot-ann-4',
+      title: 'Mudança no horário de corte da logística',
+      content:
+        'A partir da próxima semana o horário de corte para solicitar coletas no mesmo dia passa das 15h para as 14h. Pedidos enviados depois desse horário serão agendados para o dia útil seguinte, salvo exceções aprovadas pela coordenação de logística.',
+      channel: 'Sistema',
+      createdAt: isoMinutesAgo(60 * 24 * 11),
+      updatedAt: isoMinutesAgo(60 * 24 * 11),
+    },
+  ]
+  for (const { id, ...data } of announcements) await putDoc('announcements', id, data)
+}
+
+async function seedF6a() {
+  const users = [
+    ['shot-u-beatriz', 'Beatriz Rocha', 'beatriz.rocha@sqquimica.com', 'logistica', 'Geral', 'Ativo', 'ok'],
+    ['shot-u-carlos', 'Carlos Siqueira', 'carlos.siqueira@sqquimica.com', 'user', 'Área Comercial', 'Ativo', 'ok'],
+    ['shot-u-daniela', 'Daniela Martins', 'daniela.martins@sqquimica.com', 'user', 'Geral', 'Bloqueado', 'neutral'],
+    ['shot-u-eduardo', 'Eduardo Ferraz', 'eduardo.ferraz@parceiro.com.br', 'user', 'Geral', 'Reprovado', 'neutral'],
+  ]
+  for (const [id, name, email, role, area, status, statusTone] of users) {
+    await putDoc('users', id, {
+      uid: id,
+      name,
+      email,
+      role,
+      status,
+      statusTone,
+      area,
+      lastAccess: 'Seed refino visual',
+      notes: 'Seed refino visual',
+      favoriteProcessIds: [],
+    })
+  }
+  await seedAnnouncementsF6a()
+  await putDoc('barra', 'suggestion', {
+    sourceName: 'Praticagem ZP21',
+    sourceUrl: 'https://www.praticagem-zp21.example/cond-barra',
+    status: 'PRATICAVEL_RESTRICOES',
+    siteDescription: 'PRATICÁVEL COM RESTRIÇÕES',
+    restriction: 'calado máximo de 11,5 m e janela de maré',
+    fetchedAt: isoMinutesAgo(12),
+    lastAttemptAt: isoMinutesAgo(12),
+    lastSuccessAt: isoMinutesAgo(12),
+    lastError: '',
+    lastAppliedAt: isoMinutesAgo(12),
+  })
+}
+
 async function seedAll() {
   const adminUid = await uidOf(E2E_USERS.admin)
   const processes = buildProcesses()
@@ -2364,6 +2773,7 @@ async function seedAll() {
   if (PHASE === 'f4c' || PHASE === 'f4d') await seedF4c(adminUid)
   if (PHASE === 'f5a') await seedF5a(adminUid)
   if (PHASE === 'f5b') await seedAccessUsers()
+  if (PHASE === 'f6a') await seedF6a()
 }
 
 // --- capturas --------------------------------------------------------------
@@ -2385,7 +2795,7 @@ test.beforeAll(async () => {
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
-    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' ? 600_000 : 180_000)
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' || PHASE === 'f6a' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 

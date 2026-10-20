@@ -1559,7 +1559,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/admin/AdminBarStatusPanel.jsx': [1, 1, 0],
   'features/admin/AdminLeadTimePanel.jsx': [1, 1, 0],
   'features/admin/AdminSupportPanel.jsx': [3, 3, 0],
-  'features/admin/AdminUsersPanel.jsx': [5, 3, 0],
+  // F6a: a arvore desktop (au-*) acrescenta 3 fantasmas sem moldura no mock: Excluir usuario, Reprovar (contorno de perigo proprio) e Abrir detalhe.
+  'features/admin/AdminUsersPanel.jsx': [8, 3, 0],
   'features/erp/ErpCreateProcessesPanel.jsx': [1, 0, 0],
   'features/erp/ErpReconcileModal.jsx': [2, 1, 0],
   'features/processes/CollectionStatusEditView.jsx': [1, 0, 0],
@@ -3444,7 +3445,8 @@ describe('F5a - icones novos', () => {
 const F5B_MARK = 'REFINO VISUAL F5b — LOGIN E ESTADOS DE ACESSO'
 const f5bMarkAt = css.indexOf(F5B_MARK)
 const f5bStart = css.lastIndexOf('/*', f5bMarkAt)
-const f5bEnd = css.indexOf('/* Roadmap 11 / PR #223')
+// F6a: a secao F5b termina onde comeca a secao F6a (que vem logo depois, antes do bloco reduce).
+const f5bEnd = css.lastIndexOf('/*', css.indexOf('REFINO VISUAL F6a — ADMIN'))
 const F5B_COMPACT_MEDIA = '@media (min-width: 1041px) and (max-height: 800px) {'
 const f5bSection = stripComments(css.slice(f5bStart, f5bEnd))
 const f5bMediaAt = f5bSection.indexOf(DESKTOP_MEDIA)
@@ -3854,5 +3856,159 @@ describe('F5b - JSX 404', () => {
   it('sem toISOString, console.log nem hex', () => {
     expect(f5bNoComments(f5bNotFound)).not.toMatch(/toISOString\(\)|console\.log/)
     expect(f5bNoComments(f5bNotFound)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F6a - Admin: Usuarios, Comunicados e Barra do porto (AdminUsuarios.dc.html, AdminComunicados.dc.html,
+// AdminBarra.dc.html). CSS = 1 secao "REFINO VISUAL F6a" com UM @media desktop; toda regra comeca pela
+// moldura da pagina (.admin-section) ou por uma raiz de painel (.admin-panel, .admin-panel--users|
+// --announcements|--bar). Os tres paineis escolhem a arvore por matchMedia (au-*, ac-*, ab-* + atomos ad-*);
+// tablet e mobile seguem na arvore anterior. Sem @media (max-width) e sem cor literal.
+// ---------------------------------------------------------------------------
+const F6A_MARK = 'REFINO VISUAL F6a — ADMIN'
+const f6aMarkAt = css.indexOf(F6A_MARK)
+const f6aStart = css.lastIndexOf('/*', f6aMarkAt)
+const f6aEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f6aSection = stripComments(css.slice(f6aStart, f6aEnd))
+const f6aRules = parseRules(bodyAfter(f6aSection, DESKTOP_MEDIA))
+
+function expectF6a(selector, declarations) {
+  const bodies = f6aRules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F6a: ${selector}`).toBeGreaterThan(0)
+  const body = bodies.join(' ')
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F6a - secao, escopo e ordem', () => {
+  it('a secao existe depois da F5b, antes do bloco reduce desktop (que segue ultimo) e tem UM @media desktop', () => {
+    expect(f6aMarkAt).toBeGreaterThan(css.indexOf('REFINO VISUAL F5b — LOGIN E ESTADOS DE ACESSO'))
+    expect(f6aEnd).toBeGreaterThan(f6aStart)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f6aEnd)
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP)).match(/@media/g)).toHaveLength(1)
+    expect(f6aSection.match(/@media/g)).toHaveLength(1)
+    expect(f6aSection.trim().startsWith(DESKTOP_MEDIA)).toBe(true)
+  })
+
+  it('nenhum @media (max-width): tablet e mobile ficam como estao', () => {
+    expect(f6aSection).not.toMatch(/@media\s*\(max-width/)
+  })
+
+  it('toda regra comeca pela moldura (.admin-section) ou por uma raiz de painel', () => {
+    const ROOT = /^(\[data-theme='dark'\] )?(\.surface\.admin-section|\.admin-section \.admin-panel-stack|\.admin-panel(--users|--announcements|--bar)?\b)/
+    for (const rule of f6aRules) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem raiz: ${selector}`).toMatch(ROOT)
+    }
+    expect(f6aRules.length).toBeGreaterThan(60)
+  })
+
+  it('so tokens: nenhuma cor literal na secao', () => {
+    const all = f6aRules.map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
+    expect(all.match(/rgba?\([^)]*\)/g)).toBeNull()
+  })
+
+  it('moldura: o cartao ao redor das abas e paineis some (mocks: abas e paineis direto sobre o fundo)', () => {
+    expectF6a('.surface.admin-section', ['gap: 20px', 'padding: 0', 'border: 0', 'border-radius: 0', 'background: none', 'box-shadow: none'])
+    expectF6a('.admin-section .admin-panel-stack', ['gap: 20px'])
+  })
+
+  it('atomos: cartao 22/22 com borda --border, etiqueta 3x10 12/700 por tom, rodape com divisor', () => {
+    expectF6a('.admin-panel .ad-card', ['gap: 14px', 'padding: 22px', 'border: 1px solid var(--border)', 'border-radius: 22px', 'background: var(--surface)'])
+    expectF6a('.admin-panel .ad-title', ['font-family: var(--font-heading)', 'font-size: 20px', 'font-weight: 700'])
+    expectF6a('.admin-panel .ad-pill', ['padding: 3px 10px', 'border-radius: 99px', 'font-size: 12px', 'font-weight: 700'])
+    expectF6a('.admin-panel .ad-pill--ok', ['background: var(--success-50)', 'color: var(--success-700)'])
+    expectF6a('.admin-panel .ad-pill--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF6a('.admin-panel .ad-pill--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+    expectF6a('.admin-panel .ad-pill--neutral', ['background: var(--neutral-50)', 'color: var(--neutral-700)'])
+    expectF6a('.admin-panel .ad-pill--info', ['background: var(--info-50)', 'color: var(--info-700)'])
+    expectF6a('.admin-panel .ad-footer', ['justify-content: space-between', 'padding-top: 14px', 'border-top: 1px solid var(--row-divider)'])
+    expectF6a('.admin-panel .ad-delete', ['padding: 0 14px', 'color: var(--danger-700)'])
+    expectF6a('.admin-panel .ad-mono', ['font-family: var(--font-mono)'])
+  })
+
+  it('dark: o destaque navy do painel vira --primary', () => {
+    expectF6a('.admin-panel', ['--ad-accent: var(--navy)'])
+    expectF6a("[data-theme='dark'] .admin-panel", ['--ad-accent: var(--primary)'])
+  })
+})
+
+describe('F6a - Usuarios (valores do AdminUsuarios.dc.html)', () => {
+  it('2 colunas auto-fit minmax(420px, 1fr) gap 20; filtros 1fr + 160px gap 10 com rotulo 12/700', () => {
+    expectF6a('.admin-panel--users .au-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr))', 'align-items: start', 'gap: 20px'])
+    expectF6a('.admin-panel--users .au-filters', ['grid-template-columns: minmax(0, 1fr) 160px', 'gap: 10px'])
+    expectF6a('.admin-panel--users .au-filters .field > span', ['font-size: 12px', 'font-weight: 700'])
+  })
+
+  it('linha: grid 40px 1fr auto gap 12, padding 10, raio 12; hover --surface-alt (200 ms); selecionada --navy-50 + anel 1.5px', () => {
+    expectF6a('.admin-panel--users .au-row', ['grid-template-columns: 40px minmax(0, 1fr) auto', 'gap: 12px', 'padding: 10px', 'border-radius: 12px', 'background: transparent'])
+    expect(f6aRules.find((r) => r.selectors.includes('.admin-panel--users .au-row')).body).toContain('background-color var(--dur-base) var(--ease-out)')
+    expectF6a('.admin-panel--users .au-row:hover:not(.au-row--skeleton)', ['background: var(--surface-alt)'])
+    expectF6a('.admin-panel--users .au-row--selected', ['background: var(--navy-50)', 'box-shadow: inset 0 0 0 1.5px var(--ad-accent)'])
+  })
+
+  it('avatar da linha 40 raio 12 (navy quando selecionada); nome 14/700; meta 12 --ink-soft; UID mono', () => {
+    expectF6a('.admin-panel--users .au-row__avatar', ['width: 40px', 'height: 40px', 'border-radius: 12px', 'background: var(--row-divider)', 'color: var(--navy)', 'font-size: 14px', 'font-weight: 700'])
+    expectF6a('.admin-panel--users .au-row--selected .au-row__avatar', ['background: var(--navy)', 'color: var(--brand-mark-glyph)'])
+    expectF6a("[data-theme='dark'] .admin-panel--users .au-row__avatar", ['color: var(--ink)'])
+    expectF6a('.admin-panel--users .au-row__name', ['font-size: 14px', 'font-weight: 700'])
+    expectF6a('.admin-panel--users .au-row__meta', ['font-size: 12px', 'color: var(--ink-soft)'])
+  })
+
+  it('detalhe: avatar 52 raio 14 navy 18/700; UID mono 12; campos em 2 colunas gap 14', () => {
+    expectF6a('.admin-panel--users .au-avatar', ['width: 52px', 'height: 52px', 'border-radius: 14px', 'background: var(--navy)', 'color: var(--brand-mark-glyph)', 'font-size: 18px', 'font-weight: 700'])
+    expectF6a('.admin-panel--users .au-uid', ['font-family: var(--font-mono)', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--users .au-detail-head', ['gap: 14px', 'align-items: center'])
+    expectF6a('.admin-panel--users .au-detail-head__title', ['align-items: center', 'gap: 4px 10px'])
+    expectF6a('.admin-panel--users .au-new-user', ['gap: 8px', 'margin-left: auto', 'padding: 0 14px'])
+    expectF6a('.admin-panel--users .au-fields', ['grid-template-columns: repeat(2, minmax(0, 1fr))', 'gap: 14px'])
+  })
+
+  it('chips de permissao: --primary-50 / --success-700, 5x12, 12/700, gap 6', () => {
+    expectF6a('.admin-panel--users .au-chips', ['flex-wrap: wrap', 'gap: 6px'])
+    expectF6a('.admin-panel--users .au-chip', ['padding: 5px 12px', 'border-radius: 99px', 'background: var(--primary-50)', 'color: var(--success-700)', 'font-size: 12px', 'font-weight: 700'])
+    expectF6a('.admin-panel--users .au-perms__label', ['font-size: 13px', 'font-weight: 600'])
+  })
+
+  it('fila: cartoes --surface-alt raio 16 padding 16 gap 12, grade minmax(340px, 1fr); nome 15/700, e-mail 13', () => {
+    expectF6a('.admin-panel--users .au-queue', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr))', 'gap: 12px'])
+    expectF6a('.admin-panel--users .au-pending', ['gap: 12px', 'padding: 16px', 'border: 1px solid var(--row-divider)', 'border-radius: 16px', 'background: var(--surface-alt)'])
+    expectF6a('.admin-panel--users .au-pending__name', ['font-size: 15px', 'font-weight: 700'])
+    expectF6a('.admin-panel--users .au-pending__email', ['font-size: 13px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--users .au-pending__meta strong', ['color: var(--ink)'])
+  })
+
+  it('fila: botoes de 40 raio 10 13/700; Aprovar e Reprovar dividem a linha; Reprovar = contorno de perigo (review 1a)', () => {
+    expectF6a('.admin-panel--users .au-pending__actions', ['gap: 8px'])
+    expectF6a('.admin-panel--users .au-pending__actions .primary-button', ['min-height: 40px', 'height: 40px', 'border-radius: 10px', 'font-size: 13px'])
+    expectF6a('.admin-panel--users .au-pending__approve', ['flex: 1'])
+    expectF6a('.admin-panel--users .au-pending__reject', ['border: 1.5px solid var(--danger)', 'background: var(--surface)', 'color: var(--danger-700)', '--focus-ring: var(--danger)'])
+    expectF6a('.admin-panel--users .au-pending__reject:hover:not(:disabled)', ['border-color: var(--danger)', 'background: var(--danger-50)'])
+    expectF6a('.admin-panel--users .au-pending__reject:disabled', ['color: var(--disabled-ink)'])
+  })
+
+  it('avisos de email/senha em --warning-50/--warning-700 raio 14', () => {
+    expectF6a('.admin-panel--users .au-note', ['padding: 10px 14px', 'border-radius: 14px', 'background: var(--warning-50)', 'color: var(--warning-700)', 'font-size: 12px'])
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--users, headings nivel 3, Reprovar sem o modificador secundario na arvore nova', () => {
+    const panel = read('src/features/admin/AdminUsersPanel.jsx').replace(/\r\n/g, '\n')
+    expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(panel).toContain('className="admin-panel admin-panel--users au-root"')
+    expect(panel).toContain('<h3 className="ad-title">Gestão de usuários</h3>')
+    expect(panel).toContain('<h3 className="ad-title">Fila de aprovação</h3>')
+    expect(panel).toContain('className="ghost-button au-pending__reject"')
+    expect(panel).toContain('className="secondary-button"')
+    // as etiquetas do mock distinguem Bloqueado (danger) de Reprovado (neutro); o dado gravado nao muda
+    expect(panel).toContain("if (status === 'Bloqueado') return 'danger'")
+    expect(panel).toMatch(/function statusMeta\(status\) \{[\s\S]*status === 'Bloqueado' \|\| status === 'Reprovado'[\s\S]*statusTone: 'neutral'/)
+    expect(stripComments(panel)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+
+  it('movimento: a transicao da linha entra no bloco reduce existente (sem bloco reduce novo)', () => {
+    const reduce = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(reduce).toContain('.admin-panel--users .au-row')
+    expect(reduce).toContain('.admin-panel .ad-link-button')
   })
 })

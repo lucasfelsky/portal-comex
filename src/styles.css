@@ -20772,6 +20772,516 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F6a — ADMIN: USUARIOS, COMUNICADOS E BARRA DO PORTO (desktop >= 1041px)
+   Fontes: AdminUsuarios.dc.html, AdminComunicados.dc.html, AdminBarra.dc.html (valores
+   inline) e AdminTabs.dc.html (a moldura da pagina). Os tres paineis escolhem, por
+   matchMedia, uma arvore propria no desktop (classes `au-*`, `ac-*`, `ab-*` + os atomos
+   `ad-*`); tablet e mobile ficam na arvore anterior, sem mudanca.
+   Escopo: toda regra comeca por `.admin-section` (so a moldura da pagina: sem cartao ao
+   redor, como nos mocks) ou por uma raiz de painel — `.admin-panel` (atomos comuns) e
+   `.admin-panel--users|--announcements|--bar`. Nao ha @media (max-width) aqui.
+   So tokens (nenhuma cor literal). Dark: os tokens ja trocam; so o navy-texto/navy-anel vira
+   --primary onde o mock nao define (mesma troca do shell, F2/F3).
+   Fica antes do bloco reduce desktop (que segue ultimo); as transicoes novas entram nele.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* ---------- Moldura da pagina do admin (os 3 mocks): abas e paineis direto sobre o fundo ---------- */
+  .surface.admin-section {
+    gap: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .admin-section .admin-panel-stack {
+    gap: 20px;
+  }
+
+  /* ---------- Atomos comuns dos paineis (.ad-*) ---------- */
+  .admin-panel {
+    --ad-accent: var(--navy);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  [data-theme='dark'] .admin-panel {
+    --ad-accent: var(--primary);
+  }
+
+  .admin-panel .ad-card {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: none;
+  }
+
+  .admin-panel .ad-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .admin-panel .ad-head--start {
+    justify-content: flex-start;
+  }
+
+  .admin-panel .ad-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: normal;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+
+  .admin-panel .ad-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel .ad-pill {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  .admin-panel .ad-pill--ok {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .admin-panel .ad-pill--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .admin-panel .ad-pill--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .admin-panel .ad-pill--neutral {
+    background: var(--neutral-50);
+    color: var(--neutral-700);
+  }
+
+  .admin-panel .ad-pill--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .admin-panel .ad-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .admin-panel .ad-footer__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-panel .ad-footer .primary-button {
+    margin-left: auto;
+    padding: 0 18px;
+  }
+
+  .admin-panel .ad-footer .secondary-button {
+    padding: 0 14px;
+  }
+
+  .admin-panel .ad-delete {
+    padding: 0 14px;
+    color: var(--danger-700);
+  }
+
+  .admin-panel .ad-delete:disabled {
+    color: var(--disabled-ink);
+  }
+
+  .admin-panel .ad-delete:focus-visible:not(:disabled) {
+    --focus-ring: var(--danger);
+  }
+
+  /* Botao de texto (link) dos paineis: "Mostrar senha" / "Ocultar senha". */
+  .admin-panel .ad-link-button {
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--link-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .admin-panel .ad-link-button:hover:not(:disabled) {
+    color: var(--link-color-hover);
+  }
+
+  .admin-panel .ad-link-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .admin-panel .ad-link-button:disabled {
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
+
+  /* ---------- Usuarios (AdminUsuarios.dc.html) ---------- */
+  .admin-panel--users .au-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  .admin-panel--users .au-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 10px;
+  }
+
+  .admin-panel--users .au-filters .field > span {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .admin-panel--users .au-filters select.text-input {
+    font-weight: 600;
+  }
+
+  /* Lista: linhas-botao 40px / 1fr / etiqueta; rolagem propria para listas longas. */
+  .admin-panel--users .au-list {
+    display: flex;
+    flex-direction: column;
+    max-height: min(64vh, 560px);
+    overflow-y: auto;
+  }
+
+  .admin-panel--users .au-row {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--users .au-row:hover:not(.au-row--skeleton) {
+    background: var(--surface-alt);
+  }
+
+  .admin-panel--users .au-row--selected,
+  .admin-panel--users .au-row--selected:hover {
+    background: var(--navy-50);
+    box-shadow: inset 0 0 0 1.5px var(--ad-accent);
+  }
+
+  .admin-panel--users .au-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .admin-panel--users .au-row--skeleton {
+    cursor: default;
+  }
+
+  .admin-panel--users .au-row__skeleton-text {
+    display: grid;
+    gap: 4px;
+  }
+
+  .admin-panel--users .au-row__avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--row-divider);
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  [data-theme='dark'] .admin-panel--users .au-row__avatar {
+    color: var(--ink);
+  }
+
+  .admin-panel--users .au-row--selected .au-row__avatar {
+    background: var(--navy);
+    color: var(--brand-mark-glyph);
+  }
+
+  .admin-panel--users .au-row__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .admin-panel--users .au-row__name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .admin-panel--users .au-row__meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  /* Detalhe: avatar 52 raio 14 + titulo + UID mono; acoes (etiqueta + Novo usuario) a direita. */
+  .admin-panel--users .au-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .admin-panel--users .au-avatar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: var(--navy);
+    color: var(--brand-mark-glyph);
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .admin-panel--users .au-detail-head__text {
+    display: flex;
+    flex: 1 1 200px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .admin-panel--users .au-detail-head__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+  }
+
+  .admin-panel--users .au-uid {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--users .au-new-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 0 14px;
+  }
+
+  .admin-panel--users .au-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .admin-panel--users .au-password__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .admin-panel--users .au-password__row label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .admin-panel--users .au-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-panel--users .au-note {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: var(--warning-50);
+    color: var(--warning-700);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .admin-panel--users .au-note strong {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .admin-panel--users .au-perms {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-panel--users .au-perms__label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .admin-panel--users .au-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .admin-panel--users .au-chip {
+    padding: 5px 12px;
+    border-radius: 99px;
+    background: var(--primary-50);
+    color: var(--success-700);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Fila de aprovacao: cartoes --surface-alt; Aprovar primario, Reprovar contorno de perigo
+     (borda 1.5px --danger, fundo --surface, texto --danger-700), Abrir detalhe fantasma. */
+  .admin-panel--users .au-queue {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 12px;
+  }
+
+  .admin-panel--users .au-pending {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--row-divider);
+    border-radius: 16px;
+    background: var(--surface-alt);
+  }
+
+  .admin-panel--users .au-pending__who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .admin-panel--users .au-pending__name {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .admin-panel--users .au-pending__email {
+    font-size: 13px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--users .au-pending__meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--users .au-pending__meta strong {
+    color: var(--ink);
+  }
+
+  .admin-panel--users .au-pending__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .admin-panel--users .au-pending__actions .primary-button,
+  .admin-panel--users .au-pending__actions .ghost-button {
+    min-height: 40px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .admin-panel--users .au-pending__approve,
+  .admin-panel--users .au-pending__reject {
+    flex: 1;
+  }
+
+  .admin-panel--users .au-pending__reject {
+    --focus-ring: var(--danger);
+    border: 1.5px solid var(--danger);
+    background: var(--surface);
+    color: var(--danger-700);
+  }
+
+  .admin-panel--users .au-pending__reject:hover:not(:disabled) {
+    border-color: var(--danger);
+    background: var(--danger-50);
+  }
+
+  .admin-panel--users .au-pending__reject:active:not(:disabled) {
+    background: var(--danger-50);
+  }
+
+  .admin-panel--users .au-pending__reject:disabled {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--disabled-ink);
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -20858,6 +21368,12 @@ body {
   .auth-screen--login .auth-password__toggle,
   .auth-screen--pending .auth-diagnostic-toggle,
   .auth-screen--pending .auth-diagnostic-toggle svg {
+    transition: none;
+  }
+
+  /* Refino F6a: sem transicao nas linhas e nos botoes de texto dos paineis do admin. */
+  .admin-panel--users .au-row,
+  .admin-panel .ad-link-button {
     transition: none;
   }
 

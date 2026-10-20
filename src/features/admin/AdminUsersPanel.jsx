@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import SelectField from '../../components/SelectField'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import EmptyState from '../../components/EmptyState'
+import Icon from '../../components/Icon'
 import { getRoleLabel, getRolePermissions, roleOptions } from './rolePermissions'
 
 // F15.2: iniciais pro avatar da lista mobile (mesma lógica do topbar).
@@ -21,11 +23,16 @@ import {
 import { sendCustomVerificationEmail } from '../../services/authRepository'
 import { createUser, deleteUser, listUsers, saveUser } from '../../services/usersRepository'
 import useAuth from '../../hooks/useAuth'
+import useMediaQuery from '../../hooks/useMediaQuery'
 import { isFirebaseConfigured } from '../../lib/firebase'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import { getFieldA11yProps, getFieldErrorId, focusField } from '../../utils/fieldErrors'
 
 const statusOptions = ['Todos', 'Ativo', 'Pendente', 'Bloqueado', 'Reprovado']
+
+// Refino F6a (AdminUsuarios.dc.html): >= 1041px a lista usa a arvore `au-*` (tablet/mobile ficam na
+// arvore anterior).
+const DESKTOP_QUERY = '(min-width: 1041px)'
 
 function statusClassName(tone) {
   return `status-tag status-tag--${tone}`
@@ -39,6 +46,16 @@ function statusMeta(status) {
     return { status, statusTone: 'neutral' }
   }
   return { status: 'Pendente', statusTone: 'warn' }
+}
+
+// Tom da etiqueta no desktop (AdminUsuarios.dc.html: Ativo ok, Pendente warn, Bloqueado danger,
+// Reprovado neutro). `statusMeta` (que e' gravado no usuario) continua agrupando Bloqueado e
+// Reprovado em 'neutral'; so a exibicao do desktop os distingue.
+function getDesktopStatusTone(status) {
+  if (status === 'Ativo') return 'ok'
+  if (status === 'Pendente') return 'warn'
+  if (status === 'Bloqueado') return 'danger'
+  return 'neutral'
 }
 
 function createEmptyDraft() {
@@ -66,6 +83,7 @@ function createDraftFromUser(user) {
 
 export default function AdminUsersPanel() {
   const { profile } = useAuth()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('Todos')
   const [users, setUsers] = useState([])
@@ -337,6 +355,395 @@ export default function AdminUsersPanel() {
     if (ok) {
       setPendingConfirm(null)
     }
+  }
+
+  const confirmDialog = (
+    <ConfirmDialog
+      tone="danger"
+      open={Boolean(pendingConfirm)}
+      busy={isSavingUser}
+      error={confirmError}
+      title={
+        pendingConfirm?.kind === 'delete'
+          ? `Excluir usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+          : pendingConfirm?.kind === 'block'
+            ? `Bloquear usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+            : pendingConfirm?.kind === 'reject'
+              ? `Reprovar cadastro de ${pendingConfirm.user.name || pendingConfirm.user.email}?`
+              : ''
+      }
+      message={
+        pendingConfirm?.kind === 'delete'
+          ? `A conta de login e o cadastro de ${pendingConfirm.user.email} serão excluídos. Esta ação não pode ser desfeita.`
+          : pendingConfirm?.kind === 'block'
+            ? `${pendingConfirm.user.name || pendingConfirm.user.email} deixará de acessar o portal. Você pode liberar o acesso depois em "Ativar usuário".`
+            : pendingConfirm?.kind === 'reject'
+              ? `O acesso de ${pendingConfirm.user.email} ao portal não será liberado. Você pode ativar o usuário depois pelo detalhe do usuário.`
+              : ''
+      }
+      confirmLabel={
+        pendingConfirm?.kind === 'delete'
+          ? 'Excluir usuário'
+          : pendingConfirm?.kind === 'block'
+            ? 'Bloquear usuário'
+            : 'Reprovar cadastro'
+      }
+      busyLabel={
+        pendingConfirm?.kind === 'delete'
+          ? 'Excluindo...'
+          : pendingConfirm?.kind === 'block'
+            ? 'Bloqueando...'
+            : 'Reprovando...'
+      }
+      onConfirm={handleConfirmAction}
+      onCancel={handleCancelConfirm}
+    />
+  )
+
+  // Refino F6a (AdminUsuarios.dc.html): >= 1041px o painel usa a arvore `au-*` (lista com avatar,
+  // detalhe em 2 colunas com chips de permissao, fila em cartoes). Tablet/mobile seguem na arvore
+  // abaixo, intacta. Todo o estado e os handlers sao os mesmos (vivem aqui em cima), entao a troca
+  // ao vivo de breakpoint nao perde busca, filtro, rascunho nem senha digitada.
+  if (isDesktop) {
+    const detailTone = getDesktopStatusTone(draft.status)
+    const pendingTone = pendingUsers.length > 0 ? 'warn' : 'neutral'
+
+    return (
+      <div className="admin-panel admin-panel--users au-root">
+        {error ? <div className="error-banner">{error}</div> : null}
+
+        <div className="au-grid">
+          <section className="ad-card">
+            <div className="ad-head">
+              <h3 className="ad-title">Gestão de usuários</h3>
+              <span className="ad-pill ad-pill--neutral">{filteredUsers.length} visíveis</span>
+            </div>
+
+            <div className="au-filters">
+              <label className="field">
+                <span>Buscar usuário</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Nome, email, perfil ou ID"
+                />
+              </label>
+
+              <label className="field">
+                <span>Status</span>
+                <SelectField
+                  className="text-input"
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </SelectField>
+              </label>
+            </div>
+
+            <div className="au-list">
+              {isLoadingUsers ? (
+                <Skeleton.Group count={4}>
+                  <div className="au-row au-row--skeleton">
+                    <Skeleton variant="circle" width={40} height={40} />
+                    <div className="au-row__skeleton-text">
+                      <Skeleton variant="text" width="60%" />
+                      <Skeleton variant="text" width="40%" />
+                    </div>
+                  </div>
+                </Skeleton.Group>
+              ) : filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => {
+                  const isSelected = selectedUserId === user.id && !isCreating
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      className={`au-row${isSelected ? ' au-row--selected' : ''}`}
+                      aria-current={isSelected ? 'true' : undefined}
+                      onClick={() => handleSelectUser(user.id)}
+                    >
+                      <span className="au-row__avatar" aria-hidden="true">
+                        {getInitials(user.name || user.email)}
+                      </span>
+                      <span className="au-row__text">
+                        <strong className="au-row__name">{user.name}</strong>
+                        <span className="au-row__meta">
+                          {getRoleLabel(user.role)} · {user.area || 'Geral'} ·{' '}
+                          <span className="ad-mono">{user.id}</span>
+                        </span>
+                      </span>
+                      <span className={`ad-pill ad-pill--${getDesktopStatusTone(user.status)}`}>
+                        {user.status}
+                      </span>
+                    </button>
+                  )
+                })
+              ) : (
+                <EmptyState
+                  illustration="filter"
+                  title="Nenhum usuário encontrado"
+                  message="Ajuste a busca ou o filtro para voltar a exibir resultados."
+                />
+              )}
+            </div>
+          </section>
+
+          <section className="ad-card">
+            <div className="au-detail-head">
+              <span className="au-avatar" aria-hidden="true">
+                {isCreating ? (
+                  <Icon name="plus" size={22} strokeWidth={2.2} />
+                ) : (
+                  getInitials(draft.name || draft.email)
+                )}
+              </span>
+              <div className="au-detail-head__text">
+                <div className="au-detail-head__title">
+                  <h3 className="ad-title">{isCreating ? 'Novo usuário' : 'Detalhe do usuário'}</h3>
+                  <span className={`ad-pill ad-pill--${detailTone}`}>{draft.status}</span>
+                </div>
+                <span className="au-uid">{isCreating ? 'UID gerado ao criar' : `UID ${draft.id}`}</span>
+              </div>
+              <button type="button" className="secondary-button au-new-user" onClick={handleCreateMode}>
+                <Icon name="plus" size={16} strokeWidth={2.2} />
+                Novo usuário
+              </button>
+            </div>
+
+            <div className="au-fields">
+              <label className="field">
+                <span>Nome</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={draft.name}
+                  onChange={(event) => handleDraftChange('name', event.target.value)}
+                  placeholder="Nome completo"
+                />
+              </label>
+
+              <label className="field">
+                <span>Email</span>
+                <input
+                  className="text-input"
+                  type="email"
+                  value={draft.email}
+                  onChange={(event) => handleDraftChange('email', event.target.value)}
+                  placeholder="email@empresa.com"
+                  disabled={!isCreating && isFirebaseConfigured}
+                />
+              </label>
+
+              <label className="field">
+                <span>Perfil</span>
+                <SelectField
+                  className="text-input"
+                  value={draft.role}
+                  onChange={(event) => handleDraftChange('role', event.target.value)}
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </SelectField>
+              </label>
+
+              <label className="field">
+                <span>Status</span>
+                <SelectField
+                  className="text-input"
+                  value={draft.status}
+                  onChange={(event) => handleDraftChange('status', event.target.value)}
+                >
+                  {statusOptions
+                    .filter((status) => status !== 'Todos')
+                    .map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                </SelectField>
+              </label>
+
+              <label className="field">
+                <span>Área</span>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={draft.area}
+                  onChange={(event) => handleDraftChange('area', event.target.value)}
+                  placeholder="Ex.: Importação"
+                />
+              </label>
+
+              <div className="field au-password">
+                <div className="au-password__row">
+                  <label htmlFor="admin-user-password">Senha</label>
+                  <button
+                    type="button"
+                    className="ad-link-button"
+                    onClick={() => setIsPasswordVisible((current) => !current)}
+                    disabled={!draft.password}
+                  >
+                    {isPasswordVisible ? 'Ocultar senha' : 'Mostrar senha'}
+                  </button>
+                </div>
+                <input
+                  className="text-input"
+                  type={isPasswordVisible ? 'text' : 'password'}
+                  value={draft.password}
+                  onChange={(event) => handleDraftChange('password', event.target.value)}
+                  onFocus={() => setIsPasswordVisible(true)}
+                  onClick={() => setIsPasswordVisible(true)}
+                  placeholder={passwordInputPlaceholder}
+                  autoComplete="new-password"
+                  {...getFieldA11yProps('admin-user-password', passwordError)}
+                />
+                {passwordError ? (
+                  <small className="field-error" id={getFieldErrorId('admin-user-password')} aria-hidden="true">
+                    {passwordError}
+                  </small>
+                ) : null}
+              </div>
+            </div>
+
+            {!isCreating && isFirebaseConfigured ? (
+              <div className="au-notes">
+                <p className="au-note">
+                  <strong>Email protegido</strong>
+                  <span>
+                    Para usuarios existentes, o email fica bloqueado aqui para evitar divergencia com o
+                    Firebase Auth.
+                  </span>
+                </p>
+                <p className="au-note">
+                  <strong>Senha não disponível</strong>
+                  <span>
+                    Usuários antigos não têm a senha atual recuperável pelo Firebase. Para este usuário,
+                    digite uma nova senha e salve.
+                  </span>
+                </p>
+              </div>
+            ) : null}
+
+            <div className="au-perms">
+              <span className="au-perms__label" id="au-perms-label">
+                Permissões do perfil
+              </span>
+              <div className="au-chips" role="list" aria-labelledby="au-perms-label">
+                {draft.scopes.map((scope) => (
+                  <span key={scope} className="au-chip" role="listitem">
+                    {scope}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="ad-footer">
+              <div className="ad-footer__group">
+                {!isCreating && selectedUser ? (
+                  <>
+                    <button
+                      type="button"
+                      className="ghost-button ad-delete"
+                      onClick={() => openConfirm('delete', selectedUser)}
+                      disabled={isSavingUser || selectedUser.id === profile?.uid}
+                    >
+                      Excluir usuário
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        selectedUser.status === 'Ativo'
+                          ? openConfirm('block', selectedUser)
+                          : handleSetUserStatus(selectedUser, 'Ativo')
+                      }
+                      disabled={isSavingUser}
+                    >
+                      {selectedUser.status === 'Ativo' ? 'Bloquear usuário' : 'Ativar usuário'}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleSaveUser}
+                disabled={isSavingUser}
+              >
+                {isSavingUser ? 'Salvando...' : isCreating ? 'Criar usuário' : 'Salvar alterações'}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <section className="ad-card">
+          <div className="ad-head ad-head--start">
+            <h3 className="ad-title">Fila de aprovação</h3>
+            <span className={`ad-pill ad-pill--${pendingTone}`}>{pendingUsers.length} pendentes</span>
+          </div>
+
+          {pendingUsers.length > 0 ? (
+            <div className="au-queue">
+              {pendingUsers.map((user) => (
+                <div key={user.id} className="au-pending">
+                  <div className="au-pending__who">
+                    <span className="au-pending__name">{user.name}</span>
+                    <span className="au-pending__email">{user.email}</span>
+                  </div>
+                  <span className="au-pending__meta">
+                    Perfil: <strong>{getRoleLabel(user.role)}</strong> · Área:{' '}
+                    <strong>{user.area || 'Geral'}</strong> · ID: <span className="ad-mono">{user.id}</span>
+                  </span>
+                  <div className="au-pending__actions">
+                    <button
+                      type="button"
+                      className="primary-button au-pending__approve"
+                      onClick={() => handleSetUserStatus(user, 'Ativo')}
+                      disabled={isSavingUser}
+                    >
+                      Aprovar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button au-pending__reject"
+                      onClick={() => openConfirm('reject', user)}
+                      disabled={isSavingUser}
+                    >
+                      Reprovar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button au-pending__detail"
+                      onClick={() => handleSelectUser(user.id)}
+                    >
+                      Abrir detalhe
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              illustration="inbox"
+              title="Nenhum cadastro pendente"
+              message="Novos registros aparecerão aqui para aprovação administrativa."
+            />
+          )}
+        </section>
+
+        {confirmDialog}
+      </div>
+    )
   }
 
   return (
@@ -665,46 +1072,7 @@ export default function AdminUsersPanel() {
         </div>
       </article>
 
-      <ConfirmDialog
-        tone="danger"
-        open={Boolean(pendingConfirm)}
-        busy={isSavingUser}
-        error={confirmError}
-        title={
-          pendingConfirm?.kind === 'delete'
-            ? `Excluir usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
-            : pendingConfirm?.kind === 'block'
-              ? `Bloquear usuário ${pendingConfirm.user.name || pendingConfirm.user.email}?`
-              : pendingConfirm?.kind === 'reject'
-                ? `Reprovar cadastro de ${pendingConfirm.user.name || pendingConfirm.user.email}?`
-                : ''
-        }
-        message={
-          pendingConfirm?.kind === 'delete'
-            ? `A conta de login e o cadastro de ${pendingConfirm.user.email} serão excluídos. Esta ação não pode ser desfeita.`
-            : pendingConfirm?.kind === 'block'
-              ? `${pendingConfirm.user.name || pendingConfirm.user.email} deixará de acessar o portal. Você pode liberar o acesso depois em "Ativar usuário".`
-              : pendingConfirm?.kind === 'reject'
-                ? `O acesso de ${pendingConfirm.user.email} ao portal não será liberado. Você pode ativar o usuário depois pelo detalhe do usuário.`
-                : ''
-        }
-        confirmLabel={
-          pendingConfirm?.kind === 'delete'
-            ? 'Excluir usuário'
-            : pendingConfirm?.kind === 'block'
-              ? 'Bloquear usuário'
-              : 'Reprovar cadastro'
-        }
-        busyLabel={
-          pendingConfirm?.kind === 'delete'
-            ? 'Excluindo...'
-            : pendingConfirm?.kind === 'block'
-              ? 'Bloqueando...'
-              : 'Reprovando...'
-        }
-        onConfirm={handleConfirmAction}
-        onCancel={handleCancelConfirm}
-      />
+      {confirmDialog}
     </>
   )
 }
