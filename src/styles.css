@@ -12415,210 +12415,10 @@ body {
   outline-offset: 2px;
 }
 
-/* ============================================================
-   Ciclo 2a (redesign Fase 2) — Dashboard desktop: hero + faixa de KPIs
-   + restyle das listas do dashboard (Comunicados / Chegadas da semana /
-   Favoritos). So' tokens (--radius-*, --shadow-*, --font-heading,
-   --primary), sem hex fora do :root. Escopado via `.dashboard-heading`
-   (classe unica do Dashboard) pra nao vazar pra ProcessesPage — que tem
-   os proprios .list-card/.process-item/.card-heading restilizados em
-   ciclos separados (2b/2c do mesmo PLAN.md). Nao toca nenhum bloco
-   @media (max-width:*).
-   Sub-ciclo 5b: Barra do Rio vira pill com borda (mockup `.bar`); KPIs
-   perdem o icone e o valor vira Bricolage grande (mockup `.kpi`); grid
-   inverte — Favoritos full-width, Chegadas volta pra coluna (mockup
-   `.grid`/`.fav`); favlist 2-col com leading icon + card `--surface-alt`
-   (mockup `.favlist`/`.fitem`). */
-@media (min-width: 1041px) {
-  .dashboard-heading {
-    margin-bottom: 28px;
-  }
-
-  .dashboard-heading__eyebrow {
-    display: block;
-    margin-bottom: 6px;
-    font-family: var(--font-heading);
-    font-size: var(--fs-caption);
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: capitalize;
-    color: var(--primary-700);
-  }
-
-  .dashboard-heading h2 {
-    font-family: var(--font-heading);
-  }
-
-  /* Passo 6 — Barra do Rio como pill com borda (mockup `.bar`). Mantem
-     `.dashboard-bar-card__text`/`--${tone}` e `.dashboard-bar-inline__dot`
-     intocados (DashboardPage.test.jsx:285/295 dependem deles). */
-  .dashboard-heading .dashboard-bar-inline {
-    padding: 12px 18px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .dashboard-stat-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .dashboard-stat-row .stat-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .dashboard-stat-row .stat-card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  /* Passo 7 — KPIs sem icone, valor grande (mockup `.kpi`). Trends
-     "+2"/"atencao" ficam FORA (Decisao D2 — sem dado real de serie).
-     Escopado com `.dashboard-heading ~` (TRAP `.dashboard-stat-row`
-     tambem existe em AdminSupportPanel/Suporte, que nao tem
-     `.dashboard-heading` como irmao — ver REVIEW.md rodada 1). */
-  .dashboard-heading ~ .dashboard-stat-row .stat-card__icon {
-    display: none;
-  }
-
-  .dashboard-heading ~ .dashboard-stat-row .stat-card__label {
-    letter-spacing: 0.08em;
-  }
-
-  .dashboard-heading ~ .dashboard-stat-row .stat-card__value {
-    font-family: var(--font-heading);
-    font-size: 1.75rem;
-  }
-
-  /* Ajuste (layout telas 2026-09-29) - respiro de 14px entre os blocos do
-     Dashboard (heading/KPIs/cards). `.surface:has(> .dashboard-heading)`
-     so' alcanca a surface do Dashboard; o `margin-bottom` do heading
-     (28px acima) e dos KPIs e' zerado em regra escopada por `.dashboard-heading ~` (a regra solta
-     `.dashboard-stat-row` e' compartilhada com AdminSupportPanel). */
-  .surface:has(> .dashboard-heading) {
-    gap: 14px;
-  }
-
-  .surface:has(> .dashboard-heading) > .dashboard-heading,
-  .dashboard-heading ~ .dashboard-stat-row {
-    margin-bottom: 0;
-  }
-
-  /* Titulo de cada comunicado do Dashboard em 14px (escopado; nao afeta
-     Admin > Comunicados, que usa `.admin-section .announcement-card`). */
-  .dashboard-heading ~ .stagger .announcement-card strong {
-    font-size: var(--fs-subhead);
-  }
-
-  /* Ajuste (feedback 2026-08-26) — sem animacao de hover nos KPIs do
-     Dashboard. NAO mexe na regra solta `.dashboard-stat-row
-     .stat-card:hover` (~9008, compartilhada com AdminSupportPanel,
-     mesma classe sem `.dashboard-heading` de irmao la') nem na base
-     global `.stat-card:hover` (~2214, tambem usada no admin) -- so'
-     cancela o efeito aqui, escopado ao Dashboard, com especificidade
-     maior que as duas. */
-  .dashboard-heading ~ .dashboard-stat-row .stat-card:hover {
-    box-shadow: var(--shadow-sm);
-    transform: none;
-  }
-
-  /* Restyle desktop dos cards do corpo do dashboard (dentro do
-     `.stagger` que segue o hero): Comunicados, Chegadas da semana e
-     Favoritos. Escopo via combinador de irmao geral + descendente pra
-     nao afetar `.list-card`/`.process-item`/`.card-heading` de outras
-     paginas (ProcessesPage etc.), que compartilham as mesmas classes. */
-  .dashboard-heading ~ .stagger {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: 14px;
-  }
-
-  /* Passo 8 — layout telas 2026-09-29: os 3 cards (Comunicados ->
-     Favoritos -> Chegadas da semana, nessa ordem no JSX) ocupam a linha
-     inteira (grid de 1 coluna acima); a regra abaixo fica redundante mas
-     inofensiva. Favoritos NAO e mais o ultimo `.list-card`
-     (DashboardPage.test.jsx usa `.dashboard-favorites-card`). */
-  .dashboard-heading ~ .stagger .dashboard-favorites-card {
-    grid-column: 1 / -1;
-  }
-
-  .dashboard-heading ~ .stagger .list-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  /* Ajuste (feedback 2026-08-26) — hover animado (mudanca de sombra)
-     removido dos cards do Dashboard (Comunicados/Chegadas/Favoritos);
-     a sombra base (`--shadow-sm` acima) fica, so' o CHANGE no hover
-     sai. Escopado igual as demais regras deste bloco. */
-
-  .dashboard-heading ~ .stagger .card-heading h3 {
-    font-family: var(--font-heading);
-  }
-
-  .dashboard-heading ~ .stagger .process-item {
-    border-radius: var(--radius-sm);
-  }
-
-  /* Ajuste (feedback 2026-08-26) — "Chegadas da semana" mostra no
-     maximo ~2 processos visiveis no desktop (era ~3); o resto rola
-     dentro do proprio card (nao estica o card nem empurra o resto do
-     dashboard). max-height estimado a partir da estrutura real de um
-     `.process-item.weekly-arrivals-item` (title+subtitle+categoria+
-     chips + `.weekly-arrivals-windows`, padding 16px, gap do
-     `.process-list` 12px): ~200px por item x2 + 1 gap de 12px ~= 412px,
-     arredondado pra 400px (mesma logica de estimativa do ciclo 5c);
-     ajustado para 380px no layout telas 2026-09-29.
-     Escopado ao Dashboard (`.dashboard-heading ~ .stagger`) pra nao
-     afetar o WeeklyArrivalsCard se ele passar a ser usado em outra
-     tela. Nao mexe no JSX/logica de janelas do WeeklyArrivalsCard. */
-  .dashboard-heading ~ .stagger .weekly-arrivals-card .process-list--scroll {
-    max-height: 380px;
-    overflow-y: auto;
-    padding-right: 6px;
-  }
-
-  /* Passo 9 — Favoritos em 1 coluna (1 card por linha) com leading icon + chips + ETA
-     empilhada com estrela (mockup `.favlist`/`.fitem`). Escopado em
-     `.dashboard-favorites-card` pra nao vazar pro card de Chegadas
-     (que compartilha `.process-item`/`.process-list` no mesmo grid). O
-     bloco verboso `.dashboard-process-inline` (MAPA/DUIMP/janelas)
-     continua visivel — Decisao D1, e' dado operacional real. */
-  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item {
-    align-items: flex-start;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-  }
-
-  /* Leading icon (categoria) e' mobile-only por padrao (styles.css
-     ~6372-6376); revelado aqui igual a tecnica ja usada em
-     `.process-list-card .process-item__leading` (~9053). */
-  .dashboard-heading ~ .stagger .dashboard-favorites-card .process-item__leading {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-sm);
-    background: var(--primary-50);
-    color: var(--primary-700);
-    flex-shrink: 0;
-  }
-
-  .dashboard-heading ~ .stagger .dashboard-favorites-card .dashboard-favorites-item__star {
-    display: inline-flex;
-    color: var(--warning-700);
-  }
-}
+/* Dashboard desktop (>= 1041px): reescrito na F4a — ver "REFINO VISUAL F4a —
+   DASHBOARD" (raiz .surface--dashboard, arvore dash-*). O bloco do ciclo 2a que
+   ficava aqui (hero, KPIs e cards sob .dashboard-heading) foi removido: o
+   desktop nao renderiza mais a arvore legada. */
 
 /* ============================================================
    Ciclo 2b (redesign Fase 2) — Chegadas (lista) desktop: card + painel
@@ -16079,6 +15879,738 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F4a — DASHBOARD (Dashboard.dc.html, desktop >= 1041px)
+   O desktop renderiza uma arvore propria (`dash-*`, DashboardPage.jsx /
+   WeeklyArrivalsCard.jsx variant="desktop"); tablet e mobile seguem na arvore
+   legada (`dashboard-*`), que este bloco nao toca. Toda regra comeca por
+   `.surface--dashboard` (raiz unica da tela): `.stat-card`, `.list-card`,
+   `.process-item` e `.dashboard-stat-row` sao classes compartilhadas e ja
+   vazaram para outras telas. Sem hex: so tokens. Segue o mock linha a linha
+   (valores inline do .dc.html); elementos sem line-height no mock usam
+   `normal` para dar a mesma altura.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* ---- Raiz: sem cartao externo, so respiro de 22px entre as secoes ---- */
+  .surface.surface--dashboard {
+    padding: 0;
+    gap: 22px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* ---- Cabecalho: eyebrow de data + "Visao geral" + pilula da barra ---- */
+  .surface--dashboard .dash-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .surface--dashboard .dash-head__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .surface--dashboard .dash-head__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .surface--dashboard .dash-head h2 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 99px;
+    background: var(--neutral-50);
+    color: var(--neutral-700);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+    white-space: nowrap;
+  }
+
+  .surface--dashboard .dash-bar__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--channel-gray-edge);
+  }
+
+  .surface--dashboard .dash-bar--ok {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .surface--dashboard .dash-bar--ok .dash-bar__dot {
+    background: var(--channel-green-edge);
+  }
+
+  .surface--dashboard .dash-bar--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .surface--dashboard .dash-bar--warn .dash-bar__dot {
+    background: var(--warning);
+  }
+
+  .surface--dashboard .dash-bar--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .surface--dashboard .dash-bar--danger .dash-bar__dot {
+    background: var(--danger);
+  }
+
+  .surface--dashboard .dash-bar--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .surface--dashboard .dash-bar--info .dash-bar__dot {
+    background: var(--info);
+  }
+
+  /* ---- Entrada das secoes: sobe 12px em 500 ms; atraso 0/80/160 ms ---- */
+  .surface--dashboard .dash-rise {
+    animation: motion-rise var(--dur-page) var(--ease-out) both;
+    animation-delay: var(--dash-rise-delay, 0ms);
+  }
+
+  /* ---- KPIs: 4 cards sem icone, valor Sora 40 e nota de 12/600 ---- */
+  .surface--dashboard .dash-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+
+  .surface--dashboard .dash-kpis .stat-card.dash-kpi,
+  .surface--dashboard .dash-kpis .stat-card.dash-kpi:hover {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transform: none;
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__head {
+    display: block;
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: none;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__value {
+    display: block;
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-kpi--alert .stat-card__value {
+    color: var(--danger-700);
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__note {
+    min-height: 1.37em;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__note--success {
+    color: var(--success-700);
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__note--warning {
+    color: var(--warning-700);
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__note--danger {
+    color: var(--danger-700);
+  }
+
+  /* ---- Cartoes das secoes (raio 22, padding 22) ---- */
+  .surface--dashboard .dash-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface--dashboard .dash-card h3 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .surface--dashboard .dash-card__link {
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--link-color);
+  }
+
+  .surface--dashboard .dash-card__link:hover {
+    color: var(--link-color-hover);
+  }
+
+  .surface--dashboard .dash-card__link:focus-visible {
+    outline: none;
+    border-radius: 6px;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .surface--dashboard .dash-card__count {
+    font-size: 12px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Chegadas + Comunicados lado a lado ---- */
+  .surface--dashboard .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* O mock mostra 4 linhas; com mais chegadas a lista rola dentro do card (como
+     no feedback de 2026-08-26) em vez de empurrar os Favoritos para fora da tela.
+     O respiro de 6px segura o anel de foco e a sombra do hover. */
+  .surface--dashboard .dash-arrivals__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 440px;
+    margin: -6px;
+    padding: 6px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .surface--dashboard .dash-arrival {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .surface--dashboard .dash-arrival:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--dashboard .dash-arrival:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .surface--dashboard .dash-arrival--skeleton,
+  .surface--dashboard .dash-arrival--skeleton:hover {
+    cursor: default;
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  .surface--dashboard .dash-arrival__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .surface--dashboard .dash-arrival__month {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-arrival__day {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-arrival__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .surface--dashboard .dash-arrival__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-arrival__meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-arrival__delivery {
+    font-size: 12px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-arrival__delivery strong {
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-arrival__note {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-arrival__aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .surface--dashboard .dash-arrival__aside .process-derived-status-badge {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* ---- Comunicados: o mais recente em destaque (info) + linhas compactas ---- */
+  .surface--dashboard .dash-announcements {
+    gap: 12px;
+  }
+
+  .surface--dashboard .dash-announcements__skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .surface--dashboard .dash-announce {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .surface--dashboard .dash-announce--lead {
+    gap: 6px;
+    padding: 16px;
+    border-radius: 14px;
+    background: var(--info-50);
+  }
+
+  .surface--dashboard .dash-announce__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--info-700);
+  }
+
+  .surface--dashboard .dash-announce--lead .dash-announce__title {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-announce__summary {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-announce--row {
+    gap: 4px;
+    padding: 12px 4px 4px;
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .surface--dashboard .dash-announce__when {
+    font-size: 11px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-announce--row .dash-announce__title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+
+  /* ---- Favoritos: grade auto-fit, barra de 5 etapas e 3 fatos por linha ---- */
+  .surface--dashboard .dash-favorites__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 14px;
+  }
+
+  .surface--dashboard .dash-fav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-alt);
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .surface--dashboard .dash-fav:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--dashboard .dash-fav--skeleton,
+  .surface--dashboard .dash-fav--skeleton:hover {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  .surface--dashboard .dash-fav__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .surface--dashboard .dash-fav__id {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .surface--dashboard .dash-fav__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  /* D14: "ETA atualizada" em azul informativo. */
+  .surface--dashboard .dash-fav__eta--updated {
+    color: var(--info-700);
+  }
+
+  .surface--dashboard .dash-fav__name {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: normal;
+    text-align: left;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .surface--dashboard .dash-fav__name:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .surface--dashboard .dash-fav__name:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface-alt), 0 0 0 5px var(--focus-ring);
+  }
+
+  .surface--dashboard .dash-fav__meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-fav__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .surface--dashboard .dash-fav__star {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--warning-50);
+    cursor: pointer;
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out);
+  }
+
+  .surface--dashboard .dash-fav__star svg {
+    fill: var(--channel-yellow-edge);
+    stroke: var(--warning-700);
+  }
+
+  .surface--dashboard .dash-fav__star:hover {
+    box-shadow: inset 0 0 0 1.5px var(--warning);
+  }
+
+  .surface--dashboard .dash-fav__star:active {
+    transform: scale(0.97);
+  }
+
+  .surface--dashboard .dash-fav__star:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface-alt), 0 0 0 5px var(--focus-ring);
+  }
+
+  .surface--dashboard .dash-stages {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surface--dashboard .dash-stages__item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .surface--dashboard .dash-stages__bar {
+    height: 6px;
+    border-radius: 99px;
+    background: var(--row-divider);
+  }
+
+  .surface--dashboard .dash-stages__item--done .dash-stages__bar {
+    background: var(--primary-700);
+  }
+
+  .surface--dashboard .dash-stages__item--now .dash-stages__bar {
+    background: var(--primary);
+  }
+
+  /* No escuro --primary-700 e --primary sao o mesmo menta: a etapa concluida
+     fica mais fechada para a atual continuar se destacando. */
+  [data-theme='dark'] .surface--dashboard .dash-stages__item--done .dash-stages__bar {
+    background: color-mix(in srgb, var(--primary) 55%, var(--surface-alt));
+  }
+
+  .surface--dashboard .dash-stages__label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-stages__item--done .dash-stages__label,
+  .surface--dashboard .dash-stages__item--now .dash-stages__label {
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-stages__item--now .dash-stages__label {
+    font-weight: 700;
+  }
+
+  .surface--dashboard .dash-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .surface--dashboard .dash-facts__item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .surface--dashboard .dash-facts__item dt {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .surface--dashboard .dash-facts__item dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+  }
+
+  .surface--dashboard .dash-facts__item dd.dash-facts__value--success {
+    color: var(--success-700);
+  }
+
+  .surface--dashboard .dash-facts__item dd.dash-facts__value--warning {
+    color: var(--warning-700);
+  }
+
+  .surface--dashboard .dash-facts__item dd.dash-facts__value--danger {
+    color: var(--danger-700);
+  }
+
+  .surface--dashboard .dash-facts__item dd.dash-facts__value--neutral {
+    color: var(--neutral-700);
+  }
+
+  /* ---- Estados (carregando / erro / vazio) dentro dos cartoes ---- */
+  .surface--dashboard .dash-card .error-banner {
+    margin: 0;
+  }
+
+  .surface--dashboard .dash-card .empty-state {
+    margin: 0;
+  }
+}
+
+/* REFINO VISUAL F4a — DASHBOARD COMPACTO (notebook, altura <= 800): menos
+   respiro vertical, sem perder nenhuma secao. notebook.css so mira as classes
+   legadas (`dashboard-*`), entao o Dashboard novo traz o proprio modo compacto. */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .surface.surface--dashboard {
+    gap: clamp(12px, 2.2vh, 18px);
+  }
+
+  .surface--dashboard .dash-kpis .stat-card.dash-kpi,
+  .surface--dashboard .dash-kpis .stat-card.dash-kpi:hover {
+    padding: 12px 16px;
+    gap: 3px;
+  }
+
+  .surface--dashboard .dash-kpi .stat-card__value {
+    font-size: 32px;
+  }
+
+  .surface--dashboard .dash-card {
+    padding: 18px;
+  }
+
+  .surface--dashboard .dash-fav {
+    padding: 14px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -16109,6 +16641,7 @@ body {
      escalonamento, sem contador e sem shimmer (Movimento.dc.html). A entrada da
      gaveta, do modal e do toast continua instantanea (regras acima). */
   .page-fade--visible,
+  .surface--dashboard .dash-rise,
   .skeleton-reveal,
   .favorite-star--pop,
   .process-detail-view .process-timeline__bar--done::after,
