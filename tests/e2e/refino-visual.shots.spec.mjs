@@ -48,6 +48,8 @@ const FIRESTORE_HOST = 'http://127.0.0.1:8080'
 const PROJECT_ID = 'demo-sqcomex'
 const DOCS = `${FIRESTORE_HOST}/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 const OUT_ROOT = path.resolve(process.cwd(), '.agent-tmp', 'refino-shots')
+// REFINO_OUTDIR (opcional) redireciona a saida da rodada, ex.: .agent-tmp/refino-shots/rc1/_raw/f4a.
+const outDirFor = () => (process.env.REFINO_OUTDIR ? path.resolve(process.cwd(), process.env.REFINO_OUTDIR) : path.join(OUT_ROOT, PHASE))
 const THEMES = ['light', 'dark']
 const VIEWPORT = { width: 1440, height: 900 }
 
@@ -3362,7 +3364,7 @@ for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
     test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' || PHASE === 'f6a' || PHASE === 'f6b' ? 600_000 : 180_000)
-    const outDir = path.join(OUT_ROOT, PHASE)
+    const outDir = outDirFor()
     fs.mkdirSync(outDir, { recursive: true })
 
     const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
@@ -3423,7 +3425,7 @@ for (const theme of THEMES) {
   test('capturas ' + PHASE + ' - estados de acesso - ' + theme, async ({ browser }) => {
     test.skip(PHASE !== 'f5b', 'estados de acesso so na F5b')
     test.setTimeout(300_000)
-    const outDir = path.join(OUT_ROOT, PHASE)
+    const outDir = outDirFor()
     fs.mkdirSync(outDir, { recursive: true })
     for (const screen of ACCESS_SCREENS) {
       const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
@@ -3475,7 +3477,7 @@ for (const theme of THEMES) {
   test(`capturas ${PHASE} - nao-admin - ${theme}`, async ({ browser }) => {
     test.skip(PHASE !== 'f4b', 'nao-admin so na F4b')
     test.setTimeout(120_000)
-    const outDir = path.join(OUT_ROOT, PHASE)
+    const outDir = outDirFor()
     fs.mkdirSync(outDir, { recursive: true })
     const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
     await context.addInitScript((value) => {
@@ -4217,7 +4219,7 @@ for (const theme of THEMES) {
     test(`capturas ${PHASE} - ${role.key} - ${theme}`, async ({ browser }) => {
       test.skip(PHASE !== 'f4c', 'papeis so na F4c')
       test.setTimeout(150_000)
-      const outDir = path.join(OUT_ROOT, PHASE)
+      const outDir = outDirFor()
       fs.mkdirSync(outDir, { recursive: true })
       const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
       await context.addInitScript((value) => {
