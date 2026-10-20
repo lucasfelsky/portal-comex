@@ -10,6 +10,7 @@
 //     isLoading={boolean}           // UX-2: skeleton antes da 1ª carga
 //     loadError={string|null}       // UX-2: banner com "Tentar novamente"
 //     onRetry={() => void}          // UX-2: recarrega (some se ausente)
+//     variant="drawer"              // refino F2: lista plana da gaveta desktop
 //   />
 //
 // Comportamento:
@@ -36,6 +37,71 @@ function iconForNotificationType(type) {
   if (normalized.startsWith('support_ticket')) return 'help'
   if (normalized.startsWith('news')) return 'news'
   return 'arrivals'
+}
+
+// Refino F2 (Flutuantes.dc.html): na gaveta desktop a lista e' PLANA (sem
+// grupos por processo), mais recentes primeiro; o tom do ladrilho vem do tipo.
+const DRAWER_LIMIT = 20
+
+function getDrawerVisual(type) {
+  const normalized = String(type ?? '')
+  if (normalized.startsWith('news')) return { icon: 'nav-news', tone: 'info' }
+  switch (normalized) {
+    case 'collection_status_updated':
+      return { icon: 'truck', tone: 'ok' }
+    case 'post_receipt_notes_updated':
+      return { icon: 'doc', tone: 'ok' }
+    case 'process_document_uploaded':
+      return { icon: 'doc', tone: 'warn' }
+    case 'receipt_divergence_reported':
+    case 'license_rejected':
+      return { icon: 'alert-triangle', tone: 'danger' }
+    case 'process_daily_alerts':
+      return { icon: 'alert-triangle', tone: 'warn' }
+    case 'support_ticket_resolved':
+      return { icon: 'message', tone: 'ok' }
+    default:
+      // dúvidas, respostas, favoritos, chamados: conversa
+      return { icon: 'message', tone: 'info' }
+  }
+}
+
+// "há 8 min • 19/10": o mock mostra só a data (dd/mm) e "ontem" no lugar de
+// "há 1 d". Sem toISOString: formata no fuso local.
+function formatDrawerDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+}
+
+function formatDrawerRelative(value, formatRelative) {
+  const relative = formatRelative(value)
+  return relative === 'há 1 d' ? 'ontem' : relative
+}
+
+function DrawerRow({ notification, onOpenNotification, formatRelative }) {
+  const { icon, tone } = getDrawerVisual(notification.type)
+  return (
+    <button
+      type="button"
+      className={`notif-row${notification.isRead ? '' : ' notif-row--unread'}`}
+      onClick={() => onOpenNotification(notification)}
+      aria-label={buildNotificationAriaLabel(notification, formatRelative)}
+    >
+      <span className={`notif-row__icon notif-row__icon--${tone}`} aria-hidden="true">
+        <Icon name={icon} size={16} strokeWidth={1.9} />
+      </span>
+      <span className="notif-row__body">
+        <span className="notif-row__title">{notification.title}</span>
+        <span className="notif-row__text">{notification.body}</span>
+        <span className="notif-row__time">
+          {formatDrawerRelative(notification.createdAt, formatRelative)} • {formatDrawerDate(notification.createdAt)}
+        </span>
+      </span>
+      <span className="notif-row__dot" aria-hidden="true" />
+    </button>
+  )
 }
 
 const RECENT_LIMIT = 8
@@ -199,6 +265,7 @@ export default function NotificationsList({
   isLoading = false,
   loadError = null,
   onRetry,
+  variant = 'default',
 }) {
   const [olderLimit, setOlderLimit] = useState(OLDER_INITIAL)
   const isMobile = useMobileLayout()
@@ -234,6 +301,30 @@ export default function NotificationsList({
         <strong>Nenhuma notificação</strong>
         <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
       </div>
+    )
+  }
+
+  if (variant === 'drawer') {
+    const flat = grouped
+      .flatMap((group) => group.items)
+      .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
+      .slice(0, DRAWER_LIMIT)
+
+    return (
+      <>
+        {errorBanner}
+        <ul className="notif-drawer__items">
+          {flat.map((notification) => (
+            <li key={notification.id}>
+              <DrawerRow
+                notification={notification}
+                onOpenNotification={onOpenNotification}
+                formatRelative={formatRelative}
+              />
+            </li>
+          ))}
+        </ul>
+      </>
     )
   }
 

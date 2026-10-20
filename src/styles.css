@@ -8933,227 +8933,1498 @@ body {
 }
 
 /* ============================================================
-   Fase 1 do redesign geral — restyle do shell no DESKTOP (sidebar navy
-   com nav em pills translucidos, card IntelliQuote discreto sobre navy).
-   So' ativa em min-width:1041px (breakpoint desktop do repo; abaixo disso
-   a sidebar vira drawer — @media max-width:1040px/720px, nao tocados
-   aqui). Vem depois de todas as regras base de .sidebar/.nav__link/
-   .brand/.sidebar-intelliquote-link no arquivo pra vencer por cascata
-   (mesma especificidade). Usa somente os tokens --sidebar-* do :root (e
-   a contraparte dark), sem hex novo hardcoded aqui.
+   REFINO VISUAL F2 — SHELL DO DESKTOP (>= 1041px)
+   Fonte dos valores: Sidebar.dc.html, Topbar.dc.html, AdminTabs.dc.html,
+   Flutuantes.dc.html (gaveta de notificacoes, paleta, suporte) e a faixa
+   "Sidebar" do Componentes.dc.html. Tablet (721-1040px) e mobile nao mudam:
+   tudo que e novo fica escondido por padrao (regras base logo abaixo) e so
+   aparece dentro do @media (min-width: 1041px).
+   Escopo por classe raiz: .sidebar, .topbar, .admin-section,
+   .notifications__panel--drawer, .command-palette(-modal), .support-fab,
+   .support-modal(-shell). O notebook.css (modo compacto) vem depois e
+   sobrescreve por ordem — por isso larguras/paddings da sidebar ficam em
+   seletores simples (0,1,0), fora do par [data-theme='dark'] .sidebar.
    ============================================================ */
+
+/* Elementos novos do shell: escondidos fora do desktop. */
+.sidebar__mark,
+.sidebar-intelliquote-link__mark,
+.topbar__search,
+.topbar__ptax-sep,
+.admin-tab__dot,
+.admin-tab__desc {
+  display: none;
+}
+
+/* Rodape da sidebar: o card do IntelliQuote e os botoes Tema/Sair moram no
+   mesmo wrapper. Fora do desktop o espacamento e o do drawer anterior. */
+.sidebar__foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Tablet: no detalhe de um processo o titulo da pagina continua sendo o unico
+   cabecalho (o crumb "Chegadas > processo" e so do desktop); nas paginas do
+   Admin o crumb substitui o titulo, como antes. */
+@media (max-width: 1040px) {
+  .topbar__title-wrap--crumb .topbar__title {
+    display: none;
+  }
+
+  .topbar__title-wrap--process-crumb .breadcrumb {
+    display: none;
+  }
+}
+
+@keyframes notif-drawer-in {
+  from { transform: translateX(calc(100% + 16px)); }
+  to { transform: translateX(0); }
+}
+
+@keyframes notif-drawer-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(100% + 16px)); }
+}
+
 @media (min-width: 1041px) {
-  /* [data-theme='dark'] .sidebar (linha ~7576, especificidade 0,2,0) e
-     [data-theme='dark'] .sidebar-intelliquote-link[:hover] (linhas ~7599/7603,
-     especificidade 0,2,0/0,3,0) vencem por especificidade as regras deste bloco
-     se ficarem so' com o seletor simples (media query nao soma especificidade).
-     Por isso os seletores abaixo repetem a variante [data-theme='dark'] pra
-     igualar a especificidade — igualdade resolvida por ordem no arquivo (este
-     bloco vem depois), mesmo padrao ja usado no bloco F16.1 mais abaixo. */
+  /* ---------------------------------------------------------------------
+     Sidebar (Sidebar.dc.html): 256px, padding 24/16/20, gap 28, gradiente
+     navy; marca "Rota e chegada" + "Portal COMEX".
+     --------------------------------------------------------------------- */
+  .sidebar {
+    /* Sobre o navy o anel de foco e o verde SQ (guarda (h) do contraste). */
+    --focus-ring: var(--primary);
+    width: 256px;
+    gap: 28px;
+    padding: 24px 16px 20px;
+    border: 0;
+    box-shadow: none;
+  }
+
+  /* O par com [data-theme='dark'] iguala a especificidade do bloco dark de
+     chrome (0,2,0); fica so com o que NAO e dimensao (o notebook sobrescreve
+     largura/padding por ordem). */
   [data-theme='dark'] .sidebar,
   .sidebar {
     background: var(--sidebar-bg);
-    border-right: none;
-    color: var(--sidebar-ink);
+    color: var(--toast-ink);
   }
 
-  .sidebar::-webkit-scrollbar-thumb {
-    background: var(--sidebar-pill-hover);
-  }
+  .sidebar::-webkit-scrollbar-thumb,
   .sidebar::-webkit-scrollbar-thumb:hover {
     background: var(--sidebar-pill-hover);
   }
 
-  .brand h1 {
-    color: var(--sidebar-ink);
+  .main-content {
+    --shell-pad-x: clamp(16px, 3vw, 40px);
+    margin-left: 256px;
+    width: calc(100% - 256px);
+    /* O topbar agora e um item sticky DENTRO do main-content (precisa crescer
+       quando quebra de linha, como no mock): sem padding-top e com as linhas
+       do grid empacotadas no topo (senao o auto-stretch esticaria o topbar). */
+    padding: 0 var(--shell-pad-x) 40px;
+    align-content: start;
   }
 
-  /* Accent verde SQ so' contrasta sobre o navy da sidebar; fora dela o
-     eyebrow (card de login, Verificar/Pendente/404) usa --primary-700. */
-  .sidebar .brand__eyebrow {
-    color: var(--primary);
-  }
-
-  .nav__link {
-    background: transparent;
-    border-color: transparent;
-    color: var(--sidebar-ink);
-    border-radius: var(--radius-full);
-  }
-
-  .nav__link-icon {
-    background: var(--sidebar-pill-hover);
-    color: var(--sidebar-ink-soft);
-  }
-
-  .nav__link-text p {
-    color: var(--sidebar-ink-soft);
-  }
-
-  .nav__link:hover {
-    background: var(--sidebar-pill-hover);
-    border-color: transparent;
-    color: var(--sidebar-ink);
-  }
-
-  .nav__link--active {
-    border-color: var(--primary);
-    border-radius: var(--radius-full);
-  }
-
-  /* UX-6a (D1, armadilha 2): a base `.nav__link--active .nav__link-icon`
-     (0,2,0) usa --on-primary-subtle/--on-primary (navy), que some sobre a
-     sidebar navy do desktop. Override com o mesmo (0,2,0), vindo depois no
-     arquivo, reaplica o visual translucido claro original. */
-  .nav__link--active .nav__link-icon {
-    background: var(--sidebar-pill-active);
-    color: var(--sidebar-ink);
-  }
-
-  [data-theme='dark'] .sidebar-intelliquote-link,
-  .sidebar-intelliquote-link {
-    background: var(--sidebar-pill-hover);
-    border: 1px solid var(--sidebar-pill-hover);
-  }
-
-  [data-theme='dark'] .sidebar-intelliquote-link:hover,
-  .sidebar-intelliquote-link:hover {
-    background: var(--sidebar-pill-hover);
-  }
-
-  /* Sub-ciclo 5a passo 5 — logo real (assets/sqquimica.png) num chip branco
-     (o PNG é colorido com texto navy, por isso o fundo precisa ficar sempre
-     branco independente do tema — mesmo raciocínio de #ffffff hardcoded já
-     usado em .primary-button/.danger-button etc, cor invariante ao tema). */
-  .brand {
+  /* Marca: ladrilho 40 + "Portal COMEX" Sora 19/700. O chip do PNG da SQ e o
+     eyebrow ficam so no drawer do tablet (D3). */
+  .sidebar .brand {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 0 6px;
   }
 
-  .sidebar__logo {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    border-radius: var(--radius-sm);
-    background: #ffffff;
-  }
-
-  .sidebar__logo img {
+  .sidebar .sidebar__mark {
     display: block;
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
+    flex-shrink: 0;
   }
 
-  /* Sub-ciclo 5a passo 4 — rodapé Tema+Sair em 2 colunas (mockup .sb__foot).
-     Especificidade .sidebar__foot .sidebar-theme-button (0,2,0) vence a
-     regra base .sidebar-theme-button{display:none} (0,1,0, linha ~2989)
-     independente de ordem no arquivo. */
-  .sidebar__foot {
-    display: flex;
-    gap: 9px;
+  .sidebar .sidebar__logo,
+  .sidebar .brand__eyebrow {
+    display: none;
   }
 
-  .sidebar__foot .sidebar-theme-button,
-  .sidebar__foot .sidebar-logout-button {
+  .sidebar .brand h1 {
+    font-family: var(--font-heading);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: normal;
+    color: var(--toast-ink);
+  }
+
+  /* Navegacao: 44px, raio 12, gap 12, 14px. Repouso #b8ccd3/600; hover
+     branco + rgba(255,255,255,.08) em 200ms; ativo = pilula menta
+     translucida + anel de 1px + texto branco 700 + icone #14dda7. */
+  .sidebar .nav {
     display: flex;
-    flex: 1;
-    justify-content: center;
-    padding: 11px;
-    border-radius: var(--radius-sm);
-    border-color: var(--sidebar-pill-hover);
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sidebar .nav__link {
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 14px;
+    gap: 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
     color: var(--sidebar-ink-soft);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
   }
 
-  .sidebar__foot .sidebar-theme-button:hover,
-  .sidebar__foot .sidebar-logout-button:hover {
+  .sidebar .nav__link-icon,
+  .sidebar .nav__link:hover .nav__link-icon,
+  .sidebar .nav__link--active .nav__link-icon {
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+  }
+
+  .sidebar .nav__link-text {
+    display: block;
+  }
+
+  .sidebar .nav__link-text strong {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: normal;
+    color: inherit;
+  }
+
+  /* A descricao some no desktop (continua no DOM; o tablet mostra). */
+  .sidebar .nav__link-text p {
+    display: none;
+  }
+
+  .sidebar .nav__link:hover {
     background: var(--sidebar-pill-hover);
     color: var(--sidebar-ink);
   }
-}
 
-/* ============================================================
-   Sub-ciclo 5a — Topbar (passos 1-3 do pass de fidelidade ao mockup
-   Main.dc.html). Só desktop (min-width:1041px); a faixa tablet
-   (max-width:1040px, bloco ~4196) já esconde ptax/user-info/role-badge/
-   logout e reduz o avatar — não é tocada aqui.
-   ============================================================ */
-@media (min-width: 1041px) {
-  /* Passo 1 — notificação vira botão-ícone (sino) com dot (mockup
-     .icobtn + .dot). O texto "Notificações" (.notifications__label)
-     some visualmente no desktop; o aria-label no <button> continua
-     garantindo o acesso por leitor de tela. */
-  .notifications__label {
-    display: none;
+  .sidebar .nav__link--active,
+  .sidebar .nav__link--active:hover {
+    background: var(--sidebar-pill-active);
+    box-shadow: inset 0 0 0 1px var(--sidebar-pill-active-ring);
+    color: var(--sidebar-ink);
+    font-weight: 700;
   }
 
-  .notifications__trigger {
-    position: relative;
-    width: 42px;
-    height: 42px;
+  .sidebar .nav__link--active .nav__link-icon,
+  .sidebar .nav__link--active:hover .nav__link-icon {
+    color: var(--primary);
+  }
+
+  .sidebar .nav__link:focus-visible,
+  .sidebar .nav__link--active:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* Rodape: card do IntelliQuote (marca IQ 36 + "IntelliQuote" 14/700 +
+     "Abrir cotacoes" 12 + seta 16) e botoes Tema/Sair de 40px. O card
+     "Fazer uma cotacao" (Comercial, D4) tem o mesmo estilo, sem marca. */
+  .sidebar .sidebar__foot {
+    gap: 6px;
+  }
+
+  [data-theme='dark'] .sidebar .sidebar-intelliquote-link,
+  .sidebar .sidebar-intelliquote-link {
+    margin-top: 0;
+    margin-bottom: 8px;
+    padding: 12px;
+    gap: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: none;
+    color: var(--sidebar-ink);
+    transform: none;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  [data-theme='dark'] .sidebar .sidebar-intelliquote-link:hover,
+  .sidebar .sidebar-intelliquote-link:hover {
+    background: var(--sidebar-pill-hover);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .sidebar .sidebar-intelliquote-link:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
+  }
+
+  .sidebar .sidebar-intelliquote-link__mark {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .sidebar .sidebar-intelliquote-link__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .sidebar .sidebar-intelliquote-link__title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+    color: var(--sidebar-ink);
+  }
+
+  .sidebar .sidebar-intelliquote-link__eyebrow {
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: normal;
+    text-transform: none;
+    color: var(--sidebar-ink-soft);
+  }
+
+  .sidebar .sidebar-intelliquote-link__arrow,
+  .sidebar .sidebar-intelliquote-link:hover .sidebar-intelliquote-link__arrow {
+    margin-left: auto;
+    color: var(--sidebar-ink-soft);
+    transform: none;
+  }
+
+  .sidebar .sidebar__foot .sidebar-theme-button,
+  .sidebar .sidebar__foot .sidebar-logout-button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--sidebar-ink-soft);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: normal;
+    letter-spacing: normal;
+    text-align: left;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  .sidebar .sidebar__foot .sidebar-theme-button:hover:not(:disabled),
+  .sidebar .sidebar__foot .sidebar-logout-button:hover:not(:disabled) {
+    background: var(--sidebar-pill-hover);
+    border-color: transparent;
+    color: var(--sidebar-ink);
+  }
+
+  .sidebar .sidebar__foot .sidebar-theme-button:focus-visible,
+  .sidebar .sidebar__foot .sidebar-logout-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* ---------------------------------------------------------------------
+     Topbar (Topbar.dc.html): item sticky do main-content, min-height 76,
+     gap 10/14, titulo + breadcrumb ACIMA, busca Ctrl K, PTAX, sino com
+     badge numerico e botao de usuario. `.topbar__actions` vira
+     display:contents: seus filhos entram direto no flex (e quebram de linha)
+     como no mock.
+     --------------------------------------------------------------------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    z-index: 25;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px 14px;
+    height: auto;
+    min-height: 76px;
+    margin: 0 calc(-1 * var(--shell-pad-x)) 8px;
+    padding: 14px var(--shell-pad-x);
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg);
+    box-shadow: none;
+    color: var(--ink);
+  }
+
+  .topbar__heading {
+    display: block;
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .topbar__actions {
+    display: contents;
+  }
+
+  .topbar__title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .topbar .topbar__title {
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+  }
+
+  /* Breadcrumb: "Admin › Barra do porto", 12/600 ink-soft, texto simples. */
+  .topbar .breadcrumb__list {
+    gap: 4px;
+    line-height: normal;
+  }
+
+  .topbar .breadcrumb__item {
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: normal;
+  }
+
+  .topbar .breadcrumb__link,
+  .topbar .breadcrumb__current {
     padding: 0;
-    gap: 0;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    background: var(--surface);
+    border-radius: 0;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: normal;
+    text-decoration: none;
   }
 
-  .notifications__count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    border-radius: var(--radius-full);
-    background: var(--danger);
-    border: 2px solid var(--bg);
-    /* UX-6a (D1/D3): sem isso herdaria --on-primary (navy) da regra base,
-       navy sobre --danger da 3,75 e reprova. */
-    color: var(--on-danger);
+  .topbar .breadcrumb__link:hover {
+    background: none;
+    color: var(--ink);
   }
 
-  /* Passo 2 — "Sair" só mora na sidebar no desktop (mockup não tem
-     logout na topbar). Markup do botão continua existindo (tablet
-     721-1040px segue mostrando, bloco ~4196 não é tocado). */
-  .topbar__logout {
+  .topbar .breadcrumb__separator {
+    opacity: 1;
+  }
+
+  .topbar .breadcrumb__separator svg {
     display: none;
   }
 
-  /* Ajuste (feedback 2026-08-26) — toggle de tema duplicado no desktop:
-     mantém SÓ o da sidebar (`.sidebar-theme-button`, rodapé `.sidebar__foot`
-     do 5a acima); esconde o da topbar só aqui (min-width:1041px). NÃO
-     esconder em max-width nenhum — no tablet (721-1040px) a sidebar é
-     drawer escondido e o `.topbar-theme-button` precisa continuar visível
-     (o `.sidebar-theme-button` já é `display:none` por padrão fora do
-     drawer mobile, linha ~2997). Markup do botão não muda. */
+  .topbar .breadcrumb__separator::before {
+    content: '\203A';
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Busca (abre a paleta): 44px, raio 12, flex 0 1 300px, min 180. */
+  .topbar .topbar__search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    height: 44px;
+    min-width: 180px;
+    padding: 0 8px 0 14px;
+    flex: 0 1 300px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .topbar .topbar__search:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+  }
+
+  .topbar .topbar__search:focus-visible,
+  .topbar .notifications__trigger:focus-visible,
+  .topbar .topbar__user:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .topbar .topbar__search svg {
+    flex-shrink: 0;
+  }
+
+  .topbar .topbar__search-text {
+    flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .topbar .topbar__search-kbd {
+    flex-shrink: 0;
+    padding: 3px 7px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-alt);
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  /* PTAX: chip 44px, mono 12 tabular, USD | EUR com separador 1x18 (D6: sem
+     "R$"). */
+  .topbar .topbar__ptax {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topbar .topbar__ptax-pair {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 7px;
+    line-height: normal;
+  }
+
+  .topbar .topbar__ptax-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: normal;
+    color: var(--ink-soft);
+  }
+
+  .topbar .topbar__ptax-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .topbar .topbar__ptax-sep {
+    display: block;
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+  }
+
+  /* O alternador de tema mora so na sidebar (decisao 4). */
   .topbar-theme-button {
     display: none;
   }
 
-  /* Passo 3 — PTAX como card com borda (mockup .ptax) + par label/valor
-     empilhado; avatar mais denso (mockup .av). */
-  .topbar__ptax {
-    display: flex;
-    gap: 16px;
-    padding: 9px 16px;
-    border-radius: var(--radius-sm);
+  /* Sino: 44x44, raio 12, icone 18 e badge numerico menta com halo. */
+  .topbar .notifications__label {
+    display: none;
   }
 
-  .topbar__ptax-pair {
+  .topbar .notifications__trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .topbar .notifications__trigger:hover:not(:disabled) {
+    background: var(--surface-alt);
+    border-color: var(--border-strong);
+  }
+
+  .topbar .notifications__trigger--active {
+    border-color: var(--navy);
+  }
+
+  .topbar .notifications__count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--primary);
+    box-shadow: 0 0 0 2px var(--bg);
+    color: var(--on-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Usuario: botao 44px (avatar 32 raio 10 navy, nome 13/700, papel 11/600
+     primary-700, chevron 14) com menu (D5). */
+  .topbar__user-wrap {
+    position: relative;
+  }
+
+  .topbar .topbar__user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 12px 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .topbar .topbar__user:hover {
+    background: var(--surface-alt);
+    border-color: var(--border-strong);
+  }
+
+  .topbar .topbar__avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--navy);
+    color: var(--sidebar-ink);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: normal;
+  }
+
+  .topbar .topbar__user-info {
+    display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: 0;
   }
 
-  .topbar__avatar {
-    width: 42px;
-    height: 42px;
-    border-radius: var(--radius-sm);
+  .topbar .topbar__user-info strong {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .topbar .topbar__user-info .topbar__role-badge {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--primary-700);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: normal;
+    text-transform: none;
+  }
+
+  .topbar .topbar__user-chevron {
+    flex-shrink: 0;
+    color: var(--ink-soft);
+  }
+
+  .topbar__user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+    min-width: 248px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .topbar__user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .topbar__user-menu-item:hover {
+    background: var(--surface-alt);
+  }
+
+  .topbar__user-menu-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* ---------------------------------------------------------------------
+     Abas do Admin (AdminTabs.dc.html): grid auto-fit minmax(150px,1fr), gap
+     8; cada aba = rotulo 14/700 + ponto de ativo 6px + descricao 12/1.35.
+     --------------------------------------------------------------------- */
+  .admin-section .admin-tabs.admin-tabs--desktop {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .admin-section .admin-tabs .admin-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink);
+    font-weight: 400;
+    text-align: left;
+    text-decoration: none;
+    transform: none;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-section .admin-tabs .admin-tab:hover:not(.tab-button--active) {
+    border-color: var(--border-strong);
+    background: transparent;
+    color: var(--ink);
+  }
+
+  .admin-section .admin-tabs .admin-tab.tab-button--active {
+    border-color: var(--navy);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    color: var(--ink);
+    transform: none;
+  }
+
+  [data-theme='dark'] .admin-section .admin-tabs .admin-tab.tab-button--active {
+    border-color: var(--primary);
+  }
+
+  .admin-section .admin-tabs .admin-tab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .admin-tab__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .admin-tab__dot {
+    display: block;
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 99px;
+    background: transparent;
+  }
+
+  .admin-tab.tab-button--active .admin-tab__dot {
+    background: var(--primary);
+  }
+
+  .admin-tab__desc {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--ink-soft);
+  }
+
+  /* ---------------------------------------------------------------------
+     Gaveta de notificacoes (Flutuantes.dc.html): painel de 420px a direita,
+     altura total menos margens, raio 22, --shadow-lg; entra por translateX
+     em 300ms (--ease-out) e sai em 210ms (--ease-in); scrim --scrim-soft.
+     --------------------------------------------------------------------- */
+  .notifications-backdrop {
+    background: var(--scrim-soft);
+  }
+
+  .notifications__panel.notifications__panel--drawer {
+    --drawer-action-ink: var(--navy);
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    left: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    box-sizing: border-box;
+    width: min(420px, calc(100vw - 32px));
+    padding: 0;
+    border: 0;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: notif-drawer-in var(--dur-slow) var(--ease-out) forwards;
+  }
+
+  [data-theme='dark'] .notifications__panel.notifications__panel--drawer {
+    --drawer-action-ink: var(--primary);
+    background: var(--surface);
+  }
+
+  .notifications__panel.notifications__panel--drawer.notifications__panel--closing {
+    animation: notif-drawer-out 210ms var(--ease-in) forwards;
+  }
+
+  .notif-drawer__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px 12px;
+  }
+
+  .notif-drawer__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .notif-drawer__title {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .notif-drawer__sub {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .notif-drawer__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .notif-drawer__close:hover {
+    background: var(--bg);
+  }
+
+  .notif-drawer__filters {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0 20px 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .notif-drawer__pill {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .notif-drawer__pill:hover:not(.notif-drawer__pill--active) {
+    border-color: var(--border-strong);
+  }
+
+  .notif-drawer__pill--active {
+    border: 0;
+    background: var(--navy);
+    color: var(--sidebar-ink);
+  }
+
+  .notif-drawer__close:focus-visible,
+  .notif-drawer__pill:focus-visible,
+  .notif-drawer__mark-all:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .notifications__panel--drawer .notif-drawer__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 4px 12px;
+    border-top: 1px solid var(--row-divider);
+    overflow-y: auto;
+    max-height: none;
+  }
+
+  .notif-drawer__items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .notif-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 10px;
+    gap: 12px;
+    align-items: start;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 8px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .notif-row:hover {
+    background: var(--surface-alt);
+  }
+
+  .notif-row--unread {
+    background: var(--surface-alt);
+  }
+
+  .notif-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .notif-row__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .notif-row__icon--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .notif-row__icon--ok {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .notif-row__icon--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .notif-row__icon--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .notif-row__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .notif-row__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .notif-row__text {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+
+  .notif-row__time {
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .notif-row__dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 99px;
+    background: transparent;
+  }
+
+  .notif-row--unread .notif-row__dot {
+    background: var(--primary);
+  }
+
+  .notif-drawer__foot {
+    display: flex;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .notif-drawer__mark-all {
+    flex: 1;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--drawer-action-ink);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .notif-drawer__mark-all:hover:not(:disabled) {
+    background: var(--surface-alt);
+  }
+
+  .notif-drawer__mark-all:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .notifications__panel--drawer .notif-drawer__view-all {
+    flex: 1;
+    height: 44px;
+    padding: 0;
+    border-radius: 12px;
+    box-shadow: none;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  /* ---------------------------------------------------------------------
+     Paleta de comandos (Flutuantes.dc.html): cartao de 444px (coluna
+     central do mock), raio 22, busca de 60px, grupos em mono 10/600 com
+     1.5px, item de processo de 52px, item ativo em --primary-50 com anel.
+     --------------------------------------------------------------------- */
+  .modal-backdrop.command-palette-modal-backdrop {
+    place-items: start center;
+    padding-top: 12vh;
+    background: var(--scrim);
+  }
+
+  .modal.command-palette-modal {
+    width: 444px;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 22px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+
+  .command-palette-modal .command-palette {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .command-palette-modal .command-palette__search {
+    box-sizing: border-box;
+    height: 60px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--row-divider);
+  }
+
+  .command-palette-modal .command-palette__search-icon {
+    color: var(--navy);
+  }
+
+  [data-theme='dark'] .command-palette-modal .command-palette__search-icon {
+    color: var(--primary);
+  }
+
+  .command-palette-modal .command-palette__input {
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .command-palette-modal .command-palette__search .command-palette__kbd {
+    padding: 3px 7px;
+    border-radius: 6px;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: normal;
+  }
+
+  .command-palette-modal .command-palette__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: min(60vh, 520px);
+    padding: 10px;
+  }
+
+  .command-palette-modal .command-palette__group {
+    margin-bottom: 0;
+  }
+
+  .command-palette-modal .command-palette__group-label {
+    padding: 8px 10px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .command-palette-modal .command-palette__group + .command-palette__group .command-palette__group-label {
+    padding-top: 12px;
+  }
+
+  .command-palette-modal .command-palette__item {
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 12px;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .command-palette-modal .command-palette__item--process {
+    height: 52px;
+  }
+
+  .command-palette-modal .command-palette__item--active,
+  .command-palette-modal .command-palette__item:hover {
+    background: var(--primary-50);
+    box-shadow: inset 0 0 0 1px rgba(0, 120, 100, 0.25);
+  }
+
+  [data-theme='dark'] .command-palette-modal .command-palette__item--active,
+  [data-theme='dark'] .command-palette-modal .command-palette__item:hover {
+    box-shadow: inset 0 0 0 1px rgba(20, 221, 167, 0.25);
+  }
+
+  .command-palette-modal .command-palette__item-icon,
+  .command-palette-modal .command-palette__item--active .command-palette__item-icon,
+  .command-palette-modal .command-palette__item:hover .command-palette__item-icon {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-soft);
+  }
+
+  .command-palette-modal .command-palette__item--active .command-palette__item-icon,
+  .command-palette-modal .command-palette__item:hover .command-palette__item-icon {
+    color: var(--primary-700);
+  }
+
+  .command-palette-modal .command-palette__item-label,
+  .command-palette-modal .command-palette__item--active .command-palette__item-label,
+  .command-palette-modal .command-palette__item:hover .command-palette__item-label {
+    flex-grow: 1;
+    color: var(--ink);
+  }
+
+  .command-palette-modal .command-palette__item--process .command-palette__item-label {
+    font-weight: 700;
+  }
+
+  .command-palette__item-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .command-palette__item-main .command-palette__item-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .command-palette__item-sub {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+
+  .command-palette__mark {
+    border-radius: 3px;
+    background: var(--mark-bg);
+    color: inherit;
+  }
+
+  .command-palette__item-hint {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--success-700);
+  }
+
+  .command-palette-modal .command-palette__footer {
+    gap: 16px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--row-divider);
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .command-palette-modal .command-palette__footer .command-palette__kbd {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font-family: var(--font-mono);
+    font-size: inherit;
+    font-weight: 400;
+  }
+
+  /* ---------------------------------------------------------------------
+     Suporte (Flutuantes.dc.html): FAB pilula 48px navy + modal de 400px com
+     "Meus chamados" como visao alternada.
+     --------------------------------------------------------------------- */
+  .support-fab .support-fab__trigger {
+    box-sizing: border-box;
+    height: 48px;
+    padding: 0 18px 0 14px;
+    gap: 10px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--navy);
+    box-shadow: 0 6px 18px rgba(0, 65, 83, 0.25);
+    color: var(--sidebar-ink);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+    letter-spacing: normal;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .support-fab .support-fab__trigger:hover {
+    background: var(--navy-700);
+    transform: none;
+  }
+
+  .support-fab .support-fab__trigger svg {
+    color: var(--primary);
+  }
+
+  .support-fab .support-fab__trigger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-ring);
+  }
+
+  .modal-backdrop.support-modal-shell-backdrop {
+    background: var(--scrim);
+  }
+
+  .modal.support-modal-shell {
+    max-width: 400px;
+    padding: 22px;
+    border: 0;
+    border-radius: 22px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .support-modal-shell .modal__header {
+    display: none;
+  }
+
+  .support-modal--desktop {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .support-modal--desktop .support-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .support-modal--desktop .support-modal__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .support-modal--desktop .support-modal__switch {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--link-color);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .support-modal--desktop .support-modal__switch:hover {
+    color: var(--link-color-hover);
+  }
+
+  .support-modal--desktop .support-modal__switch:focus-visible,
+  .support-modal--desktop .support-modal__cancel:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .support-modal--desktop .support-modal__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .support-modal--desktop .support-modal__field,
+  .support-modal--desktop .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .support-modal--desktop .support-modal__field > label,
+  .support-modal--desktop .field > span:first-child {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .support-modal--desktop .support-modal__input,
+  .support-modal--desktop .text-input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border: 1.5px solid var(--border-control);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: normal;
+    outline: none;
+    transition:
+      border-color var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out);
+  }
+
+  .support-modal--desktop textarea.text-input {
+    height: auto;
+    padding: 12px 14px;
+    resize: none;
+  }
+
+  .support-modal--desktop .support-modal__input:hover,
+  .support-modal--desktop .text-input:hover:not(:focus) {
+    border-color: var(--border-control-hover);
+  }
+
+  .support-modal--desktop .support-modal__input:focus,
+  .support-modal--desktop .text-input:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 4px rgba(20, 221, 167, 0.28);
+  }
+
+  [data-theme='dark'] .support-modal--desktop .support-modal__input:focus,
+  [data-theme='dark'] .support-modal--desktop .text-input:focus {
+    border-color: var(--primary);
+  }
+
+  .support-modal--desktop .text-input[aria-invalid='true'] {
+    border-color: var(--danger);
+  }
+
+  .support-modal--desktop .file-picker__button {
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .support-modal--desktop .support-modal__context {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .support-modal--desktop .support-modal__context svg {
+    flex-shrink: 0;
+  }
+
+  .support-modal--desktop .support-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .support-modal--desktop .support-modal__cancel {
+    height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--drawer-action-ink, var(--navy));
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  [data-theme='dark'] .support-modal--desktop .support-modal__cancel {
+    color: var(--primary);
+  }
+
+  .support-modal--desktop .support-modal__cancel:hover {
+    background: var(--surface-alt);
+  }
+
+  .support-modal--desktop .primary-button {
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 12px;
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .support-modal--desktop .support-modal__history {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .support-modal--desktop .support-modal__history h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .support-modal--desktop .support-modal__tickets {
+    max-height: 380px;
   }
 }
 
@@ -13639,6 +14910,7 @@ body {
    vencer .toast/.toast--closing (mesma especificidade). */
 @media (min-width: 1041px) and (prefers-reduced-motion: reduce) {
   .notifications__panel,
+  .notifications__panel.notifications__panel--drawer,
   .notifications-backdrop,
   .modal-backdrop,
   .news-modal-backdrop,
@@ -13648,6 +14920,7 @@ body {
   }
 
   .notifications__panel--closing,
+  .notifications__panel.notifications__panel--drawer.notifications__panel--closing,
   .notifications-backdrop--closing,
   .modal--sheet-closing,
   .modal-backdrop--closing,

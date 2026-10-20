@@ -7,7 +7,8 @@
 //   - Enter executa (navigate se 'to', action senao)
 //   - Empty state quando nada bate
 //   - Click no item executa
-//   - Agrupa por 'group'
+//   - Dois grupos fixos (refino F2): "Processos" (async, primeiro) e "Páginas e ações"
+//   - Trecho buscado em <mark>, subtitulo mono e dica "Enter" no item ativo
 //   - Hook useCommandPalette registra Ctrl+K / Cmd+K
 //
 // @vitest-environment jsdom
@@ -129,11 +130,33 @@ describe('CommandPalette', () => {
     expect(active).toHaveTextContent('Noticias')
   })
 
-  it('Agrupa por group com label visivel', () => {
+  // Refino F2 (Flutuantes.dc.html): todos os comandos estaticos caem num grupo
+  // so, "Páginas e ações" (o group de cada item segue valendo na busca).
+  it('Agrupa os comandos estaticos num grupo unico "Páginas e ações"', () => {
     renderWithRouter(<CommandPalette open={true} commands={COMMANDS} />)
-    expect(screen.getByText('Paginas')).toBeInTheDocument()
-    expect(screen.getByText('Externo')).toBeInTheDocument()
-    expect(screen.getByText('Conta')).toBeInTheDocument()
+    expect(screen.getByText('Páginas e ações')).toBeInTheDocument()
+    expect(screen.queryByText('Paginas')).not.toBeInTheDocument()
+    expect(screen.queryByText('Externo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Conta')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('.command-palette__group')).toHaveLength(1)
+  })
+
+  it('o item ativo mostra a dica "Enter" (so ele)', () => {
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} />)
+    const hints = document.querySelectorAll('.command-palette__item-hint')
+    expect(hints).toHaveLength(1)
+    expect(screen.getByRole('option', { selected: true })).toContainElement(hints[0])
+    fireEvent.keyDown(screen.getByPlaceholderText(/buscar/i), { key: 'ArrowDown' })
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Noticias')
+    expect(document.querySelectorAll('.command-palette__item-hint')).toHaveLength(1)
+  })
+
+  it('rodape lista os atalhos: ↑ ↓ navegar, Enter abrir, Esc fechar', () => {
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} />)
+    const footer = document.querySelector('.command-palette__footer')
+    expect(footer).toHaveTextContent('↑ ↓ navegar')
+    expect(footer).toHaveTextContent('Enter abrir')
+    expect(footer).toHaveTextContent('Esc fechar')
   })
 })
 
@@ -207,8 +230,10 @@ describe('CommandPalette searcher', () => {
     await new Promise((resolve) => setTimeout(resolve, 220))
     expect(searcher).toHaveBeenCalledWith('Atlas')
 
-    const resultNode = await screen.findByText('Resultado Atlas')
+    // O termo buscado vai em <mark> (refino F2): o texto do item continua inteiro.
+    const resultNode = await screen.findByRole('option', { name: /Resultado Atlas/ })
     expect(resultNode).toBeInTheDocument()
+    expect(resultNode.querySelector('mark')).toHaveTextContent('Atlas')
   })
 
   it('mostra "Buscando..." enquanto loading e placeholder custom', async () => {
@@ -231,7 +256,7 @@ describe('CommandPalette searcher', () => {
     expect(screen.getByText(/Buscando\.\.\./i)).toBeInTheDocument()
   })
 
-  it('agrupa resultados async com label "Resultados"', async () => {
+  it('agrupa resultados async em "Processos", SEMPRE antes de "Páginas e ações"', async () => {
     const searcher = vi.fn(async (q) => [
       { id: `r-${q}`, label: `Proc ${q}`, group: 'Resultados' },
     ])
@@ -239,12 +264,40 @@ describe('CommandPalette searcher', () => {
     renderWithRouter(<CommandPalette open={true} commands={COMMANDS} searcher={searcher} />)
 
     fireEvent.change(screen.getByPlaceholderText(/buscar/i), {
-      target: { value: 'X' },
+      target: { value: 'a' },
     })
 
     await new Promise((resolve) => setTimeout(resolve, 220))
 
-    expect(await screen.findByText(/^Resultados$/)).toBeInTheDocument()
+    expect(await screen.findByText(/^Processos$/)).toBeInTheDocument()
+    const labels = [...document.querySelectorAll('.command-palette__group-label')].map((node) => node.textContent)
+    expect(labels).toEqual(['Processos', 'Páginas e ações'])
+    // O primeiro item (ativo) e o processo, nao a pagina.
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Proc a')
+  })
+
+  it('processo: subtitulo mono "PO ... · status" e termo buscado em <mark>', async () => {
+    const searcher = vi.fn(async () => [
+      {
+        id: 'p-1',
+        label: 'Dióxido de titânio',
+        description: 'PO 4500127710 · Coleta agendada',
+        icon: 'arrivals',
+      },
+    ])
+
+    renderWithRouter(<CommandPalette open={true} commands={COMMANDS} searcher={searcher} />)
+
+    // Sem acento/caixa: "TITANIO" destaca "titânio".
+    fireEvent.change(screen.getByPlaceholderText(/buscar/i), { target: { value: 'TITANIO' } })
+    await new Promise((resolve) => setTimeout(resolve, 220))
+
+    const option = await screen.findByRole('option', { name: /Dióxido de titânio/ })
+    expect(option).toHaveClass('command-palette__item--process')
+    expect(option.querySelector('mark')).toHaveTextContent('titânio')
+    expect(option.querySelector('.command-palette__item-sub')).toHaveTextContent(
+      'PO 4500127710 · Coleta agendada',
+    )
   })
 
   it('searcher com erro mostra empty state', async () => {

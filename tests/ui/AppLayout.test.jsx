@@ -310,7 +310,8 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       const user = userEvent.setup()
       await user.click(bell)
 
-      const filterSelect = await screen.findByLabelText('Filtrar notificações por categoria')
+      // Refino F2: o select virou a faixa de pilulas (role=tablist).
+      const filterPill = await screen.findByRole('tab', { name: 'Coleta' })
       // Espera o auto-foco inicial do useFocusTrap (30ms) assentar antes de
       // mover o foco manualmente — senão o timeout pendente rouba o foco
       // de volta e o teste não isola a regressão do polling.
@@ -318,8 +319,8 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
         const dialog = screen.getByRole('dialog', { name: 'Central de notificações' })
         expect(dialog.contains(document.activeElement)).toBe(true)
       })
-      filterSelect.focus()
-      expect(document.activeElement).toBe(filterSelect)
+      filterPill.focus()
+      expect(document.activeElement).toBe(filterPill)
 
       act(() => {
         window.dispatchEvent(
@@ -329,21 +330,26 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 40))
 
-      expect(document.activeElement).toBe(filterSelect)
+      expect(document.activeElement).toBe(filterPill)
     })
 
-    // F18b-1 (B4): filtro "Documentos" no drawer (option value
-    // process_document_uploaded), depois de "Alertas".
-    it('drawer: filtro tem a opção "Documentos" (process_document_uploaded)', async () => {
+    // F18b-1 (B4): filtro "Documentos" no drawer, depois de "Alertas". Refino
+    // F2 (D18): pilulas em rolagem horizontal com as 10 categorias.
+    it('drawer: pilulas de filtro com as 10 categorias, incluindo "Documentos" depois de "Alertas"', async () => {
       renderWithRole('admin')
       const bell = screen.getAllByLabelText('Notificações')[0]
       const user = userEvent.setup()
       await user.click(bell)
 
-      const filterSelect = await screen.findByLabelText('Filtrar notificações por categoria')
-      const option = within(filterSelect).getByText('Documentos')
-      expect(option).toBeInTheDocument()
-      expect(option.closest('option').value).toBe('process_document_uploaded')
+      const tablist = await screen.findByRole('tablist', { name: 'Filtrar notificações por categoria' })
+      const labels = within(tablist)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent)
+      expect(labels).toHaveLength(10)
+      expect(labels[0]).toBe('Todas')
+      expect(labels.indexOf('Documentos')).toBe(labels.indexOf('Alertas') + 1)
+      expect(within(tablist).getByRole('tab', { name: 'Todas' })).toHaveAttribute('aria-selected', 'true')
+      expect(within(tablist).getByRole('tab', { name: 'Documentos' })).toHaveAttribute('aria-selected', 'false')
     })
 
     it('erro no drawer: alerta "Não foi possível carregar as notificações" e retry limpa', async () => {

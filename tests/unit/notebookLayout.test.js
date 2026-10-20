@@ -126,15 +126,14 @@ const CSS_COLOR_NAMES = new Set(
   ).split(' '),
 )
 
-// Q-D (todo desktop, sem outra condicao): so as abas do detalhe/Admin e a folga
-// do Suporte no fim do .main-content. Qualquer outra regra aqui vazaria para
-// 1366+ com altura > 800 (1440x900, 1920x1080).
+// Q-D (todo desktop, sem outra condicao): so as abas do detalhe e a folga do
+// Suporte no fim do .main-content. Qualquer outra regra aqui vazaria para
+// 1366+ com altura > 800 (1440x900, 1920x1080). Refino F2: as abas do Admin
+// viraram o grid auto-fit do mock (AdminTabs.dc.html) e saem do notebook.css.
 const Q_D = '@media (min-width: 1041px)'
 const Q_D_SELECTORS = [
   '.process-detail-view .detail-tab-row',
   '.process-detail-view .detail-tab-row .tab-button',
-  '.admin-section .admin-tabs',
-  '.admin-section .admin-tabs .tab-button',
   '.main-content',
 ]
 
@@ -227,7 +226,8 @@ describe('notebook.css - guarda de escopo', () => {
         ).toBe(false)
       }
     }
-    expect(checked).toBeGreaterThanOrEqual(2)
+    // Refino F2: o scroll-shadow das abas do Admin saiu; resta o do detalhe.
+    expect(checked).toBeGreaterThanOrEqual(1)
   })
 
   it('(g) todo var(--x) existe no styles.css ou e --nb-* declarado no proprio arquivo', () => {
@@ -272,7 +272,7 @@ describe('notebook.css - guarda de escopo', () => {
     expect(sidebar.declarations).toContainEqual({ prop: 'width', value: '232px' })
   })
 
-  it('(j) Q-D (so min-width: 1041px) tem apenas as abas e o padding-bottom do .main-content', () => {
+  it('(j) Q-D (so min-width: 1041px) tem apenas as abas do detalhe e o padding-bottom do .main-content', () => {
     const qd = mediaBlocks.filter((block) => block.prelude === Q_D)
     expect(qd.length).toBe(1)
     const selectors = qd[0].rules.map((rule) => rule.selector)
@@ -295,7 +295,7 @@ describe('notebook.css - guarda de escopo', () => {
       }
     }
     const qd = mediaBlocks.find((block) => block.prelude === Q_D)
-    for (const selector of ['.process-detail-view .detail-tab-row', '.admin-section .admin-tabs']) {
+    for (const selector of ['.process-detail-view .detail-tab-row']) {
       const backgrounds = qd.rules
         .filter((entry) => entry.selector === selector)
         .flatMap((entry) => entry.declarations)

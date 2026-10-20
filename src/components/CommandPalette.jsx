@@ -22,6 +22,11 @@
 //   - Se `searcher` for passado, chama com debounce 200ms e junta resultados
 //
 // Estrutura: <Modal> wrapper com <input> + lista de resultados.
+//
+// Refino visual F2 (Flutuantes.dc.html): dois grupos fixos — "Processos"
+// (resultados do searcher, sempre PRIMEIRO, com o trecho buscado em <mark>) e
+// "Páginas e ações" (todos os comandos estaticos num grupo so). O item ativo
+// mostra a dica "Enter".
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -30,6 +35,30 @@ import Icon from './Icon'
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 
 const SEARCH_DEBOUNCE_MS = 200
+const ASYNC_GROUP_LABEL = 'Processos'
+const STATIC_GROUP_LABEL = 'Páginas e ações'
+
+const foldText = (value) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
+// Destaca o trecho buscado (sem acento/caixa) com <mark>. Se a dobra de
+// acentos mudar o tamanho do texto (caracteres ja decompostos), nao destaca.
+function highlightMatch(label, query) {
+  const text = String(label ?? '')
+  const needle = String(query ?? '').trim()
+  if (!needle) return text
+  const foldedText = foldText(text)
+  if (foldedText.length !== text.length) return text
+  const index = foldedText.indexOf(foldText(needle))
+  if (index < 0) return text
+  const end = index + needle.length
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark className="command-palette__mark">{text.slice(index, end)}</mark>
+      {text.slice(end)}
+    </>
+  )
+}
 
 export default function CommandPalette({
   open,
@@ -133,7 +162,7 @@ export default function CommandPalette({
   const filtered = useMemo(() => {
     if (!searcher) return filteredCommands
     const taggedAsync = asyncResults.map((item) => ({ ...item, _async: true }))
-    return [...filteredCommands, ...taggedAsync]
+    return [...taggedAsync, ...filteredCommands]
   }, [filteredCommands, asyncResults, searcher])
 
   // Mantem activeIndex dentro dos limites quando query muda
@@ -173,7 +202,7 @@ export default function CommandPalette({
     const out = []
     let current = null
     filtered.forEach((cmd) => {
-      const g = (cmd._async ? 'Resultados' : cmd.group) ?? ''
+      const g = cmd._async ? ASYNC_GROUP_LABEL : STATIC_GROUP_LABEL
       if (!current || current.group !== g) {
         current = { group: g, items: [] }
         out.push(current)
@@ -188,7 +217,7 @@ export default function CommandPalette({
       <div className="command-palette">
         <div className="command-palette__search">
           <span className="command-palette__search-icon" aria-hidden="true">
-            <Icon name="search" size={18} />
+            <Icon name="search-field" size={18} strokeWidth={1.9} />
           </span>
           <input
             ref={inputRef}
@@ -235,7 +264,7 @@ export default function CommandPalette({
                         id={`command-${cmd.id}`}
                         role="option"
                         aria-selected={isActive}
-                        className={`command-palette__item${isActive ? ' command-palette__item--active' : ''}`}
+                        className={`command-palette__item${cmd._async ? ' command-palette__item--process' : ''}${isActive ? ' command-palette__item--active' : ''}`}
                         // Items nao sao focaveis: tabIndex -1 evita que
                         // o navegador mova o foco pra eles ao re-renderizar
                         tabIndex={-1}
@@ -248,13 +277,29 @@ export default function CommandPalette({
                       >
                         {cmd.icon ? (
                           <span className="command-palette__item-icon" aria-hidden="true">
-                            <Icon name={cmd.icon} size={16} />
+                            <Icon name={cmd.icon === 'arrivals' ? 'nav-arrivals' : cmd.icon} size={18} strokeWidth={1.9} />
                           </span>
                         ) : null}
-                        <span className="command-palette__item-label">{cmd.label}</span>
-                        {cmd.description ? (
-                          <span className="command-palette__item-description">{cmd.description}</span>
-                        ) : null}
+                        {cmd._async ? (
+                          // Processo: nome (com o termo em <mark>) e subtitulo mono
+                          // "PO ... · status" empilhados.
+                          <span className="command-palette__item-main">
+                            <span className="command-palette__item-label">
+                              {highlightMatch(cmd.label, query)}
+                            </span>
+                            {cmd.description ? (
+                              <span className="command-palette__item-sub">{cmd.description}</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="command-palette__item-label">{cmd.label}</span>
+                            {cmd.description ? (
+                              <span className="command-palette__item-description">{cmd.description}</span>
+                            ) : null}
+                          </>
+                        )}
+                        {isActive ? <kbd className="command-palette__item-hint">Enter</kbd> : null}
                       </li>
                     )
                   })}
@@ -266,7 +311,7 @@ export default function CommandPalette({
 
         <div className="command-palette__footer">
           <span>
-            <kbd className="command-palette__kbd">↑↓</kbd> navegar
+            <kbd className="command-palette__kbd">↑ ↓</kbd> navegar
           </span>
           <span>
             <kbd className="command-palette__kbd">Enter</kbd> abrir
