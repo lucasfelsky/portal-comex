@@ -1618,6 +1618,14 @@ const sized = [
 PHASES.f6a = [
   // --- Usuarios ---------------------------------------------------------------------------------
   { name: 'usuarios-lista', route: '/admin/usuarios', ready: usersReady, action: adminShot(), afterShot: restoreViewport },
+  // Pagina inteira (fila de aprovacao incluida): a prancheta de 1060 corta a fila.
+  {
+    name: 'usuarios-lista-completa',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: withViewport(1440, 1500),
+    afterShot: restoreViewport,
+  },
   {
     name: 'usuarios-detalhe-bloqueado',
     route: '/admin/usuarios',
@@ -1697,7 +1705,7 @@ PHASES.f6a = [
       for (const id of ['shot-pending-1', 'shot-pending-2']) await patchFields('users', id, { status: 'Ativo', statusTone: 'ok' })
     },
     ready: usersReady,
-    action: adminShot(async (page) => {
+    action: withViewport(1440, 1500, async (page) => {
       await expect(page.getByText('Nenhum cadastro pendente')).toBeVisible()
     }),
     afterShot: async (page) => {
@@ -1710,6 +1718,18 @@ PHASES.f6a = [
     route: '/admin/usuarios',
     ready: width > 1040 ? usersReady : usersLegacyReady,
     action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Moldura do admin nas abas que ainda nao foram refeitas (F6b): so o cartao ao redor some ----
+  ...[
+    ['previsoes', '/admin/previsoes'],
+    ['lead-time', '/admin/lead-time'],
+    ['suporte', '/admin/suporte'],
+  ].map(([key, route]) => ({
+    name: 'moldura-' + key,
+    route,
+    ready: (page) => page.locator('.admin-section .admin-tabs--desktop').first(),
+    action: adminShot(),
     afterShot: restoreViewport,
   })),
   // --- Comunicados ------------------------------------------------------------------------------

@@ -3914,6 +3914,11 @@ describe('F6a - secao, escopo e ordem', () => {
     expectF6a('.admin-section .admin-panel-stack', ['gap: 20px'])
   })
 
+  it('o <label> global (margin-bottom 6px, caixa alta) nao vaza para os campos e cartoes dos paineis', () => {
+    expectF6a('.admin-panel label.field', ['margin-bottom: 0'])
+    expectF6a('.admin-panel--bar .ab-option', ['margin: 0', 'letter-spacing: normal', 'text-transform: none'])
+  })
+
   it('atomos: cartao 22/22 com borda --border, etiqueta 3x10 12/700 por tom, rodape com divisor', () => {
     expectF6a('.admin-panel .ad-card', ['gap: 14px', 'padding: 22px', 'border: 1px solid var(--border)', 'border-radius: 22px', 'background: var(--surface)'])
     expectF6a('.admin-panel .ad-title', ['font-family: var(--font-heading)', 'font-size: 20px', 'font-weight: 700'])

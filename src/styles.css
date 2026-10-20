@@ -20812,6 +20812,11 @@ body {
     --ad-accent: var(--primary);
   }
 
+  /* O <label> global traz margin-bottom 6px (+ caixa alta): os campos dos paineis alinham so pelo gap. */
+  .admin-panel label.field {
+    margin-bottom: 0;
+  }
+
   .admin-panel .ad-card {
     box-sizing: border-box;
     display: flex;
@@ -21611,6 +21616,11 @@ body {
   .admin-panel--bar .ab-option {
     position: relative;
     box-sizing: border-box;
+    margin: 0;
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) auto;
     align-items: center;
