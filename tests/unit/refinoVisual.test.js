@@ -2729,3 +2729,88 @@ describe('F4c - Mensagens e Historico (valores do Processo.dc.html)', () => {
     expectF4c('.process-detail-view .pdv-hist__by', ['font-size: 12px', 'color: var(--ink-soft)'])
   })
 })
+
+describe('F4c - Documentos (valores do Processo.dc.html)', () => {
+  it('secao = cartao (padding 20, raio 16, gap 14); titulo Sora 18; nota 12 --ink-soft', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-section', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 14px',
+      'padding: 20px',
+      'border-radius: 16px',
+      'box-shadow: none',
+    ])
+    expectF4c('.process-detail-view .pdv-panel .documents-section__title', ['font-size: 18px'])
+    expectF4c('.process-detail-view .pdv-panel .documents-section__note', ['font-size: 12px', 'color: var(--ink-soft)'])
+  })
+
+  it('grade de slots: auto-fill minmax(260px, 1fr) gap 12', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-section__rows', [
+      'display: grid',
+      'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))',
+      'gap: 12px',
+    ])
+  })
+
+  it('slot: padding 16, raio 14; pendente --surface + tracejada --border-strong; enviado --surface-alt + solida --row-divider', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-row-group', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 10px',
+      'padding: 16px',
+      'border: 1px dashed var(--border-strong)',
+      'border-radius: 14px',
+      'background: var(--surface)',
+    ])
+    expectF4c('.process-detail-view .pdv-panel .documents-row-group:has(.documents-row__icon--on)', [
+      'border: 1px solid var(--row-divider)',
+      'background: var(--surface-alt)',
+    ])
+  })
+
+  it('linha do slot: rotulo 14/700 + tag 11/700 lado a lado, arquivo mono 12, acoes de 36px raio 10 12/700', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-row', ['display: flex', 'flex-wrap: wrap', 'align-items: center', 'padding: 0', 'border-top: 0'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__content', ['display: contents'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row > .documents-row__icon', ['display: none'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__label', ['order: 1', 'flex: 1 1 0', 'font-size: 14px'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__badge', ['order: 2', 'flex: none'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__badge .inline-badge', ['padding: 3px 9px', 'font-size: 11px', 'white-space: nowrap'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__file', ['order: 3', 'flex: 1 1 100%', 'font-family: var(--font-mono)', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row > .documents-row__actions', ['order: 6', 'flex: 1 1 100%', 'gap: 6px'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__actions .documents-icon-button', [
+      'height: 36px',
+      'padding: 0 12px',
+      'border: 1px solid var(--border)',
+      'border-radius: 10px',
+      'background: var(--surface)',
+      'color: var(--navy)',
+      'font-size: 12px',
+      'font-weight: 700',
+    ])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__action-label', ['display: inline'])
+  })
+
+  it('tags de estado do mock: enviado ok, pendente warn, neutro e info (Opcional) por token', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-badge--info', ['background: var(--info-50)', 'color: var(--info-700)'])
+    // ok/warn/neutral vem dos modificadores globais (.inline-badge--ok/--warn, .documents-badge--neutral)
+    expect(css).toContain('.inline-badge--ok')
+    expect(css).toContain('.documents-badge--neutral')
+  })
+
+  it('"Documento adicional": cartao tracejado com cabecalho (titulo + tag) e botao de 36px', () => {
+    expectF4c('.process-detail-view .pdv-panel .documents-add-other-row', [
+      'flex-direction: column',
+      'padding: 16px',
+      'border: 1px dashed var(--border-strong)',
+      'border-radius: 14px',
+      'background: var(--surface)',
+    ])
+    expectF4c('.process-detail-view .pdv-panel .documents-add-other__head', ['display: flex', 'align-items: center', 'justify-content: space-between'])
+    expectF4c('.process-detail-view .pdv-panel .documents-add-other', ['height: 36px', 'border-radius: 10px', 'font-size: 12px', 'font-weight: 700'])
+  })
+
+  it('o painel nao reabre o desktop legado: a regra de 2 colunas/linha em grade de 4 colunas nao vale no detalhe novo', () => {
+    expect(f4cDecls('.process-detail-view .pdv-panel .documents-row')).not.toContain('grid-template-columns')
+    expect(f4cDecls('.process-detail-view .pdv-panel .documents-row')).toContain('display: flex;')
+  })
+})

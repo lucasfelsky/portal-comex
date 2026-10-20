@@ -17840,6 +17840,314 @@ body {
     font-size: 12px;
     color: var(--ink-soft);
   }
+
+  /* ============================================================
+     ABA DOCUMENTOS — secoes em cartao e slots em grade (ProcessDocumentsPanel.jsx)
+     ============================================================ */
+  .process-detail-view .pdv-panel--documents {
+    --pdv-gap: 14px;
+  }
+
+  .process-detail-view .pdv-panel .documents-panel,
+  .process-detail-view .pdv-panel .documents-sections {
+    gap: 14px;
+  }
+
+  /* resumo: tags de enviados/pendentes e o botao de atualizar */
+  .process-detail-view .pdv-panel .documents-summary {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'badges update';
+  }
+
+  .process-detail-view .pdv-panel .documents-summary .documents-icon-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .process-detail-view .pdv-panel .documents-empty-state {
+    grid-column: 1;
+    padding: 24px 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 16px;
+  }
+
+  /* secao = cartao do mock (padding 20, raio 16, gap 14) */
+  .process-detail-view .pdv-panel .documents-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .process-detail-view .pdv-panel .documents-section__header {
+    align-items: baseline;
+    gap: 8px 16px;
+    padding: 0;
+  }
+
+  .process-detail-view .pdv-panel .documents-section__title {
+    font-size: 18px;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-panel .documents-section__subtitle {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .documents-section__note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  /* grade de slots: auto-fill minmax(260px, 1fr), gap 12 */
+  .process-detail-view .pdv-panel .documents-section__rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  /* slot enviado: --surface-alt + borda solida; pendente/vazio: --surface + tracejada */
+  .process-detail-view .pdv-panel .documents-row-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface);
+  }
+
+  .process-detail-view .pdv-panel .documents-row-group:has(.documents-row__icon--on) {
+    border: 1px solid var(--row-divider);
+    background: var(--surface-alt);
+  }
+
+  .process-detail-view .pdv-panel .documents-row-group.documents-drop-active {
+    outline-offset: 2px;
+    background: var(--primary-50);
+  }
+
+  /* a linha vira: rotulo + tag / arquivo / meta / extras / acoes (o conteudo "dissolve"
+     na linha para o rotulo e a tag ficarem lado a lado) */
+  .process-detail-view .pdv-panel .documents-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 8px;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__content {
+    display: contents;
+  }
+
+  .process-detail-view .pdv-panel .documents-row > .documents-row__icon {
+    display: none;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__label {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 14px;
+    line-height: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__badge {
+    order: 2;
+    flex: none;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__badge .inline-badge {
+    min-height: 0;
+    padding: 3px 9px;
+    font-size: 11px;
+    line-height: normal;
+    white-space: nowrap;
+  }
+
+  .process-detail-view .pdv-panel .documents-badge--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .process-detail-view .pdv-panel .documents-row__file {
+    order: 3;
+    flex: 1 1 100%;
+    min-height: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .documents-row__meta {
+    order: 4;
+    flex: 1 1 100%;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .documents-combine,
+  .process-detail-view .pdv-panel .documents-progress,
+  .process-detail-view .pdv-panel .documents-row__error {
+    order: 5;
+    flex: 1 1 100%;
+    margin: 0;
+  }
+
+  .process-detail-view .pdv-panel .documents-row > .documents-row__actions {
+    order: 6;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* botoes de acao: 36px, raio 10, texto 12/700 navy (Baixar, Substituir, Renomear,
+     Excluir, Separar, Enviar ...) */
+  .process-detail-view .pdv-panel .documents-row__actions .documents-icon-button,
+  .process-detail-view .pdv-panel .documents-row__actions .primary-button {
+    box-sizing: border-box;
+    width: auto;
+    height: 36px;
+    min-height: 0;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: none;
+    color: var(--navy);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  [data-theme='dark'] .process-detail-view .pdv-panel .documents-row__actions .documents-icon-button,
+  [data-theme='dark'] .process-detail-view .pdv-panel .documents-row__actions .primary-button {
+    color: var(--ink);
+  }
+
+  .process-detail-view .pdv-panel .documents-row__actions .documents-icon-button:hover:not(:disabled),
+  .process-detail-view .pdv-panel .documents-row__actions .primary-button:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+    box-shadow: none;
+    color: var(--navy);
+  }
+
+  .process-detail-view .pdv-panel .documents-row__actions .documents-icon-button:focus-visible,
+  .process-detail-view .pdv-panel .documents-row__actions .primary-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-detail-view .pdv-panel .documents-row__actions .documents-icon-button svg {
+    display: none;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__action-label {
+    display: inline;
+  }
+
+  .process-detail-view .pdv-panel .documents-lock {
+    font-size: 12px;
+  }
+
+  /* versao anterior: sublinha dentro do cartao */
+  .process-detail-view .pdv-panel .documents-row__previous {
+    padding: 0;
+    font-size: 12px;
+  }
+
+  /* "Documento adicional": cartao tracejado com tag "Opcional" */
+  .process-detail-view .pdv-panel .documents-add-other-row {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface);
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other__head .documents-row__label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other__head .inline-badge {
+    min-height: 0;
+    padding: 3px 9px;
+    font-size: 11px;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other__name {
+    flex: none;
+    max-width: none;
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other {
+    align-self: flex-start;
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: none;
+    color: var(--navy);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  [data-theme='dark'] .process-detail-view .pdv-panel .documents-add-other {
+    color: var(--ink);
+  }
+
+  /* tabela de Invoice/Packing List por PO (CONSOLIDADO): moldura do mock */
+  .process-detail-view .pdv-panel .documents-po-table-wrap {
+    border: 1px solid var(--row-divider);
+    border-radius: 12px;
+  }
+
+  .process-detail-view .pdv-panel .documents-po-empty {
+    padding: 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .documents-panel-unconfigured {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+  }
 }
 
 @keyframes pdv-panel-in {

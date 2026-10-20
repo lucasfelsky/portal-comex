@@ -7,7 +7,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import React from 'react'
 
 vi.mock('../../src/services/processEventsRepository', () => ({
   listProcessEvents: vi.fn().mockResolvedValue([]),

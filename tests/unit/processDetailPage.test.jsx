@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
-import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
 

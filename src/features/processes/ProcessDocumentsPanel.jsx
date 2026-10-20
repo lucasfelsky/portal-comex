@@ -93,6 +93,13 @@ function badgeClassForTone(tone) {
   return 'inline-badge documents-badge--neutral'
 }
 
+// Refino F4c: no desktop as linhas das secoes FISPQ/lavacao/sem vinculo ficam na mesma
+// grade de cartoes da secao do processo (`documents-section__rows`); fora dele o DOM
+// e' o de sempre (o mobile-redesign.css mira `.documents-section__rows >`).
+function RowsGroup({ enabled, children }) {
+  return enabled ? <div className="documents-section__rows">{children}</div> : children
+}
+
 function DocumentsSectionHeader({ title, subtitle, badge }) {
   return (
     <div className="documents-section__header">
@@ -105,7 +112,13 @@ function DocumentsSectionHeader({ title, subtitle, badge }) {
   )
 }
 
-export default function ProcessDocumentsPanel({ process, profile, onPendingCountChange }) {
+// Refino F4c: `variant="desktop"` (Processo.dc.html) — a nota "Visivel so' para COMEX e
+// logistica..." sobe para o cabecalho da secao de documentos do processo, os slots
+// viram cartoes numa grade e "Documento adicional" ganha titulo e tag. O resto do
+// painel (envio, troca, exclusao, renomear, vinculo Invoice/Packing List, FISPQ,
+// lavacao, sem vinculo) e' o mesmo; sem a prop o render e' o de sempre.
+export default function ProcessDocumentsPanel({ process, profile, onPendingCountChange, variant }) {
+  const isDesktopVariant = variant === 'desktop'
   const processId = process?.id
   const category = process?.category
   const role = profile?.role
@@ -1012,6 +1025,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
 
   const isEmptyDocuments = documents.length === 0
   const showLoadedContent = !isLoading && !loadError
+  const visibilityNote = `Visível só para COMEX e logística · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`
 
   const missingConsolidatedCount = isConsolidated
     ? purchaseOrders.reduce((count, order) => {
@@ -1065,9 +1079,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 </span>
               ) : null}
             </div>
-            <p className="documents-summary__hint">
-              {`Visível só para COMEX e logística · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`}
-            </p>
+            {isDesktopVariant ? null : <p className="documents-summary__hint">{visibilityNote}</p>}
           </>
         ) : (
           <div className="documents-summary__badges" />
@@ -1120,6 +1132,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             <DocumentsSectionHeader
               title="Documentos do processo"
               subtitle="Cada tipo guarda o arquivo atual e a última versão anterior."
+              badge={
+                isDesktopVariant && showLoadedContent && !isEmptyDocuments ? (
+                  <p className="documents-section__note">{visibilityNote}</p>
+                ) : null
+              }
             />
             <div className="documents-section__rows">
               {PROCESS_LEVEL_TYPES.map((type) => {
@@ -1231,6 +1248,12 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                       if (file) handleAddOtherDocument(file)
                     }}
                   />
+                  {isDesktopVariant ? (
+                    <div className="documents-add-other__head">
+                      <span className="documents-row__label">Documento adicional</span>
+                      <span className="inline-badge documents-badge--info">Opcional</span>
+                    </div>
+                  ) : null}
                   <label className="field documents-add-other__name">
                     <span>Nome do documento (opcional)</span>
                     <input
@@ -1328,6 +1351,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     : '')
                 }
               />
+              <RowsGroup enabled={isDesktopVariant}>
               {imoItems.map((item) => {
                 const slotKey = buildDocumentSlotKey('fispq', { itemId: item.id })
                 const group = findGroup(slotKey)
@@ -1364,6 +1388,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   onUpload: (file) => handleUploadFile('fispq', slotKey, { itemId: item.id }, file),
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
 
@@ -1373,6 +1398,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 title="Relatório de lavação por contêiner"
                 subtitle="Pendente depois que a devolução do vazio é registrada. A logística também pode enviar."
               />
+              <RowsGroup enabled={isDesktopVariant}>
               {washContainers.map((container, index) => {
                 const { state, slotKey, group, isReturned } = getWashRowState(container)
                 const primary = group?.primary ?? null
@@ -1404,12 +1430,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   onUpload: (file) => handleUploadFile('containerWash', slotKey, { containerId: container.id }, file),
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
 
           {unlinkedGroups.length > 0 ? (
             <div className="documents-section">
               <DocumentsSectionHeader title="Documentos sem vínculo atual" />
+              <RowsGroup enabled={isDesktopVariant}>
               {unlinkedGroups.map((group) => {
                 const metaText = [
                   getDocumentFileKindLabel(group.primary?.mimeType, group.primary?.name),
@@ -1429,6 +1457,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   presentBadgeTone: 'neutral',
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
         </div>

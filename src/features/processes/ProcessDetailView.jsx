@@ -734,6 +734,7 @@ export default function ProcessDetailView({
         process={selectedProcess}
         profile={profile}
         onPendingCountChange={handleDocumentsPendingCountChange}
+        variant={isDesktop ? 'desktop' : undefined}
       />
     ) : null}
     </>
