@@ -10,6 +10,7 @@
    Queries (todas exigem min-width: 1041px; nada aqui toca mobile/tablet):
      Q-D          (min-width: 1041px)                       todo desktop
      Q-SB         1041-1365 de largura OU altura <= 800     sidebar compacta
+     Q-W          1041-1365 de largura                      topbar e abas do Admin numa linha
      Q-H          altura <= 800                             modo compacto
      Q-H-1248     1248-1439 de largura + altura <= 800      rosa dos ventos
      Q-H-MOTION   altura <= 800 + no-preference             navios da carta
@@ -129,7 +130,8 @@
   }
 
   .sidebar .sidebar__foot .sidebar-theme-button,
-  .sidebar .sidebar__foot .sidebar-logout-button {
+  .sidebar .sidebar__foot .sidebar-logout-button,
+  .sidebar .sidebar__foot .sidebar-support-button {
     height: 34px;
     padding: 0 12px;
   }
@@ -164,6 +166,59 @@
 
   .process-list-card .process-filters__search {
     text-overflow: ellipsis;
+  }
+}
+
+/* ---- Q-W: faixa 1041-1365 de largura (independente da altura) ----------- */
+@media (min-width: 1041px) and (max-width: 1365px) {
+  /* Topbar numa linha: sem quebra, titulo flexivel (reticencias so quando nao
+     cabe) e busca so com o icone (aria-label e o atalho Ctrl K continuam). Sem
+     height/padding-left: o min-height de 76 e a altura do modo compacto (Q-H)
+     seguem valendo. */
+  .topbar {
+    flex-wrap: nowrap;
+  }
+
+  .topbar__heading {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .topbar .topbar__search {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+
+  .topbar .topbar__search-text,
+  .topbar .topbar__search-kbd {
+    display: none;
+  }
+
+  /* Abas do Admin numa linha, sem a descricao; rolagem horizontal se a janela
+     for menor que as 6 abas. O padding negativo/positivo de 4px segura a
+     sombra da aba ativa e o outline de foco. */
+  .admin-section .admin-tabs.admin-tabs--desktop {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    padding: 4px;
+    margin: -4px;
+  }
+
+  .admin-section .admin-tabs .tab-button.admin-tab {
+    flex: 1 0 auto;
+    white-space: nowrap;
+    padding: 10px 14px;
+  }
+
+  .admin-tab__desc {
+    display: none;
   }
 }
 

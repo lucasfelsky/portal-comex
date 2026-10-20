@@ -72,7 +72,7 @@ function formatTicketDate(isoDate) {
   })
 }
 
-export default function SupportButton() {
+export default function SupportButton({ showTrigger = true } = {}) {
   const { profile } = useAuth()
   const location = useLocation()
   const toast = useToast()
@@ -132,9 +132,11 @@ export default function SupportButton() {
   }, [isSubmitting])
 
   useEffect(() => {
-    function handleOpenRequest() {
-      // Notificação de chamado resolvido/respondido: abre direto em "Meus chamados".
-      setView('tickets')
+    function handleOpenRequest(event) {
+      // Notificação de chamado resolvido/respondido (sem detail): abre direto em
+      // "Meus chamados". O gatilho "Suporte" do rodapé da sidebar manda
+      // detail.view = 'form' e abre direto o formulário.
+      setView(event?.detail?.view === 'form' ? 'form' : 'tickets')
       setIsOpen(true)
     }
 
@@ -341,7 +343,7 @@ export default function SupportButton() {
     .filter(Boolean)
     .join(' · ')
 
-  const fab = (
+  const fab = !showTrigger ? null : (
     <div className="support-fab">
       <button
         type="button"

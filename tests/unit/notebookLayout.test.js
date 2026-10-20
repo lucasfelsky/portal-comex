@@ -315,4 +315,38 @@ describe('notebook.css - guarda de escopo', () => {
     expect(card.declarations).toContainEqual({ prop: 'max-height', value: '100%' })
     expect(card.declarations).toContainEqual({ prop: 'overflow-y', value: 'auto' })
   })
+
+  it('(m) Q-W (1041-1365 de largura): topbar numa linha, busca so com icone e abas do Admin numa linha sem descricao', () => {
+    const qw = mediaBlocks.filter((block) => block.prelude === '@media (min-width: 1041px) and (max-width: 1365px)')
+    expect(qw.length).toBe(1)
+    const rules = qw[0].rules
+    const declsOf = (selector) => {
+      const rule = rules.find((entry) => entry.selector === selector)
+      expect(rule, `regra "${selector}" no Q-W`).toBeTruthy()
+      return rule.declarations
+    }
+    expect(declsOf('.topbar')).toContainEqual({ prop: 'flex-wrap', value: 'nowrap' })
+    expect(declsOf('.topbar__heading')).toContainEqual({ prop: 'min-width', value: '0' })
+    expect(declsOf('.topbar .topbar__search')).toContainEqual({ prop: 'width', value: '44px' })
+    expect(declsOf('.topbar .topbar__search-text, .topbar .topbar__search-kbd')).toContainEqual({
+      prop: 'display',
+      value: 'none',
+    })
+    // Abas do Admin: 1 linha (flex nowrap + rolagem), sem quebra de rotulo e sem descricao.
+    const tabsRow = declsOf('.admin-section .admin-tabs.admin-tabs--desktop')
+    expect(tabsRow).toContainEqual({ prop: 'display', value: 'flex' })
+    expect(tabsRow).toContainEqual({ prop: 'flex-wrap', value: 'nowrap' })
+    expect(tabsRow).toContainEqual({ prop: 'overflow-x', value: 'auto' })
+    expect(declsOf('.admin-section .admin-tabs .tab-button.admin-tab')).toContainEqual({
+      prop: 'white-space',
+      value: 'nowrap',
+    })
+    expect(declsOf('.admin-tab__desc')).toContainEqual({ prop: 'display', value: 'none' })
+    // Altura/padding-left da topbar nao sao do Q-W (guarda refinoVisual: min-height de 76 e Q-H).
+    for (const rule of rules) {
+      for (const decl of rule.declarations) {
+        expect(decl.prop, `Q-W nao declara height em "${rule.selector}"`).not.toBe('height')
+      }
+    }
+  })
 })

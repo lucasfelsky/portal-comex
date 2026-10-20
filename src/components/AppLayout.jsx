@@ -86,9 +86,9 @@ function isMacPlatform() {
 
 const pageMeta = {
   '/': { title: 'Dashboard operacional', breadcrumb: [] },
-  '/news': { title: 'Notícias', breadcrumb: [] },
+  '/news': { title: 'Notícias', breadcrumb: [], hideTopbarTitle: true },
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
-  '/notifications': { title: 'Central de Notificações', breadcrumb: [] },
+  '/notifications': { title: 'Central de Notificações', breadcrumb: [], hideTopbarTitle: true },
   '/menu': { title: 'Menu', breadcrumb: [] },
   '/admin': { title: 'Centro Administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
@@ -295,6 +295,9 @@ export default function AppLayout() {
     ? [{ label: 'Chegadas' }, { label: getProcessTitle(activeProcess, canSeeName) || 'Processo' }]
     : null
   const topbarCrumb = processCrumb ?? routeCrumb
+  // A2: /news e /notifications ja tem o proprio h2 na pagina; no desktop a
+  // topbar nao repete o titulo (tablet/phone mantem, <= 1040 inalterado).
+  const showTopbarTitle = !(meta.hideTopbarTitle && !isMobileViewport)
   const topbarTitleWrapClass = [
     'topbar__title-wrap',
     processCrumb ? 'topbar__title-wrap--process-crumb' : routeCrumb ? 'topbar__title-wrap--crumb' : '',
@@ -864,14 +867,30 @@ export default function AppLayout() {
               <span>{themeLabel}</span>
             </button>
 
-            <button
-              type="button"
-              className="ghost-button sidebar-logout-button"
-              onClick={() => requestLeave(logout)}
-            >
-              <Icon name="logout-door" size={16} strokeWidth={1.9} aria-hidden="true" />
-              <span>Sair</span>
-            </button>
+            {isMobileViewport ? (
+              <button
+                type="button"
+                className="ghost-button sidebar-logout-button"
+                onClick={() => requestLeave(logout)}
+              >
+                <Icon name="logout-door" size={16} strokeWidth={1.9} aria-hidden="true" />
+                <span>Sair</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ghost-button sidebar-support-button"
+                aria-label="Abrir suporte"
+                aria-haspopup="dialog"
+                title="Relatar um problema"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent(OPEN_SUPPORT_MODAL_EVENT, { detail: { view: 'form' } }))
+                }
+              >
+                <Icon name="message" size={16} strokeWidth={1.9} aria-hidden="true" />
+                <span>Suporte</span>
+              </button>
+            )}
           </div>
         </aside>
 
@@ -906,10 +925,12 @@ export default function AppLayout() {
                   <span />
                 </span>
               </button>
-              <div className={topbarTitleWrapClass}>
-                {topbarCrumb ? <Breadcrumb items={topbarCrumb} /> : null}
-                <h2 className="topbar__title" title={meta.title}>{meta.title}</h2>
-              </div>
+              {topbarCrumb || showTopbarTitle ? (
+                <div className={topbarTitleWrapClass}>
+                  {topbarCrumb ? <Breadcrumb items={topbarCrumb} /> : null}
+                  {showTopbarTitle ? <h2 className="topbar__title" title={meta.title}>{meta.title}</h2> : null}
+                </div>
+              ) : null}
             </div>
             <div className="topbar__actions">
               <button
@@ -1035,7 +1056,7 @@ export default function AppLayout() {
             <Outlet />
           </PageFade>
 
-          <SupportButton />
+          <SupportButton showTrigger={false} />
 
           <NotificationPreferencesModal
             open={isPrefsModalOpen}

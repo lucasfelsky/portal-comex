@@ -192,7 +192,7 @@ describe('AdminUsersPanel', () => {
     const user = userEvent.setup()
     renderPanel()
     await waitFor(() => expect(screen.getAllByText('Maria Souza').length).toBeGreaterThan(0))
-    const searchInput = screen.getByPlaceholderText('Nome, email, perfil ou ID')
+    const searchInput = screen.getByPlaceholderText('Nome, email ou perfil')
     await user.type(searchInput, 'carlos')
     await waitFor(() => {
       // Carlos aparece na lista
@@ -204,6 +204,23 @@ describe('AdminUsersPanel', () => {
       const joaoInList = Array.from(carlosRows).some((r) => r.textContent.includes('Joao Pendente'))
       expect(mariaInList).toBe(false)
       expect(joaoInList).toBe(false)
+    })
+  })
+
+  it('arvore legada (<= 1040) nao exibe o id do usuario; busca por id continua funcionando', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPanel()
+    await waitFor(() => expect(document.querySelectorAll('.admin-user-row')).toHaveLength(3))
+    expect(container.querySelector('.admin-user-row__uid')).toBeNull()
+    expect(container.querySelector('.invite-card__meta')?.textContent ?? '').not.toMatch(/ID:/)
+    for (const id of ['u-1', 'u-2', 'u-3']) {
+      expect(container.textContent).not.toContain(id)
+    }
+    await user.type(screen.getByPlaceholderText('Nome, email ou perfil'), 'u-3')
+    await waitFor(() => {
+      const list = Array.from(document.querySelectorAll('.admin-user-row'))
+      expect(list).toHaveLength(1)
+      expect(list[0]).toHaveTextContent('Carlos Bloq')
     })
   })
 

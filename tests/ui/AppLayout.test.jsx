@@ -30,6 +30,13 @@ vi.mock('../../src/services/exchangeRatesRepository', () => ({
   getDailyPtaxRates: vi.fn(async () => null),
 }))
 
+// O gatilho "Suporte" do rodape abre o modal, que lista os chamados do usuario;
+// sem o mock a lista bateria no Firestore real.
+vi.mock('../../src/services/supportTicketsRepository', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listMySupportTickets: vi.fn(async () => []),
+}))
+
 import AppLayout from '../../src/components/AppLayout.jsx'
 // SupportButton (aba de suporte) usa useToast; no app real o ToastProvider
 // mora no main.jsx, entao o wrapper do teste precisa dele tambem.
@@ -721,11 +728,31 @@ describe('AppLayout shell F2 (refino visual)', () => {
       expect(link.querySelector('img')).toBeNull()
     })
 
-    it('rodapé: "Tema: automático" alterna e "Sair" encerra a sessão', async () => {
+    it('rodapé desktop: Tema + Suporte, SEM Sair (Sair fica no menu do usuário e no Ctrl K)', () => {
+      const { container } = renderAt('/')
+      const foot = within(container.querySelector('.sidebar__foot'))
+      expect(foot.getByRole('button', { name: /Tema: automático/ })).toBeInTheDocument()
+      expect(foot.getByRole('button', { name: 'Abrir suporte' })).toHaveClass('sidebar-support-button')
+      expect(foot.getByRole('button', { name: 'Abrir suporte' })).toHaveTextContent('Suporte')
+      expect(foot.queryByRole('button', { name: 'Sair' })).toBeNull()
+      expect(container.querySelector('.sidebar-logout-button')).toBeNull()
+    })
+
+    it('rodapé desktop: "Abrir suporte" abre o formulário e o FAB flutuante não existe', async () => {
+      const { container } = renderAt('/')
+      const user = userEvent.setup()
+      expect(container.querySelector('.support-fab')).toBeNull()
+      await user.click(within(container.querySelector('.sidebar__foot')).getByRole('button', { name: 'Abrir suporte' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByLabelText('O que aconteceu?')).toBeInTheDocument()
+    })
+
+    it('tablet: o rodapé mantém "Sair" (encerra a sessão) e não tem "Abrir suporte"', async () => {
+      stubTablet()
       const { container, logout } = renderAt('/')
       const user = userEvent.setup()
       const foot = within(container.querySelector('.sidebar__foot'))
-      expect(foot.getByRole('button', { name: /Tema: automático/ })).toBeInTheDocument()
+      expect(foot.queryByRole('button', { name: 'Abrir suporte' })).toBeNull()
       await user.click(foot.getByRole('button', { name: 'Sair' }))
       expect(logout).toHaveBeenCalledTimes(1)
     })
@@ -749,6 +776,32 @@ describe('AppLayout shell F2 (refino visual)', () => {
     it('breadcrumb de Previsões usa o rótulo do mock ("Previsões")', () => {
       const { container } = renderAt('/admin/previsoes')
       expect(container.querySelector('.topbar .breadcrumb__current')).toHaveTextContent('Previsões')
+    })
+
+    it('A2: /news e /notifications não repetem o título na topbar do desktop', () => {
+      for (const path of ['/news', '/notifications']) {
+        const { container, unmount } = renderAt(path)
+        expect(container.querySelector('.topbar__title')).toBeNull()
+        expect(container.querySelector('.topbar__title-wrap')).toBeNull()
+        unmount()
+      }
+    })
+
+    it('A2: no tablet /news e /notifications mantêm o título; "/" e Admin seguem com título no desktop', () => {
+      stubTablet()
+      const tablet = renderAt('/news')
+      expect(tablet.container.querySelector('.topbar__title')).toHaveTextContent('Notícias')
+      tablet.unmount()
+      const tabletNotif = renderAt('/notifications')
+      expect(tabletNotif.container.querySelector('.topbar__title')).toHaveTextContent('Central de Notificações')
+      tabletNotif.unmount()
+      window.matchMedia = originalMatchMedia
+      const home = renderAt('/')
+      expect(home.container.querySelector('.topbar__title')).toHaveTextContent('Dashboard operacional')
+      home.unmount()
+      const admin = renderAt('/admin/usuarios')
+      expect(admin.container.querySelector('.topbar__title')).toHaveTextContent('Centro Administrativo')
+      expect(admin.container.querySelector('.topbar .breadcrumb')).not.toBeNull()
     })
 
     it('sem crumb nas páginas simples (só o título)', () => {

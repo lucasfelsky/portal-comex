@@ -427,7 +427,7 @@ export default function AdminUsersPanel() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Nome, email, perfil ou ID"
+                  placeholder="Nome, email ou perfil"
                 />
               </label>
 
@@ -475,8 +475,7 @@ export default function AdminUsersPanel() {
                       <span className="au-row__text">
                         <strong className="au-row__name">{user.name}</strong>
                         <span className="au-row__meta">
-                          {getRoleLabel(user.role)} · {user.area || 'Geral'} ·{' '}
-                          <span className="ad-mono">{user.id}</span>
+                          {getRoleLabel(user.role)} · {user.area || 'Geral'}
                         </span>
                       </span>
                       <span className={`ad-pill ad-pill--${getDesktopStatusTone(user.status)}`}>
@@ -509,7 +508,6 @@ export default function AdminUsersPanel() {
                   <h3 className="ad-title">{isCreating ? 'Novo usuário' : 'Detalhe do usuário'}</h3>
                   <span className={`ad-pill ad-pill--${detailTone}`}>{draft.status}</span>
                 </div>
-                <span className="au-uid">{isCreating ? 'UID gerado ao criar' : `UID ${draft.id}`}</span>
               </div>
               <button type="button" className="secondary-button au-new-user" onClick={handleCreateMode}>
                 <Icon name="plus" size={16} strokeWidth={2.2} />
@@ -702,7 +700,7 @@ export default function AdminUsersPanel() {
                   </div>
                   <span className="au-pending__meta">
                     Perfil: <strong>{getRoleLabel(user.role)}</strong> · Área:{' '}
-                    <strong>{user.area || 'Geral'}</strong> · ID: <span className="ad-mono">{user.id}</span>
+                    <strong>{user.area || 'Geral'}</strong>
                   </span>
                   <div className="au-pending__actions">
                     <button
@@ -767,7 +765,7 @@ export default function AdminUsersPanel() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Nome, email, perfil ou ID"
+                placeholder="Nome, email ou perfil"
               />
             </label>
 
@@ -817,7 +815,6 @@ export default function AdminUsersPanel() {
                       <p>
                         {getRoleLabel(user.role)} · {user.area || 'Geral'}
                       </p>
-                      <span className="admin-user-row__uid">{user.id}</span>
                     </div>
                     <span className={statusClassName(user.statusTone)}>{user.status}</span>
                   </button>
@@ -1034,7 +1031,6 @@ export default function AdminUsersPanel() {
                 <div className="invite-card__meta">
                   <span>Perfil: {getRoleLabel(user.role)}</span>
                   <span>Área: {user.area || 'Geral'}</span>
-                  <span>ID: {user.id}</span>
                 </div>
                 <div className="invite-card__actions">
                   <button

@@ -1550,7 +1550,8 @@ describe('F3 - JSX dos componentes', () => {
 // ---------------------------------------------------------------------------
 describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma)', () => {
   const GHOST_CONSUMERS = {
-  'components/AppLayout.jsx': [8, 1, 0],
+  // QA responsividade: +1 fantasma ("Suporte" no rodape da sidebar desktop, no lugar do "Sair" que fica so no drawer <= 1040).
+  'components/AppLayout.jsx': [9, 1, 0],
   'components/ConfirmDialog.jsx': [1, 0, 0],
   'components/NotificationPreferencesModal.jsx': [1, 0, 0],
   'components/NotificationsList.jsx': [3, 0, 1],
