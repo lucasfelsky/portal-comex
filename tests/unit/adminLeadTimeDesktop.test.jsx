@@ -126,7 +126,7 @@ function renderPanel() {
   )
 }
 
-const fclCard = () => screen.getByRole('region', { name: /Previsão × real \(dias úteis após a chegada\) — FCL/ })
+const fclCard = () => screen.getByRole('region', { name: /Previsão × real \(dias úteis da atracação\/chegada até o recebimento\) — FCL/ })
 const rowOf = (card, name) => within(card).getByText(name).closest('tr')
 
 beforeEach(() => {

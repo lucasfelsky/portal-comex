@@ -317,7 +317,7 @@ export default function AdminLeadTimePanel() {
             <section
               key={group.category}
               className="ad-card al-card"
-              aria-label={`Previsão × real (dias úteis após a chegada) — ${group.category}`}
+              aria-label={`Previsão × real (dias úteis da atracação/chegada até o recebimento) — ${group.category}`}
             >
               <div className="al-card__head">
                 <h4 className="al-pill">{group.category}</h4>
