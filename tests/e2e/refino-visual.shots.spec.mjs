@@ -1165,7 +1165,7 @@ PHASES.f5a = [
     action: async (page) => {
       await resizeTo(1440, slug === 'todas' ? 1700 : 1100)(page)
       await notifLoaded(page)
-      await page.getByRole('button', { name: new RegExp(`^${label}`) }).click()
+      await page.locator('.nt-filters').getByRole('button', { name: new RegExp(`^${label}`) }).click()
       await page.waitForTimeout(400)
     },
     afterShot: restoreViewport,
@@ -1990,16 +1990,16 @@ async function seedF5a(adminUid) {
     })
   }
 
-  // Notificacoes extras: o grupo de coleta ganha 3 linhas (3 nao lidas) e entram 4 grupos
+  // Notificacoes extras (a pagina agrupa por processo: lidas em 6 processos distintos): o grupo de coleta ganha 3 linhas (3 nao lidas) e entram 4 grupos
   // lidos ("Anteriores": 4 visiveis + "Ver mais 3 anteriores").
   const extras = [
     ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · janela de 14h às 18h.', 'shot-aguardando-atracacao', false, 40],
     ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · transportadora confirmada.', 'shot-aguardando-atracacao', false, 130],
     ['process_question_answered', 'Nova resposta em Solvente', 'Logística: BL liberado.', 'shot-embarcou', true, 60 * 30],
     ['process_question_created', 'Nova dúvida', 'Tensoativo: qual o ETA atualizado?', 'shot-carga-recebida', true, 60 * 31],
-    ['receipt_divergence_reported', 'Divergência no recebimento', 'Glicerina bidestilada: quantidade menor que a Invoice.', 'shot-carga-recebida', true, 60 * 50],
-    ['process_daily_alerts', 'Alertas do dia', '2 processos exigem ação hoje.', 'shot-canal-vermelho', true, 60 * 52],
-    ['post_receipt_notes_updated', 'Observações pós-recebimento', 'Antiespumante: observação atualizada.', 'shot-carga-recebida', true, 60 * 70],
+    ['receipt_divergence_reported', 'Divergência no recebimento', 'Glicerina bidestilada: quantidade menor que a Invoice.', 'shot-atrasado', true, 60 * 50],
+    ['process_daily_alerts', 'Alertas do dia', '2 processos exigem ação hoje.', 'shot-duimp-registro', true, 60 * 52],
+    ['post_receipt_notes_updated', 'Observações pós-recebimento', 'Antiespumante: observação atualizada.', 'shot-alertas-multiplos', true, 60 * 70],
     ['favorite_process_message', 'Atualização em processo favoritado', 'Emulsificante: nova mensagem da logística.', 'shot-coleta-agendada', true, 60 * 80],
   ]
   for (const [index, [type, title, body, processId, isRead, minutes]] of extras.entries()) {
