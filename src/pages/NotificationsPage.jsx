@@ -1,4 +1,7 @@
-import { useContext } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
+import useAuth from '../hooks/useAuth'
+import { listProcesses } from '../services/processesRepository'
+import { canSeeProcessName, getProcessTitle } from '../features/processes/processLabels'
 import { NotificationsContext } from '../contexts/NotificationsContext'
 import NotificationsList from '../components/NotificationsList'
 import TabButton from '../components/TabButton'
@@ -28,6 +31,40 @@ const NOTIFICATION_FILTERS = [
 
 export default function NotificationsPage() {
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const { profile } = useAuth()
+  const canSeeName = canSeeProcessName(profile?.role)
+  // Refino F5a: o titulo do cartao de cada grupo e' o nome do processo (Notificacoes.dc.html).
+  // Os processos sao carregados UMA vez (so no desktop, que e' quem mostra o nome), com a mesma
+  // mascara do resto do app (getProcessTitle: so admin/logistica veem o nome nas categorias
+  // restritas). Falha de carga nao quebra a lista: o titulo cai no da ultima notificacao.
+  const [processes, setProcesses] = useState([])
+  useEffect(() => {
+    if (!isDesktop) return undefined
+    let isMounted = true
+
+    async function loadProcesses() {
+      try {
+        const loaded = await listProcesses()
+        if (isMounted) setProcesses(Array.isArray(loaded) ? loaded : [])
+      } catch (error) {
+        console.error('Falha ao carregar os processos das notificações.', error)
+      }
+    }
+
+    loadProcesses()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isDesktop])
+  const processTitles = useMemo(() => {
+    const titles = {}
+    processes.forEach((process) => {
+      const title = process?.id ? getProcessTitle(process, canSeeName) : ''
+      if (title) titles[process.id] = title
+    })
+    return titles
+  }, [processes, canSeeName])
   const {
     notifications,
     unreadNotifications,
@@ -138,6 +175,7 @@ export default function NotificationsPage() {
         <div className="nt-list">
           <NotificationsList
             variant="page"
+            processTitles={processTitles}
             grouped={groupedNotifications}
             onOpenNotification={handleOpenNotification}
             onMarkAsRead={markOneAsRead}

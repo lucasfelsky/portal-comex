@@ -19545,6 +19545,33 @@ body {
     color: var(--ink);
   }
 
+  /* "Ver mais N" dentro do cartao: as demais notificacoes do processo */
+  .notifications-page .nt-group__more {
+    box-sizing: border-box;
+    width: 100%;
+    height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-top: 1px solid var(--row-divider-soft);
+    background: transparent;
+    color: var(--link-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .notifications-page .nt-group__more:hover {
+    color: var(--link-color-hover);
+  }
+
+  .notifications-page .nt-group__more:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--focus-ring);
+  }
+
   .notifications-page .nt-section__more {
     align-self: center;
     box-sizing: border-box;

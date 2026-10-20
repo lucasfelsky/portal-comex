@@ -3364,6 +3364,7 @@ describe('F5a - Central de notificacoes (valores do Notificacoes.dc.html)', () =
     expectF5a(f5aNotifRules, '.notifications-page .nt-older__toggle', ['height: 56px', 'padding: 0 18px', 'font-size: 14px', 'font-weight: 700'])
     expectF5a(f5aNotifRules, '.notifications-page .nt-older--open .nt-older__chevron', ['transform: rotate(180deg)'])
     expectF5a(f5aNotifRules, '.notifications-page .nt-section__more', ['height: 44px', 'color: var(--link-color)', 'font-size: 13px', 'font-weight: 700'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-group__more', ['height: 44px', 'border-top: 1px solid var(--row-divider-soft)', 'color: var(--link-color)', 'font-size: 13px', 'font-weight: 700'])
   })
 
   it('JSX: arvore por matchMedia, 10 filtros, FilterPill, DND com os mesmos aria-labels, variant="page"', () => {
@@ -3373,6 +3374,9 @@ describe('F5a - Central de notificacoes (valores do Notificacoes.dc.html)', () =
     expect(page).toContain('<FilterPill')
     expect(page).toContain("'Ativar modo não perturbe por 1 hora'")
     expect(page).toContain('variant="page"')
+    expect(page).toContain('processTitles={processTitles}')
+    expect(page).toContain('getProcessTitle(process, canSeeName)')
+    expect(page).toContain('await listProcesses()')
     expect(page).toContain('name="bell-slash"')
     expect(page).toContain('name="sliders"')
     const list = read('src/components/NotificationsList.jsx')

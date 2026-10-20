@@ -127,13 +127,47 @@ function DrawerRow({ notification, onOpenNotification, onMarkAsRead, formatRelat
   )
 }
 
-// Refino F5a (Notificacoes.dc.html): "há 8 min • 19/10/2026" — data completa com ano
+// Refino F5a (Notificacoes.dc.html): "há 8 min • 19/10/2026 14:20" — data completa com ano
+// + a hora (o legado mostrava dd/mm HH:MM; o relativo sozinho nao diz a hora depois de 1 h)
 // e "ontem" no lugar de "há 1 d". Sem toISOString: formata no fuso local.
 function formatPageDate(value) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+  const day = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+  const time = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(date)
+  return `${day} ${time}`
+}
+
+// Pagina desktop: um cartao POR PROCESSO (o PLAN F5a.2). O contexto agrupa por processo+tipo;
+// aqui os grupos do mesmo `processId` se fundem (itens por data, mais recente primeiro) e o
+// titulo vira o nome do processo (`processTitles`, ja mascarado pela pagina), com fallback para
+// o titulo da ultima notificacao. Notificacoes sem processo (noticias, chamados) ficam como estao.
+function regroupByProcess(grouped, processTitles) {
+  const merged = new Map()
+  grouped.forEach((group) => {
+    const key = group.processId ? `p:${group.processId}` : `g:${group.items[0]?.id ?? group.latestCreatedAt}:${group.type}`
+    const current = merged.get(key)
+    if (!current) {
+      merged.set(key, { ...group, key, items: [...group.items] })
+      return
+    }
+    current.items.push(...group.items)
+    current.unreadCount += group.unreadCount
+    if (new Date(group.latestCreatedAt ?? 0).getTime() > new Date(current.latestCreatedAt ?? 0).getTime()) {
+      current.latestCreatedAt = group.latestCreatedAt
+      current.title = group.title
+    }
+  })
+  return [...merged.values()]
+    .map((group) => ({
+      ...group,
+      title: (group.processId && processTitles?.[group.processId]) || group.title,
+      items: [...group.items].sort(
+        (left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime()
+      ),
+    }))
+    .sort((left, right) => new Date(right.latestCreatedAt ?? 0).getTime() - new Date(left.latestCreatedAt ?? 0).getTime())
 }
 
 // Linha da pagina desktop: grid [ladrilho 40 | corpo | "Marcar como lida"]. O botao
@@ -179,8 +213,33 @@ function PageRow({ notification, onOpenNotification, onMarkAsRead, formatRelativ
   )
 }
 
+// Linhas de um cartao: as 3 mais recentes; "Ver mais N" revela o resto (nada fica inalcancavel).
+function PageItems({ items, onOpenNotification, onMarkAsRead, formatRelative }) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? items : items.slice(0, ITEMS_PER_GROUP)
+  const hidden = items.length - visible.length
+  return (
+    <>
+      {visible.map((notification) => (
+        <PageRow
+          key={notification.id}
+          notification={notification}
+          onOpenNotification={onOpenNotification}
+          onMarkAsRead={onMarkAsRead}
+          formatRelative={formatRelative}
+        />
+      ))}
+      {hidden > 0 ? (
+        <button type="button" className="nt-group__more" onClick={() => setShowAll(true)}>
+          Ver mais {hidden}
+        </button>
+      ) : null}
+    </>
+  )
+}
+
 // "Anteriores" no desktop: botao de 56px recolhido (nome + "N notificações" + chevron);
-// aberto, o mesmo cartao revela ate 3 linhas (acordeao com aria-expanded/aria-controls).
+// aberto, o mesmo cartao revela as linhas (acordeao com aria-expanded/aria-controls).
 function PageOlderGroup({ group, isExpanded, onToggle, onOpenNotification, onMarkAsRead, formatRelative }) {
   const itemsId = useId()
   return (
@@ -200,15 +259,12 @@ function PageOlderGroup({ group, isExpanded, onToggle, onOpenNotification, onMar
       </button>
       {isExpanded ? (
         <div id={itemsId} className="nt-older__items">
-          {group.items.slice(0, ITEMS_PER_GROUP).map((notification) => (
-            <PageRow
-              key={notification.id}
-              notification={notification}
-              onOpenNotification={onOpenNotification}
-              onMarkAsRead={onMarkAsRead}
-              formatRelative={formatRelative}
-            />
-          ))}
+          <PageItems
+            items={group.items}
+            onOpenNotification={onOpenNotification}
+            onMarkAsRead={onMarkAsRead}
+            formatRelative={formatRelative}
+          />
         </div>
       ) : null}
     </div>
@@ -377,6 +433,7 @@ export default function NotificationsList({
   loadError = null,
   onRetry,
   variant = 'default',
+  processTitles,
 }) {
   const [olderLimit, setOlderLimit] = useState(OLDER_INITIAL)
   const isMobile = useMobileLayout()
@@ -467,17 +524,19 @@ export default function NotificationsList({
   }
 
   if (variant === 'page') {
+    const pageGroups = regroupByProcess(grouped, processTitles)
+    const pageRecent = pageGroups.filter((g) => g.unreadCount > 0).slice(0, RECENT_LIMIT)
+    const pageAllOlder = pageGroups.filter((g) => g.unreadCount === 0)
+    const pageOlder = pageAllOlder.slice(0, olderLimit)
+    const pageHasMoreOlder = pageAllOlder.length > olderLimit
     return (
       <>
         {errorBanner}
-        {recent.length > 0 ? (
+        {pageRecent.length > 0 ? (
           <section className="nt-section" aria-label="Recentes">
             <h2 className="nt-section__title">Recentes</h2>
-            {recent.map((group) => (
-              <div
-                key={`recent-${group.processId || group.latestCreatedAt}-${group.type}`}
-                className="nt-group"
-              >
+            {pageRecent.map((group) => (
+              <div key={`recent-${group.key}`} className="nt-group">
                 <div className="nt-group__head">
                   <span className="nt-group__title">{group.title}</span>
                   <span className="nt-group__meta">
@@ -487,24 +546,21 @@ export default function NotificationsList({
                       : ''}
                   </span>
                 </div>
-                {group.items.slice(0, ITEMS_PER_GROUP).map((notification) => (
-                  <PageRow
-                    key={notification.id}
-                    notification={notification}
-                    onOpenNotification={onOpenNotification}
-                    onMarkAsRead={onMarkAsRead}
-                    formatRelative={formatRelative}
-                  />
-                ))}
+                <PageItems
+                  items={group.items}
+                  onOpenNotification={onOpenNotification}
+                  onMarkAsRead={onMarkAsRead}
+                  formatRelative={formatRelative}
+                />
               </div>
             ))}
           </section>
         ) : null}
-        {older.length > 0 ? (
+        {pageOlder.length > 0 ? (
           <section className="nt-section" aria-label="Anteriores">
             <h2 className="nt-section__title">Anteriores</h2>
-            {older.map((group) => {
-              const key = `older-${group.processId || group.latestCreatedAt}-${group.type}`
+            {pageOlder.map((group) => {
+              const key = `older-${group.key}`
               return (
                 <PageOlderGroup
                   key={key}
@@ -517,13 +573,13 @@ export default function NotificationsList({
                 />
               )
             })}
-            {hasMoreOlder ? (
+            {pageHasMoreOlder ? (
               <button
                 type="button"
                 className="nt-section__more"
                 onClick={() => setOlderLimit((value) => value + OLDER_STEP)}
               >
-                Ver mais {Math.min(OLDER_STEP, allOlder.length - olderLimit)} anteriores
+                Ver mais {Math.min(OLDER_STEP, pageAllOlder.length - olderLimit)} anteriores
               </button>
             ) : null}
           </section>

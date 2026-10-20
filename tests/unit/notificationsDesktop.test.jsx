@@ -10,8 +10,14 @@ import userEvent from '@testing-library/user-event'
 import React, { useState } from 'react'
 
 const mockSavePreferences = vi.fn()
+const mockUseAuth = vi.fn()
+const mockListProcesses = vi.fn()
 vi.mock('../../src/services/usersRepository', () => ({
   saveNotificationPreferences: (...args) => mockSavePreferences(...args),
+}))
+vi.mock('../../src/hooks/useAuth', () => ({ default: () => mockUseAuth() }))
+vi.mock('../../src/services/processesRepository', () => ({
+  listProcesses: (...args) => mockListProcesses(...args),
 }))
 
 import { NotificationsContext } from '../../src/contexts/NotificationsContext'
@@ -155,6 +161,10 @@ function Harness({ initial = SEED, dnd = makeDnd(), isLoading = false, loadError
 
 beforeEach(() => {
   media = installMatchMedia(true)
+  mockUseAuth.mockReset()
+  mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'admin' } })
+  mockListProcesses.mockReset()
+  mockListProcesses.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -315,19 +325,19 @@ describe('F5a Notificacoes - Recentes (cartao por grupo)', () => {
     expect(coleta.querySelector('.nt-group__meta')).toHaveTextContent('1 notificação • 1 não lida')
   })
 
-  it('linha: ladrilho por tom (info/ok/warn/danger), ponto de nao lida, corpo e "há N min • dd/mm/aaaa"', () => {
+  it('linha: ladrilho por tom (info/ok/warn/danger), ponto de nao lida, corpo e "há N min • dd/mm/aaaa HH:MM"', () => {
     const { container } = render(<Harness />)
     const rows = [...container.querySelectorAll('.nt-group .nt-row')]
     const answer = rows.find((row) => row.textContent.includes('Fulano respondeu.'))
     expect(answer).toHaveClass('nt-row--unread')
     expect(answer.querySelector('.nt-row__icon')).toHaveClass('nt-row__icon--info')
     expect(answer.querySelector('.nt-row__dot')).not.toBeNull()
-    expect(answer.querySelector('.nt-row__time').textContent).toMatch(/^há \d+ min • \d{2}\/\d{2}\/\d{4}$/)
+    expect(answer.querySelector('.nt-row__time').textContent).toMatch(/^há \d+ min • \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/)
     const collection = rows.find((row) => row.textContent.includes('Janela 24/10.'))
     expect(collection.querySelector('.nt-row__icon')).toHaveClass('nt-row__icon--ok')
     const divergence = rows.find((row) => row.textContent.includes('Quantidade menor.'))
     expect(divergence.querySelector('.nt-row__icon')).toHaveClass('nt-row__icon--danger')
-    expect(divergence.querySelector('.nt-row__time').textContent).toMatch(/^ontem • \d{2}\/\d{2}\/\d{4}$/)
+    expect(divergence.querySelector('.nt-row__time').textContent).toMatch(/^ontem • \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/)
   })
 
   it('clicar na linha abre a notificacao; "Marcar como lida" marca so aquela e some da linha', async () => {
@@ -362,6 +372,118 @@ describe('F5a Notificacoes - Recentes (cartao por grupo)', () => {
     const { container } = render(<Harness initial={[]} />)
     expect(screen.getByText('Nenhuma notificação')).toBeInTheDocument()
     expect(container.querySelector('.notifications-page--desktop .empty-state')).not.toBeNull()
+  })
+})
+
+describe('F5a Notificacoes - cartao por processo (titulo = nome do processo)', () => {
+  const PROCESSES = [
+    { id: 'p-1', name: 'Resina epóxi líquida', category: 'FCL', processNumber: '4500128734' },
+    { id: 'p-2', name: 'Dióxido de titânio', category: 'CONSOLIDADO', processNumber: '' },
+  ]
+  const MIXED = [
+    notification('m1', { processId: 'p-1', type: 'process_question_answered', title: 'Nova resposta', body: 'Resposta.', createdAt: minutesAgo(10) }),
+    notification('m2', { processId: 'p-1', type: 'collection_status_updated', title: 'Coleta agendada', body: 'Coleta.', createdAt: minutesAgo(30) }),
+    notification('m3', { processId: 'p-1', type: 'process_document_uploaded', title: 'Documento anexado', body: 'Doc.', createdAt: minutesAgo(50) }),
+    notification('m4', { processId: 'p-1', type: 'receipt_divergence_reported', title: 'Divergência', body: 'Div.', createdAt: minutesAgo(70) }),
+    notification('m5', { processId: 'p-2', type: 'process_question_answered', title: 'Nova resposta', body: 'Outra.', createdAt: minutesAgo(5) }),
+    notification('n1', { processId: '', type: 'news_published', title: 'Nova notícia', body: 'Publicada.', createdAt: minutesAgo(20) }),
+    notification('n2', { processId: '', type: 'support_ticket_resolved', title: 'Chamado resolvido', body: 'Ok.', createdAt: minutesAgo(25) }),
+  ]
+
+  it('admin: o cabecalho do cartao e o NOME do processo; uma unica carga de processos', async () => {
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    render(<Harness initial={MIXED} />)
+    expect(await screen.findByText('Resina epóxi líquida')).toHaveClass('nt-group__title')
+    expect(screen.getByText('Dióxido de titânio')).toHaveClass('nt-group__title')
+    expect(mockListProcesses).toHaveBeenCalledTimes(1)
+  })
+
+  it('usuario comum: mascara igual ao resto do app ("PO: n" nas categorias restritas; nome nas demais)', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-2', role: 'user' } })
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    render(<Harness initial={MIXED} />)
+    expect(await screen.findByText('PO: 4500128734')).toHaveClass('nt-group__title')
+    expect(screen.queryByText('Resina epóxi líquida')).toBeNull()
+    expect(screen.getByText('Dióxido de titânio')).toBeInTheDocument()
+  })
+
+  it('logistica ve o nome', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-3', role: 'logistica' } })
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    render(<Harness initial={MIXED} />)
+    expect(await screen.findByText('Resina epóxi líquida')).toBeInTheDocument()
+  })
+
+  it('um cartao por processo: tipos diferentes do mesmo processo se fundem, ordenados do mais recente ao mais antigo', async () => {
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    const { container } = render(<Harness initial={MIXED} />)
+    await screen.findByText('Resina epóxi líquida')
+    const cards = [...container.querySelectorAll('.nt-group')]
+    // p-1, p-2 e as 2 sem processo (cada uma no seu cartao) = 4
+    expect(cards).toHaveLength(4)
+    const titles = cards.map((card) => card.querySelector('.nt-group__title').textContent)
+    // ordem pela notificacao mais recente do cartao: p-2 (5 min), p-1 (10 min), noticia (20), chamado (25)
+    expect(titles).toEqual(['Dióxido de titânio', 'Resina epóxi líquida', 'Nova notícia', 'Chamado resolvido'])
+    const resina = cards[1]
+    expect(resina.querySelector('.nt-group__meta')).toHaveTextContent('4 notificações • 4 não lidas')
+    const rowTitles = [...resina.querySelectorAll('.nt-row__title')].map((node) => node.textContent)
+    expect(rowTitles.slice(0, 3)).toEqual(['Nova resposta', 'Coleta agendada', 'Documento anexado'])
+  })
+
+  it('nada fica inalcancavel: 3 linhas por cartao e "Ver mais N" revela as demais; acoes por item continuam', async () => {
+    const user = userEvent.setup()
+    const markOne = vi.fn()
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    const { container } = render(<Harness initial={MIXED} spies={{ markOne }} />)
+    await screen.findByText('Resina epóxi líquida')
+    const resina = [...container.querySelectorAll('.nt-group')].find((card) => card.textContent.includes('Resina epóxi líquida'))
+    expect(resina.querySelectorAll('.nt-row')).toHaveLength(3)
+    await user.click(within(resina).getByRole('button', { name: 'Ver mais 1' }))
+    expect(resina.querySelectorAll('.nt-row')).toHaveLength(4)
+    expect(within(resina).queryByRole('button', { name: /^Ver mais/ })).toBeNull()
+    await user.click(within(resina).getByRole('button', { name: 'Marcar como lida: Divergência' }))
+    expect(markOne).toHaveBeenCalledWith(expect.objectContaining({ id: 'm4' }))
+  })
+
+  it('sem processId (noticias, chamados): cada uma no proprio cartao com o proprio titulo', async () => {
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    const { container } = render(<Harness initial={MIXED} />)
+    await screen.findByText('Resina epóxi líquida')
+    const own = [...container.querySelectorAll('.nt-group')].filter((card) => !card.textContent.includes('Resina') && !card.textContent.includes('Dióxido'))
+    expect(own.map((card) => card.querySelector('.nt-group__title').textContent).sort()).toEqual(['Chamado resolvido', 'Nova notícia'])
+  })
+
+  it('processo nao encontrado ou falha ao carregar: cai no titulo da ultima notificacao, sem quebrar a lista', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockListProcesses.mockRejectedValue(new Error('boom'))
+    const { container } = render(<Harness initial={MIXED} />)
+    await waitFor(() => expect(mockListProcesses).toHaveBeenCalled())
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    const titles = [...container.querySelectorAll('.nt-group__title')].map((node) => node.textContent)
+    expect(titles).toContain('Nova resposta')
+    expect(container.querySelectorAll('.nt-row').length).toBeGreaterThan(0)
+    spy.mockRestore()
+  })
+
+  it('"Anteriores" tambem por processo: os grupos lidos do mesmo processo viram um botao so, com o nome', async () => {
+    mockListProcesses.mockResolvedValue(PROCESSES)
+    const read = [
+      notification('r1', { processId: 'p-1', type: 'process_document_uploaded', title: 'Documento', isRead: true, createdAt: minutesAgo(300) }),
+      notification('r2', { processId: 'p-1', type: 'process_question_created', title: 'Dúvida', isRead: true, createdAt: minutesAgo(310) }),
+      notification('r3', { processId: 'p-2', type: 'process_question_created', title: 'Dúvida', isRead: true, createdAt: minutesAgo(320) }),
+    ]
+    const { container } = render(<Harness initial={[notification('u1', { processId: 'p-9' }), ...read]} />)
+    await screen.findByText('Resina epóxi líquida')
+    const toggles = [...container.querySelectorAll('.nt-older__toggle')]
+    expect(toggles).toHaveLength(2)
+    expect(toggles[0]).toHaveTextContent('Resina epóxi líquida')
+    expect(toggles[0].querySelector('.nt-older__meta')).toHaveTextContent('2 notificações')
+  })
+
+  it('tablet/mobile (arvore legada) nao carregam processos', () => {
+    media.setDesktop(false)
+    render(<Harness initial={MIXED} />)
+    expect(mockListProcesses).not.toHaveBeenCalled()
   })
 })
 
