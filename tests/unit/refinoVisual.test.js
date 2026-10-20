@@ -4362,7 +4362,7 @@ describe('F6b - Lead time (valores do AdminLeadTime.dc.html)', () => {
     expectF6b('.admin-panel--lead-time .al-segment__unit', ['font-family: var(--font-mono)', 'font-size: 11px', 'letter-spacing: 1px'])
   })
 
-  it('JSX: arvore por matchMedia, raiz .admin-panel--lead-time, chegada -> liberacao do mock + Outros trechos, sem toISOString', () => {
+  it('JSX: arvore por matchMedia, raiz .admin-panel--lead-time, chegada -> recebimento (arrivalToReceiptBusiness) + Outros trechos, sem toISOString', () => {
     const panel = read('src/features/admin/AdminLeadTimePanel.jsx').replace(/\r\n/g, '\n')
     expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
     expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')

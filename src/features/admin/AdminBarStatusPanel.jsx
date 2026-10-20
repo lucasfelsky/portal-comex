@@ -197,6 +197,8 @@ export default function AdminBarStatusPanel() {
   const suggestionMatchesCurrent =
     barSuggestion?.status && barStatusMeta && barSuggestion.status === barStatusMeta.status
   const barSyncHealth = getBarSyncHealth(barSuggestion)
+  // Data de aplicacao invalida -> '' (formatRelativeTime): sem frase, nunca "Aplicado automaticamente .".
+  const legacyAppliedAgo = barSuggestion?.lastAppliedAt ? formatRelativeTime(barSuggestion.lastAppliedAt) : ''
 
   // Refino F6a (AdminBarra.dc.html): >= 1041px o status vira 3 cartoes de radio (no lugar do select) e o
   // robo da Praticagem ZP21 ganha um cartao proprio. Tablet/mobile seguem na arvore abaixo, intacta
@@ -478,9 +480,7 @@ export default function AdminBarStatusPanel() {
                 {suggestionMatchesCurrent ? (
                   <span className="suggestion-banner__match">
                     Coincide com o status atual.
-                    {barSuggestion.lastAppliedAt
-                      ? ` Aplicado automaticamente ${formatRelativeTime(barSuggestion.lastAppliedAt)}.`
-                      : ''}
+                    {legacyAppliedAgo ? ` Aplicado automaticamente ${legacyAppliedAgo}.` : ''}
                   </span>
                 ) : (
                   <>

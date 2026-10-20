@@ -153,7 +153,7 @@ describe('Lead time - desktop (>= 1041px): estrutura', () => {
     expect(container.querySelector('.admin-panel.admin-panel--lead-time')).not.toBeNull()
     expect(container.querySelector('.list-card')).toBeNull()
     expect(container.querySelector('.admin-toolbar')).toBeNull()
-    expect(screen.getByText('Dias úteis após a chegada até a liberação, por modal e porto.')).toBeInTheDocument()
+    expect(screen.getByText('Dias úteis da atracação/chegada até o recebimento, por modal e porto.')).toBeInTheDocument()
     const select = container.querySelector('.al-period select')
     expect(select).toHaveValue('180')
     expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual([
@@ -184,7 +184,7 @@ describe('Lead time - desktop (>= 1041px): estrutura', () => {
   })
 })
 
-describe('Lead time - desktop: tabela por modal (chegada -> liberacao)', () => {
+describe('Lead time - desktop: tabela por modal (chegada -> recebimento)', () => {
   it('colunas Porto / Atual / Mediana real / P80 / n / Atual × mediana, uma linha por porto + "Todos os portos"', async () => {
     mockLoadLeadTimeDataset.mockResolvedValue(buildDataset([5, 6, 6, 7, 7]))
     renderPanel()
@@ -350,7 +350,7 @@ describe('Lead time - desktop: Outros trechos (D11)', () => {
     expect(screen.getByText('5 trechos em dias corridos, por modal e porto (mediana, P80 e n).')).toBeInTheDocument()
   })
 
-  it('aberta: os 5 outros trechos (sem chegada -> liberacao) no estilo das tabelas, com unidade e dados', async () => {
+  it('aberta: os 5 outros trechos (sem chegada -> recebimento) no estilo das tabelas, com unidade e dados', async () => {
     const user = userEvent.setup()
     mockLoadLeadTimeDataset.mockResolvedValue(datasetWithAllMilestones())
     renderPanel()

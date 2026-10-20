@@ -283,6 +283,21 @@ describe('AdminBarStatusPanel', () => {
       expect(screen.queryByRole('button', { name: 'Aplicar' })).not.toBeInTheDocument()
     })
 
+    it('sugestão igual ao atual com data de aplicação inválida: só "Coincide", sem "Aplicado automaticamente ."', async () => {
+      mockGetBarSuggestion.mockResolvedValueOnce({
+        ...SUGGESTION_DIFF,
+        status: 'PRATICAVEL',
+        label: 'PRATICAVEL',
+        tone: 'ok',
+        lastAppliedAt: 'nao-e-uma-data',
+      })
+      renderPanel()
+      await waitFor(() => {
+        expect(screen.getByText(/Coincide com o status atual/i)).toBeInTheDocument()
+      })
+      expect(screen.queryByText(/Aplicado automaticamente/i)).not.toBeInTheDocument()
+    })
+
     it('mostra o texto do site e a restrição', async () => {
       mockGetBarSuggestion.mockResolvedValueOnce({
         ...SUGGESTION_DIFF,

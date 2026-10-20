@@ -22,7 +22,7 @@ import { buildActionErrorMessage } from '../../utils/errorMessages'
 // na arvore anterior, sem mudanca.
 const DESKTOP_QUERY = '(min-width: 1041px)'
 
-// Trecho "chegada -> liberacao" do mock (dias uteis); os outros 5 vao para "Outros trechos" (D11).
+// Trecho "chegada -> recebimento" do mock (dias uteis, arrivalToReceiptBusiness); os outros 5 vao para "Outros trechos" (D11).
 const MAIN_SEGMENT_ID = 'arrivalToReceiptBusiness'
 
 // A mediana real "diverge" da previsao atual a partir de 2 dias (destaque em --warning, como no mock).
@@ -286,7 +286,7 @@ export default function AdminLeadTimePanel() {
         <div className="al-head">
           <div className="al-head__text">
             <h3 className="al-title">Previsão × real</h3>
-            <p className="al-subtitle">Dias úteis após a chegada até a liberação, por modal e porto.</p>
+            <p className="al-subtitle">Dias úteis da atracação/chegada até o recebimento, por modal e porto.</p>
           </div>
           <label className="field al-period">
             <span>Período</span>
