@@ -36,7 +36,15 @@ export default function FilterChip({
           onClick={onRemove}
           aria-label={`Remover filtro ${label}`}
         >
-          <Icon name="close" size={12} strokeWidth={2.4} />
+          {/* Dois glifos: o X antigo (plus girado) segue no tablet/mobile; o X do mock
+              (Chegadas.dc.html, traco 2.4) so no desktop. O CSS mostra um por breakpoint. */}
+          <Icon
+            name="plus"
+            size={12}
+            style={{ transform: 'rotate(45deg)' }}
+            className="filter-chip__x filter-chip__x--legacy"
+          />
+          <Icon name="close" size={12} strokeWidth={2.4} className="filter-chip__x filter-chip__x--desk" />
         </button>
       ) : null}
     </span>

@@ -1571,7 +1571,19 @@ body {
    .filter-pill = seletor de filtro com contador; .filter-chip = filtro ja
    aplicado (removivel). Dark: o navy vira --primary / --ink.
    ============================================================ */
+.filter-chip__x--desk {
+  display: none;
+}
+
 @media (min-width: 1041px) {
+  .filter-chip__x--legacy {
+    display: none;
+  }
+
+  .filter-chip__x--desk {
+    display: block;
+  }
+
   .filter-pill {
     display: inline-flex;
     align-items: center;

@@ -1093,7 +1093,13 @@ describe('F3 - secoes e escopo', () => {
     const selectors = [...stripped.matchAll(/([^{}]+)\{/g)].map((m) => norm(m[1])).filter(Boolean)
     for (const selector of selectors) {
       expect(
-        ['.empty-state__glyph', '.toast__icon', '.process-list-skeletons--card', '.skeleton-process-card'],
+        [
+          '.empty-state__glyph',
+          '.toast__icon',
+          '.process-list-skeletons--card',
+          '.skeleton-process-card',
+          '.filter-chip__x--desk',
+        ],
         `regra F3 fora do desktop: ${selector}`,
       ).toContain(selector)
     }
@@ -1268,6 +1274,10 @@ describe('F3 - campos, chips, tags (Componentes.dc.html)', () => {
     expectF3('.filter-chip--default', ['background: var(--navy-50)', 'color: var(--navy)'], S)
     expectF3('.filter-chips-row .filter-chip', ['background: var(--navy-50)', 'color: var(--navy)'], S)
     expectF3('.filter-chip__remove', ['width: 24px', 'height: 24px'], S)
+    // o X do mock so no desktop; o antigo (plus girado) continua no tablet/mobile
+    expectF3('.filter-chip__x--legacy', ['display: none'], S)
+    expectF3('.filter-chip__x--desk', ['display: block'], S)
+    expect(f3[S].before).toContain('.filter-chip__x--desk')
     expectF3('.filter-chips-row__clear', ['color: var(--danger-700)', 'min-height: 32px'], S)
   })
 

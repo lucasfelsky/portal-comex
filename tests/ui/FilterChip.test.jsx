@@ -103,9 +103,12 @@ describe('FilterChip', () => {
     expect(container.querySelector('.filter-chip.meu-chip')).toBeInTheDocument()
   })
 
-  it('botao remover usa o X do mock (path M6 6l12 12M18 6 6 18, traco 2.4, 12px)', () => {
+  it('botao remover usa o X do mock (path M6 6l12 12M18 6 6 18, traco 2.4, 12px) so no desktop; o X antigo segue no tablet/mobile', () => {
     const { container } = render(<FilterChip label="X" onRemove={() => {}} />)
-    const svg = container.querySelector('.filter-chip__remove svg')
+    const legacy = container.querySelector('.filter-chip__x--legacy')
+    expect(legacy).toBeInTheDocument()
+    expect(legacy.style.transform).toBe('rotate(45deg)')
+    const svg = container.querySelector('.filter-chip__x--desk')
     expect(svg.getAttribute('width')).toBe('12')
     expect(svg.getAttribute('stroke-width')).toBe('2.4')
     expect(svg.querySelector('path').getAttribute('d')).toBe('M6 6l12 12M18 6 6 18')
