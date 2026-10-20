@@ -3760,3 +3760,21 @@ describe('F5b - JSX Login', () => {
     }
   })
 })
+// @@F5B-VERIFY
+describe('F5b - JSX Verificar e-mail', () => {
+  it('raiz propria, ladrilho de e-mail, caixa de status e acoes agrupadas', () => {
+    expect((f5bVerify.match(/auth-screen auth-screen--verify/g) ?? []).length).toBe(2)
+    expect(f5bVerify).toContain('<Icon name="mail" size={26} strokeWidth={1.8} />')
+    expect(f5bVerify).toContain('className="auth-reset-panel auth-status" role="status"')
+    expect(f5bVerify).toContain('Aguardando confirmação')
+    expect(f5bVerify).toContain('className="auth-state__actions"')
+    expect(f5bVerify).toContain('Já confirmei meu email')
+    expect(f5bVerify).toContain('Reenviar email de confirmação')
+    expect(f5bVerify).toContain('Voltar ao login')
+  })
+
+  it('sem toISOString, console.log nem hex', () => {
+    expect(f5bNoComments(f5bVerify)).not.toMatch(/toISOString\(\)|console\.log/)
+    expect(f5bNoComments(f5bVerify)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+})
