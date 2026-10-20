@@ -8947,13 +8947,30 @@ body {
    ============================================================ */
 
 /* Elementos novos do shell: escondidos fora do desktop. */
-.sidebar__mark,
-.sidebar-intelliquote-link__mark,
+/* .brand-mark (SVG da marca, F1) vem depois no arquivo: por isso a marca na
+   sidebar usa especificidade (0,2,0) para esconder no tablet. */
+.sidebar .sidebar__mark,
+.sidebar .sidebar-intelliquote-link__mark,
 .topbar__search,
 .topbar__ptax-sep,
 .admin-tab__dot,
 .admin-tab__desc {
   display: none;
+}
+
+/* Icones/textos com 2 versoes (tablet x desktop): o glifo do mock e o
+   subtitulo "Abrir cotacoes" so aparecem no desktop; o tablet continua com os
+   glifos e o "Suite SQ" anteriores (D3). */
+.icon--desk,
+.sidebar-intelliquote-link__eyebrow--desk {
+  display: none;
+}
+
+/* Tablet: o card admin e' a linha "SUITE SQ  IntelliQuote  ↗" de antes. */
+.sidebar-intelliquote-link--admin .sidebar-intelliquote-link__body {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
 }
 
 /* Rodape da sidebar: o card do IntelliQuote e os botoes Tema/Sair moram no
@@ -8975,6 +8992,12 @@ body {
 
   .topbar__title-wrap--process-crumb .breadcrumb {
     display: none;
+  }
+
+  /* O "Sair" escondido da topbar (e o gap de 12px dele) saiu do DOM: o avatar
+     mantem a mesma posicao de antes. */
+  .topbar__user {
+    padding-right: 12px;
   }
 }
 
@@ -9026,6 +9049,10 @@ body {
        do grid empacotadas no topo (senao o auto-stretch esticaria o topbar). */
     padding: 0 var(--shell-pad-x) 40px;
     align-content: start;
+    /* Linhas pelo conteudo (max-content): com `auto` o Chromium dimensiona a
+       linha do topbar ANTES de ele quebrar de linha (altura de 1 linha) e o
+       2o andar do topbar vaza sobre o conteudo. */
+    grid-auto-rows: max-content;
   }
 
   /* Marca: ladrilho 40 + "Portal COMEX" Sora 19/700. O chip do PNG da SQ e o
@@ -9040,6 +9067,16 @@ body {
   .sidebar .sidebar__mark {
     display: block;
     flex-shrink: 0;
+  }
+
+  .sidebar .icon--tablet,
+  .topbar .icon--tablet {
+    display: none;
+  }
+
+  .sidebar .icon--desk,
+  .topbar .icon--desk {
+    display: inline-block;
   }
 
   .sidebar .sidebar__logo,
@@ -9178,8 +9215,17 @@ body {
   .sidebar .sidebar-intelliquote-link__body {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: 1px;
     min-width: 0;
+  }
+
+  .sidebar .sidebar-intelliquote-link__eyebrow--tablet {
+    display: none;
+  }
+
+  .sidebar .sidebar-intelliquote-link__eyebrow--desk {
+    display: block;
   }
 
   .sidebar .sidebar-intelliquote-link__title {

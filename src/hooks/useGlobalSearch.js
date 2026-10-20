@@ -74,7 +74,8 @@ export function useGlobalSearch(canSeeName) {
       return processResults.slice(0, 8).map((process) => {
         // Refino F2: subtitulo da paleta = "PO ... · status" (Flutuantes.dc.html).
         // Sem status, cai no destino (comportamento anterior).
-        const po = process.processNumber ? `PO ${process.processNumber}` : 'sem PO'
+        const number = String(process.processNumber ?? '').trim()
+        const po = number ? (/^po(\s|:|$)/i.test(number) ? number : `PO ${number}`) : 'sem PO'
         const status = getQuickReadProcessStatus(process) || process.destination
         const description = [po, status].filter(Boolean).join(' · ')
         return {

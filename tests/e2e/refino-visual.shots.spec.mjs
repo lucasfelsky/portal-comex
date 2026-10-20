@@ -13,7 +13,10 @@
 // Vermelho, ETA atualizada, inflamavel, dados pendentes, favoritos do admin,
 // comunicados, barra, notificacoes, chamados e usuarios pendentes.
 //
-// Cada fase ACRESCENTA suas telas em PHASES (F1: login, dashboard, chegadas).
+// Cada fase ACRESCENTA suas telas em PHASES (F1: login, dashboard, chegadas;
+// F2: shell — sidebar, topbar, abas do admin, gaveta, paleta, suporte).
+// Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
+// paleta, modal) antes da captura.
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -49,7 +52,81 @@ const PHASES = {
     { name: '404', route: '/rota-que-nao-existe', ready: shell },
   ],
 }
-const PHASE = process.env.REFINO_PHASE || 'f1'
+// Refino F2 (shell): as capturas mostram sidebar + topbar em todas as telas e
+// os flutuantes abertos (gaveta, paleta, suporte, menu do usuario).
+const dashboardReady = (page) => page.getByRole('heading', { name: 'Visão geral' })
+PHASES.f2 = [
+  { name: 'shell-dashboard', route: '/', ready: dashboardReady },
+  { name: 'shell-chegadas', route: '/processos', ready: (page) => page.locator('.process-list-card').first() },
+  {
+    name: 'shell-detalhe-breadcrumb',
+    route: '/processos',
+    ready: (page) => page.locator('.process-list-card').first(),
+    action: async (page) => {
+      await page.locator('.process-item--button').first().click()
+      await expect(page.locator('.topbar .breadcrumb')).toBeVisible()
+    },
+  },
+  { name: 'shell-admin-usuarios', route: '/admin/usuarios', ready: shell },
+  { name: 'shell-admin-barra', route: '/admin/barra', ready: shell },
+  {
+    name: 'gaveta-notificacoes',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar .notifications__trigger').click()
+      await expect(page.locator('.notifications__panel--drawer .notif-row').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'paleta-busca',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar__search').click()
+      await page.getByLabel('Buscar comandos').fill('Solvente')
+      await expect(page.locator('.command-palette__item--process').first()).toBeVisible({ timeout: 10_000 })
+    },
+  },
+  {
+    name: 'paleta-vazia',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar__search').click()
+      await expect(page.locator('.command-palette__item').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'suporte-modal',
+    route: '/processos',
+    ready: (page) => page.locator('.process-list-card').first(),
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Abrir suporte' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+    },
+  },
+  {
+    name: 'suporte-meus-chamados',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Abrir suporte' }).click()
+      await page.getByRole('button', { name: 'Meus chamados' }).click()
+      await expect(page.getByRole('button', { name: 'Novo chamado' })).toBeVisible()
+    },
+  },
+  {
+    name: 'menu-usuario',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar .topbar__user').click()
+      await expect(page.getByRole('menu')).toBeVisible()
+    },
+  },
+]
+const PHASE = process.env.REFINO_PHASE || 'f2'
 
 // --- helpers de seed -------------------------------------------------------
 
@@ -402,6 +479,7 @@ for (const theme of THEMES) {
     for (const screen of screens.filter((s) => s.auth !== false)) {
       await page.goto(screen.route)
       await expect(screen.ready(page)).toBeVisible({ timeout: 15_000 })
+      if (screen.action) await screen.action(page)
       await page.waitForTimeout(800)
       await page.screenshot({ path: path.join(outDir, `${screen.name}-${theme}.png`), fullPage: true })
     }

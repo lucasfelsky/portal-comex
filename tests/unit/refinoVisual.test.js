@@ -561,3 +561,441 @@ describe('F1 marca (BrandMark.jsx)', () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// F2 - shell (sidebar, topbar, abas do admin, gaveta, paleta, suporte).
+// Valores copiados de Sidebar/Topbar/AdminTabs/Flutuantes.dc.html. O CSS novo
+// fica numa secao delimitada de src/styles.css; aqui se confere cada valor do
+// mock e o escopo por classe raiz (vazamento por classe compartilhada ja
+// quebrou 3x).
+// ---------------------------------------------------------------------------
+const F2_START = 'REFINO VISUAL F2 — SHELL DO DESKTOP'
+const F2_END = 'F16.1 — Fundações do redesign iOS'
+const f2Start = css.indexOf(F2_START)
+const f2End = css.indexOf(F2_END)
+// A secao comeca/termina DENTRO de comentarios de cabecalho: recua ate o "/*"
+// que os abre para o stripComments remove-los por inteiro.
+const f2Css = stripComments(css.slice(css.lastIndexOf('/*', f2Start), css.lastIndexOf('/*', f2End)))
+const f2MediaStart = f2Css.indexOf('@media (min-width: 1041px) {')
+const f2Desktop = f2Css.slice(f2MediaStart)
+
+const norm = (s) => s.replace(/\s+/g, ' ').trim()
+
+function parseRules(source) {
+  const out = []
+  for (const m of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    out.push({
+      selectors: m[1].split(',').map((x) => norm(x)),
+      body: norm(m[2]),
+    })
+  }
+  return out
+}
+
+const f2Rules = parseRules(f2Desktop)
+
+// Todos os trechos de declaracao dos blocos cujo seletor-lista inclui `selector`.
+function declsOf(selector) {
+  const bodies = f2Rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F2: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectDecls(selector, declarations) {
+  const body = declsOf(selector)
+  for (const declaration of declarations) {
+    expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+  }
+}
+
+describe('F2 shell - CSS do mock', () => {
+  it('a secao F2 existe, vem antes do bloco reduce desktop e so tem 1 media desktop de shell', () => {
+    expect(f2Start).toBeGreaterThan(0)
+    expect(f2End).toBeGreaterThan(f2Start)
+    expect(f2MediaStart).toBeGreaterThan(0)
+    expect(f2Start).toBeLessThan(css.lastIndexOf('@media (min-width: 1041px) and (prefers-reduced-motion: reduce)'))
+  })
+
+  it('sidebar: 256px, padding 24/16/20, gap 28, gradiente navy, anel de foco verde', () => {
+    expectDecls('.sidebar', [
+      '--focus-ring: var(--primary)',
+      'width: 256px',
+      'gap: 28px',
+      'padding: 24px 16px 20px',
+    ])
+    expectDecls('.sidebar', ['background: var(--sidebar-bg)'])
+    expectDecls('.main-content', ['margin-left: 256px', 'width: calc(100% - 256px)'])
+  })
+
+  it('marca da sidebar: ladrilho 40 + "Portal COMEX" Sora 19/700 -0.01em, gap 12, padding 0 6px', () => {
+    expectDecls('.sidebar .brand', ['gap: 12px', 'padding: 0 6px'])
+    expectDecls('.sidebar .brand h1', [
+      'font-family: var(--font-heading)',
+      'font-size: 19px',
+      'font-weight: 700',
+      'letter-spacing: -0.01em',
+    ])
+    // PNG da SQ e eyebrow so no drawer do tablet.
+    expectDecls('.sidebar .sidebar__logo', ['display: none'])
+    expectDecls('.sidebar .brand__eyebrow', ['display: none'])
+  })
+
+  it('navegacao: 44px, raio 12, gap 12, 14px/600 repouso, hover 200ms, ativo = pilula + anel', () => {
+    expectDecls('.sidebar .nav__link', [
+      'height: 44px',
+      'padding: 0 14px',
+      'gap: 12px',
+      'border-radius: 12px',
+      'color: var(--sidebar-ink-soft)',
+      'font-size: 14px',
+      'font-weight: 600',
+    ])
+    const nav = declsOf('.sidebar .nav__link')
+    expect(nav).toContain('background-color var(--dur-base) var(--ease-out)')
+    expectDecls('.sidebar .nav__link:hover', ['background: var(--sidebar-pill-hover)', 'color: var(--sidebar-ink)'])
+    expectDecls('.sidebar .nav__link--active', [
+      'background: var(--sidebar-pill-active)',
+      'box-shadow: inset 0 0 0 1px var(--sidebar-pill-active-ring)',
+      'color: var(--sidebar-ink)',
+      'font-weight: 700',
+    ])
+    expectDecls('.sidebar .nav__link--active .nav__link-icon', ['color: var(--primary)'])
+    expectDecls('.sidebar .nav__link-text p', ['display: none'])
+    expect(declsOf('.sidebar .nav__link:focus-visible')).toContain(
+      'box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring)',
+    )
+  })
+
+  it('rodape: card IntelliQuote (raio 16, padding 12, .06/.10) e botoes Tema/Sair de 40px 13/600', () => {
+    expectDecls('.sidebar .sidebar-intelliquote-link', [
+      'padding: 12px',
+      'gap: 12px',
+      'border-radius: 16px',
+      'background: rgba(255, 255, 255, 0.06)',
+      'border: 1px solid rgba(255, 255, 255, 0.1)',
+      'margin-bottom: 8px',
+    ])
+    expectDecls('.sidebar .sidebar-intelliquote-link__title', ['font-size: 14px', 'font-weight: 700'])
+    expectDecls('.sidebar .sidebar-intelliquote-link__eyebrow', [
+      'font-size: 12px',
+      'color: var(--sidebar-ink-soft)',
+      'text-transform: none',
+    ])
+    expectDecls('.sidebar .sidebar__foot', ['gap: 6px'])
+    expectDecls('.sidebar .sidebar__foot .sidebar-theme-button', [
+      'height: 40px',
+      'padding: 0 14px',
+      'border-radius: 12px',
+      'font-size: 13px',
+      'font-weight: 600',
+      'color: var(--sidebar-ink-soft)',
+    ])
+  })
+
+  it('topbar: sticky, min-height 76, gap 10/14, padding 14 + clamp, fundo --bg, borda inferior', () => {
+    expectDecls('.topbar', [
+      'position: sticky',
+      'min-height: 76px',
+      'flex-wrap: wrap',
+      'gap: 10px 14px',
+      'padding: 14px var(--shell-pad-x)',
+      'background: var(--bg)',
+      'border-bottom: 1px solid var(--border)',
+    ])
+    expectDecls('.main-content', ['--shell-pad-x: clamp(16px, 3vw, 40px)', 'grid-auto-rows: max-content'])
+    expectDecls('.topbar__actions', ['display: contents'])
+    expectDecls('.topbar .topbar__title', [
+      'font-family: var(--font-heading)',
+      'font-size: 20px',
+      'font-weight: 700',
+      'letter-spacing: -0.01em',
+    ])
+    expectDecls('.topbar .breadcrumb__current', ['font-size: 12px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectDecls('.topbar-theme-button', ['display: none'])
+  })
+
+  it('busca Ctrl K, PTAX, sino e usuario: 44px, raio 12, medidas do mock', () => {
+    expectDecls('.topbar .topbar__search', [
+      'height: 44px',
+      'min-width: 180px',
+      'padding: 0 8px 0 14px',
+      'flex: 0 1 300px',
+      'border-radius: 12px',
+    ])
+    expectDecls('.topbar .topbar__search-kbd', [
+      'font-family: var(--font-mono)',
+      'font-size: 11px',
+      'padding: 3px 7px',
+      'border-radius: 6px',
+    ])
+    expectDecls('.topbar .topbar__ptax', [
+      'height: 44px',
+      'padding: 0 14px',
+      'gap: 12px',
+      'font-family: var(--font-mono)',
+      'font-size: 12px',
+      'font-variant-numeric: tabular-nums',
+    ])
+    expectDecls('.topbar .topbar__ptax-sep', ['width: 1px', 'height: 18px'])
+    expectDecls('.topbar .notifications__trigger', ['width: 44px', 'height: 44px', 'border-radius: 12px'])
+    expectDecls('.topbar .notifications__count', [
+      'top: -5px',
+      'right: -5px',
+      'min-width: 20px',
+      'height: 20px',
+      'padding: 0 5px',
+      'background: var(--primary)',
+      'color: var(--on-primary)',
+      'font-family: var(--font-mono)',
+      'font-size: 11px',
+      'font-weight: 700',
+      'box-shadow: 0 0 0 2px var(--bg)',
+    ])
+    expectDecls('.topbar .topbar__user', ['height: 44px', 'padding: 0 12px 0 6px', 'border-radius: 12px', 'gap: 10px'])
+    expectDecls('.topbar .topbar__avatar', ['width: 32px', 'height: 32px', 'border-radius: 10px', 'background: var(--navy)'])
+    expectDecls('.topbar .topbar__user-info .topbar__role-badge', [
+      'font-size: 11px',
+      'font-weight: 600',
+      'color: var(--primary-700)',
+    ])
+  })
+
+  it('abas do admin: grid auto-fit 150px, gap 8, aba 12/14 raio 14, ativa navy + sombra', () => {
+    expectDecls('.admin-section .admin-tabs.admin-tabs--desktop', [
+      'grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))',
+      'gap: 8px',
+    ])
+    expectDecls('.admin-section .admin-tabs .admin-tab', ['padding: 12px 14px', 'border-radius: 14px', 'gap: 4px'])
+    expectDecls('.admin-section .admin-tabs .admin-tab.tab-button--active', [
+      'border-color: var(--navy)',
+      'background: var(--surface)',
+      'box-shadow: var(--shadow-sm)',
+    ])
+    expectDecls('.admin-tab__label', ['font-size: 14px', 'font-weight: 700', 'gap: 8px'])
+    expectDecls('.admin-tab__dot', ['width: 6px', 'height: 6px'])
+    expectDecls('.admin-tab.tab-button--active .admin-tab__dot', ['background: var(--primary)'])
+    expectDecls('.admin-tab__desc', ['font-size: 12px', 'line-height: 1.35', 'color: var(--ink-soft)'])
+  })
+
+  it('gaveta: 420px, raio 22, --shadow-lg, entra 300ms ease-out e sai 210ms ease-in (transform so)', () => {
+    expectDecls('.notifications__panel.notifications__panel--drawer', [
+      'width: min(420px, calc(100vw - 32px))',
+      'border-radius: 22px',
+      'box-shadow: var(--shadow-lg)',
+      'animation: notif-drawer-in var(--dur-slow) var(--ease-out) forwards',
+    ])
+    expectDecls('.notifications__panel.notifications__panel--drawer.notifications__panel--closing', [
+      'animation: notif-drawer-out 210ms var(--ease-in) forwards',
+    ])
+    expectDecls('.notifications-backdrop', ['background: var(--scrim-soft)'])
+    for (const name of ['notif-drawer-in', 'notif-drawer-out']) {
+      const frames = bodyAfter(f2Css, `@keyframes ${name}`)
+      expect(frames, name).toContain('transform: translateX')
+      expect(frames, name).not.toMatch(/(width|height|left|top|margin)/)
+    }
+    // 210ms (saida) <= timer do JS (220ms): o painel nunca desmonta antes de sair.
+    const layout = read('src/components/AppLayout.jsx')
+    expect(layout).toContain('const NOTIFICATION_PANEL_ANIMATION_MS = 220')
+  })
+
+  it('gaveta: cabecalho, pilulas 32px raio 99, item grid 36/1fr/10 com ladrilho 36 raio 10', () => {
+    expectDecls('.notif-drawer__title', ['font-family: var(--font-heading)', 'font-size: 18px', 'font-weight: 700'])
+    expectDecls('.notif-drawer__sub', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectDecls('.notif-drawer__close', ['width: 44px', 'height: 44px', 'background: var(--surface-alt)'])
+    expectDecls('.notif-drawer__filters', ['flex-wrap: nowrap', 'overflow-x: auto'])
+    expectDecls('.notif-drawer__pill', ['height: 32px', 'padding: 0 12px', 'border-radius: 99px', 'font-size: 12px', 'font-weight: 600'])
+    expectDecls('.notif-drawer__pill--active', ['background: var(--navy)'])
+    expectDecls('.notif-row', ['grid-template-columns: 36px minmax(0, 1fr) 10px', 'gap: 12px', 'padding: 12px 8px', 'border-radius: 12px'])
+    expectDecls('.notif-row--unread', ['background: var(--surface-alt)'])
+    expectDecls('.notif-row__icon', ['width: 36px', 'height: 36px', 'border-radius: 10px'])
+    expectDecls('.notif-row__title', ['font-size: 13px', 'font-weight: 700'])
+    expectDecls('.notif-row__text', ['font-size: 12px', 'line-height: 1.45'])
+    expectDecls('.notif-row__time', ['font-size: 11px'])
+    expectDecls('.notif-row__dot', ['width: 8px', 'height: 8px'])
+    expectDecls('.notif-row--unread .notif-row__dot', ['background: var(--primary)'])
+    // tons por tipo = soft + ink dos tokens
+    for (const [tone, soft, ink] of [
+      ['info', '--info-50', '--info-700'],
+      ['ok', '--success-50', '--success-700'],
+      ['warn', '--warning-50', '--warning-700'],
+      ['danger', '--danger-50', '--danger-700'],
+    ]) {
+      expectDecls(`.notif-row__icon--${tone}`, [`background: var(${soft})`, `color: var(${ink})`])
+    }
+    expectDecls('.notif-drawer__foot', ['padding: 14px 20px', 'gap: 8px'])
+  })
+
+  it('paleta: 444px, raio 22, busca 60px, grupos mono 10/600 1.5px, itens 44/52, mark e Enter por token', () => {
+    expectDecls('.modal.command-palette-modal', ['width: 444px', 'border-radius: 22px', 'box-shadow: var(--shadow-lg)'])
+    expectDecls('.command-palette-modal .command-palette__search', ['height: 60px', 'padding: 0 20px'])
+    expectDecls('.command-palette-modal .command-palette__group-label', [
+      'font-family: var(--font-mono)',
+      'font-size: 10px',
+      'font-weight: 600',
+      'letter-spacing: 1.5px',
+    ])
+    expectDecls('.command-palette-modal .command-palette__item', ['height: 44px', 'border-radius: 12px', 'font-size: 14px'])
+    expectDecls('.command-palette-modal .command-palette__item--process', ['height: 52px'])
+    expectDecls('.command-palette-modal .command-palette__item--active', [
+      'background: var(--primary-50)',
+      'box-shadow: inset 0 0 0 1px rgba(0, 120, 100, 0.25)',
+    ])
+    expectDecls('.command-palette__item-sub', ['font-family: var(--font-mono)', 'font-size: 11px'])
+    expectDecls('.command-palette__mark', ['background: var(--mark-bg)', 'border-radius: 3px'])
+    expectDecls('.command-palette__item-hint', ['color: var(--success-700)', 'font-family: var(--font-mono)'])
+    expectDecls('.command-palette-modal .command-palette__footer', ['font-size: 11px', 'padding: 12px 20px'])
+  })
+
+  it('suporte: FAB pilula 48px navy com sombra do mock; modal 400px raio 22; campos 44px raio 10, foco navy + halo', () => {
+    expectDecls('.support-fab .support-fab__trigger', [
+      'height: 48px',
+      'padding: 0 18px 0 14px',
+      'gap: 10px',
+      'border-radius: 99px',
+      'background: var(--navy)',
+      'box-shadow: 0 6px 18px rgba(0, 65, 83, 0.25)',
+      'font-size: 14px',
+      'font-weight: 700',
+    ])
+    expectDecls('.support-fab .support-fab__trigger svg', ['color: var(--primary)'])
+    expectDecls('.modal.support-modal-shell', ['max-width: 400px', 'padding: 22px', 'border-radius: 22px'])
+    expectDecls('.support-modal--desktop .support-modal__title', ['font-family: var(--font-heading)', 'font-size: 18px'])
+    expectDecls('.support-modal--desktop .support-modal__input', [
+      'height: 44px',
+      'padding: 0 14px',
+      'border: 1.5px solid var(--border-control)',
+      'border-radius: 10px',
+      'font-size: 14px',
+      'font-weight: 500',
+    ])
+    expectDecls('.support-modal--desktop .support-modal__input:focus', [
+      'border-color: var(--navy)',
+      'box-shadow: 0 0 0 4px rgba(20, 221, 167, 0.28)',
+    ])
+    expectDecls('.support-modal--desktop .support-modal__context', ['padding: 10px 12px', 'border-radius: 12px', 'background: var(--surface-alt)', 'font-size: 12px'])
+    expectDecls('.support-modal--desktop .support-modal__cancel', ['height: 44px', 'border-radius: 12px', 'font-weight: 700'])
+  })
+
+  it('escopo: toda regra do bloco desktop F2 comeca por uma classe raiz do shell', () => {
+    const ROOTS =
+      /^(\[data-theme='dark'\] )?(\.sidebar(?![-\w])|\.main-content|\.topbar(?![-\w])|\.topbar__|\.topbar-theme-button|\.admin-section |\.admin-tab(__|\.)|\.notifications-backdrop|\.notifications__panel(\.|--| )|\.notif-|\.modal(-backdrop)?\.(command-palette-modal|support-modal-shell)|\.command-palette|\.support-fab|\.support-modal)/
+    expect(f2Rules.length).toBeGreaterThan(150)
+    for (const rule of f2Rules) {
+      for (const selector of rule.selectors) {
+        expect(ROOTS.test(selector), `seletor fora das raizes do shell: ${selector}`).toBe(true)
+      }
+    }
+  })
+
+  it('tablet/mobile: elementos novos escondidos por padrao e crumb do processo so no desktop', () => {
+    const base = parseRules(f2Css.slice(0, f2MediaStart))
+    const hidden = base.find((r) => r.selectors.includes('.topbar__search'))
+    expect(hidden?.body).toContain('display: none')
+    for (const selector of [
+      '.sidebar .sidebar__mark',
+      '.sidebar .sidebar-intelliquote-link__mark',
+      '.topbar__ptax-sep',
+      '.admin-tab__dot',
+      '.admin-tab__desc',
+    ]) {
+      expect(hidden.selectors, selector).toContain(selector)
+    }
+    expect(f2Css).toContain('.topbar__title-wrap--process-crumb .breadcrumb')
+    expect(f2Css).toContain('@media (max-width: 1040px)')
+  })
+
+  it('reduce desktop: a gaveta nova entra no bloco existente (sem bloco reduce novo)', () => {
+    const reduce = bodyAfter(css, '@media (min-width: 1041px) and (prefers-reduced-motion: reduce)')
+    expect(reduce).toContain('.notifications__panel.notifications__panel--drawer')
+    expect(reduce).toContain('.notifications__panel.notifications__panel--drawer.notifications__panel--closing')
+  })
+
+  it('notebook: sidebar compacta mantem 232px e o novo markup (marca, nav, rodape)', () => {
+    const nb = stripComments(read('src/notebook.css'))
+    expect(nb).toContain('width: 232px')
+    for (const selector of [
+      '.sidebar .sidebar__mark',
+      '.sidebar .nav__link',
+      '.sidebar .sidebar-intelliquote-link__mark',
+      '.sidebar .sidebar__foot',
+      '.support-fab .support-fab__trigger',
+    ]) {
+      expect(nb, selector).toContain(selector)
+    }
+    // o topbar sticky nao precisa mais de padding-left nem de altura fixa
+    expect(nb).not.toMatch(/\.topbar\s*\{[^}]*padding-left/)
+    expect(nb).not.toMatch(/\.topbar\s*\{[^}]*(?<![-\w])height:/)
+  })
+})
+
+describe('F2 shell - JSX/markup', () => {
+  const layout = read('src/components/AppLayout.jsx')
+  const palette = read('src/components/CommandPalette.jsx')
+  const adminLayout = read('src/pages/AdminLayout.jsx')
+  const support = read('src/components/SupportButton.jsx')
+
+  it('menu: Dashboard, Chegadas, Noticias, Admin (nessa ordem) e sem item de Notificacoes', () => {
+    const nav = layout.slice(layout.indexOf('const navigation = ['), layout.indexOf('const ROLE_LABELS'))
+    const labels = [...nav.matchAll(/label: '([^']+)'/g)].map((m) => m[1])
+    expect(labels).toEqual(['Dashboard', 'Chegadas', 'Notícias', 'Admin'])
+    expect(nav).not.toMatch(/Notifica/)
+    for (const icon of ['nav-dashboard', 'nav-arrivals', 'nav-news', 'nav-admin']) expect(nav).toContain(icon)
+  })
+
+  it('icones do shell com os paths exatos do mock', () => {
+    const icons = read('src/components/Icon.jsx')
+    for (const path of [
+      'M3 4h7v8H3zM14 4h7v5h-7zM14 13h7v7h-7zM3 16h7v4H3z',
+      'M3 17h18l-2 3H5zM5 17V9h14v8M9 9V5h6v4',
+      'M4 5h12v14H6a2 2 0 0 1-2-2zM16 9h4v8a2 2 0 0 1-2 2M8 9h4M8 13h4',
+      'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4',
+      'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4',
+      'M7 17 17 7M8 7h9v9',
+    ]) {
+      expect(icons, path).toContain(path)
+    }
+  })
+
+  it('marca de produto no cabecalho (COMEX dark 40) e no card IntelliQuote (IQ dark 36)', () => {
+    expect(layout).toContain('<ProductMark product="comex" tone="dark" size={40}')
+    expect(layout).toContain('<ProductMark product="iq" tone="dark" size={36}')
+    expect(layout).toContain('Abrir cotações')
+    expect(layout).toContain('aria-label="Abrir IntelliQuote em nova aba"')
+    // D4: o card "Fazer uma cotacao" (Comercial) nao tem marca.
+    const quote = layout.slice(layout.indexOf('sidebar-intelliquote-link--quote'), layout.indexOf('profile?.role === \'admin\' ? ('))
+    expect(quote).not.toContain('ProductMark')
+  })
+
+  it('topbar: busca Ctrl K, PTAX sem "R$", sino com badge e botao de usuario com menu (D5)', () => {
+    expect(layout).toContain('className="topbar__search"')
+    expect(layout).toContain('Buscar páginas, ações ou processos')
+    expect(layout).toContain('topbar__ptax-sep')
+    expect(layout).not.toMatch(/currency: 'BRL'/)
+    expect(layout).toContain('aria-haspopup="menu"')
+    expect(layout).toContain('Preferências de notificação')
+    expect(layout).toContain("admin: 'Admin'")
+    expect(layout).toContain("logistica: 'Logística'")
+    expect(layout).not.toContain('topbar__logout')
+  })
+
+  it('abas do admin: rotulo + ponto + descricao e classe tab-button--active preservada', () => {
+    expect(adminLayout).toContain('admin-tab__label')
+    expect(adminLayout).toContain('admin-tab__dot')
+    expect(adminLayout).toContain('admin-tab__desc')
+    expect(adminLayout).toContain('tab-button--active')
+  })
+
+  it('paleta: grupos "Processos" (primeiro) e "Páginas e ações"', () => {
+    expect(palette).toContain("const ASYNC_GROUP_LABEL = 'Processos'")
+    expect(palette).toContain("const STATIC_GROUP_LABEL = 'Páginas e ações'")
+    expect(palette.indexOf('...taggedAsync, ...filteredCommands')).toBeGreaterThan(0)
+  })
+
+  it('suporte: "Meus chamados" como visao alternada, chip de contexto e modal antigo no tablet', () => {
+    expect(support).toContain('Meus chamados')
+    expect(support).toContain('Contexto anexado:')
+    expect(support).toContain('Cancelar')
+    expect(support).toContain('isCompactLayout')
+    expect(support).toContain("window.matchMedia('(max-width: 1040px)')")
+  })
+})

@@ -34,15 +34,27 @@ function getInitials(value) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Refino F2: ordem do mock (Dashboard, Chegadas, Notícias, Admin) e icones
-// com os glifos exatos do Sidebar.dc.html. A descricao fica no DOM mas some
-// no desktop (>=1041px); o tablet (drawer) continua mostrando.
+// Refino F2: ordem do mock (Dashboard, Chegadas, Notícias, Admin) — vale no
+// tablet também (D3). Icones com os glifos exatos do Sidebar.dc.html SO no
+// desktop (>=1041px); o drawer do tablet mantem os glifos anteriores
+// (`legacyIcon`). A descricao fica no DOM mas some no desktop.
 const navigation = [
-  { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo', icon: 'nav-dashboard' },
-  { to: '/processos', label: 'Chegadas', description: 'Fila de chegadas', icon: 'nav-arrivals' },
-  { to: '/news', label: 'Notícias', description: 'Postagens e atualizações', icon: 'nav-news' },
-  { to: '/admin', label: 'Admin', description: 'Governança e ajustes', icon: 'nav-admin', roles: ['admin'] },
+  { to: '/', label: 'Dashboard', description: 'Visão geral do fluxo', icon: 'nav-dashboard', legacyIcon: 'dashboard' },
+  { to: '/processos', label: 'Chegadas', description: 'Fila de chegadas', icon: 'nav-arrivals', legacyIcon: 'arrivals' },
+  { to: '/news', label: 'Notícias', description: 'Postagens e atualizações', icon: 'nav-news', legacyIcon: 'news' },
+  { to: '/admin', label: 'Admin', description: 'Governança e ajustes', icon: 'nav-admin', legacyIcon: 'admin', roles: ['admin'] },
 ]
+
+// Icone com 2 glifos: o do tablet (`legacy`) e o do mock (`desk`); o CSS mostra
+// um por breakpoint (.icon--tablet / .icon--desk em styles.css).
+function ResponsiveIcon({ legacy, desk, size = 18, strokeWidth = 1.9 }) {
+  return (
+    <>
+      <Icon name={legacy} size={size} className="icon--tablet" />
+      <Icon name={desk} size={size} strokeWidth={strokeWidth} className="icon--desk" />
+    </>
+  )
+}
 
 // Papel legivel no botao de usuario da topbar (Topbar.dc.html).
 const ROLE_LABELS = {
@@ -217,7 +229,9 @@ export default function AppLayout() {
   // C17 (toggle): tema claro/escuro/automatico, persistido em localStorage.
   const theme = useTheme()
   const themeLabel = { auto: 'Tema: automático', dark: 'Tema: escuro', light: 'Tema: claro' }[theme.preference]
-  const themeIcon = { auto: 'theme-half', dark: 'moon', light: 'sun' }[theme.preference]
+  const themeIcon = { auto: 'theme-auto', dark: 'moon', light: 'sun' }[theme.preference]
+  // O botao da sidebar (so desktop) usa o glifo do mock (meio circulo a esquerda).
+  const sidebarThemeIcon = { auto: 'theme-half', dark: 'moon', light: 'sun' }[theme.preference]
   const commandItems = useMemo(
     () => [
       // Refino F2 (D7): "Novo processo" so para admin; navega com
@@ -710,7 +724,7 @@ export default function AppLayout() {
           aria-haspopup="dialog"
           onClick={handleToggleNotificationPanel}
         >
-          <Icon name="bell-ring" size={18} strokeWidth={1.9} aria-hidden="true" />
+          <ResponsiveIcon legacy="bell" desk="bell-ring" size={19} />
           <span className="notifications__label">Notificações</span>
           {unreadNotifications.length > 0 ? (
             <span className="notifications__count">{unreadNotifications.length}</span>
@@ -767,7 +781,7 @@ export default function AppLayout() {
               >
                 {item.icon ? (
                   <span className="nav__link-icon" aria-hidden="true">
-                    <Icon name={item.icon} size={18} strokeWidth={1.9} />
+                    <ResponsiveIcon legacy={item.legacyIcon} desk={item.icon} />
                   </span>
                 ) : null}
                 <span className="nav__link-text">
@@ -792,14 +806,14 @@ export default function AppLayout() {
                   <strong className="sidebar-intelliquote-link__title">Fazer uma cotação</strong>
                 </span>
                 <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
-                  <Icon name="arrow-up-right" size={16} strokeWidth={1.9} />
+                  <ResponsiveIcon legacy="external" desk="arrow-up-right" size={16} />
                 </span>
               </a>
             ) : null}
 
             {profile?.role === 'admin' ? (
               <a
-                className="sidebar-intelliquote-link"
+                className="sidebar-intelliquote-link sidebar-intelliquote-link--admin"
                 href={INTELLIQUOTE_WEB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -807,11 +821,12 @@ export default function AppLayout() {
               >
                 <ProductMark product="iq" tone="dark" size={36} className="sidebar-intelliquote-link__mark" />
                 <span className="sidebar-intelliquote-link__body">
+                  <span className="sidebar-intelliquote-link__eyebrow sidebar-intelliquote-link__eyebrow--tablet">Suite SQ</span>
                   <strong className="sidebar-intelliquote-link__title">IntelliQuote</strong>
-                  <span className="sidebar-intelliquote-link__eyebrow">Abrir cotações</span>
+                  <span className="sidebar-intelliquote-link__eyebrow sidebar-intelliquote-link__eyebrow--desk">Abrir cotações</span>
                 </span>
                 <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
-                  <Icon name="arrow-up-right" size={16} strokeWidth={1.9} />
+                  <ResponsiveIcon legacy="external" desk="arrow-up-right" size={16} />
                 </span>
               </a>
             ) : null}
@@ -823,7 +838,7 @@ export default function AppLayout() {
               aria-label={`${themeLabel} — alternar tema`}
               title="Alternar tema (automático / escuro / claro)"
             >
-              <Icon name={themeIcon} size={16} strokeWidth={1.9} aria-hidden="true" />
+              <Icon name={sidebarThemeIcon} size={16} strokeWidth={1.9} aria-hidden="true" />
               <span>{themeLabel}</span>
             </button>
 

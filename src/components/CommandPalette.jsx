@@ -38,7 +38,7 @@ const SEARCH_DEBOUNCE_MS = 200
 const ASYNC_GROUP_LABEL = 'Processos'
 const STATIC_GROUP_LABEL = 'Páginas e ações'
 
-const foldText = (value) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const foldText = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 // Destaca o trecho buscado (sem acento/caixa) com <mark>. Se a dobra de
 // acentos mudar o tamanho do texto (caracteres ja decompostos), nao destaca.
