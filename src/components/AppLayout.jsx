@@ -551,7 +551,7 @@ export default function AppLayout() {
                 }
                 title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
               >
-                <Icon name="bell" size={16} strokeWidth={1.9} />
+                <Icon name="bell-off" size={16} strokeWidth={1.9} />
               </button>
               <button
                 type="button"

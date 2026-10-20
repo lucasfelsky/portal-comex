@@ -36,7 +36,7 @@ import AppLayout from '../../src/components/AppLayout.jsx'
 import { ToastProvider } from '../../src/components/Toast.jsx'
 import { NotificationsProvider } from '../../src/contexts/NotificationsContext.jsx'
 import NotificationsPage from '../../src/pages/NotificationsPage.jsx'
-import { NOTIFICATIONS_CHANGED_EVENT, listNotifications, markAllNotificationsAsRead } from '../../src/services/notificationsRepository.js'
+import { NOTIFICATIONS_CHANGED_EVENT, listNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '../../src/services/notificationsRepository.js'
 import { getDailyPtaxRates } from '../../src/services/exchangeRatesRepository.js'
 import { setActiveProcess } from '../../src/utils/activeProcessContext.js'
 
@@ -597,6 +597,16 @@ function fireKeyDown(key, init = {}) {
 describe('AppLayout shell F2 (refino visual)', () => {
   const originalMatchMedia = window.matchMedia
 
+  // Estado limpo por teste: mocks do repositorio e localStorage (DND, PTAX, tema).
+  beforeEach(() => {
+    window.localStorage.clear()
+    markAllNotificationsAsRead.mockClear()
+    markNotificationAsRead.mockReset()
+    markNotificationAsRead.mockResolvedValue(undefined)
+    getDailyPtaxRates.mockReset()
+    getDailyPtaxRates.mockResolvedValue(null)
+  })
+
   afterEach(() => {
     window.matchMedia = originalMatchMedia
     setActiveProcess(null)
@@ -1014,9 +1024,14 @@ describe('AppLayout shell F2 (refino visual)', () => {
       expect(mark).toHaveClass('notif-row__mark')
       expect(mark.closest('.notif-row')).toBeNull() // irmão do botão da linha, nunca aninhado
 
+      // CAUSA-RAIZ do flake: o useFocusTrap move o foco para o 1o focavel da gaveta
+      // num setTimeout de 30ms apos abrir. Se mark.focus() vier antes, o timer
+      // rouba o foco e o Enter cai em outro botao. Espera o auto-foco assentar.
+      await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
       mark.focus()
       expect(document.activeElement).toBe(mark)
       await user.keyboard('{Enter}')
+      expect(markNotificationAsRead).toHaveBeenCalledWith('a')
       await waitFor(() =>
         expect(within(dialog).queryByRole('button', { name: 'Marcar como lida: Dúvida nova' })).toBeNull()
       )

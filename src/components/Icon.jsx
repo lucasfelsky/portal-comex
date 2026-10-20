@@ -287,6 +287,8 @@ const ICONS = {
   'nav-news': <path d="M4 5h12v14H6a2 2 0 0 1-2-2zM16 9h4v8a2 2 0 0 1-2 2M8 9h4M8 13h4" />,
   'nav-admin': <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" />,
   'bell-ring': <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4" />,
+  // Nao perturbe (gaveta): sino cortado, mesmo corpo do 'bell-ring' + traco diagonal.
+  'bell-off': <path d="M6 8a6 6 0 0 1 9-5.2M18 8c0 4 1.2 6 2 7.4M3 17s3-2 3-9M10 21h4M3 3l18 18" />,
   'search-field': (
     <>
       <circle cx="11" cy="11" r="7" />

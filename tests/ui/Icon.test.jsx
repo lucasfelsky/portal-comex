@@ -34,7 +34,7 @@ describe('Icon', () => {
       // Refino F2 (shell): glifos exatos dos mock-ups.
       'nav-dashboard', 'nav-arrivals', 'nav-news', 'nav-admin', 'bell-ring', 'search-field',
       'arrow-up-right', 'logout-door', 'theme-half', 'close', 'chevron-down', 'message',
-      'truck', 'alert-triangle', 'doc', 'image',
+      'truck', 'alert-triangle', 'doc', 'image', 'bell-off',
     ]
     for (const name of KNOWN) {
       const { container } = render(<Icon name={name} />)
