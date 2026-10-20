@@ -14590,8 +14590,12 @@ body {
     min-width: 0;
   }
 
+  /* margin: 0 — o `label` global (styles.css:309) traz margin-bottom: 6px; o rotulo do Periodo de ETA
+     e um <span> (nao ha controle unico a rotular) e nao herdava a margem, entao o contorno das datas
+     subia 6 px em relacao a Busca/Categoria/Etapa. O respiro entre rotulo e controle e so o `gap: 6px`. */
   .process-list-card .chg-field > label,
   .process-list-card .chg-field__label {
+    margin: 0;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0;

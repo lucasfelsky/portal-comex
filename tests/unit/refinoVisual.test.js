@@ -2052,7 +2052,10 @@ describe('F4b - valores do mock (Chegadas.dc.html)', () => {
       'background: var(--surface)',
     ])
     expectF4b('.process-list-card .chg-field', ['display: flex', 'flex-direction: column', 'gap: 6px'])
-    expectF4b('.process-list-card .chg-field > label', ['font-size: 12px', 'font-weight: 700'])
+    expectF4b('.process-list-card .chg-field > label', ['margin: 0', 'font-size: 12px', 'font-weight: 700'])
+    // RC2: o `label` global tem margin-bottom: 6px; sem zerar, Busca/Categoria/Etapa descem 6 px a mais que o
+    // Periodo de ETA (rotulo <span>). A guarda de geometria renderizada fica no spec de capturas (F4b).
+    expectF4b('.process-list-card .chg-field__label', ['margin: 0'])
   })
 
   it('campos 44px raio 10 borda 1.5px; busca/periodo em --border-control, selects navy (mock); foco com halo', () => {
