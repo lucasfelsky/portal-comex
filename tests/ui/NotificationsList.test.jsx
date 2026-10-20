@@ -413,3 +413,97 @@ describe('NotificationsList', () => {
     })
   })
 })
+
+// Refino F2 (Flutuantes.dc.html): a gaveta desktop usa a lista PLANA.
+describe('NotificationsList variant="drawer"', () => {
+  const NOW = Date.now()
+  const iso = (minutesAgo) => new Date(NOW - minutesAgo * 60000).toISOString()
+  const item = (id, type, title, minutesAgo, isRead = false) => ({
+    id,
+    type,
+    title,
+    body: `corpo ${id}`,
+    createdAt: iso(minutesAgo),
+    isRead,
+  })
+  const relative = (value) => {
+    const minutes = Math.round((NOW - new Date(value).getTime()) / 60000)
+    return minutes >= 1440 ? 'há 1 d' : `há ${minutes} min`
+  }
+  const grouped = [
+    { processId: 'p1', type: 'collection_status_updated', title: 'G1', unreadCount: 1, latestCreatedAt: iso(30), items: [item('a', 'collection_status_updated', 'Coleta agendada', 30)] },
+    {
+      processId: 'p2',
+      type: 'process_question_created',
+      title: 'G2',
+      unreadCount: 1,
+      latestCreatedAt: iso(5),
+      items: [item('b', 'process_question_created', 'Nova dúvida', 5), item('c', 'process_question_created', 'Outra dúvida', 2000, true)],
+    },
+  ]
+
+  function renderDrawer(props = {}) {
+    return render(
+      <NotificationsList
+        variant="drawer"
+        grouped={grouped}
+        onOpenNotification={() => {}}
+        formatRelative={relative}
+        formatDate={() => ''}
+        {...props}
+      />
+    )
+  }
+
+  it('achata os grupos e ordena do mais recente para o mais antigo (sem grupos/acordeao)', () => {
+    const { container } = renderDrawer()
+    const titles = [...container.querySelectorAll('.notif-row__title')].map((node) => node.textContent)
+    expect(titles).toEqual(['Nova dúvida', 'Coleta agendada', 'Outra dúvida'])
+    expect(container.querySelector('.notifications__group')).toBeNull()
+    expect(screen.queryByText('Recentes')).toBeNull()
+    expect(screen.queryByText('Anteriores')).toBeNull()
+  })
+
+  it('tom e glifo por tipo; nao lida com ponto; lida sem a classe', () => {
+    const { container } = renderDrawer()
+    const rows = [...container.querySelectorAll('.notif-row')]
+    expect(rows[0].querySelector('.notif-row__icon--info')).not.toBeNull()
+    expect(rows[1].querySelector('.notif-row__icon--ok')).not.toBeNull()
+    expect(rows[0]).toHaveClass('notif-row--unread')
+    expect(rows[2]).not.toHaveClass('notif-row--unread')
+    expect(rows[0].querySelector('.notif-row__dot')).not.toBeNull()
+  })
+
+  it('tempo "há N min • dd/mm" e "ontem" no lugar de "há 1 d"', () => {
+    const { container } = renderDrawer()
+    const times = [...container.querySelectorAll('.notif-row__time')].map((node) => node.textContent)
+    expect(times[0]).toMatch(/^há 5 min • \d{2}\/\d{2}$/)
+    expect(times[2]).toMatch(/^ontem • \d{2}\/\d{2}$/)
+  })
+
+  it('clicar na linha chama onOpenNotification com a notificacao', async () => {
+    const onOpen = vi.fn()
+    renderDrawer({ onOpenNotification: onOpen })
+    await userEvent.setup().click(screen.getByRole('button', { name: /Nova dúvida/ }))
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }))
+  })
+
+  it('mostra no maximo 20 itens e mantem o estado vazio do componente', () => {
+    const many = [
+      {
+        processId: 'px',
+        type: 'process_question_created',
+        title: 'X',
+        unreadCount: 30,
+        latestCreatedAt: iso(1),
+        items: Array.from({ length: 30 }, (_, index) => item(`m${index}`, 'process_question_created', `T${index}`, index + 1)),
+      },
+    ]
+    const { container, unmount } = renderDrawer({ grouped: many })
+    expect(container.querySelectorAll('.notif-row')).toHaveLength(20)
+    unmount()
+
+    renderDrawer({ grouped: [] })
+    expect(screen.getByText(/Nenhuma notificação/i)).toBeInTheDocument()
+  })
+})

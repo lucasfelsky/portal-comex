@@ -19,7 +19,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
@@ -166,6 +166,7 @@ vi.mock('../../src/utils/postReceiptImages', () => ({
 }))
 
 import ProcessesPage from '../../src/pages/ProcessesPage'
+import { getActiveProcess } from '../../src/utils/activeProcessContext'
 import { getLocalDateKey } from '../../src/features/processes/shipmentConfirmation'
 
 const PROCESSES = [
@@ -2031,5 +2032,60 @@ describe('ProcessesPage — House BL unico (D-F3-1)', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
     await waitFor(() => expect(mockSaveProcess).toHaveBeenCalledTimes(1))
     expect(mockSaveProcess.mock.calls[0][0]).toMatchObject({ masterBl: 'MBL-1', houseBl: '' })
+  })
+})
+
+// Refino visual F2: a paleta de comandos ("Novo processo", D7) navega para
+// /processos com state.openCreate, e a topbar monta o breadcrumb
+// "Chegadas › <processo>" a partir do activeProcessContext.
+describe('ProcessesPage — refino F2 (deep-link "Novo processo" e processo ativo)', () => {
+  it('admin: state.openCreate abre "Criar processo" e consome o pedido (state some)', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    function StateProbe() {
+      const location = useLocation()
+      return <span data-testid="state">{JSON.stringify(location.state)}</span>
+    }
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/processos', state: { openCreate: true } }]}>
+        <UnsavedChangesProvider>
+          <ToastProvider>
+            <Routes>
+              <Route
+                path="/processos"
+                element={
+                  <>
+                    <ProcessesPage />
+                    <StateProbe />
+                  </>
+                }
+              />
+            </Routes>
+          </ToastProvider>
+        </UnsavedChangesProvider>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Criar processo' })).toBeInTheDocument()
+    // Recarregar a pagina nao pode reabrir a criacao: o state foi consumido.
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('null'))
+  })
+
+  it('nao admin: state.openCreate e ignorado', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
+    renderPage({ initialEntries: [{ pathname: '/processos', state: { openCreate: true } }] })
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    expect(screen.queryByRole('heading', { name: 'Criar processo' })).not.toBeInTheDocument()
+  })
+
+  it('publica category e viewMode do processo no contexto ativo (lista -> detalhe)', async () => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+
+    await waitFor(() => expect(getActiveProcess()).toMatchObject({ id: 'p-1', category: 'FCL', viewMode: 'list' }))
+
+    await user.click(screen.getAllByText(/PO 12345 - Importacao A/)[0])
+    await waitFor(() => expect(getActiveProcess()).toMatchObject({ id: 'p-1', category: 'FCL', viewMode: 'detail' }))
   })
 })

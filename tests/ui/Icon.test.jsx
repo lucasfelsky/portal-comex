@@ -31,6 +31,10 @@ describe('Icon', () => {
       'dollar', 'trend', 'sparkle', 'inbox',
       // F18b-2 (E10): aba "Documentos" redesenhada.
       'upload', 'refresh', 'file', 'flask', 'container', 'alert', 'history',
+      // Refino F2 (shell): glifos exatos dos mock-ups.
+      'nav-dashboard', 'nav-arrivals', 'nav-news', 'nav-admin', 'bell-ring', 'search-field',
+      'arrow-up-right', 'logout-door', 'theme-half', 'close', 'chevron-down', 'message',
+      'truck', 'alert-triangle', 'doc', 'image',
     ]
     for (const name of KNOWN) {
       const { container } = render(<Icon name={name} />)

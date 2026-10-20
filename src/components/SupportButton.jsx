@@ -409,7 +409,7 @@ export default function SupportButton() {
       <Modal
         open={isOpen}
         onClose={handleClose}
-        title="Suporte"
+        ariaLabel="Suporte"
         className="support-modal-shell"
         initialFocusRef={view === 'form' ? messageRef : undefined}
       >
