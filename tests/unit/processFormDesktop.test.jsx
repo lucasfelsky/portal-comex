@@ -432,6 +432,8 @@ describe('F4d - formulario como modal (ProcessForm direto)', () => {
     expect(within(el).queryByLabelText(/Código do processo/)).toBeNull()
     await user.click(within(stepper()).getByRole('button', { name: /Itens/ }))
     expect(within(el).getByLabelText('PO')).toBeInTheDocument()
+    // cabecalho de 5 colunas (Nome | PO | Quantidade | IMO | acao) alinhado com as linhas
+    expect(el.querySelector('.editor-grid__head--items')).toHaveClass('editor-grid__head--po')
   })
 
   it('Transbordo e um switch (mesmo estado booleano): marcar chama onDraftChange("transshipment", true) e revela os campos', async () => {
@@ -569,6 +571,48 @@ describe('F4d - formulario como modal (ProcessForm direto)', () => {
     media.setDesktop(true)
     expect(document.querySelector('.process-form.list-card')).toBeNull()
     expect(dialog().querySelector('.pfd-eyebrow')).toHaveTextContent('PASSO 3 DE 6')
+  })
+
+  it('chip "ERP" (so admin, em edicao) continua no modal: aplica o valor do ERP no rascunho pelo mesmo callback', async () => {
+    const user = userEvent.setup()
+    const snapshotId = 'AAAAAAAAAAAAAAAAAAAA'
+    const erpReference = {
+      snapshot: { snapshotId, updatedAtMs: new Date(2026, 9, 2, 14, 30).getTime() },
+      hint: {
+        snapshotId,
+        matchRule: 'pedido',
+        shipment: {
+          kind: 'FCL',
+          portalCategory: 'FCL',
+          key: 'BETA SEA 904-26',
+          incoterm: '',
+          originHint: '',
+          stage: 1,
+          statuses: ['EMBARCOU'],
+          statusNf: [],
+          orders: [{ pedido: '4500128734', poRef: 'BETA SEA 904-26', poBase: '', exporter: '' }],
+          items: [],
+          transport: {
+            etd: '',
+            eta: '2026-11-14',
+            vessel: { name: '', raw: '', voyage: '' },
+            blAwb: '',
+            origin: '',
+            destination: '',
+            diNumber: '',
+            diDate: '',
+          },
+          conflicts: [],
+        },
+      },
+    }
+    const { onDraftChange } = renderForm({ erpReference })
+    await user.click(within(stepper()).getByRole('button', { name: /Embarque/ }))
+    const chip = within(dialog()).getByRole('button', { name: 'ETA no ERP: 14/11/2026 (usar este valor)' })
+    // o chip fica FORA do label: o input continua com o nome "ETA"
+    expect(chip.closest('label')).toBeNull()
+    await user.click(chip)
+    expect(onDraftChange).toHaveBeenCalledWith('eta', '2026-11-14')
   })
 
   it('tablet/mobile (matchMedia falso): vista legada, sem modal e sem "Dado pendente"', () => {

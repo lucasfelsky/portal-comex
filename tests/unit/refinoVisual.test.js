@@ -3064,6 +3064,17 @@ describe('F4d - valores do mock (ProcessoForm.dc.html)', () => {
     expectF4d('.process-form--dialog .pfd-footer__actions', ['display: flex', 'gap: 8px'])
   })
 
+  it('Itens: coluna do switch IMO com largura fixa de 96px (cabecalho e linhas alinhados), com e sem PO', () => {
+    expectF4d('.process-form--dialog .editor-grid__head--items', ['grid-template-columns: minmax(200px, 2fr) minmax(100px, 0.8fr) 96px 40px'])
+    expectF4d('.process-form--dialog .editor-grid--items > .editor-row', ['grid-template-columns: minmax(200px, 2fr) minmax(100px, 0.8fr) 96px 40px'])
+    expectF4d('.process-form--dialog .editor-grid__head--items.editor-grid__head--po', [
+      'grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) minmax(100px, 0.8fr) 96px 40px',
+    ])
+    expectF4d('.process-form--dialog .editor-grid--items-po > .editor-row', [
+      'grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) minmax(100px, 0.8fr) 96px 40px',
+    ])
+  })
+
   it('notebook (altura <= 800): dialogo na altura da janela (16px de scrim), cabecalho/corpo/rodape compactos', () => {
     expectF4d('.modal-backdrop.process-form-modal-backdrop', ['padding: 16px'], f4dCompactRules)
     expectF4d('.modal.process-form-modal', ['height: calc(100vh - 32px)'], f4dCompactRules)

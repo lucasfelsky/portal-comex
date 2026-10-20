@@ -18773,6 +18773,18 @@ body {
     gap: 14px;
   }
 
+  /* Itens: a coluna do switch IMO tem largura fixa (com "auto" o cabecalho e as linhas
+     seriam grades separadas e as colunas sairiam desalinhadas). */
+  .process-form--dialog .editor-grid__head--items,
+  .process-form--dialog .editor-grid--items > .editor-row {
+    grid-template-columns: minmax(200px, 2fr) minmax(100px, 0.8fr) 96px 40px;
+  }
+
+  .process-form--dialog .editor-grid__head--items.editor-grid__head--po,
+  .process-form--dialog .editor-grid--items-po > .editor-row {
+    grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) minmax(100px, 0.8fr) 96px 40px;
+  }
+
   .process-form--dialog .process-item-editor__imo-band {
     border-radius: 12px;
   }

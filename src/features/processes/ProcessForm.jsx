@@ -685,7 +685,10 @@ export default function ProcessForm({
       </div>
 
       {(draft.items ?? []).length > 0 ? (
-        <div className="editor-grid__head editor-grid__head--items" aria-hidden="true">
+        <div
+          className={`editor-grid__head editor-grid__head--items${isConsolidatedItems ? ' editor-grid__head--po' : ''}`}
+          aria-hidden="true"
+        >
           <span>Nome comercial</span>
           {isConsolidatedItems ? <span>PO</span> : null}
           <span>Quantidade</span>
