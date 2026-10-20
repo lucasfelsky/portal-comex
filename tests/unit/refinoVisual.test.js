@@ -4302,3 +4302,77 @@ describe('F6b - Previsoes (valores do AdminPrevisoes.dc.html)', () => {
     expect(reduce).toContain('.admin-panel--forecast .af-switch__track')
   })
 })
+
+describe('F6b - Lead time (valores do AdminLeadTime.dc.html)', () => {
+  it('cabecalho: titulo Sora 26/700 -0.02em, subtitulo 14, seletor Periodo com rotulo 12/700 e select de 200+', () => {
+    expectF6b('.admin-panel--lead-time .al-head', ['align-items: flex-end', 'justify-content: space-between', 'gap: 12px'])
+    expectF6b('.admin-panel--lead-time .al-title', ['font-family: var(--font-heading)', 'font-size: 26px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF6b('.admin-panel--lead-time .al-subtitle', ['font-size: 14px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--lead-time .al-period > span', ['font-size: 12px', 'font-weight: 700'])
+    expectF6b('.admin-panel--lead-time .al-period select.text-input', ['min-width: 200px', 'font-weight: 600'])
+  })
+
+  it('pilula do modal: mono 12/700 sobre --navy-50, raio 99, padding 4x12', () => {
+    expectF6b('.admin-panel--lead-time .al-pill', ['padding: 4px 12px', 'border-radius: 99px', 'background: var(--navy-50)', 'font-family: var(--font-mono)', 'font-size: 12px', 'font-weight: 700'])
+    expectF6b("[data-theme='dark'] .admin-panel--lead-time .al-pill", ['color: var(--ink)'])
+  })
+
+  it('tabela: min-width 760, cabecalho 13/700 --ink-soft padding 8x10, linhas 12x10 com divisor --row-divider', () => {
+    expectF6b('.admin-panel--lead-time .al-table', ['min-width: 760px', 'border-collapse: collapse', 'font-size: 13px'])
+    expectF6b('.admin-panel--lead-time .al-table th', ['padding: 8px 10px', 'font-weight: 700', 'color: var(--ink-soft)', 'text-transform: none'])
+    expectF6b('.admin-panel--lead-time .al-table td', ['padding: 12px 10px', 'border-top: 1px solid var(--row-divider)'])
+    expectF6b('.admin-panel--lead-time .al-table .al-table__num', ['width: 70px'])
+    expectF6b('.admin-panel--lead-time .al-table .al-table__num--wide', ['width: 110px'])
+    expectF6b('.admin-panel--lead-time .al-table .al-table__num--narrow', ['width: 50px'])
+    expectF6b('.admin-panel--lead-time .al-table .al-table__action', ['width: 150px', 'text-align: right'])
+  })
+
+  it('celulas: porto 700, numeros mono, n em --ink-soft, divergencia em --warning-700, linha "Todos os portos" em --surface-alt', () => {
+    expectF6b('.admin-panel--lead-time .al-port', ['font-weight: 700'])
+    expectF6b('.admin-panel--lead-time .al-num', ['font-family: var(--font-mono)'])
+    expectF6b('.admin-panel--lead-time .al-num--n', ['color: var(--ink-soft)'])
+    expectF6b('.admin-panel--lead-time .al-num--diverge', ['color: var(--warning-700)'])
+    expectF6b('.admin-panel--lead-time .al-row--all td', ['background: var(--surface-alt)'])
+  })
+
+  it('barras duplas de 6px: atual --border-control, mediana --primary-700 ou --warning; teto de 240', () => {
+    expectF6b('.admin-panel--lead-time .al-bars', ['flex-direction: column', 'gap: 4px', 'max-width: 240px'])
+    expectF6b('.admin-panel--lead-time .al-bar', ['height: 6px', 'border-radius: 99px'])
+    expectF6b('.admin-panel--lead-time .al-bar--current', ['background: var(--border-control)'])
+    expectF6b('.admin-panel--lead-time .al-bar--median', ['background: var(--primary-700)'])
+    expectF6b('.admin-panel--lead-time .al-bar--diverge', ['background: var(--warning)'])
+  })
+
+  it('"Aplicar N dias": secundario de 36 raio 10 12/700 sem quebra; legenda com barrinhas 18x6 e texto 12', () => {
+    expectF6b('.admin-panel--lead-time .al-apply', ['height: 36px', 'padding: 0 12px', 'border-radius: 10px', 'font-size: 12px', 'white-space: nowrap'])
+    expectF6b('.admin-panel--lead-time .al-legend', ['gap: 18px', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--lead-time .al-legend__swatch', ['width: 18px', 'height: 6px', 'border-radius: 99px'])
+    expectF6b('.admin-panel--lead-time .al-legend__swatch--median', ['background: var(--primary-700)'])
+    expectF6b('.admin-panel--lead-time .al-legend__swatch--diverge', ['background: var(--warning)'])
+  })
+
+  it('Outros trechos (D11): cartao recolhivel com botao de largura total, chevron que gira e divisor no corpo', () => {
+    expectF6b('.admin-panel--lead-time .al-others', ['gap: 0', 'padding: 0'])
+    expectF6b('.admin-panel--lead-time .al-others__toggle', ['width: 100%', 'padding: 18px 22px', 'border-radius: 22px'])
+    expectF6b('.admin-panel--lead-time .al-others__title', ['font-family: var(--font-heading)', 'font-size: 16px', 'font-weight: 700'])
+    expectF6b(".admin-panel--lead-time .al-others__toggle[aria-expanded='true'] .al-others__chevron", ['transform: rotate(180deg)'])
+    expectF6b('.admin-panel--lead-time .al-others__body', ['border-top: 1px solid var(--row-divider)'])
+    expectF6b('.admin-panel--lead-time .al-segment__title', ['font-family: var(--font-heading)', 'font-size: 15px', 'font-weight: 700'])
+    expectF6b('.admin-panel--lead-time .al-segment__unit', ['font-family: var(--font-mono)', 'font-size: 11px', 'letter-spacing: 1px'])
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--lead-time, chegada -> liberacao do mock + Outros trechos, sem toISOString', () => {
+    const panel = read('src/features/admin/AdminLeadTimePanel.jsx').replace(/\r\n/g, '\n')
+    expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(panel).toContain('className="admin-panel admin-panel--lead-time al-root"')
+    expect(panel).toContain('<h3 className="al-title">Previsão × real</h3>')
+    expect(panel).toContain("const MAIN_SEGMENT_ID = 'arrivalToReceiptBusiness'")
+    expect(panel).toContain('LEAD_TIME_SEGMENTS.filter((segment) => segment.id !== MAIN_SEGMENT_ID)')
+    expect(panel).toContain('Outros trechos')
+    expect(panel).toContain('Aplicar ${suggestion.suggested} dias')
+    // a arvore anterior continua com a tabela de 6 trechos
+    expect(panel).toContain('Previsão × real (dias úteis após a chegada)')
+    expect(stripComments(panel)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+})
