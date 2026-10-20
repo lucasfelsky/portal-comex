@@ -13540,6 +13540,86 @@ body {
   }
 }
 
+/* Refino visual F1: marca de produto "Rota e chegada" (BrandMark.jsx,
+   ProductMark) e assinatura SQ Quimica (SqQuimicaLogo). So tokens
+   --brand-mark-* / --sq-logo-*; o tom "dark" do logo SQ fixa branco porque
+   fica sobre navy nos dois temas. Escopo de componente, sem @media. */
+.brand-mark {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.brand-mark__tile {
+  fill: var(--brand-mark-tile);
+}
+
+.brand-mark__glyph {
+  stroke: var(--brand-mark-glyph);
+}
+
+.brand-mark__dot {
+  fill: var(--brand-mark-dot);
+}
+
+.brand-mark--dark .brand-mark__tile {
+  fill: var(--brand-mark-tile-on-dark);
+}
+
+.brand-mark--mono .brand-mark__tile {
+  fill: var(--brand-mark-mono-tile);
+}
+
+.brand-mark--mono .brand-mark__dot {
+  fill: var(--brand-mark-mono-dot);
+}
+
+.sq-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sq-logo-gap, 6px);
+}
+
+.sq-logo--dark {
+  --sq-logo-ring: #ffffff;
+  --sq-logo-ink: #ffffff;
+  --sq-logo-ink-2: #b8ccd3;
+}
+
+.sq-logo__symbol {
+  flex-shrink: 0;
+}
+
+.sq-logo__ring {
+  stroke: var(--sq-logo-ring);
+}
+
+.sq-logo__green {
+  fill: var(--sq-logo-green);
+}
+
+.sq-logo__words {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sq-logo-word-gap, 4px);
+  white-space: nowrap;
+  line-height: 1;
+  font-family: var(--font-heading);
+  font-size: var(--sq-logo-font, 14px);
+}
+
+.sq-logo__sq {
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: var(--sq-logo-ink);
+}
+
+.sq-logo__chem {
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--sq-logo-ink-2);
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para

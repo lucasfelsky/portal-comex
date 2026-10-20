@@ -112,14 +112,14 @@ describe('useTheme (C17 — toggle claro/escuro/auto)', () => {
   it('atualiza <meta name="theme-color"> junto com o tema', () => {
     const meta = document.createElement('meta')
     meta.setAttribute('name', 'theme-color')
-    meta.setAttribute('content', '#00ae91')
+    meta.setAttribute('content', '#004153')
     document.head.appendChild(meta)
 
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setPreference('dark'))
-    expect(meta.getAttribute('content')).toBe('#0e1413')
+    expect(meta.getAttribute('content')).toBe('#061a22')
     act(() => result.current.setPreference('light'))
-    expect(meta.getAttribute('content')).toBe('#00ae91')
+    expect(meta.getAttribute('content')).toBe('#004153')
 
     meta.remove()
   })
