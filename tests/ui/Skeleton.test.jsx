@@ -92,6 +92,38 @@ describe('Skeleton', () => {
     expect(el.style.height).toBe('120px')
   })
 
+  it('pecas do card de processo: linha 12px, titulo 18px, barra 6px e pilula 26px (Componentes.dc.html)', () => {
+    const { container } = render(
+      <>
+        <Skeleton variant="line" />
+        <Skeleton variant="heading" />
+        <Skeleton variant="bar" />
+        <Skeleton variant="pill" />
+      </>
+    )
+    const [line, heading, bar, pill] = container.querySelectorAll('.skeleton')
+    expect(line.style.height).toBe('12px')
+    expect(heading.style.height).toBe('18px')
+    expect(bar.style.height).toBe('6px')
+    expect(pill.style.height).toBe('26px')
+    expect(pill.style.width).toBe('48%')
+    expect(pill.style.borderRadius).toBe('999px')
+  })
+
+  it('Skeleton.ProcessCard: linha 40% / titulo 75% / linha 55% / barra / pilula, decorativo', () => {
+    const { container } = render(<Skeleton.ProcessCard />)
+    const root = container.querySelector('.skeleton-process-card')
+    expect(root).toHaveAttribute('aria-hidden', 'true')
+    const pieces = root.querySelectorAll('.skeleton')
+    expect(pieces).toHaveLength(5)
+    expect(pieces[0].style.width).toBe('40%')
+    expect(pieces[1].style.width).toBe('75%')
+    expect(pieces[2].style.width).toBe('55%')
+    expect(pieces[3].style.width).toBe('100%')
+    expect(pieces[3].style.height).toBe('6px')
+    expect(pieces[4].style.height).toBe('26px')
+  })
+
   it('variant button tem height 36px e width 120px', () => {
     const { container } = render(<Skeleton variant="button" />)
     const el = container.querySelector('.skeleton')

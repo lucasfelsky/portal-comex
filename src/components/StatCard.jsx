@@ -17,6 +17,7 @@
 
 import { useId } from 'react'
 import Icon from './Icon'
+import useCountUp from '../hooks/useCountUp'
 
 const TREND_COLORS = {
   up: 'var(--success-700)',
@@ -74,6 +75,8 @@ export default function StatCard({
   // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
   // o navegador pinta a area do sparkline de PRETO (default do fill).
   const gradientId = `sparkline-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  // Contador 600 ms, 1x por sessao (so valor numerico; texto passa direto).
+  const displayedValue = useCountUp(value)
   const direction = trend ? pickTrendDirection(trend.delta) : null
   const sparklineWidth = 100
   const sparklineHeight = 28
@@ -104,7 +107,7 @@ export default function StatCard({
         ) : null}
       </div>
 
-      <strong className="stat-card__value">{value}</strong>
+      <strong className="stat-card__value">{displayedValue}</strong>
 
       {sparklineData ? (
         <svg

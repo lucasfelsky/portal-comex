@@ -43,6 +43,21 @@ describe('Stagger', () => {
     expect(items[2].style.getPropertyValue('--stagger-delay')).toBe('120ms')
   })
 
+  it('cada filho expoe --stagger-index (posicao 0-based) para o escalonamento do desktop', () => {
+    const { container } = render(
+      <Stagger stepMs={100} baseMs={200}>
+        <div>a</div>
+        <div>b</div>
+        <div>c</div>
+      </Stagger>
+    )
+    const items = container.querySelectorAll('.stagger__item')
+    // O indice nao depende de stepMs/baseMs: o CSS do desktop faz min(indice, 7) * 40ms.
+    expect(items[0].style.getPropertyValue('--stagger-index')).toBe('0')
+    expect(items[1].style.getPropertyValue('--stagger-index')).toBe('1')
+    expect(items[2].style.getPropertyValue('--stagger-index')).toBe('2')
+  })
+
   it('stepMs custom', () => {
     const { container } = render(
       <Stagger stepMs={100}>

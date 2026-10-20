@@ -61,6 +61,17 @@ describe('EmptyState', () => {
     expect(iconWrap.querySelector('svg')).toBeInTheDocument()
   })
 
+  it('sem icon explicito, renderiza o glifo de 40px (traco 1.5) derivado da ilustracao', () => {
+    const { container } = render(<EmptyState illustration="news" title="X" />)
+    const glyph = container.querySelector('.empty-state__glyph')
+    expect(glyph).toBeInTheDocument()
+    expect(glyph.getAttribute('width')).toBe('40')
+    expect(glyph.getAttribute('stroke-width')).toBe('1.5')
+    // com icon explicito nao duplica o glifo
+    const withIcon = render(<EmptyState icon="inbox" title="Y" />)
+    expect(withIcon.container.querySelector('.empty-state__glyph')).toBeNull()
+  })
+
   it('renderiza action slot quando passado', () => {
     const { container } = render(
       <EmptyState

@@ -46,6 +46,16 @@ const ILLUSTRATIONS = {
   ),
 }
 
+// Desktop (Componentes.dc.html): o estado vazio e so um icone de 40px (traco
+// 1.5, --primary-700) + titulo + texto; a ilustracao grande fica so no
+// tablet/mobile. Sem `icon` explicito, o glifo vem da ilustracao.
+const ILLUSTRATION_GLYPHS = {
+  inbox: 'inbox',
+  news: 'news',
+  search: 'search',
+  filter: 'search',
+}
+
 export default function EmptyState({
   illustration = 'inbox',
   title,
@@ -55,9 +65,14 @@ export default function EmptyState({
   className = '',
 }) {
   const content = ILLUSTRATIONS[illustration] ?? ILLUSTRATIONS.inbox
+  const glyphName = ILLUSTRATION_GLYPHS[illustration] ?? 'inbox'
   return (
     <div className={`empty-state empty-state--rich ${className}`} role="status">
-      {icon ? <div className="empty-state__icon"><Icon name={icon} size={28} /></div> : null}
+      {icon ? (
+        <div className="empty-state__icon"><Icon name={icon} size={28} /></div>
+      ) : (
+        <Icon name={glyphName} size={40} strokeWidth={1.5} className="empty-state__glyph" />
+      )}
       <div className="empty-state__illustration">{content}</div>
       {title ? <strong className="empty-state__title">{title}</strong> : null}
       {message ? <p className="empty-state__message">{message}</p> : null}

@@ -319,7 +319,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="announcement-list announcement-list--scroll">
+        <div
+          className={`announcement-list announcement-list--scroll${isLoadingAnnouncements ? '' : ' skeleton-reveal'}`}
+        >
           {isLoadingAnnouncements ? (
             <Skeleton.Group count={3} gap={12}>
               <Skeleton variant="title" />
@@ -355,12 +357,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="process-list process-list--scroll">
+        <div className={`process-list process-list--scroll${isLoadingProcesses ? '' : ' skeleton-reveal'}`}>
           {isLoadingProcesses ? (
-            <Skeleton.Group count={3} gap={12}>
-              <Skeleton variant="title" />
-              <Skeleton variant="subtitle" />
-            </Skeleton.Group>
+            <>
+              {/* Skeleton antigo: continua no tablet/mobile (CSS esconde no desktop). */}
+              <div className="skeleton-legacy">
+                <Skeleton.Group count={3} gap={12}>
+                  <Skeleton variant="title" />
+                  <Skeleton variant="subtitle" />
+                </Skeleton.Group>
+              </div>
+              {/* Desktop: skeleton no formato real do card (Componentes.dc.html). */}
+              <div className="process-list-skeletons process-list-skeletons--card" aria-hidden="true">
+                {Array.from({ length: 2 }).map((_, index) => (
+                  <div key={index} className="process-card-skeleton">
+                    <Skeleton.ProcessCard />
+                  </div>
+                ))}
+              </div>
+            </>
           ) : processesError ? (
             renderLoadError(processesError, retryProcesses)
           ) : favoriteProcesses.length > 0 ? (

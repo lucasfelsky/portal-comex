@@ -5,6 +5,7 @@ import FilterChip from '../../components/FilterChip'
 import Icon from '../../components/Icon'
 import Spinner from '../../components/Spinner'
 import { useSwipeReveal } from '../../hooks/useSwipeReveal'
+import useActivationPop from '../../hooks/useActivationPop'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
 import { getStatusTagClass } from './processStatusView'
 import {
@@ -58,6 +59,8 @@ function ProcessRow({
   isArchivedRow = false,
 }) {
   const canArchive = isAdmin && typeof onArchiveProcess === 'function'
+  // Estrela de favorito: entra com mola (scale 0 -> 1) so ao ativar.
+  const favoriteStarPop = useActivationPop(Boolean(isFavorite))
   const actionCount = (onToggleFavorite ? 1 : 0) + (canArchive ? 1 : 0)
   const swipe = useSwipeReveal({
     actionCount,
@@ -225,7 +228,11 @@ function ProcessRow({
                   onToggleFavorite(item.id)
                 }}
               >
-                <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} />
+                <Icon
+                  name={isFavorite ? 'star-filled' : 'star'}
+                  size={20}
+                  className={favoriteStarPop ? 'favorite-star--pop' : undefined}
+                />
               </button>
             ) : null}
             {canArchive ? (
@@ -583,22 +590,35 @@ export default function ProcessListView({
         </div>
       ) : null}
 
-      <div className="process-list process-list--scroll">
+      {/* Quando o carregamento termina o conteudo entra por fade de 200 ms
+          (classe skeleton-reveal; troca skeleton -> conteudo sem pulo). */}
+      <div className={`process-list process-list--scroll${isLoading ? '' : ' skeleton-reveal'}`}>
         {isLoading ? (
-          <div className="process-list-skeletons">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="process-item process-item--skeleton">
-                <div className="process-item__main">
-                  <Skeleton variant="title" width="60%" />
-                  <Skeleton variant="text" width="40%" />
+          <>
+            {/* Skeleton antigo: continua no tablet/mobile (CSS esconde no desktop). */}
+            <div className="process-list-skeletons skeleton-legacy">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="process-item process-item--skeleton">
+                  <div className="process-item__main">
+                    <Skeleton variant="title" width="60%" />
+                    <Skeleton variant="text" width="40%" />
+                  </div>
+                  <div className="process-item__meta">
+                    <Skeleton variant="text" width="80px" height="22px" radius="999px" />
+                    <Skeleton variant="text" width="100px" height="22px" radius="999px" />
+                  </div>
                 </div>
-                <div className="process-item__meta">
-                  <Skeleton variant="text" width="80px" height="22px" radius="999px" />
-                  <Skeleton variant="text" width="100px" height="22px" radius="999px" />
+              ))}
+            </div>
+            {/* Desktop: skeleton no formato real do card (Componentes.dc.html). */}
+            <div className="process-list-skeletons process-list-skeletons--card" aria-hidden="true">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="process-card-skeleton">
+                  <Skeleton.ProcessCard />
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         ) : isMobile ? (
           shownProcesses.length === 0 && !(isAdmin && archivedProcesses.length > 0) ? (
             <div className="empty-state" role="status">
@@ -639,6 +659,7 @@ export default function ProcessListView({
           </>
         ) : shownProcesses.length === 0 ? (
           <div className="empty-state" role="status">
+            <Icon name="nav-arrivals" size={40} strokeWidth={1.5} className="empty-state__glyph" />
             <strong>Nenhum processo encontrado</strong>
             <p>
               {isAdmin

@@ -12,6 +12,7 @@ import {
   getScheduledCollectionDeliveryShift,
 } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
+import Icon from '../../components/Icon'
 import { getCargoHazardBadges } from './operationalOptions'
 
 // PR #13 (2026-07-09): helper pra extrair YYYY-MM-DD em local
@@ -355,6 +356,7 @@ export default function WeeklyArrivalsCard({
           </div>
         ) : total === 0 ? (
           <div className="empty-state">
+            <Icon name="nav-arrivals" size={40} strokeWidth={1.5} className="empty-state__glyph" />
             <strong>Nenhuma chegada prevista</strong>
             <p>Quando um processo tiver coleta agendada ou entrega prevista para a semana, aparecerá aqui.</p>
           </div>

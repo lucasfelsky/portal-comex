@@ -22,6 +22,7 @@ import { getItemDangerousGoodsLabel } from './operationalOptions'
 import Spinner from '../../components/Spinner'
 import Icon from '../../components/Icon'
 import { useMobileLayout } from '../../hooks/useMobileLayout'
+import useActivationPop from '../../hooks/useActivationPop'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
@@ -242,6 +243,8 @@ export default function ProcessDetailView({
   const showCarrier = isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus)
   const showCollectionBlock = showCollectionStatusBadge || showCollectionWindows || showCarrier
   const isFavorite = favoriteProcessIds.includes(selectedProcess.id)
+  // Estrela de favorito: entra com mola (scale 0 -> 1) so ao ativar.
+  const favoriteStarPop = useActivationPop(isFavorite)
   const linkedItemsCount = selectedProcess.items?.length ?? 0
 
   // PR 3 (so' admin): avisos que dependem da view. POs consolidadas (aviso no
@@ -279,7 +282,11 @@ export default function ProcessDetailView({
       aria-label={isFavorite ? 'Desfavoritar' : 'Favoritar'}
       onClick={() => onToggleFavorite(selectedProcess.id)}
     >
-      <Icon name={isFavorite ? 'star-filled' : 'star'} size={20} className="process-detail-fav__icon" />
+      <Icon
+        name={isFavorite ? 'star-filled' : 'star'}
+        size={20}
+        className={`process-detail-fav__icon${favoriteStarPop ? ' favorite-star--pop' : ''}`}
+      />
       <span className="process-detail-fav__label">{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
     </button>
   )
@@ -346,6 +353,9 @@ export default function ProcessDetailView({
           em todas as larguras (mobile + tablet <=1040px + desktop). */}
       {(() => {
         const { currentStage, isComplete } = getProcessStage(selectedProcess)
+        // Preenchimento do trilho (desktop): os segmentos concluidos preenchem em
+        // sequencia dentro de 600 ms (--seg-index / --seg-count).
+        const filledSegments = Math.max(isComplete ? PROCESS_STAGES.length - 1 : currentStage, 1)
         return (
           <div className="process-timeline" aria-hidden="true">
             <div className="process-timeline__track">
@@ -357,6 +367,7 @@ export default function ProcessDetailView({
                     {index > 0 ? (
                       <span
                         className={`process-timeline__bar${isComplete || index <= currentStage ? ' process-timeline__bar--done' : ''}`}
+                        style={{ '--seg-index': index - 1, '--seg-count': filledSegments }}
                       />
                     ) : null}
                     <span

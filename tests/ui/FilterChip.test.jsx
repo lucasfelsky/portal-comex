@@ -13,7 +13,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
-import FilterChip from '../../src/components/FilterChip.jsx'
+import FilterChip, { FilterPill } from '../../src/components/FilterChip.jsx'
 
 describe('FilterChip', () => {
   it('renderiza o label', () => {
@@ -101,5 +101,44 @@ describe('FilterChip', () => {
       <FilterChip label="X" className="meu-chip" onRemove={() => {}} />
     )
     expect(container.querySelector('.filter-chip.meu-chip')).toBeInTheDocument()
+  })
+
+  it('botao remover usa o X do mock (path M6 6l12 12M18 6 6 18, traco 2.4, 12px)', () => {
+    const { container } = render(<FilterChip label="X" onRemove={() => {}} />)
+    const svg = container.querySelector('.filter-chip__remove svg')
+    expect(svg.getAttribute('width')).toBe('12')
+    expect(svg.getAttribute('stroke-width')).toBe('2.4')
+    expect(svg.querySelector('path').getAttribute('d')).toBe('M6 6l12 12M18 6 6 18')
+  })
+})
+
+describe('FilterPill (seletor de filtro com contador)', () => {
+  it('renderiza rotulo e contador; aria-pressed reflete o estado ativo', () => {
+    render(<FilterPill label="Todos" count={48} active />)
+    const pill = screen.getByRole('button', { name: /Todos/ })
+    expect(pill).toHaveClass('filter-pill', 'filter-pill--active')
+    expect(pill).toHaveAttribute('aria-pressed', 'true')
+    expect(pill).toHaveTextContent('48')
+  })
+
+  it('inativo: sem classe ativa; contador de pendencia (alert) marca o tom de perigo', () => {
+    const { container } = render(<FilterPill label="Docs pendentes" count={3} alert />)
+    expect(container.querySelector('.filter-pill')).not.toHaveClass('filter-pill--active')
+    expect(container.querySelector('.filter-pill__count')).toHaveClass('filter-pill__count--alert')
+  })
+
+  it('"+ Filtro" (add) e tracejado e nao e um botao de alternar (sem aria-pressed)', () => {
+    const { container } = render(<FilterPill label="+ Filtro" add />)
+    const pill = container.querySelector('.filter-pill')
+    expect(pill).toHaveClass('filter-pill--add')
+    expect(pill).not.toHaveAttribute('aria-pressed')
+    expect(container.querySelector('.filter-pill__count')).toBeNull()
+  })
+
+  it('onClick e repassado', () => {
+    const onClick = vi.fn()
+    render(<FilterPill label="Atracados" count={6} onClick={onClick} />)
+    screen.getByRole('button').click()
+    expect(onClick).toHaveBeenCalledTimes(1)
   })
 })
