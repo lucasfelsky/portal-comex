@@ -24,74 +24,73 @@
   --radius-full: 999px; /* pills, badges, handles */
 
   /* Tokens de design system compartilhados com IntelliQuote (sprint 6.2). */
-  --bg: #e9eeec;
+  --bg: #eef2f1;
   --surface: #ffffff;
-  --surface-alt: #eef4f1;
-  --ink: #1f1c18;
-  --ink-soft: #4a5560;
-  --primary: #00ae91;
+  --surface-alt: #f5f8f7;
+  --ink: #0b2430;
+  --ink-soft: #4a6472;
+  --primary: #14dda7;
   --primary-700: #007864;
-  --primary-50: #e3f5f0;
-  /* UX-6a (D1-D3): tokens de texto/icone sobre fundos coloridos, para
-     contraste AA. --on-primary e o navy da sidebar (6,43:1 sobre --primary
-     nos 4 temas, ja que --primary e #00ae91 em todos). --primary-700 escureceu
-     de #008f76 pra #007864 (D2) porque #008f76 reprovava como texto sobre
-     --bg/--surface-alt claros. --on-danger fica branco no claro e navy-escuro
-     no dark (D3), porque #1f0a0a sobre #dc2626 claro reprova (3,93). NAO
-     redeclarar --on-primary no dark nem nos blocos mobile: --primary e igual
-     nos 4 contextos. */
-  --on-primary: #071820;
-  --on-primary-subtle: rgba(7, 24, 32, 0.12);
-  --on-button-primary: #ffffff;
+  --primary-50: #e2f6f0;
+  /* UX-6a (D1-D3) + refino visual F1: tokens de texto/icone sobre fundos
+     coloridos, para contraste AA. --on-primary e o navy de texto (#0b2430,
+     9,11:1 sobre o verde SQ --primary #14dda7; branco daria 1,76:1, por isso
+     o botao primario e menta com texto navy). --primary e acento (nunca
+     texto); texto/link verde e --primary-700 (#007864). --on-danger fica
+     branco no claro e navy-escuro no dark (D3). --primary e igual nos 4
+     contextos (claro/dark/mobile), entao --on-primary tambem. */
+  --on-primary: #0b2430;
+  --on-primary-subtle: rgba(11, 36, 48, 0.12);
+  --on-button-primary: #0b2430;
   --on-danger: #ffffff;
-  --sidebar-pill-active: rgba(255, 255, 255, 0.18);
+  --sidebar-pill-active: rgba(20, 221, 167, 0.16);
   /* AD-1 (adendo do orquestrador): botao Favoritar do swipe tem fundo
      --warning (amarelo/dourado nos 2 temas) — texto branco reprovava (3,18
      claro / 2,05 dark). O mesmo navy de --on-primary da 5,70:1 (claro) e
      8,84:1 (dark), unico em :root porque --warning nao e redeclarado nos
      blocos mobile. */
-  --on-warn: #071820;
+  --on-warn: #0b2430;
   --eta-label-color: #007864;
-  --button-primary-bg: #007864;
-  --button-primary-bg-hover: #006b56;
-  --button-primary-bg-active: #005948;
-  --focus-ring: #007864;
+  --button-primary-bg: #14dda7;
+  --button-primary-bg-hover: #2ee8b5;
+  --button-primary-bg-active: #0fb98c;
+  --focus-ring: #004153;
   --link-color: #007864;
-  --link-color-hover: #006b56;
-  --danger: #dc2626;
-  --danger-700: #b91c1c;
-  --danger-50: #fee2e2;
-  --warning: #b48a2d;
-  --warning-700: #7a5e1b;
-  --warning-50: #faf2dc;
+  --link-color-hover: #00604f;
+  --danger: #c2362b;
+  --danger-700: #9a2a21;
+  --danger-50: #fdecea;
+  --warning: #c98a12;
+  --warning-700: #8a5a0a;
+  --warning-50: #fdf3dc;
   --info: #1e6fb6;
   --info-700: #155793;
-  --info-50: #e3eef9;
-  --success-700: #006b56;
-  --success-50: #e3f5f0;
-  --neutral-700: #4a5560;
-  --neutral-50: #eef4f1;
-  --border: #dce9e5;
-  --border-strong: #b7cdc5;
-  --border-control: #708a82;
-  --border-control-hover: #56706a;
-  --bg-tint-1: #eef7f6;
-  --bg-tint-2: #e6f1f2;
+  --info-50: #e6f0fa;
+  --success-700: #00604f;
+  --success-50: #e2f6f0;
+  --neutral-700: #475861;
+  --neutral-50: #eceff0;
+  --border: #d5e2de;
+  --border-strong: #b9cbc6;
+  --border-control: #6b7f88;
+  --border-control-hover: #4a6472;
+  --bg-tint-1: #eef4f2;
+  --bg-tint-2: #e8f0f2;
 
   /* Fase 1 do redesign geral: tokens frios do shell (sidebar navy + tint).
      --sidebar-ink/-ink-soft ficam claros nos dois temas porque o navy e'
      escuro em ambos (ver contraparte em :root[data-theme='dark']). */
-  --sidebar-bg: linear-gradient(180deg, #0b2530, #123845);
-  --sidebar-ink: #f3f8f7;
-  --sidebar-ink-soft: rgba(243, 248, 247, 0.68);
-  --sidebar-pill-hover: rgba(255, 255, 255, 0.1);
-  --tint: #e3f5f0;
+  --sidebar-bg: linear-gradient(180deg, #003241, #004153);
+  --sidebar-ink: #ffffff;
+  --sidebar-ink-soft: #b8ccd3;
+  --sidebar-pill-hover: rgba(255, 255, 255, 0.08);
+  --tint: #e2f6f0;
   --radius: var(--radius-sm); /* legado — aponta pra escala F15.1b */
-  --shadow: 0 8px 28px rgba(0, 40, 40, 0.08);
-  --shadow-sm: 0 2px 8px rgba(0, 40, 40, 0.06);
-  --shadow-md: 0 14px 30px rgba(0, 40, 40, 0.10);
-  --shadow-lg: 0 24px 48px rgba(0, 40, 40, 0.16);
-  --shadow-xl: 0 30px 60px rgba(0, 40, 40, 0.22);
+  --shadow: 0 2px 8px rgba(0, 65, 83, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 65, 83, 0.08);
+  --shadow-md: 0 6px 18px rgba(0, 65, 83, 0.10);
+  --shadow-lg: 0 20px 48px rgba(0, 65, 83, 0.18);
+  --shadow-xl: 0 30px 70px rgba(0, 30, 40, 0.30);
 
   /* Tints de texto (intelliQuote).
      C10 (auditoria mobile): --text-subtle e --text-faint foram escurecidos
@@ -100,37 +99,129 @@
      UX-5: --text-faint media 3,35:1 (pior fundo) com 0.52 — ainda reprovava.
      Subiu para 0.66 (5,11:1 a 5,46:1). --text-subtle/--text-muted em 0.62
      ja passavam (4,51:1 a 4,78:1) e ficam travados pelo teste. */
-  --text-muted: rgba(31, 28, 24, 0.62);
-  --text-subtle: rgba(31, 28, 24, 0.62);
-  --text-faint: rgba(31, 28, 24, 0.66);
-  --text-mute-strong: rgba(31, 28, 24, 0.68);
+  --text-muted: rgba(11, 36, 48, 0.68);
+  --text-subtle: rgba(11, 36, 48, 0.68);
+  --text-faint: rgba(11, 36, 48, 0.68);
+  --text-mute-strong: rgba(11, 36, 48, 0.72);
 
-  /* Fase 1 do redesign: fonte de headings (Bricolage Grotesque, adicionada
-     no index.html). Fallback pra Manrope (corpo) se a webfont nao carregar. */
-  --font-heading: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
+  /* Refino visual F1: fonte de headings Sora (adicionada no index.html) e
+     mono JetBrains Mono (PO, conteiner, NCM, PTAX, rotulos). Fallback pra
+     Manrope/monoespacada do sistema se a webfont nao carregar. */
+  --font-heading: 'Sora', 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   /* Ciclo login-arte: cores da arte do login (LoginArt.jsx); contraparte em
      :root[data-theme='dark']. */
   --login-art-line: #007864;
-  --login-art-mark: #00ae91;
-  --login-art-ink: #0b2530;
-  --login-art-hull: #0b2530;
-  --login-art-bridge: #123845;
+  --login-art-mark: #14dda7;
+  --login-art-ink: #0b2430;
+  --login-art-hull: #0b2430;
+  --login-art-bridge: #004153;
   --login-art-foam: #7fe3cf;
   --login-art-cargo-b: #2f6f7c;
   --login-art-cargo-c: #7fc9bb;
   --login-art-cargo-d: #007864;
-  --login-art-sea-top: #123845;
-  --login-art-sea-bottom: #0b2530;
+  --login-art-sea-top: #004153;
+  --login-art-sea-bottom: #003241;
   --login-port-cargo-teal: #2f6f7c;
   --login-port-cargo-deep: #1d4f5c;
-  --login-port-cargo-pale: #e3f5f0;
+  --login-port-cargo-pale: #e2f6f0;
   --login-port-cargo-green: #007864;
-  --login-port-window: #0b2530;
-  --login-port-hull: #061820;
-  --login-port-water-top: #0e3a46;
-  --login-port-water-bottom: #071a22;
-  --login-head-ink: #0b2530;
+  --login-port-window: #0b2430;
+  --login-port-hull: #021a22;
+  --login-port-water-top: #0a5468;
+  --login-port-water-bottom: #022a37;
+  --login-head-ink: #0b2430;
+
+  /* Refino visual F1 (PLAN 2.1): tokens novos. Cada um tem contraparte em
+     :root[data-theme='dark'] (redeclarados, mesmo os de valor igual). */
+  --radius-field: 10px; /* inputs */
+  --danger-bg-hover: #a82d23;
+  --danger-bg-active: #8f251d;
+  --sidebar-pill-active-ring: rgba(20, 221, 167, 0.35); /* inset 1px */
+
+  /* Navy da marca (Pantone 309C) */
+  --navy-900: #003241;
+  --navy: #004153;
+  --navy-700: #0a5468;
+  --navy-50: #e8f0f2;
+  --navy-100: #d6e3e7;
+
+  /* Canal de parametrizacao: cor + rotulo, nunca so cor */
+  --channel-green-solid: #14dda7;
+  --channel-green-edge: #0fb98c;
+  --channel-green-soft: #e2f6f0;
+  --channel-green-ink: #00604f;
+  --channel-yellow-solid: #f2c14e;
+  --channel-yellow-edge: #c98a12;
+  --channel-yellow-soft: #fdf3dc;
+  --channel-yellow-ink: #8a5a0a;
+  --channel-red-solid: #e5483c;
+  --channel-red-edge: #c2362b;
+  --channel-red-soft: #fdecea;
+  --channel-red-ink: #9a2a21;
+  --channel-gray-solid: #9aa9b0;
+  --channel-gray-edge: #6b7f88;
+  --channel-gray-soft: #eceff0;
+  --channel-gray-ink: #475861;
+
+  /* Componentes: toast, skeleton, desabilitado, destaque de busca, switch,
+     placeholder de midia, scrims e divisor de linha */
+  --toast-bg: #0b2430;
+  --toast-ink: #e8f4f6;
+  --skeleton-base: #e3ecea;
+  --skeleton-shine: #f7faf9;
+  --disabled-bg: #e3ecea;
+  --disabled-ink: #6b7f88;
+  --mark-bg: #b8f3e0;
+  --switch-off: #c7d4d0;
+  --media-placeholder: #dbe7ea;
+  --scrim: rgba(11, 36, 48, 0.42);
+  --scrim-soft: rgba(11, 36, 48, 0.32);
+  --row-divider: #e3ecea;
+
+  /* Marca de produto "Rota e chegada" (BrandMark.jsx) e SQ Quimica (SQLogo) */
+  --brand-mark-tile: #004153;
+  --brand-mark-glyph: #ffffff;
+  --brand-mark-dot: #14dda7;
+  --brand-mark-tile-on-dark: rgba(255, 255, 255, 0.1);
+  --brand-mark-mono-tile: #0b2430;
+  --brand-mark-mono-dot: #ffffff;
+  --sq-logo-ring: #004153;
+  --sq-logo-ink: #004153;
+  --sq-logo-ink-2: #4a6472;
+  --sq-logo-green: #14dda7;
+
+  /* Movimento (Movimento.dc.html): duracoes e curvas; so transform/opacity */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+  --dur-page: 500ms;
+  --dur-fill: 600ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Variantes com alpha da paleta nova (substituem os rgba() literais da
+     paleta antiga espalhados pelo arquivo): verde SQ, navy de texto e tom
+     de sombra navy. */
+  --primary-a08: rgba(20, 221, 167, 0.08);
+  --primary-a12: rgba(20, 221, 167, 0.12);
+  --primary-a16: rgba(20, 221, 167, 0.16);
+  --primary-a18: rgba(20, 221, 167, 0.18);
+  --primary-a22: rgba(20, 221, 167, 0.22);
+  --primary-a24: rgba(20, 221, 167, 0.24);
+  --primary-a28: rgba(20, 221, 167, 0.28);
+  --primary-a30: rgba(20, 221, 167, 0.3);
+  --shade-a04: rgba(11, 36, 48, 0.04);
+  --shade-a06: rgba(11, 36, 48, 0.06);
+  --shade-a08: rgba(11, 36, 48, 0.08);
+  --shade-a10: rgba(11, 36, 48, 0.1);
+  --shade-a30: rgba(11, 36, 48, 0.3);
+  --shade-a50: rgba(11, 36, 48, 0.5);
+  --shadow-tint-a06: rgba(0, 65, 83, 0.06);
+  --shadow-tint-a16: rgba(0, 65, 83, 0.16);
+  --shadow-tint-a18: rgba(0, 65, 83, 0.18);
 
   color: var(--ink);
   background: var(--bg);
@@ -482,7 +573,7 @@ body {
   background: var(--primary);
   color: var(--on-primary);
   border-color: var(--primary-700);
-  box-shadow: 0 1px 2px rgba(0, 174, 145, 0.16);
+  box-shadow: 0 1px 2px var(--primary-a16);
 }
 
 .nav__link--active .nav__link-icon {
@@ -504,7 +595,7 @@ body {
   background: var(--primary);
   color: var(--on-primary);
   border-color: var(--primary-700);
-  box-shadow: 0 2px 6px rgba(0, 174, 145, 0.24);
+  box-shadow: 0 2px 6px var(--primary-a24);
 }
 
 .sidebar__brandmark {
@@ -541,7 +632,7 @@ body {
 .sidebar-intelliquote-link:hover {
   background: #2a2520;
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(0, 40, 40, 0.16);
+  box-shadow: 0 12px 24px var(--shadow-tint-a16);
   text-decoration: none;
 }
 
@@ -1041,8 +1132,8 @@ body {
 }
 
 .notifications__group--unread {
-  border-color: rgba(0, 174, 145, 0.28);
-  background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.04));
+  border-color: var(--primary-a28);
+  background: linear-gradient(135deg, var(--primary-50), var(--shade-a04));
 }
 
 .notifications__group-header {
@@ -1088,8 +1179,8 @@ body {
 }
 
 .notifications__item--unread {
-  border-color: rgba(0, 174, 145, 0.28);
-  background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06));
+  border-color: var(--primary-a28);
+  background: linear-gradient(135deg, var(--primary-50), var(--shade-a06));
 }
 
 .notifications__item:focus-visible {
@@ -1887,7 +1978,7 @@ body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(31, 28, 24, 0.5);
+  background: var(--shade-a50);
   display: grid;
   place-items: center;
   z-index: 200;
@@ -1902,7 +1993,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 28, 24, 0.42);
+  background: var(--scrim);
   animation: modal-fade-in 160ms ease-out;
 }
 
@@ -2141,8 +2232,8 @@ body {
 
 .auth-toggle__item--active {
   background: var(--button-primary-bg);
-  color: #ffffff;
-  box-shadow: 0 6px 16px rgba(0, 174, 145, 0.24);
+  color: var(--on-button-primary);
+  box-shadow: 0 6px 16px var(--primary-a24);
 }
 
 .auth-card h1,
@@ -2458,11 +2549,11 @@ body {
 
 .process-item--selected:hover {
   background:
-    linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06)),
+    linear-gradient(135deg, var(--primary-50), var(--shade-a06)),
     rgba(255, 255, 255, 0.76);
   box-shadow:
-    inset 0 0 0 1.5px rgba(0, 174, 145, 0.28),
-    0 14px 28px rgba(31, 28, 24, 0.10);
+    inset 0 0 0 1.5px var(--primary-a28),
+    0 14px 28px var(--shade-a10);
 }
 
 /* Skeleton de processo: copia a estrutura de .process-item com
@@ -2494,8 +2585,8 @@ body {
 .eta-meta-highlight {
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 174, 145, 0.22);
-  background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06));
+  border: 1px solid var(--primary-a22);
+  background: linear-gradient(135deg, var(--primary-50), var(--shade-a06));
   color: var(--ink);
   font-weight: 700;
 }
@@ -2628,7 +2719,7 @@ body {
 
 .process-related-item-button:hover {
   transform: translateY(-2px);
-  border-color: rgba(0, 174, 145, 0.22);
+  border-color: var(--primary-a22);
   box-shadow: none;
 }
 
@@ -2744,7 +2835,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 28, 24, 0.42);
+  background: var(--scrim);
   backdrop-filter: blur(6px);
 }
 
@@ -2789,7 +2880,7 @@ body {
   padding: 18px 64px;
   border: 1px solid var(--border);
   border-radius: 28px;
-  background: rgba(31, 28, 24, 0.04);
+  background: var(--shade-a04);
   overflow: hidden;
   touch-action: pan-y;
 }
@@ -2994,8 +3085,8 @@ body {
 
 .tab-button--active {
   background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 174, 145, 0.28);
+  color: var(--on-button-primary);
+  box-shadow: 0 4px 12px var(--primary-a28);
   transform: scale(1.02);
 }
 
@@ -3046,14 +3137,14 @@ body {
 
 .primary-button {
   background: var(--button-primary-bg);
-  color: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 40, 40, 0.06);
+  color: var(--on-button-primary);
+  box-shadow: 0 1px 2px var(--shadow-tint-a06);
 }
 
 .primary-button:hover:not(:disabled) {
   background: var(--button-primary-bg-hover);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 174, 145, 0.24);
+  color: var(--on-button-primary);
+  box-shadow: 0 2px 6px var(--primary-a24);
 }
 
 .primary-button:active:not(:disabled) {
@@ -3826,7 +3917,7 @@ body {
   gap: 10px;
   min-height: 148px;
   padding: 18px;
-  border: 1px dashed rgba(0, 174, 145, 0.28);
+  border: 1px dashed var(--primary-a28);
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, rgba(239, 248, 246, 0.98), rgba(229, 242, 239, 0.9));
 }
@@ -3835,7 +3926,7 @@ body {
   width: fit-content;
   padding: 6px 10px;
   border-radius: var(--radius-full);
-  background: rgba(0, 174, 145, 0.12);
+  background: var(--primary-a12);
   color: var(--ink);
   font-size: var(--fs-caption);
   font-weight: 800;
@@ -3968,7 +4059,7 @@ body {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 28, 24, 0.30);
+  background: var(--shade-a30);
   backdrop-filter: blur(4px);
 }
 
@@ -4354,7 +4445,7 @@ body {
   align-items: center;
   padding: 16px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.08));
+  background: linear-gradient(135deg, var(--primary-50), var(--shade-a08));
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
 }
@@ -5115,7 +5206,7 @@ body {
 
 .admin-callout {
   margin-top: 16px;
-  background: linear-gradient(135deg, var(--primary-50), rgba(31, 28, 24, 0.06));
+  background: linear-gradient(135deg, var(--primary-50), var(--shade-a06));
 }
 
 .admin-callout p {
@@ -5323,7 +5414,7 @@ body {
     justify-content: center;
     gap: 0;
     font-size: 0;
-    border-color: rgba(0, 174, 145, 0.18);
+    border-color: var(--primary-a18);
     background: rgba(255, 255, 255, 0.64);
     box-shadow: none;
   }
@@ -5525,7 +5616,7 @@ body {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 249, 248, 0.96)),
       var(--surface);
-    box-shadow: 0 -2px 12px rgba(0, 40, 40, 0.06);
+    box-shadow: 0 -2px 12px var(--shadow-tint-a06);
     backdrop-filter: blur(20px);
   }
 
@@ -5685,7 +5776,7 @@ body {
 
 .process-list-card .process-item--selected,
 .process-list-card .process-item--selected:hover {
-  box-shadow: inset 0 0 0 1.5px rgba(0, 174, 145, 0.28);
+  box-shadow: inset 0 0 0 1.5px var(--primary-a28);
 }
 
   .detail-stack {
@@ -5934,7 +6025,7 @@ body {
     color: var(--ink);
     font-weight: 600;
     font-size: 16px;
-    box-shadow: 0 1px 0 rgba(31, 28, 24, 0.04);
+    box-shadow: 0 1px 0 var(--shade-a04);
     appearance: none;
     -webkit-appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23008f76' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -5988,7 +6079,7 @@ body {
     align-items: flex-end;
     justify-content: stretch;
     padding: 0;
-    background: rgba(31, 28, 24, 0.42);
+    background: var(--scrim);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -6010,7 +6101,7 @@ body {
     padding:
       8px 20px
       max(20px, env(safe-area-inset-bottom));
-    box-shadow: 0 -8px 32px rgba(0, 40, 40, 0.18);
+    box-shadow: 0 -8px 32px var(--shadow-tint-a18);
     animation: sheet-slide-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
@@ -6148,7 +6239,7 @@ body {
     z-index: 45;
     display: block;
     border: 0;
-    background: rgba(31, 28, 24, 0.32);
+    background: var(--scrim-soft);
     backdrop-filter: blur(8px);
     opacity: 0;
     animation: sidebar-backdrop-in 280ms ease forwards;
@@ -6648,7 +6739,7 @@ body {
 
 .admin-tabs .tab-button--active {
   background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
-  color: #ffffff;
+  color: var(--on-button-primary);
   box-shadow: var(--shadow-md);
 }
 
@@ -6960,7 +7051,7 @@ body {
 
 .scope-chip--active {
   background: linear-gradient(180deg, var(--button-primary-bg-hover) 0%, var(--button-primary-bg) 100%);
-  color: #ffffff;
+  color: var(--on-button-primary);
 }
 
 .chip-add {
@@ -7195,7 +7286,7 @@ body {
 
 .notifications__show-more:hover {
   background: var(--button-primary-bg);
-  color: #ffffff;
+  color: var(--on-button-primary);
   transform: translateY(-1px);
 }
 
@@ -7480,7 +7571,7 @@ body {
   /* Mesma especificidade da regra base acima (0,2,0) pro tom vencer. */
   .dashboard-heading .dashboard-bar-inline--ok {
     background: var(--primary-50);
-    border-color: rgba(0, 174, 145, 0.3);
+    border-color: var(--primary-a30);
   }
 
   .dashboard-heading .dashboard-bar-inline--warn {
@@ -7538,7 +7629,7 @@ body {
     border-radius: var(--radius-md);
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(31, 28, 24, 0.04);
+    box-shadow: 0 1px 2px var(--shade-a04);
     color: var(--primary-700);
     font-weight: 600;
     min-height: 40px;
@@ -7556,14 +7647,14 @@ body {
   .process-detail-toolbar .primary-button:hover {
     background: var(--primary-50);
     border-color: var(--primary-300);
-    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.08);
+    box-shadow: 0 2px 6px var(--primary-a08);
   }
 
   .process-detail-toolbar .ghost-button:focus-visible,
   .process-detail-toolbar .primary-button:focus-visible {
     background: var(--primary-50);
     border-color: var(--primary-300);
-    box-shadow: 0 2px 6px rgba(0, 174, 145, 0.08);
+    box-shadow: 0 2px 6px var(--primary-a08);
     outline: 2px solid var(--focus-ring);
     outline-offset: -2px;
   }
@@ -7988,7 +8079,7 @@ body {
   border: 1px solid var(--border-strong, var(--border));
   border-radius: var(--radius-full);
   background: var(--button-primary-bg);
-  color: #ffffff;
+  color: var(--on-button-primary);
   font-weight: 700;
   font-size: var(--fs-subhead);
   cursor: pointer;
@@ -8402,7 +8493,7 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(31, 28, 24, 0.32);
+  background: var(--scrim-soft);
   backdrop-filter: blur(8px);
   animation: sidebar-backdrop-in 220ms ease forwards;
 }
@@ -8416,7 +8507,7 @@ body {
   padding: 8px 12px max(16px, env(safe-area-inset-bottom));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--surface);
-  box-shadow: 0 -8px 32px rgba(0, 40, 40, 0.18);
+  box-shadow: 0 -8px 32px var(--shadow-tint-a18);
   animation: sheet-slide-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -8534,57 +8625,57 @@ body {
 :root[data-theme='dark'] {
     color-scheme: dark;
 
-    --bg: #0e1413;
-    --surface: #161d1b;
-    --surface-alt: #202826;
-    --ink: #eef3f1;
-    --ink-soft: #9fb0ac;
+    --bg: #061a22;
+    --surface: #0f2b35;
+    --surface-alt: #163845;
+    --ink: #e8f4f6;
+    --ink-soft: #9fb6bf;
 
     /* --primary mantido igual ao claro: e' acento (icones/barras/badges).
        UX-5: o fundo de botao/estado ativo com texto branco agora vem de
        --button-primary-bg, herdado do :root (D1) — nao redeclarado aqui.
        --primary-700 fica um tom mais claro que no claro so' pra dar
        contraste a LINKS/acentos sobre fundo escuro. */
-    --primary: #00ae91;
-    --primary-700: #14b89a;
-    --primary-50: #123029;
-    --eta-label-color: #6ed9be;
-    --focus-ring: #14b89a;
-    --link-color: #14b89a;
-    --link-color-hover: #6ed9be;
-    --border-control: #72857f;
-    --border-control-hover: #8a9d98;
-    --danger: #f87171;
-    --danger-700: #e15b5b;
-    --danger-50: #3a1f1f;
+    --primary: #14dda7;
+    --primary-700: #14dda7;
+    --primary-50: #0f3b38;
+    --eta-label-color: #7fe3cf;
+    --focus-ring: #14dda7;
+    --link-color: #14dda7;
+    --link-color-hover: #7fe3cf;
+    --border-control: #7a9aa6;
+    --border-control-hover: #9fb6bf;
+    --danger: #f07a70;
+    --danger-700: #f59a92;
+    --danger-50: #3a1f22;
     /* UX-6a (D3): --danger dark e' claro (#f87171), entao o texto precisa ser
        escuro pra AA (6,86:1 no --danger, 5,29:1 no --danger-700 hover). */
     --on-danger: #1f0a0a;
     --warning: #e0ad4d;
-    --warning-700: #c4922f;
-    --warning-50: #322a17;
+    --warning-700: #f2c46b;
+    --warning-50: #33290f;
     --info: #5aa6e6;
-    --info-700: #3d84c4;
-    --info-50: #16263a;
-    --success-700: #1cc4a3;
-    --success-50: #123029;
-    --neutral-700: #9fb0ac;
-    --neutral-50: #202826;
+    --info-700: #7cb8ec;
+    --info-50: #132a3f;
+    --success-700: #4fe0b8;
+    --success-50: #0f3b38;
+    --neutral-700: #9fb6bf;
+    --neutral-50: #1b3a45;
 
-    --border: #2a3532;
-    --border-strong: #3b4a46;
-    --bg-tint-1: #121a18;
-    --bg-tint-2: #111a1b;
+    --border: rgba(74, 222, 200, 0.14);
+    --border-strong: rgba(74, 222, 200, 0.24);
+    --bg-tint-1: #0a222b;
+    --bg-tint-2: #0b2029;
 
     /* Fase 1 do redesign: contraparte dark dos tokens frios do shell.
        Sidebar navy ainda mais escura que no claro; ink/ink-soft/pill-hover
        ficam iguais (texto claro vale nos dois temas, navy ja' e' escura
-       nos dois); tint aponta pro --primary-50 deste bloco (#123029). */
-    --sidebar-bg: linear-gradient(180deg, #071820, #0c2029);
-    --sidebar-ink: #f3f8f7;
-    --sidebar-ink-soft: rgba(243, 248, 247, 0.62);
+       nos dois); tint aponta pro --primary-50 deste bloco (#0f3b38). */
+    --sidebar-bg: linear-gradient(180deg, #031820, #062833);
+    --sidebar-ink: #ffffff;
+    --sidebar-ink-soft: #b8ccd3;
     --sidebar-pill-hover: rgba(255, 255, 255, 0.08);
-    --tint: #123029;
+    --tint: #0f3b38;
 
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.40);
@@ -8593,80 +8684,172 @@ body {
     --shadow-xl: 0 30px 60px rgba(0, 0, 0, 0.65);
 
     /* Tints de texto: agora sobre --surface escuro (ink claro + alpha). */
-    --text-muted: rgba(238, 243, 241, 0.72);
-    --text-subtle: rgba(238, 243, 241, 0.60);
-    --text-faint: rgba(238, 243, 241, 0.56);
-    --text-mute-strong: rgba(238, 243, 241, 0.82);
+    --text-muted: rgba(232, 244, 246, 0.72);
+    --text-subtle: rgba(232, 244, 246, 0.66);
+    --text-faint: rgba(232, 244, 246, 0.62);
+    --text-mute-strong: rgba(232, 244, 246, 0.82);
 
     /* Vidros dark reutilizaveis (substituem os rgba(255,255,255,..) claros). */
-    --glass-strong: rgba(22, 29, 27, 0.92);
-    --glass-soft: rgba(22, 29, 27, 0.55);
-    --glass-grad: linear-gradient(180deg, rgba(28, 36, 34, 0.98), rgba(18, 25, 23, 0.96));
+    --glass-strong: rgba(15, 43, 53, 0.92);
+    --glass-soft: rgba(15, 43, 53, 0.55);
+    --glass-grad: linear-gradient(180deg, rgba(22, 56, 69, 0.98), rgba(15, 43, 53, 0.96));
     --glass-tint: linear-gradient(135deg, var(--primary-50), rgba(255, 255, 255, 0.04));
 
     /* Ciclo login-arte: arte do login (LoginArt.jsx). Todos redeclarados, mesmo
        os de valor igual ao claro (precedente: --sidebar-ink). */
-    --login-art-line: #14b89a;
-    --login-art-mark: #00ae91;
+    --login-art-line: #14dda7;
+    --login-art-mark: #14dda7;
     --login-art-ink: #cfe3de;
     --login-art-hull: #6f9aa3;
     --login-art-bridge: #3f7f8c;
     --login-art-foam: #7fe3cf;
     --login-art-cargo-b: #4b97a5;
     --login-art-cargo-c: #7fc9bb;
-    --login-art-cargo-d: #14b89a;
-    --login-art-sea-top: #0c2029;
-    --login-art-sea-bottom: #071820;
+    --login-art-cargo-d: #14dda7;
+    --login-art-sea-top: #0f2b35;
+    --login-art-sea-bottom: #061a22;
     --login-port-cargo-teal: #2f6f7c;
     --login-port-cargo-deep: #1d4f5c;
     --login-port-cargo-pale: #e3f5f0;
     --login-port-cargo-green: #007864;
-    --login-port-window: #071820;
-    --login-port-hull: #04121a;
+    --login-port-window: #061a22;
+    --login-port-hull: #021a22;
     --login-port-water-top: #0a2c36;
-    --login-port-water-bottom: #04121a;
+    --login-port-water-bottom: #021a22;
     --login-head-ink: var(--ink);
+
+    /* Refino visual F1 (PLAN 2.2): contraparte dark dos tokens novos. O mock
+       (Main.dc.html) define fundo/superficie/texto/acento/borda; os demais
+       sao propostos com contraste calculado (D17). Todos redeclarados, mesmo
+       os de valor igual ao claro. */
+    --radius-field: 10px;
+    --on-primary: #0b2430;
+    --on-button-primary: #0b2430;
+    --on-warn: #0b2430;
+    --button-primary-bg: #14dda7;
+    --button-primary-bg-hover: #2ee8b5;
+    --button-primary-bg-active: #0fb98c;
+    --danger-bg-hover: #f59a92;
+    --danger-bg-active: #f8b0a9;
+    --sidebar-pill-active: rgba(20, 221, 167, 0.16);
+    --sidebar-pill-active-ring: rgba(20, 221, 167, 0.35);
+    --font-heading: 'Sora', 'Manrope', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    --navy-900: #003241;
+    --navy: #004153;
+    --navy-700: #0a5468;
+    --navy-50: #163845;
+    --navy-100: #1d4250;
+    --channel-green-solid: #14dda7;
+    --channel-green-edge: #0fb98c;
+    --channel-green-soft: #0f3b38;
+    --channel-green-ink: #4fe0b8;
+    --channel-yellow-solid: #f2c14e;
+    --channel-yellow-edge: #c98a12;
+    --channel-yellow-soft: #33290f;
+    --channel-yellow-ink: #f2c46b;
+    --channel-red-solid: #e5483c;
+    --channel-red-edge: #c2362b;
+    --channel-red-soft: #3a1f22;
+    --channel-red-ink: #f59a92;
+    --channel-gray-solid: #9aa9b0;
+    --channel-gray-edge: #6b7f88;
+    --channel-gray-soft: #1b3a45;
+    --channel-gray-ink: #9fb6bf;
+    --toast-bg: #163845;
+    --toast-ink: #e8f4f6;
+    --skeleton-base: #163845;
+    --skeleton-shine: #1d4250;
+    --disabled-bg: #163845;
+    --disabled-ink: #7a9aa6;
+    --mark-bg: #0f5a49;
+    --switch-off: #2b4f5c;
+    --media-placeholder: #163845;
+    --scrim: rgba(0, 0, 0, 0.55);
+    --scrim-soft: rgba(0, 0, 0, 0.4);
+    --row-divider: rgba(74, 222, 200, 0.1);
+    --brand-mark-tile: #004153;
+    --brand-mark-glyph: #ffffff;
+    --brand-mark-dot: #14dda7;
+    --brand-mark-tile-on-dark: rgba(255, 255, 255, 0.1);
+    --brand-mark-mono-tile: #0b2430;
+    --brand-mark-mono-dot: #ffffff;
+    --sq-logo-ring: #ffffff;
+    --sq-logo-ink: #ffffff;
+    --sq-logo-ink-2: #b8ccd3;
+    --sq-logo-green: #14dda7;
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 300ms;
+    --dur-page: 500ms;
+    --dur-fill: 600ms;
+    --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --primary-a08: rgba(20, 221, 167, 0.08);
+    --primary-a12: rgba(20, 221, 167, 0.12);
+    --primary-a16: rgba(20, 221, 167, 0.16);
+    --primary-a18: rgba(20, 221, 167, 0.18);
+    --primary-a22: rgba(20, 221, 167, 0.22);
+    --primary-a24: rgba(20, 221, 167, 0.24);
+    --primary-a28: rgba(20, 221, 167, 0.28);
+    --primary-a30: rgba(20, 221, 167, 0.3);
+    --shade-a04: rgba(11, 36, 48, 0.04);
+    --shade-a06: rgba(11, 36, 48, 0.06);
+    --shade-a08: rgba(11, 36, 48, 0.08);
+    --shade-a10: rgba(11, 36, 48, 0.1);
+    --shade-a30: rgba(11, 36, 48, 0.3);
+    --shade-a50: rgba(11, 36, 48, 0.5);
+    --shadow-tint-a06: rgba(0, 0, 0, 0.06);
+    --shadow-tint-a16: rgba(0, 0, 0, 0.16);
+    --shadow-tint-a18: rgba(0, 0, 0, 0.18);
 }
 
 /* Toast: no claro era ink(escuro)+texto branco. No dark --ink vira claro,
    entao texto branco ficaria invisivel. Inverte para superficie clara. */
 [data-theme='dark'] .toast {
-  background: var(--surface-alt);
-  color: var(--ink);
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   border: 1px solid var(--border);
 }
 
+/* F1: no dark todo toast e navy (--toast-bg/--toast-ink); o tom da variante
+   fica numa faixa lateral ate o F3 trazer o circulo de icone colorido. */
 [data-theme='dark'] .toast.toast--success {
-  background: #005948;
-  color: #ffffff;
-  border-color: transparent;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  border-color: var(--border);
+  border-left: 4px solid var(--primary);
 }
 
 [data-theme='dark'] .toast.toast--error {
-  background: #a31616;
-  color: #ffffff;
-  border-color: transparent;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  border-color: var(--border);
+  border-left: 4px solid var(--danger);
 }
 
 [data-theme='dark'] .toast.toast--warning {
-  background: #755919;
-  color: #ffffff;
-  border-color: transparent;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  border-color: var(--border);
+  border-left: 4px solid var(--warning);
 }
 
 [data-theme='dark'] .toast.toast--info {
-  background: #114c82;
-  color: #ffffff;
-  border-color: transparent;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  border-color: var(--border);
+  border-left: 4px solid var(--info);
 }
 
-/* Shimmer do skeleton: streak claro sutil sobre a surface-alt escura. */
+/* Shimmer do skeleton: --skeleton-base -> --skeleton-shine -> --skeleton-base. */
 [data-theme='dark'] .skeleton {
   background: linear-gradient(
     90deg,
-    var(--surface-alt) 0%,
-    rgba(255, 255, 255, 0.06) 50%,
-    var(--surface-alt) 100%
+    var(--skeleton-base) 0%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 100%
   );
   background-size: 200% 100%;
 }
@@ -9151,7 +9334,7 @@ body {
   height: 56px;
   border-radius: var(--radius-full);
   background: linear-gradient(140deg, var(--primary), var(--primary-700));
-  color: #fff;
+  color: var(--on-primary);
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -10058,7 +10241,7 @@ body {
     font: inherit;
     font-size: var(--fs-caption);
     font-weight: 600;
-    color: #fff;
+    color: var(--on-button-primary);
     background: var(--button-primary-bg);
     cursor: pointer;
   }
