@@ -22,7 +22,9 @@
 // aplicados, hover, foco, vazio, carregando, arquivados, nao-admin (nomes
 // mascarados), notebook, tablet e mobile; F4c: Detalhe do processo — as 6 abas em
 // FCL/AEREO/CONSOLIDADO/carga recebida, estados vazios, menu e confirmacao de
-// exclusao, foco, usuario comum, logistica, notebook, tablet e mobile).
+// exclusao, foco, usuario comum, logistica, notebook, tablet e mobile; F4d: formulario de
+// processo em modal — os 6 passos em editar/criar/AEREO/CONSOLIDADO, pendentes, validacao,
+// descartar alteracoes, notebook, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -765,6 +767,213 @@ PHASES.f4c = [
     afterShot: restoreViewport,
   },
 ]
+// Refino F4d (Editar/criar processo — ProcessoForm.dc.html): o formulario e um MODAL fixo na
+// janela (nao rola com a pagina), entao as capturas usam a viewport padrao 1440x900. Cada tela
+// abre o dialogo pela UI (detalhe -> "Editar processo" | lista -> "Novo processo") e navega
+// pelo stepper. Seed = o da F4c (FCL "Resina epóxi líquida", AEREO, CONSOLIDADO, recebida,
+// vazio "Surfactante").
+const F4D_STEPS = ['Identificação', 'Embarque', 'Carga', 'Chegada e liberação', 'Coleta', 'Itens']
+const F4D_STEP_SLUGS = ['identificacao', 'embarque', 'carga', 'chegada', 'coleta', 'itens']
+const formDialog = (page, title = 'Editar processo') => page.getByRole('dialog', { name: title })
+const stepButton = (page, label) => page.locator('.pfd-step__button', { hasText: label })
+const gotoStep = async (page, index) => {
+  await stepButton(page, F4D_STEPS[index]).click()
+  await expect(stepButton(page, F4D_STEPS[index])).toHaveAttribute('aria-current', 'step')
+  await page.waitForTimeout(250)
+}
+const editOpen = async (page, rowText) => {
+  await detailOpen(page, rowText)
+  await page.getByRole('button', { name: 'Editar processo' }).click()
+  await expect(formDialog(page)).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(400)
+}
+const createOpen = async (page) => {
+  await chegadasLoaded(page)
+  await page.getByRole('button', { name: 'Novo processo' }).click()
+  await expect(formDialog(page, 'Criar processo')).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(400)
+}
+const formShot = (name, open, { step = 0, before, after } = {}) => ({
+  name,
+  route: '/processos',
+  ready: chegadasReady,
+  action: async (page) => {
+    await open(page)
+    if (before) await before(page)
+    if (step > 0) await gotoStep(page, step)
+    if (after) await after(page)
+    await page.waitForTimeout(300)
+  },
+  afterShot: restoreViewport,
+})
+const stepsOf = (prefix, open, opts = {}) =>
+  F4D_STEPS.map((_, index) => formShot(`${prefix}-${index + 1}-${F4D_STEP_SLUGS[index]}`, open, { ...opts, step: index }))
+const openFcl = (page) => editOpen(page, 'Resina epóxi líquida')
+const openAereo = (page) => editOpen(page, '4500129902')
+const openCon = (page) => editOpen(page, 'CON CN 929-26')
+const fillCreateIdentification = async (page) => {
+  const dialog = formDialog(page, 'Criar processo')
+  await dialog.getByLabel('Nome do processo').fill('Resina acrílica — Shanghai')
+  await dialog.getByLabel('Código do processo').fill('4500130001')
+  await dialog.getByLabel('Destino').fill('ITAJAI')
+  await dialog.getByLabel('Fornecedor').fill('ACRYL CHEM CO.')
+  await dialog.getByLabel('Origem').fill('Shanghai, CN')
+}
+const resizeAndEdit = (width, height, rowText = 'Resina epóxi líquida') => async (page) => {
+  await resizeTo(width, height)(page)
+  await editOpen(page, rowText)
+}
+PHASES.f4d = [
+  // --- editar FCL: os 6 passos -----------------------------------------------------
+  ...stepsOf('form-editar', openFcl),
+  // --- criar: os 6 passos (passo 1 preenchido) ---------------------------------------
+  formShot('form-criar-0-vazio', createOpen),
+  ...stepsOf('form-criar', createOpen, { before: fillCreateIdentification }),
+  // --- AEREO e CONSOLIDADO -------------------------------------------------------------
+  ...stepsOf('form-aereo', openAereo),
+  ...stepsOf('form-consolidado', openCon),
+  // --- estados -----------------------------------------------------------------------------
+  formShot('form-embarque-transbordo-ativo', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByRole('switch', { name: 'Transbordo' }).click({ force: true })
+      await expect(formDialog(page).getByLabel('Porto/aeroporto de transbordo')).toBeVisible()
+    },
+  }),
+  formShot('form-foco-campo-navio', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByRole('textbox', { name: /^Navio/ }).focus()
+      await page.waitForTimeout(250)
+    },
+  }),
+  formShot('form-carga-aviso-iso6346', openFcl, {
+    step: 2,
+    after: async (page) => {
+      await formDialog(page).getByPlaceholder('Ex.: CSQU3054383').first().fill('MSCU1234567')
+      await expect(formDialog(page).getByText(/ISO 6346|dígito verificador/i).first()).toBeVisible()
+    },
+  }),
+  formShot('form-erro-validacao', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByLabel('ETD').fill('1999-01-01')
+      await formDialog(page).getByRole('button', { name: 'Salvar alterações' }).click()
+      await expect(formDialog(page).getByRole('alert')).toContainText('Corrija')
+      await page.waitForTimeout(300)
+    },
+  }),
+  formShot('form-pendentes-vazio-passo-1', (page) => editOpen(page, 'Surfactante')),
+  formShot('form-pendentes-vazio-passo-2', (page) => editOpen(page, 'Surfactante'), { step: 1 }),
+  formShot('form-pendentes-vazio-passo-3', (page) => editOpen(page, 'Surfactante'), { step: 2 }),
+  // carga recebida: transportadora, devolucao do vazio e janela de coleta (so existem depois da liberacao)
+  formShot('form-chegada-recebida', (page) => editOpen(page, 'Glicerina bidestilada'), { step: 3 }),
+  formShot('form-coleta-recebida', (page) => editOpen(page, 'Glicerina bidestilada'), { step: 4 }),
+  formShot('form-descartar-alteracoes', openFcl, {
+    after: async (page) => {
+      await formDialog(page).getByLabel('Nome do processo').fill('Resina epóxi líquida (editada)')
+      await formDialog(page).getByRole('button', { name: 'Fechar' }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  }),
+  {
+    name: 'form-completar-agora',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.getByRole('button', { name: 'Completar agora' }).click()
+      await expect(formDialog(page)).toBeVisible({ timeout: 15_000 })
+      await page.waitForTimeout(700)
+    },
+  },
+  // --- notebook ----------------------------------------------------------------------------
+  {
+    name: 'form-notebook-1366x768-passo-2',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1366, 768)(page)
+      await gotoStep(page, 1)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1366x768-passo-4',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1366, 768)(page)
+      await gotoStep(page, 3)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-1',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-3',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+      await gotoStep(page, 2)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-4-rolado',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+      await gotoStep(page, 3)
+      await page.locator('.pfd-body').evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      await page.waitForTimeout(300)
+    },
+    afterShot: restoreViewport,
+  },
+  // --- tablet e mobile: vista legada (a pagina, nao o modal) ------------------------------------
+  {
+    name: 'form-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1200)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Editar processo' }).first().click()
+      await expect(page.locator('.process-form.list-card')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.process-form--dialog')).toHaveCount(0)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Editar processo' }).first().click()
+      await expect(page.locator('.process-form.list-card')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.process-form--dialog')).toHaveCount(0)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+]
 const PHASE = process.env.REFINO_PHASE || 'f4c'
 
 // --- helpers de seed -------------------------------------------------------
@@ -1394,7 +1603,7 @@ async function seedAll() {
     })
   }
 
-  if (PHASE === 'f4c') await seedF4c(adminUid)
+  if (PHASE === 'f4c' || PHASE === 'f4d') await seedF4c(adminUid)
 }
 
 // --- capturas --------------------------------------------------------------
@@ -1416,7 +1625,7 @@ test.beforeAll(async () => {
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
-    test.setTimeout(PHASE === 'f4c' ? 600_000 : 180_000)
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 
