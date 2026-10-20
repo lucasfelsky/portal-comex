@@ -20,7 +20,9 @@
 // computado, ver o fim do arquivo; F4a: Dashboard — secoes com dados, estados
 // carregando/erro/vazio, notebook, tablet e mobile; F4b: Chegadas — lista, filtros
 // aplicados, hover, foco, vazio, carregando, arquivados, nao-admin (nomes
-// mascarados), notebook, tablet e mobile).
+// mascarados), notebook, tablet e mobile; F4c: Detalhe do processo — as 6 abas em
+// FCL/AEREO/CONSOLIDADO/carga recebida, estados vazios, menu e confirmacao de
+// exclusao, foco, usuario comum, logistica, notebook, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -609,7 +611,161 @@ PHASES.f4b = [
     afterShot: restoreViewport,
   },
 ]
-const PHASE = process.env.REFINO_PHASE || 'f4b'
+// Refino F4c (Detalhe do processo): a rolagem e do .main-content (nao da janela), entao
+// cada captura usa uma viewport alta o bastante para a aba inteira (1440 de largura).
+const detailOpen = async (page, rowText) => {
+  // o Vite do emulador as vezes devolve uma pagina em branco logo apos reotimizar: 1 reload
+  try {
+    await expect(chegadasRows(page).first()).toBeVisible({ timeout: 15_000 })
+  } catch {
+    await page.reload()
+  }
+  await chegadasLoaded(page)
+  await page.locator('.chg-row__main', { hasText: rowText }).first().click()
+  await expect(page.locator('.pdv-head')).toBeVisible({ timeout: 15_000 })
+}
+const detailTab = (rowText, tabName, { height = 1300, after } = {}) => async (page) => {
+  await resizeTo(1440, height)(page)
+  await detailOpen(page, rowText)
+  if (tabName) {
+    await page.getByRole('tab', { name: tabName }).click()
+    await expect(page.getByRole('tab', { name: tabName })).toHaveAttribute('aria-selected', 'true')
+  }
+  await page.waitForTimeout(500)
+  if (after) await after(page)
+}
+const detailShot = (name, rowText, tabName, opts = {}) => ({
+  name,
+  route: '/processos',
+  ready: chegadasReady,
+  action: detailTab(rowText, tabName, opts),
+  afterShot: restoreViewport,
+})
+PHASES.f4c = [
+  // --- FCL completo: as 6 abas -------------------------------------------------
+  detailShot('detalhe-geral', 'Resina epóxi líquida', 'Detalhes gerais'),
+  detailShot('detalhe-processo', 'Resina epóxi líquida', 'Processo', { height: 1900 }),
+  detailShot('detalhe-itens', 'Resina epóxi líquida', 'Itens'),
+  detailShot('detalhe-mensagens', 'Resina epóxi líquida', 'Mensagens'),
+  detailShot('detalhe-historico', 'Resina epóxi líquida', 'Histórico'),
+  detailShot('detalhe-documentos', 'Resina epóxi líquida', 'Documentos', { height: 1800 }),
+  detailShot('detalhe-item-relacionado', 'Resina epóxi líquida', 'Itens', {
+    after: async (page) => {
+      await page.locator('.pdv-item', { hasText: 'Endurecedor amínico' }).click()
+      await expect(page.getByRole('tab', { name: 'Item relacionado' })).toHaveAttribute('aria-selected', 'true')
+      await page.waitForTimeout(400)
+    },
+  }),
+  detailShot('detalhe-mais-acoes', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Mais ações' }).click()
+      await expect(page.getByRole('menuitem', { name: 'Excluir processo' })).toBeVisible()
+    },
+  }),
+  detailShot('detalhe-excluir-confirmacao', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Mais ações' }).click()
+      await page.getByRole('menuitem', { name: 'Excluir processo' }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  }),
+  detailShot('detalhe-foco-aba', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      // abas com roving tabindex: so a ativa entra na ordem do Tab
+      await page.getByRole('tab', { name: 'Detalhes gerais' }).focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.getByRole('tab', { name: 'Detalhes gerais' })).toBeFocused()
+    },
+  }),
+  detailShot('detalhe-hover-botao', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Editar processo' }).hover()
+      await page.waitForTimeout(400)
+    },
+  }),
+  // --- AEREO ---------------------------------------------------------------------
+  detailShot('detalhe-geral-aereo', 'Ácido cítrico anidro', 'Detalhes gerais'),
+  detailShot('detalhe-processo-aereo', 'Ácido cítrico anidro', 'Processo', { height: 1500 }),
+  detailShot('detalhe-itens-aereo', 'Ácido cítrico anidro', 'Itens', { height: 900 }),
+  // --- CONSOLIDADO ---------------------------------------------------------------
+  detailShot('detalhe-geral-consolidado', 'CON CN 929-26', 'Detalhes gerais'),
+  detailShot('detalhe-processo-consolidado', 'CON CN 929-26', 'Processo', { height: 1900 }),
+  detailShot('detalhe-itens-consolidado', 'CON CN 929-26', 'Itens'),
+  detailShot('detalhe-documentos-consolidado', 'CON CN 929-26', 'Documentos', { height: 1500 }),
+  // --- carga recebida: timeline completa, observacoes e divergencia ----------------
+  detailShot('detalhe-geral-recebida', 'Glicerina bidestilada', 'Detalhes gerais'),
+  detailShot('detalhe-processo-recebida', 'Glicerina bidestilada', 'Processo', { height: 2100 }),
+  detailShot('detalhe-documentos-recebida', 'Glicerina bidestilada', 'Documentos', { height: 1500 }),
+  // --- estados vazios (processo sem dados) -----------------------------------------
+  detailShot('detalhe-vazio-geral', 'Surfactante', 'Detalhes gerais'),
+  detailShot('detalhe-vazio-processo', 'Surfactante', 'Processo', { height: 1500 }),
+  detailShot('detalhe-vazio-itens', 'Surfactante', 'Itens', { height: 800 }),
+  detailShot('detalhe-vazio-mensagens', 'Surfactante', 'Mensagens', { height: 800 }),
+  detailShot('detalhe-vazio-historico', 'Surfactante', 'Histórico', { height: 800 }),
+  detailShot('detalhe-vazio-documentos', 'Surfactante', 'Documentos', { height: 1100 }),
+  // --- notebook, tablet e mobile ---------------------------------------------------
+  {
+    name: 'detalhe-notebook-1366x768-geral',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-notebook-1366x768-processo',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.getByRole('tab', { name: 'Processo' }).click()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-desktop-estreito-1100',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1100, 1500)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1200)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.pdv-head')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.pdv-head')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+]
+const PHASE = process.env.REFINO_PHASE || 'f4c'
 
 // --- helpers de seed -------------------------------------------------------
 
@@ -860,6 +1016,279 @@ function buildProcesses() {
   ]
 }
 
+// --- F4c: processos ricos para o detalhe (itens, conteineres, mensagens, historico,
+// documentos) e um usuario de logistica. So roda na fase f4c.
+async function createLogisticaUser() {
+  const user = { email: 'e2e-logistica@sqquimica.com', password: 'senha-e2e-logistica', name: 'Ana Logística', role: 'logistica', status: 'Ativo' }
+  const post = async (url, body) => {
+    const response = await fetch(`${AUTH_HOST}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify(body),
+    })
+    return { ok: response.ok, payload: await response.json() }
+  }
+  const signUp = await post('/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key', {
+    email: user.email,
+    password: user.password,
+    returnSecureToken: true,
+  })
+  if (!signUp.ok) return { ...user, uid: await uidOf(user) }
+  const uid = signUp.payload.localId
+  await post(`/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:update`, {
+    localId: uid,
+    displayName: user.name,
+    emailVerified: true,
+    customAttributes: JSON.stringify({ role: user.role, status: user.status, name: user.name }),
+  })
+  await putDoc('users', uid, {
+    uid,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    statusTone: 'ok',
+    area: 'Logística',
+    lastAccess: 'Seed refino visual',
+    notes: 'Seed refino visual',
+    favoriteProcessIds: [],
+  })
+  return { ...user, uid }
+}
+
+const F4C_LOGISTICA = { email: 'e2e-logistica@sqquimica.com', password: 'senha-e2e-logistica' }
+
+async function seedF4c(adminUid) {
+  const logistica = await createLogisticaUser()
+  const stamp = (offsetDays) => `${dateKey(offsetDays)}T10:00`
+  const fcl = {
+    id: 'shot-f4c-fcl',
+    category: 'FCL',
+    name: 'Resina epóxi líquida',
+    processNumber: '4500129901',
+    destination: 'ITAJAI',
+    processStatus: 'Aguardando registro da DUIMP',
+    etd: dateKey(-38),
+    eta: dateKey(-6),
+    etaOriginal: dateKey(-8),
+    shippedAt: dateKey(-38),
+    berthed: true,
+    berthedAt: stamp(-6),
+    terminalName: 'Portonave',
+    ceMercante: '152605012345678',
+    ceHouse: '152605099999999',
+    cargoPresenceInformed: true,
+    cargoPresenceInformedAt: stamp(-5),
+    freeTimeDays: 14,
+    demurrageDailyRateUsd: 85,
+    supplierName: 'ALFA CHEM CO.',
+    originLocation: 'Shanghai, CN',
+    incoterm: 'CFR',
+    vesselName: 'MSC AURORA',
+    voyage: '123W',
+    houseBl: 'MEDU0000000',
+    forwarderName: 'Agente Global Ltda.',
+    carrierName: 'MSC',
+    grossWeightKg: 41200,
+    volumeM3: 52,
+    packagesQuantity: 160,
+    palletQuantity: 40,
+    containerQuantity: 2,
+    containers: [
+      { id: 'ct-1', type: '20DC', number: 'MSCU4829130', seal: 'FX118204', returnedAt: dateKey(5) },
+      { id: 'ct-2', type: '20DC', number: 'MSCU4829771', seal: '', returnedAt: '' },
+    ],
+    items: [
+      { id: 'it-1', commercialName: 'Resina epóxi líquida EP-128', quantity: 36000, dangerousGoods: true, imoClass: '3', unNumber: '1263' },
+      { id: 'it-2', commercialName: 'Endurecedor amínico', quantity: 4000, dangerousGoods: true, imoClass: '8', unNumber: '2735' },
+    ],
+    licenses: [{ id: 'lic-1', agency: 'MAPA', status: 'Em análise' }],
+    warehouseDeliveryDateOverride: dateKey(3),
+    processNotes: 'Cliente pediu priorização da entrega no CD.',
+    documentIndex: { fispqItemIds: ['it-1'], containerWashIds: [], processSlotKeys: ['bl', 'invoice'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(5),
+  }
+  const aereo = {
+    id: 'shot-f4c-aereo',
+    category: 'AEREO',
+    name: 'Ácido cítrico anidro',
+    processNumber: '4500129902',
+    destination: 'GRU',
+    processStatus: 'Embarcou',
+    etd: dateKey(-9),
+    eta: dateKey(3),
+    shippedAt: dateKey(-9),
+    flightNumber: 'LH8140',
+    mawb: '020-12345678',
+    supplierName: 'CITRIC GMBH',
+    originLocation: 'Frankfurt, DE',
+    incoterm: 'FCA',
+    forwarderName: 'Air Cargo Brasil',
+    grossWeightKg: 1200,
+    chargeableWeightKg: 1500,
+    packagesQuantity: 12,
+    palletQuantity: 3,
+    items: [{ id: 'ai-1', commercialName: 'Ácido cítrico anidro 25 kg', quantity: 1200 }],
+    archived: false,
+    updatedAt: isoMinutesAgo(6),
+  }
+  const consolidado = {
+    id: 'shot-f4c-con',
+    category: 'CONSOLIDADO',
+    name: 'CON CN 929-26',
+    processNumber: '',
+    destination: 'NAVEGANTES',
+    processStatus: 'Embarcou',
+    etd: dateKey(-20),
+    eta: dateKey(10),
+    shippedAt: dateKey(-20),
+    vesselName: 'MAERSK FAME',
+    voyage: '12W',
+    houseBl: 'MAEU9999999',
+    originLocation: 'Ningbo, CN',
+    incoterm: 'FOB',
+    containerQuantity: 2,
+    containers: [
+      { id: 'cc-1', type: '40HC', number: 'MAEU1111111', seal: 'S1' },
+      { id: 'cc-2', type: '40HC', number: 'MAEU2222222', seal: 'S2' },
+    ],
+    purchaseOrders: [
+      { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+      { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'GAMA TRADING' },
+      { po: '9012', reference: 'DELTA SEA 907-26', supplierName: 'DELTA' },
+    ],
+    items: [
+      { id: 'ci-1', commercialName: 'Solvente PI', quantity: 2000, poNumber: '9010' },
+      { id: 'ci-2', commercialName: 'Solvente PI', quantity: 100, poNumber: '9011' },
+      { id: 'ci-3', commercialName: 'Pigmento orgânico', quantity: 500, poNumber: '9012' },
+    ],
+    documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: ['bl', 'invoice:9010'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(7),
+  }
+  const recebida = {
+    id: 'shot-f4c-recebida',
+    category: 'FCL',
+    name: 'Glicerina bidestilada',
+    processNumber: '4500129903',
+    destination: 'ITAJAI',
+    processStatus: 'Carga recebida',
+    etd: dateKey(-60),
+    eta: dateKey(-30),
+    shippedAt: dateKey(-60),
+    berthed: true,
+    berthedAt: stamp(-30),
+    terminalName: 'Itapoá',
+    cargoPresenceInformed: true,
+    cargoPresenceInformedAt: stamp(-29),
+    duimpStatus: 'Parametrizada',
+    duimpNumber: '25BR00001234',
+    duimpRegisteredAt: stamp(-28),
+    parameterizedAt: stamp(-27),
+    parameterizationChannel: 'Verde',
+    clearanceCompletedAt: stamp(-25),
+    collectionStatus: 'Carga disponível em estoque',
+    collectionWindows: [{ id: 'w1', scheduledAt: `${dateKey(-3)}T09:00`, notes: 'Levar EPI' }],
+    carrierName: 'Transportes Delta',
+    cargoReceivedAt: stamp(-2),
+    freeTimeDays: 10,
+    supplierName: 'GLYCO LTD',
+    originLocation: 'Busan, KR',
+    incoterm: 'CIF',
+    vesselName: 'HMM ALGECIRAS',
+    voyage: '44E',
+    houseBl: 'HDMU5555555',
+    containerQuantity: 1,
+    containers: [{ id: 'rc-1', type: '20DC', number: 'HMMU3333333', seal: 'R1', returnedAt: dateKey(-4) }],
+    items: [{ id: 'ri-1', commercialName: 'Glicerina bidestilada', quantity: 18000 }],
+    postReceiptNotes: 'Avaria leve em 2 sacos, fotografada na descarga.',
+    receiptDivergence: true,
+    receiptDivergenceType: 'Avaria',
+    receiptDivergenceNotes: 'Dois sacos rasgados.',
+    documentIndex: { fispqItemIds: [], containerWashIds: ['rc-1'], processSlotKeys: ['bl', 'invoice', 'packingList', 'cargoReport'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(8),
+  }
+  for (const { id, ...data } of [fcl, aereo, consolidado, recebida]) await putDoc('processes', id, data)
+
+  const messages = [
+    [logistica.uid, 'Ana Logística', 'A presença de carga já foi informada? Precisamos programar o CD.', 1500],
+    [adminUid, 'Admin E2E', 'Ainda não. Previsão para amanhã cedo; aviso aqui assim que sair.', 1420],
+    [logistica.uid, 'Ana Logística', 'Perfeito, obrigada!', 1380],
+  ]
+  for (const [index, [authorId, authorName, content, minutes]] of messages.entries()) {
+    await putDoc('processes/shot-f4c-fcl/messages', `m${index + 1}`, {
+      processId: 'shot-f4c-fcl',
+      authorId,
+      authorName,
+      authorEmail: `${authorId}@sqquimica.com`,
+      content,
+      createdAt: isoMinutesAgo(minutes),
+    })
+  }
+
+  const events = [
+    ['statusChanged', 'Aguardando atracação', 'Aguardando registro da DUIMP', 'Automático', 60 * 5],
+    ['fispqUploaded', '', 'Resina epóxi líquida EP-128', 'Admin E2E', 60 * 28],
+    ['containerWashUploaded', '', 'MSCU4829130', 'Ana Logística', 60 * 50],
+    ['berthed', '', '', 'Automático', 60 * 24 * 6],
+    ['shipped', '', '', 'Automático', 60 * 24 * 38],
+  ]
+  for (const [index, [type, previousValue, value, actorName, minutes]] of events.entries()) {
+    await putDoc('processes/shot-f4c-fcl/events', `e${index + 1}`, {
+      type,
+      field: '',
+      previousValue,
+      value,
+      actorId: 'seed',
+      actorName,
+      occurredAt: isoMinutesAgo(minutes),
+      recordedAt: isoMinutesAgo(minutes),
+    })
+  }
+
+  const documentBase = {
+    mimeType: 'application/pdf',
+    size: 245_760,
+    uploadedById: adminUid,
+    uploadedByName: 'Admin E2E',
+    uploadedByRole: 'admin',
+    itemId: '',
+    containerId: '',
+    poNumber: '',
+    description: '',
+    alsoPackingList: false,
+  }
+  const documents = [
+    { id: 'd-bl-2', type: 'bl', slotKey: 'bl', name: 'BL_MEDU0000000.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 12), storagePath: 'processes/shot-f4c-fcl/documents/bl/2.pdf' },
+    { id: 'd-bl-1', type: 'bl', slotKey: 'bl', name: 'BL_rascunho.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 20), storagePath: 'processes/shot-f4c-fcl/documents/bl/1.pdf' },
+    { id: 'd-inv', type: 'invoice', slotKey: 'invoice', name: 'INV-2026-0912.pdf', alsoPackingList: true, uploadedAt: isoMinutesAgo(60 * 24 * 12), storagePath: 'processes/shot-f4c-fcl/documents/invoice/1.pdf' },
+    { id: 'd-fq', type: 'fispq', slotKey: 'fispq:it-1', itemId: 'it-1', name: 'FISPQ_EP128.pdf', uploadedAt: isoMinutesAgo(60 * 28), storagePath: 'processes/shot-f4c-fcl/documents/fispq/it-1/1.pdf' },
+    { id: 'd-oth', type: 'other', slotKey: 'other:cert', name: 'certificado.pdf', description: 'Certificado de análise', uploadedAt: isoMinutesAgo(60 * 24 * 3), storagePath: 'processes/shot-f4c-fcl/documents/other/1.pdf' },
+    { id: 'd-orf', type: 'fispq', slotKey: 'fispq:it-removido', itemId: 'it-removido', name: 'FISPQ_antiga.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 30), storagePath: 'processes/shot-f4c-fcl/documents/fispq/it-removido/1.pdf' },
+  ]
+  for (const { id, ...data } of documents) await putDoc('processes/shot-f4c-fcl/documents', id, { ...documentBase, ...data })
+  for (const [id, type, slotKey, name, poNumber] of [
+    ['d-con-inv', 'invoice', 'invoice:9010', 'INV-9010.pdf', '9010'],
+    ['d-con-bl', 'bl', 'bl', 'BL_MAEU.pdf', ''],
+  ]) {
+    await putDoc('processes/shot-f4c-con/documents', id, {
+      ...documentBase,
+      type,
+      slotKey,
+      name,
+      poNumber,
+      uploadedAt: isoMinutesAgo(60 * 24 * 5),
+      storagePath: `processes/shot-f4c-con/documents/${type}/1.pdf`,
+    })
+  }
+
+  await patchFields('users', adminUid, {
+    favoriteProcessIds: ['shot-aguardando-atracacao', 'shot-coleta-agendada', 'shot-f4c-fcl'],
+  })
+}
+
 async function seedAll() {
   const adminUid = await uidOf(E2E_USERS.admin)
   const processes = buildProcesses()
@@ -964,6 +1393,8 @@ async function seedAll() {
       favoriteProcessIds: [],
     })
   }
+
+  if (PHASE === 'f4c') await seedF4c(adminUid)
 }
 
 // --- capturas --------------------------------------------------------------
@@ -984,7 +1415,8 @@ test.beforeAll(async () => {
 
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
-    test.setTimeout(180_000)
+    // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
+    test.setTimeout(PHASE === 'f4c' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 
@@ -1754,3 +2186,62 @@ test('movimento reduzido (CSS computado) - so fades de 150 ms, sem contador, esc
   await page.unroute('**/127.0.0.1:8080/**')
   await context.close()
 })
+
+// F4c - o detalhe para um usuario comum (nome mascarado, sem Editar/Mais acoes, sem
+// Historico/Documentos) e para a logistica (Historico + Documentos, sem Editar processo).
+const F4C_ROLE_SHOTS = [
+  {
+    key: 'user',
+    credentials: () => E2E_USERS.user,
+    rowText: '4500129901',
+    tabs: [['geral', 'Detalhes gerais'], ['processo', 'Processo'], ['mensagens', 'Mensagens']],
+    expectNoTabs: ['Histórico', 'Documentos'],
+  },
+  {
+    key: 'logistica',
+    credentials: () => F4C_LOGISTICA,
+    rowText: 'Resina epóxi líquida',
+    tabs: [['geral', 'Detalhes gerais'], ['documentos', 'Documentos'], ['historico', 'Histórico']],
+    expectNoTabs: [],
+  },
+]
+for (const theme of THEMES) {
+  for (const role of F4C_ROLE_SHOTS) {
+    test(`capturas ${PHASE} - ${role.key} - ${theme}`, async ({ browser }) => {
+      test.skip(PHASE !== 'f4c', 'papeis so na F4c')
+      test.setTimeout(150_000)
+      const outDir = path.join(OUT_ROOT, PHASE)
+      fs.mkdirSync(outDir, { recursive: true })
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
+      await context.addInitScript((value) => {
+        try {
+          window.localStorage.setItem('pc-theme', value)
+          window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+        } catch {
+          /* ignora */
+        }
+      }, theme)
+      const page = await context.newPage()
+      await login(page, role.credentials())
+      await page.goto('/processos')
+      await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+      await detailOpen(page, role.rowText)
+      if (role.key === 'user') {
+        await expect(page.getByRole('heading', { level: 2, name: 'PO: 4500129901' })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Editar processo' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Mais ações' })).toHaveCount(0)
+      } else {
+        await expect(page.getByRole('button', { name: 'Editar processo' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Mais ações' })).toHaveCount(0)
+      }
+      for (const tabName of role.expectNoTabs) await expect(page.getByRole('tab', { name: tabName })).toHaveCount(0)
+      for (const [slug, tabName] of role.tabs) {
+        await page.getByRole('tab', { name: tabName }).click()
+        await expect(page.getByRole('tab', { name: tabName })).toHaveAttribute('aria-selected', 'true')
+        await page.waitForTimeout(800)
+        await page.screenshot({ path: path.join(outDir, `detalhe-${role.key}-${slug}-${theme}.png`), fullPage: true })
+      }
+      await context.close()
+    })
+  }
+}

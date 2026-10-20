@@ -18148,6 +18148,61 @@ body {
     border-radius: 16px;
     background: var(--surface);
   }
+
+  /* ---- ajustes finos apos a conferencia visual ---- */
+  .process-detail-view .pdv-panel .process-block--cargo .detail-dl__row--wide dd {
+    font-family: inherit;
+    font-size: 13px;
+    font-variant-numeric: normal;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__previous {
+    align-items: baseline;
+    gap: 4px 6px;
+  }
+
+  .process-detail-view .pdv-panel .documents-row__previous svg {
+    display: none;
+  }
+
+  .process-detail-view .pdv-panel .documents-add-other__head .documents-row__label {
+    order: 0;
+    flex: 1 1 auto;
+  }
+
+  .process-detail-view .pdv-panel .documents-combine__label {
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: none;
+    color: var(--ink-soft);
+  }
+
+  /* Itens: as colunas (quantidade, PO, tags) alinham entre as linhas via subgrid; sem
+     suporte a subgrid cada linha mantem a propria grade de 4 colunas (regra acima). */
+  @supports (grid-template-columns: subgrid) {
+    .process-detail-view .pdv-items__list {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 140px 160px auto;
+      gap: 14px 16px;
+    }
+
+    .process-detail-view .pdv-items--related .pdv-items__list {
+      grid-template-columns: minmax(0, 1fr) 180px;
+    }
+
+    .process-detail-view .pdv-items__list > .pdv-item,
+    .process-detail-view .pdv-items__list > .pdv-items__entry,
+    .process-detail-view .pdv-items__list > .empty-state {
+      grid-column: 1 / -1;
+    }
+
+    .process-detail-view .pdv-items__list > .pdv-item {
+      grid-template-columns: subgrid;
+    }
+  }
 }
 
 @keyframes pdv-panel-in {

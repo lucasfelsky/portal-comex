@@ -2814,3 +2814,18 @@ describe('F4c - Documentos (valores do Processo.dc.html)', () => {
     expect(f4cDecls('.process-detail-view .pdv-panel .documents-row')).toContain('display: flex;')
   })
 })
+
+describe('F4c - ajustes finos da conferencia visual', () => {
+  it('Itens: as colunas alinham entre as linhas por subgrid (com a grade propria como fallback)', () => {
+    const body = f4cMainBody.replace(/\s+/g, ' ')
+    expect(body).toContain('@supports (grid-template-columns: subgrid)')
+    expect(body).toMatch(/\.pdv-items__list > \.pdv-item \{ grid-template-columns: subgrid;/)
+    expectF4c('.process-detail-view .pdv-item', ['grid-template-columns: minmax(0, 1fr) 140px 160px auto'])
+  })
+
+  it('IMO da Carga em texto normal (nao mono); "contem Packing List" sem caixa alta; versao anterior sem icone', () => {
+    expectF4c('.process-detail-view .pdv-panel .process-block--cargo .detail-dl__row--wide dd', ['font-family: inherit', 'font-size: 13px'])
+    expectF4c('.process-detail-view .pdv-panel .documents-combine__label', ['text-transform: none', 'font-size: 12px'])
+    expectF4c('.process-detail-view .pdv-panel .documents-row__previous svg', ['display: none'])
+  })
+})
