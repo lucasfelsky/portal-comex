@@ -8980,6 +8980,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Tablet: antes o card IntelliQuote ficava 24px acima do wrapper (vazio) dos
+     botoes Tema/Sair, que no drawer sao display:none. */
+  padding-bottom: 24px;
 }
 
 /* Tablet: no detalhe de um processo o titulo da pagina continua sendo o unico
@@ -9176,6 +9179,7 @@ body {
      "Fazer uma cotacao" (Comercial, D4) tem o mesmo estilo, sem marca. */
   .sidebar .sidebar__foot {
     gap: 6px;
+    padding-bottom: 0;
   }
 
   [data-theme='dark'] .sidebar .sidebar-intelliquote-link,
@@ -10267,6 +10271,17 @@ body {
 
   .support-fab .support-fab__trigger svg {
     color: var(--primary);
+  }
+
+  /* Dark (D17, o mock nao define): o navy #004153 some sobre o fundo escuro;
+     o FAB usa o navy suave (--navy-700) com um aro menta no hover. */
+  [data-theme='dark'] .support-fab .support-fab__trigger,
+  [data-theme='dark'] .support-fab .support-fab__trigger:hover {
+    background: var(--navy-700);
+  }
+
+  [data-theme='dark'] .support-fab .support-fab__trigger:hover {
+    box-shadow: 0 6px 18px rgba(0, 65, 83, 0.25), 0 0 0 1px var(--primary-a30);
   }
 
   .support-fab .support-fab__trigger:focus-visible {
