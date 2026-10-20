@@ -315,6 +315,58 @@ const ICONS = {
       <path d="m3 15 5-5 4 4 3-3 6 6" />
     </>
   ),
+  // Refino F5a (Notificacoes.dc.html / Noticias.dc.html / AcessoEstados / Login /
+  // AdminBarra / Processo): glifos exatos dos mock-ups.
+  // Silenciar (pagina de notificacoes): sino cortado do mock (o 'bell-off' da F2
+  // e' o da gaveta mobile).
+  'bell-slash': <path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H7M10 21h4M3 3l18 18" />,
+  sliders: (
+    <>
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  // O mock so traz o olho aberto ("Mostrar senha"); o riscado e' o mesmo olho + diagonal.
+  'eye-off': (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 3l18 18" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none" />
+    </>
+  ),
+  robot: (
+    <>
+      <rect x="4" y="7" width="16" height="12" rx="3" />
+      <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

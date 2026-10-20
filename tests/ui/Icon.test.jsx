@@ -35,6 +35,8 @@ describe('Icon', () => {
       'nav-dashboard', 'nav-arrivals', 'nav-news', 'nav-admin', 'bell-ring', 'search-field',
       'arrow-up-right', 'logout-door', 'theme-half', 'close', 'chevron-down', 'message',
       'truck', 'alert-triangle', 'doc', 'image', 'bell-off',
+      // Refino F5a: glifos dos mock-ups de Notificacoes/Noticias/Acesso/Admin.
+      'bell-slash', 'sliders', 'mail', 'clock', 'eye', 'eye-off', 'more', 'robot',
     ]
     for (const name of KNOWN) {
       const { container } = render(<Icon name={name} />)
