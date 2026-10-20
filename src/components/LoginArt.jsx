@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 // Arte SVG da tela de login (Ciclo login-arte). So' o LoginPage monta isto.
 // Tudo e' decorativo: aria-hidden + focusable="false". Sem hex aqui: a cor vem
 // de classes (`login-art-*`, `login-chart__*`, `login-port-scene__*`,
@@ -242,6 +244,56 @@ const LAT_LABELS = [
 // 24°10′S os rotulos deixam de ser desenhados. Filtra por indice (as posicoes y = 144 + 180·k dos
 // que ficam nao mudam; nada e removido do meio do array).
 const LAT_VISIBLE_COUNT = 4
+// Refino F6a (carry-over da F5b): nenhum rotulo da carta pode aparecer cortado. A largura/altura do
+// SVG muda com o viewport e com o modo notebook (a carta e deslocada por --nb-login-shift), entao o
+// que cabe e' medido no elemento. Um rotulo so e' desenhado se sua caixa inteira cair na zona opaca:
+// longitudes ate 170px antes da borda direita (onde a mascara comeca a esmaecer) e latitudes ate 84px
+// antes do rodape (onde a mascara corta). Sem medida (jsdom, carta escondida em <= 1040px) = todos.
+const LON_X0 = 706
+const LON_STEP = 160
+const LON_LABEL_WIDTH = 56
+const LON_FADE_PX = 170
+const LAT_Y0 = 144
+const LAT_STEP = 180
+const LAT_LABEL_DEPTH = 4
+const LAT_FOOTER_PX = 84
+
+export function countFittingLonLabels(width) {
+  if (!(width > 0)) return LON_LABELS.length
+  return LON_LABELS.filter((_, k) => LON_X0 + LON_STEP * k + LON_LABEL_WIDTH <= width - LON_FADE_PX).length
+}
+
+export function countFittingLatLabels(height) {
+  if (!(height > 0)) return LAT_VISIBLE_COUNT
+  return LAT_LABELS.slice(0, LAT_VISIBLE_COUNT).filter(
+    (_, k) => LAT_Y0 + LAT_STEP * k + LAT_LABEL_DEPTH <= height - LAT_FOOTER_PX,
+  ).length
+}
+
+function useBoxSize(ref) {
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return undefined
+    const read = () => {
+      const box = node.getBoundingClientRect()
+      setSize((previous) =>
+        previous.width === box.width && previous.height === box.height
+          ? previous
+          : { width: box.width, height: box.height },
+      )
+    }
+    read()
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(read)
+      observer.observe(node)
+      return () => observer.disconnect()
+    }
+    window.addEventListener('resize', read)
+    return () => window.removeEventListener('resize', read)
+  }, [ref])
+  return size
+}
 const GRID_X = Array.from({ length: 13 }, (_, k) => 700 + 160 * k)
 const GRID_Y = Array.from({ length: 8 }, (_, k) => 150 + 180 * k)
 
@@ -280,6 +332,10 @@ function renderChartRoute(y, opacity) {
 }
 
 export function LoginSeaChart() {
+  const lonRef = useRef(null)
+  const latRef = useRef(null)
+  const lonCount = countFittingLonLabels(useBoxSize(lonRef).width)
+  const latCount = countFittingLatLabels(useBoxSize(latRef).height)
   return (
     <div className="login-chart" aria-hidden="true">
       <svg className="login-chart__grid" focusable="false">
@@ -299,18 +355,20 @@ export function LoginSeaChart() {
         </g>
       </svg>
 
-      <svg className="login-chart__lon" focusable="false">
-        {LON_LABELS.map((label, k) => (
-          <text key={label} x={706 + 160 * k} y="44">
-            {label}
-          </text>
-        ))}
+      <svg className="login-chart__lon" focusable="false" ref={lonRef}>
+        {LON_LABELS.map((label, k) =>
+          k < lonCount ? (
+            <text key={label} x={LON_X0 + LON_STEP * k} y="44">
+              {label}
+            </text>
+          ) : null,
+        )}
       </svg>
 
-      <svg className="login-chart__lat" focusable="false">
+      <svg className="login-chart__lat" focusable="false" ref={latRef}>
         {LAT_LABELS.map((label, k) =>
-          k < LAT_VISIBLE_COUNT ? (
-            <text key={label} x="110" y={144 + 180 * k} textAnchor="end">
+          k < LAT_VISIBLE_COUNT && k < latCount ? (
+            <text key={label} x="110" y={LAT_Y0 + LAT_STEP * k} textAnchor="end">
               {label}
             </text>
           ) : null,

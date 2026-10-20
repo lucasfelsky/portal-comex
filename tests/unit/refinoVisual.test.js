@@ -3786,9 +3786,12 @@ describe('F5b - JSX Login', () => {
 
   it('LoginArt: latitudes a partir de 24°10′S deixam de ser desenhadas (D16), sem remover do array', () => {
     expect(f5bArt).toContain('const LAT_VISIBLE_COUNT = 4')
-    expect(f5bArt).toMatch(/LAT_LABELS\.map\(\(label, k\) =>\s*k < LAT_VISIBLE_COUNT \?/)
+    // F6a: alem do corte por indice, so desenha o rotulo que cabe inteiro (medido no SVG).
+    expect(f5bArt).toMatch(/LAT_LABELS\.map\(\(label, k\) =>\s*k < LAT_VISIBLE_COUNT && k < latCount \?/)
     expect(f5bArt).toContain("'24°25′S',")
-    expect(f5bArt).toContain('y={144 + 180 * k}')
+    expect(f5bArt).toContain('y={LAT_Y0 + LAT_STEP * k}')
+    expect(f5bArt).toContain('const LAT_Y0 = 144')
+    expect(f5bArt).toContain('const LAT_STEP = 180')
   })
 
   it('sem toISOString, console.log nem hex nos JSX do login', () => {

@@ -26,6 +26,7 @@ vi.mock('../../src/hooks/useAuth', () => ({
 }))
 
 import LoginPage from '../../src/pages/LoginPage'
+import { LoginSeaChart, countFittingLatLabels, countFittingLonLabels } from '../../src/components/LoginArt'
 import { ToastProvider } from '../../src/components/Toast'
 
 function defaultAuth() {
@@ -597,5 +598,117 @@ describe('LoginPage - painel da marca e assinatura (F5b)', () => {
     await user.click(cadastrar)
     expect(entrar).toHaveAttribute('aria-pressed', 'false')
     expect(cadastrar).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+// Refino F6a (carry-over da F5b): nenhum rotulo da carta aparece cortado. A largura/altura dos SVGs
+// vem do navegador; so cabe o rotulo cuja caixa inteira esta na zona opaca da mascara.
+describe('LoginSeaChart - rotulos que nao cabem nao sao desenhados', () => {
+  const originalRect = Element.prototype.getBoundingClientRect
+  const originalObserver = globalThis.ResizeObserver
+
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = originalRect
+    globalThis.ResizeObserver = originalObserver
+  })
+
+  function stubBoxes({ lon, lat }) {
+    const box = { lon, lat }
+    Element.prototype.getBoundingClientRect = function getRect() {
+      if (this.classList?.contains('login-chart__lon')) return { width: box.lon, height: 60, top: 0, left: 0, right: box.lon, bottom: 60 }
+      if (this.classList?.contains('login-chart__lat')) return { width: 140, height: box.lat, top: 0, left: 0, right: 140, bottom: box.lat }
+      return originalRect.call(this)
+    }
+    return box
+  }
+
+  const lonLabels = (container) => [...container.querySelectorAll('.login-chart__lon text')].map((node) => node.textContent)
+  const latLabels = (container) => [...container.querySelectorAll('.login-chart__lat text')].map((node) => node.textContent)
+
+  it('sem medida (jsdom / carta escondida em <= 1040px) desenha todos: 12 longitudes e 4 latitudes', () => {
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(12)
+    expect(latLabels(container)).toHaveLength(4)
+    expect(countFittingLonLabels(0)).toBe(12)
+    expect(countFittingLatLabels(0)).toBe(4)
+  })
+
+  it('longitudes: so as que cabem inteiras ate 170px antes da borda (x = 706 + 160k, caixa de 56px)', () => {
+    // largura 1340 (1100x800 em modo notebook): 706+56 <= 1170 e 866+56 <= 1170; 1026+56 > 1170
+    expect(countFittingLonLabels(1340)).toBe(3)
+    // 1470 (1280x552): k=3 termina em 1242 <= 1300; k=4 termina em 1402 > 1300
+    expect(countFittingLonLabels(1470)).toBe(4)
+    // 1440 de largura e 900 de altura (sem deslocamento): 1242 <= 1270
+    expect(countFittingLonLabels(1440)).toBe(4)
+    // estreita demais ate para o primeiro
+    expect(countFittingLonLabels(900)).toBe(0)
+    // cada contagem nunca deixa um rotulo na zona de esmaecimento
+    for (const width of [1000, 1100, 1280, 1340, 1366, 1440, 1600, 1920, 2560]) {
+      const count = countFittingLonLabels(width)
+      for (let k = 0; k < count; k += 1) expect(706 + 160 * k + 56).toBeLessThanOrEqual(width - 170)
+      if (count < 12) expect(706 + 160 * count + 56).toBeGreaterThan(width - 170)
+    }
+  })
+
+  it('latitudes: so as que terminam antes dos 84px do rodape (y = 144 + 180k)', () => {
+    expect(countFittingLatLabels(900)).toBe(4)
+    expect(countFittingLatLabels(800)).toBe(4)
+    // 552 de altura: 148 e 328 cabem em 468; 508 nao
+    expect(countFittingLatLabels(552)).toBe(2)
+    // no corte exato do mascara o rotulo e' escondido, nao cortado ao meio
+    expect(countFittingLatLabels(504 + 4 + 84 - 1)).toBe(2)
+    expect(countFittingLatLabels(504 + 4 + 84)).toBe(3)
+    expect(countFittingLatLabels(60)).toBe(0)
+  })
+
+  it('renderiza so os rotulos medidos como inteiros (1100x800 em modo notebook: 3 longitudes; 552 de altura: 2 latitudes)', () => {
+    stubBoxes({ lon: 1340, lat: 552 })
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toEqual(['46°40′W', '46°30′W', '46°20′W'])
+    expect(latLabels(container)).toEqual(['23°50′S', '23°55′S'])
+  })
+
+  it('acompanha o redimensionamento ao vivo (ResizeObserver) sem remontar a carta', () => {
+    const observers = []
+    globalThis.ResizeObserver = class {
+      constructor(callback) {
+        this.callback = callback
+        this.disconnect = vi.fn()
+        observers.push(this)
+      }
+
+      observe() {}
+    }
+    const box = stubBoxes({ lon: 900, lat: 900 })
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(0)
+    box.lon = 1470
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(lonLabels(container)).toHaveLength(4)
+    box.lat = 552
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(latLabels(container)).toHaveLength(2)
+    box.lon = 1100
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(lonLabels(container)).toHaveLength(2)
+  })
+
+  it('sem ResizeObserver cai para o evento resize da janela e limpa o listener ao desmontar', () => {
+    globalThis.ResizeObserver = undefined
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const box = stubBoxes({ lon: 1340, lat: 900 })
+    const { container, unmount } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(3)
+    box.lon = 1470
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(lonLabels(container)).toHaveLength(4)
+    expect(add.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThan(0)
+    unmount()
+    expect(remove.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThan(0)
+    add.mockRestore()
+    remove.mockRestore()
   })
 })
