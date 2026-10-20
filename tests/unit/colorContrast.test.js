@@ -519,15 +519,18 @@ describe('guardas estruturais', () => {
   // UX-6b-3 (D5/F2): o no atual da timeline (`--now`) deixa de ser
   // preenchido (halo com anel externo var(--primary) - garante o verde no
   // tema escuro, onde --primary-50 quase some sobre --surface-alt).
-  it('(s) os 2 blocos ".process-timeline__node--now {" tem o halo com --primary/--primary-50/--primary-700, sem preencher o fundo', () => {
+  it('(s) o no atual da timeline: halo no mobile/tablet (--primary/--primary-50/--primary-700, sem preencher) e, no desktop F4c, fundo --primary com anel --navy', () => {
     const mobile = extractBlock(css, '.process-timeline__node--now {')
-    const desktop = extractBlock(css, '.process-detail-view .process-timeline__node--now {')
+    expect(mobile.body).toContain('var(--primary-700)')
+    expect(mobile.body).toContain('var(--primary-50)')
+    expect(mobile.body).toContain('var(--primary)')
+    expect(mobile.body).not.toContain('background: var(--primary-700)')
 
-    for (const { body } of [mobile, desktop]) {
-      expect(body).toContain('var(--primary-700)')
-      expect(body).toContain('var(--primary-50)')
-      expect(body).toContain('var(--primary)')
-      expect(body).not.toContain('background: var(--primary-700)')
-    }
+    // Desktop (Processo.dc.html): ponto atual = fundo #14dda7 (--primary) + anel de 3px
+    // #004153 (--navy; no escuro o anel vira --ink-soft, ver o bloco [data-theme]).
+    const desktop = extractBlock(css, '.process-detail-view .pdv-stage--now .pdv-stage__node {')
+    expect(desktop.body).toContain('background: var(--primary)')
+    expect(desktop.body).toContain('var(--navy)')
+    expect(desktop.body).not.toContain('background: var(--primary-700)')
   })
 })

@@ -254,7 +254,7 @@ export default function ProcessListDesktop({
 
   const total = typeof totalCount === 'number' ? totalCount : filteredProcesses.length
   const archivedCount = archivedProcesses.length
-  // "Exportar (N)" conta o que realmente sai na planilha: com "Arquivados" aberto
+  // A contagem do botao de exportar e' o que realmente sai na planilha: com "Arquivados" aberto
   // exporta as linhas arquivadas; fora dele, as linhas filtradas.
   const exportRows = isShowingArchived ? archivedProcesses : filteredProcesses
 

@@ -1092,7 +1092,10 @@ export default function ProcessesPage() {
     setViewMode('create')
   }
 
-  function handleEditMode() {
+  // `focusKey` (opcional, string): campo para focar ao abrir o formulario — usado
+  // por "Completar agora" (Dados pendentes). Chamado como onClick direto o 1o
+  // argumento e' o evento, que e' ignorado.
+  function handleEditMode(focusKey) {
     if (!selectedProcess || !isAdmin) return
     const nextDraft = {
       ...selectedProcess,
@@ -1104,7 +1107,9 @@ export default function ProcessesPage() {
     setDraft(nextDraft)
     baselineRef.current = nextDraft
     setHasAttemptedSave(false)
-    setProcessFocusRequest(null)
+    setProcessFocusRequest(
+      typeof focusKey === 'string' && focusKey ? { key: focusKey, nonce: Date.now() } : null
+    )
     setViewMode('edit')
   }
 
@@ -1862,10 +1867,15 @@ export default function ProcessesPage() {
   }
 
   const isDesktopList = isDesktopLayout && viewMode === 'list'
+  // Refino F4c: no detalhe desktop o cabecalho e' o card do proprio processo
+  // (Processo.dc.html); a pagina nao repete o titulo "Fila de chegadas".
+  const isDesktopDetail = isDesktopLayout && viewMode === 'detail' && Boolean(selectedProcess)
 
   return (
-    <section className={`surface${isDesktopList ? ' surface--arrivals' : ''}`}>
-      {isDesktopList ? null : (
+    <section
+      className={`surface${isDesktopList ? ' surface--arrivals' : ''}${isDesktopDetail ? ' surface--process-detail' : ''}`}
+    >
+      {isDesktopList || isDesktopDetail ? null : (
         <div className="section-heading">
           <div>
             <h2>Fila de chegadas</h2>

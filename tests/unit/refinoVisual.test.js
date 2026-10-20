@@ -1426,25 +1426,8 @@ describe('F3 - movimento (Movimento.dc.html)', () => {
     expect(bezier('--ease-spring')).toBe('cubic-bezier(.34,1.56,.64,1)')
   })
 
-  it('timeline: trilho preenche em 600 ms (segmentos em sequencia) e pontos com mola a 100 + 150 ms * posicao', () => {
-    expectF3(
-      '.process-detail-view .process-timeline__bar--done::after',
-      ['animation: motion-fill calc(var(--dur-fill) / var(--seg-count, 1)) linear both', 'transform-origin: left center'],
-      MOTION,
-    )
-    expectF3(
-      '.process-detail-view .process-timeline__node--done',
-      ['animation: motion-pop var(--dur-slow) var(--ease-spring) both', 'animation-delay: var(--dot-delay, 100ms)'],
-      MOTION,
-    )
-    ;[100, 250, 400, 550, 700].forEach((ms, i) => {
-      expectF3(`.process-detail-view .process-timeline__cell:nth-child(${i + 1})`, [`--dot-delay: ${ms}ms`], MOTION)
-    })
+  it('timeline: o token do preenchimento e 600 ms (o trilho do detalhe desktop esta nos testes da F4c)', () => {
     expect(light['--dur-fill']).toBe('600ms')
-    // o halo do no atual (guarda (s) do colorContrast) nao foi tocado
-    expect(css).toMatch(
-      /\.process-detail-view \.process-timeline__node--now \{[^}]*var\(--primary-700\)[^}]*var\(--primary-50\)[^}]*var\(--primary\)/,
-    )
   })
 
   it('estrela de favorito: scale(0 -> 1) em 300 ms com mola', () => {
@@ -1499,7 +1482,7 @@ describe('F3 - movimento (Movimento.dc.html)', () => {
     const reduceBody = norm(stripComments(bodyAfter(css.slice(reduceStart), REDUCE_DESKTOP)))
     expect(reduceBody).toContain('.page-fade--visible')
     expect(reduceBody).toContain('.favorite-star--pop')
-    expect(reduceBody).toContain('.process-detail-view .process-timeline__bar--done::after')
+    expect(reduceBody).toContain('.process-detail-view .pdv-timeline__fill')
     expect(reduceBody).toContain('animation: motion-fade-in 150ms linear both')
     expect(reduceBody).toContain('.stagger__item { animation: motion-fade-in 150ms linear both; animation-delay: 0ms; }')
     expect(reduceBody).toMatch(/\.skeleton, \[data-theme='dark'\] \.skeleton \{ animation: none; \}/)
@@ -2221,5 +2204,303 @@ describe('F4b - JSX/markup', () => {
     const shared = readLf('src/features/processes/processListShared.js')
     expect(shared.indexOf("label: 'Anuência indeferida'")).toBeLessThan(shared.indexOf("label: 'Carga inflamável'"))
     expect(shared.indexOf("label: 'Carga inflamável'")).toBeLessThan(shared.indexOf('label: `Dados pendentes'))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4c - Detalhe do processo (Processo.dc.html). Arvore propria no desktop (pdv-*,
+// ProcessDetailDesktop.jsx + miolo das abas), escolhida por matchMedia; tablet e
+// mobile ficam na arvore legada. CSS = uma secao "REFINO VISUAL F4c — DETALHE DO
+// PROCESSO" com UM @media desktop (+ o compacto de notebook), toda regra sob a raiz
+// `.process-detail-view` (ou `.surface.surface--process-detail`).
+// ---------------------------------------------------------------------------
+const F4C_MARKER = 'REFINO VISUAL F4c — DETALHE DO PROCESSO (Processo.dc.html'
+const F4C_COMPACT_MARKER = 'REFINO VISUAL F4c — DETALHE COMPACTO'
+const f4cAt = css.indexOf(F4C_MARKER)
+const f4cStart = css.lastIndexOf('/*', f4cAt)
+const f4cCompactAt = css.indexOf(F4C_COMPACT_MARKER)
+const f4cCompactStart = css.lastIndexOf('/*', f4cCompactAt)
+const f4cEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f4cMainBody = bodyAfter(stripComments(css.slice(f4cStart, f4cCompactAt)), DESKTOP_MEDIA)
+const f4cRules = parseRules(f4cMainBody)
+const f4cCompactRules = parseRules(
+  bodyAfter(stripComments(css.slice(f4cCompactAt, f4cEnd)), '@media (min-width: 1041px) and (max-height: 800px) {'),
+)
+
+function f4cDecls(selector, rules = f4cRules) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F4c: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectF4c(selector, declarations, rules) {
+  const body = f4cDecls(selector, rules)
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F4c - secao, escopo e ordem', () => {
+  it('a secao existe, vem antes do bloco reduce desktop, tem UM @media desktop (+ o compacto) e so keyframes fora dele', () => {
+    expect(f4cAt).toBeGreaterThan(0)
+    expect(f4cCompactAt).toBeGreaterThan(f4cAt)
+    expect(f4cEnd).toBeGreaterThan(f4cCompactAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f4cEnd)
+    const before = stripComments(css.slice(f4cStart, css.indexOf(DESKTOP_MEDIA, f4cAt)))
+    expect(before.trim(), 'nada fora do @media antes do bloco principal').toBe('')
+    expect(f4cMainBody).not.toMatch(/@media/)
+    const outside = stripComments(css.slice(f4cStart, f4cCompactStart)).replace(f4cMainBody, '')
+    expect(
+      outside
+        .replace(/@media \(min-width: 1041px\) \{\s*\}/, '')
+        .replace(/@keyframes pdv-panel-in \{[\s\S]*?\n\}\n/, '')
+        .trim()
+    ).toBe('')
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail.match(/@media/g)).toHaveLength(1)
+  })
+
+  it('nenhum @media (max-width) e toda regra comeca pela raiz .process-detail-view (ou a pagina .surface--process-detail)', () => {
+    const whole = stripComments(css.slice(f4cStart, f4cEnd))
+    expect(whole).not.toMatch(/@media\s*\(max-width/)
+    const ROOT = /^(\[data-theme='dark'\] )?(\.process-detail-view|\.surface\.surface--process-detail)/
+    for (const rule of [...f4cRules, ...f4cCompactRules]) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(ROOT)
+    }
+  })
+
+  it('sem hex: so tokens (a unica cor literal e a sombra da aba ativa do mock)', () => {
+    const all = [...f4cRules, ...f4cCompactRules].map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
+    expect(all.match(/rgba?\([^)]*\)/g)).toEqual(['rgba(0, 65, 83, 0.14)'])
+  })
+
+  it('o miolo desktop legado (timeline por segmento, abas pilula, grid de 2 colunas do cabecalho) saiu', () => {
+    const desktopBlocks = [...css.matchAll(/@media \(min-width: 1041px\) \{/g)].map((m) => bodyAfter(css.slice(m.index), DESKTOP_MEDIA))
+    for (const block of desktopBlocks) {
+      expect(block).not.toContain('.process-detail-view .process-timeline')
+      expect(block).not.toContain('.process-detail-view .detail-tab-row')
+      expect(block).not.toContain('.process-detail-view > .process-detail-card-heading')
+    }
+    // o legado de tablet/mobile fica
+    expect(css).toContain('.process-timeline__node--now')
+  })
+
+  it('notebook.css e mobile-redesign.css nao ganharam o desktop novo', () => {
+    expect(read('src/notebook.css')).not.toContain('pdv-')
+    expect(read('src/mobile-redesign.css')).not.toContain('pdv-')
+    expect(read('src/mobile-redesign.css')).not.toContain('surface--process-detail')
+  })
+
+  it('reduce desktop: preenchimento, pontos e entrada do painel viram fade de 150 ms no bloco existente', () => {
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    for (const selector of [
+      '.process-detail-view .pdv-timeline__fill',
+      '.process-detail-view .pdv-stage--done .pdv-stage__node',
+      '.process-detail-view .pdv-stage--now .pdv-stage__node',
+      '.process-detail-view .pdv-panel',
+    ]) {
+      expect(tail, selector).toContain(selector)
+    }
+  })
+})
+
+describe('F4c - cabecalho, timeline e abas (valores do Processo.dc.html)', () => {
+  it('pagina sem cartao, gap 18; raiz do detalhe em coluna sem fundo (vence o padding do notebook.css)', () => {
+    expectF4c('.surface.surface--process-detail', ['padding: 0', 'gap: 18px', 'border: 0', 'background: none', 'box-shadow: none'])
+    expectF4c('.process-detail-view.process-detail-view--desktop', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 18px',
+      'padding: 0',
+      'background: none',
+    ])
+  })
+
+  it('cartao do cabecalho: gap 20, padding 24, raio 22, borda --border, --shadow-sm', () => {
+    expectF4c('.process-detail-view .pdv-card', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 20px',
+      'padding: 24px',
+      'border: 1px solid var(--border)',
+      'border-radius: 22px',
+      'background: var(--surface)',
+      'box-shadow: var(--shadow-sm)',
+    ])
+    expectF4c('.process-detail-view .pdv-head__row', ['display: flex', 'flex-wrap: wrap', 'justify-content: space-between', 'gap: 16px'])
+    expectF4c('.process-detail-view .pdv-head__titles', ['display: flex', 'flex-direction: column', 'gap: 8px', 'min-width: 0'])
+  })
+
+  it('Voltar 13/700 em --link-color com chevron; titulo Sora 28/700 -0.02em; tag 28px 13/700; meta mono 13', () => {
+    expectF4c('.process-detail-view .pdv-back', ['gap: 6px', 'color: var(--link-color)', 'font-size: 13px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-back:hover', ['color: var(--link-color-hover)'])
+    expectF4c('.process-detail-view .pdv-head__title-line', ['display: flex', 'flex-wrap: wrap', 'align-items: center', 'gap: 12px'])
+    expectF4c('.process-detail-view .pdv-head__name', [
+      'font-family: var(--font-heading)',
+      'font-size: 28px',
+      'font-weight: 700',
+      'letter-spacing: -0.02em',
+    ])
+    expectF4c('.process-detail-view .pdv-head__title-line .status-tag', [
+      'height: 28px',
+      'padding: 0 12px',
+      'border-radius: 99px',
+      'font-size: 13px',
+      'font-weight: 700',
+    ])
+    expectF4c('.process-detail-view .pdv-head__meta', ['font-family: var(--font-mono)', 'font-size: 13px', 'color: var(--ink-soft)'])
+  })
+
+  it('acoes: gap 8; botoes 44px 14/700 (primario 0 18px); icones 44x44 raio 12; favorito --warning-50 com estrela --channel-yellow-edge/--warning-700', () => {
+    expectF4c('.process-detail-view .pdv-head__actions', ['display: flex', 'flex-wrap: wrap', 'align-items: flex-start', 'gap: 8px'])
+    expectF4c('.process-detail-view .pdv-btn', ['height: 44px', 'padding: 0 16px', 'font-size: 14px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-btn--primary', ['padding: 0 18px'])
+    expectF4c('.process-detail-view .pdv-icon-btn', ['width: 44px', 'height: 44px', 'border-radius: 12px'])
+    expectF4c('.process-detail-view .pdv-icon-btn--on', ['background-color: var(--warning-50)'])
+    expectF4c('.process-detail-view .pdv-icon-btn--on .pdv-star', ['fill: var(--channel-yellow-edge)', 'stroke: var(--warning-700)'])
+    expectF4c('.process-detail-view .pdv-more', ['border: 1px solid var(--border)', 'background: var(--surface)'])
+    for (const selector of [
+      '.process-detail-view .pdv-icon-btn:focus-visible',
+      '.process-detail-view .pdv-tab:focus-visible',
+      '.process-detail-view .pdv-back:focus-visible',
+    ]) {
+      expectF4c(selector, ['box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring)'])
+    }
+  })
+
+  it('timeline: 5 colunas de gap 8, trilho de 4px no centro do ponto (top 9), segmentos a partir de 30px', () => {
+    expectF4c('.process-detail-view .pdv-timeline__list', ['display: grid', 'grid-template-columns: repeat(5, minmax(0, 1fr))', 'gap: 8px'])
+    expectF4c('.process-detail-view .pdv-timeline__track', [
+      'position: absolute',
+      'top: 9px',
+      'grid-template-columns: repeat(5, minmax(0, 1fr))',
+      'column-gap: 8px',
+      'height: 4px',
+    ])
+    expectF4c('.process-detail-view .pdv-timeline__seg', ['height: 4px', 'margin-left: 30px', 'border-radius: 4px', 'background: var(--row-divider)'])
+    expectF4c('.process-detail-view .pdv-timeline__fill .pdv-timeline__seg', ['background: var(--primary-700)'])
+    expectF4c('.process-detail-view .pdv-stage', ['display: flex', 'flex-direction: column', 'gap: 8px'])
+  })
+
+  it('timeline: ponto 22px borda 3px (concluida --primary-700, atual --primary + anel --navy, futura --surface + --border)', () => {
+    expectF4c('.process-detail-view .pdv-stage__node', [
+      'width: 22px',
+      'height: 22px',
+      'border: 3px solid var(--border)',
+      'border-radius: 99px',
+      'background: var(--surface)',
+    ])
+    expectF4c('.process-detail-view .pdv-stage--done .pdv-stage__node', ['border-color: var(--primary-700)', 'background: var(--primary-700)'])
+    expectF4c('.process-detail-view .pdv-stage--now .pdv-stage__node', ['border-color: var(--pdv-now-ring, var(--navy))', 'background: var(--primary)'])
+    expectF4c("[data-theme='dark'] .process-detail-view .pdv-stage--now .pdv-stage__node", ['--pdv-now-ring: var(--ink-soft)'])
+  })
+
+  it('timeline: rotulo 13 (atual 700), data mono 11 em --ink-soft', () => {
+    expectF4c('.process-detail-view .pdv-stage__label', ['font-size: 13px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-stage--now .pdv-stage__label', ['font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-stage__date', ['font-family: var(--font-mono)', 'font-size: 11px', 'color: var(--ink-soft)'])
+  })
+
+  it('timeline (movimento): UM trilho com preenchimento por transform: scaleX em 600 ms ease-out e pontos com mola em 100 + 150·i ms', () => {
+    const fill = f4cDecls('.process-detail-view .pdv-timeline__fill')
+    expect(fill).toContain('transform-origin: left center;')
+    expect(fill).toContain('animation: motion-fill var(--dur-fill) var(--ease-out) both;')
+    // o keyframe e' scaleX(0) -> scaleX(1) (so transform)
+    expect(css).toMatch(/@keyframes motion-fill \{\s*from \{ transform: scaleX\(0\); \}\s*to \{ transform: scaleX\(1\); \}\s*\}/)
+    // largura do preenchimento = colunas concluidas (o 8px de gap entra na conta)
+    expect(fill).toContain('width: calc(var(--pdv-filled, 0) * (100% + 8px) / 5 - 8px);')
+    const dots = f4cDecls('.process-detail-view .pdv-stage--done .pdv-stage__node')
+    expect(dots).toContain('animation: motion-pop var(--dur-slow) var(--ease-spring) both;')
+    expect(dots).toContain('animation-delay: calc(100ms + 150ms * var(--i, 0));')
+    expect(f4cDecls('.process-detail-view .pdv-stage--now .pdv-stage__node')).toContain(
+      'animation-delay: calc(100ms + 150ms * var(--i, 0));'
+    )
+    // os tokens por tras: 600 ms, 300 ms, ease-out e mola do mock
+    expect(light['--dur-fill']).toBe('600ms')
+    expect(light['--dur-slow']).toBe('300ms')
+    const bezier = (token) => light[token].replace(/\s+/g, '').replace(/\(0\./g, '(.').replace(/,0\./g, ',.')
+    expect(bezier('--ease-out')).toBe('cubic-bezier(.4,0,.2,1)')
+    expect(bezier('--ease-spring')).toBe('cubic-bezier(.34,1.56,.64,1)')
+    // so transform/opacity nos keyframes do detalhe
+    const panelIn = css.match(/@keyframes pdv-panel-in \{([\s\S]*?)\n\}\n/)[1]
+    expect([...new Set(panelIn.match(/[a-z-]+(?=:)/g))].sort()).toEqual(['opacity', 'transform'])
+  })
+
+  it('abas: trilho --disabled-bg raio 14 padding 4; aba 40px raio 10 13/700; ativa --surface + sombra do mock; pilula "N pendentes" --warning-50/--warning-700', () => {
+    expectF4c('.process-detail-view .pdv-tabs', [
+      'display: flex',
+      'flex-wrap: wrap',
+      'align-self: flex-start',
+      'gap: 4px',
+      'padding: 4px',
+      'border-radius: 14px',
+      'background: var(--disabled-bg)',
+    ])
+    expectF4c('.process-detail-view .pdv-tab', [
+      'height: 40px',
+      'padding: 0 14px',
+      'border-radius: 10px',
+      'font-size: 13px',
+      'font-weight: 700',
+      'gap: 8px',
+      'background: transparent',
+      'color: var(--ink-soft)',
+    ])
+    const tab = f4cDecls('.process-detail-view .pdv-tab')
+    expect(tab).toContain('background-color var(--dur-base) var(--ease-out)')
+    expect(tab).toContain('color var(--dur-base) var(--ease-out)')
+    expectF4c('.process-detail-view .pdv-tab:hover', ['background-color: var(--disabled-bg)'])
+    expectF4c('.process-detail-view .pdv-tab--active', ['background: var(--surface)', 'color: var(--ink)', 'box-shadow: 0 1px 3px rgba(0, 65, 83, 0.14)'])
+    expectF4c('.process-detail-view .pdv-tab .documents-tab-count', [
+      'padding: 2px 7px',
+      'border-radius: 99px',
+      'background: var(--warning-50)',
+      'color: var(--warning-700)',
+      'font-size: 11px',
+    ])
+  })
+
+  it('painel da aba entra em 300 ms subindo 8px (so opacity/transform)', () => {
+    const panel = f4cDecls('.process-detail-view .pdv-panel')
+    expect(panel).toContain('animation: pdv-panel-in var(--dur-slow) var(--ease-out) both;')
+    expect(css).toMatch(/@keyframes pdv-panel-in \{\s*from \{\s*opacity: 0;\s*transform: translateY\(8px\);/)
+  })
+
+  it('compacto de notebook: menos respiro, sem perder nada', () => {
+    expectF4c('.process-detail-view .pdv-card', ['gap: 14px', 'padding: 18px 22px'], f4cCompactRules)
+    expectF4c('.process-detail-view .pdv-head__name', ['font-size: 24px'], f4cCompactRules)
+  })
+})
+
+describe('F4c - JSX/markup', () => {
+  const readLf = (rel) => read(rel).replace(/\r\n/g, '\n')
+  const view = readLf('src/features/processes/ProcessDetailView.jsx')
+  const desktop = readLf('src/features/processes/ProcessDetailDesktop.jsx')
+  const page = readLf('src/pages/ProcessesPage.jsx')
+
+  it('a view escolhe a arvore por matchMedia (useMediaQuery) e a legada continua intacta', () => {
+    expect(view).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(view).toContain('useMediaQuery(DESKTOP_QUERY)')
+    expect(view).toContain('const isDesktop = isDesktopQuery && !isMobileLayout')
+    expect(view).toContain('if (isDesktop) {')
+    expect(view).toContain('className="process-detail-mobilebar"')
+    expect(view).toContain('className="process-timeline"')
+    expect(view).toContain('className="detail-tab-select"')
+    expect(view).toContain('<article className="list-card view-push process-detail-view"')
+  })
+
+  it('a pagina esconde o titulo da fila no detalhe desktop (surface--process-detail)', () => {
+    expect(page).toContain("isDesktopLayout && viewMode === 'detail' && Boolean(selectedProcess)")
+    expect(page).toContain("' surface--process-detail'")
+  })
+
+  it('a arvore desktop nao usa .ghost-button (secundario = .secondary-button, primario = .primary-button)', () => {
+    expect(desktop).not.toMatch(/ghost-button(?!-)/)
+    expect(desktop).toContain('secondary-button pdv-btn')
+    expect(desktop).toContain('primary-button pdv-btn pdv-btn--primary')
+  })
+
+  it('sem toISOString e sem hex nos JSX novos', () => {
+    expect(desktop).not.toContain('toISOString')
+    expect(desktop.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
   })
 })

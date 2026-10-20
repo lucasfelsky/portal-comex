@@ -12443,137 +12443,6 @@ body {
    do :root. Nao toca nenhum bloco @media (max-width:*).
    ============================================================ */
 @media (min-width: 1041px) {
-  .process-detail-view {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  /* Timeline horizontal (F16.5 so' definia mobile). Track = celulas
-     [bar? + node]; a primeira celula so' tem node (largura fixa), as
-     demais crescem (flex:1) pra' preencher a barra entre nodes —
-     mesma tecnica do bloco mobile, so' com metricas maiores. */
-  .process-detail-view .process-timeline {
-    display: block;
-    margin: 0 0 20px;
-    padding: 22px 26px 18px;
-    background: var(--surface);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .process-detail-view .process-timeline__track {
-    display: flex;
-    align-items: center;
-  }
-
-  .process-detail-view .process-timeline__cell {
-    display: flex;
-    align-items: center;
-    flex: 0 0 28px;
-  }
-
-  .process-detail-view .process-timeline__cell:not(:first-child) {
-    flex: 1;
-  }
-
-  .process-detail-view .process-timeline__bar {
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--border);
-  }
-
-  .process-detail-view .process-timeline__bar--done {
-    background: var(--primary-700);
-  }
-
-  .process-detail-view .process-timeline__node {
-    width: 18px;
-    height: 18px;
-    border-radius: var(--radius-full);
-    background: var(--border);
-    flex-shrink: 0;
-  }
-
-  .process-detail-view .process-timeline__node--done {
-    background: var(--primary-700);
-  }
-
-  .process-detail-view .process-timeline__node--now {
-    background: var(--surface);
-    border: 3px solid var(--primary-700);
-    box-sizing: border-box;
-    box-shadow: 0 0 0 6px var(--primary-50), 0 0 0 7px var(--primary);
-  }
-
-  .process-detail-view .process-timeline__labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-  }
-
-  .process-detail-view .process-timeline__labels span {
-    font-size: var(--fs-footnote);
-    font-weight: 700;
-    color: var(--text-subtle);
-    text-align: center;
-  }
-
-  .process-detail-view .process-timeline__labels span:first-child {
-    text-align: left;
-  }
-
-  .process-detail-view .process-timeline__labels span:last-child {
-    text-align: right;
-  }
-
-  .process-detail-view .process-timeline__label--now {
-    color: var(--primary-700);
-  }
-
-  /* Header-resumo: o card-heading de TOPO (botao voltar + titulo +
-     toolbar) — combinador de filho direto pra nao pegar os outros
-     `.process-detail-card-heading` aninhados dentro de `.detail-card`
-     (Itens vinculados, Status do processo etc.), que continuam como
-     estao. */
-  .process-detail-view > .process-detail-card-heading {
-    margin-bottom: 20px;
-  }
-
-  .process-detail-view > .process-detail-card-heading h3 {
-    font-family: var(--font-heading);
-  }
-
-  /* Abas do detalhe (o select nativo do F16.11 continua mobile-only,
-     regra em @media (max-width:720px) intocada). */
-  .process-detail-view .detail-tab-row {
-    margin-top: 16px;
-    margin-bottom: 20px;
-  }
-
-  .process-detail-view .detail-tab-row .tab-button {
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
-  }
-
-  /* Aba ativa vira "card elevado" (mockup Detalhe.dc.html `.tab--on`) em
-     vez do pill gradiente teal global (`.tab-button--active`,
-     styles.css:2866). Mesmo padrao ja aprovado pro segmented control
-     mobile em `.tab-row:not(...):not(.detail-tab-row)
-     .tab-button--active` (styles.css:6683-6688) -- aqui e' o equivalente
-     pra esta tab-row especifica no desktop, que aquela regra exclui de
-     proposito. Especificidade (0,3,0) + ordem no arquivo ja vencem o
-     `.tab-button--active` base sem precisar de !important; so' tokens
-     dark-aware, nao ha override `[data-theme='dark'] .tab-button--active`
-     fora de @media (max-width:720px) pra disputar. */
-  .process-detail-view .detail-tab-row .tab-button--active {
-    background: var(--surface);
-    color: var(--ink);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-    transform: none;
-  }
-
   /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
      Cards que precisam da linha inteira (ETD/ETA e quantidades em
      --split, listas roladas de itens/mensagens, e a acao de excluir
@@ -12690,19 +12559,6 @@ body {
   .process-detail-view .field .text-input:not(textarea) {
     border-radius: var(--radius-full);
     padding-left: 16px;
-  }
-
-  /* UX-6b-3 (D10): cabecalho do detalhe em 3 colunas (voltar | nome+status
-     | toolbar) so' dentro do escopo `.process-detail-view >` — a base
-     `.process-detail-card-heading` (styles.css:2501) fica 1fr auto 1fr pros
-     outros usos (Itens vinculados etc, aninhados em `.detail-card`). */
-  .process-detail-view > .process-detail-card-heading {
-    grid-template-columns: auto 1fr auto;
-  }
-
-  .process-detail-view > .process-detail-card-heading h2 {
-    font-family: var(--font-heading);
-    font-size: var(--fs-title);
   }
 }
 
@@ -15692,41 +15548,6 @@ body {
     transform: none;
   }
 
-  /* ---- Timeline do detalhe: o trilho verde preenche em 600 ms (segmentos em
-     sequencia, via --seg-index/--seg-count do JSX) e os pontos entram com mola,
-     atrasados 100 + 150 ms * posicao (--dot-delay) ---- */
-  .process-detail-view .process-timeline__bar {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .process-detail-view .process-timeline__bar--done {
-    background: var(--border);
-  }
-
-  .process-detail-view .process-timeline__bar--done::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: var(--primary-700);
-    transform-origin: left center;
-    animation: motion-fill calc(var(--dur-fill) / var(--seg-count, 1)) linear both;
-    animation-delay: calc(var(--dur-fill) / var(--seg-count, 1) * var(--seg-index, 0));
-  }
-
-  .process-detail-view .process-timeline__node--done,
-  .process-detail-view .process-timeline__node--now {
-    animation: motion-pop var(--dur-slow) var(--ease-spring) both;
-    animation-delay: var(--dot-delay, 100ms);
-  }
-
-  .process-detail-view .process-timeline__cell:nth-child(1) { --dot-delay: 100ms; }
-  .process-detail-view .process-timeline__cell:nth-child(2) { --dot-delay: 250ms; }
-  .process-detail-view .process-timeline__cell:nth-child(3) { --dot-delay: 400ms; }
-  .process-detail-view .process-timeline__cell:nth-child(4) { --dot-delay: 550ms; }
-  .process-detail-view .process-timeline__cell:nth-child(5) { --dot-delay: 700ms; }
-
   /* ---- Estrela de favorito: scale(0 -> 1) em 300 ms com mola, so ao ativar ---- */
   .favorite-star--pop {
     animation: motion-pop var(--dur-slow) var(--ease-spring) both;
@@ -17011,6 +16832,429 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F4c — DETALHE DO PROCESSO (Processo.dc.html, desktop >= 1041px)
+   O desktop renderiza cabecalho, timeline e abas proprios (`pdv-*`,
+   ProcessDetailDesktop.jsx); tablet e mobile seguem na arvore legada
+   (`process-timeline`, `tab-row`, mobilebar), que este bloco nao toca. Toda
+   regra comeca por `.process-detail-view` (raiz unica; `.list-card`,
+   `.detail-card`, `.inline-badge` e `.status-tag` sao classes compartilhadas e
+   ja vazaram para outras telas). Sem hex: so tokens (rgba literal so onde o mock
+   usa sombra propria). Segue o mock linha a linha (valores inline do .dc.html);
+   elementos sem line-height no mock usam `normal` para dar a mesma altura.
+   Movimento reduzido: as regras entram no bloco reduce desktop do fim do arquivo.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* ---- Pagina: o <section class="surface"> fica sem cartao; 18px entre secoes ---- */
+  .surface.surface--process-detail {
+    padding: 0;
+    gap: 18px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* (0,2,0): vence o `.process-detail-view { padding }` do modo compacto do notebook.css */
+  .process-detail-view.process-detail-view--desktop {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* ---- Cartao do cabecalho ---- */
+  .process-detail-view .pdv-card {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-detail-view .pdv-head__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .process-detail-view .pdv-head__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .process-detail-view .pdv-back {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--link-color);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+    cursor: pointer;
+    transition: color var(--dur-base) var(--ease-out);
+  }
+
+  .process-detail-view .pdv-back:hover {
+    color: var(--link-color-hover);
+  }
+
+  .process-detail-view .pdv-back:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-detail-view .pdv-head__title-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .process-detail-view .pdv-head__name {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  /* tag de status do cabecalho: 28px / 13px (a tag da lista e' 26px / 12px) */
+  .process-detail-view .pdv-head__title-line .status-tag {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-head__meta {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Acoes: favorito, Status de coleta, Editar processo, Mais acoes ---- */
+  .process-detail-view .pdv-head__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .process-detail-view .pdv-btn {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-btn--primary {
+    padding: 0 18px;
+  }
+
+  .process-detail-view .pdv-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-detail-view .pdv-icon-btn:hover {
+    background-color: var(--disabled-bg);
+  }
+
+  .process-detail-view .pdv-icon-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-detail-view .pdv-icon-btn--on {
+    background-color: var(--warning-50);
+  }
+
+  .process-detail-view .pdv-more {
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .process-detail-view .pdv-star {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  .process-detail-view .pdv-icon-btn--on .pdv-star {
+    fill: var(--channel-yellow-edge);
+    stroke: var(--warning-700);
+  }
+
+  .process-detail-view .pdv-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ---- Timeline: trilho unico (5 segmentos) + preenchimento por scaleX ----
+     Colunas: 5 iguais com 8px de gap, como o grid do mock; o segmento comeca 30px
+     (no 22 + 8) depois do inicio da coluna e vai ate o fim dela. O preenchimento
+     cobre as colunas concluidas e entra em 600 ms (--dur-fill, --ease-out); os
+     pontos entram com mola em 100 + 150 ms * posicao (--i). */
+  .process-detail-view .pdv-timeline {
+    position: relative;
+  }
+
+  .process-detail-view .pdv-timeline__track {
+    position: absolute;
+    top: 9px;
+    right: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    column-gap: 8px;
+    height: 4px;
+    pointer-events: none;
+  }
+
+  .process-detail-view .pdv-timeline__seg {
+    height: 4px;
+    margin-left: 30px;
+    border-radius: 4px;
+    background: var(--row-divider);
+  }
+
+  .process-detail-view .pdv-timeline__fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--pdv-filled, 1), minmax(0, 1fr));
+    column-gap: 8px;
+    width: calc(var(--pdv-filled, 0) * (100% + 8px) / 5 - 8px);
+    height: 4px;
+    transform-origin: left center;
+    animation: motion-fill var(--dur-fill) var(--ease-out) both;
+  }
+
+  .process-detail-view .pdv-timeline__fill .pdv-timeline__seg {
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .pdv-timeline__list {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .process-detail-view .pdv-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .process-detail-view .pdv-stage__node {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border: 3px solid var(--border);
+    border-radius: 99px;
+    background: var(--surface);
+  }
+
+  .process-detail-view .pdv-stage--done .pdv-stage__node {
+    border-color: var(--primary-700);
+    background: var(--primary-700);
+  }
+
+  .process-detail-view .pdv-stage--now .pdv-stage__node {
+    border-color: var(--pdv-now-ring, var(--navy));
+    background: var(--primary);
+  }
+
+  [data-theme='dark'] .process-detail-view .pdv-stage--now .pdv-stage__node {
+    --pdv-now-ring: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-stage--done .pdv-stage__node,
+  .process-detail-view .pdv-stage--now .pdv-stage__node {
+    animation: motion-pop var(--dur-slow) var(--ease-spring) both;
+    animation-delay: calc(100ms + 150ms * var(--i, 0));
+  }
+
+  .process-detail-view .pdv-stage__label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-stage--done .pdv-stage__label,
+  .process-detail-view .pdv-stage--now .pdv-stage__label {
+    color: var(--ink);
+  }
+
+  .process-detail-view .pdv-stage--now .pdv-stage__label {
+    font-weight: 700;
+  }
+
+  .process-detail-view .pdv-stage__date {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Abas: controle segmentado ---- */
+  .process-detail-view .pdv-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: var(--disabled-bg);
+  }
+
+  .process-detail-view .pdv-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 40px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: normal;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  .process-detail-view .pdv-tab:hover {
+    background-color: var(--disabled-bg);
+  }
+
+  .process-detail-view .pdv-tab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-detail-view .pdv-tab--active,
+  .process-detail-view .pdv-tab--active:hover {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(0, 65, 83, 0.14);
+  }
+
+  .process-detail-view .pdv-tab--active:focus-visible {
+    box-shadow:
+      0 0 0 3px var(--surface),
+      0 0 0 5px var(--focus-ring);
+  }
+
+  .process-detail-view .pdv-tab .documents-tab-count {
+    margin: 0;
+    padding: 2px 7px;
+    border-radius: 99px;
+    background: var(--warning-50);
+    color: var(--warning-700);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  /* ---- Painel da aba: entra em 300 ms (sobe 8px) ---- */
+  .process-detail-view .pdv-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pdv-gap, 14px);
+    animation: pdv-panel-in var(--dur-slow) var(--ease-out) both;
+  }
+}
+
+@keyframes pdv-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* REFINO VISUAL F4c — DETALHE COMPACTO (notebook, altura <= 800): menos respiro
+   vertical, sem perder nenhuma secao. notebook.css so mira as classes legadas. */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .surface.surface--process-detail,
+  .process-detail-view.process-detail-view--desktop {
+    gap: clamp(12px, 2.2vh, 18px);
+  }
+
+  .process-detail-view .pdv-card {
+    gap: 14px;
+    padding: 18px 22px;
+  }
+
+  .process-detail-view .pdv-head__name {
+    font-size: 24px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -17044,9 +17288,10 @@ body {
   .surface--dashboard .dash-rise,
   .skeleton-reveal,
   .favorite-star--pop,
-  .process-detail-view .process-timeline__bar--done::after,
-  .process-detail-view .process-timeline__node--done,
-  .process-detail-view .process-timeline__node--now {
+  .process-detail-view .pdv-timeline__fill,
+  .process-detail-view .pdv-stage--done .pdv-stage__node,
+  .process-detail-view .pdv-stage--now .pdv-stage__node,
+  .process-detail-view .pdv-panel {
     animation: motion-fade-in 150ms linear both;
     animation-delay: 0ms;
   }

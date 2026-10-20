@@ -22,10 +22,12 @@ import { getItemDangerousGoodsLabel } from './operationalOptions'
 import Spinner from '../../components/Spinner'
 import Icon from '../../components/Icon'
 import { useMobileLayout } from '../../hooks/useMobileLayout'
+import useMediaQuery from '../../hooks/useMediaQuery'
 import useActivationPop from '../../hooks/useActivationPop'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
+import { DetailHeaderCard, DetailTabs } from './ProcessDetailDesktop'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
@@ -64,6 +66,9 @@ import {
 // "Mais ações" (admin, com "Excluir processo") e a aba "Processo" em
 // blocos numerados 1-5 espelhando o wizard (Carga > Embarque > Chegada +
 // Free time > Aduana + Anuências > Coleta).
+// Refino F4c: arvore desktop (Processo.dc.html) a partir de 1041px.
+const DESKTOP_QUERY = '(min-width: 1041px)'
+
 export default function ProcessDetailView({
   selectedProcess,
   detailTab,
@@ -109,6 +114,10 @@ export default function ProcessDetailView({
   // Mobile (<=720px): Favoritar e "..." sobem pra barra do topo (nav bar do
   // iOS); no desktop ficam na toolbar abaixo do titulo, como sempre.
   const isMobileLayout = useMobileLayout()
+  // Os dois breakpoints sao excludentes no navegador; `!isMobileLayout` so protege
+  // quando um teste forca matchMedia = true para todas as consultas.
+  const isDesktopQuery = useMediaQuery(DESKTOP_QUERY)
+  const isDesktop = isDesktopQuery && !isMobileLayout
   const moreContainerRef = useRef(null)
   const moreTriggerRef = useRef(null)
   const firstMenuItemRef = useRef(null)
@@ -291,6 +300,23 @@ export default function ProcessDetailView({
     </button>
   )
 
+  const deleteDialog = isAdmin ? (
+    <ConfirmDialog
+      open={isConfirmDeleteOpen}
+      title="Excluir processo?"
+      message="Esta ação é irreversível e excluirá o processo e todas as suas mensagens."
+      confirmLabel="Excluir"
+      cancelLabel="Cancelar"
+      tone="danger"
+      busy={isSaving}
+      onConfirm={() => {
+        setIsConfirmDeleteOpen(false)
+        onDeleteProcess()
+      }}
+      onCancel={() => setIsConfirmDeleteOpen(false)}
+    />
+  ) : null
+
   const moreActions = isAdmin ? (
     <div className="process-detail-more" ref={moreContainerRef}>
       <button
@@ -322,6 +348,405 @@ export default function ProcessDetailView({
       ) : null}
     </div>
   ) : null
+
+  // Conteudo das abas: o mesmo nas duas arvores (legada e desktop F4c); o que
+  // muda por arvore e' so' o invólucro (e, nas proximas etapas do F4c, o miolo).
+  const tabPanels = (
+    <>
+    {effectiveTab === 'general' ? (
+      <>
+        {isAdmin && pendingFields.length > 0 ? (
+          <div className="detail-card process-general-card process-general-card--pending">
+            <span className="detail-label">Dados pendentes</span>
+            <ul className="process-general-card__list">
+              {pendingFields.map((field) => (
+                <li key={field.id}>{field.label}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {isConsolidatedProcess && consolidatedOrders.length > 0 ? (
+          <div className="detail-card process-general-card process-general-card--consolidated-pos">
+            <span className="detail-label">
+              POs consolidadas
+              <ErpHint hint={poSetHint} />
+            </span>
+            <ul className="detail-stack detail-stack--compact">
+              {consolidatedOrders.map((order) => (
+                <li key={order.po}>
+                  {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
+                  <ErpHint hint={erpHints.po[erpOrderKey(order.po)]} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : emptyPoSetHint ? (
+          <div className="detail-card process-general-card process-general-card--consolidated-pos">
+            <span className="detail-label">
+              POs consolidadas
+              <ErpHint hint={emptyPoSetHint} />
+            </span>
+            <p>—</p>
+          </div>
+        ) : null}
+        <div className="detail-card process-general-card process-general-card--destination">
+          <span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span>
+          <p>
+            {selectedProcess.destination || '-'}
+            <ErpHint hint={getErpRowHint(erpHints.fields.destination, selectedProcess)} />
+          </p>
+        </div>
+        <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} erpHints={erpHints} />
+        <div className="detail-card process-general-card process-general-card--etd-eta">
+          <span className="detail-label">ETD / ETA</span>
+          <div className="detail-card--split" style={{ marginTop: '8px' }}>
+            <div>
+              <span className="detail-label detail-label--muted">ETD</span>
+              <p>
+                {formatDate(selectedProcess.etd)}
+                <ErpHint hint={etdHint} />
+              </p>
+            </div>
+            <div className={getEtaDisplayClassName(selectedProcess)}>
+              <span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span>
+              <p>
+                {formatDate(selectedProcess.eta)}
+                <ErpHint hint={getErpRowHint(erpHints.fields.eta, selectedProcess)} />
+              </p>
+            </div>
+          </div>
+        </div>
+        {selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card process-general-card process-general-card--eta-original"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}
+        <div className="detail-card process-general-card process-general-card--forecast">
+          <span className="detail-label">Previsão de entrega no armazém</span>
+          <p>{getEstimatedDeliveryLabel(selectedProcess)}</p>
+          <small className="field-hint">{selectedProcess.warehouseDeliveryDateOverride ? 'Data definida manualmente por um admin.' : 'Data calculada automaticamente pelo sistema.'}</small>
+        </div>
+        <div className="detail-card process-general-card process-general-card--linked-items">
+          <div className="card-heading process-detail-card-heading">
+            <div>
+              <span className="detail-label">Itens vinculados</span>
+              <p>
+                <span className="process-linked-items__count">
+                  {linkedItemsCount === 1 ? '1 item' : `${linkedItemsCount} itens`}
+                </span>
+                <span className="process-linked-items__suffix">
+                  {linkedItemsCount === 1 ? ' cadastrado' : ' cadastrados'} para este processo.
+                </span>
+              </p>
+            </div>
+            <button type="button" className="ghost-button ghost-button--secondary" onClick={() => onDetailTabChange('items')}>Ver itens do processo</button>
+          </div>
+        </div>
+      </>
+    ) : null}
+
+    {effectiveTab === 'process' ? (
+      <>
+        <ProcessCargoDetails
+          process={selectedProcess}
+          showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
+          containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
+        />
+        <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder erpHints={erpHints} />
+        <ProcessArrivalDetails process={selectedProcess} step={3} showEmptyPlaceholder />
+        <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} showEmptyPlaceholder />
+        <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder erpHints={erpHints} />
+        <ProcessLicensesDetails
+          process={selectedProcess}
+          step={showCustomsBlock ? null : 4}
+          showEmptyPlaceholder
+        />
+        {showCollectionBlock ? (
+          <DetailBlock
+            step={5}
+            title="Coleta"
+            wide
+            className="process-block--collection"
+            badges={
+              showCollectionStatusBadge ? (
+                <span className="inline-badge">{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</span>
+              ) : null
+            }
+          >
+            {showCollectionWindows ? (
+              <div className="detail-stack detail-stack--compact">
+                {collectionWindows.map((window) => (
+                  <div key={window.id} className="detail-block__row">
+                    <p>
+                      <strong>
+                        {getCollectionWindowLabel(window, {
+                          category: selectedProcess.category,
+                          containers: selectedProcess.containers,
+                        })}
+                      </strong>
+                      {' · '}
+                      {formatDateTime(window.scheduledAt)}
+                    </p>
+                    {window.notes ? <small className="field-hint">{window.notes}</small> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {showCarrier ? (
+              <DetailList>
+                <DetailRow label="Transportadora">{selectedProcess.carrierName || '-'}</DetailRow>
+              </DetailList>
+            ) : null}
+          </DetailBlock>
+        ) : showsCollectionCategory ? (
+          <DetailBlockPlaceholder
+            title="Coleta"
+            wide
+            className="process-block--collection"
+            message="Coleta ainda não agendada."
+          />
+        ) : null}
+        {selectedProcess.processNotes ? (
+          <DetailBlock title="Observações do processo" wide className="process-block--process-notes">
+            <p>{selectedProcess.processNotes}</p>
+          </DetailBlock>
+        ) : null}
+        {isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? (
+          <DetailBlock title="Observações pós-recebimento da carga" wide className="process-block--post-receipt">
+            {selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}
+            {selectedProcessPostReceiptImages.length > 0 ? (
+              <div className="post-receipt-image-grid post-receipt-image-grid--detail">
+                {selectedProcessPostReceiptImages.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    className="post-receipt-image-card post-receipt-image-card--detail"
+                    onClick={() => onOpenPostReceiptGallery(index)}
+                  >
+                    <img src={image.url} alt={image.name || 'Imagem do recebimento no CD'} />
+                    <div className="post-receipt-image-card__meta">
+                      <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
+                      <span>{formatPostReceiptImageSize(image.size)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </DetailBlock>
+        ) : null}
+        <ProcessReceiptDivergenceDetails process={selectedProcess} />
+      </>
+    ) : null}
+
+    {effectiveTab === 'items' ? (
+      <div ref={itemsSectionRef} className="detail-card">
+        <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
+          <div>
+            <span className="detail-label">Itens do processo</span>
+            <p>Itens comerciais vinculados diretamente a este processo.</p>
+          </div>
+          <span className="inline-badge">
+            {visibleProcessItems.length === 1 ? '1 item' : `${visibleProcessItems.length} itens`}
+          </span>
+        </div>
+        <label className="field">
+          <span>Buscar item</span>
+          <input
+            className="text-input"
+            type="search"
+            value={itemSearchTerm}
+            onChange={(event) => onSetItemSearchTerm(event.target.value)}
+            placeholder="Digite o nome comercial do item"
+          />
+        </label>
+        <div className="process-items-list">
+          {visibleProcessItems.length > 0 ? (
+            visibleProcessItems.map((item) => {
+              const itemHint = quantityHintByItem.get(item)
+              const itemButton = (
+              <button
+                key={item.id}
+                type="button"
+                className="metric-card process-related-item-button process-related-item-button--compact"
+                onClick={() => onOpenRelatedItemTab(item.commercialName)}
+              >
+                <div className="process-item-display">
+                  <strong className="process-item-display__name">{item.commercialName}</strong>
+                </div>
+                <div className="process-item-display process-item-display--quantity">
+                  <span className="detail-label">Quantidade:</span>
+                  <strong>{item.quantity}</strong>
+                </div>
+                {selectedProcess.category === 'CONSOLIDADO' && item.poNumber ? (
+                  <div className="process-item-display">
+                    <span className="detail-label">PO:</span>
+                    <strong>{item.poNumber}</strong>
+                  </div>
+                ) : null}
+                {item.dangerousGoods ? (
+                  <span className="inline-badge inline-badge--warn">
+                    {getItemDangerousGoodsLabel(item)}
+                  </span>
+                ) : null}
+                {documentIndex && item.dangerousGoods && item.id ? (
+                  documentIndex.fispqItemIds.includes(item.id) ? (
+                    <span className="inline-badge inline-badge--ok">FISPQ enviada</span>
+                  ) : (
+                    <span className="inline-badge inline-badge--warn">FISPQ pendente</span>
+                  )
+                ) : null}
+              </button>
+              )
+              // O aviso fica FORA do <button> (botao aninhado e' invalido): so' com
+              // aviso o item ganha o wrapper; sem aviso o DOM e' o de sempre.
+              return itemHint ? (
+                <div className="process-items-list__entry" key={item.id}>
+                  {itemButton}
+                  <ErpHint hint={itemHint} />
+                </div>
+              ) : (
+                itemButton
+              )
+            })
+          ) : (
+            <div className="empty-state" role="status">
+              <strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong>
+              <p>{selectedProcess.items?.length > 0 ? 'Ajuste a busca para localizar outro item deste processo.' : 'Os itens vinculados ao processo aparecerão aqui.'}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null}
+
+    {effectiveTab === 'related-item' && selectedItemName ? (
+      <div className="detail-card">
+        <div className="card-heading process-detail-card-heading">
+          <div>
+            <span className="detail-label">Chegadas ativas com este item</span>
+            <p>Item selecionado: {selectedItemName}</p>
+          </div>
+          <span className="inline-badge">
+            {relatedActiveProcesses.length === 1 ? '1 chegada' : `${relatedActiveProcesses.length} chegadas`}
+          </span>
+        </div>
+        <div className="process-items-list process-items-list--scroll">
+          {relatedActiveProcesses.length > 0 ? (
+            relatedActiveProcesses.map(({ process, quantity }) => (
+              <button
+                key={`${process.id}-${selectedItemName}`}
+                type="button"
+                className="metric-card process-related-item-button process-related-item-button--compact"
+                onClick={() => onOpenProcessDetail(process)}
+              >
+                <div className="process-item-display">
+                  <span className="detail-label">Chegada:</span>
+                  <strong>{getProcessTitle(process, canSeeName)}</strong>
+                </div>
+                <div className="process-item-display process-item-display--quantity">
+                  <span className="detail-label">Quantidade:</span>
+                  <strong>{quantity}</strong>
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="empty-state" role="status">
+              <strong>Nenhuma chegada ativa encontrada</strong>
+              <p>Não há chegadas ativas com este item fora do CD no momento.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null}
+
+    {effectiveTab === 'messages' ? (
+      <ProcessMessagesPanel
+        messages={processMessages}
+        isLoading={isLoadingMessages}
+        messageDraft={messageDraft}
+        onMessageDraftChange={onMessageDraftChange}
+        onSubmit={onSendMessage}
+        isSending={isSendingMessage}
+        currentUserName={profile?.name ?? profile?.email ?? 'usuário'}
+        messageLimitReached={messageLimitReached}
+        remainingMessages={remainingMessages}
+        canSendMessages={!messageLimitReached || hasUnlimitedMessages}
+        showRemainingMessages={isAdmin}
+        canDeleteMessages={isAdmin}
+        deletingMessageId={deletingMessageId}
+        onDeleteMessage={onDeleteMessage}
+      />
+    ) : null}
+
+    {effectiveTab === 'history' ? (
+      <ProcessHistoryPanel processId={selectedProcess.id} />
+    ) : null}
+
+    {effectiveTab === 'documents' ? (
+      <ProcessDocumentsPanel
+        process={selectedProcess}
+        profile={profile}
+        onPendingCountChange={handleDocumentsPendingCountChange}
+      />
+    ) : null}
+    </>
+  )
+
+  if (isDesktop) {
+    const panelId = 'process-detail-panel'
+    const tabs = [
+      { key: 'general', label: 'Detalhes gerais' },
+      { key: 'process', label: 'Processo' },
+      { key: 'items', label: 'Itens' },
+      { key: 'messages', label: 'Mensagens' },
+      ...(canViewRecords ? [{ key: 'history', label: 'Histórico' }] : []),
+      ...(canViewRecords
+        ? [
+            {
+              key: 'documents',
+              label: 'Documentos',
+              badge:
+                documentsPendingCount > 0
+                  ? `${documentsPendingCount} ${documentsPendingCount === 1 ? 'pendente' : 'pendentes'}`
+                  : '',
+            },
+          ]
+        : []),
+      ...(effectiveTab === 'related-item' && selectedItemName ? [{ key: 'related-item', label: 'Item relacionado' }] : []),
+    ]
+    return (
+      <article className="process-detail-view process-detail-view--desktop">
+        <DetailHeaderCard
+          process={selectedProcess}
+          deliveryDate={getEstimatedDeliveryDate(selectedProcess)}
+          canSeeName={canSeeName}
+          isAdmin={isAdmin}
+          isSaving={isSaving}
+          isFavorite={isFavorite}
+          favoriteStarPop={favoriteStarPop}
+          canEditPostReceiptNotes={canEditPostReceiptNotes}
+          canEditCollectionStatus={canEditSelectedCollectionStatus}
+          isMoreOpen={isMoreOpen}
+          moreContainerRef={moreContainerRef}
+          moreTriggerRef={moreTriggerRef}
+          firstMenuItemRef={firstMenuItemRef}
+          onToggleMore={() => setIsMoreOpen((open) => !open)}
+          onOpenDeleteConfirm={handleOpenDeleteConfirm}
+          onBack={onSetViewModeList}
+          onToggleFavorite={onToggleFavorite}
+          onEditMode={onEditMode}
+          onPostReceiptEditMode={onPostReceiptEditMode}
+          onCollectionStatusEditMode={onCollectionStatusEditMode}
+        />
+        {deleteDialog}
+        <DetailTabs tabs={tabs} activeKey={effectiveTab} panelId={panelId} onChange={onDetailTabChange} />
+        <div
+          id={panelId}
+          role="tabpanel"
+          aria-labelledby={`${panelId}-tab-${effectiveTab}`}
+          className={`pdv-panel pdv-panel--${effectiveTab}`}
+          key={effectiveTab}
+        >
+          {tabPanels}
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}>
@@ -425,22 +850,7 @@ export default function ProcessDetailView({
         </div>
       </div>
 
-      {isAdmin ? (
-        <ConfirmDialog
-          open={isConfirmDeleteOpen}
-          title="Excluir processo?"
-          message="Esta ação é irreversível e excluirá o processo e todas as suas mensagens."
-          confirmLabel="Excluir"
-          cancelLabel="Cancelar"
-          tone="danger"
-          busy={isSaving}
-          onConfirm={() => {
-            setIsConfirmDeleteOpen(false)
-            onDeleteProcess()
-          }}
-          onCancel={() => setIsConfirmDeleteOpen(false)}
-        />
-      ) : null}
+      {deleteDialog}
 
       <div className="detail-tab-select">
         <select
@@ -487,337 +897,7 @@ export default function ProcessDetailView({
       </div>
 
       <div className="detail-stack tab-panel-spacing">
-        {effectiveTab === 'general' ? (
-          <>
-            {isAdmin && pendingFields.length > 0 ? (
-              <div className="detail-card process-general-card process-general-card--pending">
-                <span className="detail-label">Dados pendentes</span>
-                <ul className="process-general-card__list">
-                  {pendingFields.map((field) => (
-                    <li key={field.id}>{field.label}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {isConsolidatedProcess && consolidatedOrders.length > 0 ? (
-              <div className="detail-card process-general-card process-general-card--consolidated-pos">
-                <span className="detail-label">
-                  POs consolidadas
-                  <ErpHint hint={poSetHint} />
-                </span>
-                <ul className="detail-stack detail-stack--compact">
-                  {consolidatedOrders.map((order) => (
-                    <li key={order.po}>
-                      {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
-                      <ErpHint hint={erpHints.po[erpOrderKey(order.po)]} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : emptyPoSetHint ? (
-              <div className="detail-card process-general-card process-general-card--consolidated-pos">
-                <span className="detail-label">
-                  POs consolidadas
-                  <ErpHint hint={emptyPoSetHint} />
-                </span>
-                <p>—</p>
-              </div>
-            ) : null}
-            <div className="detail-card process-general-card process-general-card--destination">
-              <span className="detail-label">{getDestinationLabel(selectedProcess.category)}</span>
-              <p>
-                {selectedProcess.destination || '-'}
-                <ErpHint hint={getErpRowHint(erpHints.fields.destination, selectedProcess)} />
-              </p>
-            </div>
-            <ProcessIdentificationDetails process={selectedProcess} canSeeName={canSeeName} erpHints={erpHints} />
-            <div className="detail-card process-general-card process-general-card--etd-eta">
-              <span className="detail-label">ETD / ETA</span>
-              <div className="detail-card--split" style={{ marginTop: '8px' }}>
-                <div>
-                  <span className="detail-label detail-label--muted">ETD</span>
-                  <p>
-                    {formatDate(selectedProcess.etd)}
-                    <ErpHint hint={etdHint} />
-                  </p>
-                </div>
-                <div className={getEtaDisplayClassName(selectedProcess)}>
-                  <span className="detail-label">{hasUpdatedEta(selectedProcess) ? 'ETA atualizada' : 'ETA'}</span>
-                  <p>
-                    {formatDate(selectedProcess.eta)}
-                    <ErpHint hint={getErpRowHint(erpHints.fields.eta, selectedProcess)} />
-                  </p>
-                </div>
-              </div>
-            </div>
-            {selectedProcess.etaOriginal && selectedProcess.etaOriginal !== selectedProcess.eta ? <div className="detail-card process-general-card process-general-card--eta-original"><span className="detail-label">ETA original</span><p>{formatDate(selectedProcess.etaOriginal)}</p></div> : null}
-            <div className="detail-card process-general-card process-general-card--forecast">
-              <span className="detail-label">Previsão de entrega no armazém</span>
-              <p>{getEstimatedDeliveryLabel(selectedProcess)}</p>
-              <small className="field-hint">{selectedProcess.warehouseDeliveryDateOverride ? 'Data definida manualmente por um admin.' : 'Data calculada automaticamente pelo sistema.'}</small>
-            </div>
-            <div className="detail-card process-general-card process-general-card--linked-items">
-              <div className="card-heading process-detail-card-heading">
-                <div>
-                  <span className="detail-label">Itens vinculados</span>
-                  <p>
-                    <span className="process-linked-items__count">
-                      {linkedItemsCount === 1 ? '1 item' : `${linkedItemsCount} itens`}
-                    </span>
-                    <span className="process-linked-items__suffix">
-                      {linkedItemsCount === 1 ? ' cadastrado' : ' cadastrados'} para este processo.
-                    </span>
-                  </p>
-                </div>
-                <button type="button" className="ghost-button ghost-button--secondary" onClick={() => onDetailTabChange('items')}>Ver itens do processo</button>
-              </div>
-            </div>
-          </>
-        ) : null}
-
-        {effectiveTab === 'process' ? (
-          <>
-            <ProcessCargoDetails
-              process={selectedProcess}
-              showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
-              containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
-            />
-            <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder erpHints={erpHints} />
-            <ProcessArrivalDetails process={selectedProcess} step={3} showEmptyPlaceholder />
-            <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} showEmptyPlaceholder />
-            <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder erpHints={erpHints} />
-            <ProcessLicensesDetails
-              process={selectedProcess}
-              step={showCustomsBlock ? null : 4}
-              showEmptyPlaceholder
-            />
-            {showCollectionBlock ? (
-              <DetailBlock
-                step={5}
-                title="Coleta"
-                wide
-                className="process-block--collection"
-                badges={
-                  showCollectionStatusBadge ? (
-                    <span className="inline-badge">{getDisplayedCollectionStatus(selectedProcess.collectionStatus)}</span>
-                  ) : null
-                }
-              >
-                {showCollectionWindows ? (
-                  <div className="detail-stack detail-stack--compact">
-                    {collectionWindows.map((window) => (
-                      <div key={window.id} className="detail-block__row">
-                        <p>
-                          <strong>
-                            {getCollectionWindowLabel(window, {
-                              category: selectedProcess.category,
-                              containers: selectedProcess.containers,
-                            })}
-                          </strong>
-                          {' · '}
-                          {formatDateTime(window.scheduledAt)}
-                        </p>
-                        {window.notes ? <small className="field-hint">{window.notes}</small> : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {showCarrier ? (
-                  <DetailList>
-                    <DetailRow label="Transportadora">{selectedProcess.carrierName || '-'}</DetailRow>
-                  </DetailList>
-                ) : null}
-              </DetailBlock>
-            ) : showsCollectionCategory ? (
-              <DetailBlockPlaceholder
-                title="Coleta"
-                wide
-                className="process-block--collection"
-                message="Coleta ainda não agendada."
-              />
-            ) : null}
-            {selectedProcess.processNotes ? (
-              <DetailBlock title="Observações do processo" wide className="process-block--process-notes">
-                <p>{selectedProcess.processNotes}</p>
-              </DetailBlock>
-            ) : null}
-            {isProcessStatusFinalized(selectedProcess.processStatus) && hasPostReceiptContent(selectedProcess) ? (
-              <DetailBlock title="Observações pós-recebimento da carga" wide className="process-block--post-receipt">
-                {selectedProcess.postReceiptNotes ? <p>{selectedProcess.postReceiptNotes}</p> : null}
-                {selectedProcessPostReceiptImages.length > 0 ? (
-                  <div className="post-receipt-image-grid post-receipt-image-grid--detail">
-                    {selectedProcessPostReceiptImages.map((image, index) => (
-                      <button
-                        key={image.id}
-                        type="button"
-                        className="post-receipt-image-card post-receipt-image-card--detail"
-                        onClick={() => onOpenPostReceiptGallery(index)}
-                      >
-                        <img src={image.url} alt={image.name || 'Imagem do recebimento no CD'} />
-                        <div className="post-receipt-image-card__meta">
-                          <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
-                          <span>{formatPostReceiptImageSize(image.size)}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </DetailBlock>
-            ) : null}
-            <ProcessReceiptDivergenceDetails process={selectedProcess} />
-          </>
-        ) : null}
-
-        {effectiveTab === 'items' ? (
-          <div ref={itemsSectionRef} className="detail-card">
-            <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
-              <div>
-                <span className="detail-label">Itens do processo</span>
-                <p>Itens comerciais vinculados diretamente a este processo.</p>
-              </div>
-              <span className="inline-badge">
-                {visibleProcessItems.length === 1 ? '1 item' : `${visibleProcessItems.length} itens`}
-              </span>
-            </div>
-            <label className="field">
-              <span>Buscar item</span>
-              <input
-                className="text-input"
-                type="search"
-                value={itemSearchTerm}
-                onChange={(event) => onSetItemSearchTerm(event.target.value)}
-                placeholder="Digite o nome comercial do item"
-              />
-            </label>
-            <div className="process-items-list">
-              {visibleProcessItems.length > 0 ? (
-                visibleProcessItems.map((item) => {
-                  const itemHint = quantityHintByItem.get(item)
-                  const itemButton = (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="metric-card process-related-item-button process-related-item-button--compact"
-                    onClick={() => onOpenRelatedItemTab(item.commercialName)}
-                  >
-                    <div className="process-item-display">
-                      <strong className="process-item-display__name">{item.commercialName}</strong>
-                    </div>
-                    <div className="process-item-display process-item-display--quantity">
-                      <span className="detail-label">Quantidade:</span>
-                      <strong>{item.quantity}</strong>
-                    </div>
-                    {selectedProcess.category === 'CONSOLIDADO' && item.poNumber ? (
-                      <div className="process-item-display">
-                        <span className="detail-label">PO:</span>
-                        <strong>{item.poNumber}</strong>
-                      </div>
-                    ) : null}
-                    {item.dangerousGoods ? (
-                      <span className="inline-badge inline-badge--warn">
-                        {getItemDangerousGoodsLabel(item)}
-                      </span>
-                    ) : null}
-                    {documentIndex && item.dangerousGoods && item.id ? (
-                      documentIndex.fispqItemIds.includes(item.id) ? (
-                        <span className="inline-badge inline-badge--ok">FISPQ enviada</span>
-                      ) : (
-                        <span className="inline-badge inline-badge--warn">FISPQ pendente</span>
-                      )
-                    ) : null}
-                  </button>
-                  )
-                  // O aviso fica FORA do <button> (botao aninhado e' invalido): so' com
-                  // aviso o item ganha o wrapper; sem aviso o DOM e' o de sempre.
-                  return itemHint ? (
-                    <div className="process-items-list__entry" key={item.id}>
-                      {itemButton}
-                      <ErpHint hint={itemHint} />
-                    </div>
-                  ) : (
-                    itemButton
-                  )
-                })
-              ) : (
-                <div className="empty-state" role="status">
-                  <strong>{selectedProcess.items?.length > 0 ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}</strong>
-                  <p>{selectedProcess.items?.length > 0 ? 'Ajuste a busca para localizar outro item deste processo.' : 'Os itens vinculados ao processo aparecerão aqui.'}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {effectiveTab === 'related-item' && selectedItemName ? (
-          <div className="detail-card">
-            <div className="card-heading process-detail-card-heading">
-              <div>
-                <span className="detail-label">Chegadas ativas com este item</span>
-                <p>Item selecionado: {selectedItemName}</p>
-              </div>
-              <span className="inline-badge">
-                {relatedActiveProcesses.length === 1 ? '1 chegada' : `${relatedActiveProcesses.length} chegadas`}
-              </span>
-            </div>
-            <div className="process-items-list process-items-list--scroll">
-              {relatedActiveProcesses.length > 0 ? (
-                relatedActiveProcesses.map(({ process, quantity }) => (
-                  <button
-                    key={`${process.id}-${selectedItemName}`}
-                    type="button"
-                    className="metric-card process-related-item-button process-related-item-button--compact"
-                    onClick={() => onOpenProcessDetail(process)}
-                  >
-                    <div className="process-item-display">
-                      <span className="detail-label">Chegada:</span>
-                      <strong>{getProcessTitle(process, canSeeName)}</strong>
-                    </div>
-                    <div className="process-item-display process-item-display--quantity">
-                      <span className="detail-label">Quantidade:</span>
-                      <strong>{quantity}</strong>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="empty-state" role="status">
-                  <strong>Nenhuma chegada ativa encontrada</strong>
-                  <p>Não há chegadas ativas com este item fora do CD no momento.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {effectiveTab === 'messages' ? (
-          <ProcessMessagesPanel
-            messages={processMessages}
-            isLoading={isLoadingMessages}
-            messageDraft={messageDraft}
-            onMessageDraftChange={onMessageDraftChange}
-            onSubmit={onSendMessage}
-            isSending={isSendingMessage}
-            currentUserName={profile?.name ?? profile?.email ?? 'usuário'}
-            messageLimitReached={messageLimitReached}
-            remainingMessages={remainingMessages}
-            canSendMessages={!messageLimitReached || hasUnlimitedMessages}
-            showRemainingMessages={isAdmin}
-            canDeleteMessages={isAdmin}
-            deletingMessageId={deletingMessageId}
-            onDeleteMessage={onDeleteMessage}
-          />
-        ) : null}
-
-        {effectiveTab === 'history' ? (
-          <ProcessHistoryPanel processId={selectedProcess.id} />
-        ) : null}
-
-        {effectiveTab === 'documents' ? (
-          <ProcessDocumentsPanel
-            process={selectedProcess}
-            profile={profile}
-            onPendingCountChange={handleDocumentsPendingCountChange}
-          />
-        ) : null}
+        {tabPanels}
       </div>
     </article>
   )
