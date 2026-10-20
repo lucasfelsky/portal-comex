@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useForecastSettings } from '../hooks/useForecastSettings'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { FilterPill } from '../components/FilterChip'
+import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import {
   CATEGORY_OPTIONS,
@@ -13,11 +15,34 @@ import {
 } from '../services/forecastSettingsRepository'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { useMobileLayout } from '../hooks/useMobileLayout'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { buildActionErrorMessage } from '../utils/errorMessages'
 
 const HOUR_BOUNDS = { min: 0, max: 23 }
 const BUSINESS_DAY_BOUNDS = { min: 0, max: 30 }
 const ALERT_DAY_BOUNDS = { min: 1, max: 30 }
+
+// Refino F6b (AdminPrevisoes.dc.html): >= 1041px a pagina escolhe uma arvore propria (barra de status +
+// cartoes em 2 colunas); tablet e mobile ficam na arvore anterior, sem mudanca.
+const DESKTOP_QUERY = '(min-width: 1041px)'
+
+// Campo numerico fora do intervalo (ou nao numerico): marca o input com aria-invalid na arvore desktop.
+function isOutOfRange(value, min, max) {
+  const number = Number(value)
+  return !Number.isFinite(number) || number < min || number > max
+}
+
+// "18/10 17:20" pela data LOCAL (com o ano quando nao e o corrente); manual, nunca toISOString (BRT).
+// Vazio quando nao ha data; texto original quando nao e uma data valida.
+function formatShortTimestamp(value, now = new Date()) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  const pad = (number) => String(number).padStart(2, '0')
+  const day = `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`
+  const year = date.getFullYear() === now.getFullYear() ? '' : `/${date.getFullYear()}`
+  return `${day}${year} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
 
 function buildEmptyDestination() {
   return { match: '', label: '', cutoffHour: 12, cutoffMinute: 0 }
@@ -141,6 +166,7 @@ export default function AdminForecastPage() {
   // Mobile: o badge de origem dos dados vai pro cabecalho do 1o card, ao lado
   // do titulo; no desktop segue na toolbar acima dos cards.
   const isMobileLayout = useMobileLayout()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [draft, setDraft] = useState(() => normalizeDraft(settings))
   const [newDuimpStatus, setNewDuimpStatus] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -288,11 +314,389 @@ export default function AdminForecastPage() {
   }
 
   if (loading) {
+    if (isDesktop) {
+      return (
+        <div className="admin-panel admin-panel--forecast af-root">
+          <Skeleton variant="card" style={{ height: 74 }} />
+          <div className="af-grid">
+            <Skeleton variant="card" style={{ height: 260 }} />
+            <Skeleton variant="card" style={{ height: 260 }} />
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="admin-panel-stack" style={{ gap: 16 }}>
         <Skeleton variant="card" style={{ height: 60 }} />
         <Skeleton variant="card" style={{ height: 180 }} />
         <Skeleton variant="card" style={{ height: 120 }} />
+      </div>
+    )
+  }
+
+  const resetDialog = (
+    <ConfirmDialog
+      open={isResetDialogOpen}
+      title="Restaurar regras padrão"
+      message="Esta ação restaura todas as regras de previsão para o padrão do sistema e será registrada na auditoria."
+      confirmLabel="Restaurar"
+      tone="danger"
+      busy={isResetting}
+      onConfirm={handleReset}
+      onCancel={() => {
+        if (!isResetting) setIsResetDialogOpen(false)
+      }}
+    />
+  )
+
+  // Refino F6b (AdminPrevisoes.dc.html): >= 1041px as regras ganham a barra de status no topo e os cartoes em
+  // 2 colunas. Tablet/mobile seguem na arvore abaixo, intacta. Rascunho, validacao e handlers sao os mesmos
+  // (vivem la em cima), entao a troca ao vivo de breakpoint mantem o que foi digitado e ainda nao salvo.
+  if (isDesktop) {
+    const source = isFirebaseConfigured ? 'Firestore ativo' : 'Fallback local'
+    const updatedAtText = formatShortTimestamp(settings?.updatedAt)
+    const updatedByName = settings?.updatedBy
+      ? (settings.updatedBy.name ?? settings.updatedBy.email ?? 'Sistema')
+      : ''
+    const rollingOff = !draft.rollingCustoms.enabled
+
+    return (
+      <div className="admin-panel admin-panel--forecast af-root">
+        <div className="af-bar">
+          <span className="af-status">
+            <span
+              className={`af-status__dot${isFirebaseConfigured ? '' : ' af-status__dot--fallback'}`}
+              aria-hidden="true"
+            />
+            <span className="af-status__text">
+              <span className="af-status__source">{source}</span>
+              {' · Última atualização '}
+              {updatedAtText ? (
+                <>
+                  <strong>{updatedAtText}</strong>
+                  {updatedByName ? ` por ${updatedByName}` : ''}
+                </>
+              ) : (
+                <strong>sem alterações registradas ainda</strong>
+              )}
+            </span>
+          </span>
+          <div className="af-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setIsResetDialogOpen(true)}
+              disabled={isResetting || isSaving}
+            >
+              {isResetting ? 'Restaurando...' : 'Restaurar padrões'}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSave}
+              disabled={hasErrors || isSaving || isResetting}
+            >
+              {isSaving ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+          </div>
+        </div>
+
+        {error ? <div className="error-banner">{error}</div> : null}
+        {feedback ? <div className="success-banner">{feedback}</div> : null}
+        {hasErrors ? (
+          <div className="error-banner">
+            <strong>Verifique os campos:</strong>
+            <ul>
+              {validationErrors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="af-grid">
+          <section className="ad-card af-card">
+            <div className="af-card__head">
+              <div className="af-card__titles">
+                <h3 className="af-card__title">Destinos e cutoff</h3>
+                <p className="af-card__hint">
+                  Match é comparado (sem acento, case-insensitive) com o destino do processo.
+                </p>
+              </div>
+              <span className="af-card__note">Horário de Brasília (UTC−03).</span>
+            </div>
+
+            <div className="af-table-wrap">
+              <table className="af-table">
+                <thead>
+                  <tr>
+                    <th>Match</th>
+                    <th>Rótulo</th>
+                    <th className="af-table__num">Cutoff (h)</th>
+                    <th className="af-table__num">Min</th>
+                    <th className="af-table__actions">
+                      <span className="af-visually-hidden">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.destinations.map((destination, index) => (
+                    <tr key={`destination-${index}`}>
+                      <td>
+                        <input
+                          className="text-input text-input--mono af-input--match"
+                          type="text"
+                          value={destination.match}
+                          placeholder="ex.: navegantes"
+                          aria-label={`Match do destino ${index + 1}`}
+                          aria-invalid={!destination.match.trim() ? 'true' : undefined}
+                          onChange={(event) => updateDestination(index, { match: event.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="text-input af-input--label"
+                          type="text"
+                          value={destination.label}
+                          placeholder="ex.: Navegantes"
+                          aria-label={`Rótulo do destino ${index + 1}`}
+                          aria-invalid={!destination.label.trim() ? 'true' : undefined}
+                          onChange={(event) => updateDestination(index, { label: event.target.value })}
+                        />
+                      </td>
+                      <td className="af-table__num">
+                        <input
+                          className="text-input text-input--mono af-input--hour"
+                          type="number"
+                          min={HOUR_BOUNDS.min}
+                          max={HOUR_BOUNDS.max}
+                          value={destination.cutoffHour}
+                          aria-label={`Cutoff em horas do destino ${index + 1}`}
+                          aria-invalid={isOutOfRange(destination.cutoffHour, HOUR_BOUNDS.min, HOUR_BOUNDS.max) ? 'true' : undefined}
+                          onChange={(event) => updateDestination(index, { cutoffHour: event.target.value })}
+                        />
+                      </td>
+                      <td className="af-table__num">
+                        <input
+                          className="text-input text-input--mono af-input--minute"
+                          type="number"
+                          min={0}
+                          max={59}
+                          value={destination.cutoffMinute}
+                          aria-label={`Minutos do destino ${index + 1}`}
+                          aria-invalid={isOutOfRange(destination.cutoffMinute, 0, 59) ? 'true' : undefined}
+                          onChange={(event) => updateDestination(index, { cutoffMinute: event.target.value })}
+                        />
+                      </td>
+                      <td className="af-table__actions">
+                        <button
+                          type="button"
+                          className="af-remove"
+                          onClick={() => removeDestination(index)}
+                          disabled={draft.destinations.length <= 1}
+                          aria-label={`Remover destino ${index + 1}`}
+                          title="Remover destino"
+                        >
+                          <Icon name="trash" size={16} strokeWidth={1.9} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="button" className="af-add" onClick={addDestination}>
+              + Adicionar destino
+            </button>
+          </section>
+
+          <div className="af-col">
+            <section className="ad-card af-card">
+              <div className="af-card__head">
+                <div className="af-card__titles">
+                  <h3 className="af-card__title">Dias úteis por categoria</h3>
+                  <p className="af-card__hint">
+                    Aplicados após a ETA quando não há coleta agendada nem rolling customs.
+                  </p>
+                </div>
+                <Link to="/admin/lead-time" className="ad-link-button af-link">
+                  Ver lead time real
+                </Link>
+              </div>
+              <div className="af-cats">
+                {CATEGORY_OPTIONS.map((category) => (
+                  <label key={category} className="field">
+                    <span>{category}</span>
+                    <input
+                      className="text-input text-input--mono af-input--days"
+                      type="number"
+                      min={BUSINESS_DAY_BOUNDS.min}
+                      max={BUSINESS_DAY_BOUNDS.max}
+                      value={draft.categoryBusinessDays[category] ?? 0}
+                      aria-invalid={
+                        isOutOfRange(draft.categoryBusinessDays[category], BUSINESS_DAY_BOUNDS.min, BUSINESS_DAY_BOUNDS.max)
+                          ? 'true'
+                          : undefined
+                      }
+                      onChange={(event) => updateBusinessDay(category, event.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className="ad-card af-card">
+              <div className="af-card__head">
+                <div className="af-card__titles">
+                  <h3 className="af-card__title">Rolling customs forecast</h3>
+                  <p className="af-card__hint">
+                    Adianta a previsão em N dias úteis quando o navio atraca e a DUIMP está pendente.
+                  </p>
+                </div>
+                <label className="af-switch">
+                  <span className="af-switch__control">
+                    <input
+                      className="af-switch__input"
+                      type="checkbox"
+                      checked={draft.rollingCustoms.enabled}
+                      onChange={(event) => updateRollingEnabled(event.target.checked)}
+                    />
+                    <span className="af-switch__track" aria-hidden="true">
+                      <span className="af-switch__knob" />
+                    </span>
+                  </span>
+                  <span className="af-switch__label">{draft.rollingCustoms.enabled ? 'Ativo' : 'Desativado'}</span>
+                </label>
+              </div>
+
+              <div className="af-rolling">
+                <label className="field">
+                  <span>Dias úteis após atracar</span>
+                  <input
+                    className="text-input text-input--mono af-input--rolling"
+                    type="number"
+                    min={0}
+                    max={BUSINESS_DAY_BOUNDS.max}
+                    value={draft.rollingCustoms.businessDaysAfterBerth}
+                    aria-invalid={
+                      !rollingOff &&
+                      isOutOfRange(draft.rollingCustoms.businessDaysAfterBerth, 0, BUSINESS_DAY_BOUNDS.max)
+                        ? 'true'
+                        : undefined
+                    }
+                    onChange={(event) => updateRollingDays(event.target.value)}
+                    disabled={rollingOff}
+                  />
+                </label>
+                <div className="af-field">
+                  <span className="af-field__label" id="af-applies-label">
+                    Aplicar a
+                  </span>
+                  <div className="af-chips" role="group" aria-labelledby="af-applies-label">
+                    {CATEGORY_OPTIONS.map((category) => (
+                      <FilterPill
+                        key={category}
+                        label={category}
+                        active={draft.rollingCustoms.appliesTo.includes(category)}
+                        onClick={() => toggleAppliesTo(category)}
+                        disabled={rollingOff}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="af-field">
+                <span className="af-field__label" id="af-duimp-label">
+                  DUIMP status (match normalizado)
+                </span>
+                <div
+                  className={`af-tokens${rollingOff ? ' af-tokens--disabled' : ''}`}
+                  role="group"
+                  aria-labelledby="af-duimp-label"
+                >
+                  {draft.rollingCustoms.duimpStatuses.map((status) => (
+                    <span key={status} className="af-token">
+                      <span className="af-token__label">{status}</span>
+                      <button
+                        type="button"
+                        className="af-token__remove"
+                        onClick={() => removeDuimpStatus(status)}
+                        aria-label={`Remover ${status}`}
+                        disabled={rollingOff}
+                      >
+                        <Icon name="close" size={12} strokeWidth={2.4} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    className="af-tokens__input"
+                    type="text"
+                    placeholder="ex.: aguardando registro"
+                    aria-label="Novo status DUIMP"
+                    value={newDuimpStatus}
+                    onChange={(event) => setNewDuimpStatus(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addDuimpStatus()
+                      }
+                    }}
+                    disabled={rollingOff}
+                  />
+                  <button
+                    type="button"
+                    className="af-tokens__add"
+                    onClick={addDuimpStatus}
+                    disabled={rollingOff || !newDuimpStatus.trim()}
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="ad-card af-card">
+              <div className="af-card__titles">
+                <h3 className="af-card__title">Alertas operacionais</h3>
+                <p className="af-card__hint">Resumo diário enviado aos admins às 7h (horário de Brasília).</p>
+              </div>
+              <div className="af-alert-row">
+                <label className="af-alert-row__label" htmlFor="af-clearance-days">
+                  Dias sem desembaraço após parametrização
+                </label>
+                <input
+                  id="af-clearance-days"
+                  className="text-input text-input--mono af-input--alert"
+                  type="number"
+                  min={ALERT_DAY_BOUNDS.min}
+                  max={ALERT_DAY_BOUNDS.max}
+                  value={draft.operationalAlerts.clearanceOverdueDays}
+                  aria-invalid={
+                    isOutOfRange(draft.operationalAlerts.clearanceOverdueDays, ALERT_DAY_BOUNDS.min, ALERT_DAY_BOUNDS.max)
+                      ? 'true'
+                      : undefined
+                  }
+                  onChange={(event) => updateClearanceOverdueDays(event.target.value)}
+                />
+              </div>
+              <p className="af-card__hint">
+                O resumo também avisa free time a vencer (D-5 e D-2), ETA vencida há mais de 2 dias sem
+                atracação/chegada e coleta de amanhã sem transportadora.
+              </p>
+            </section>
+          </div>
+        </div>
+
+        <p className="af-foot-note">
+          Quando o documento `forecastSettings/current` ainda não existe no Firestore, o sistema usa o seed
+          padrão embutido em <code>DEFAULT_FORECAST_SETTINGS</code> (Navegantes 14h, Itapoá 12h, FCL/CONSOLIDADO
+          5, LCL 7, AEREO 10, rolling 3 dias, alerta de desembaraço 3 dias).
+        </p>
+
+        {resetDialog}
       </div>
     )
   }
@@ -595,18 +999,7 @@ export default function AdminForecastPage() {
         5, LCL 7, AEREO 10, rolling 3 dias, alerta de desembaraço 3 dias).
       </p>
 
-    <ConfirmDialog
-      open={isResetDialogOpen}
-      title="Restaurar regras padrão"
-      message="Esta ação restaura todas as regras de previsão para o padrão do sistema e será registrada na auditoria."
-      confirmLabel="Restaurar"
-      tone="danger"
-      busy={isResetting}
-      onConfirm={handleReset}
-      onCancel={() => {
-        if (!isResetting) setIsResetDialogOpen(false)
-      }}
-    />
+    {resetDialog}
   </div>
   )
 }

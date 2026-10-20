@@ -390,13 +390,15 @@ describe('AdminForecastPage', () => {
 })
 
 // Redesign mobile (rodada de QA): o badge de origem dos dados vai pro
-// cabecalho do card "Destinos e cutoff" no mobile; no desktop fica na toolbar.
-describe('AdminForecastPage — badge de origem (mobile x desktop)', () => {
+// cabecalho do card "Destinos e cutoff" no mobile; no tablet (721-1040px) fica na toolbar.
+// F6b: a partir de 1041px a pagina usa a arvore desktop (tests/unit/adminForecastDesktop.test.jsx), entao o
+// stub so responde a consulta do mobile (max-width: 720px); a de 1041px segue falsa.
+describe('AdminForecastPage — badge de origem (mobile x tablet)', () => {
   const originalMatchMedia = window.matchMedia
 
   function stubMatchMedia(matches) {
     window.matchMedia = vi.fn().mockImplementation((query) => ({
-      matches,
+      matches: query.includes('max-width: 720px') ? matches : false,
       media: query,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -421,7 +423,7 @@ describe('AdminForecastPage — badge de origem (mobile x desktop)', () => {
     expect(container.querySelectorAll('.inline-badge')).toHaveLength(1)
   })
 
-  it('desktop: badge segue na toolbar acima dos cards', () => {
+  it('tablet: badge segue na toolbar acima dos cards', () => {
     stubMatchMedia(false)
     const { container } = renderPage()
     expect(container.querySelector('.admin-heading-row')).toBeNull()

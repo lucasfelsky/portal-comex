@@ -30,7 +30,10 @@
 // senha, erro, carregando), Verificar e-mail, Acesso pendente/bloqueado/reprovado (com diagnostico),
 // 404 e "Pagina inicial indisponivel", notebook, 1100, tablet e mobile; F6a: Admin — Usuarios (lista, detalhe,
 // novo, filtros, fila, vazio, confirmacoes), Comunicados (lista, editor, novo, vazio) e Barra do porto (cada
-// status e os avisos do robo ZP21: coincide, difere, falha, atrasado), notebook, 1100, tablet e mobile).
+// status e os avisos do robo ZP21: coincide, difere, falha, atrasado), notebook, 1100, tablet e mobile;
+// F6b: Admin — Previsoes (normal, editada, erro, restaurar, sem historico), Lead time (dados, divergencias,
+// Outros trechos, periodo, dados insuficientes) e Suporte (cada aba, 2o chamado, resolvido, resposta, vazio),
+// notebook, 1100, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -1720,18 +1723,6 @@ PHASES.f6a = [
     action: withViewport(width, height),
     afterShot: restoreViewport,
   })),
-  // --- Moldura do admin nas abas que ainda nao foram refeitas (F6b): so o cartao ao redor some ----
-  ...[
-    ['previsoes', '/admin/previsoes'],
-    ['lead-time', '/admin/lead-time'],
-    ['suporte', '/admin/suporte'],
-  ].map(([key, route]) => ({
-    name: 'moldura-' + key,
-    route,
-    ready: (page) => page.locator('.admin-section .admin-tabs--desktop').first(),
-    action: adminShot(),
-    afterShot: restoreViewport,
-  })),
   // --- Comunicados ------------------------------------------------------------------------------
   { name: 'comunicados-lista', route: '/admin/comunicados', ready: annReady, action: adminShot(), afterShot: restoreViewport },
   {
@@ -1892,6 +1883,288 @@ PHASES.f6a = [
     route: '/admin/barra',
     beforeGoto: restoreBarDefault,
     ready: width > 1040 ? barReady : barLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
+// --- F6b: Admin — Previsoes, Lead time e Suporte ------------------------------------------------
+// Prancheta de 1440x1060 (a dos mocks AdminPrevisoes/AdminLeadTime/AdminSuporte). Os estados com dado
+// (regras de previsao, historico de marcos, chamados) regravam os docs no emulador antes da navegacao e
+// restauram depois.
+const forecastReady = (page) => page.locator('.admin-panel--forecast .af-grid').first()
+const forecastLegacyReady = (page) => page.getByRole('heading', { name: 'Destinos e cutoff' })
+const leadReady = (page) => page.locator('.admin-panel--lead-time .al-head').first()
+// A captura em tablet/mobile abre a pagina no viewport desktop e so depois redimensiona: o "pronto" tem de
+// existir nas duas arvores (o seletor Período e comum a ambas).
+const leadLegacyReady = (page) => page.getByText('Período', { exact: true })
+const supportReady = (page) => page.locator('.admin-panel--support .as-grid, .admin-panel--support .empty-state').first()
+const supportLegacyReady = (page) => page.getByRole('heading', { name: 'Chamados de suporte' })
+const clickSupportTab = (name) => async (page) => {
+  await page.getByRole('tab', { name }).click()
+  await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true')
+}
+const F6B_DESTINATIONS_FORECAST = [
+  { match: 'navegantes', label: 'Navegantes', cutoffHour: 14, cutoffMinute: 0 },
+  { match: 'itapoa', label: 'Itapoá', cutoffHour: 12, cutoffMinute: 0 },
+  { match: 'itajai', label: 'Itajaí', cutoffHour: 10, cutoffMinute: 30 },
+]
+const F6B_DESTINATIONS_LEAD = [
+  ...F6B_DESTINATIONS_FORECAST,
+  { match: 'paranagua', label: 'Paranaguá', cutoffHour: 9, cutoffMinute: 0 },
+  { match: 'viracopos', label: 'Viracopos', cutoffHour: 16, cutoffMinute: 0 },
+  { match: 'guarulhos', label: 'Guarulhos', cutoffHour: 15, cutoffMinute: 30 },
+]
+const forecastDoc = (overrides = {}) => ({
+  destinations: F6B_DESTINATIONS_FORECAST,
+  categoryBusinessDays: { FCL: 3, LCL: 5, AEREO: 2, CONSOLIDADO: 4 },
+  rollingCustoms: {
+    enabled: true,
+    businessDaysAfterBerth: 3,
+    appliesTo: ['FCL', 'CONSOLIDADO'],
+    duimpStatuses: ['aguardando registro', 'aguardando parametrizacao'],
+  },
+  operationalAlerts: { clearanceOverdueDays: 2 },
+  updatedAt: isoMinutesAgo(60 * 26),
+  updatedBy: { uid: 'shot-admin', name: 'Admin E2E' },
+  ...overrides,
+})
+const forecastState = (overrides) => async () => {
+  await putDoc('forecastSettings', 'current', forecastDoc(overrides))
+}
+const setLeadProcessesArchived = (archived) => async () => {
+  for (const id of F6B_LEAD_PROCESS_IDS) await patchFields('processes', id, { archived })
+}
+PHASES.f6b = [
+  // --- Previsoes --------------------------------------------------------------------------------
+  {
+    name: 'previsoes-normal',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-editada',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 1').fill('15')
+      await page.getByLabel('Match do destino 3').fill('itajai-cd')
+      await page.getByRole('button', { name: '+ Adicionar destino' }).click()
+      await page.getByLabel('Match do destino 4').fill('paranagua')
+      await page.getByLabel('Rótulo do destino 4').fill('Paranaguá')
+      await page.getByLabel('Dias úteis após atracar').fill('4')
+      await page.getByRole('button', { name: 'LCL' }).click()
+      await page.getByLabel('Novo status DUIMP').fill('desembaraco em analise')
+      await page.getByRole('button', { name: 'Adicionar', exact: true }).click()
+      await page.getByLabel('Novo status DUIMP').focus()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-erro',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 1').fill('25')
+      await page.getByLabel('Minutos do destino 2').fill('75')
+      await page.getByLabel('Match do destino 3').fill('')
+      await page.getByLabel('Dias sem desembaraço após parametrização').fill('0')
+      await expect(page.getByText('Verifique os campos:')).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-restaurar',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(confirmDialogOpen('Restaurar padrões')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'previsoes-sem-historico-rolling-desligado',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState({
+      updatedAt: null,
+      updatedBy: null,
+      rollingCustoms: { enabled: false, businessDaysAfterBerth: 3, appliesTo: ['FCL', 'CONSOLIDADO'], duimpStatuses: ['aguardando registro'] },
+    }),
+    ready: forecastReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-foco-teclado',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 2').focus()
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `previsoes-${suffix}`,
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: width > 1040 ? forecastReady : forecastLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Lead time --------------------------------------------------------------------------------
+  {
+    name: 'lead-time-dados',
+    route: '/admin/lead-time',
+    beforeGoto: async () => {
+      await forecastState({ destinations: F6B_DESTINATIONS_LEAD })()
+      await setLeadProcessesArchived(false)()
+    },
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-pagina-inteira',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: withViewport(1440, 1500),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-outros-trechos',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: withViewport(1440, 2600, async (page) => {
+      await page.getByRole('button', { name: /Outros trechos/ }).click()
+      await expect(page.locator('.al-segment').first()).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-periodo-90',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(async (page) => {
+      await page.locator('.al-period select').selectOption('90')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-dados-insuficientes',
+    route: '/admin/lead-time',
+    beforeGoto: async () => {
+      await forecastState({ destinations: F6B_DESTINATIONS_LEAD })()
+      await setLeadProcessesArchived(true)()
+    },
+    ready: (page) => page.getByText('Dados insuficientes'),
+    action: adminShot(),
+    afterShot: async (page) => {
+      await setLeadProcessesArchived(false)()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'lead-time-foco-teclado',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: /Aplicar \d+ dias/ }).first().focus()
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `lead-time-${suffix}`,
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: width > 1040 ? leadReady : leadLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Suporte ----------------------------------------------------------------------------------
+  { name: 'suporte-abertos', route: '/admin/suporte', ready: supportReady, action: adminShot(), afterShot: restoreViewport },
+  {
+    name: 'suporte-abertos-2',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Próximo chamado' }).click()
+      await expect(page.locator('.as-pager__counter')).toHaveText('2/3')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-em-andamento',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Em andamento')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-resolvidos',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Resolvidos')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-todos',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Todos')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-resposta-digitada',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Nova resposta').fill('Obrigado pelo relato. Já estamos olhando o filtro de ETA; retorno ainda hoje.')
+      await page.getByLabel('Mensagem de encerramento (opcional)').fill('Corrigido na versão de hoje: o filtro agora respeita o fuso de Brasília.')
+      await page.getByRole('button', { name: 'Enviar resposta' }).focus()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-vazio',
+    route: '/admin/suporte',
+    beforeGoto: async () => {
+      for (const id of F6B_TICKET_IDS) await deleteDocFs('supportTickets', id)
+    },
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Nenhum chamado por aqui')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await seedSupportTicketsF6b()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'suporte-foco-teclado',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('tab', { name: /Abertos/ }).focus()
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `suporte-${suffix}`,
+    route: '/admin/suporte',
+    ready: width > 1040 ? supportReady : supportLegacyReady,
     action: withViewport(width, height),
     afterShot: restoreViewport,
   })),
@@ -2685,6 +2958,256 @@ async function seedF6a() {
   })
 }
 
+// F6b: regras de previsao, historico de marcos para o lead time (processos concluidos com os marcos que
+// alimentam os 6 trechos) e chamados de suporte (3 abertos, 2 em andamento, 3 resolvidos; um com prints,
+// um com conversa e um com resposta de encerramento).
+const F6B_LEAD_SAMPLES = [
+  // [modal, destino, dias uteis entre a chegada e o recebimento de cada processo]
+  ['FCL', 'ITAJAI', [2, 3, 3, 3, 3, 4, 4]],
+  ['FCL', 'NAVEGANTES', [4, 5, 5, 5, 6, 7]],
+  ['FCL', 'PARANAGUA', [4, 4, 5]],
+  ['AEREO', 'VIRACOPOS', [2, 2, 2, 3]],
+  ['AEREO', 'GUARULHOS', [4, 4, 5]],
+]
+const F6B_LEAD_PROCESS_IDS = F6B_LEAD_SAMPLES.flatMap(([category, destination, values]) =>
+  values.map((_, index) => `shot-lt-${category.toLowerCase()}-${destination.toLowerCase()}-${index + 1}`)
+)
+
+// Feriados nacionais fixos usados pelo calendario do app (mesmo conjunto de deliveryForecast.js) para as
+// datas semeadas fecharem exatamente N dias uteis.
+function isF6bBusinessDay(date) {
+  const day = date.getDay()
+  if (day === 0 || day === 6) return false
+  const mmdd = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return !['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].includes(mmdd)
+}
+
+function shiftBusinessDays(startKey, amount) {
+  const [year, month, day] = startKey.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  let remaining = amount
+  while (remaining > 0) {
+    date.setDate(date.getDate() + 1)
+    if (isF6bBusinessDay(date)) remaining -= 1
+  }
+  return dateKeyOf(date)
+}
+
+function dateKeyOf(date) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function shiftCalendarDays(key, amount) {
+  const [year, month, day] = key.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + amount)
+  return dateKeyOf(date)
+}
+
+async function seedLeadTimeF6b() {
+  let counter = 0
+  for (const [category, destination, values] of F6B_LEAD_SAMPLES) {
+    for (const [index, businessDays] of values.entries()) {
+      counter += 1
+      const id = `shot-lt-${category.toLowerCase()}-${destination.toLowerCase()}-${index + 1}`
+      // chegada em dia util, espalhada pelos ultimos ~60 dias
+      let arrival = dateKey(-(8 + counter * 3))
+      while (!isF6bBusinessDay(new Date(`${arrival}T12:00:00`))) arrival = shiftCalendarDays(arrival, 1)
+      const received = shiftBusinessDays(arrival, businessDays)
+      const shipped = shiftCalendarDays(arrival, -(20 + (counter % 6)))
+      const presence = shiftCalendarDays(arrival, 1)
+      const cleared = shiftCalendarDays(arrival, 2 + (counter % 3))
+      const collection = cleared > received ? received : shiftCalendarDays(cleared, 1) > received ? received : shiftCalendarDays(cleared, 1)
+      await putDoc('processes', id, {
+        name: `Lead time ${category} ${destination} ${index + 1}`,
+        processNumber: `45009${String(counter).padStart(5, '0')}`,
+        category,
+        destination,
+        processStatus: 'Carga recebida',
+        containerQuantity: category === 'AEREO' ? 0 : 1,
+        archived: false,
+        updatedAt: isoMinutesAgo(60 * 24 * 3),
+      })
+      const arrivalType = category === 'AEREO' ? 'arrived' : 'berthed'
+      const events = [
+        ['shipped', shipped],
+        [arrivalType, arrival],
+        ['cargoPresence', presence],
+        ['cleared', cleared],
+        ['collectionScheduled', collection],
+        ['received', received],
+      ]
+      for (const [eventIndex, [type, key]] of events.entries()) {
+        await putDoc(`processes/${id}/events`, `e${eventIndex + 1}`, {
+          type,
+          field: '',
+          previousValue: '',
+          value: type === 'collectionScheduled' ? key : '',
+          actorId: 'seed',
+          actorName: 'Automático',
+          occurredAt: `${key}T12:00:00-03:00`,
+          recordedAt: `${key}T12:00:00-03:00`,
+        })
+      }
+    }
+  }
+}
+
+// Capturas de tela dos chamados: SVG embutido (data URI) que imita uma tela do portal.
+function ticketShot(title, accent) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="152" viewBox="0 0 240 152"><rect width="240" height="152" fill="#eef2f1"/><rect width="240" height="18" fill="#004153"/><rect x="8" y="26" width="64" height="118" rx="6" fill="#003241"/><rect x="80" y="26" width="152" height="22" rx="5" fill="#ffffff"/><rect x="80" y="54" width="152" height="40" rx="5" fill="#ffffff"/><rect x="80" y="100" width="72" height="44" rx="5" fill="#ffffff"/><rect x="160" y="100" width="72" height="44" rx="5" fill="${accent}"/><text x="88" y="41" font-family="sans-serif" font-size="9" fill="#0b2430">${title}</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+const F6B_TICKET_IDS = ['shot-ticket-1', 'shot-ticket-2', 'shot-ticket-3', ...Array.from({ length: 8 }, (_, i) => `shot-f6b-ticket-${i + 1}`)]
+
+async function seedSupportTicketsF6b() {
+  const mailOf = (name) => `${name.split(' ')[0].toLowerCase()}@sqquimica.com`
+  const tickets = [
+    {
+      author: ['shot-u-beatriz', 'Beatriz Rocha'],
+      status: 'aberto',
+      priority: 4,
+      minutesAgo: 60 * 2,
+      message:
+        'O filtro de ETA da Central de chegadas está desconsiderando o fuso horário: processos com ETA no fim do dia aparecem na semana seguinte. Tentei limpar os filtros e recarregar a página, mas o resultado é o mesmo.',
+      contextPage: '/processos',
+      contextProcessName: 'Resina epóxi líquida',
+      imageUrls: [ticketShot('Central de chegadas', '#14dda7'), ticketShot('Filtro de ETA', '#f2c14e')],
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Obrigado pelo relato. Pode informar qual processo ficou na semana errada e a ETA cadastrada?',
+          createdAt: isoMinutesAgo(60),
+        },
+        {
+          id: 'r2',
+          authorId: 'shot-u-beatriz',
+          authorName: 'Beatriz Rocha',
+          message: 'É o processo da resina, ETA cadastrada para domingo à noite.',
+          createdAt: isoMinutesAgo(25),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-carlos', 'Carlos Siqueira'],
+      status: 'aberto',
+      priority: 3,
+      minutesAgo: 60 * 20,
+      message: 'Preciso exportar a lista de chegadas em planilha com a coluna de contêineres.',
+      contextPage: '/processos',
+    },
+    {
+      author: ['shot-u-daniela', 'Daniela Martins'],
+      status: 'aberto',
+      priority: 2,
+      minutesAgo: 60 * 31,
+      message: 'A notificação de documento anexado chega duplicada no e-mail e na central.',
+      contextPage: '/notifications',
+    },
+    {
+      author: ['shot-u-eduardo', 'Eduardo Ferraz'],
+      status: 'em_andamento',
+      priority: 3,
+      minutesAgo: 60 * 24 * 9,
+      message: 'Não consigo anexar o BL no processo: o botão de enviar fica desabilitado.',
+      contextPage: '/processos',
+      contextProcessName: 'Solvente industrial',
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Estamos verificando o limite de tamanho do arquivo.',
+          createdAt: isoMinutesAgo(60 * 24 * 8),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-beatriz', 'Beatriz Rocha'],
+      status: 'em_andamento',
+      priority: 2,
+      minutesAgo: 60 * 24 * 16,
+      message: 'O contador de dias de free time não mostra o terminal.',
+      contextPage: '/',
+    },
+    {
+      author: ['shot-u-carlos', 'Carlos Siqueira'],
+      status: 'resolvido',
+      priority: 3,
+      minutesAgo: 60 * 24 * 23,
+      resolvedAfterHours: 4,
+      message: 'Não recebo o e-mail de resumo diário dos processos favoritos.',
+      contextPage: '/notifications',
+      resolutionMessage: 'Ajustamos a preferência de e-mail da sua conta. O próximo resumo chega amanhã às 7h.',
+    },
+    {
+      author: ['shot-u-daniela', 'Daniela Martins'],
+      status: 'resolvido',
+      priority: 4,
+      minutesAgo: 60 * 24 * 30,
+      resolvedAfterHours: 9,
+      message: 'Erro ao salvar a janela de coleta em dois horários no mesmo dia.',
+      contextPage: '/processos',
+      contextProcessName: 'Pigmento orgânico',
+      resolutionMessage: 'Corrigido na versão de ontem: as duas janelas agora são salvas.',
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Reproduzimos o problema e já estamos corrigindo.',
+          createdAt: isoMinutesAgo(60 * 24 * 29),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-eduardo', 'Eduardo Ferraz'],
+      status: 'resolvido',
+      priority: 1,
+      minutesAgo: 60 * 24 * 44,
+      resolvedAfterHours: 6,
+      message: 'O nome do processo aparece cortado na lista em telas pequenas.',
+      contextPage: '/processos',
+    },
+  ]
+  for (const [index, ticket] of tickets.entries()) {
+    const [authorId, authorName] = ticket.author
+    const createdAt = isoMinutesAgo(ticket.minutesAgo)
+    const resolvedAt = ticket.resolvedAfterHours
+      ? new Date(Date.now() - ticket.minutesAgo * 60_000 + ticket.resolvedAfterHours * 3_600_000).toISOString()
+      : null
+    await putDoc('supportTickets', `shot-f6b-ticket-${index + 1}`, {
+      authorId,
+      authorName,
+      authorEmail: mailOf(authorName),
+      message: ticket.message,
+      imageUrls: ticket.imageUrls ?? [],
+      status: ticket.status,
+      priority: ticket.priority,
+      createdAt,
+      updatedAt: resolvedAt ?? createdAt,
+      resolvedAt,
+      resolvedByName: resolvedAt ? 'Admin E2E' : null,
+      resolutionMessage: ticket.resolutionMessage ?? null,
+      contextPage: ticket.contextPage ?? null,
+      contextProcessName: ticket.contextProcessName ?? null,
+      replies: ticket.replies ?? [],
+    })
+  }
+}
+
+async function seedF6b() {
+  // os 3 chamados genericos do seed comum saem: a fase usa os 8 proprios
+  for (const id of ['shot-ticket-1', 'shot-ticket-2', 'shot-ticket-3']) await deleteDocFs('supportTickets', id)
+  await seedSupportTicketsF6b()
+  await putDoc('forecastSettings', 'current', forecastDoc())
+  await seedLeadTimeF6b()
+}
+
 async function seedAll() {
   const adminUid = await uidOf(E2E_USERS.admin)
   const processes = buildProcesses()
@@ -2794,6 +3317,7 @@ async function seedAll() {
   if (PHASE === 'f5a') await seedF5a(adminUid)
   if (PHASE === 'f5b') await seedAccessUsers()
   if (PHASE === 'f6a') await seedF6a()
+  if (PHASE === 'f6b') await seedF6b()
 }
 
 // --- capturas --------------------------------------------------------------
@@ -2815,7 +3339,7 @@ test.beforeAll(async () => {
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
-    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' || PHASE === 'f6a' ? 600_000 : 180_000)
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' || PHASE === 'f6a' || PHASE === 'f6b' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 

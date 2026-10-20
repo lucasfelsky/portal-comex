@@ -3870,7 +3870,8 @@ describe('F5b - JSX 404', () => {
 const F6A_MARK = 'REFINO VISUAL F6a — ADMIN'
 const f6aMarkAt = css.indexOf(F6A_MARK)
 const f6aStart = css.lastIndexOf('/*', f6aMarkAt)
-const f6aEnd = css.indexOf('/* Roadmap 11 / PR #223')
+// a secao da F6a termina onde comeca a da F6b (que vem logo depois, antes do bloco reduce)
+const f6aEnd = css.lastIndexOf('/*', css.indexOf('REFINO VISUAL F6b — ADMIN'))
 const f6aSection = stripComments(css.slice(f6aStart, f6aEnd))
 const f6aRules = parseRules(bodyAfter(f6aSection, DESKTOP_MEDIA))
 
@@ -4163,5 +4164,141 @@ describe('F6a - Barra do porto (valores do AdminBarra.dc.html)', () => {
 
   it('movimento: a transicao do cartao de radio entra no bloco reduce existente', () => {
     expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP))).toContain('.admin-panel--bar .ab-option')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F6b - Admin: Previsoes, Lead time e Suporte (AdminPrevisoes.dc.html, AdminLeadTime.dc.html,
+// AdminSuporte.dc.html). CSS = 1 secao "REFINO VISUAL F6b" com UM @media desktop; toda regra comeca por uma
+// raiz de painel (.admin-panel--forecast|--lead-time|--support). Os tres paineis escolhem a arvore por
+// matchMedia (af-*, al-*, as-* + os atomos ad-* da F6a); tablet e mobile seguem na arvore anterior. Sem
+// @media (max-width) e sem cor literal.
+// ---------------------------------------------------------------------------
+const F6B_MARK = 'REFINO VISUAL F6b — ADMIN'
+const f6bMarkAt = css.indexOf(F6B_MARK)
+const f6bStart = css.lastIndexOf('/*', f6bMarkAt)
+const f6bEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f6bSection = stripComments(css.slice(f6bStart, f6bEnd))
+const f6bRules = parseRules(bodyAfter(f6bSection, DESKTOP_MEDIA))
+
+function expectF6b(selector, declarations) {
+  const bodies = f6bRules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F6b: ${selector}`).toBeGreaterThan(0)
+  const body = bodies.join(' ')
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F6b - secao, escopo e ordem', () => {
+  it('a secao existe depois da F6a, antes do bloco reduce desktop (que segue ultimo) e tem UM @media desktop', () => {
+    expect(f6bMarkAt).toBeGreaterThan(css.indexOf('REFINO VISUAL F6a — ADMIN'))
+    expect(f6bEnd).toBeGreaterThan(f6bStart)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f6bEnd)
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP)).match(/@media/g)).toHaveLength(1)
+    expect(f6bSection.match(/@media/g)).toHaveLength(1)
+    expect(f6bSection.trim().startsWith(DESKTOP_MEDIA)).toBe(true)
+  })
+
+  it('nenhum @media (max-width): tablet e mobile ficam como estao', () => {
+    expect(f6bSection).not.toMatch(/@media\s*\(max-width/)
+  })
+
+  it('toda regra comeca por uma raiz de painel (forecast, lead-time ou support)', () => {
+    const ROOT = /^(\[data-theme='dark'\] )?(\.admin-panel--(forecast|lead-time|support)\b|\.admin-section \.admin-panel-stack)/
+    for (const rule of f6bRules) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem raiz: ${selector}`).toMatch(ROOT)
+    }
+    expect(f6bRules.length).toBeGreaterThan(40)
+  })
+
+  it('so tokens: nenhuma cor literal na secao', () => {
+    const all = f6bRules.map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
+    expect(all.match(/rgba?\([^)]*\)/g)).toBeNull()
+  })
+
+  it('a secao F6a nao contem mais nenhuma regra da F6b (cada secao tem as suas raizes)', () => {
+    expect(f6aSection).not.toContain('admin-panel--forecast')
+    expect(f6aSection).not.toContain('admin-panel--lead-time')
+    expect(f6aSection).not.toContain('admin-panel--support')
+  })
+})
+
+describe('F6b - Previsoes (valores do AdminPrevisoes.dc.html)', () => {
+  it('barra de status: --surface 14/18 raio 16 com borda --border; ponto 8 --primary (--warning no fallback)', () => {
+    expectF6b('.admin-panel--forecast .af-bar', ['justify-content: space-between', 'padding: 14px 18px', 'border: 1px solid var(--border)', 'border-radius: 16px', 'background: var(--surface)'])
+    expectF6b('.admin-panel--forecast .af-status', ['gap: 10px', 'font-size: 13px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--forecast .af-status strong', ['color: var(--ink)'])
+    expectF6b('.admin-panel--forecast .af-status__dot', ['width: 8px', 'height: 8px', 'border-radius: 99px', 'background: var(--primary)'])
+    expectF6b('.admin-panel--forecast .af-status__dot--fallback', ['background: var(--warning)'])
+    expectF6b('.admin-panel--forecast .af-actions', ['gap: 8px'])
+    expectF6b('.admin-panel--forecast .af-actions .secondary-button', ['padding: 0 16px'])
+    expectF6b('.admin-panel--forecast .af-actions .primary-button', ['padding: 0 18px'])
+  })
+
+  it('grade: 2 colunas auto-fit minmax(440px, 1fr) gap 20; cartao 22/22 (atomo ad-card); titulo Sora 18/700', () => {
+    expectF6b('.admin-panel--forecast .af-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr))', 'align-items: start', 'gap: 20px'])
+    expectF6b('.admin-panel--forecast .af-col', ['flex-direction: column', 'gap: 20px'])
+    expectF6b('.admin-panel--forecast .af-card__title', ['font-family: var(--font-heading)', 'font-size: 18px', 'font-weight: 700'])
+    expectF6b('.admin-panel--forecast .af-card__note', ['font-size: 12px', 'color: var(--ink-soft)'])
+  })
+
+  it('tabela de destinos: cabecalho --surface-alt, divisor --row-divider, inputs de 36 raio 8 mono; Cutoff 90, Min 70', () => {
+    expectF6b('.admin-panel--forecast .af-table-wrap', ['border: 1px solid var(--row-divider)', 'border-radius: 12px'])
+    expectF6b('.admin-panel--forecast .af-table th', ['background: var(--surface-alt)', 'font-size: 13px', 'font-weight: 700', 'text-transform: none'])
+    expectF6b('.admin-panel--forecast .af-table td', ['border-top: 1px solid var(--row-divider)'])
+    expectF6b('.admin-panel--forecast .af-table .af-table__num', ['width: 90px'])
+    expectF6b('.admin-panel--forecast .af-table th.af-table__num + th.af-table__num', ['width: 70px'])
+    expectF6b('.admin-panel--forecast .af-table input.text-input', ['height: 36px', 'border-radius: 8px', 'font-size: 13px', 'font-weight: 600'])
+    expectF6b('.admin-panel--forecast .af-table input.af-input--hour', ['width: 64px'])
+    expectF6b('.admin-panel--forecast .af-table input.af-input--minute', ['width: 52px'])
+  })
+
+  it('"+ Adicionar destino": 40px, tracejado, raio 10, 13/700; Remover e botao de icone de 36 em perigo', () => {
+    expectF6b('.admin-panel--forecast .af-add', ['height: 40px', 'padding: 0 12px', 'border: 1px dashed var(--border-control)', 'border-radius: 10px', 'font-size: 13px', 'font-weight: 700', 'color: var(--ad-accent)'])
+    expectF6b('.admin-panel--forecast .af-remove', ['width: 36px', 'height: 36px', 'color: var(--danger-700)'])
+    expectF6b('.admin-panel--forecast .af-remove:disabled', ['color: var(--disabled-ink)'])
+  })
+
+  it('dias uteis: 4 colunas gap 10, rotulo mono 11/600 1px, campo mono 16/600', () => {
+    expectF6b('.admin-panel--forecast .af-cats', ['grid-template-columns: repeat(4, minmax(0, 1fr))', 'gap: 10px'])
+    expectF6b('.admin-panel--forecast .af-cats .field > span', ['font-family: var(--font-mono)', 'font-size: 11px', 'font-weight: 600', 'letter-spacing: 1px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--forecast .af-cats input.af-input--days', ['font-size: 16px', 'font-weight: 600'])
+  })
+
+  it('rolling: 140px + 1fr; campo composto sem .field (o global vazaria caixa alta); fichas 12 mono; interruptor 44x26', () => {
+    expectF6b('.admin-panel--forecast .af-rolling', ['grid-template-columns: 140px minmax(0, 1fr)', 'gap: 12px'])
+    expectF6b('.admin-panel--forecast .af-rolling input.af-input--rolling', ['font-size: 15px', 'font-weight: 600'])
+    expectF6b('.admin-panel--forecast .af-field__label', ['font-size: 13px', 'font-weight: 600', 'text-transform: none', 'color: var(--ink)'])
+    expectF6b('.admin-panel--forecast .af-tokens', ['min-height: 44px', 'border: 1.5px solid var(--border-control)', 'border-radius: var(--radius-field)'])
+    expectF6b('.admin-panel--forecast .af-token', ['border-radius: 99px', 'background: var(--navy-50)', 'font-family: var(--font-mono)', 'font-size: 12px'])
+    expectF6b('.admin-panel--forecast .af-switch__control', ['width: 44px', 'height: 26px'])
+    expectF6b('.admin-panel--forecast .af-switch__track', ['background: var(--switch-off)'])
+    expectF6b('.admin-panel--forecast .af-switch__input:checked + .af-switch__track', ['background: var(--primary-700)'])
+  })
+
+  it('alertas: rotulo 14/600 a esquerda e campo de 80 a direita', () => {
+    expectF6b('.admin-panel--forecast .af-alert-row', ['justify-content: space-between', 'gap: 14px'])
+    expectF6b('.admin-panel--forecast .af-alert-row__label', ['font-size: 14px', 'font-weight: 600'])
+    expectF6b('.admin-panel--forecast .af-alert-row input.af-input--alert', ['width: 80px', 'font-size: 15px', 'font-weight: 600'])
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--forecast, h3 dos 4 cartoes, sem toISOString', () => {
+    const page = read('src/pages/AdminForecastPage.jsx').replace(/\r\n/g, '\n')
+    expect(page).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(page).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(page).toContain('className="admin-panel admin-panel--forecast af-root"')
+    for (const title of ['Destinos e cutoff', 'Dias úteis por categoria', 'Rolling customs forecast', 'Alertas operacionais']) {
+      expect(page).toContain(`<h3 className="af-card__title">${title}</h3>`)
+    }
+    expect(page).toContain('+ Adicionar destino')
+    // a arvore anterior continua com o rodape e o selo
+    expect(page).toContain('admin-feature-footer')
+    expect(stripComments(page)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+
+  it('movimento: as transicoes de pilulas e botoes do painel entram no bloco reduce existente', () => {
+    const reduce = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(reduce).toContain('.admin-panel--forecast .af-add')
+    expect(reduce).toContain('.admin-panel--forecast .af-switch__track')
   })
 })

@@ -21850,6 +21850,572 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F6b — ADMIN: PREVISOES, LEAD TIME E SUPORTE (desktop >= 1041px)
+   Fontes: AdminPrevisoes.dc.html, AdminLeadTime.dc.html, AdminSuporte.dc.html (valores inline).
+   Os tres paineis escolhem, por matchMedia, uma arvore propria no desktop (classes `af-*`, `al-*`,
+   `as-*` + os atomos `ad-*` da F6a); tablet e mobile ficam na arvore anterior, sem mudanca.
+   Escopo: toda regra comeca por uma raiz de painel — `.admin-panel--forecast|--lead-time|--support`
+   (a moldura da pagina e os atomos `.ad-*` ja vieram na F6a). Nao ha @media (max-width) aqui.
+   So tokens (nenhuma cor literal). Dark: os tokens ja trocam; so o navy-texto/navy-anel vira
+   --primary onde o mock nao define (--ad-accent, mesma troca da F6a).
+   Fica antes do bloco reduce desktop (que segue ultimo); as transicoes novas entram nele.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* ---------- Previsoes (AdminPrevisoes.dc.html) ---------- */
+  .admin-panel--forecast .af-bar {
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+
+  .admin-panel--forecast .af-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--forecast .af-status strong {
+    color: var(--ink);
+  }
+
+  .admin-panel--forecast .af-status__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--primary);
+  }
+
+  .admin-panel--forecast .af-status__dot--fallback {
+    background: var(--warning);
+  }
+
+  .admin-panel--forecast .af-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .admin-panel--forecast .af-actions .secondary-button {
+    padding: 0 16px;
+  }
+
+  .admin-panel--forecast .af-actions .primary-button {
+    padding: 0 18px;
+  }
+
+  .admin-panel--forecast .af-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  .admin-panel--forecast .af-col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  .admin-panel--forecast .af-card {
+    min-width: 0;
+  }
+
+  .admin-panel--forecast .af-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .admin-panel--forecast .af-card__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .admin-panel--forecast .af-card__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: normal;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+
+  .admin-panel--forecast .af-card__hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--forecast .af-card__note {
+    flex: none;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--forecast .af-link {
+    flex: none;
+    text-decoration: none;
+  }
+
+  .admin-panel--forecast .af-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Tabela de destinos: cabecalho --surface-alt, linhas separadas por --row-divider. */
+  .admin-panel--forecast .af-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--row-divider);
+    border-radius: 12px;
+  }
+
+  .admin-panel--forecast .af-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .admin-panel--forecast .af-table th {
+    padding: 10px 12px;
+    background: var(--surface-alt);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-align: left;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .admin-panel--forecast .af-table td {
+    padding: 6px 8px 6px 12px;
+    border-top: 1px solid var(--row-divider);
+    vertical-align: middle;
+  }
+
+  .admin-panel--forecast .af-table .af-table__num {
+    width: 90px;
+  }
+
+  .admin-panel--forecast .af-table th.af-table__num + th.af-table__num,
+  .admin-panel--forecast .af-table td.af-table__num + td.af-table__num {
+    width: 70px;
+  }
+
+  .admin-panel--forecast .af-table .af-table__actions {
+    width: 1%;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .admin-panel--forecast .af-table input.text-input {
+    min-height: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .admin-panel--forecast .af-table input.af-input--match {
+    min-width: 96px;
+    font-weight: 500;
+  }
+
+  .admin-panel--forecast .af-table input.af-input--label {
+    min-width: 96px;
+  }
+
+  .admin-panel--forecast .af-table input.af-input--hour {
+    width: 64px;
+  }
+
+  .admin-panel--forecast .af-table input.af-input--minute {
+    width: 52px;
+  }
+
+  .admin-panel--forecast .af-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .admin-panel--forecast .af-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--danger-700);
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-remove:hover:not(:disabled) {
+    background: var(--danger-50);
+  }
+
+  .admin-panel--forecast .af-remove:focus-visible {
+    outline: 2px solid var(--danger);
+    outline-offset: 1px;
+  }
+
+  .admin-panel--forecast .af-remove:disabled {
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
+
+  .admin-panel--forecast .af-add {
+    align-self: flex-start;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px dashed var(--border-control);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ad-accent);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-add:hover {
+    border-color: var(--ad-accent);
+    background: var(--navy-50);
+  }
+
+  .admin-panel--forecast .af-add:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Dias uteis por categoria: 4 campos mono 16, rotulo mono 11. */
+  .admin-panel--forecast .af-cats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .admin-panel--forecast .af-cats .field > span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--forecast .af-cats input.af-input--days {
+    padding: 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  /* Campo composto (pilulas, fichas): rotulo 13/600 + conteudo. Nao usa .field: o global .field span
+     (caixa alta, --text-subtle) vazaria para as pilulas e fichas de dentro. */
+  .admin-panel--forecast .af-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .admin-panel--forecast .af-field__label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  /* Rolling customs: 140px + 1fr; "Aplicar a" em pilulas (varias categorias). */
+  .admin-panel--forecast .af-rolling {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .admin-panel--forecast .af-rolling input.af-input--rolling {
+    padding: 0 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .admin-panel--forecast .af-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+  }
+
+  .admin-panel--forecast .af-chips .filter-pill:disabled {
+    border-color: var(--border);
+    background: var(--disabled-bg);
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
+
+  /* DUIMP: campo de fichas (borda de campo, 44px) com o input de nova ficha embutido. */
+  .admin-panel--forecast .af-tokens {
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 5px 8px 5px 10px;
+    border: 1.5px solid var(--border-control);
+    border-radius: var(--radius-field);
+    background: var(--surface);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-tokens:hover:not(.af-tokens--disabled) {
+    border-color: var(--border-control-hover);
+  }
+
+  .admin-panel--forecast .af-tokens:focus-within {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 4px var(--primary-a28);
+  }
+
+  .admin-panel--forecast .af-tokens--disabled {
+    background: var(--surface-alt);
+    cursor: not-allowed;
+  }
+
+  .admin-panel--forecast .af-token {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 30px;
+    padding: 0 4px 0 10px;
+    border-radius: 99px;
+    background: var(--navy-50);
+    color: var(--navy);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  [data-theme='dark'] .admin-panel--forecast .af-token {
+    color: var(--ink);
+  }
+
+  .admin-panel--forecast .af-token__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 99px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-token__remove:hover:not(:disabled) {
+    background: var(--navy-100);
+  }
+
+  .admin-panel--forecast .af-token__remove:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
+  .admin-panel--forecast .af-token__remove:disabled {
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
+
+  .admin-panel--forecast .af-tokens__input {
+    flex: 1 1 180px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 4px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .admin-panel--forecast .af-tokens__input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .admin-panel--forecast .af-tokens__input:disabled {
+    cursor: not-allowed;
+  }
+
+  .admin-panel--forecast .af-tokens__add {
+    flex: none;
+    height: 30px;
+    padding: 0 12px;
+    border: 1.5px solid var(--ad-accent);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ad-accent);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-tokens__add:hover:not(:disabled) {
+    background: var(--navy-50);
+  }
+
+  .admin-panel--forecast .af-tokens__add:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .admin-panel--forecast .af-tokens__add:disabled {
+    border-color: var(--border);
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
+
+  /* Interruptor "Ativo / Desativado" (mesmo desenho do Transbordo do formulario, em 44x26). */
+  .admin-panel--forecast .af-switch {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .admin-panel--forecast .af-switch__control {
+    position: relative;
+    display: inline-flex;
+    width: 44px;
+    height: 26px;
+  }
+
+  .admin-panel--forecast .af-switch__input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .admin-panel--forecast .af-switch__track {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    width: 44px;
+    height: 26px;
+    padding: 3px;
+    border-radius: 99px;
+    background: var(--switch-off);
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-switch__knob {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 99px;
+    background: var(--brand-mark-glyph);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--forecast .af-switch__input:checked + .af-switch__track {
+    background: var(--primary-700);
+  }
+
+  .admin-panel--forecast .af-switch__input:checked + .af-switch__track .af-switch__knob {
+    transform: translateX(18px);
+  }
+
+  .admin-panel--forecast .af-switch__input:focus-visible + .af-switch__track {
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* Alertas operacionais: rotulo 14/600 a esquerda, campo de 80 a direita. */
+  .admin-panel--forecast .af-alert-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .admin-panel--forecast .af-alert-row__label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .admin-panel--forecast .af-alert-row input.af-input--alert {
+    width: 80px;
+    padding: 0 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .admin-panel--forecast .af-foot-note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--forecast .af-foot-note code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -21944,6 +22510,22 @@ body {
   .admin-panel--announcements .ac-row,
   .admin-panel--bar .ab-option,
   .admin-panel .ad-link-button {
+    transition: none;
+  }
+
+  /* Refino F6b: sem transicao nos botoes, fichas, interruptor, secao recolhivel, abas e miniaturas. */
+  .admin-panel--forecast .af-remove,
+  .admin-panel--forecast .af-add,
+  .admin-panel--forecast .af-tokens,
+  .admin-panel--forecast .af-token__remove,
+  .admin-panel--forecast .af-tokens__add,
+  .admin-panel--forecast .af-switch__track,
+  .admin-panel--forecast .af-switch__knob,
+  .admin-panel--lead-time .al-others__toggle,
+  .admin-panel--lead-time .al-others__chevron,
+  .admin-panel--support .as-tab,
+  .admin-panel--support .as-pager__button,
+  .admin-panel--support .as-shot {
     transition: none;
   }
 
