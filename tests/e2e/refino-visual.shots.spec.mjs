@@ -1997,6 +1997,28 @@ PHASES.f6b = [
     action: adminShot(),
     afterShot: restoreViewport,
   },
+  // "Fallback local": sem Firebase configurado o app nao tem login, entao o selo so aparece em teste. A captura
+  // troca, so no modulo da pagina, a leitura de isFirebaseConfigured por false (o resto do app segue no emulador).
+  {
+    name: 'previsoes-fallback-local',
+    route: '/admin/previsoes',
+    beforeGoto: async (page) => {
+      await forecastState()()
+      await page.route(/\/src\/pages\/AdminForecastPage\.jsx/, async (route) => {
+        const response = await route.fetch()
+        const body = (await response.text()).replaceAll('isFirebaseConfigured ?', 'false ?')
+        await route.fulfill({ response, body })
+      })
+    },
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Fallback local')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await page.unroute(/\/src\/pages\/AdminForecastPage\.jsx/)
+      await restoreViewport(page)
+    },
+  },
   {
     name: 'previsoes-foco-teclado',
     route: '/admin/previsoes',
