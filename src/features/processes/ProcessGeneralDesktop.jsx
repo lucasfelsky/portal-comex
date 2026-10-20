@@ -101,6 +101,7 @@ export default function ProcessGeneralDesktop({
   etdHint,
   onEditMode,
   onOpenItems,
+  onOpenDocuments,
 }) {
   const isConsolidated = process.category === 'CONSOLIDADO'
   const etaUpdated = hasUpdatedEta(process)
@@ -109,7 +110,10 @@ export default function ProcessGeneralDesktop({
   const items = Array.isArray(process.items) ? process.items : []
   const linkedItemsCount = items.length
   const identRows = buildIdentRows({ process, canSeeName, erpHints })
-  const pendingFocusKey = pendingFields.map((field) => field.field).find((key) => typeof key === 'string' && key) ?? undefined
+  // "Completar agora": o 1o campo pendente DE DADOS abre a edicao focada nele; se so'
+  // restam documentos (field 'documents'), abre a aba Documentos.
+  const dataField = pendingFields.find((field) => typeof field.field === 'string' && field.field && field.field !== 'documents')
+  const completeAction = dataField ? (onEditMode ? () => onEditMode(dataField.field) : null) : onOpenDocuments ?? null
   // Canal: a dica "Aguardando parametrizacao da DUIMP" so para quem ja ve a DUIMP
   // antes da atracacao (admin/logistica); os demais veem uma dica neutra.
   const channelHint = channel
@@ -142,8 +146,8 @@ export default function ProcessGeneralDesktop({
               <li key={field.id}>{field.label}</li>
             ))}
           </ul>
-          {onEditMode ? (
-            <button type="button" className="pdv-pending__action" onClick={() => onEditMode(pendingFocusKey)}>
+          {completeAction ? (
+            <button type="button" className="pdv-pending__action" onClick={completeAction}>
               Completar agora
             </button>
           ) : null}

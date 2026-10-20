@@ -68,6 +68,15 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
 }
 
+// Refino F4c: dd/mm (com ano so' quando difere do atual), horario local; o title
+// das celulas leva a data completa.
+function formatShortDateLocal(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ''))
+  if (!match) return String(value ?? '')
+  const [, year, month, day] = match
+  return Number(year) === new Date().getFullYear() ? `${day}/${month}` : `${day}/${month}/${year}`
+}
+
 // F17.2b (D-6): mesmo padrao de `formatDate`, mas pra `deferredAt`
 // (`YYYY-MM-DD` puro) - NUNCA `new Date(value)` direto (fuso).
 function formatDeferredAt(value) {
@@ -104,9 +113,14 @@ export function DetailBlock({ step, title, badges, tone, wide, className, childr
   )
 }
 
-export function DetailBlockPlaceholder({ title, wide, className, message }) {
+export function DetailBlockPlaceholder({ title, wide, className, message, step }) {
   return (
-    <DetailBlock title={title} wide={wide} className={[className, 'detail-block--placeholder'].filter(Boolean).join(' ')}>
+    <DetailBlock
+      step={step}
+      title={title}
+      wide={wide}
+      className={[className, 'detail-block--placeholder'].filter(Boolean).join(' ')}
+    >
       <p className="field-hint">{message}</p>
     </DetailBlock>
   )
@@ -117,9 +131,9 @@ export function DetailList({ children }) {
 }
 
 // `hint` (PR 3, so' admin): aviso "ERP" depois do valor.
-export function DetailRow({ label, children, hint }) {
+export function DetailRow({ label, children, hint, wide }) {
   return (
-    <div className="detail-dl__row">
+    <div className={wide ? 'detail-dl__row detail-dl__row--wide' : 'detail-dl__row'}>
       <dt>{label}</dt>
       <dd>
         {children}
@@ -188,7 +202,7 @@ export function hasCustomsDetails(process, erpHints) {
 
 // F17.2b (D-6): bloco "Anuências" - so' quando ha' anuencia efetiva (leitura
 // visivel a todos os aprovados, anuencia nao identifica o processo).
-export function ProcessLicensesDetails({ process, step, showEmptyPlaceholder = false }) {
+export function ProcessLicensesDetails({ process, step, placeholderStep, showEmptyPlaceholder = false }) {
   const licenses = getEffectiveLicenses(process)
 
   if (licenses.length === 0) {
@@ -198,6 +212,7 @@ export function ProcessLicensesDetails({ process, step, showEmptyPlaceholder = f
         wide
         className="process-block--licenses"
         message="Nenhuma anuência registrada."
+        step={placeholderStep}
       />
     ) : null
   }
@@ -325,7 +340,18 @@ export function ProcessIdentificationDetails({ process, canSeeName, erpHints }) 
 // F18b-2 (E9): `containerWashIds` e' prop opcional (array de `container.id`
 // com relatorio de lavacao enviado, lido de `documentIndex` pelo pai). Sem
 // a prop, o render fica identico ao atual.
-export function ProcessCargoDetails({ process, showContainerQuantity, containerWashIds }) {
+export function ProcessCargoDetails({
+  process,
+  showContainerQuantity,
+  containerWashIds,
+  step = 1,
+  // Refino F4c: `variant="desktop"` (Processo.dc.html) poe o dl de resumo ANTES da
+  // tabela e a tabela ganha a coluna "Lavação". Sem a prop o render e' o de sempre.
+  variant,
+  // so' o admin (pendencias sao admin-only): lacre ausente aparece como "Pendente".
+  sealPending = false,
+}) {
+  const isDesktop = variant === 'desktop'
   const containers = Array.isArray(process?.containers) ? process.containers : []
   const specialBadges = getContainerSpecialBadges(containers)
   const isDangerous = hasDangerousGoods(process)
@@ -347,88 +373,172 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
     (item) => item?.dangerousGoods === true
   )
 
-  return (
-    <DetailBlock step={1} title="Carga" wide className="process-block--cargo" badges={badges}>
+  const cargoList = (
+    <DetailList>
+      {/* 2026-10-01 (Lucas): contador de conteineres no card, contando a tabela. */}
       {containers.length > 0 ? (
-        <div className="detail-table__scroll">
-          <table className="detail-table" aria-label="Contêineres">
-            <thead>
-              <tr>
-                <th scope="col">Contêiner</th>
-                <th scope="col">Tipo</th>
-                <th scope="col">Lacre</th>
-                <th scope="col">Devolução do vazio</th>
+        <DetailRow label="Contêineres">{formatContainerCount(containers.length)}</DetailRow>
+      ) : null}
+      {process?.grossWeightKg > 0 ? <DetailRow label="Peso bruto">{`${process.grossWeightKg} kg`}</DetailRow> : null}
+      {process?.volumeM3 > 0 ? <DetailRow label="Cubagem">{`${process.volumeM3} m³`}</DetailRow> : null}
+      {process?.chargeableWeightKg > 0 ? (
+        <DetailRow label="Peso taxado">{`${process.chargeableWeightKg} kg`}</DetailRow>
+      ) : null}
+      {process?.packagesQuantity > 0 ? <DetailRow label="Volumes">{process.packagesQuantity}</DetailRow> : null}
+      <DetailRow label="Pallets">{formatPalletCount(process?.palletQuantity)}</DetailRow>
+      {containers.length === 0 && showContainerQuantity ? (
+        <DetailRow label="Contêineres">{formatContainerCount(process?.containerQuantity)}</DetailRow>
+      ) : null}
+      {dangerousItems.map((item) => (
+        <DetailRow key={item.id} label="IMO" wide={isDesktop}>
+          {`${item.commercialName || 'Item sem nome'}: ${getItemDangerousGoodsLabel(item)}`}
+        </DetailRow>
+      ))}
+      {isLegacyProcessDangerousGoods(process) ? (
+        <DetailRow label="IMO" wide={isDesktop}>
+          {`Cadastro antigo do processo: ${
+            [
+              process?.unNumber ? `ONU ${process.unNumber}` : null,
+              process?.imoClass ? `Classe ${getImoClassLabel(process.imoClass)}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'sem número ONU/classe registrados'
+          }`}
+        </DetailRow>
+      ) : null}
+    </DetailList>
+  )
+
+  const legacyTable =
+    containers.length > 0 ? (
+      <div className="detail-table__scroll">
+        <table className="detail-table" aria-label="Contêineres">
+          <thead>
+            <tr>
+              <th scope="col">Contêiner</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Lacre</th>
+              <th scope="col">Devolução do vazio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {containers.map((container) => (
+              <tr key={container.id}>
+                <td data-label="Contêiner">{container.number || 'Sem número'}</td>
+                <td data-label="Tipo">
+                  {CONTAINER_TYPE_OPTIONS.find((option) => option.value === container.type)?.label ??
+                    container.type ??
+                    '—'}
+                </td>
+                <td data-label="Lacre">{container.seal || '—'}</td>
+                <td data-label="Devolução do vazio">
+                  {container.returnedAt ? (
+                    <span className="detail-table__badges">
+                      {isContainerReturnPlanned(container) ? (
+                        <span className="inline-badge">{`Devolução prevista para ${formatDate(container.returnedAt)}`}</span>
+                      ) : (
+                        <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
+                      )}
+                      {Array.isArray(containerWashIds) && !isContainerReturnPlanned(container) ? (
+                        containerWashIds.includes(container.id) ? (
+                          <span className="inline-badge inline-badge--ok">Lavação enviada</span>
+                        ) : (
+                          <span className="inline-badge inline-badge--warn">Lavação pendente</span>
+                        )
+                      ) : null}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {containers.map((container) => (
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : null
+
+  const desktopTable =
+    containers.length > 0 ? (
+      <div className="detail-table__scroll pdv-table-wrap">
+        <table className="detail-table pdv-table" aria-label="Contêineres">
+          <thead>
+            <tr>
+              <th scope="col">Contêiner</th>
+              <th scope="col">Tipo</th>
+              <th scope="col">Lacre</th>
+              <th scope="col">Devolução do vazio</th>
+              <th scope="col">Lavação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {containers.map((container) => {
+              const returned = Boolean(container.returnedAt)
+              const planned = returned && isContainerReturnPlanned(container)
+              return (
                 <tr key={container.id}>
-                  <td data-label="Contêiner">{container.number || 'Sem número'}</td>
+                  <td data-label="Contêiner" className="pdv-table__mono pdv-table__strong">
+                    {container.number || 'Sem número'}
+                  </td>
                   <td data-label="Tipo">
                     {CONTAINER_TYPE_OPTIONS.find((option) => option.value === container.type)?.label ??
                       container.type ??
                       '—'}
                   </td>
-                  <td data-label="Lacre">{container.seal || '—'}</td>
+                  <td data-label="Lacre" className="pdv-table__mono">
+                    {container.seal ? (
+                      container.seal
+                    ) : sealPending ? (
+                      <span className="pdv-table__pending">Pendente</span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td data-label="Devolução do vazio">
-                    {container.returnedAt ? (
-                      <span className="detail-table__badges">
-                        {isContainerReturnPlanned(container) ? (
-                          <span className="inline-badge">{`Devolução prevista para ${formatDate(container.returnedAt)}`}</span>
-                        ) : (
-                          <span className="inline-badge inline-badge--ok">{`Devolvido em ${formatDate(container.returnedAt)}`}</span>
-                        )}
-                        {Array.isArray(containerWashIds) && !isContainerReturnPlanned(container) ? (
-                          containerWashIds.includes(container.id) ? (
-                            <span className="inline-badge inline-badge--ok">Lavação enviada</span>
-                          ) : (
-                            <span className="inline-badge inline-badge--warn">Lavação pendente</span>
-                          )
-                        ) : null}
+                    {!returned ? (
+                      '—'
+                    ) : planned ? (
+                      <span className="pdv-table__muted" title={formatDate(container.returnedAt)}>
+                        {`Prevista ${formatShortDateLocal(container.returnedAt)}`}
                       </span>
+                    ) : (
+                      <span className="inline-badge inline-badge--ok" title={formatDate(container.returnedAt)}>
+                        {`Devolvido ${formatShortDateLocal(container.returnedAt)}`}
+                      </span>
+                    )}
+                  </td>
+                  <td data-label="Lavação">
+                    {returned && !planned && Array.isArray(containerWashIds) ? (
+                      containerWashIds.includes(container.id) ? (
+                        <span className="inline-badge inline-badge--ok">Lavação enviada</span>
+                      ) : (
+                        <span className="inline-badge inline-badge--warn">Lavação pendente</span>
+                      )
                     ) : (
                       '—'
                     )}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-      <DetailList>
-        {/* 2026-10-01 (Lucas): contador de conteineres no card, contando a tabela. */}
-        {containers.length > 0 ? (
-          <DetailRow label="Contêineres">{formatContainerCount(containers.length)}</DetailRow>
-        ) : null}
-        {process?.grossWeightKg > 0 ? <DetailRow label="Peso bruto">{`${process.grossWeightKg} kg`}</DetailRow> : null}
-        {process?.volumeM3 > 0 ? <DetailRow label="Cubagem">{`${process.volumeM3} m³`}</DetailRow> : null}
-        {process?.chargeableWeightKg > 0 ? (
-          <DetailRow label="Peso taxado">{`${process.chargeableWeightKg} kg`}</DetailRow>
-        ) : null}
-        {process?.packagesQuantity > 0 ? <DetailRow label="Volumes">{process.packagesQuantity}</DetailRow> : null}
-        <DetailRow label="Pallets">{formatPalletCount(process?.palletQuantity)}</DetailRow>
-        {containers.length === 0 && showContainerQuantity ? (
-          <DetailRow label="Contêineres">{formatContainerCount(process?.containerQuantity)}</DetailRow>
-        ) : null}
-        {dangerousItems.map((item) => (
-          <DetailRow key={item.id} label="IMO">
-            {`${item.commercialName || 'Item sem nome'}: ${getItemDangerousGoodsLabel(item)}`}
-          </DetailRow>
-        ))}
-        {isLegacyProcessDangerousGoods(process) ? (
-          <DetailRow label="IMO">
-            {`Cadastro antigo do processo: ${
-              [
-                process?.unNumber ? `ONU ${process.unNumber}` : null,
-                process?.imoClass ? `Classe ${getImoClassLabel(process.imoClass)}` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || 'sem número ONU/classe registrados'
-            }`}
-          </DetailRow>
-        ) : null}
-      </DetailList>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    ) : null
+
+  return (
+    <DetailBlock step={step} title="Carga" wide className="process-block--cargo" badges={badges}>
+      {isDesktop ? (
+        <>
+          {cargoList}
+          {desktopTable}
+        </>
+      ) : (
+        <>
+          {legacyTable}
+          {cargoList}
+        </>
+      )}
     </DetailBlock>
   )
 }
@@ -440,7 +550,7 @@ export function ProcessCargoDetails({ process, showContainerQuantity, containerW
 // maritimos o BL e' uma linha so' ("House BL", leitura `houseBl || masterBl`).
 const BL_ROW_LABELS = { houseBl: 'House BL', masterBl: 'House BL', mawb: 'MAWB', hawb: 'HAWB' }
 
-export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, erpHints }) {
+export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, erpHints, step = 2, placeholderStep }) {
   const trackingTarget = getVesselTrackingTarget(process)
   const fields = erpHints?.fields
   const houseBl = getHouseBl(process)
@@ -479,12 +589,13 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, e
         wide
         className="process-block--transit"
         message="Embarque ainda não registrado."
+        step={placeholderStep}
       />
     ) : null
   }
 
   return (
-    <DetailBlock step={2} title="Embarque e trânsito" wide className="process-block--transit">
+    <DetailBlock step={step} title="Embarque e trânsito" wide className="process-block--transit">
       <DetailList>
         {process?.shippedAt ? (
           <DetailRow label="Data de embarque" hint={shippedHint}>
@@ -548,7 +659,7 @@ export function ProcessTransitDetails({ process, showEmptyPlaceholder = false, e
 // F17.3a (D-12): bloco "Chegada" - atracacao/chegada com data (aprox. quando
 // migrada), CE/terminal, DTA (aereo) e presenca de carga com data. So'
 // renderiza se ha algum dado (visivel a todos os aprovados).
-export function ProcessArrivalDetails({ process, step, showEmptyPlaceholder = false }) {
+export function ProcessArrivalDetails({ process, step, placeholderStep, showEmptyPlaceholder = false }) {
   const isMaritime = isMaritimeCategory(process?.category)
   const isAir = isAirCategory(process?.category)
 
@@ -558,6 +669,7 @@ export function ProcessArrivalDetails({ process, step, showEmptyPlaceholder = fa
         title="Chegada"
         className="process-block--arrival"
         message="Chegada ainda não registrada."
+        step={placeholderStep}
       />
     ) : null
   }
@@ -605,7 +717,7 @@ export function ProcessArrivalDetails({ process, step, showEmptyPlaceholder = fa
 // F17.3a (D-12): bloco "Free time" (FCL/CONSOLIDADO) - prazo de devolucao do
 // vazio (A1: conta da presenca de carga). UX-6b-3 (F2): vencido e' o UNICO
 // bloco que muda de cor (`tone="danger"`).
-export function ProcessFreeTimeDetails({ process, step, showEmptyPlaceholder = false }) {
+export function ProcessFreeTimeDetails({ process, step, placeholderStep, showEmptyPlaceholder = false }) {
   const status = getFreeTimeStatus(process)
   if (!status) return null
   if (status.state === 'not-informed') {
@@ -615,6 +727,7 @@ export function ProcessFreeTimeDetails({ process, step, showEmptyPlaceholder = f
         wide
         className="process-block--free-time"
         message="Free time não informado."
+        step={placeholderStep}
       />
     ) : null
   }
@@ -679,7 +792,7 @@ const CHANNEL_BADGE_TONE = {
 // So' renderiza se maritimo/aereo e ha algum dado preenchido. Visivel a
 // todos os aprovados (nenhum campo identifica o processo; mascara de nome
 // intocada).
-export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = false, erpHints }) {
+export function ProcessCustomsDetails({ process, step, placeholderStep, showEmptyPlaceholder = false, erpHints }) {
   // `hasCustomsDetails(process, erpHints)` e' o unico predicado (o pai o usa para
   // a numeracao das Anuências): com aviso de DUIMP vazia o bloco passa a existir.
   if (!hasCustomsDetails(process, erpHints)) {
@@ -688,6 +801,7 @@ export function ProcessCustomsDetails({ process, step, showEmptyPlaceholder = fa
         title="Aduana (DUIMP)"
         className="process-block--customs"
         message="DUIMP ainda não registrada."
+        step={placeholderStep}
       />
     ) : null
   }

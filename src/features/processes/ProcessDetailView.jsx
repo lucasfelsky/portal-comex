@@ -27,6 +27,7 @@ import useActivationPop from '../../hooks/useActivationPop'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
+import { getFreeTimeStatus } from './arrivalCustoms'
 import { DetailHeaderCard, DetailTabs } from './ProcessDetailDesktop'
 import ProcessGeneralDesktop from './ProcessGeneralDesktop'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
@@ -252,6 +253,26 @@ export default function ProcessDetailView({
     collectionWindows.length > 0
   const showCarrier = isCollectionScheduledOrBeyondStatus(selectedProcess.collectionStatus)
   const showCollectionBlock = showCollectionStatusBadge || showCollectionWindows || showCarrier
+
+  // Refino F4c (aba Processo no desktop): blocos numerados em sequencia (Carga,
+  // Embarque e transito, Chegada, Free time, Aduana, Anuencias, Coleta). O bloco que
+  // nao se aplica a categoria (ex.: Free time no aereo) nao consome numero, entao em
+  // FCL/CONSOLIDADO vao de 1 a 7 como no mock. A arvore legada segue a numeracao
+  // propria (Chegada + Free time compartilham o 3, Aduana + Anuencias o 4).
+  const isMaritimeOrAir = isMaritimeCategory(selectedProcess.category) || isAirCategory(selectedProcess.category)
+  const desktopSteps = (() => {
+    let n = 0
+    const next = () => (n += 1)
+    return {
+      cargo: next(),
+      transit: next(),
+      arrival: isMaritimeOrAir ? next() : null,
+      freeTime: getFreeTimeStatus(selectedProcess) ? next() : null,
+      customs: isMaritimeOrAir ? next() : null,
+      licenses: next(),
+      collection: showCollectionBlock || showsCollectionCategory ? next() : null,
+    }
+  })()
   const isFavorite = favoriteProcessIds.includes(selectedProcess.id)
   // Estrela de favorito: entra com mola (scale 0 -> 1) so ao ativar.
   const favoriteStarPop = useActivationPop(isFavorite)
@@ -448,19 +469,45 @@ export default function ProcessDetailView({
           process={selectedProcess}
           showContainerQuantity={shouldShowContainerQuantity(selectedProcess.category)}
           containerWashIds={documentIndex ? documentIndex.containerWashIds : undefined}
+          variant={isDesktop ? 'desktop' : undefined}
+          step={isDesktop ? desktopSteps.cargo : 1}
+          sealPending={isDesktop && pendingFields.some((field) => field.id === 'containerSeals')}
         />
-        <ProcessTransitDetails process={selectedProcess} showEmptyPlaceholder erpHints={erpHints} />
-        <ProcessArrivalDetails process={selectedProcess} step={3} showEmptyPlaceholder />
-        <ProcessFreeTimeDetails process={selectedProcess} step={showArrivalBlock ? null : 3} showEmptyPlaceholder />
-        <ProcessCustomsDetails process={selectedProcess} step={4} showEmptyPlaceholder erpHints={erpHints} />
+        <ProcessTransitDetails
+          process={selectedProcess}
+          showEmptyPlaceholder
+          erpHints={erpHints}
+          step={isDesktop ? desktopSteps.transit : 2}
+          placeholderStep={isDesktop ? desktopSteps.transit : undefined}
+        />
+        <ProcessArrivalDetails
+          process={selectedProcess}
+          step={isDesktop ? desktopSteps.arrival : 3}
+          placeholderStep={isDesktop ? desktopSteps.arrival : undefined}
+          showEmptyPlaceholder
+        />
+        <ProcessFreeTimeDetails
+          process={selectedProcess}
+          step={isDesktop ? desktopSteps.freeTime : showArrivalBlock ? null : 3}
+          placeholderStep={isDesktop ? desktopSteps.freeTime : undefined}
+          showEmptyPlaceholder
+        />
+        <ProcessCustomsDetails
+          process={selectedProcess}
+          step={isDesktop ? desktopSteps.customs : 4}
+          placeholderStep={isDesktop ? desktopSteps.customs : undefined}
+          showEmptyPlaceholder
+          erpHints={erpHints}
+        />
         <ProcessLicensesDetails
           process={selectedProcess}
-          step={showCustomsBlock ? null : 4}
+          step={isDesktop ? desktopSteps.licenses : showCustomsBlock ? null : 4}
+          placeholderStep={isDesktop ? desktopSteps.licenses : undefined}
           showEmptyPlaceholder
         />
         {showCollectionBlock ? (
           <DetailBlock
-            step={5}
+            step={isDesktop ? desktopSteps.collection : 5}
             title="Coleta"
             wide
             className="process-block--collection"
@@ -501,6 +548,7 @@ export default function ProcessDetailView({
             wide
             className="process-block--collection"
             message="Coleta ainda não agendada."
+            step={isDesktop ? desktopSteps.collection : undefined}
           />
         ) : null}
         {selectedProcess.processNotes ? (
@@ -756,6 +804,7 @@ export default function ProcessDetailView({
               etdHint={etdHint}
               onEditMode={isAdmin ? onEditMode : undefined}
               onOpenItems={() => onDetailTabChange('items')}
+              onOpenDocuments={canViewRecords ? () => onDetailTabChange('documents') : undefined}
             />
           ) : (
             tabPanels

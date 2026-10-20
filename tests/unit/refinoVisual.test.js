@@ -2579,3 +2579,78 @@ describe('F4c - Detalhes gerais (valores do Processo.dc.html)', () => {
     expectF4c('.process-detail-view .pdv-btn--start', ['align-self: flex-start'])
   })
 })
+
+describe('F4c - aba Processo (valores do Processo.dc.html)', () => {
+  it('bloco: coluna, gap 14, padding 20, raio 16, borda --border, sem sombra; placeholders visiveis no desktop', () => {
+    expectF4c('.process-detail-view .pdv-panel--process', ['--pdv-gap: 14px'])
+    expectF4c('.process-detail-view .pdv-panel .detail-block', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 14px',
+      'padding: 20px',
+      'border: 1px solid var(--border)',
+      'border-radius: 16px',
+      'background: var(--surface)',
+      'box-shadow: none',
+    ])
+    expectF4c('.process-detail-view .pdv-panel > .detail-block--placeholder', ['display: flex'])
+    expectF4c('.process-detail-view .pdv-panel .detail-block--danger', ['border-color: var(--danger-700)', 'background: var(--danger-50)'])
+  })
+
+  it('titulo: ladrilho navy 26x26 raio 8 mono 12/700 + h3 Sora 16/700, gap 10', () => {
+    expectF4c('.process-detail-view .pdv-panel .detail-block__head', ['display: flex', 'align-items: center', 'gap: 10px'])
+    expectF4c('.process-detail-view .pdv-panel .detail-block__step', [
+      'width: 26px',
+      'height: 26px',
+      'border-radius: 8px',
+      'background: var(--navy)',
+      'color: var(--sidebar-ink)',
+      'font-family: var(--font-mono)',
+      'font-size: 12px',
+      'font-weight: 700',
+    ])
+    expectF4c('.process-detail-view .pdv-panel .detail-block__title', ['font-family: var(--font-heading)', 'font-size: 16px', 'font-weight: 700'])
+  })
+
+  it('dl: auto-fill minmax(170px,1fr) gap 14/12, dt 12 --ink-soft, dd 14/600; Carga em 5 colunas mono', () => {
+    expectF4c('.process-detail-view .pdv-panel .detail-dl', ['grid-template-columns: repeat(auto-fill, minmax(170px, 1fr))', 'gap: 14px 12px'])
+    expectF4c('.process-detail-view .pdv-panel .detail-dl__row dt', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-panel .detail-dl__row dd', ['font-size: 14px', 'font-weight: 600'])
+    expectF4c('.process-detail-view .pdv-panel .process-block--cargo .detail-dl', ['grid-template-columns: repeat(5, minmax(0, 1fr))', 'gap: 12px'])
+    expectF4c('.process-detail-view .pdv-panel .process-block--cargo .detail-dl__row dd', ['font-family: var(--font-mono)'])
+  })
+
+  it('tabela: moldura --row-divider raio 12, cabecalho --surface-alt, celulas 10/14 13px, linhas com --row-divider, mono no contêiner e lacre', () => {
+    expectF4c('.process-detail-view .pdv-panel .pdv-table-wrap', ['overflow-x: auto', 'border: 1px solid var(--row-divider)', 'border-radius: 12px'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table', ['width: 100%', 'border-collapse: collapse', 'font-size: 13px'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table thead tr', ['background: var(--surface-alt)'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table th', ['padding: 10px 14px', 'font-weight: 700', 'text-align: left'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table td', ['padding: 10px 14px', 'font-size: 13px'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table tbody tr', ['border-top: 1px solid var(--row-divider)'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table__mono', ['font-family: var(--font-mono)'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table__pending', ['font-weight: 600', 'color: var(--warning-700)'])
+    expectF4c('.process-detail-view .pdv-panel .pdv-table .inline-badge', ['padding: 3px 10px', 'font-size: 12px'])
+  })
+
+  it('bloco vazio: borda tracejada --border-strong, raio 12, padding 14, 13px --ink-soft', () => {
+    expectF4c('.process-detail-view .pdv-panel .detail-block--placeholder .field-hint', [
+      'padding: 14px',
+      'border: 1px dashed var(--border-strong)',
+      'border-radius: 12px',
+      'font-size: 13px',
+      'color: var(--ink-soft)',
+    ])
+  })
+
+  it('o CSS desktop legado do detalhe (grade .tab-panel-spacing, ordem dos blocos, passos escondidos) saiu', () => {
+    const desktopBlocks = [...css.matchAll(/@media \(min-width: 1041px\) \{/g)].map((m) => bodyAfter(css.slice(m.index), DESKTOP_MEDIA))
+    for (const block of desktopBlocks) {
+      expect(block).not.toContain('.process-detail-view .tab-panel-spacing')
+      expect(block).not.toContain('.process-general-card')
+      expect(block).not.toMatch(/\.process-block--[a-z-]+\s*\{\s*order:/)
+      expect(block).not.toContain('.process-detail-view .detail-block__step { display: none')
+    }
+    expect(stripComments(css)).not.toContain('Detalhe desktop (SPEC 2026-09-28)')
+    expect(stripComments(css)).not.toMatch(/\.process-block--transit:has/)
+  })
+})

@@ -700,3 +700,308 @@ describe('F4c - aba Detalhes gerais', () => {
     expect(poChip.closest('li')).toHaveTextContent('9011')
   })
 })
+
+describe('F4c - Detalhes gerais: Completar agora quando so restam documentos', () => {
+  it('sem campos de dados pendentes, "Completar agora" abre a aba Documentos', async () => {
+    const user = userEvent.setup()
+    const complete = makeProcess({
+      processStatus: 'Embarcou',
+      berthed: false,
+      supplierName: 'ALFA',
+      originLocation: 'Shanghai',
+      incoterm: 'CFR',
+      carrierName: 'MSC',
+      grossWeightKg: 10,
+      volumeM3: 10,
+      containers: [{ id: 'c1', type: '20DC', number: 'MSCU1234567', seal: 'L1' }],
+      items: [{ id: 'i1', commercialName: 'Resina', quantity: 10 }],
+      vesselName: 'MSC X',
+      voyage: '1W',
+      houseBl: 'MEDU1',
+      forwarderName: 'Agente',
+      documentIndex: { processSlotKeys: [], fispqItemIds: [], containerWashIds: [] },
+    })
+    const { props } = renderDetail({ selectedProcess: complete })
+    const note = screen.getByRole('note')
+    const labels = within(note).getAllByRole('listitem').map((li) => li.textContent)
+    // so documentos pendentes (BL/AWB, relatorio de carga, invoice, packing list)
+    expect(labels.every((label) => /BL\/AWB|Relatório de carga|Invoice|Packing List|FISPQ/.test(label))).toBe(true)
+    await user.click(within(note).getByRole('button', { name: 'Completar agora' }))
+    expect(props.onEditMode).not.toHaveBeenCalled()
+    expect(props.onDetailTabChange).toHaveBeenCalledWith('documents')
+  })
+})
+
+describe('F4c - aba Processo (blocos numerados do Processo.dc.html)', () => {
+  const blockTitles = (container) =>
+    [...container.querySelectorAll('.pdv-panel .detail-block')].map((block) => [
+      block.querySelector('.detail-block__step')?.textContent ?? null,
+      block.querySelector('.detail-block__title').textContent,
+    ])
+
+  const fullFcl = (overrides = {}) =>
+    makeProcess({
+      detailTab: 'process',
+      grossWeightKg: 41200,
+      volumeM3: 52,
+      packagesQuantity: 160,
+      containers: [
+        { id: 'c1', type: '20DC', number: 'MSCU 482913-0', seal: 'FX 118204', returnedAt: '2999-11-08' },
+        { id: 'c2', type: '20DC', number: 'MSCU 482977-1', seal: '' },
+      ],
+      shippedAt: '2026-09-12',
+      vesselName: 'MSC Aurora',
+      voyage: '123W',
+      freeTimeDays: 14,
+      ...overrides,
+    })
+
+  it('FCL: 7 blocos numerados de 1 a 7 na ordem do mock (vazios entram como placeholder numerado)', () => {
+    const { container } = renderDetail({ detailTab: 'process', selectedProcess: fullFcl({ freeTimeDays: null }) })
+    expect(blockTitles(container)).toEqual([
+      ['1', 'Carga'],
+      ['2', 'Embarque e trânsito'],
+      ['3', 'Chegada'],
+      ['4', 'Free time'],
+      ['5', 'Aduana (DUIMP)'],
+      ['6', 'Anuências'],
+      ['7', 'Coleta'],
+    ])
+    const placeholders = [...container.querySelectorAll('.detail-block--placeholder')].map((block) => [
+      block.querySelector('.detail-block__title').textContent,
+      block.querySelector('.field-hint').textContent,
+    ])
+    expect(placeholders).toEqual([
+      ['Chegada', 'Chegada ainda não registrada.'],
+      ['Free time', 'Free time não informado.'],
+      ['Aduana (DUIMP)', 'DUIMP ainda não registrada.'],
+      ['Anuências', 'Nenhuma anuência registrada.'],
+      ['Coleta', 'Coleta ainda não agendada.'],
+    ])
+  })
+
+  it('AEREO: sem Free time, a numeracao segue sem buraco (1 a 6)', () => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({ category: 'AEREO', destination: 'GRU', processNumber: 'AWB 1', containerQuantity: 0 }),
+    })
+    expect(blockTitles(container).map(([n, title]) => `${n} ${title}`)).toEqual([
+      '1 Carga',
+      '2 Embarque e trânsito',
+      '3 Chegada',
+      '4 Aduana (DUIMP)',
+      '5 Anuências',
+      '6 Coleta',
+    ])
+  })
+
+  it('LCL (sem free time): 1 a 6; blocos com dados tambem levam o numero', () => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: makeProcess({
+        category: 'LCL',
+        berthed: true,
+        berthedAt: '2026-10-20T08:00',
+        terminalName: 'Portonave',
+        duimpStatus: 'Registrada',
+        parameterizationChannel: 'Verde',
+        licenses: [{ id: 'l1', agency: 'MAPA', status: 'Deferida' }],
+      }),
+    })
+    expect(blockTitles(container).map(([n, title]) => `${n} ${title}`)).toEqual([
+      '1 Carga',
+      '2 Embarque e trânsito',
+      '3 Chegada',
+      '4 Aduana (DUIMP)',
+      '5 Anuências',
+      '6 Coleta',
+    ])
+    expect(screen.getByText('Canal Verde')).toBeInTheDocument()
+  })
+
+  it('o painel e o tabpanel da aba Processo (gap 14) e nao tem grade de 2 colunas legada', () => {
+    const { container } = renderDetail({ detailTab: 'process', selectedProcess: fullFcl() })
+    expect(container.querySelector('.pdv-panel--process')).not.toBeNull()
+    expect(container.querySelector('.tab-panel-spacing')).toBeNull()
+  })
+
+  it('Carga: dl de resumo (contêineres, pallets, peso, cubagem, volumes) ANTES da tabela de contêineres', () => {
+    const { container } = renderDetail({ detailTab: 'process', selectedProcess: fullFcl() })
+    const block = container.querySelector('.process-block--cargo')
+    const labels = [...block.querySelectorAll('.detail-dl__row dt')].map((dt) => dt.textContent)
+    expect(labels).toEqual(['Contêineres', 'Peso bruto', 'Cubagem', 'Volumes', 'Pallets'])
+    const children = [...block.children].map((child) => child.className.split(' ')[0])
+    expect(children.indexOf('detail-dl')).toBeLessThan(children.indexOf('detail-table__scroll'))
+  })
+
+  it('tabela de conteineres com 5 colunas: lacre "Pendente" so para o admin, devolucao prevista e lavacao por contêiner', () => {
+    const process = fullFcl({
+      shippedAt: '2026-09-12',
+      containers: [
+        { id: 'c1', type: '20DC', number: 'MSCU 482913-0', seal: 'FX 118204', returnedAt: '2999-11-08' },
+        { id: 'c2', type: '20DC', number: 'MSCU 482977-1', seal: '', returnedAt: '2020-01-10' },
+        { id: 'c3', type: '40HC', number: 'MSCU 000000-3', seal: 'Z9', returnedAt: '2020-01-12' },
+        { id: 'c4', type: '20DC', number: 'MSCU 111111-2', seal: 'Z8' },
+      ],
+      documentIndex: { fispqItemIds: [], containerWashIds: ['c3'], processSlotKeys: [] },
+    })
+    const view = renderDetail({ detailTab: 'process', selectedProcess: process })
+    const table = screen.getByRole('table', { name: 'Contêineres' })
+    expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Contêiner',
+      'Tipo',
+      'Lacre',
+      'Devolução do vazio',
+      'Lavação',
+    ])
+    const rows = within(table).getAllByRole('row').slice(1)
+    const cells = rows.map((row) => [...row.querySelectorAll('td')].map((td) => td.textContent))
+    expect(cells[0][0]).toBe('MSCU 482913-0')
+    expect(cells[0][2]).toBe('FX 118204')
+    // devolucao futura = prevista (texto simples) e sem lavacao ainda
+    expect(cells[0][3]).toMatch(/^Prevista 08\/11\/2999$/)
+    expect(cells[0][4]).toBe('—')
+    // lacre ausente e processo com a pendencia de lacre: "Pendente" (so admin)
+    expect(cells[1][2]).toBe('Pendente')
+    expect(cells[1][4]).toBe('Lavação pendente')
+    expect(cells[2][4]).toBe('Lavação enviada')
+    expect(cells[2][3]).toMatch(/^Devolvido /)
+    expect(cells[3][3]).toBe('—')
+    expect(cells[3][4]).toBe('—')
+    view.unmount()
+
+    renderDetail({
+      detailTab: 'process',
+      isAdmin: false,
+      canSeeName: true,
+      profile: { name: 'Ana', role: 'logistica' },
+      selectedProcess: process,
+    })
+    const rowsLogistica = within(screen.getByRole('table', { name: 'Contêineres' })).getAllByRole('row').slice(1)
+    // logistica ve a lavacao (documentIndex) mas nao ve "Pendente" no lacre (pendencias sao do admin)
+    expect(rowsLogistica[1].querySelectorAll('td')[2].textContent).toBe('—')
+  })
+
+  it('usuario sem acesso a registros nao ve "Lavação" (sem documentIndex) e a tabela segue com 5 colunas', () => {
+    renderDetail({
+      detailTab: 'process',
+      isAdmin: false,
+      canSeeName: false,
+      profile: { name: 'Zé', role: 'user' },
+      selectedProcess: fullFcl({
+        containers: [{ id: 'c1', type: '20DC', number: 'M1', seal: 'S', returnedAt: '2020-01-10' }],
+      }),
+    })
+    const row = within(screen.getByRole('table', { name: 'Contêineres' })).getAllByRole('row')[1]
+    expect(row.querySelectorAll('td')[4].textContent).toBe('—')
+  })
+
+  it('IMO da carga fica no dl em linha larga; carga perigosa/inflamavel em tags no titulo do bloco', () => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: fullFcl({
+        items: [{ id: 'i1', commercialName: 'Acetona', quantity: 10, dangerousGoods: true, imoClass: '3', unNumber: '1090' }],
+      }),
+    })
+    const block = container.querySelector('.process-block--cargo')
+    const imo = [...block.querySelectorAll('.detail-dl__row')].find((row) => row.querySelector('dt').textContent === 'IMO')
+    expect(imo).toHaveClass('detail-dl__row--wide')
+    expect(imo.querySelector('dd').textContent).toContain('Acetona')
+    expect(block.querySelector('.detail-block__head')).toHaveTextContent('Carga inflamável')
+  })
+
+  it('Embarque e transito com dados: linhas do dl, "Rastrear navio" e transbordo', () => {
+    renderDetail({
+      detailTab: 'process',
+      selectedProcess: fullFcl({ transshipment: true, transshipmentPort: 'Colombo', transshipmentEtd: '2026-09-20', vesselImo: '9000000' }),
+    })
+    const block = screen.getByRole('heading', { level: 3, name: 'Embarque e trânsito' }).closest('.detail-block')
+    const rows = Object.fromEntries([...block.querySelectorAll('.detail-dl__row')].map((row) => [row.querySelector('dt').textContent, row.querySelector('dd').textContent]))
+    expect(rows['Data de embarque']).toBe('12/09/2026')
+    expect(rows.Navio).toBe('MSC Aurora')
+    expect(rows.Viagem).toBe('123W')
+    expect(rows.Transbordo).toMatch(/^Sim — Colombo/)
+  })
+
+  it('Free time vencido: bloco em tom de perigo e tag com a situacao', () => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: fullFcl({
+        berthed: true,
+        berthedAt: '2020-01-02T08:00',
+        cargoPresenceInformed: true,
+        cargoPresenceInformedAt: '2020-01-03T08:00',
+        freeTimeDays: 5,
+      }),
+    })
+    const block = container.querySelector('.process-block--free-time')
+    expect(block).toHaveClass('detail-block--danger')
+    expect(block.querySelector('.inline-badge--danger')).toHaveTextContent(/vencido há/)
+  })
+
+  it('Coleta com janelas e transportadora; observacoes do processo e pos-recebimento seguem sem numero', () => {
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: fullFcl({
+        processStatus: 'Carga recebida',
+        collectionStatus: 'Coleta Agendada',
+        collectionWindows: [{ id: 'w1', scheduledAt: '2026-10-25T09:00', notes: 'levar EPI' }],
+        carrierName: 'Transp X',
+        processNotes: 'Atenção ao prazo.',
+        postReceiptNotes: 'Avaria leve.',
+        berthed: true,
+        berthedAt: '2026-10-20T08:00',
+      }),
+    })
+    const titles = blockTitles(container)
+    expect(titles.find(([, title]) => title === 'Coleta')[0]).toMatch(/^\d$/)
+    expect(titles.find(([, title]) => title === 'Observações do processo')[0]).toBeNull()
+    expect(titles.find(([, title]) => title === 'Observações pós-recebimento da carga')[0]).toBeNull()
+    const coleta = screen.getByRole('heading', { level: 3, name: 'Coleta' }).closest('.detail-block')
+    expect(within(coleta).getByText('levar EPI')).toBeInTheDocument()
+    expect(within(coleta).getByText('Transp X')).toBeInTheDocument()
+    expect(screen.getByText('Atenção ao prazo.')).toBeInTheDocument()
+  })
+
+  it('a arvore legada (tablet) segue com a numeracao propria: Carga 1, Embarque 2, Chegada 3 (Free time sem numero quando ha Chegada)', () => {
+    media.setDesktop(false)
+    const { container } = renderDetail({
+      detailTab: 'process',
+      selectedProcess: fullFcl({ berthed: true, berthedAt: '2026-10-20T08:00', freeTimeDays: 7 }),
+    })
+    const steps = [...container.querySelectorAll('.detail-block')].map((block) => [
+      block.querySelector('.detail-block__title').textContent,
+      block.querySelector('.detail-block__step')?.textContent ?? null,
+    ])
+    expect(steps.slice(0, 4)).toEqual([
+      ['Carga', '1'],
+      ['Embarque e trânsito', '2'],
+      ['Chegada', '3'],
+      ['Free time', null],
+    ])
+    // legado: a tabela de 4 colunas (sem "Lavação") e o dl depois dela
+    expect(screen.queryByRole('columnheader', { name: 'Lavação' })).not.toBeInTheDocument()
+  })
+
+  it('ERP (admin): avisos de Navio, House BL e DUIMP continuam nas linhas da aba Processo', () => {
+    const process = makeProcess({
+      category: 'FCL', processNumber: '9036', destination: 'NAVEGANTES', etd: '2026-09-30', eta: '2026-10-20',
+      vesselName: 'ALFA MAERSK', voyage: '639W', masterBl: 'MBL-A', supplierName: 'ALFA CHEM', incoterm: 'FOB',
+      duimpNumber: 'DU-A', duimpRegisteredAt: '2026-10-01T10:00:00', duimpStatus: 'Parametrizada',
+    })
+    const shipment = erpShipment({
+      incoterm: 'CFR',
+      orders: [{ pedido: '9036', poRef: 'BETA SEA 904-26', poBase: '', exporter: 'BETA TRADING' }],
+      transport: {
+        destination: 'ITAJAI', etd: '2026-10-06', eta: '2026-10-14', blAwb: 'MBL-B', diNumber: 'DU-B', diDate: '2026-10-20',
+        vessel: { name: 'BETA FAME', raw: 'BETA FAME 12W', voyage: '12W' },
+      },
+    })
+    renderDetail({ detailTab: 'process', selectedProcess: process, erpReference: erpReferenceOf(shipment) })
+    const chip = (name) => screen.getByRole('button', { name })
+    expect(chip('Navio no ERP: BETA FAME 12W').closest('.detail-dl__row')).toHaveTextContent('NavioALFA MAERSK')
+    expect(chip('BL no ERP: MBL-B').closest('.detail-dl__row')).toHaveTextContent('House BLMBL-A')
+    expect(chip('Nº da DUIMP no ERP: DU-B').closest('.detail-dl__row')).toHaveTextContent('Nº da DUIMPDU-A')
+    expect(chip('Registro da DUIMP no ERP: 20/10/2026')).toBeInTheDocument()
+  })
+})

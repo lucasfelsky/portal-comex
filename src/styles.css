@@ -12426,141 +12426,11 @@ body {
    meta e botoes de acao inline) foi removido: o desktop nao renderiza mais a
    arvore legada da lista. */
 
-/* ============================================================
-   Ciclo 2c (redesign Fase 2) — Chegadas (detalhe) desktop: traz a
-   timeline de estagios (F16.5) tambem pro desktop com layout proprio
-   (as regras dela dentro de @media (max-width:720px), 8342-8428, sao
-   mobile-only e nao sao tocadas aqui; o aria-hidden do JSX continua
-   como esta) + restyle do header-resumo, `.detail-card` em grid 2
-   colunas, abas e destaque de canal na DUIMP, na linguagem da Fase 1.
-   Escopado via `.process-detail-view` — classe nova, adicionada so' no
-   <article> raiz de ProcessDetailView.jsx (unica no app) — pra nao
-   vazar pro ProcessForm/ProcessMessagesPanel/paineis admin, que reusam
-   `.process-detail-card-heading`/`.detail-card`/`.detail-stack` como
-   classes soltas, nem pro Dashboard (2a, `.dashboard-heading ~
-   .stagger`) ou pra lista (2b, `.process-list-card`). So' tokens
-   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
-   do :root. Nao toca nenhum bloco @media (max-width:*).
-   ============================================================ */
-@media (min-width: 1041px) {
-  /* `.detail-card` em grid de 2 colunas dentro do painel de aba ativa.
-     Cards que precisam da linha inteira (ETD/ETA e quantidades em
-     --split, listas roladas de itens/mensagens, e a acao de excluir
-     processo) ganham `grid-column: 1 / -1` pra nao ficar espremidos
-     numa coluna de 50%. */
-  .process-detail-view .tab-panel-spacing {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .process-detail-view .tab-panel-spacing > .detail-card--split,
-  .process-detail-view .tab-panel-spacing > .detail-card:has(.detail-card--split),
-  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-items-list),
-  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-messages-list),
-  .process-detail-view .tab-panel-spacing > .detail-card:has(.post-receipt-image-grid),
-  .process-detail-view .tab-panel-spacing > .detail-card:has(.process-detail-collection-windows),
-  .process-detail-view .tab-panel-spacing > .action-row {
-    grid-column: 1 / -1;
-  }
-
-  .process-detail-view .detail-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  /* Cartoes split (ETD/ETA e Carga, `.detail-card--split` ja' renderizado
-     pelo JSX -- ProcessDetailView.jsx:225 e :264) ganham valores maiores
-     em `--font-heading`, ecoando `.split .dv` do mockup Detalhe.dc.html.
-     Rotulo (`.detail-label`) ja' e' uppercase/tracking na base
-     (styles.css:3558-3565); nao repetido aqui. */
-  .process-detail-view .detail-card--split p {
-    font-family: var(--font-heading);
-    font-size: var(--fs-headline);
-  }
-
-  /* Destaque de canal da DUIMP (getChannelToneClass ja' aplica a
-     classe certa no JSX; aqui so' se reforca o contorno pra chamar
-     mais atencao no desktop, mesmo padrao de cor ja usado em
-     .dashboard-process-inline__row--duimp, linhas 2272-2289). */
-  .process-detail-view .detail-card--danger {
-    border: 1px solid var(--danger-700);
-  }
-
-  .process-detail-view .detail-card--warning {
-    border: 1px solid var(--warning-700);
-  }
-
-  .process-detail-view .detail-card--success {
-    border: 1px solid var(--success-700);
-  }
-
-  .process-detail-view .detail-card--neutral {
-    border: 1px solid var(--neutral-700);
-  }
-
-  /* Feedback pos-6b: cards de item da aba "Itens" e "Item relacionado"
-     (mesmo componente .process-related-item-button, ProcessDetailView.jsx
-     ~396-410 e ~437-448) ainda estavam no visual antigo (fundo gradiente
-     hardcoded, sombra none). Refino na linguagem do redesign: fundo
-     --surface, borda+shadow leves, hover com --surface-alt/--shadow;
-     nome comercial/chegada em --font-heading a' esquerda, quantidade em
-     destaque (--fs-title) a' direita.
-     `.process-related-item-button` tem override dark FORA de media
-     (styles.css ~7610, `background: var(--glass-grad)`) com a MESMA
-     especificidade (0,2,0) de `.process-detail-view .process-related-item-button`
-     -- por isso o background/shadow aqui usam seletor duplo com
-     `[data-theme='dark']` na frente pra vencer de forma explicita (regra 3
-     do PLAN), nao so' por ordem de fonte. So' tokens dark-aware, sem hex
-     fora do :root. */
-  [data-theme='dark'] .process-detail-view .process-related-item-button,
-  .process-detail-view .process-related-item-button {
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .process-detail-view .process-related-item-button {
-    transition:
-      transform 120ms ease,
-      box-shadow 120ms ease,
-      border-color 120ms ease,
-      background-color 120ms ease;
-  }
-
-  .process-detail-view .process-related-item-button--compact {
-    padding: 16px 20px;
-  }
-
-  [data-theme='dark'] .process-detail-view .process-related-item-button:hover,
-  .process-detail-view .process-related-item-button:hover {
-    background: var(--surface-alt);
-    border-color: var(--primary);
-    box-shadow: var(--shadow);
-    transform: translateY(-2px);
-  }
-
-  .process-detail-view .process-items-list {
-    gap: 14px;
-  }
-
-  .process-detail-view .process-item-display strong {
-    font-family: var(--font-heading);
-  }
-
-  .process-detail-view .process-item-display--quantity strong {
-    font-size: var(--fs-title);
-  }
-
-  /* Heading da aba "Itens" (rotulo eyebrow + badge "N itens") e o campo
-     de busca -- so' pill no input de busca pra combinar com o card
-     refinado acima; `.detail-label`/`.inline-badge` ja' sao dark-aware
-     na base (nao setar background/color novos aqui). A textarea (Nova
-     mensagem) fica de fora: mantem o raio base. */
-  .process-detail-view .field .text-input:not(textarea) {
-    border-radius: var(--radius-full);
-    padding-left: 16px;
-  }
-}
+/* Detalhe do processo desktop (>= 1041px): reescrito na F4c — ver "REFINO VISUAL
+   F4c — DETALHE DO PROCESSO" (raiz .process-detail-view, arvore pdv-*). O bloco do
+   ciclo 2c que ficava aqui (timeline, abas em pilula, grid de 2 colunas de
+   .detail-card, cards de item) foi removido: o desktop nao renderiza mais a
+   arvore legada do detalhe. */
 
 /* ============================================================
    UX-6b-3 (D6/D7/D10): cabecalho do detalhe (nome/status/subtitulo),
@@ -12720,114 +12590,6 @@ body {
 
 .process-item-display__name {
   font-family: var(--font-heading);
-}
-
-@media (min-width: 1041px) {
-  .process-detail-view .tab-panel-spacing > .detail-block--wide {
-    grid-column: 1 / -1;
-  }
-
-  .process-detail-view .detail-block--wide .detail-dl {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  }
-}
-
-/* Detalhe desktop (SPEC 2026-09-28): ordem/largura dos cards por aba do
-   detalhe do processo (Detalhes gerais, Processo, Itens, Mensagens,
-   Historico, Documentos). So desktop, so tokens, nenhum @media (max-width)
-   tocado. */
-@media (min-width: 1041px) {
-  /* Detalhes gerais: ordem */
-  .process-detail-view .process-general-card--pending { order: 1; }
-  .process-detail-view .process-general-card--etd-eta { order: 2; }
-  .process-detail-view .process-general-card--ident { order: 3; }
-  .process-detail-view .process-general-card--forecast { order: 4; }
-  .process-detail-view .process-general-card--destination { order: 5; }
-  .process-detail-view .process-general-card--eta-original { order: 6; }
-  .process-detail-view .process-general-card--linked-items { order: 7; }
-  .process-detail-view .process-general-card--consolidated-pos { order: 8; }
-
-  /* ETD/ETA vira meia coluna: (0,5,0) vence `.detail-card:has(.detail-card--split)` (0,4,0) */
-  .process-detail-view .tab-panel-spacing > .detail-card.process-general-card.process-general-card--etd-eta {
-    grid-column: auto;
-  }
-  .process-detail-view .tab-panel-spacing > .detail-card.process-general-card--consolidated-pos {
-    grid-column: 1 / -1;
-  }
-
-  /* listas em 2 colunas */
-  .process-detail-view .process-general-card__list { columns: 2; column-gap: 24px; }
-  .process-detail-view .process-general-card--consolidated-pos > .detail-stack {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 24px;
-  }
-
-  /* Identificacao: 2 colunas, rotulo acima do valor (estilo de .detail-label) */
-  .process-detail-view .detail-ident {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 20px;
-  }
-  .process-detail-view .detail-ident__row { display: grid; gap: 2px; }
-  .process-detail-view .detail-ident__label {
-    display: block;
-    font-size: var(--fs-footnote);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-subtle);
-  }
-  .process-detail-view .detail-ident__sep { display: none; }
-
-  /* Processo: ordem + largura + passos escondidos */
-  .process-detail-view .process-block--transit { order: 1; }
-  .process-detail-view .process-block--arrival { order: 2; }
-  .process-detail-view .process-block--customs { order: 3; }
-  .process-detail-view .process-block--cargo { order: 4; }
-  .process-detail-view .process-block--licenses { order: 5; }
-  .process-detail-view .process-block--collection { order: 6; }
-  .process-detail-view .process-block--process-notes { order: 7; }
-  .process-detail-view .process-block--free-time { order: 8; }
-  .process-detail-view .process-block--post-receipt { order: 9; }
-  .process-detail-view .process-block--divergence { order: 10; }
-  .process-detail-view .detail-block__step { display: none; }
-  .process-detail-view .tab-panel-spacing > .detail-block--placeholder { display: grid; }
-
-  /* Mensagens: espaco entre mensagens 12 -> 6px (painel 2026-09-30) */
-  .process-detail-view .process-messages-list { gap: 6px; }
-
-  /* Heading com badge/botao a direita (Itens do detalhe e do form, Mensagens, Historico) */
-  .process-detail-view .process-detail-card-heading--end,
-  .process-form .process-detail-card-heading--end {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  /* Itens: grade 2 col (1041-1279) */
-  .process-detail-view .process-items-list:not(.process-items-list--scroll) {
-    padding: 2px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .process-detail-view .process-items-list:not(.process-items-list--scroll) > .empty-state {
-    grid-column: 1 / -1;
-  }
-
-  /* Documentos: painel e fallback em linha inteira */
-  .process-detail-view .tab-panel-spacing > .documents-panel,
-  .process-detail-view .tab-panel-spacing > .documents-panel-unconfigured {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (min-width: 1280px) {
-  .process-detail-view .process-items-list:not(.process-items-list--scroll) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .process-detail-view .documents-section--process .documents-section__rows {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .process-detail-view .documents-section--process .documents-add-other-row {
-    grid-column: 1 / -1;
-  }
 }
 
 /* ============================================================
@@ -15141,25 +14903,6 @@ body {
   .process-transit__actions,
   .vessel-tracking__links {
     justify-content: center;
-  }
-}
-
-/* Desktop: "Rastrear navio" na direita do bloco, centralizado na altura. */
-@media (min-width: 1041px) {
-  .process-detail-view .process-block--transit:has(> .process-transit__actions) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 24px;
-  }
-
-  .process-detail-view .process-block--transit:has(> .process-transit__actions) > * {
-    grid-column: 1;
-  }
-
-  .process-detail-view .process-block--transit > .process-transit__actions {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
-    margin-top: 0;
   }
 }
 
@@ -17489,6 +17232,220 @@ body {
 
   .process-detail-view .pdv-btn--start {
     align-self: flex-start;
+  }
+
+  /* ============================================================
+     ABA PROCESSO — blocos numerados (ProcessOperationalDetails.jsx)
+     ============================================================ */
+  .process-detail-view .pdv-panel--process {
+    --pdv-gap: 14px;
+  }
+
+  .process-detail-view .pdv-panel .detail-block {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: none;
+  }
+
+  .process-detail-view .pdv-panel .detail-block--danger {
+    border-color: var(--danger-700);
+    background: var(--danger-50);
+  }
+
+  /* placeholders (bloco vazio): a regra base os esconde fora do detalhe desktop */
+  .process-detail-view .pdv-panel > .detail-block--placeholder {
+    display: flex;
+  }
+
+  .process-detail-view .pdv-panel .detail-block__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .process-detail-view .pdv-panel .detail-block__step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--navy);
+    color: var(--sidebar-ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .process-detail-view .pdv-panel .detail-block__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  /* dl de campos do bloco: auto-fill minmax(170px, 1fr) */
+  .process-detail-view .pdv-panel .detail-dl {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px 12px;
+    margin: 0;
+  }
+
+  .process-detail-view .pdv-panel .detail-dl__row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .process-detail-view .pdv-panel .detail-dl__row dt {
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .detail-dl__row dd {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: normal;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+  }
+
+  /* Carga: 5 colunas de valores mono */
+  .process-detail-view .pdv-panel .process-block--cargo .detail-dl {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .process-detail-view .pdv-panel .process-block--cargo .detail-dl__row dd {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .process-detail-view .pdv-panel .process-block--cargo .detail-dl__row--wide {
+    grid-column: span 2;
+  }
+
+  /* tabela de conteineres */
+  .process-detail-view .pdv-panel .pdv-table-wrap {
+    margin: 0;
+    overflow-x: auto;
+    border: 1px solid var(--row-divider);
+    border-radius: 12px;
+  }
+
+  .process-detail-view .pdv-panel .pdv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .process-detail-view .pdv-panel .pdv-table thead tr {
+    background: var(--surface-alt);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table th {
+    padding: 10px 14px;
+    border-bottom: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table td {
+    padding: 10px 14px;
+    border-bottom: 0;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table tbody tr {
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table__mono {
+    font-family: var(--font-mono);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table__strong {
+    font-weight: 600;
+  }
+
+  .process-detail-view .pdv-panel .pdv-table__muted {
+    color: var(--ink-soft);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table__pending {
+    font-family: var(--font-body, inherit);
+    font-weight: 600;
+    color: var(--warning-700);
+  }
+
+  .process-detail-view .pdv-panel .pdv-table .inline-badge {
+    min-height: 0;
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: normal;
+  }
+
+  /* bloco vazio: borda tracejada */
+  .process-detail-view .pdv-panel .detail-block--placeholder .field-hint {
+    margin: 0;
+    padding: 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: normal;
+    color: var(--ink-soft);
+  }
+
+  /* conteudo livre dos blocos (anuencias, janelas de coleta, observacoes, divergencia) */
+  .process-detail-view .pdv-panel .detail-block .detail-stack {
+    gap: 8px;
+  }
+
+  .process-detail-view .pdv-panel .detail-block__row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--surface-alt);
+    font-size: 13px;
+  }
+
+  .process-detail-view .pdv-panel .detail-block__row p {
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .process-detail-view .pdv-panel .detail-block > p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+
+  .process-detail-view .pdv-panel .detail-block__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
   }
 }
 
