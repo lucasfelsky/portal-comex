@@ -264,7 +264,7 @@ export default function AdminAnnouncementsPanel() {
               {announcementDraft.id ? (
                 <button
                   type="button"
-                  className="ghost-button"
+                  className="ghost-button ghost-button--secondary"
                   onClick={() => {
                     setDeleteConfirmError('')
                     setIsDeleteConfirmOpen(true)

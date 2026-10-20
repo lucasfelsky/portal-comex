@@ -142,7 +142,7 @@ export default function PurchaseOrdersEditor({
         </label>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAdd}
         >
@@ -192,7 +192,7 @@ export default function PurchaseOrdersEditor({
                     </label>
                     <button
                       type="button"
-                      className="ghost-button collection-windows-editor__remove"
+                      className="ghost-button ghost-button--secondary collection-windows-editor__remove"
                       onClick={() => handleRemove(po)}
                       disabled={disabled}
                     >

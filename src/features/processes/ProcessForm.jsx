@@ -317,7 +317,7 @@ export default function ProcessForm({
                 Embarque registrado em {formatDate(draft.shippedAt)} (diferente do ETD).{' '}
                 <button
                   type="button"
-                  className="ghost-button"
+                  className="ghost-button ghost-button--secondary"
                   onClick={() => onDraftChange('etd', draft.shippedAt)}
                 >
                   Usar esta data como ETD
@@ -424,7 +424,7 @@ export default function ProcessForm({
         <div className="action-row">
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             onClick={() => onDraftChange('warehouseDeliveryDateOverride', '')}
           >
             Remover previsão manual
@@ -627,13 +627,13 @@ export default function ProcessForm({
           />
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             onClick={() => itemsFileInputRef.current?.click()}
             disabled={isImportingItems}
           >
             {isImportingItems ? 'Importando planilha...' : 'Importar planilha'}
           </button>
-          <button type="button" className="ghost-button" onClick={onAddItem}>Adicionar item</button>
+          <button type="button" className="ghost-button ghost-button--secondary" onClick={onAddItem}>Adicionar item</button>
         </div>
       </div>
 
@@ -911,7 +911,7 @@ export default function ProcessForm({
         {!isLastStep ? (
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             onClick={() => setStep(Math.min(currentStep + 1, steps.length - 1))}
           >
             Avançar

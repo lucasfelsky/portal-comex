@@ -192,7 +192,7 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
           <div className="action-row">
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button ghost-button--secondary"
               onClick={() => onDraftChange('dangerousGoods', false)}
             >
               Descartar classificação do processo

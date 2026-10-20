@@ -432,7 +432,7 @@ export default function AdminSupportPanel() {
                     <div className="action-row">
                       <button
                         type="button"
-                        className="ghost-button"
+                        className="ghost-button ghost-button--secondary"
                         disabled={
                           sendingReplyTicketId === ticket.id || !(replyDrafts[ticket.id] ?? '').trim()
                         }
@@ -484,7 +484,7 @@ export default function AdminSupportPanel() {
                     {!isResolved && !isInProgress ? (
                       <button
                         type="button"
-                        className="ghost-button"
+                        className="ghost-button ghost-button--secondary"
                         disabled={isSaving}
                         onClick={() => applyTicketUpdate(ticket, 'em_andamento', ticket.priority)}
                       >
@@ -494,7 +494,7 @@ export default function AdminSupportPanel() {
 
                     <button
                       type="button"
-                      className={isResolved ? 'ghost-button' : 'primary-button'}
+                      className={isResolved ? 'ghost-button ghost-button--secondary' : 'primary-button'}
                       disabled={isSaving}
                       onClick={() =>
                         applyTicketUpdate(

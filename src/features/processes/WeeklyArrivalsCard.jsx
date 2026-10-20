@@ -247,7 +247,7 @@ function UnscheduledItem({ process, estimatedDelivery, canSeeName, onSelectProce
         </ul>
       </div>
       <div className="process-item__meta process-item__meta--top">
-        <span className="ghost-button weekly-arrivals-item__cta" aria-hidden="true">
+        <span className="ghost-button ghost-button--secondary weekly-arrivals-item__cta" aria-hidden="true">
           Abrir processo →
         </span>
       </div>
@@ -306,7 +306,7 @@ function ScheduledItem({ process, windows, canSeeName, onSelectProcess }) {
         </ul>
       </div>
       <div className="process-item__meta process-item__meta--top">
-        <span className="ghost-button weekly-arrivals-item__cta" aria-hidden="true">
+        <span className="ghost-button ghost-button--secondary weekly-arrivals-item__cta" aria-hidden="true">
           Abrir processo →
         </span>
       </div>

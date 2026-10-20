@@ -115,7 +115,7 @@ export default function PendingApprovalPage() {
         <div className="button-row">
           <button
             type="button"
-            className="ghost-button auth-button"
+            className="ghost-button ghost-button--secondary auth-button"
             onClick={handleForceReload}
             disabled={reloading}
           >

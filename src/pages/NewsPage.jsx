@@ -307,7 +307,7 @@ export default function NewsPage() {
 
         {isAdmin && item.sourceType !== 'automatic' ? (
           <div className="news-card__actions">
-            <button type="button" className="ghost-button" onClick={() => handleEditNews(item)}>
+            <button type="button" className="ghost-button ghost-button--secondary" onClick={() => handleEditNews(item)}>
               Editar
             </button>
           </div>
@@ -497,7 +497,7 @@ export default function NewsPage() {
               {draft.id ? (
                 <button
                   type="button"
-                  className="ghost-button"
+                  className="ghost-button ghost-button--secondary"
                   onClick={() => {
                     setDeleteConfirmError('')
                     setIsDeleteConfirmOpen(true)
@@ -574,7 +574,7 @@ export default function NewsPage() {
             {draft.coverImage ? (
               <div className="news-image-preview">
                 <img src={draft.coverImage} alt="Capa da notícia" />
-                <button type="button" className="ghost-button" onClick={() => setDraft((current) => ({ ...current, coverImage: '' }))}>
+                <button type="button" className="ghost-button ghost-button--secondary" onClick={() => setDraft((current) => ({ ...current, coverImage: '' }))}>
                   Remover capa
                 </button>
               </div>
@@ -596,7 +596,7 @@ export default function NewsPage() {
                       <strong>{getNewsMediaDisplayName(item)}</strong>
                       <span>{getNewsMediaMetaText(item)}</span>
                     </div>
-                    <button type="button" className="ghost-button" onClick={() => handleRemoveMediaItem(item.id)}>
+                    <button type="button" className="ghost-button ghost-button--secondary" onClick={() => handleRemoveMediaItem(item.id)}>
                       Remover
                     </button>
                   </div>

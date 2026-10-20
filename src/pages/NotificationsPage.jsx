@@ -46,7 +46,7 @@ export default function NotificationsPage() {
         <div className="notifications__heading-actions">
           <button
             type="button"
-            className="ghost-button notifications__mark-all"
+            className="ghost-button ghost-button--secondary notifications__mark-all"
             onClick={markAllAsRead}
             disabled={unreadNotifications.length === 0}
           >
@@ -54,7 +54,7 @@ export default function NotificationsPage() {
           </button>
           <button
             type="button"
-            className="ghost-button notifications__prefs"
+            className="ghost-button ghost-button--outline notifications__prefs"
             onClick={() => setIsPrefsModalOpen(true)}
             aria-label="Preferências de notificação"
             title="Preferências de notificação"
@@ -63,7 +63,7 @@ export default function NotificationsPage() {
           </button>
           <button
             type="button"
-            className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
+            className={`ghost-button ghost-button--outline notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
             onClick={() => {
               if (dnd.isActive) {
                 dnd.disable()

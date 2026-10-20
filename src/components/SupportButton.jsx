@@ -242,7 +242,7 @@ export default function SupportButton() {
       </span>
       <div className="file-picker">
         <label
-          className={`ghost-button file-picker__button${
+          className={`ghost-button ghost-button--secondary file-picker__button${
             files.length >= SUPPORT_TICKET_MAX_IMAGES ? ' file-picker__button--disabled' : ''
           }`}
         >
@@ -281,7 +281,7 @@ export default function SupportButton() {
             <span>{file.name}</span>
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button ghost-button--outline"
               onClick={() => handleRemoveFile(index)}
               aria-label={`Remover ${file.name}`}
             >

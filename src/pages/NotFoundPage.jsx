@@ -35,7 +35,7 @@ export default function NotFoundPage() {
           <Link to="/" className="primary-button" data-testid="not-found-home">
             Voltar para o painel
           </Link>
-          <Link to="/news" className="ghost-button" data-testid="not-found-news">
+          <Link to="/news" className="ghost-button ghost-button--secondary" data-testid="not-found-news">
             Ver últimas notícias
           </Link>
         </div>

@@ -178,7 +178,7 @@ export default function VerifyEmailPage() {
             </button>
             <button
               type="button"
-              className="ghost-button auth-button"
+              className="ghost-button ghost-button--secondary auth-button"
               onClick={handleResendEmail}
               disabled={submitting}
             >

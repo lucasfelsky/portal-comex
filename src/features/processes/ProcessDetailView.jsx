@@ -278,7 +278,7 @@ export default function ProcessDetailView({
   const favoriteButton = (
     <button
       type="button"
-      className="ghost-button process-detail-fav"
+      className="ghost-button ghost-button--outline process-detail-fav"
       aria-label={isFavorite ? 'Desfavoritar' : 'Favoritar'}
       onClick={() => onToggleFavorite(selectedProcess.id)}
     >
@@ -295,7 +295,7 @@ export default function ProcessDetailView({
     <div className="process-detail-more" ref={moreContainerRef}>
       <button
         type="button"
-        className="ghost-button process-detail-more__trigger"
+        className="ghost-button ghost-button--outline process-detail-more__trigger"
         aria-label="Mais ações"
         title="Mais ações"
         aria-haspopup="menu"
@@ -415,10 +415,10 @@ export default function ProcessDetailView({
             <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button>
           ) : null}
           {canEditPostReceiptNotes && isProcessStatusFinalized(selectedProcess.processStatus) ? (
-            <button type="button" className="ghost-button" onClick={onPostReceiptEditMode}>Editar observações</button>
+            <button type="button" className="ghost-button ghost-button--secondary" onClick={onPostReceiptEditMode}>Editar observações</button>
           ) : null}
           {canEditSelectedCollectionStatus ? (
-            <button type="button" className="ghost-button" onClick={onCollectionStatusEditMode}>Status de coleta</button>
+            <button type="button" className="ghost-button ghost-button--secondary" onClick={onCollectionStatusEditMode}>Status de coleta</button>
           ) : null}
           {isMobileLayout ? null : favoriteButton}
           {isMobileLayout ? null : moreActions}
@@ -569,7 +569,7 @@ export default function ProcessDetailView({
                     </span>
                   </p>
                 </div>
-                <button type="button" className="ghost-button" onClick={() => onDetailTabChange('items')}>Ver itens do processo</button>
+                <button type="button" className="ghost-button ghost-button--secondary" onClick={() => onDetailTabChange('items')}>Ver itens do processo</button>
               </div>
             </div>
           </>

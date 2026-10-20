@@ -249,7 +249,7 @@ export default function AdminBarStatusPanel() {
                     </span>
                     <button
                       type="button"
-                      className="ghost-button"
+                      className="ghost-button ghost-button--secondary"
                       onClick={handleApplySuggestion}
                       disabled={isSavingBarStatus}
                     >

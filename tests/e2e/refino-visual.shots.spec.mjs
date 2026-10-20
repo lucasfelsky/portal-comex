@@ -743,9 +743,9 @@ function catalogHtml() {
 
   return `
   <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start">
-    <section style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:18px">
+    <section style="grid-column:1 / -1;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:18px">
       <h2 style="margin:0;font-family:var(--font-heading);font-size:18px">Botões</h2>
-      <div style="display:grid;grid-template-columns:96px repeat(5,minmax(0,1fr));gap:10px 12px;align-items:center">${head}${buttonRows}</div>
+      <div style="display:grid;grid-template-columns:96px repeat(5,minmax(140px,1fr));gap:10px 12px;align-items:center">${head}${buttonRows}</div>
     </section>
     <section style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:18px">
       <h2 style="margin:0;font-family:var(--font-heading);font-size:18px">Campos e filtros</h2>
@@ -908,6 +908,18 @@ for (const theme of THEMES) {
       await expectStyle(page, 'danger-hover', { 'background-color': MOCK.dangerHover })
       await expectStyle(page, 'danger-active', { 'background-color': MOCK.dangerActive, transform: 'matrix(0.97, 0, 0, 0.97, 0, 0)' })
       await expectStyle(page, 'danger-focus', { 'box-shadow': `${MOCK.white} 0px 0px 0px 3px, ${MOCK.danger} 0px 0px 0px 5px` })
+      // nenhum botao do catalogo corta o proprio conteudo (trilhos do arnes comportam o texto)
+      const clipped = await page.evaluate(() =>
+        [...document.querySelectorAll('#f3-catalog button[data-cat], #f3-catalog [data-cat] button')]
+          .filter((b) => b.scrollWidth > b.clientWidth || b.scrollHeight > b.clientHeight)
+          .map((b) => (b.dataset.cat || b.textContent).trim())
+      )
+      expect(clipped, 'botoes com conteudo cortado').toEqual([])
+      const loading = await page.evaluate(() => {
+        const b = document.querySelector('[data-cat="danger-loading"]')
+        return { sw: b.scrollWidth, cw: b.clientWidth }
+      })
+      expect(loading.sw).toBeLessThanOrEqual(loading.cw)
       // carregando: spinner 14px + borda 2px (18px no total, como o span do mock), 0,8 s linear
       const spinner = await page.evaluate(() => {
         const s = document.querySelector('[data-cat="danger-loading"] .spinner')

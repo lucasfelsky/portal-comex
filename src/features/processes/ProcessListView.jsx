@@ -405,7 +405,7 @@ export default function ProcessListView({
             {isAdmin && onReconcileErp ? (
               <button
                 type="button"
-                className="ghost-button erp-reconcile-trigger"
+                className="ghost-button ghost-button--secondary erp-reconcile-trigger"
                 disabled={isLoading}
                 title="Anexar a planilha do DBCorp: concilia com os processos e salva como referência do ERP"
                 onClick={onReconcileErp}
@@ -415,7 +415,7 @@ export default function ProcessListView({
             ) : null}
             <button
               type="button"
-              className="ghost-button"
+              className="ghost-button ghost-button--secondary"
               disabled={filteredProcesses.length === 0 || isExporting}
               title="Baixar as linhas visíveis (filtros aplicados) em Excel"
               onClick={onExport}

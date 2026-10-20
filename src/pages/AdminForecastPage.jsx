@@ -394,7 +394,7 @@ export default function AdminForecastPage() {
                     <td className="admin-table__actions-cell">
                       <button
                         type="button"
-                        className="ghost-button"
+                        className="ghost-button ghost-button--secondary"
                         onClick={() => removeDestination(index)}
                         disabled={draft.destinations.length <= 1}
                       >
@@ -415,7 +415,7 @@ export default function AdminForecastPage() {
               <h3>Dias úteis por categoria</h3>
               <p>Aplicados após a ETA quando não há coleta agendada nem rolling customs.</p>
             </div>
-            <Link to="/admin/lead-time" className="ghost-button">
+            <Link to="/admin/lead-time" className="ghost-button ghost-button--secondary">
               Ver lead time real
             </Link>
           </div>
@@ -519,7 +519,7 @@ export default function AdminForecastPage() {
                   />
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="ghost-button ghost-button--secondary"
                     onClick={addDuimpStatus}
                     disabled={!draft.rollingCustoms.enabled || !newDuimpStatus.trim()}
                   >
@@ -572,7 +572,7 @@ export default function AdminForecastPage() {
           </Link>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             onClick={() => setIsResetDialogOpen(true)}
             disabled={isResetting || isSaving}
           >

@@ -2387,6 +2387,14 @@ body {
     background: transparent;
     color: inherit;
   }
+
+  /* Card de aviso (.detail-card--warning): mesmo tom do alerta (soft + ink, raio 14).
+     Sem icone: e um card de conteudo, que o F4c reconstroi como faixa "Dados pendentes". */
+  .detail-card--warning {
+    border-radius: 14px;
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
 }
 
 /* F13: banner de sugestão da barra (fonte externa via OCR da Praticagem). */
@@ -3630,6 +3638,58 @@ body {
     background: transparent;
     color: var(--disabled-ink);
     opacity: 1;
+  }
+
+  /* Consumidores que NAO sao fantasma no mock (ou cujo mock nao mostra o botao e o
+     visual anterior era contornado) continuam com a classe .ghost-button — os
+     seletores de tela e o mobile-redesign.css miram essa classe — e ganham um
+     modificador so de desktop:
+       --secondary = .secondary-button do mock (1.5px navy; hover --navy-50);
+       --outline   = botao neutro do mock de Processo/Notificacoes (1px --border,
+                     raio 12; icones 44px e acoes de 36px).
+     Inventario e classificacao: tests/unit/refinoVisual.test.js (guarda). */
+  .ghost-button.ghost-button--secondary {
+    border: 1.5px solid var(--btn-ink);
+    background: var(--surface);
+    color: var(--btn-ink);
+  }
+
+  .ghost-button.ghost-button--secondary:hover:not(:disabled) {
+    border-color: var(--btn-ink);
+    background: var(--navy-50);
+  }
+
+  .ghost-button.ghost-button--secondary:active:not(:disabled) {
+    border-color: var(--btn-line-active);
+    background: var(--navy-100);
+  }
+
+  .ghost-button.ghost-button--secondary:disabled {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--disabled-ink);
+  }
+
+  .ghost-button.ghost-button--outline {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--btn-ink);
+  }
+
+  .ghost-button.ghost-button--outline:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+  }
+
+  .ghost-button.ghost-button--outline:active:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--disabled-bg);
+  }
+
+  .ghost-button.ghost-button--outline:disabled {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--disabled-ink);
   }
 
   /* Carregando: spinner de 14px (borda 2px a 40%, topo cheio, 0,8 s) ao lado do texto. */

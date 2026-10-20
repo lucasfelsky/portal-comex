@@ -74,7 +74,7 @@ export default function ContainersEditor({
         </div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAddMore}
         >

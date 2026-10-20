@@ -503,7 +503,7 @@ export default function AdminUsersPanel() {
             <div className="action-row">
               <button
                 type="button"
-                className="ghost-button"
+                className="ghost-button ghost-button--secondary"
                 onClick={() => setIsPasswordVisible((current) => !current)}
                 disabled={!draft.password}
               >
@@ -580,7 +580,7 @@ export default function AdminUsersPanel() {
             {!isCreating && selectedUser ? (
               <button
                 type="button"
-                className="ghost-button"
+                className="ghost-button ghost-button--secondary"
                 onClick={() =>
                   selectedUser.status === 'Ativo'
                     ? openConfirm('block', selectedUser)
@@ -640,7 +640,7 @@ export default function AdminUsersPanel() {
                   </button>
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="ghost-button ghost-button--secondary"
                     onClick={() => openConfirm('reject', user)}
                     disabled={isSavingUser}
                   >

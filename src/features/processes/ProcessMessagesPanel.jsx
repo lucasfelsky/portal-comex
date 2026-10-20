@@ -55,7 +55,7 @@ export default function ProcessMessagesPanel({
                 {canDeleteMessages ? (
                   <button
                     type="button"
-                    className="ghost-button process-message-card__delete"
+                    className="ghost-button ghost-button--outline process-message-card__delete"
                     onClick={() => {
                       setConfirmError('')
                       setPendingMessage(message)

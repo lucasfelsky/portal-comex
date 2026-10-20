@@ -1021,7 +1021,7 @@ export default function AppLayout() {
                 <div className="action-row">
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="ghost-button ghost-button--secondary"
                     onClick={() => requestLeave(() => navigate('/verificar-email'))}
                   >
                     Abrir confirmacao

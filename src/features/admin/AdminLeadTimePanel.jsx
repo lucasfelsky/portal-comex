@@ -191,7 +191,7 @@ export default function AdminLeadTimePanel() {
         <div className="error-banner">{error}</div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={() => {
             setIsLoading(true)
             loadLeadTimeDataset()

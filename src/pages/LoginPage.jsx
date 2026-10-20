@@ -211,7 +211,7 @@ export default function LoginPage() {
             <p>Use o e-mail corporativo da sua conta para receber o link de redefinição.</p>
             <button
               type="button"
-              className="ghost-button auth-reset-panel__button"
+              className="ghost-button ghost-button--secondary auth-reset-panel__button"
               disabled={submitting || loading || !form.email.trim()}
               onClick={handlePasswordReset}
             >

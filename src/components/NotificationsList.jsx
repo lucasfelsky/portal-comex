@@ -213,7 +213,7 @@ function NotificationRow({
       {showDesktopMarkAsRead ? (
         <button
           type="button"
-          className="ghost-button notifications__mark-one"
+          className="ghost-button ghost-button--outline notifications__mark-one"
           onClick={() => onMarkAsRead(notification)}
           aria-label={`Marcar como lida: ${notification.title}`}
         >

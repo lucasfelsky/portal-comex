@@ -255,7 +255,7 @@ export default function CollectionWindowsEditor({
         </div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAddMore}
         >
@@ -269,7 +269,7 @@ export default function CollectionWindowsEditor({
           <p>Adicione uma janela para informar o horário previsto de coleta no CD.</p>
           <button
             type="button"
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             onClick={handleQuickFill}
             disabled={disabled}
           >

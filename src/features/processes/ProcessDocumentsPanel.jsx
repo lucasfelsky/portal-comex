@@ -679,7 +679,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <>
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${includedInInvoice.invoice.name}`}
                   title={`Baixar ${includedInInvoice.invoice.name}`}
                   disabled={downloadingId === includedInInvoice.invoice.id}
@@ -692,7 +692,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {includedInInvoice.canSeparate ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label="Separar Packing List da Invoice"
                     title="Separar Packing List da Invoice"
                     disabled={linkBusyKey === includedInInvoice.invoiceSlotKey}
@@ -706,7 +706,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Baixar ${primary.name}`}
                 title={`Baixar ${primary.name}`}
                 disabled={isRowUploading || downloadingId === primary.id}
@@ -731,7 +731,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 />
                 <button
                   type="button"
-                  className={primary ? 'documents-icon-button ghost-button' : 'primary-button'}
+                  className={primary ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
                   aria-label={primary ? `Substituir ${title}` : uploadLabel}
                   title={primary ? `Substituir ${title}` : uploadLabel}
                   disabled={isRowUploading}
@@ -757,7 +757,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary && onRename ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Renomear ${title}`}
                 title={`Renomear ${title}`}
                 disabled={isRowUploading}
@@ -770,7 +770,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary && canDelete ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Excluir ${primary.name}`}
                 title={`Excluir ${primary.name}`}
                 disabled={isRowUploading}
@@ -833,7 +833,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <div className="documents-row__actions">
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${primary.name}`}
                   title={`Baixar ${primary.name}`}
                   disabled={isRowUploading || downloadingId === primary.id}
@@ -846,7 +846,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canUpload ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Substituir ${getDocumentTypeLabel(type)}`}
                     title={`Substituir ${getDocumentTypeLabel(type)}`}
                     disabled={isRowUploading}
@@ -860,7 +860,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canDeleteDocument(profile, primary) ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Excluir ${primary.name}`}
                     title={`Excluir ${primary.name}`}
                     disabled={isRowUploading}
@@ -910,7 +910,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <div className="documents-row__actions">
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${invoiceLink.name}`}
                   title={`Baixar ${invoiceLink.name}`}
                   disabled={downloadingId === invoiceLink.id}
@@ -923,7 +923,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canUploadDocumentType(role, 'invoice') ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Separar Packing List da Invoice da PO ${order.po}`}
                     title="Separar Packing List da Invoice"
                     disabled={linkBusyKey === invoiceSlotKey}
@@ -1074,7 +1074,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         )}
         <button
           type="button"
-          className="documents-icon-button ghost-button documents-summary__update"
+          className="documents-icon-button ghost-button ghost-button--outline documents-summary__update"
           aria-label="Atualizar lista de documentos"
           title="Atualizar lista de documentos"
           disabled={isRefreshing}
@@ -1246,7 +1246,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   </label>
                   <button
                     type="button"
-                    className="ghost-button documents-add-other"
+                    className="ghost-button ghost-button--secondary documents-add-other"
                     disabled={uploadingKey === 'other:new'}
                     onClick={() => triggerFilePicker('other:new')}
                   >

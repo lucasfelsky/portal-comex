@@ -29,7 +29,7 @@ export default function PostReceiptImagesField({
       <div className="field">
         <span id={labelId}>{label}</span>
         <div className="file-picker">
-          <label className={`ghost-button file-picker__button${isDisabled ? ' file-picker__button--disabled' : ''}`}>
+          <label className={`ghost-button ghost-button--secondary file-picker__button${isDisabled ? ' file-picker__button--disabled' : ''}`}>
             <input
               className="file-picker__input"
               type="file"
@@ -63,7 +63,7 @@ export default function PostReceiptImagesField({
                 <strong>{image.name || 'Imagem do recebimento no CD'}</strong>
                 <span>{formatPostReceiptImageSize(image.size)}</span>
               </div>
-              <button type="button" className="ghost-button" onClick={() => onRemove(image.id)}>
+              <button type="button" className="ghost-button ghost-button--outline" onClick={() => onRemove(image.id)}>
                 Remover imagem
               </button>
             </div>

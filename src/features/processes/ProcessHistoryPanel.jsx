@@ -80,7 +80,7 @@ export default function ProcessHistoryPanel({ processId }) {
           <span className="detail-label">Histórico de marcos</span>
           <p>Linha do tempo de eventos operacionais deste processo.</p>
         </div>
-        <button type="button" className="ghost-button" onClick={() => setReloadToken((token) => token + 1)}>
+        <button type="button" className="ghost-button ghost-button--secondary" onClick={() => setReloadToken((token) => token + 1)}>
           Atualizar
         </button>
       </div>

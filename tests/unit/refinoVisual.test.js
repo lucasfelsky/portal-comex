@@ -1299,6 +1299,8 @@ describe('F3 - feedback (Componentes.dc.html)', () => {
     expect(media).toContain('M12 8v5M12 16h.01')
     expect(media).toContain("stroke-width='1.9'")
     expectF3('.error-banner--retry .ghost-button', ['text-decoration: underline', 'font-size: 13px', 'font-weight: 700'], S)
+    // card de aviso: mesmo tom soft + ink, raio 14
+    expectF3('.detail-card--warning', ['background: var(--warning-50)', 'color: var(--warning-700)', 'border-radius: 14px'], S)
   })
 
   it('estado vazio: borda 1px tracejada --border-strong, raio 16, icone 40px (traco 1.5, --primary-700), 14/700 + 12/1.5', () => {
@@ -1548,5 +1550,136 @@ describe('F3 - JSX dos componentes', () => {
     }
     // o skeleton antigo (4 pecas por card) segue no DOM para tablet/mobile
     expect(listView).toContain('process-item process-item--skeleton')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F3 - inventario dos consumidores de .ghost-button (guarda anti-regressao).
+// O .ghost-button do mock e SEM moldura (fantasma); varios consumidores eram
+// contornados e NAO sao fantasma no mock (ou o mock da pagina nao os mostra).
+// Esses ganharam um modificador so de desktop (ghost-button--secondary = navy
+// 1.5px; ghost-button--outline = 1px --border). A lista completa, com a
+// classificacao linha a linha, esta em .agent-tmp/ghost-consumers.md. Aqui:
+// por arquivo, [total de .ghost-button, com --secondary, com --outline]. Novo
+// consumidor, ou um SECONDARY que volte a ser fantasma, reprova este teste.
+// ---------------------------------------------------------------------------
+describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma)', () => {
+  const GHOST_CONSUMERS = {
+  'components/AppLayout.jsx': [8, 1, 0],
+  'components/ConfirmDialog.jsx': [1, 0, 0],
+  'components/NotificationPreferencesModal.jsx': [1, 0, 0],
+  'components/NotificationsList.jsx': [3, 0, 1],
+  'components/SupportButton.jsx': [2, 1, 1],
+  'features/admin/AdminAnnouncementsPanel.jsx': [1, 1, 0],
+  'features/admin/AdminBarStatusPanel.jsx': [1, 1, 0],
+  'features/admin/AdminLeadTimePanel.jsx': [1, 1, 0],
+  'features/admin/AdminSupportPanel.jsx': [3, 3, 0],
+  'features/admin/AdminUsersPanel.jsx': [5, 3, 0],
+  'features/erp/ErpCreateProcessesPanel.jsx': [1, 0, 0],
+  'features/erp/ErpReconcileModal.jsx': [2, 1, 0],
+  'features/processes/CollectionStatusEditView.jsx': [1, 0, 0],
+  'features/processes/CollectionWindowsEditor.jsx': [2, 2, 0],
+  'features/processes/ContainersEditor.jsx': [1, 1, 0],
+  'features/processes/ImportProcessesModal.jsx': [1, 0, 0],
+  'features/processes/LicensesEditor.jsx': [1, 1, 0],
+  'features/processes/PostReceiptEditView.jsx': [1, 0, 0],
+  'features/processes/PostReceiptGallery.jsx': [1, 0, 0],
+  'features/processes/PostReceiptImagesField.jsx': [2, 1, 1],
+  'features/processes/ProcessCargoFields.jsx': [1, 1, 0],
+  'features/processes/ProcessDetailView.jsx': [6, 3, 2],
+  'features/processes/ProcessDocumentsPanel.jsx': [15, 1, 12],
+  'features/processes/ProcessForm.jsx': [7, 5, 0],
+  'features/processes/ProcessHistoryPanel.jsx': [1, 1, 0],
+  'features/processes/ProcessListView.jsx': [4, 2, 0],
+  'features/processes/ProcessMessagesPanel.jsx': [1, 0, 1],
+  'features/processes/PurchaseOrdersEditor.jsx': [2, 2, 0],
+  'features/processes/RenameDocumentDialog.jsx': [1, 0, 0],
+  'features/processes/VesselTrackingButton.jsx': [4, 4, 0],
+  'features/processes/WeeklyArrivalsCard.jsx': [3, 2, 0],
+  'pages/AdminForecastPage.jsx': [5, 4, 0],
+  'pages/DashboardPage.jsx': [1, 0, 0],
+  'pages/DebugClaimsPage.jsx': [1, 0, 0],
+  'pages/LoginPage.jsx': [1, 1, 0],
+  'pages/NewsPage.jsx': [5, 4, 0],
+  'pages/NotFoundPage.jsx': [1, 1, 0],
+  'pages/NotificationsPage.jsx': [3, 1, 2],
+  'pages/PendingApprovalPage.jsx': [2, 1, 0],
+  'pages/VerifyEmailPage.jsx': [2, 1, 0],
+  }
+
+  function walkJsx(dir, out = []) {
+    for (const entry of fs.readdirSync(path.resolve(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`
+      if (entry.isDirectory()) walkJsx(rel, out)
+      else if (entry.name.endsWith('.jsx') && !entry.name.includes('.stories.')) out.push(rel)
+    }
+    return out
+  }
+
+  it('a contagem por arquivo (total / secondary / outline) bate com o inventario', () => {
+    const found = {}
+    for (const file of walkJsx('src')) {
+      const lines = read(file).split(/\r?\n/).filter((l) => /ghost-button(?!-)/.test(l))
+      if (!lines.length) continue
+      found[file.replace(/^src\//, '')] = [
+        lines.length,
+        lines.filter((l) => l.includes('ghost-button--secondary')).length,
+        lines.filter((l) => l.includes('ghost-button--outline')).length,
+      ]
+    }
+    expect(found).toEqual(GHOST_CONSUMERS)
+  })
+
+  // rotulo -> arquivo + modificador esperado (os casos nomeados no review da F3)
+  const NAMED = [
+    ['src/features/processes/ProcessListView.jsx', 'Importar do DBCorp', 'ghost-button--secondary'],
+    ['src/features/processes/ProcessListView.jsx', 'Exportar', 'ghost-button--secondary'],
+    ['src/features/processes/ProcessDetailView.jsx', 'Status de coleta', 'ghost-button--secondary'],
+    ['src/features/processes/ProcessDetailView.jsx', 'Editar observações', 'ghost-button--secondary'],
+    ['src/pages/AdminForecastPage.jsx', 'Restaurar padrões', 'ghost-button--secondary'],
+    ['src/features/admin/AdminUsersPanel.jsx', 'Bloquear usuário', 'ghost-button--secondary'],
+    ['src/features/admin/AdminSupportPanel.jsx', 'Enviar resposta', 'ghost-button--secondary'],
+    ['src/pages/NotificationsPage.jsx', 'Marcar todas como lidas', 'ghost-button--secondary'],
+    ['src/pages/NotificationsPage.jsx', 'Preferências de notificação', 'ghost-button--outline'],
+    ['src/pages/NotificationsPage.jsx', 'Ativar modo não perturbe', 'ghost-button--outline'],
+  ]
+
+  it.each(NAMED)('%s: "%s" tem %s', (file, label, modifier) => {
+    const source = read(file)
+    let at = source.indexOf(label)
+    expect(at, `rotulo ausente: ${label}`).toBeGreaterThan(0)
+    // algum botao com esse rotulo tem a classe base + o modificador
+    let ok = false
+    while (at >= 0 && !ok) {
+      const start = Math.max(
+        source.lastIndexOf('<button', at),
+        source.lastIndexOf('<Link', at),
+        source.lastIndexOf('<a ', at),
+        source.lastIndexOf('<span', at),
+      )
+      const opening = source.slice(start, at)
+      ok = /ghost-button(?!-)/.test(opening) && opening.includes(modifier)
+      at = source.indexOf(label, at + 1)
+    }
+    expect(ok, `${label} deve ter ${modifier}`).toBe(true)
+  })
+
+  it('os modificadores existem so dentro do @media desktop (tablet/mobile intactos)', () => {
+    const outside = css.replace(/@media \(min-width: 1041px\) \{[\s\S]*?\n\}\n/g, '')
+    expect(stripComments(outside)).not.toContain('ghost-button--')
+    expect(stripComments(css)).toContain('.ghost-button.ghost-button--secondary')
+    expect(stripComments(css)).toContain('.ghost-button.ghost-button--outline')
+    // mobile-redesign.css continua mirando .ghost-button (a classe base foi mantida)
+    expect(read('src/mobile-redesign.css')).not.toContain('ghost-button--')
+  })
+
+  it('secundario = .secondary-button do mock; outline = 1px --border; compostos vencem o .ghost-button base', () => {
+    const rules = parseRules(stripComments(f3['BOTOES'].media))
+    const body = (selector) => rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body).join(' ')
+    expect(body('.ghost-button.ghost-button--secondary')).toContain('border: 1.5px solid var(--btn-ink);')
+    expect(body('.ghost-button.ghost-button--secondary:hover:not(:disabled)')).toContain('background: var(--navy-50);')
+    expect(body('.ghost-button.ghost-button--secondary:active:not(:disabled)')).toContain('background: var(--navy-100);')
+    expect(body('.ghost-button.ghost-button--outline')).toContain('border: 1px solid var(--border);')
+    expect(body('.ghost-button.ghost-button--outline:disabled')).toContain('color: var(--disabled-ink);')
   })
 })
