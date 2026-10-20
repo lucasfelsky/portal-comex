@@ -390,6 +390,12 @@ body {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--primary-700);
+}
+
+/* O eyebrow da sidebar fica sobre navy: la o verde SQ (--primary) contrasta;
+   fora dela (card de login, claro) o texto verde e --primary-700. */
+.sidebar .brand__eyebrow {
   color: var(--primary);
 }
 
@@ -2258,7 +2264,7 @@ body {
 }
 
 .auth-link-button:hover {
-  color: var(--primary);
+  color: var(--primary-700);
 }
 
 .auth-reset-panel {
@@ -2398,7 +2404,7 @@ body {
 }
 
 .dashboard-bar-card__text--ok {
-  color: var(--primary);
+  color: var(--primary-700);
 }
 
 .dashboard-bar-card__text--warn {
@@ -2406,7 +2412,7 @@ body {
 }
 
 .dashboard-bar-card__text--info {
-  color: var(--primary);
+  color: var(--primary-700);
 }
 
 .dashboard-bar-card__text--neutral {
@@ -5650,7 +5656,7 @@ body {
   }
 
   .mobile-bottom-nav__item--active {
-    color: var(--primary);
+    color: var(--primary-700);
   }
 
   .mobile-bottom-nav__item:hover {
@@ -8586,7 +8592,7 @@ body {
 
 .action-sheet__check {
   flex-shrink: 0;
-  color: var(--primary);
+  color: var(--primary-700);
   font-weight: 800;
 }
 
@@ -10334,7 +10340,7 @@ body {
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: capitalize;
-    color: var(--primary);
+    color: var(--primary-700);
   }
 
   .dashboard-heading h2 {
