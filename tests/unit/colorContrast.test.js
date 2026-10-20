@@ -210,15 +210,16 @@ describe('sanidade da formula WCAG', () => {
 })
 
 // ---------------------------------------------------------------------------
-// (b) Botao verde: texto branco sobre --button-primary-bg/-hover/-active.
+// (b) Botao primario: texto --on-button-primary sobre --button-primary-bg/
+// -hover/-active. Refino visual F1: o botao aprovado e menta (#14dda7) com
+// texto navy (#0b2430 = 9,11:1); o branco antigo daria 1,76:1.
 // ---------------------------------------------------------------------------
 describe.each(Object.entries(themes))('botao primario (%s)', (themeName, theme) => {
   it.each(['--button-primary-bg', '--button-primary-bg-hover', '--button-primary-bg-active'])(
-    'texto #ffffff sobre %s >= 4.5:1',
+    'texto --on-button-primary sobre %s >= 4.5:1',
     (token) => {
-      const resolvedTokenColor = resolveValue(theme[token], theme)
-      const ratio = contrastRatio(parseColor('#ffffff'), parseColor(resolvedTokenColor))
-      expect(ratio, `${token} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+      const ratio = ratioTokenOverBg('--on-button-primary', theme, token)
+      expect(ratio, `--on-button-primary/${token} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
     }
   )
 })
@@ -357,6 +358,38 @@ describe.each(Object.entries(themes))('--danger-700 texto de erro (%s)', (themeN
   it('sobre --surface >= 4.5:1', () => {
     const ratio = ratioTokenOverBg('--danger-700', theme, '--surface')
     expect(ratio, `--danger-700/--surface (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Refino visual F1: pares novos da paleta SQ (texto sobre fundo suave, texto
+// da sidebar sobre os 2 extremos do gradiente navy, toast, canais e
+// desabilitado). Todos medidos nos 4 contextos.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('refino F1 - pares de texto (%s)', (themeName, theme) => {
+  it.each([
+    ['--info-700', '--info-50'],
+    ['--danger-700', '--danger-50'],
+    ['--toast-ink', '--toast-bg'],
+    ['--channel-green-ink', '--channel-green-soft'],
+    ['--channel-yellow-ink', '--channel-yellow-soft'],
+    ['--channel-red-ink', '--channel-red-soft'],
+    ['--channel-gray-ink', '--channel-gray-soft'],
+  ])('%s sobre %s >= 4.5:1', (fgToken, bgToken) => {
+    const ratio = ratioTokenOverBg(fgToken, theme, bgToken)
+    expect(ratio, `${fgToken}/${bgToken} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(['#003241', '#004153'])('--sidebar-ink-soft sobre %s (extremos do gradiente da sidebar) >= 4.5:1', (bgHex) => {
+    const ratio = ratioTokenOverBg('--sidebar-ink-soft', theme, bgHex)
+    expect(ratio, `--sidebar-ink-soft/${bgHex} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+
+  // Informativo (3,0:1): texto desabilitado e isento de WCAG 1.4.3, mas nao
+  // pode sumir.
+  it('--disabled-ink sobre --disabled-bg >= 3.0:1', () => {
+    const ratio = ratioTokenOverBg('--disabled-ink', theme, '--disabled-bg')
+    expect(ratio, `--disabled-ink/--disabled-bg (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(3.0)
   })
 })
 
