@@ -9855,6 +9855,43 @@ body {
     background: var(--bg);
   }
 
+  /* Nao perturbe (icone do sino) ao lado do fechar; ativo = menta suave. */
+  .notif-drawer__head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .notif-drawer__dnd {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .notif-drawer__dnd:hover {
+    background: var(--bg);
+  }
+
+  .notif-drawer__dnd--active,
+  .notif-drawer__dnd--active:hover {
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .notif-drawer__dnd:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
   .notif-drawer__filters {
     display: flex;
     flex-wrap: nowrap;
@@ -9915,6 +9952,47 @@ body {
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  /* Wrapper da linha: a acao "Marcar como lida" e irma do botao da linha. */
+  .notif-row-wrap {
+    position: relative;
+  }
+
+  .notif-row__mark {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--primary-700);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  /* Visivel em hover e foco (teclado alcanca mesmo com opacity 0). */
+  .notif-row-wrap:hover .notif-row__mark,
+  .notif-row-wrap:focus-within .notif-row__mark,
+  .notif-row__mark:focus-visible {
+    opacity: 1;
+  }
+
+  .notif-row__mark:hover {
+    background: var(--primary-50);
+  }
+
+  .notif-row__mark:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
   }
 
   .notif-row {

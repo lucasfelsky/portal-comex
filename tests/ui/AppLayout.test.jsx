@@ -814,6 +814,18 @@ describe('AppLayout shell F2 (refino visual)', () => {
       getDailyPtaxRates.mockResolvedValue(null)
     })
 
+    it('PTAX: o chip é SEMPRE renderizado; sem dado mostra "--" em USD e EUR (D6)', async () => {
+      getDailyPtaxRates.mockResolvedValue(null)
+      const { container } = renderAt('/')
+      const ptax = container.querySelector('.topbar__ptax')
+      expect(ptax).not.toBeNull()
+      expect(ptax).toHaveTextContent('USD')
+      expect(ptax).toHaveTextContent('EUR')
+      expect(ptax.querySelectorAll('.topbar__ptax-value')).toHaveLength(2)
+      ptax.querySelectorAll('.topbar__ptax-value').forEach((node) => expect(node).toHaveTextContent('--'))
+      expect(ptax.querySelector('.topbar__ptax-sep')).not.toBeNull()
+    })
+
     it('sino: badge numérico com as não lidas e aria-label preservado', async () => {
       listNotifications.mockResolvedValue([notification({ id: 'a' }), notification({ id: 'b' }), notification({ id: 'c', isRead: true })])
       const { container } = renderAt('/')
@@ -915,7 +927,8 @@ describe('AppLayout shell F2 (refino visual)', () => {
       renderAt('/')
       const user = userEvent.setup()
       const dialog = await openDrawer(user)
-      const rows = await within(dialog).findAllByRole('button', { name: /Nova resposta|Alerta DUIMP|Divergência/ })
+      await within(dialog).findByText('Nova resposta')
+      const rows = [...dialog.querySelectorAll('.notif-row')]
       expect(rows).toHaveLength(3)
       expect(dialog.querySelector('.notifications__group')).toBeNull()
       const byTitle = (title) => rows.find((row) => row.textContent.includes(title))
@@ -958,12 +971,58 @@ describe('AppLayout shell F2 (refino visual)', () => {
       )
     })
 
-    it('"Não perturbe" e preferências saem da gaveta (continuam na página)', async () => {
+    it('"Não perturbe": botão-ícone no cabeçalho, ao lado do fechar, com aria-pressed e rótulos do painel legado', async () => {
       renderAt('/')
       const user = userEvent.setup()
       const dialog = await openDrawer(user)
-      expect(within(dialog).queryByRole('button', { name: /não perturbe/i })).toBeNull()
+      const dnd = within(dialog).getByRole('button', { name: 'Ativar modo não perturbe por 1 hora' })
+      expect(dnd).toHaveAttribute('aria-pressed', 'false')
+      expect(dnd).toHaveAttribute('title', 'Silenciar por 1 hora')
+      expect(dnd.parentElement).toBe(within(dialog).getByRole('button', { name: 'Fechar' }).parentElement)
+
+      await user.click(dnd)
+      const active = await within(dialog).findByRole('button', { name: /Desativar modo não perturbe \(restam/ })
+      expect(active).toHaveAttribute('aria-pressed', 'true')
+      expect(active).toHaveClass('notif-drawer__dnd--active')
+      expect(within(dialog).getByText(/Silenciado/)).toBeInTheDocument()
+
+      await user.click(active)
+      expect(
+        await within(dialog).findByRole('button', { name: 'Ativar modo não perturbe por 1 hora' })
+      ).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('preferências saem da gaveta (ficam no menu do usuário e na página)', async () => {
+      renderAt('/')
+      const user = userEvent.setup()
+      const dialog = await openDrawer(user)
       expect(within(dialog).queryByRole('button', { name: /Preferências de notificação/i })).toBeNull()
+    })
+
+    it('"Marcar como lida" por item: só nas não lidas, alcançável por teclado, não abre a notificação', async () => {
+      listNotifications.mockResolvedValue([
+        notification({ id: 'a', title: 'Dúvida nova' }),
+        notification({ id: 'b', title: 'Já lida', isRead: true }),
+      ])
+      renderAt('/')
+      const user = userEvent.setup()
+      const dialog = await openDrawer(user)
+      await within(dialog).findByText('Dúvida nova')
+
+      expect(within(dialog).queryByRole('button', { name: 'Marcar como lida: Já lida' })).toBeNull()
+      const mark = within(dialog).getByRole('button', { name: 'Marcar como lida: Dúvida nova' })
+      expect(mark).toHaveClass('notif-row__mark')
+      expect(mark.closest('.notif-row')).toBeNull() // irmão do botão da linha, nunca aninhado
+
+      mark.focus()
+      expect(document.activeElement).toBe(mark)
+      await user.keyboard('{Enter}')
+      await waitFor(() =>
+        expect(within(dialog).queryByRole('button', { name: 'Marcar como lida: Dúvida nova' })).toBeNull()
+      )
+      // marcou como lida sem navegar nem fechar a gaveta
+      expect(screen.getByTestId('probe')).toHaveTextContent('/|')
+      expect(screen.getByRole('dialog', { name: 'Central de notificações' })).toBeInTheDocument()
     })
 
     it('botão fechar e Esc fecham a gaveta', async () => {

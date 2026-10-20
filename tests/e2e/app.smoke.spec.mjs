@@ -48,7 +48,7 @@ test('usuário abre chamado de suporte e vê em "Meus chamados"', async ({ page 
 
   await page.getByRole('button', { name: 'Abrir suporte' }).click()
   await page
-    .getByPlaceholder(/Descreva o problema/)
+    .getByLabel('O que aconteceu?')
     .fill('E2E: o gráfico do dashboard não carrega no meu navegador.')
   await page.getByRole('button', { name: 'Enviar chamado' }).click()
 

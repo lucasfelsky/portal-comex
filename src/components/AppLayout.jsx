@@ -532,14 +532,36 @@ export default function AppLayout() {
                 {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
               </span>
             </div>
-            <button
-              type="button"
-              className="notif-drawer__close"
-              aria-label="Fechar"
-              onClick={() => handleCloseNotificationPanel()}
-            >
-              <Icon name="close" size={16} strokeWidth={2} />
-            </button>
+            <div className="notif-drawer__head-actions">
+              <button
+                type="button"
+                className={`notif-drawer__dnd${dnd.isActive ? ' notif-drawer__dnd--active' : ''}`}
+                onClick={() => {
+                  if (dnd.isActive) {
+                    dnd.disable()
+                  } else {
+                    dnd.enableFor(60 * 60 * 1000) // 1h
+                  }
+                }}
+                aria-pressed={dnd.isActive}
+                aria-label={
+                  dnd.isActive
+                    ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                    : 'Ativar modo não perturbe por 1 hora'
+                }
+                title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+              >
+                <Icon name="bell" size={16} strokeWidth={1.9} />
+              </button>
+              <button
+                type="button"
+                className="notif-drawer__close"
+                aria-label="Fechar"
+                onClick={() => handleCloseNotificationPanel()}
+              >
+                <Icon name="close" size={16} strokeWidth={2} />
+              </button>
+            </div>
           </div>
 
           <div
@@ -901,7 +923,8 @@ export default function AppLayout() {
                 <span className="topbar__search-text">Buscar páginas, ações ou processos</span>
                 <kbd className="topbar__search-kbd">{searchShortcut}</kbd>
               </button>
-              {ptaxRates ? (
+              {/* Refino F2 (D6): o chip PTAX e sempre presente; sem dado cai em "--". */}
+              {(
                 <div className="topbar__ptax" aria-label="Cotação PTAX do dia">
                   <span className="topbar__ptax-pair">
                     <span className="topbar__ptax-label">USD</span>
@@ -913,7 +936,7 @@ export default function AppLayout() {
                     <span className="topbar__ptax-value">{formatCurrencyRate(ptaxRates?.eur?.sell)}</span>
                   </span>
                 </div>
-              ) : null}
+              )}
               <button
                 type="button"
                 className="ghost-button topbar-theme-button"

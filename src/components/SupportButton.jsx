@@ -207,6 +207,10 @@ export default function SupportButton() {
     }
   }
 
+  const messagePlaceholder = isCompactLayout
+    ? 'Descreva o problema: o que você estava fazendo, o que esperava e o que aconteceu.'
+    : 'Conte o que você tentou fazer e o que apareceu na tela.'
+
   const messageField = (
     <label className="field">
       <span>O que aconteceu?</span>
@@ -220,7 +224,7 @@ export default function SupportButton() {
           setMessage(event.target.value)
           if (messageError) setMessageError('')
         }}
-        placeholder="Descreva o problema: o que você estava fazendo, o que esperava e o que aconteceu."
+        placeholder={messagePlaceholder}
         {...getFieldA11yProps('support-message', messageError)}
       />
       {messageError ? (

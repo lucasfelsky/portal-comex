@@ -370,12 +370,13 @@ async function seedAll() {
   })
 
   const notifications = [
-    ['process_message', 'Nova mensagem em Resina epóxi', 'Logística: coleta confirmada para amanhã às 09h.', 'shot-aguardando-embarque', false],
-    ['process_update', 'Status atualizado', 'Aguardando atracação → Atracação Confirmada.', 'shot-atracacao-confirmada', false],
-    ['process_update', 'Canal vermelho', 'Silicone grau técnico foi parametrizado em canal vermelho.', 'shot-canal-vermelho', false],
-    ['process_message', 'Nova mensagem em Pigmento orgânico', 'Documentos conferidos.', 'shot-aguardando-atracacao', true],
-    ['process_update', 'ETA atualizada', 'Solvente industrial teve a ETA alterada.', 'shot-embarcou', true],
-    ['process_update', 'Carga recebida', 'Antiespumante foi recebido no CD.', 'shot-carga-recebida', true],
+    // Tipos REAIS emitidos pelo app (cobrem os 4 tons da gaveta: info/ok/warn/danger).
+    ['process_question_answered', 'Nova resposta em Resina epóxi', 'Logística: coleta confirmada para amanhã às 09h.', 'shot-aguardando-embarque', false],
+    ['favorite_process_updated', 'Status atualizado', 'Aguardando atracação → Atracação Confirmada.', 'shot-atracacao-confirmada', false],
+    ['license_rejected', 'Anuência rejeitada', 'Silicone grau técnico: licença rejeitada pelo órgão anuente.', 'shot-canal-vermelho', false],
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · janela de 08h às 12h.', 'shot-aguardando-atracacao', false],
+    ['process_document_uploaded', 'Documento anexado', 'Solvente industrial · Packing List enviado.', 'shot-embarcou', true],
+    ['process_question_created', 'Nova dúvida', 'Antiespumante: alguém perguntou sobre o ETA.', 'shot-carga-recebida', true],
   ]
   for (const [index, [type, title, body, processId, isRead]] of notifications.entries()) {
     await putDoc('notifications', `shot-notif-${index + 1}`, {
@@ -458,6 +459,11 @@ for (const theme of THEMES) {
     await context.addInitScript((value) => {
       try {
         window.localStorage.setItem('pc-theme', value)
+        // PTAX semeada: sem a callable (emuladores sem functions) o chip mostraria "--".
+        window.localStorage.setItem(
+          'sq-comex-ptax-rates',
+          JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } })
+        )
       } catch {
         /* ignora */
       }

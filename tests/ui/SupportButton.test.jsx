@@ -168,6 +168,16 @@ describe('SupportButton — refino F2 (desktop)', () => {
     expect(fab.querySelector('svg')).not.toBeNull()
   })
 
+  it('placeholder do desktop = texto do mock-up', async () => {
+    const user = userEvent.setup()
+    renderSupportButton()
+    await openModal(user)
+    expect(screen.getByLabelText('O que aconteceu?')).toHaveAttribute(
+      'placeholder',
+      'Conte o que você tentou fazer e o que apareceu na tela.'
+    )
+  })
+
   it('cabecalho "Suporte" + link "Meus chamados"; Nome e Email somente leitura', async () => {
     const user = userEvent.setup()
     renderSupportButton()
@@ -293,5 +303,10 @@ describe('SupportButton — tablet/mobile (<=1040px) mantem o modal anterior', (
     expect(await within(dialog).findByText('Chamado antigo')).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Cancelar' })).toBeNull()
     expect(within(dialog).queryByRole('button', { name: 'Novo chamado' })).toBeNull()
+    // tablet/mobile mantem o placeholder anterior
+    expect(within(dialog).getByLabelText('O que aconteceu?')).toHaveAttribute(
+      'placeholder',
+      'Descreva o problema: o que você estava fazendo, o que esperava e o que aconteceu.'
+    )
   })
 })

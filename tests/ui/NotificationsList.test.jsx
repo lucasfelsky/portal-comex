@@ -12,6 +12,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import NotificationsList from '../../src/components/NotificationsList.jsx'
+import Icon from '../../src/components/Icon.jsx'
 
 const formatRelative = (v) => `rel(${v})`
 const formatDate = (v) => `date(${v})`
@@ -462,6 +463,41 @@ describe('NotificationsList variant="drawer"', () => {
     expect(container.querySelector('.notifications__group')).toBeNull()
     expect(screen.queryByText('Recentes')).toBeNull()
     expect(screen.queryByText('Anteriores')).toBeNull()
+  })
+
+  // Tipos REAIS emitidos pelo app (functions/src/core/shared.js) cobrindo os 4 tons.
+  it.each([
+    ['process_question_created', 'info', 'message'],
+    ['favorite_process_updated', 'info', 'nav-arrivals'],
+    ['collection_status_updated', 'ok', 'truck'],
+    ['post_receipt_notes_updated', 'ok', 'doc'],
+    ['process_document_uploaded', 'warn', 'doc'],
+    ['process_daily_alerts', 'warn', 'alert-triangle'],
+    ['license_rejected', 'danger', 'alert-triangle'],
+    ['receipt_divergence_reported', 'danger', 'alert-triangle'],
+  ])('tipo %s -> tom %s e glifo %s (favorite_process_updated nao e conversa)', (type, tone, glyph) => {
+    const { container } = renderDrawer({
+      grouped: [
+        { processId: 'pz', type, title: 'G', unreadCount: 1, latestCreatedAt: iso(1), items: [item('z', type, 'Titulo', 1)] },
+      ],
+    })
+    expect(container.querySelector('.notif-row__icon')).toHaveClass(`notif-row__icon--${tone}`)
+    // o glifo renderizado e o do tipo esperado (mesmo markup interno do Icon)
+    const { container: reference } = render(<Icon name={glyph} size={16} strokeWidth={1.9} />)
+    expect(container.querySelector('.notif-row__icon svg').innerHTML).toBe(
+      reference.querySelector('svg').innerHTML
+    )
+  })
+
+  it('"Marcar como lida" por item chama onMarkAsRead sem abrir a notificacao; lidas nao tem a acao', async () => {
+    const onOpen = vi.fn()
+    const onMark = vi.fn()
+    renderDrawer({ onOpenNotification: onOpen, onMarkAsRead: onMark })
+    const user = userEvent.setup()
+    expect(screen.queryByRole('button', { name: 'Marcar como lida: Outra dúvida' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Marcar como lida: Nova dúvida' }))
+    expect(onMark).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }))
+    expect(onOpen).not.toHaveBeenCalled()
   })
 
   it('tom e glifo por tipo; nao lida com ponto; lida sem a classe', () => {

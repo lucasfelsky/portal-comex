@@ -41,12 +41,17 @@ function iconForNotificationType(type) {
 
 // Refino F2 (Flutuantes.dc.html): na gaveta desktop a lista e' PLANA (sem
 // grupos por processo), mais recentes primeiro; o tom do ladrilho vem do tipo.
+// DRAWER_LIMIT: o legado tinha "Ver mais"; na gaveta o rodape "Ver todas"
+// (pagina /notifications) cobre o restante — decisao registrada aqui.
 const DRAWER_LIMIT = 20
 
 function getDrawerVisual(type) {
   const normalized = String(type ?? '')
   if (normalized.startsWith('news')) return { icon: 'nav-news', tone: 'info' }
   switch (normalized) {
+    case 'favorite_process_updated':
+      // mudanca de status/ETA do processo favorito: nao e conversa
+      return { icon: 'nav-arrivals', tone: 'info' }
     case 'collection_status_updated':
       return { icon: 'truck', tone: 'ok' }
     case 'post_receipt_notes_updated':
@@ -80,9 +85,10 @@ function formatDrawerRelative(value, formatRelative) {
   return relative === 'há 1 d' ? 'ontem' : relative
 }
 
-function DrawerRow({ notification, onOpenNotification, formatRelative }) {
+function DrawerRow({ notification, onOpenNotification, onMarkAsRead, formatRelative }) {
   const { icon, tone } = getDrawerVisual(notification.type)
   return (
+    <div className="notif-row-wrap">
     <button
       type="button"
       className={`notif-row${notification.isRead ? '' : ' notif-row--unread'}`}
@@ -101,6 +107,21 @@ function DrawerRow({ notification, onOpenNotification, formatRelative }) {
       </span>
       <span className="notif-row__dot" aria-hidden="true" />
     </button>
+    {onMarkAsRead && !notification.isRead ? (
+      <button
+        type="button"
+        className="notif-row__mark"
+        onClick={(event) => {
+          event.stopPropagation()
+          onMarkAsRead(notification)
+        }}
+        aria-label={`Marcar como lida: ${notification.title}`}
+        title="Marcar como lida"
+      >
+        <Icon name="check" size={16} strokeWidth={1.9} />
+      </button>
+    ) : null}
+    </div>
   )
 }
 
@@ -319,6 +340,7 @@ export default function NotificationsList({
               <DrawerRow
                 notification={notification}
                 onOpenNotification={onOpenNotification}
+                onMarkAsRead={onMarkAsRead}
                 formatRelative={formatRelative}
               />
             </li>
