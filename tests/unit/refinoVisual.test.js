@@ -3778,3 +3778,23 @@ describe('F5b - JSX Verificar e-mail', () => {
     expect(f5bNoComments(f5bVerify)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 })
+// @@F5B-PENDING
+describe('F5b - JSX Acesso pendente', () => {
+  it('raiz propria, tom por estado, "Proximo passo", etiqueta de status e diagnostico recolhivel', () => {
+    expect(f5bPending).toContain('auth-screen auth-screen--pending')
+    expect(f5bPending).toContain("const tone = isRejected || isBlocked ? 'danger' : 'warn'")
+    expect(f5bPending).toContain("name={tone === 'danger' ? 'alert-triangle' : 'clock'}")
+    expect(f5bPending).toContain('auth-next-step auth-next-step--${tone}')
+    expect(f5bPending).toContain('success-banner auth-status-line auth-status-line--${tone}')
+    expect(f5bPending).toContain('aria-expanded={diagnosticOpen}')
+    expect(f5bPending).toContain('aria-controls="auth-diagnostic-panel"')
+    expect(f5bPending).toContain('Diagnóstico (para o suporte)')
+    expect(f5bPending).toContain('Forçar reload das claims')
+    expect(f5bPending).toContain('Diagnóstico (claims lidas agora)')
+  })
+
+  it('sem toISOString, console.log nem hex', () => {
+    expect(f5bNoComments(f5bPending)).not.toMatch(/toISOString\(\)|console\.log/)
+    expect(f5bNoComments(f5bPending)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+})
