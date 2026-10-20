@@ -3798,3 +3798,20 @@ describe('F5b - JSX Acesso pendente', () => {
     expect(f5bNoComments(f5bPending)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 })
+// @@F5B-NOTFOUND
+describe('F5b - JSX 404', () => {
+  it('raiz propria, "Codigo: 404" com rotulo so para leitor de tela, caminho e links', () => {
+    expect(f5bNotFound).toContain('auth-screen auth-screen--not-found')
+    expect(f5bNotFound).toContain('<span className="auth-error-code__label">Código: </span>')
+    expect(f5bNotFound).toContain('<code>404</code>')
+    expect(f5bNotFound).toContain('className="auth-error-path"')
+    expect(f5bNotFound).toContain('data-testid="not-found-home"')
+    expect(f5bNotFound).toContain('data-testid="not-found-news"')
+    expect(f5bNotFound).toContain('Se você chegou aqui por um link')
+  })
+
+  it('sem toISOString, console.log nem hex', () => {
+    expect(f5bNoComments(f5bNotFound)).not.toMatch(/toISOString\(\)|console\.log/)
+    expect(f5bNoComments(f5bNotFound)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+})
