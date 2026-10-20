@@ -21280,6 +21280,219 @@ body {
     background: var(--surface);
     color: var(--disabled-ink);
   }
+
+  /* ---------- Comunicados (AdminComunicados.dc.html) ---------- */
+  .admin-panel--announcements .ac-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .admin-panel--announcements .ac-head__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .admin-panel--announcements .ac-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .admin-panel--announcements .ac-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--announcements .ac-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 18px;
+  }
+
+  .admin-panel--announcements .ac-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  /* Lista: cartoes-botao dentro de um painel de 12px de respiro. */
+  .admin-panel--announcements .ac-list {
+    gap: 4px;
+    padding: 12px;
+  }
+
+  .admin-panel--announcements .ac-row {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--announcements .ac-row:hover:not(.ac-row--skeleton) {
+    background: var(--surface-alt);
+  }
+
+  .admin-panel--announcements .ac-row--selected,
+  .admin-panel--announcements .ac-row--selected:hover {
+    background: var(--navy-50);
+    box-shadow: inset 0 0 0 1.5px var(--ad-accent);
+  }
+
+  .admin-panel--announcements .ac-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .admin-panel--announcements .ac-row--skeleton {
+    cursor: default;
+  }
+
+  .admin-panel--announcements .ac-row__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--announcements .ac-row__channel {
+    padding: 2px 9px;
+  }
+
+  .admin-panel--announcements .ac-row__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--announcements .ac-row__summary {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  /* Editor: titulo Sora 18; Titulo + Canal (200px); mensagem; previa do card do dashboard. */
+  .admin-panel--announcements .ac-editor__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: normal;
+    color: var(--ink);
+  }
+
+  .admin-panel--announcements .ac-fields-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: 12px;
+  }
+
+  .admin-panel--announcements .ac-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .admin-panel--announcements .ac-field textarea.text-input {
+    resize: vertical;
+  }
+
+  .admin-panel--announcements .ac-hint {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--announcements .ac-hint__count {
+    flex: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .admin-panel--announcements .ac-hint__count--over {
+    color: var(--warning-700);
+  }
+
+  .admin-panel--announcements .ac-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--surface-alt);
+  }
+
+  .admin-panel--announcements .ac-preview__label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--announcements .ac-preview__card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--info-50);
+  }
+
+  .admin-panel--announcements .ac-preview__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--info-700);
+  }
+
+  .admin-panel--announcements .ac-preview__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--announcements .ac-preview__summary {
+    font-size: 12px;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--announcements .ad-footer {
+    padding-top: 12px;
+  }
 }
 
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
@@ -21373,6 +21586,7 @@ body {
 
   /* Refino F6a: sem transicao nas linhas e nos botoes de texto dos paineis do admin. */
   .admin-panel--users .au-row,
+  .admin-panel--announcements .ac-row,
   .admin-panel .ad-link-button {
     transition: none;
   }

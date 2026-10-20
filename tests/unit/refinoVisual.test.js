@@ -1555,7 +1555,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'components/NotificationPreferencesModal.jsx': [1, 0, 0],
   'components/NotificationsList.jsx': [3, 0, 1],
   'components/SupportButton.jsx': [2, 1, 1],
-  'features/admin/AdminAnnouncementsPanel.jsx': [1, 1, 0],
+  // F6a: a arvore desktop acrescenta o fantasma "Excluir comunicado" (fantasma de perigo no mock).
+  'features/admin/AdminAnnouncementsPanel.jsx': [2, 1, 0],
   'features/admin/AdminBarStatusPanel.jsx': [1, 1, 0],
   'features/admin/AdminLeadTimePanel.jsx': [1, 1, 0],
   'features/admin/AdminSupportPanel.jsx': [3, 3, 0],
@@ -4010,5 +4011,73 @@ describe('F6a - Usuarios (valores do AdminUsuarios.dc.html)', () => {
     const reduce = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
     expect(reduce).toContain('.admin-panel--users .au-row')
     expect(reduce).toContain('.admin-panel .ad-link-button')
+  })
+})
+
+describe('F6a - Comunicados (valores do AdminComunicados.dc.html)', () => {
+  it('cabecalho: titulo Sora 26/700 -0.02em, subtitulo 14, "Novo comunicado" com icone (gap 8, padding 0 18)', () => {
+    expectF6a('.admin-panel--announcements .ac-head', ['align-items: flex-end', 'justify-content: space-between', 'gap: 12px'])
+    expectF6a('.admin-panel--announcements .ac-title', ['font-family: var(--font-heading)', 'font-size: 26px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF6a('.admin-panel--announcements .ac-subtitle', ['font-size: 14px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--announcements .ac-new', ['gap: 8px', 'padding: 0 18px'])
+  })
+
+  it('2 colunas auto-fit minmax(400px, 1fr) gap 20; lista em painel de 12px com cartoes de 14/16', () => {
+    expectF6a('.admin-panel--announcements .ac-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr))', 'align-items: start', 'gap: 20px'])
+    expectF6a('.admin-panel--announcements .ac-list', ['gap: 4px', 'padding: 12px'])
+    expectF6a('.admin-panel--announcements .ac-row', ['gap: 6px', 'padding: 14px 16px', 'border-radius: 14px', 'background: transparent'])
+    expect(f6aRules.find((r) => r.selectors.includes('.admin-panel--announcements .ac-row')).body).toContain('background-color var(--dur-base) var(--ease-out)')
+  })
+
+  it('cartao: hover --surface-alt; selecionado --navy-50 + anel 1.5px; canal em etiqueta 2x9; titulo 15/700; resumo 13/1.5', () => {
+    expectF6a('.admin-panel--announcements .ac-row:hover:not(.ac-row--skeleton)', ['background: var(--surface-alt)'])
+    expectF6a('.admin-panel--announcements .ac-row--selected', ['background: var(--navy-50)', 'box-shadow: inset 0 0 0 1.5px var(--ad-accent)'])
+    expectF6a('.admin-panel--announcements .ac-row__meta', ['justify-content: space-between', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--announcements .ac-row__channel', ['padding: 2px 9px'])
+    expectF6a('.admin-panel--announcements .ac-row__title', ['font-size: 15px', 'font-weight: 700'])
+    expectF6a('.admin-panel--announcements .ac-row__summary', ['font-size: 13px', 'line-height: 1.5', 'color: var(--ink-soft)'])
+  })
+
+  it('editor: titulo Sora 18/700; Titulo + Canal (200px) gap 12; dica 11 --ink-soft com contador mono', () => {
+    expectF6a('.admin-panel--announcements .ac-editor__title', ['font-family: var(--font-heading)', 'font-size: 18px', 'font-weight: 700'])
+    expectF6a('.admin-panel--announcements .ac-fields-row', ['grid-template-columns: minmax(0, 1fr) 200px', 'gap: 12px'])
+    expectF6a('.admin-panel--announcements .ac-hint', ['font-size: 11px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--announcements .ac-hint__count', ['font-family: var(--font-mono)'])
+    expectF6a('.admin-panel--announcements .ac-hint__count--over', ['color: var(--warning-700)'])
+    expectF6a('.admin-panel--announcements .ac-field textarea.text-input', ['resize: vertical'])
+  })
+
+  it('previa: painel --surface-alt raio 14 padding 14; rotulo mono 10/600 1.5px; cartao --info-50 raio 12 padding 12/14 gap 4', () => {
+    expectF6a('.admin-panel--announcements .ac-preview', ['gap: 8px', 'padding: 14px', 'border-radius: 14px', 'background: var(--surface-alt)'])
+    expectF6a('.admin-panel--announcements .ac-preview__label', ['font-family: var(--font-mono)', 'font-size: 10px', 'font-weight: 600', 'letter-spacing: 1.5px', 'text-transform: uppercase'])
+    expectF6a('.admin-panel--announcements .ac-preview__card', ['gap: 4px', 'padding: 12px 14px', 'border-radius: 12px', 'background: var(--info-50)'])
+    expectF6a('.admin-panel--announcements .ac-preview__eyebrow', ['font-family: var(--font-mono)', 'font-size: 10px', 'letter-spacing: 1.5px', 'color: var(--info-700)'])
+    expectF6a('.admin-panel--announcements .ac-preview__title', ['font-size: 14px', 'font-weight: 700'])
+    expectF6a('.admin-panel--announcements .ac-preview__summary', ['font-size: 12px', 'color: var(--ink)'])
+  })
+
+  it('rodape do editor com padding-top 12 (mock) e sem campo/colecao novos no Firestore', () => {
+    expectF6a('.admin-panel--announcements .ad-footer', ['padding-top: 12px'])
+    const panel = read('src/features/admin/AdminAnnouncementsPanel.jsx').replace(/\r\n/g, '\n')
+    // o resumo e' derivado (D10): nenhum campo "summary" entra no rascunho nem no payload
+    expect(panel).not.toMatch(/summary:\s/)
+    expect(panel).not.toContain("handleAnnouncementDraftChange('summary'")
+    expect(read('firestore.rules')).not.toContain('summary')
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--announcements, h3 preservado, resumo pelos 140 caracteres', () => {
+    const panel = read('src/features/admin/AdminAnnouncementsPanel.jsx').replace(/\r\n/g, '\n')
+    expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(panel).toContain('className="admin-panel admin-panel--announcements ac-root"')
+    expect(panel).toContain('<h3 className="ac-title">Comunicados internos</h3>')
+    expect(panel).toContain('summarizeAnnouncement(announcement.content)')
+    expect(panel).toContain('ANNOUNCEMENT_SUMMARY_MAX')
+    expect(panel).toContain('className="ghost-button ad-delete"')
+    expect(stripComments(panel)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+
+  it('movimento: a transicao do cartao entra no bloco reduce existente', () => {
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP))).toContain('.admin-panel--announcements .ac-row')
   })
 })
