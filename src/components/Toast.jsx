@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 // Toast container (Sprint 8).
 // API:
@@ -19,13 +19,33 @@ let toastIdCounter = 0
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  // Timers pendentes (auto-dismiss e animacao de saida). Cancelados no unmount
+  // do provider: sem isso o setToasts dispara depois do teardown (no Vitest,
+  // "window is not defined" apos o cleanup do jsdom).
+  const timersRef = useRef(new Set())
+
+  const schedule = useCallback((fn, ms) => {
+    const timerId = setTimeout(() => {
+      timersRef.current.delete(timerId)
+      fn()
+    }, ms)
+    timersRef.current.add(timerId)
+  }, [])
+
+  useEffect(() => {
+    const timers = timersRef.current
+    return () => {
+      timers.forEach((timerId) => clearTimeout(timerId))
+      timers.clear()
+    }
+  }, [])
 
   const dismiss = useCallback((id) => {
     setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, closing: true } : toast)))
-    setTimeout(() => {
+    schedule(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id))
     }, 200)
-  }, [])
+  }, [schedule])
 
   const push = useCallback(
     (tone, message) => {
@@ -39,10 +59,10 @@ export function ToastProvider({ children }) {
       })
 
       if (TOAST_TIMEOUT_MS > 0 && tone !== 'error') {
-        setTimeout(() => dismiss(id), TOAST_TIMEOUT_MS)
+        schedule(() => dismiss(id), TOAST_TIMEOUT_MS)
       }
     },
-    [dismiss]
+    [dismiss, schedule]
   )
 
   const api = useMemo(
