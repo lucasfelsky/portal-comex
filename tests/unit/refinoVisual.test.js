@@ -548,4 +548,16 @@ describe('F1 marca (BrandMark.jsx)', () => {
     expect(fixture.srcComponents.topLevel).toBe(25)
     expect(fixture.srcComponents._topLevel_list).toContain('BrandMark.jsx')
   })
+
+  // Rodada F1: o seletor `.ios-row__icon[style*='--primary']` (cor do icone
+  // sobre fundo menta) so casa enquanto o MenuPage declarar o fundo inline
+  // com var(--primary). Se alguem migrar o inline para classe/outro token, a
+  // regra deixaria de casar em silencio (icone navy -> branco sobre menta).
+  it("MenuPage mantem o fundo inline var(--primary) no icone admin (casa .ios-row__icon[style*='--primary'])", () => {
+    expect(cssNoComments).toContain(".ios-row__icon[style*='--primary']")
+    const menu = read('src/pages/MenuPage.jsx')
+    expect(menu).toMatch(
+      /className="ios-row__icon"\s+style=\{\{\s*background:\s*'var\(--primary\)'\s*\}\}[\s\S]{0,80}name="admin"/,
+    )
+  })
 })
