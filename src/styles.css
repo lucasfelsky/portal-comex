@@ -18234,6 +18234,651 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F4d — FORMULARIO DE PROCESSO EM MODAL (desktop >= 1041px)
+   Fonte: ProcessoForm.dc.html. Dialogo de 960 x 800 (o frame do mock tem 1040 x 880
+   com 40px de scrim), raio 22 e --shadow-xl sobre o --scrim; cabecalho 24/28/18 com
+   titulo Sora 22 + chip de categoria mono + tag de status + "nome · PO" 13 + fechar
+   44; stepper de 6 barras de 4px (concluida --primary-700, atual --primary, futura
+   --disabled-bg) com numero mono + rotulo 12; corpo rolavel com "PASSO N DE 6" mono 11
+   e titulo Sora 18; campos em 3 colunas (gap 16/14); campo pendente = borda --warning
+   + "Dado pendente"; "Transbordo" como switch 52x32; rodape 16/28 em --surface-alt.
+   Escopo: o modal (.process-form-modal) e a raiz .process-form--dialog. Tablet/mobile
+   seguem na vista legada (.process-form.list-card), sem nenhuma regra aqui.
+   Notebook (altura <= 800): dialogo ocupa a altura da janela, cabecalho/rodape
+   compactos e fixos; so o corpo rola.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .modal-backdrop.process-form-modal-backdrop {
+    padding: 40px;
+    background: var(--scrim);
+  }
+
+  .modal.process-form-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(960px, 100%);
+    max-width: none;
+    height: min(800px, calc(100vh - 80px));
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+  }
+
+  .process-form-modal .modal__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    gap: 0;
+  }
+
+  .process-form--dialog {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    color: var(--ink);
+  }
+
+  /* ---- cabecalho + stepper ---- */
+  .process-form--dialog .pfd-header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 28px 18px;
+    border-bottom: 1px solid var(--row-divider);
+  }
+
+  .process-form--dialog .pfd-header__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .process-form--dialog .pfd-header__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .process-form--dialog .pfd-header__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .process-form--dialog .pfd-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .process-form--dialog .pfd-chip {
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--navy-50);
+    color: var(--navy);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  [data-theme='dark'] .process-form--dialog .pfd-chip {
+    color: var(--ink);
+  }
+
+  .process-form--dialog .pfd-header .status-tag {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .process-form--dialog .pfd-subtitle {
+    font-size: 13px;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .process-form--dialog .pfd-close {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .process-form--dialog .pfd-close:hover {
+    background: var(--navy-50);
+  }
+
+  .process-form--dialog .pfd-close:focus-visible,
+  .process-form--dialog .pfd-step__button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .process-form--dialog .pfd-steps {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .process-form--dialog .pfd-step {
+    min-width: 0;
+  }
+
+  .process-form--dialog .pfd-step__button {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .process-form--dialog .pfd-step__bar {
+    display: block;
+    height: 4px;
+    border-radius: 4px;
+    background: var(--disabled-bg);
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-form--dialog .pfd-step--done .pfd-step__bar {
+    background: var(--primary-700);
+  }
+
+  .process-form--dialog .pfd-step--current .pfd-step__bar {
+    background: var(--primary);
+  }
+
+  [data-theme='dark'] .process-form--dialog .pfd-step--done .pfd-step__bar {
+    background: color-mix(in srgb, var(--primary) 50%, transparent);
+  }
+
+  .process-form--dialog .pfd-step__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--ink-soft);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .process-form--dialog .pfd-step--done .pfd-step__label,
+  .process-form--dialog .pfd-step--current .pfd-step__label {
+    color: var(--ink);
+  }
+
+  .process-form--dialog .pfd-step--current .pfd-step__label {
+    font-weight: 700;
+  }
+
+  .process-form--dialog .pfd-step__button:hover .pfd-step__label {
+    color: var(--ink);
+  }
+
+  .process-form--dialog .pfd-step__num {
+    font-family: var(--font-mono);
+  }
+
+  .process-form--dialog .pfd-step__label .wizard-step__error-dot {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+
+  /* ---- corpo rolavel ---- */
+  .process-form--dialog .pfd-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+    padding: 24px 28px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .process-form--dialog .pfd-body__head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .process-form--dialog .pfd-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--primary-700);
+  }
+
+  .process-form--dialog .pfd-step-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* ---- grade de campos: 3 colunas, gap 16/14 (o mock mistura todos os campos do
+     passo numa grade unica; os .form-grid do app viram "contents" para que seus
+     campos entrem nela). Blocos largos (editores, cartoes, avisos) ocupam a linha. ---- */
+  .process-form--dialog .pfd-panel,
+  .process-form--dialog .pfd-panel > .form-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 14px;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .process-form--dialog .pfd-panel > *,
+  .process-form--dialog .pfd-panel > .form-group > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .process-form--dialog .pfd-panel > .form-grid,
+  .process-form--dialog .pfd-panel > .form-group > .form-grid {
+    display: contents;
+  }
+
+  .process-form--dialog .pfd-panel > .form-group {
+    padding-top: 18px;
+    border-top: 1px solid var(--row-divider);
+  }
+
+  .process-form--dialog .pfd-panel > .form-group:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .process-form--dialog .form-group__title {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* celulas da grade: campos soltos, filhos dos grids "contents" e wrappers de aviso ERP */
+  .process-form--dialog .pfd-panel > .field,
+  .process-form--dialog .pfd-panel > .form-grid > *,
+  .process-form--dialog .pfd-panel > .form-group > .field,
+  .process-form--dialog .pfd-panel > .form-group > .form-grid > *,
+  .process-form--dialog .pfd-panel > .erp-form-field,
+  .process-form--dialog .pfd-panel > .form-group > .erp-form-field,
+  .process-form--dialog .pfd-panel > .detail-card:has(> .field:only-child) > .field {
+    grid-column: auto;
+  }
+
+  .process-form--dialog .pfd-panel > .detail-card:has(> .field:only-child) {
+    display: contents;
+  }
+
+  /* largos: observacoes (textarea), nome do processo, wrapper do aviso ERP de POs */
+  .process-form--dialog .pfd-panel > .field:has(> textarea),
+  .process-form--dialog .pfd-panel > .form-group > .field:has(> textarea),
+  .process-form--dialog .pfd-panel > .form-group > .form-grid > .field:has(> textarea),
+  .process-form--dialog .pfd-panel > .field.field--wide,
+  .process-form--dialog .pfd-panel > .erp-form-field:has(> .collection-windows-editor) {
+    grid-column: 1 / -1;
+  }
+
+  /* datas com hora tambem em mono (o global cobre date/time) */
+  .process-form--dialog .text-input[type='datetime-local'] {
+    min-height: 44px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  /* dica 11/600 abaixo do campo (ProcessoForm: helper) e avisos de bloco */
+  .process-form--dialog .field > .field-hint,
+  .process-form--dialog .field-hint--pending {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+
+  .process-form--dialog .pfd-panel > .field-hint,
+  .process-form--dialog .pfd-panel > .form-group > .field-hint {
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* campo pendente: borda --warning + "Dado pendente" --warning-700 */
+  .process-form--dialog [data-pending='true'] .text-input:not(:focus),
+  .process-form--dialog .checkbox-field[data-pending='true'] {
+    border-color: var(--warning);
+  }
+
+  .process-form--dialog .field-hint.field-hint--pending {
+    color: var(--warning-700);
+  }
+
+  .process-form--dialog .checkbox-field {
+    flex-wrap: wrap;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-alt);
+  }
+
+  .process-form--dialog .checkbox-field > .field-hint--pending {
+    margin-left: auto;
+  }
+
+  .process-form--dialog .checkbox-field input[type='checkbox'] {
+    accent-color: var(--primary-700);
+  }
+
+  /* o aviso ISO 6346 / ONU (inline-badge) dentro da celula: 11/700, sem caixa alta */
+  .process-form--dialog .field-hint .inline-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  /* "Remover previsao manual": alinha com o campo vizinho (abaixo do rotulo de 17px + gap) */
+  .process-form--dialog .pfd-panel > .form-group > .form-grid > .action-row,
+  .process-form--dialog .pfd-panel > .form-grid > .action-row {
+    align-self: start;
+    margin-top: 23px;
+  }
+
+  /* ---- Transbordo: linha com switch 52x32 ---- */
+  .process-form--dialog .process-form-switch-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--surface-alt);
+  }
+
+  .process-form--dialog .process-form-switch-row__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .process-form--dialog .process-form-switch-row__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .process-form--dialog .process-form-switch-row__hint {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .process-form--dialog .process-form-switch {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 52px;
+    height: 32px;
+    cursor: pointer;
+  }
+
+  .process-form--dialog .process-form-switch__input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .process-form--dialog .process-form-switch__track {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    width: 52px;
+    height: 32px;
+    padding: 3px;
+    border-radius: var(--radius-full);
+    background: var(--switch-off);
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-form--dialog .process-form-switch__knob {
+    display: block;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-full);
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .process-form--dialog .process-form-switch__input:checked + .process-form-switch__track {
+    background: var(--primary-700);
+  }
+
+  .process-form--dialog .process-form-switch__input:checked + .process-form-switch__track .process-form-switch__knob {
+    transform: translateX(20px);
+  }
+
+  .process-form--dialog .process-form-switch__input:focus-visible + .process-form-switch__track {
+    box-shadow: 0 0 0 2px var(--surface-alt), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* ---- editores de lista (conteineres, anuencias, POs, janelas, itens) ---- */
+  .process-form--dialog .pfd-panel .detail-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--primary-700);
+  }
+
+  .process-form--dialog .pfd-panel .collection-windows-editor,
+  .process-form--dialog .pfd-panel > .detail-card {
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--row-divider);
+    border-radius: 14px;
+    background: var(--surface-alt);
+  }
+
+  .process-form--dialog .collection-windows-editor__header p,
+  .process-form--dialog .pfd-panel > .detail-card p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .process-form--dialog .collection-windows-editor__item {
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .process-form--dialog .editor-grid__head span {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    color: var(--ink-soft);
+  }
+
+  .process-form--dialog .editor-row--window .editor-row__label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-form--dialog .editor-row--window .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .process-form--dialog .process-item-editor__imo-band {
+    border-radius: 12px;
+  }
+
+  .process-form--dialog .process-detail-card-heading--end {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .process-form--dialog .process-detail-card-heading--end > div:first-child p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .process-form--dialog .process-detail-card-heading--end .admin-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ---- rodape fixo: Voltar (fantasma) | Salvar (secundario) + Avancar (primario) ---- */
+  .process-form--dialog .pfd-footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 28px;
+    border-top: 1px solid var(--row-divider);
+    background: var(--surface-alt);
+  }
+
+  .process-form--dialog .pfd-footer .ghost-button,
+  .process-form--dialog .pfd-footer .primary-button,
+  .process-form--dialog .pfd-footer .secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .process-form--dialog .pfd-footer .ghost-button {
+    padding: 0 16px;
+  }
+
+  .process-form--dialog .pfd-footer .secondary-button {
+    padding: 0 16px;
+  }
+
+  .process-form--dialog .pfd-footer .primary-button {
+    padding: 0 18px;
+  }
+
+  .process-form--dialog .pfd-footer__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .process-form--dialog .pfd-footer__errors {
+    flex: 1 1 auto;
+    margin: 0;
+    padding: 0 8px;
+    font-size: 12px;
+    text-align: right;
+  }
+}
+
+/* Notebook / telas baixas (altura <= 800): o dialogo ocupa a janela (16px de scrim),
+   cabecalho e rodape compactos e fixos; so o corpo rola. 1366x768 e 1280x552. */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .modal-backdrop.process-form-modal-backdrop {
+    padding: 16px;
+  }
+
+  .modal.process-form-modal {
+    height: calc(100vh - 32px);
+  }
+
+  .process-form--dialog .pfd-header {
+    gap: 10px;
+    padding: 16px 24px 12px;
+  }
+
+  .process-form--dialog .pfd-title {
+    font-size: 20px;
+  }
+
+  .process-form--dialog .pfd-close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .process-form--dialog .pfd-body {
+    gap: 14px;
+    padding: 16px 24px;
+  }
+
+  .process-form--dialog .pfd-footer {
+    padding: 10px 24px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -18290,6 +18935,13 @@ body {
   .danger-button:active:not(:disabled),
   .secondary-button:active:not(:disabled) {
     transform: none;
+  }
+
+  /* Refino F4d: switch do Transbordo e barras do stepper sem transicao. */
+  .process-form--dialog .process-form-switch__knob,
+  .process-form--dialog .process-form-switch__track,
+  .process-form--dialog .pfd-step__bar {
+    transition: none;
   }
 
   .primary-button .spinner,

@@ -34,7 +34,7 @@ export default function ProcessItemDangerousGoodsFields({ item, onChange, traili
           <label className="field">
             <span>Número ONU</span>
             <input
-              className="text-input"
+              className="text-input text-input--mono"
               type="text"
               value={item.unNumber ?? ''}
               onChange={(event) => onChange('unNumber', event.target.value)}

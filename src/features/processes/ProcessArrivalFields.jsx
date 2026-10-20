@@ -10,6 +10,8 @@ import {
 import { isDtaLoadingScheduledStatus, isDtaTransitCompletedStatus } from './processStatus'
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import PendingFieldHint from './PendingFieldHint'
+import { usePendingAttrs } from './processFormContext'
 
 // F17.3a (D-11): "Chegada" - atracacao (maritimo) ou chegada (aereo)
 // com DATA, CE/terminal/free time e presenca de carga com data. Substitui os
@@ -23,6 +25,7 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // entrega, renderizada pelo `ProcessForm` como ultima celula do grid junto
 // da Presença.
 export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOptions, errors = {}, extraField = null }) {
+  const pending = usePendingAttrs()
   const isMaritime = isMaritimeCategory(draft.category)
   const isAir = isAirCategory(draft.category)
 
@@ -47,7 +50,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
       <h4 className="form-group__title">Chegada</h4>
 
       <div className="form-grid">
-        <label className="field">
+        <label className="field" {...pending(arrivalField)}>
           <span>{isMaritime ? 'Atracação (data e hora)' : 'Chegada (data e hora)'}</span>
           <input
             className="text-input"
@@ -66,6 +69,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               Data aproximada (migrada do ETA) — confirme a data real.
             </small>
           ) : null}
+          <PendingFieldHint field={arrivalField} />
           {!isApprox && isLegacyWithoutDate ? (
             <small className="field-hint">
               {isMaritime
@@ -76,7 +80,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
         </label>
 
         {!isMaritime ? (
-          <label className="field">
+          <label className="field" {...pending('terminalName')}>
             <span>Terminal / armazém (opcional)</span>
             <input
               className="text-input"
@@ -84,9 +88,10 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               value={draft.terminalName ?? ''}
               onChange={(event) => onDraftChange('terminalName', event.target.value)}
             />
+            <PendingFieldHint field="terminalName" />
           </label>
         ) : (
-          <label className="field">
+          <label className="field" {...pending('terminalName')}>
             <span>Terminal / armazém</span>
             <input
               className="text-input"
@@ -94,30 +99,33 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
               value={draft.terminalName ?? ''}
               onChange={(event) => onDraftChange('terminalName', event.target.value)}
             />
+            <PendingFieldHint field="terminalName" />
           </label>
         )}
       </div>
 
       {isMaritime ? (
         <div className="form-grid">
-          <label className="field">
+          <label className="field" {...pending('ceMercante')}>
             <span>CE Mercante</span>
             <input
-              className="text-input"
+              className="text-input text-input--mono"
               type="text"
               value={draft.ceMercante ?? ''}
               onChange={(event) => onDraftChange('ceMercante', event.target.value)}
             />
+            <PendingFieldHint field="ceMercante" />
           </label>
           {showCeHouse ? (
-            <label className="field">
+            <label className="field" {...pending('ceHouse')}>
               <span>CE house</span>
               <input
-                className="text-input"
+                className="text-input text-input--mono"
                 type="text"
                 value={draft.ceHouse ?? ''}
                 onChange={(event) => onDraftChange('ceHouse', event.target.value)}
               />
+              <PendingFieldHint field="ceHouse" />
             </label>
           ) : null}
         </div>
@@ -186,7 +194,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
       {showPresence || extraField ? (
         <div className="form-grid">
           {showPresence ? (
-            <label className="field">
+            <label className="field" {...pending('cargoPresenceInformedAt')}>
               <span>Presença de carga (data e hora)</span>
               <input
                 className="text-input"
@@ -214,6 +222,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
                   Presença informada sem data (registro antigo) — informe a data e hora.
                 </small>
               ) : null}
+              <PendingFieldHint field="cargoPresenceInformedAt" />
             </label>
           ) : null}
           {extraField}
@@ -226,6 +235,7 @@ export default function ProcessArrivalFields({ draft, onDraftChange, dtaStatusOp
 // Grupo "Free time" como irmao de "Anuências" no passo "Chegada e liberação".
 // Mesmas condicoes de antes: so maritimo/aereo e categorias de FREE_TIME_CATEGORIES.
 export function ProcessFreeTimeFields({ draft, onDraftChange, errors = {} }) {
+  const pending = usePendingAttrs()
   if (!(isMaritimeCategory(draft.category) || isAirCategory(draft.category))) return null
   if (!FREE_TIME_CATEGORIES.includes(draft.category)) return null
 
@@ -234,10 +244,10 @@ export function ProcessFreeTimeFields({ draft, onDraftChange, errors = {} }) {
       <h4 className="form-group__title">Free time</h4>
       <small className="field-hint">O prazo conta a partir da presença de carga.</small>
       <div className="form-grid form-grid--numeric">
-        <label className="field">
+        <label className="field" {...pending('freeTimeDays')}>
           <span>Free time (dias)</span>
           <input
-            className="text-input"
+            className="text-input text-input--mono"
             type="number"
             min="0"
             step="1"
@@ -250,11 +260,12 @@ export function ProcessFreeTimeFields({ draft, onDraftChange, errors = {} }) {
               {errors.freeTimeDays}
             </small>
           ) : null}
+          <PendingFieldHint field="freeTimeDays" />
         </label>
         <label className="field">
           <span>Diária de demurrage (USD, opcional)</span>
           <input
-            className="text-input"
+            className="text-input text-input--mono"
             type="number"
             min="0"
             step="0.01"

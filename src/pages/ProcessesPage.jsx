@@ -1866,10 +1866,18 @@ export default function ProcessesPage() {
     }
   }
 
-  const isDesktopList = isDesktopLayout && viewMode === 'list'
+  // Refino F4d: no desktop (>= 1041px) criar/editar abre como MODAL sobre a propria
+  // pagina (ProcessoForm.dc.html): criar fica sobre a lista, editar sobre o detalhe
+  // do processo. Tablet/mobile seguem como antes (a vista do formulario substitui a
+  // pagina). Fechar o modal de edicao devolve o detalhe; o de criacao, a lista.
+  const isFormDialog = isDesktopLayout && isAdmin && (viewMode === 'create' || viewMode === 'edit')
+  const pageBehindForm = isFormDialog ? (viewMode === 'edit' && selectedProcess ? 'detail' : 'list') : null
+  const showList = viewMode === 'list' || pageBehindForm === 'list'
+  const showDetail = (viewMode === 'detail' || pageBehindForm === 'detail') && Boolean(selectedProcess)
+  const isDesktopList = isDesktopLayout && showList
   // Refino F4c: no detalhe desktop o cabecalho e' o card do proprio processo
   // (Processo.dc.html); a pagina nao repete o titulo "Fila de chegadas".
-  const isDesktopDetail = isDesktopLayout && viewMode === 'detail' && Boolean(selectedProcess)
+  const isDesktopDetail = isDesktopLayout && showDetail
 
   return (
     <section
@@ -1886,7 +1894,7 @@ export default function ProcessesPage() {
       {error ? <div className="error-banner">{error}</div> : null}
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
 
-      {viewMode === 'list' ? (
+      {showList ? (
         <ProcessListView
           rootClassName={listReturnClass}
           filteredProcesses={filteredProcesses}
@@ -1969,7 +1977,9 @@ export default function ProcessesPage() {
           dtaStatusOptions={dtaStatusOptions}
           processCategoryOptions={processCategoryOptions}
           onDraftChange={handleDraftChange}
-          onSetViewModeList={() => requestLeave(() => setViewMode('list'))}
+          onSetViewModeList={() =>
+            requestLeave(() => setViewMode(pageBehindForm === 'detail' ? 'detail' : 'list'))
+          }
           onSave={handleSaveProcess}
           onImportItemsFile={handleImportItemsFile}
           onAddItem={handleAddItem}
@@ -2020,7 +2030,7 @@ export default function ProcessesPage() {
         />
       ) : null}
 
-      {viewMode === 'detail' && selectedProcess ? (
+      {showDetail ? (
         <ProcessDetailView
           selectedProcess={selectedProcess}
           detailTab={detailTab}

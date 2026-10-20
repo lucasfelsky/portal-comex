@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSwipe } from '../../hooks/useSwipe'
+import useMediaQuery from '../../hooks/useMediaQuery'
 import Spinner from '../../components/Spinner'
 import SelectField from '../../components/SelectField'
 import Icon from '../../components/Icon'
@@ -28,6 +29,10 @@ import ProcessItemDangerousGoodsFields from './ProcessItemDangerousGoodsFields'
 import LicensesEditor from './LicensesEditor'
 import PurchaseOrdersEditor from './PurchaseOrdersEditor'
 import ErpFormFieldHint from './ErpFormFieldHint'
+import PendingFieldHint from './PendingFieldHint'
+import ProcessFormDialog from './ProcessFormDialog'
+import { pendingAttrsFor } from './processFormContext'
+import { getPendingFields } from './pendingFields'
 import { getProcessPurchaseOrders, getPurchaseOrderNumbers } from './purchaseOrders'
 import { EMPTY_ERP_HINTS, buildErpFormHints, erpItemGroupKey, erpOrderKey } from '../erp/erpReference'
 import {
@@ -35,6 +40,19 @@ import {
   isFutureShipment,
   isShipmentConfirmed,
 } from './shipmentConfirmation'
+
+// Refino F4d: >= 1041px o formulario abre como modal (ProcessFormDialog); abaixo
+// disso segue a vista legada dentro da pagina (mesmo breakpoint do restante do desktop).
+const DESKTOP_QUERY = '(min-width: 1041px)'
+const EMPTY_PENDING = new Set()
+const FIRST_CONTROL_SELECTOR =
+  'input:not([type=hidden]):not([type=file]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+// "Completar agora" sem campo com id no passo (ex.: lacre de contêiner): o 1o campo marcado como pendente.
+const FIRST_PENDING_CONTROL_SELECTOR = [
+  "[data-pending='true'] input:not([type=hidden]):not([disabled])",
+  "[data-pending='true'] select:not([disabled])",
+  "[data-pending='true'] textarea:not([disabled])",
+].join(', ')
 
 const EMPTY_RETURN_EDITABLE_STATUSES = [
   'Aguardando agendamento de coleta',
@@ -104,6 +122,23 @@ export default function ProcessForm({
   }, [viewMode, erpReference, draft])
   const erpHintsForFields = erpActive ? erpHints : null
 
+  // Refino F4d: no desktop o formulario e' um modal. "Dado pendente" (borda de aviso
+  // + dica) so existe no desktop e so em edicao, calculado sobre o RASCUNHO: o aviso
+  // some quando o campo e' preenchido. `pending(field)` devolve o atributo que liga
+  // a borda (CSS); o <PendingFieldHint> do campo le o mesmo conjunto pelo contexto.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const pendingFieldKeys = useMemo(() => {
+    if (!isDesktop || viewMode !== 'edit' || !draft) return EMPTY_PENDING
+    // `field` (campo do formulario) e `id` (regra) - os editores de lista usam o `id`.
+    return new Set(getPendingFields(draft).flatMap((item) => [item.field, item.id]))
+  }, [isDesktop, viewMode, draft])
+  const isFieldPending = useCallback((key) => pendingFieldKeys.has(key), [pendingFieldKeys])
+  const pending = pendingAttrsFor(isFieldPending)
+  const dialogContext = useMemo(
+    () => ({ desktop: true, isPending: isFieldPending }),
+    [isFieldPending]
+  )
+
   const formatDate = (value) => {
     if (!value) return '-'
     const date = new Date(`${value}T00:00:00`)
@@ -153,7 +188,7 @@ export default function ProcessForm({
 
   const renderIdentificationStep = () => (
     <>
-      <label className="field">
+      <label className="field field--wide" {...pending('name')}>
         <span>Nome do processo</span>
         <input
           className="text-input"
@@ -162,22 +197,24 @@ export default function ProcessForm({
           onChange={(event) => onDraftChange('name', event.target.value)}
           placeholder="Ex.: Importação Atlas"
         />
+        <PendingFieldHint field="name" />
       </label>
 
       <div className="form-grid form-grid--3">
         {draft.category !== 'CONSOLIDADO' ? (
-          <label className="field">
+          <label className="field" {...pending('processNumber')}>
             <span>Código do processo</span>
             <input
-              className="text-input"
+              className="text-input text-input--mono"
               type="text"
               value={draft.processNumber}
               onChange={(event) => onDraftChange('processNumber', event.target.value)}
               placeholder="Número do processo"
             />
+            <PendingFieldHint field="processNumber" />
           </label>
         ) : null}
-        <label className="field">
+        <label className="field" {...pending('category')}>
           <span>Categoria</span>
           <SelectField
             className="text-input"
@@ -188,9 +225,10 @@ export default function ProcessForm({
               <option key={item} value={item}>{item}</option>
             ))}
           </SelectField>
+          <PendingFieldHint field="category" />
         </label>
         <ErpFormFieldHint active={erpActive} hint={erpHints.fields.destination} onDraftChange={onDraftChange}>
-          <label className="field">
+          <label className="field" {...pending('destination')}>
             <span>Destino</span>
             <input
               className="text-input"
@@ -199,6 +237,7 @@ export default function ProcessForm({
               onChange={(event) => onDraftChange('destination', event.target.value)}
               placeholder="Porto ou aeroporto de destino"
             />
+            <PendingFieldHint field="destination" />
           </label>
         </ErpFormFieldHint>
       </div>
@@ -206,7 +245,7 @@ export default function ProcessForm({
       <div className="form-grid">
         {draft.category !== 'CONSOLIDADO' ? (
           <ErpFormFieldHint active={erpActive} hint={erpHints.fields.supplier} onDraftChange={onDraftChange}>
-            <label className="field">
+            <label className="field" {...pending('supplierName')}>
               <span>Fornecedor</span>
               <input
                 className="text-input"
@@ -214,11 +253,12 @@ export default function ProcessForm({
                 value={draft.supplierName}
                 onChange={(event) => onDraftChange('supplierName', event.target.value)}
               />
+              <PendingFieldHint field="supplierName" />
             </label>
           </ErpFormFieldHint>
         ) : null}
         <ErpFormFieldHint active={erpActive} hint={erpHints.fields.origin} onDraftChange={onDraftChange}>
-          <label className="field">
+          <label className="field" {...pending('originLocation')}>
             <span>Origem</span>
             <input
               className="text-input"
@@ -226,15 +266,16 @@ export default function ProcessForm({
               value={draft.originLocation}
               onChange={(event) => onDraftChange('originLocation', event.target.value)}
             />
+            <PendingFieldHint field="originLocation" />
           </label>
         </ErpFormFieldHint>
       </div>
 
       <ErpFormFieldHint active={erpActive} hint={erpHints.fields.incoterm} onDraftChange={onDraftChange}>
-        <label className="field">
+        <label className="field" {...pending('incoterm')}>
           <span>Incoterm</span>
           <SelectField
-            className="text-input"
+            className="text-input text-input--mono"
             value={draft.incoterm}
             onChange={(event) => onDraftChange('incoterm', event.target.value)}
             {...getFieldA11yProps('process-field-incoterm', fieldErrors.incoterm)}
@@ -249,6 +290,7 @@ export default function ProcessForm({
               {fieldErrors.incoterm}
             </small>
           ) : null}
+          <PendingFieldHint field="incoterm" />
         </label>
       </ErpFormFieldHint>
 
@@ -277,7 +319,7 @@ export default function ProcessForm({
         <div className="form-grid">
           <div className="field">
             <ErpFormFieldHint active={erpActive} hint={erpHints.fields.etd} onDraftChange={onDraftChange}>
-              <label className="field">
+              <label className="field" {...pending('etd')}>
                 <span>ETD</span>
                 <input
                   className="text-input"
@@ -291,9 +333,10 @@ export default function ProcessForm({
                     {fieldErrors.etd}
                   </small>
                 ) : null}
+                <PendingFieldHint field="etd" />
               </label>
             </ErpFormFieldHint>
-            <label className="checkbox-field">
+            <label className="checkbox-field" {...pending('shippedAt')}>
               <input
                 type="checkbox"
                 checked={isShipmentConfirmed(draft)}
@@ -301,6 +344,7 @@ export default function ProcessForm({
                 onChange={(event) => onDraftChange('shipmentConfirmed', event.target.checked)}
               />
               <span>Embarque confirmado</span>
+              <PendingFieldHint field="shippedAt" />
             </label>
             {!draft.etd && !isShipmentConfirmed(draft) ? (
               <small className="field-hint">Informe o ETD para confirmar o embarque.</small>
@@ -327,7 +371,7 @@ export default function ProcessForm({
           </div>
           <div className="field">
             <ErpFormFieldHint active={erpActive} hint={erpHints.fields.eta} onDraftChange={onDraftChange}>
-              <label className="field">
+              <label className="field" {...pending('eta')}>
                 <span>ETA</span>
                 <input
                   className="text-input"
@@ -341,6 +385,7 @@ export default function ProcessForm({
                     {fieldErrors.eta}
                   </small>
                 ) : null}
+                <PendingFieldHint field="eta" />
               </label>
             </ErpFormFieldHint>
             {viewMode === 'edit' && draft.etaOriginal ? (
@@ -562,7 +607,7 @@ export default function ProcessForm({
 
       {showCarrier ? (
         <div className="detail-card">
-          <label className="field">
+          <label className="field" {...pending('carrierName')}>
             <span>Transportadora</span>
             <input
               className="text-input"
@@ -570,6 +615,7 @@ export default function ProcessForm({
               value={draft.carrierName}
               onChange={(event) => onDraftChange('carrierName', event.target.value)}
             />
+            <PendingFieldHint field="carrierName" />
           </label>
         </div>
       ) : null}
@@ -615,6 +661,7 @@ export default function ProcessForm({
       <div className="card-heading process-detail-card-heading process-detail-card-heading--end">
         <div>
           <span className="detail-label">Itens do processo</span>
+          <PendingFieldHint field={['items', 'itemPoNumber', 'itemUnNumber', 'itemImoClass']} />
           <p>Nome comercial e quantidade vinculados ao processo. A importação aceita planilhas Excel com colunas de nome e quantidade.</p>
         </div>
         <div className="admin-toolbar">
@@ -670,7 +717,7 @@ export default function ProcessForm({
                 <span className="editor-row__label">PO</span>
                 {consolidatedPurchaseOrders.length > 0 ? (
                   <SelectField
-                    className="text-input"
+                    className="text-input text-input--mono"
                     value={item.poNumber ?? ''}
                     onChange={(event) => onItemChange(item.id, 'poNumber', event.target.value)}
                   >
@@ -693,7 +740,7 @@ export default function ProcessForm({
                 <label className="field">
                   <span className="editor-row__label">Quantidade</span>
                   <input
-                    className="text-input"
+                    className="text-input text-input--mono"
                     type="number"
                     min="0"
                     value={item.quantity}
@@ -832,6 +879,54 @@ export default function ProcessForm({
 
     row.scrollLeft = active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2
   }, [currentStep])
+
+  // Refino F4d: foco inicial do modal. O <Modal> foca o 1o elemento focavel 30 ms
+  // depois de abrir (o "x" do cabecalho) — aqui o alvo e' o campo pedido por
+  // "Completar agora" (`focusRequest`, ja renderizado no passo certo) ou, sem
+  // pedido, o 1o campo do passo. Atualizado a cada passo: o Modal le o ref so' no
+  // disparo do timer, depois dos efeitos abaixo.
+  const panelRef = useRef(null)
+  const initialFocusRef = useRef(null)
+  useEffect(() => {
+    if (!isDesktop) return
+    const requested = focusRequest?.nonce
+      ? document.getElementById(getProcessFieldDomId(focusRequest.key))
+      : null
+    const firstPending = focusRequest?.nonce
+      ? panelRef.current?.querySelector(FIRST_PENDING_CONTROL_SELECTOR)
+      : null
+    initialFocusRef.current =
+      requested ?? firstPending ?? panelRef.current?.querySelector(FIRST_CONTROL_SELECTOR) ?? null
+  }, [isDesktop, currentStep, focusRequest?.nonce, focusRequest?.key])
+
+  if (isDesktop) {
+    return (
+      <ProcessFormDialog
+        viewMode={viewMode}
+        draft={draft}
+        steps={steps}
+        currentStep={currentStep}
+        onSelectStep={setStep}
+        stepHasError={stepHasError}
+        errorCount={errorCount}
+        derivedProcessStatus={derivedProcessStatus}
+        displayedProcessStatus={displayedProcessStatus}
+        isSaving={isSaving}
+        isFirstStep={isFirstStep}
+        isLastStep={isLastStep}
+        onClose={onSetViewModeList}
+        onBack={() => setStep(Math.max(currentStep - 1, 0))}
+        onNext={() => setStep(Math.min(currentStep + 1, steps.length - 1))}
+        onSave={onSave}
+        onClickCapture={onClickCapture}
+        panelRef={panelRef}
+        initialFocusRef={initialFocusRef}
+        contextValue={dialogContext}
+      >
+        {steps[currentStep].render()}
+      </ProcessFormDialog>
+    )
+  }
 
   return (
     <article className="list-card view-push process-form" style={{ marginTop: '16px' }}>

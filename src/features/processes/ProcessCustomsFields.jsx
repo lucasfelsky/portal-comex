@@ -10,6 +10,8 @@ import {
 } from './arrivalCustoms'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import ErpFormFieldHint from './ErpFormFieldHint'
+import PendingFieldHint from './PendingFieldHint'
+import { usePendingAttrs } from './processFormContext'
 
 // F17.3a (D-10 item 2): DUIMP + canal + "Desembaraço concluído em" - JSX
 // movido de `ProcessForm.jsx` (renderFlowStep, duplicado maritimo/aereo)
@@ -31,6 +33,7 @@ export default function ProcessCustomsFields({
   erpHints = null,
 }) {
   const erpActive = Boolean(erpHints)
+  const pending = usePendingAttrs()
   const hasRegistrationSignal = hasDuimpRegistrationSignal(draft)
   const hasParameterization = hasParameterizationSignal(draft)
   const channel = draft.parameterizationChannel
@@ -49,19 +52,20 @@ export default function ProcessCustomsFields({
 
       <div className="form-grid">
         <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.duimpNumber} onDraftChange={onDraftChange}>
-          <label className="field">
+          <label className="field" {...pending('duimpNumber')}>
             <span>Nº da DUIMP</span>
             <input
-              className="text-input"
+              className="text-input text-input--mono"
               type="text"
               value={draft.duimpNumber}
               onChange={(event) => onDraftChange('duimpNumber', event.target.value)}
             />
+            <PendingFieldHint field="duimpNumber" />
           </label>
         </ErpFormFieldHint>
 
         {hasParameterization ? (
-          <label className="field">
+          <label className="field" {...pending('parameterizationChannel')}>
             <span>Canal da parametrização</span>
             <SelectField
               className="text-input"
@@ -73,6 +77,7 @@ export default function ProcessCustomsFields({
                 <option key={item} value={item}>{item}</option>
               ))}
             </SelectField>
+            <PendingFieldHint field="parameterizationChannel" />
           </label>
         ) : null}
       </div>
@@ -83,7 +88,7 @@ export default function ProcessCustomsFields({
           hint={erpHints?.fields?.duimpRegisteredAt}
           onDraftChange={onDraftChange}
         >
-          <label className="field">
+          <label className="field" {...pending('duimpRegisteredAt')}>
             <span>Registro da DUIMP (data e hora)</span>
             <input
               className="text-input"
@@ -106,11 +111,12 @@ export default function ProcessCustomsFields({
                 DUIMP registrada sem data (registro antigo) — informe a data e hora.
               </small>
             ) : null}
+            <PendingFieldHint field="duimpRegisteredAt" />
           </label>
         </ErpFormFieldHint>
 
         {hasRegistrationSignal ? (
-          <label className="field">
+          <label className="field" {...pending('parameterizedAt')}>
             <span>Parametrização (data e hora)</span>
             <input
               className="text-input"
@@ -133,6 +139,7 @@ export default function ProcessCustomsFields({
                 DUIMP parametrizada sem data (registro antigo) — informe a data e hora.
               </small>
             ) : null}
+            <PendingFieldHint field="parameterizedAt" />
           </label>
         ) : null}
       </div>
@@ -143,7 +150,7 @@ export default function ProcessCustomsFields({
 
       {showClearance ? (
         <div className="form-grid">
-          <label className="field">
+          <label className="field" {...pending('clearanceCompletedAt')}>
             <span>Desembaraço concluído em</span>
             <input
               className="text-input"
@@ -166,6 +173,7 @@ export default function ProcessCustomsFields({
                 ? 'Preenchido com a parametrização. Ajuste se preciso.'
                 : 'Obrigatório para liberar a coleta neste canal.'}
             </small>
+            <PendingFieldHint field="clearanceCompletedAt" />
           </label>
 
           {isRequirementChannel ? (
@@ -191,7 +199,7 @@ export default function ProcessCustomsFields({
       ) : null}
 
       {isInspectionChannel ? (
-        <label className="field">
+        <label className="field" {...pending('customsInspectionScheduledAt')}>
           <span>Conferência agendada para</span>
           <input
             className="text-input"
@@ -209,22 +217,24 @@ export default function ProcessCustomsFields({
               {errors.customsInspectionScheduledAt}
             </small>
           ) : null}
+          <PendingFieldHint field="customsInspectionScheduledAt" />
         </label>
       ) : null}
 
       {isRequirementChannel && draft.customsRequirement && !isCinza ? (
-        <label className="field">
+        <label className="field" {...pending('customsRequirementNotes')}>
           <span>Descrição da exigência</span>
           <textarea
             className="text-input text-area"
             value={draft.customsRequirementNotes}
             onChange={(event) => onDraftChange('customsRequirementNotes', event.target.value)}
           />
+          <PendingFieldHint field="customsRequirementNotes" />
         </label>
       ) : null}
 
       {isCinza ? (
-        <label className="field">
+        <label className="field" {...pending('customsRequirementNotes')}>
           <span>Procedimento especial (canal Cinza)</span>
           <textarea
             className="text-input text-area"
@@ -232,6 +242,7 @@ export default function ProcessCustomsFields({
             onChange={(event) => onDraftChange('customsRequirementNotes', event.target.value)}
           />
           <small className="field-hint">Descreva o procedimento especial e, se houver, a exigência.</small>
+          <PendingFieldHint field="customsRequirementNotes" />
         </label>
       ) : null}
     </div>

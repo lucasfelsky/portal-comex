@@ -1572,6 +1572,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/processes/ProcessDetailView.jsx': [6, 3, 2],
   'features/processes/ProcessDocumentsPanel.jsx': [15, 1, 12],
   'features/processes/ProcessForm.jsx': [7, 5, 0],
+  // F4d: o rodape do modal (ProcessFormDialog) tem 1 fantasma (Voltar); Salvar = .secondary-button, Avancar = .primary-button.
+  'features/processes/ProcessFormDialog.jsx': [1, 0, 0],
   'features/processes/ProcessHistoryPanel.jsx': [1, 1, 0],
   // F4b: o desktop vive em ProcessListDesktop: Arquivados = fantasma; Exportar/Importar = .secondary-button.
   'features/processes/ProcessListDesktop.jsx': [1, 0, 0],
@@ -2155,7 +2157,8 @@ describe('F4b - JSX/markup', () => {
 
   it('a pagina troca o cabecalho so no desktop da lista (surface--arrivals) e passa totalCount', () => {
     expect(page).toContain("useMediaQuery('(min-width: 1041px)')")
-    expect(page).toContain("isDesktopLayout && viewMode === 'list'")
+    // F4d: `showList` = lista OU lista atras do modal de criacao
+    expect(page).toContain('const isDesktopList = isDesktopLayout && showList')
     expect(page).toContain("' surface--arrivals'")
     expect(page).toContain('totalCount={processes.length - archivedProcesses.length}')
   })
@@ -2220,7 +2223,7 @@ const f4cAt = css.indexOf(F4C_MARKER)
 const f4cStart = css.lastIndexOf('/*', f4cAt)
 const f4cCompactAt = css.indexOf(F4C_COMPACT_MARKER)
 const f4cCompactStart = css.lastIndexOf('/*', f4cCompactAt)
-const f4cEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f4cEnd = css.lastIndexOf('/*', css.indexOf('REFINO VISUAL F4d — FORMULARIO DE PROCESSO EM MODAL'))
 const f4cMainBody = bodyAfter(stripComments(css.slice(f4cStart, f4cCompactAt)), DESKTOP_MEDIA)
 const f4cRules = parseRules(f4cMainBody)
 const f4cCompactRules = parseRules(
@@ -2489,7 +2492,8 @@ describe('F4c - JSX/markup', () => {
   })
 
   it('a pagina esconde o titulo da fila no detalhe desktop (surface--process-detail)', () => {
-    expect(page).toContain("isDesktopLayout && viewMode === 'detail' && Boolean(selectedProcess)")
+    // F4d: `showDetail` = detalhe OU detalhe atras do modal de edicao
+    expect(page).toContain('const isDesktopDetail = isDesktopLayout && showDetail')
     expect(page).toContain("' surface--process-detail'")
   })
 
@@ -2827,5 +2831,325 @@ describe('F4c - ajustes finos da conferencia visual', () => {
     expectF4c('.process-detail-view .pdv-panel .process-block--cargo .detail-dl__row--wide dd', ['font-family: inherit', 'font-size: 13px'])
     expectF4c('.process-detail-view .pdv-panel .documents-combine__label', ['text-transform: none', 'font-size: 12px'])
     expectF4c('.process-detail-view .pdv-panel .documents-row__previous svg', ['display: none'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4d - Formulario de processo em MODAL no desktop (ProcessoForm.dc.html). O dialogo
+// (ProcessFormDialog.jsx, `pfd-*`) e escolhido por matchMedia; tablet e mobile ficam
+// na vista legada dentro da pagina. CSS = uma secao "REFINO VISUAL F4d" com UM @media
+// desktop (+ o compacto de notebook), toda regra sob o modal `.process-form-modal` ou
+// a raiz `.process-form--dialog`.
+// ---------------------------------------------------------------------------
+const F4D_MARKER = 'REFINO VISUAL F4d — FORMULARIO DE PROCESSO EM MODAL'
+const F4D_COMPACT_MARKER = 'Notebook / telas baixas (altura <= 800): o dialogo ocupa a janela'
+const f4dAt = css.indexOf(F4D_MARKER)
+const f4dStart = css.lastIndexOf('/*', f4dAt)
+const f4dCompactAt = css.indexOf(F4D_COMPACT_MARKER)
+const f4dCompactStart = css.lastIndexOf('/*', f4dCompactAt)
+const f4dEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f4dMainBody = bodyAfter(stripComments(css.slice(f4dStart, f4dCompactAt)), DESKTOP_MEDIA)
+const f4dRules = parseRules(f4dMainBody)
+const f4dCompactRules = parseRules(
+  bodyAfter(stripComments(css.slice(f4dCompactAt, f4dEnd)), '@media (min-width: 1041px) and (max-height: 800px) {'),
+)
+
+function f4dDecls(selector, rules = f4dRules) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F4d: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectF4d(selector, declarations, rules) {
+  const body = f4dDecls(selector, rules)
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F4d - secao, escopo e ordem', () => {
+  it('a secao existe, vem antes do bloco reduce desktop e tem UM @media desktop (+ o compacto), nada fora', () => {
+    expect(f4dAt).toBeGreaterThan(0)
+    expect(f4dCompactAt).toBeGreaterThan(f4dAt)
+    expect(f4dEnd).toBeGreaterThan(f4dCompactAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f4dEnd)
+    const before = stripComments(css.slice(f4dStart, css.indexOf(DESKTOP_MEDIA, f4dAt)))
+    expect(before.trim(), 'nada fora do @media antes do bloco principal').toBe('')
+    expect(f4dMainBody).not.toMatch(/@media/)
+    const outside = stripComments(css.slice(f4dStart, f4dCompactStart)).replace(f4dMainBody, '')
+    expect(outside.replace(/@media \(min-width: 1041px\) \{\s*\}/, '').trim()).toBe('')
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail.match(/@media/g)).toHaveLength(1)
+  })
+
+  it('nenhum @media (max-width) e toda regra comeca pelo modal (.process-form-modal) ou pela raiz .process-form--dialog', () => {
+    const whole = stripComments(css.slice(f4dStart, f4dEnd))
+    expect(whole).not.toMatch(/@media\s*\(max-width/)
+    const ROOT =
+      /^(\[data-theme='dark'\] )?(\.modal-backdrop\.process-form-modal-backdrop|\.modal\.process-form-modal|\.process-form-modal |\.process-form--dialog)/
+    for (const rule of [...f4dRules, ...f4dCompactRules]) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(ROOT)
+    }
+  })
+
+  it('so tokens: as unicas cores literais sao o branco do botao do switch e as sombras do mock', () => {
+    const all = [...f4dRules, ...f4dCompactRules].map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toEqual(['#ffffff'])
+    expect(all.match(/rgba?\([^)]*\)/g)).toEqual(['rgba(0, 0, 0, 0.2)'])
+  })
+
+  it('o legado de tablet/mobile (.process-form.list-card, wizard-nav) nao foi tocado: nenhuma regra F4d o menciona', () => {
+    const whole = stripComments(css.slice(f4dStart, f4dEnd))
+    expect(whole).not.toContain('.list-card')
+    expect(whole).not.toContain('.wizard-nav')
+    expect(whole).not.toContain('.wizard-header')
+  })
+
+  it('notebook.css e mobile-redesign.css nao ganharam o desktop novo', () => {
+    expect(read('src/notebook.css')).not.toContain('pfd-')
+    expect(read('src/mobile-redesign.css')).not.toContain('pfd-')
+    expect(read('src/mobile-redesign.css')).not.toContain('process-form-modal')
+  })
+
+  it('reduce desktop: switch e barras do stepper sem transicao, no bloco existente', () => {
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    for (const selector of [
+      '.process-form--dialog .process-form-switch__knob',
+      '.process-form--dialog .process-form-switch__track',
+      '.process-form--dialog .pfd-step__bar',
+    ]) {
+      expect(tail, selector).toContain(selector)
+    }
+  })
+})
+
+describe('F4d - valores do mock (ProcessoForm.dc.html)', () => {
+  it('dialogo: 960 x 800 (frame 1040x880 com 40px de scrim), raio 22, --shadow-xl, --scrim; coluna sem padding', () => {
+    expectF4d('.modal-backdrop.process-form-modal-backdrop', ['padding: 40px', 'background: var(--scrim)'])
+    expectF4d('.modal.process-form-modal', [
+      'display: flex',
+      'flex-direction: column',
+      'width: min(960px, 100%)',
+      'height: min(800px, calc(100vh - 80px))',
+      'padding: 0',
+      'border-radius: 22px',
+      'background: var(--surface)',
+      'box-shadow: var(--shadow-xl)',
+      'overflow: hidden',
+    ])
+    expectF4d('.process-form-modal .modal__body', ['display: flex', 'flex: 1 1 auto', 'flex-direction: column', 'min-height: 0'])
+  })
+
+  it('cabecalho: padding 24/28/18, gap 16, borda --row-divider; titulo Sora 22/700 -0.01em; chip mono 12 em --navy-50', () => {
+    expectF4d('.process-form--dialog .pfd-header', ['gap: 16px', 'padding: 24px 28px 18px', 'border-bottom: 1px solid var(--row-divider)', 'flex: 0 0 auto'])
+    expectF4d('.process-form--dialog .pfd-title', [
+      'font-family: var(--font-heading)',
+      'font-size: 22px',
+      'font-weight: 700',
+      'letter-spacing: -0.01em',
+    ])
+    expectF4d('.process-form--dialog .pfd-chip', [
+      'padding: 3px 10px',
+      'border-radius: var(--radius-full)',
+      'background: var(--navy-50)',
+      'color: var(--navy)',
+      'font-family: var(--font-mono)',
+      'font-size: 12px',
+    ])
+    expectF4d("[data-theme='dark'] .process-form--dialog .pfd-chip", ['color: var(--ink)'])
+    expectF4d('.process-form--dialog .pfd-subtitle', ['font-size: 13px', 'color: var(--ink-soft)'])
+    expectF4d('.process-form--dialog .pfd-header__titles', ['gap: 6px'])
+    expectF4d('.process-form--dialog .pfd-header__title-row', ['gap: 10px', 'align-items: center'])
+  })
+
+  it('fechar: 44x44, raio 12, fundo --surface-alt, sem borda', () => {
+    expectF4d('.process-form--dialog .pfd-close', [
+      'width: 44px',
+      'height: 44px',
+      'border: 0',
+      'border-radius: 12px',
+      'background: var(--surface-alt)',
+      'color: var(--ink)',
+    ])
+  })
+
+  it('stepper: 6 colunas gap 8; barra 4px (concluida --primary-700, atual --primary, futura --disabled-bg); rotulo 12/600, atual 700; numero mono', () => {
+    expectF4d('.process-form--dialog .pfd-steps', ['display: grid', 'grid-template-columns: repeat(6, minmax(0, 1fr))', 'gap: 8px', 'list-style: none'])
+    expectF4d('.process-form--dialog .pfd-step__button', ['display: flex', 'flex-direction: column', 'gap: 8px'])
+    expectF4d('.process-form--dialog .pfd-step__bar', ['height: 4px', 'border-radius: 4px', 'background: var(--disabled-bg)'])
+    expectF4d('.process-form--dialog .pfd-step--done .pfd-step__bar', ['background: var(--primary-700)'])
+    expectF4d('.process-form--dialog .pfd-step--current .pfd-step__bar', ['background: var(--primary)'])
+    expectF4d('.process-form--dialog .pfd-step__label', ['font-size: 12px', 'font-weight: 600', 'gap: 6px', 'color: var(--ink-soft)'])
+    expectF4d('.process-form--dialog .pfd-step--current .pfd-step__label', ['font-weight: 700'])
+    expectF4d('.process-form--dialog .pfd-step--done .pfd-step__label', ['color: var(--ink)'])
+    expectF4d('.process-form--dialog .pfd-step__num', ['font-family: var(--font-mono)'])
+  })
+
+  it('corpo: rolavel (flex 1, min-height 0, overflow-y auto), padding 24/28, gap 18; eyebrow mono 11/600 1.5px; titulo Sora 18/700', () => {
+    expectF4d('.process-form--dialog .pfd-body', [
+      'flex: 1 1 auto',
+      'min-height: 0',
+      'padding: 24px 28px',
+      'gap: 18px',
+      'overflow-y: auto',
+    ])
+    expectF4d('.process-form--dialog .pfd-body__head', ['gap: 2px'])
+    expectF4d('.process-form--dialog .pfd-eyebrow', [
+      'font-family: var(--font-mono)',
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 1.5px',
+      'color: var(--primary-700)',
+    ])
+    expectF4d('.process-form--dialog .pfd-step-title', ['font-family: var(--font-heading)', 'font-size: 18px', 'font-weight: 700'])
+  })
+
+  it('grade de campos: 3 colunas, gap 16px 14px; os .form-grid do app entram nela (display: contents)', () => {
+    expectF4d('.process-form--dialog .pfd-panel', ['display: grid', 'grid-template-columns: repeat(3, minmax(0, 1fr))', 'gap: 16px 14px'])
+    expectF4d('.process-form--dialog .pfd-panel > .form-grid', ['display: contents'])
+    expectF4d('.process-form--dialog .pfd-panel > .form-group > .form-grid', ['display: contents'])
+    expectF4d('.process-form--dialog .pfd-panel > *', ['grid-column: 1 / -1'])
+    expectF4d('.process-form--dialog .pfd-panel > .field', ['grid-column: auto'])
+    expectF4d('.process-form--dialog .pfd-panel > .field:has(> textarea)', ['grid-column: 1 / -1'])
+  })
+
+  it('campo pendente: borda --warning e "Dado pendente" em --warning-700; dica 11/600 --ink-soft', () => {
+    expectF4d(".process-form--dialog [data-pending='true'] .text-input:not(:focus)", ['border-color: var(--warning)'])
+    expectF4d('.process-form--dialog .field-hint.field-hint--pending', ['color: var(--warning-700)'])
+    expectF4d('.process-form--dialog .field > .field-hint', ['font-size: 11px', 'font-weight: 600', 'color: var(--ink-soft)'])
+  })
+
+  it('Transbordo: linha em --surface-alt (raio 14, padding 14/16) com switch 52x32 (off --switch-off, botao 26 branco)', () => {
+    expectF4d('.process-form--dialog .process-form-switch-row', [
+      'display: flex',
+      'justify-content: space-between',
+      'gap: 16px',
+      'padding: 14px 16px',
+      'border-radius: 14px',
+      'background: var(--surface-alt)',
+    ])
+    expectF4d('.process-form--dialog .process-form-switch-row__title', ['font-size: 14px', 'font-weight: 700'])
+    expectF4d('.process-form--dialog .process-form-switch-row__hint', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4d('.process-form--dialog .process-form-switch', ['width: 52px', 'height: 32px'])
+    expectF4d('.process-form--dialog .process-form-switch__track', [
+      'width: 52px',
+      'height: 32px',
+      'padding: 3px',
+      'border-radius: var(--radius-full)',
+      'background: var(--switch-off)',
+    ])
+    expectF4d('.process-form--dialog .process-form-switch__knob', [
+      'width: 26px',
+      'height: 26px',
+      'border-radius: var(--radius-full)',
+      'background: #ffffff',
+      'box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2)',
+    ])
+    expectF4d('.process-form--dialog .process-form-switch__input:checked + .process-form-switch__track', ['background: var(--primary-700)'])
+    expectF4d('.process-form--dialog .process-form-switch__input:checked + .process-form-switch__track .process-form-switch__knob', [
+      'transform: translateX(20px)',
+    ])
+  })
+
+  it('rodape fixo: 16/28 em --surface-alt com borda superior; botoes 44 com gap 6 (Voltar 0/16, Salvar 0/16, Avancar 0/18)', () => {
+    expectF4d('.process-form--dialog .pfd-footer', [
+      'flex: 0 0 auto',
+      'justify-content: space-between',
+      'gap: 12px',
+      'padding: 16px 28px',
+      'border-top: 1px solid var(--row-divider)',
+      'background: var(--surface-alt)',
+    ])
+    expectF4d('.process-form--dialog .pfd-footer .ghost-button', ['padding: 0 16px'])
+    expectF4d('.process-form--dialog .pfd-footer .secondary-button', ['padding: 0 16px'])
+    expectF4d('.process-form--dialog .pfd-footer .primary-button', ['padding: 0 18px'])
+    expectF4d('.process-form--dialog .pfd-footer__actions', ['display: flex', 'gap: 8px'])
+  })
+
+  it('notebook (altura <= 800): dialogo na altura da janela (16px de scrim), cabecalho/corpo/rodape compactos', () => {
+    expectF4d('.modal-backdrop.process-form-modal-backdrop', ['padding: 16px'], f4dCompactRules)
+    expectF4d('.modal.process-form-modal', ['height: calc(100vh - 32px)'], f4dCompactRules)
+    expectF4d('.process-form--dialog .pfd-header', ['padding: 16px 24px 12px'], f4dCompactRules)
+    expectF4d('.process-form--dialog .pfd-body', ['padding: 16px 24px'], f4dCompactRules)
+    expectF4d('.process-form--dialog .pfd-footer', ['padding: 10px 24px'], f4dCompactRules)
+  })
+})
+
+describe('F4d - JSX/markup', () => {
+  const readLf = (rel) => read(rel).replace(/\r\n/g, '\n')
+  const noComments = (s) => stripComments(s).replace(/^\s*\/\/.*$/gm, '')
+  const dialog = readLf('src/features/processes/ProcessFormDialog.jsx')
+  const form = readLf('src/features/processes/ProcessForm.jsx')
+  const page = readLf('src/pages/ProcessesPage.jsx')
+  const transit = readLf('src/features/processes/ProcessTransitFields.jsx')
+
+  it('o dialogo usa o <Modal> em modo bare, sem fechar no scrim, com o foco inicial controlado', () => {
+    expect(dialog).toContain("import Modal from '../../components/Modal'")
+    expect(dialog).toMatch(/<Modal[\s\S]*?\bbare\b[\s\S]*?closeOnBackdrop=\{false\}[\s\S]*?initialFocusRef=\{initialFocusRef\}/)
+    expect(dialog).toContain('className="process-form-modal"')
+    expect(dialog).toContain('className="process-form process-form--dialog"')
+  })
+
+  it('cabecalho, stepper e rodape do mock: fechar, Voltar fantasma, Salvar secundario, Avancar primario com chevron', () => {
+    expect(dialog).toContain('aria-label="Fechar"')
+    expect(dialog).toContain('aria-label="Etapas do cadastro"')
+    expect(dialog).toContain("aria-current={index === currentStep ? 'step' : undefined}")
+    expect(dialog).toContain('`${stepDef.label}, contém erro`')
+    expect(dialog).toMatch(/className="ghost-button pfd-footer__back"/)
+    expect(dialog).toMatch(/className="secondary-button"/)
+    expect(dialog).toMatch(/className="primary-button" onClick=\{onNext\}/)
+    expect(dialog).toContain('name="chevron-right"')
+    expect(dialog).toContain('PASSO {currentStep + 1} DE {steps.length}')
+    expect(dialog).toContain('id="process-form-error-summary"')
+  })
+
+  it('ultimo passo: o salvar vira o primario e "Avançar" some', () => {
+    expect(dialog).toMatch(/isLastStep \? \(\s*<button type="button" className="primary-button" onClick=\{onSave\}/)
+  })
+
+  it('ProcessForm escolhe a arvore por matchMedia e mantem UMA instancia (o passo sobrevive a troca ao vivo)', () => {
+    expect(form).toContain("import useMediaQuery from '../../hooks/useMediaQuery'")
+    expect(form).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(form).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(form).toMatch(/if \(isDesktop\) \{\s*return \(\s*<ProcessFormDialog/)
+    // a vista legada continua (Avançar secundario, Voltar para lista)
+    expect(form).toContain('aria-label="Voltar para lista"')
+    expect(form).toMatch(/className="ghost-button ghost-button--secondary"\s*\n\s*onClick=\{\(\) => setStep\(Math\.min\(currentStep \+ 1/)
+  })
+
+  it('pendencias so no desktop e so em edicao, calculadas sobre o rascunho (getPendingFields)', () => {
+    expect(form).toContain("if (!isDesktop || viewMode !== 'edit' || !draft) return EMPTY_PENDING")
+    expect(form).toContain('getPendingFields(draft)')
+    expect(form).toContain('{...pending(')
+    expect(readLf('src/features/processes/PendingFieldHint.jsx')).toContain('Dado pendente')
+  })
+
+  it('Transbordo: switch (role=switch, aria-label "Transbordo") no desktop; checkbox legado no resto', () => {
+    expect(transit).toContain('const { desktop } = useProcessFormContext()')
+    expect(transit).toContain('role="switch"')
+    expect(transit).toContain('aria-label="Transbordo"')
+    expect(transit).toContain('Ative se a carga troca de navio no caminho.')
+    expect(transit).toContain('Esta carga tem transbordo?')
+  })
+
+  it('campos de codigo em .text-input--mono (PO, Incoterm, viagem, IMO, House BL, CE, DUIMP, contêiner, lacre, quantidade...)', () => {
+    const count = (rel) => (readLf(rel).match(/text-input--mono/g) ?? []).length
+    expect(count('src/features/processes/ProcessForm.jsx')).toBeGreaterThanOrEqual(4)
+    expect(count('src/features/processes/ProcessTransitFields.jsx')).toBeGreaterThanOrEqual(6)
+    expect(count('src/features/processes/ProcessCargoFields.jsx')).toBeGreaterThanOrEqual(7)
+    expect(count('src/features/processes/ProcessArrivalFields.jsx')).toBeGreaterThanOrEqual(4)
+    expect(count('src/features/processes/ProcessCustomsFields.jsx')).toBeGreaterThanOrEqual(1)
+    expect(count('src/features/processes/ContainersEditor.jsx')).toBe(2)
+  })
+
+  it('a pagina mantem o fundo (lista/detalhe) atras do scrim e fecha o modal de edicao no detalhe', () => {
+    expect(page).toContain("const isFormDialog = isDesktopLayout && isAdmin && (viewMode === 'create' || viewMode === 'edit')")
+    expect(page).toContain("const showList = viewMode === 'list' || pageBehindForm === 'list'")
+    expect(page).toContain("setViewMode(pageBehindForm === 'detail' ? 'detail' : 'list')")
+  })
+
+  it('sem toISOString nem console.log, sem hex nos JSX novos', () => {
+    for (const source of [dialog, readLf('src/features/processes/PendingFieldHint.jsx'), readLf('src/features/processes/processFormContext.js')]) {
+      expect(noComments(source)).not.toMatch(/toISOString\(\)|console\.log/)
+      expect(noComments(source)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    }
   })
 })

@@ -210,7 +210,8 @@ describe('F4c - detalhe desktop dentro da ProcessesPage', () => {
     const { container } = renderPage()
     await openDetail(container, user)
     await user.click(screen.getByRole('button', { name: 'Editar processo' }))
-    await waitFor(() => expect(container.querySelector('.process-form')).not.toBeNull())
+    // F4d: no desktop o formulario e um modal (portal no body), nao um filho da pagina
+    await waitFor(() => expect(document.querySelector('.process-form--dialog')).not.toBeNull())
     expect(document.getElementById('process-field-etd')?.matches(':focus') ?? false).toBe(false)
   })
 })

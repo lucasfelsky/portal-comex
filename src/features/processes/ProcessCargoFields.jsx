@@ -1,6 +1,8 @@
 import ContainersEditor from './ContainersEditor'
 import { getImoClassLabel, isLegacyProcessDangerousGoods } from './operationalOptions'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import PendingFieldHint from './PendingFieldHint'
+import { usePendingAttrs } from './processFormContext'
 
 // F17.2a (D-11): carga por modal (containers/pesos) + carga perigosa.
 // F17.2d-1 (D-4/D-5/D-7, Q2/Q4): cubagem opcional em FCL/CONSOLIDADO; carga
@@ -12,6 +14,7 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 // UX-6b-1: grupo "Medidas" (`.form-grid.form-grid--numeric`) recebe tambem a
 // "Quantidade de pallets", movida de ProcessForm.jsx.
 export default function ProcessCargoFields({ draft, onDraftChange, disabled = false, errors = {} }) {
+  const pending = usePendingAttrs()
   const isFclOrConsolidado = draft.category === 'FCL' || draft.category === 'CONSOLIDADO'
   const isLcl = draft.category === 'LCL'
   const isAereo = draft.category === 'AEREO'
@@ -32,10 +35,10 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
         <h4 className="form-group__title">Medidas</h4>
         <div className="form-grid form-grid--numeric">
           {isFclOrConsolidado ? (
-            <label className="field">
+            <label className="field" {...pending('volumeM3')}>
               <span>Cubagem (m³)</span>
               <input
-                className="text-input"
+                className="text-input text-input--mono"
                 type="number"
                 min="0"
                 step="0.01"
@@ -48,15 +51,16 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                   {errors.volumeM3}
                 </small>
               ) : null}
+              <PendingFieldHint field="volumeM3" />
             </label>
           ) : null}
 
           {isLcl ? (
             <>
-              <label className="field">
+              <label className="field" {...pending('grossWeightKg')}>
                 <span>Peso bruto (kg)</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="number"
                   min="0"
                   step="0.01"
@@ -73,11 +77,12 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                     {errors.grossWeightKg}
                   </small>
                 ) : null}
+                <PendingFieldHint field="grossWeightKg" />
               </label>
-              <label className="field">
+              <label className="field" {...pending('volumeM3')}>
                 <span>Cubagem (m³)</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="number"
                   min="0"
                   step="0.01"
@@ -90,16 +95,17 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                     {errors.volumeM3}
                   </small>
                 ) : null}
+                <PendingFieldHint field="volumeM3" />
               </label>
             </>
           ) : null}
 
           {isAereo ? (
             <>
-              <label className="field">
+              <label className="field" {...pending('grossWeightKg')}>
                 <span>Peso bruto (kg)</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="number"
                   min="0"
                   step="0.01"
@@ -116,11 +122,12 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                     {errors.grossWeightKg}
                   </small>
                 ) : null}
+                <PendingFieldHint field="grossWeightKg" />
               </label>
-              <label className="field">
+              <label className="field" {...pending('chargeableWeightKg')}>
                 <span>Peso taxado (kg)</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="number"
                   min="0"
                   step="0.01"
@@ -137,11 +144,12 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                     {errors.chargeableWeightKg}
                   </small>
                 ) : null}
+                <PendingFieldHint field="chargeableWeightKg" />
               </label>
-              <label className="field">
+              <label className="field" {...pending('packagesQuantity')}>
                 <span>Volumes</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="number"
                   min="0"
                   step="1"
@@ -158,19 +166,21 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
                     {errors.packagesQuantity}
                   </small>
                 ) : null}
+                <PendingFieldHint field="packagesQuantity" />
               </label>
             </>
           ) : null}
 
-          <label className="field">
+          <label className="field" {...pending('palletQuantity')}>
             <span>Quantidade de pallets</span>
             <input
-              className="text-input"
+              className="text-input text-input--mono"
               type="number"
               min="0"
               value={draft.palletQuantity}
               onChange={(event) => onDraftChange('palletQuantity', event.target.value)}
             />
+            <PendingFieldHint field="palletQuantity" />
           </label>
         </div>
       </div>
@@ -178,6 +188,7 @@ export default function ProcessCargoFields({ draft, onDraftChange, disabled = fa
       {isLegacyProcessDangerousGoods(draft) ? (
         <div className="detail-card">
           <span className="detail-label">Carga perigosa (cadastro antigo)</span>
+          <PendingFieldHint field="dangerousGoodsPerItem" />
           <p>
             {[
               draft.unNumber ? `ONU ${draft.unNumber}` : null,

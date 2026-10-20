@@ -10,11 +10,16 @@
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import { getHouseBlInputValue } from './houseBl.js'
 import ErpFormFieldHint from './ErpFormFieldHint'
+import PendingFieldHint from './PendingFieldHint'
+import { useProcessFormContext, usePendingAttrs } from './processFormContext'
 
 // `erpHints` (opcional, so' admin em edicao): avisos "ERP" do formulario
 // (`buildErpFormHints`). Sem ele o DOM e' o de sempre.
 export default function ProcessTransitFields({ draft, onDraftChange, errors = {}, erpHints = null }) {
   const erpActive = Boolean(erpHints)
+  const pending = usePendingAttrs()
+  // Refino F4d: no modal (desktop) o transbordo e' uma linha com switch (ProcessoForm.dc.html).
+  const { desktop } = useProcessFormContext()
   const isMaritime =
     draft.category === 'FCL' || draft.category === 'LCL' || draft.category === 'CONSOLIDADO'
   const isAereo = draft.category === 'AEREO'
@@ -27,7 +32,7 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
           {isMaritime ? (
             <>
               <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.vessel} onDraftChange={onDraftChange}>
-                <label className="field">
+                <label className="field" {...pending('vesselName')}>
                   <span>Navio</span>
                   <input
                     className="text-input"
@@ -35,21 +40,23 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
                     value={draft.vesselName}
                     onChange={(event) => onDraftChange('vesselName', event.target.value)}
                   />
+                  <PendingFieldHint field="vesselName" />
                 </label>
               </ErpFormFieldHint>
-              <label className="field">
+              <label className="field" {...pending('voyage')}>
                 <span>Viagem</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="text"
                   value={draft.voyage}
                   onChange={(event) => onDraftChange('voyage', event.target.value)}
                 />
+                <PendingFieldHint field="voyage" />
               </label>
               <label className="field">
                 <span>IMO do navio</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
@@ -77,44 +84,47 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
 
           {isMaritime ? (
             <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.bl} onDraftChange={onDraftChange}>
-              <label className="field">
+              <label className="field" {...pending('houseBl')}>
                 <span>House BL</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="text"
                   value={getHouseBlInputValue(draft)}
                   onChange={(event) => onDraftChange('houseBl', event.target.value)}
                 />
+                <PendingFieldHint field="houseBl" />
               </label>
             </ErpFormFieldHint>
           ) : null}
 
           {isAereo ? (
             <>
-              <label className="field">
+              <label className="field" {...pending('flightNumber')}>
                 <span>Voo</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="text"
                   value={draft.flightNumber}
                   onChange={(event) => onDraftChange('flightNumber', event.target.value)}
                 />
+                <PendingFieldHint field="flightNumber" />
               </label>
               <ErpFormFieldHint active={erpActive} hint={erpHints?.fields?.bl} onDraftChange={onDraftChange}>
-                <label className="field">
+                <label className="field" {...pending('mawb')}>
                   <span>Master Air Waybill (MAWB)</span>
                   <input
-                    className="text-input"
+                    className="text-input text-input--mono"
                     type="text"
                     value={draft.mawb}
                     onChange={(event) => onDraftChange('mawb', event.target.value)}
                   />
+                  <PendingFieldHint field="mawb" />
                 </label>
               </ErpFormFieldHint>
               <label className="field">
                 <span>House Air Waybill (HAWB)</span>
                 <input
-                  className="text-input"
+                  className="text-input text-input--mono"
                   type="text"
                   value={draft.hawb}
                   onChange={(event) => onDraftChange('hawb', event.target.value)}
@@ -136,15 +146,39 @@ export default function ProcessTransitFields({ draft, onDraftChange, errors = {}
       </div>
 
       <div className="form-group">
-        <h4 className="form-group__title">Transbordo</h4>
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={Boolean(draft.transshipment)}
-            onChange={(event) => onDraftChange('transshipment', event.target.checked)}
-          />
-          <span>Esta carga tem transbordo?</span>
-        </label>
+        {desktop ? (
+          <div className="process-form-switch-row">
+            <div className="process-form-switch-row__text">
+              <span className="process-form-switch-row__title">Transbordo</span>
+              <span className="process-form-switch-row__hint">Ative se a carga troca de navio no caminho.</span>
+            </div>
+            <label className="process-form-switch">
+              <input
+                type="checkbox"
+                role="switch"
+                className="process-form-switch__input"
+                aria-label="Transbordo"
+                checked={Boolean(draft.transshipment)}
+                onChange={(event) => onDraftChange('transshipment', event.target.checked)}
+              />
+              <span className="process-form-switch__track" aria-hidden="true">
+                <span className="process-form-switch__knob" />
+              </span>
+            </label>
+          </div>
+        ) : (
+          <>
+            <h4 className="form-group__title">Transbordo</h4>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.transshipment)}
+                onChange={(event) => onDraftChange('transshipment', event.target.checked)}
+              />
+              <span>Esta carga tem transbordo?</span>
+            </label>
+          </>
+        )}
         {draft.transshipment ? (
           <div className="form-grid">
             <label className="field">
