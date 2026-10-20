@@ -1868,7 +1868,11 @@ describe('F4a - valores do mock (Dashboard.dc.html)', () => {
     expectF4a('.surface--dashboard .dash-stages__item--now .dash-stages__label', ['font-weight: 700'])
     expectF4a('.surface--dashboard .dash-facts', ['grid-template-columns: repeat(3, minmax(0, 1fr))', 'gap: 8px', 'padding-top: 10px', 'border-top: 1px solid var(--row-divider)'])
     expectF4a('.surface--dashboard .dash-facts__item dt', ['font-size: 11px', 'color: var(--ink-soft)'])
-    expectF4a('.surface--dashboard .dash-facts__item dd', ['font-size: 13px', 'font-weight: 700'])
+    expectF4a('.surface--dashboard .dash-facts__item dd', ['font-size: 13px', 'font-weight: 700', 'overflow-wrap: break-word'])
+    // valor longo ocupa a linha inteira (3 colunas continuam para os curtos)
+    expectF4a('.surface--dashboard .dash-facts__item--wide', ['grid-column: 1 / -1'])
+    expectF4a('.surface--dashboard .dash-fav__tags .process-derived-status-badge', ['height: 26px', 'font-size: 12px', 'text-transform: none'])
+    expect(f4aDecls('.surface--dashboard .dash-facts__item dd')).not.toContain('anywhere')
   })
 
   it('entrada: dash-rise = motion-rise 500 ms com atraso por variavel (0/80/160 ms no JSX)', () => {
@@ -1896,6 +1900,8 @@ describe('F4a - JSX/markup', () => {
   it('raiz .surface--dashboard e escolha desktop/legado por matchMedia (sem DOM duplicado)', () => {
     expect(dashboard).toContain('className="surface surface--dashboard"')
     expect(dashboard).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(dashboard).toContain('useMediaQuery(DESKTOP_QUERY)')
+    expect(readLf('src/hooks/useMediaQuery.js')).toContain('export default function useMediaQuery(query)')
     expect(dashboard).toContain('if (isDesktop) {')
     // a arvore legada continua la, intacta
     expect(dashboard).toContain('className="section-heading dashboard-heading"')

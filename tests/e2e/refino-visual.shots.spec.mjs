@@ -624,7 +624,12 @@ function buildProcesses() {
       shippedAt: dateKey(-40),
       berthed: true,
       berthedAt: `${dateKey(-9)}T07:30`,
+      // valores longos de proposito: DUIMP + canal e anuencias ocupam a linha inteira do cartao
       duimpStatus: 'Parametrizada',
+      licenses: [
+        { id: 'lic-1', agency: 'MAPA', status: 'Deferida' },
+        { id: 'lic-2', agency: 'ANVISA', status: 'Deferida' },
+      ],
       parameterizationChannel: 'Verde',
       clearanceCompletedAt: `${dateKey(-5)}T14:00`,
       collectionStatus: 'Coleta Agendada',

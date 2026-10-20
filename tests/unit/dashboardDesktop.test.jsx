@@ -450,3 +450,90 @@ describe('Dashboard desktop - Processos favoritos', () => {
     expect(loading.container.querySelectorAll('.dash-fav--skeleton')).toHaveLength(2)
   })
 })
+
+describe('Dashboard desktop - troca ao vivo da arvore (resize / rotacao)', () => {
+  function controllableMatchMedia(initial) {
+    const listeners = new Set()
+    let current = initial
+    window.matchMedia = (query) => ({
+      get matches() {
+        return current && query.includes('min-width: 1041px')
+      },
+      media: query,
+      addEventListener: (type, fn) => type === 'change' && listeners.add(fn),
+      removeEventListener: (type, fn) => type === 'change' && listeners.delete(fn),
+    })
+    return {
+      listeners,
+      fire(matches) {
+        current = matches
+        act(() => listeners.forEach((fn) => fn({ matches })))
+      },
+    }
+  }
+
+  const trees = (container) => ({
+    desktop: container.querySelector('.dash-head') !== null || container.querySelector('.dash-kpis') !== null,
+    legacy: container.querySelector('.dashboard-heading') !== null || container.querySelector('.dashboard-stat-row') !== null,
+  })
+
+  it('change true -> false -> true troca dash-* <-> dashboard-*, nunca as duas, sem recarregar dados e com listener limpo no unmount', async () => {
+    const media = controllableMatchMedia(true)
+    const { container, unmount } = await renderLoaded()
+    expect(trees(container)).toEqual({ desktop: true, legacy: false })
+    expect(media.listeners.size).toBe(1)
+
+    media.fire(false)
+    expect(trees(container)).toEqual({ desktop: false, legacy: true })
+    // os dados ficam no pai: a troca nao dispara nova consulta
+    expect(container.textContent).toContain('Janela de manutenção')
+
+    media.fire(true)
+    expect(trees(container)).toEqual({ desktop: true, legacy: false })
+    expect(container.textContent).toContain('Pigmento orgânico')
+
+    expect(mockListProcesses).toHaveBeenCalledTimes(1)
+    expect(mockListAnnouncements).toHaveBeenCalledTimes(1)
+    expect(mockGetBarStatus).toHaveBeenCalledTimes(1)
+
+    unmount()
+    expect(media.listeners.size).toBe(0)
+  })
+
+  it('comecando no tablet (false) tambem vai ao desktop quando a janela cresce', async () => {
+    const media = controllableMatchMedia(false)
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelector('.dashboard-heading')).toBeInTheDocument())
+    expect(trees(container)).toEqual({ desktop: false, legacy: true })
+    media.fire(true)
+    expect(trees(container)).toEqual({ desktop: true, legacy: false })
+  })
+})
+
+describe('Dashboard desktop - favoritos: status derivado visivel e fatos longos', () => {
+  it('status derivado e uma tag visivel (nao so title), junto dos selos de carga, fora do eyebrow', async () => {
+    const { container } = await renderLoaded()
+    const card = [...container.querySelectorAll('.dash-fav')].find((c) => c.textContent.includes('Emulsificante'))
+    const tags = card.querySelector('.dash-fav__tags')
+    const derived = tags.querySelector('.process-derived-status-badge')
+    expect(derived).toBeInTheDocument()
+    expect(derived.textContent.length).toBeGreaterThan(0)
+    expect(card.querySelector('.dash-fav__eyebrow').textContent).not.toContain(derived.textContent)
+    expect(card.querySelector('.dash-fav__eyebrow').hasAttribute('title')).toBe(false)
+    expect(tags.firstElementChild).toBe(derived)
+  })
+
+  it('fatos de valor longo (DUIMP, anuencias, coleta, janela) ocupam a linha inteira; os curtos nao', async () => {
+    const { container } = await renderLoaded()
+    const card = [...container.querySelectorAll('.dash-fav')].find((c) => c.textContent.includes('Emulsificante'))
+    const wideOf = (label) =>
+      [...card.querySelectorAll('.dash-facts__item')]
+        .find((item) => item.querySelector('dt').textContent === label)
+        ?.classList.contains('dash-facts__item--wide')
+    expect(wideOf('DUIMP')).toBe(true)
+    expect(wideOf('Coleta · contêiner 1')).toBe(true)
+    expect(wideOf('Presença de carga')).toBe(false)
+    expect(wideOf('Porto de atracação')).toBe(false)
+    expect(wideOf('Previsão de entrega')).toBe(false)
+  })
+})
