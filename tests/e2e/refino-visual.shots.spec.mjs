@@ -24,7 +24,9 @@
 // FCL/AEREO/CONSOLIDADO/carga recebida, estados vazios, menu e confirmacao de
 // exclusao, foco, usuario comum, logistica, notebook, tablet e mobile; F4d: formulario de
 // processo em modal — os 6 passos em editar/criar/AEREO/CONSOLIDADO, pendentes, validacao,
-// descartar alteracoes, notebook, tablet e mobile).
+// descartar alteracoes, notebook, tablet e mobile; F5a: Noticias (com e sem capas, detalhe, editor,
+// vazio, carregando), Notificacoes (10 filtros, grupos, Anteriores, silenciado, vazio),
+// Preferencias, notebook, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -974,6 +976,394 @@ PHASES.f4d = [
     afterShot: restoreViewport,
   },
 ]
+// ---------------------------------------------------------------------------
+// Refino F5a (Noticias.dc.html, Notificacoes.dc.html, Preferencias.dc.html):
+// lista de noticias com e sem capas, detalhe, editor (admin), vazio/carregando;
+// central de notificacoes em cada filtro, grupos, "Anteriores" aberto, silenciado,
+// vazio; modal de preferencias; notebook, tablet e mobile. A rolagem e do
+// .main-content: as capturas usam viewport mais alta (1440x1000 = prancheta do mock).
+// ---------------------------------------------------------------------------
+const emptyCollections = (collectionIds) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (collectionIds.some((id) => body.includes(`"collectionId":"${id}"`))) {
+      return route
+        .fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ readTime: new Date().toISOString() }]),
+        })
+        .catch(() => {})
+    }
+    return route.continue().catch(() => {})
+  })
+}
+const delayCollections = (collectionIds, ms) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (collectionIds.some((id) => body.includes(`"collectionId":"${id}"`))) {
+      await new Promise((resolve) => setTimeout(resolve, ms))
+    }
+    await route.continue().catch(() => {})
+  })
+}
+const newsDesktopReady = (page) => page.locator('.surface--news-desktop .nw-head__title').first()
+const newsLoaded = async (page) => {
+  await expect(page.locator('.surface--news-desktop .nw-card--featured:not(.nw-card--skeleton)')).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(300)
+}
+const NEWS_IDS = ['shot-news-1', 'shot-news-3', 'shot-news-5', 'shot-news-7']
+const stripCovers = async () => {
+  for (const id of NEWS_IDS) await patchFields('news', id, { coverImage: '' })
+  for (const id of ['shot-ext-2', 'shot-ext-4', 'shot-ext-6']) await patchFields('externalNews', id, { coverImage: '' })
+}
+const restoreCovers = async () => {
+  for (const [index, id] of NEWS_IDS.entries()) await patchFields('news', id, { coverImage: coverDataUri(index) })
+  for (const [index, id] of ['shot-ext-2', 'shot-ext-4', 'shot-ext-6'].entries()) {
+    await patchFields('externalNews', id, { coverImage: coverDataUri(index + 4) })
+  }
+}
+const notifLoaded = async (page) => {
+  await expect(page.locator('.notifications-page--desktop .nt-group').first()).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(300)
+}
+const notifReady = (page) => page.locator('.notifications-page--desktop .nt-head__title').first()
+
+const NOTIF_FILTERS = [
+  ['todas', 'Todas'],
+  ['duvidas', 'Dúvidas'],
+  ['respostas', 'Respostas'],
+  ['favoritos', 'Favoritos'],
+  ['pos-recebimento', 'Pós-recebimento'],
+  ['coleta', 'Coleta'],
+  ['divergencias', 'Divergências'],
+  ['anuencias', 'Anuências'],
+  ['alertas', 'Alertas'],
+  ['documentos', 'Documentos'],
+]
+
+PHASES.f5a = [
+  // --- noticias --------------------------------------------------------------------
+  {
+    name: 'noticias-lista-com-capas',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-hover-card',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--row').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-com-galeria-anexos-referencias',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1500)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__link').click()
+      await expect(page.locator('.nw-modal .nw-detail__title')).toBeVisible()
+      await expect(page.locator('.nw-modal .nw-detail__file').first()).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-fonte-externa',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--row', { hasText: 'Portos e Navios' }).locator('.nw-card__link').click()
+      await expect(page.getByRole('link', { name: 'Abrir fonte oficial' })).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-editor-editar',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1300)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__edit').click()
+      await expect(page.locator('.nw-editor')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-editor-nova',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.getByRole('button', { name: 'Nova notícia' }).click()
+      await expect(page.locator('.nw-editor')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-lista-sem-capas',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: async () => {
+      await stripCovers()
+    },
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+    },
+    afterShot: async (page) => {
+      await restoreCovers()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'noticias-vazio',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: emptyCollections(['news', 'externalNews']),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.surface--news-desktop .empty-state')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'noticias-carregando',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: delayCollections(['news', 'externalNews'], 4000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.surface--news-desktop .nw-card--skeleton').first()).toBeVisible()
+    },
+  },
+  // --- notificacoes -----------------------------------------------------------------
+  ...NOTIF_FILTERS.map(([slug, label]) => ({
+    name: `notificacoes-filtro-${slug}`,
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, slug === 'todas' ? 1700 : 1100)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: new RegExp(`^${label}`) }).click()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  })),
+  {
+    name: 'notificacoes-anteriores-aberto',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await notifLoaded(page)
+      await page.locator('.nt-older__toggle').first().click()
+      await page.locator('.nt-older__toggle').nth(1).click()
+      await expect(page.locator('.nt-older--open')).toHaveCount(2)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-ver-mais-anteriores',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: /^Ver mais \d+ anteriores/ }).click()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-silenciado',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: /Ativar modo não perturbe/ }).click()
+      await expect(page.locator('.nt-icon-button--active')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+    afterShot: async (page) => {
+      await page.getByRole('button', { name: /Desativar modo não perturbe/ }).click()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'notificacoes-hover-linha',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await notifLoaded(page)
+      await page.locator('.nt-row').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-vazio',
+    route: '/notifications',
+    ready: notifReady,
+    beforeGoto: emptyCollections(['notifications']),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.notifications-page--desktop .empty-state')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'notificacoes-carregando',
+    route: '/notifications',
+    ready: notifReady,
+    beforeGoto: delayCollections(['notifications'], 4000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.notifications-page--desktop [aria-busy="true"]')).toBeVisible()
+    },
+  },
+  // --- preferencias -----------------------------------------------------------------
+  {
+    name: 'preferencias-modal',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+  },
+  {
+    name: 'preferencias-modal-marcacoes',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.getByRole('checkbox', { name: 'Notícias: E-mail' }).uncheck({ force: true })
+      await page.getByRole('checkbox', { name: 'Suporte: Navegador' }).uncheck({ force: true })
+      await page.getByRole('checkbox', { name: 'Suporte: No portal' }).focus()
+      await page.waitForTimeout(400)
+    },
+  },
+  // --- notebook ---------------------------------------------------------------------
+  {
+    name: 'noticias-notebook-1280x552',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await newsLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-notebook-1280x552',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__link').click()
+      await expect(page.locator('.nw-modal .nw-detail__title')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-notebook-1280x552',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await notifLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'preferencias-notebook-1280x552',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  // --- tablet e mobile: arvores legadas, nada muda de layout --------------------------------
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].flatMap(([suffix, width, height]) => [
+    {
+      name: `noticias-${suffix}`,
+      route: '/news',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.news-card--featured')).toBeVisible({ timeout: 15_000 })
+        await expect(page.locator('.surface--news-desktop')).toHaveCount(0)
+        await page.waitForTimeout(400)
+      },
+      afterShot: restoreViewport,
+    },
+    {
+      name: `notificacoes-${suffix}`,
+      route: '/notifications',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.notifications__group').first()).toBeVisible({ timeout: 15_000 })
+        await expect(page.locator('.notifications-page--desktop')).toHaveCount(0)
+        await page.waitForTimeout(400)
+      },
+      afterShot: restoreViewport,
+    },
+    {
+      name: `preferencias-${suffix}`,
+      route: '/notifications',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.notifications__group').first()).toBeVisible({ timeout: 15_000 })
+        await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+        await expect(page.locator('.notification-prefs')).toBeVisible()
+        await expect(page.locator('.notification-prefs--desktop')).toHaveCount(0)
+        await page.waitForTimeout(500)
+      },
+      afterShot: restoreViewport,
+    },
+  ]),
+]
 const PHASE = process.env.REFINO_PHASE || 'f4c'
 
 // --- helpers de seed -------------------------------------------------------
@@ -1498,6 +1888,139 @@ async function seedF4c(adminUid) {
   })
 }
 
+// Refino F5a: noticias (manuais e de fonte externa, com capa em data URI e uma com
+// galeria + anexo + referencias) e notificacoes extras (grupos com varias linhas,
+// 7 grupos "Anteriores" para o "Ver mais"). Capa = gradiente SVG em data URI: nada de
+// rede nem de Storage.
+function coverDataUri(index) {
+  const palettes = [
+    ['#004153', '#14dda7'],
+    ['#0a5468', '#7fe3cf'],
+    ['#003241', '#2f6f7c'],
+    ['#0f2b35', '#14dda7'],
+    ['#155793', '#7cb8ec'],
+    ['#8a5a0a', '#f2c14e'],
+    ['#2f6f7c', '#e2f6f0'],
+  ]
+  const [from, to] = palettes[index % palettes.length]
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>` +
+    `<rect width="900" height="600" fill="url(#g)"/>` +
+    `<path d="M0 430 Q225 360 450 430 T900 430 V600 H0Z" fill="rgba(255,255,255,.14)"/>` +
+    `<path d="M0 480 Q225 410 450 480 T900 480 V600 H0Z" fill="rgba(255,255,255,.12)"/>` +
+    `</svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+async function seedF5a(adminUid) {
+  const manual = [
+    {
+      id: 'shot-news-1',
+      title: 'Portal COMEX ganha novo visual: mais claro, mais rápido e igual em todas as telas',
+      content:
+        'A nova identidade do Portal COMEX chegou ao desktop com a paleta navy e menta da SQ Química, tipografia Sora e movimento mais suave.\n\nO que muda para quem acompanha as chegadas: a fila ficou mais compacta, o detalhe do processo ganhou linha do tempo com datas e o formulário de edição passou a abrir em uma janela própria.\n\nO que não muda: todos os dados, filtros e rotinas continuam exatamente como antes.',
+      // um pouco no futuro: a noticia semeada pelo global-setup e' de agora e nao pode ser o destaque
+      minutesAgo: -3,
+      cover: 0,
+      references: ['https://www.gov.br/siscomex/pt-br', 'https://www.portodeitajai.com.br'],
+      withMedia: true,
+    },
+    {
+      id: 'shot-news-3',
+      title: 'Terminal de Itajaí amplia o free time para cargas de importação',
+      content: 'A partir do próximo mês, o terminal concede 7 dias de free time para contêineres de importação em operação regular.',
+      minutesAgo: 60 * 20,
+      cover: 1,
+    },
+    {
+      id: 'shot-news-5',
+      title: 'Receita publica novo prazo para anuência de produtos químicos controlados',
+      content: 'O prazo de análise das anuências passou de 10 para 7 dias úteis, conforme comunicado da Receita.',
+      minutesAgo: 60 * 40,
+      cover: 2,
+    },
+    {
+      id: 'shot-news-7',
+      title: 'Boas práticas de documentação: Invoice e Packing List no mesmo arquivo',
+      content: 'Quando o fornecedor emite a Packing List dentro da Invoice, marque o vínculo no processo para evitar pendências.',
+      minutesAgo: 60 * 46,
+      cover: 3,
+    },
+  ]
+  for (const item of manual) {
+    const stamp = isoMinutesAgo(item.minutesAgo)
+    await putDoc('news', item.id, {
+      title: item.title,
+      content: item.content,
+      coverImage: coverDataUri(item.cover),
+      references: item.references ?? [],
+      mediaItems: item.withMedia
+        ? [
+            { id: 'm-img-1', url: coverDataUri(4), name: 'galeria-1.svg', caption: 'Nova fila de chegadas', mimeType: 'image/svg+xml', kind: 'image' },
+            { id: 'm-img-2', url: coverDataUri(5), name: 'galeria-2.svg', caption: 'Detalhe do processo', mimeType: 'image/svg+xml', kind: 'image' },
+            { id: 'm-file-1', url: 'https://example.com/guia-novo-visual.pdf', name: 'guia-novo-visual.pdf', caption: 'Guia do novo visual', mimeType: 'application/pdf', kind: 'file', size: 482133 },
+            { id: 'm-file-2', url: 'https://example.com/lista-de-mudancas.xlsx', name: 'lista-de-mudancas.xlsx', caption: 'Lista de mudanças', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', kind: 'file', size: 91322 },
+          ]
+        : [],
+      createdAt: stamp,
+      updatedAt: stamp,
+    })
+  }
+
+  const external = [
+    { id: 'shot-ext-2', title: 'Santos registra recorde de movimentação de contêineres em setembro', minutesAgo: 60 * 24, cover: 4, source: 'Portos e Navios' },
+    { id: 'shot-ext-4', title: 'Câmbio: dólar fecha em queda com expectativa sobre juros nos EUA', minutesAgo: 60 * 41, cover: 5, source: 'Valor Econômico' },
+    { id: 'shot-ext-6', title: 'Antaq atualiza norma de cobrança de THC nos terminais', minutesAgo: 60 * 44, cover: 6, source: 'Antaq' },
+  ]
+  for (const item of external) {
+    const stamp = isoMinutesAgo(item.minutesAgo)
+    await putDoc('externalNews', item.id, {
+      title: item.title,
+      content: 'Resumo automático da matéria publicada pela fonte. Abra a fonte oficial para ler a matéria completa.',
+      summary: 'Resumo automático da matéria publicada pela fonte. Abra a fonte oficial para ler a matéria completa.',
+      coverImage: coverDataUri(item.cover),
+      sourceName: item.source,
+      externalUrl: 'https://example.com/materia',
+      mediaItems: [],
+      references: [],
+      createdAt: stamp,
+      updatedAt: stamp,
+      publishedAt: stamp,
+    })
+  }
+
+  // Notificacoes extras: o grupo de coleta ganha 3 linhas (3 nao lidas) e entram 4 grupos
+  // lidos ("Anteriores": 4 visiveis + "Ver mais 3 anteriores").
+  const extras = [
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · janela de 14h às 18h.', 'shot-aguardando-atracacao', false, 40],
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · transportadora confirmada.', 'shot-aguardando-atracacao', false, 130],
+    ['process_question_answered', 'Nova resposta em Solvente', 'Logística: BL liberado.', 'shot-embarcou', true, 60 * 30],
+    ['process_question_created', 'Nova dúvida', 'Tensoativo: qual o ETA atualizado?', 'shot-carga-recebida', true, 60 * 31],
+    ['receipt_divergence_reported', 'Divergência no recebimento', 'Glicerina bidestilada: quantidade menor que a Invoice.', 'shot-carga-recebida', true, 60 * 50],
+    ['process_daily_alerts', 'Alertas do dia', '2 processos exigem ação hoje.', 'shot-canal-vermelho', true, 60 * 52],
+    ['post_receipt_notes_updated', 'Observações pós-recebimento', 'Antiespumante: observação atualizada.', 'shot-carga-recebida', true, 60 * 70],
+    ['favorite_process_message', 'Atualização em processo favoritado', 'Emulsificante: nova mensagem da logística.', 'shot-coleta-agendada', true, 60 * 80],
+  ]
+  for (const [index, [type, title, body, processId, isRead, minutes]] of extras.entries()) {
+    await putDoc('notifications', `shot-notif-extra-${index + 1}`, {
+      recipientUserId: adminUid,
+      actorUserId: 'shot-actor',
+      actorName: 'Equipe COMEX',
+      type,
+      processId,
+      messageId: '',
+      title,
+      body,
+      targetTab: 'details',
+      isRead,
+      createdAt: isoMinutesAgo(minutes),
+      // lidas sao descartadas 24 h depois do readAt (READ_NOTIFICATION_RETENTION_MS)
+      readAt: isRead ? isoMinutesAgo(20 + index * 15) : null,
+    })
+  }
+}
+
 async function seedAll() {
   const adminUid = await uidOf(E2E_USERS.admin)
   const processes = buildProcesses()
@@ -1604,6 +2127,7 @@ async function seedAll() {
   }
 
   if (PHASE === 'f4c' || PHASE === 'f4d') await seedF4c(adminUid)
+  if (PHASE === 'f5a') await seedF5a(adminUid)
 }
 
 // --- capturas --------------------------------------------------------------
@@ -1625,7 +2149,7 @@ test.beforeAll(async () => {
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
-    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' ? 600_000 : 180_000)
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 
