@@ -3501,6 +3501,82 @@ for (const theme of THEMES) {
   })
 }
 
+// RC2 - guarda de geometria dos filtros da Central de chegadas (desktop >= 1041px). Bug do RC1: o
+// "Periodo de ETA" (2 datas num contorno unico, D19) ficava ~6 px ACIMA dos outros 3 controles. CSS
+// computado nao pega isso (cada caixa tem 44 px); so a geometria renderizada: dentro de cada linha da
+// grade, os controles precisam compartilhar topo, base e altura, e os rotulos o mesmo topo/base.
+const FILTER_WIDTHS = [
+  [1041, 900],
+  [1100, 900],
+  [1280, 900],
+  [1366, 900],
+  [1440, 900],
+  [1600, 900],
+  [1920, 1080],
+  [1366, 768], // notebook (altura <= 800)
+  [1280, 552], // notebook baixo
+]
+for (const theme of THEMES) {
+  test(`chegadas - filtros alinhados (geometria) - ${theme}`, async ({ browser }) => {
+    test.skip(PHASE !== 'f4b', 'guarda de geometria dos filtros so na F4b')
+    test.setTimeout(120_000)
+    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+    await login(page, E2E_USERS.admin)
+    await page.goto('/processos')
+    await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+    await chegadasLoaded(page)
+    for (const [width, height] of FILTER_WIDTHS) {
+      await page.setViewportSize({ width, height })
+      await page.waitForTimeout(300)
+      const fields = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('.chg-filters > .chg-field')).map((field) => {
+          const label = field.querySelector(':scope > label, :scope > .chg-field__label')
+          const control = field.querySelector('.chg-search, .chg-range, select.chg-select')
+          const rect = (el) => {
+            const r = el.getBoundingClientRect()
+            return { top: r.top, bottom: r.bottom, height: r.height }
+          }
+          return { label: label ? rect(label) : null, control: control ? rect(control) : null, field: rect(field) }
+        })
+      )
+      const where = `${width}x${height} ${theme}`
+      expect(fields, where).toHaveLength(4)
+      for (const f of fields) {
+        expect(f.label, where).not.toBeNull()
+        expect(f.control, where).not.toBeNull()
+        expect(f.control.height, `altura do controle ${where}`).toBeCloseTo(44, 0)
+      }
+      // linhas da grade: campos com o mesmo topo; >= 1280 e uma linha so, abaixo disso busca + 3 filtros
+      const rows = new Map()
+      for (const f of fields) {
+        const key = Math.round(f.field.top)
+        rows.set(key, [...(rows.get(key) ?? []), f])
+      }
+      const sizes = Array.from(rows.values()).map((row) => row.length).sort()
+      expect(sizes, `linhas da grade ${where}`).toEqual(width >= 1280 ? [4] : [1, 3])
+      for (const row of rows.values()) {
+        const [first, ...rest] = row
+        for (const f of rest) {
+          expect(f.label.top, `topo do rotulo ${where}`).toBeCloseTo(first.label.top, 1)
+          expect(f.label.bottom, `base do rotulo ${where}`).toBeCloseTo(first.label.bottom, 1)
+          expect(f.control.top, `topo do controle ${where}`).toBeCloseTo(first.control.top, 1)
+          expect(f.control.bottom, `base do controle ${where}`).toBeCloseTo(first.control.bottom, 1)
+        }
+      }
+    }
+    await context.close()
+  })
+}
+
 // =============================================================================
 // F3 - catalogo de componentes (estados forcados via CDP) + CSS computado
 // =============================================================================
