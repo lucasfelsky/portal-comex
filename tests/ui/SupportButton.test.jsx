@@ -168,6 +168,32 @@ describe('SupportButton — refino F2 (desktop)', () => {
     expect(fab.querySelector('svg')).not.toBeNull()
   })
 
+  it('showTrigger={false}: sem FAB, mas o modal continua montado e abre pelo evento', async () => {
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <SupportButton showTrigger={false} />
+        </ToastProvider>
+      </MemoryRouter>
+    )
+    expect(screen.queryByRole('button', { name: 'Abrir suporte' })).toBeNull()
+    expect(document.querySelector('.support-fab')).toBeNull()
+    act(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_SUPPORT_MODAL_EVENT, { detail: { view: 'form' } }))
+    })
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('O que aconteceu?')).toBeInTheDocument()
+  })
+
+  it('evento sem detail abre em "Meus chamados" (notificação de chamado)', async () => {
+    renderSupportButton()
+    act(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_SUPPORT_MODAL_EVENT))
+    })
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByLabelText('O que aconteceu?')).toBeNull()
+  })
+
   it('placeholder do desktop = texto do mock-up', async () => {
     const user = userEvent.setup()
     renderSupportButton()

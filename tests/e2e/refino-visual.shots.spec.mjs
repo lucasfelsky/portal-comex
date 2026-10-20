@@ -1669,7 +1669,7 @@ PHASES.f6a = [
     route: '/admin/usuarios',
     ready: usersReady,
     action: adminShot(async (page) => {
-      await page.getByPlaceholder('Nome, email, perfil ou ID').fill('zzz')
+      await page.getByPlaceholder('Nome, email ou perfil').fill('zzz')
       await expect(page.getByText('Nenhum usuário encontrado')).toBeVisible()
     }),
     afterShot: restoreViewport,
@@ -1689,7 +1689,7 @@ PHASES.f6a = [
     route: '/admin/usuarios',
     ready: usersReady,
     action: adminShot(async (page) => {
-      await page.getByPlaceholder('Nome, email, perfil ou ID').focus()
+      await page.getByPlaceholder('Nome, email ou perfil').focus()
       await page.keyboard.press('Tab')
       await page.keyboard.press('Tab')
       await page.waitForTimeout(200)

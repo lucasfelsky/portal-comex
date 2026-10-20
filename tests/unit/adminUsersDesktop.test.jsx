@@ -201,19 +201,21 @@ describe('AdminUsersPanel - desktop (>= 1041px): estrutura', () => {
 })
 
 describe('AdminUsersPanel - desktop: lista, busca e filtro', () => {
-  it('"N visiveis" em etiqueta neutra e linhas com avatar de iniciais, Perfil · Area · UID e etiqueta de status', async () => {
+  it('"N visiveis" em etiqueta neutra e linhas com avatar de iniciais, Perfil · Area e etiqueta de status (sem UID)', async () => {
     const { container } = renderPanel()
     await waitFor(() => expect(rows(container)).toHaveLength(4))
     expect(screen.getByText('4 visíveis')).toHaveClass('ad-pill', 'ad-pill--neutral')
     const maria = rowOf(container, 'Maria Souza')
     expect(maria.querySelector('.au-row__avatar')).toHaveTextContent('MS')
     expect(maria.querySelector('.au-row__avatar')).toHaveAttribute('aria-hidden', 'true')
-    expect(maria.querySelector('.au-row__meta')).toHaveTextContent('User · Importacao · u-1')
-    expect(maria.querySelector('.au-row__meta .ad-mono')).toHaveTextContent('u-1')
+    expect(maria.querySelector('.au-row__meta')).toHaveTextContent('User · Importacao')
+    expect(maria.querySelector('.au-row__meta')).not.toHaveTextContent('u-1')
+    expect(maria.querySelector('.au-row__meta .ad-mono')).toBeNull()
+    expect(container.querySelector('.au-uid')).toBeNull()
     const carlos = rowOf(container, 'Carlos Bloq')
-    expect(carlos.querySelector('.au-row__meta')).toHaveTextContent('Logística · Logistica · u-3')
+    expect(carlos.querySelector('.au-row__meta')).toHaveTextContent('Logística · Logistica')
     // sem area: "Geral"
-    expect(rowOf(container, 'Rita Reprovada').querySelector('.au-row__meta')).toHaveTextContent('User · Geral · u-4')
+    expect(rowOf(container, 'Rita Reprovada').querySelector('.au-row__meta')).toHaveTextContent('User · Geral')
   })
 
   it('etiquetas: Ativo ok, Pendente warn, Bloqueado danger, Reprovado neutra (mock)', async () => {
@@ -240,11 +242,11 @@ describe('AdminUsersPanel - desktop: lista, busca e filtro', () => {
     expect(screen.getByDisplayValue('joao@sqquimica.com')).toBeInTheDocument()
   })
 
-  it('busca por nome, email, perfil e ID; "N visiveis" acompanha', async () => {
+  it('busca por nome, email, perfil e (por tras) id; "N visiveis" acompanha', async () => {
     const user = userEvent.setup()
     const { container } = renderPanel()
     await waitFor(() => expect(rows(container)).toHaveLength(4))
-    const search = screen.getByPlaceholderText('Nome, email, perfil ou ID')
+    const search = screen.getByPlaceholderText('Nome, email ou perfil')
     expect(screen.getByLabelText('Buscar usuário')).toBe(search)
     await user.type(search, 'carlos')
     expect(rows(container)).toHaveLength(1)
@@ -275,7 +277,7 @@ describe('AdminUsersPanel - desktop: lista, busca e filtro', () => {
     expect(rows(container)[0]).toHaveTextContent('Carlos Bloq')
     await user.selectOptions(filter, 'Reprovado')
     expect(rows(container)[0]).toHaveTextContent('Rita Reprovada')
-    await user.type(screen.getByPlaceholderText('Nome, email, perfil ou ID'), 'zzz')
+    await user.type(screen.getByPlaceholderText('Nome, email ou perfil'), 'zzz')
     expect(rows(container)).toHaveLength(0)
     expect(screen.getByText('Nenhum usuário encontrado')).toBeInTheDocument()
     expect(screen.getByText('Ajuste a busca ou o filtro para voltar a exibir resultados.')).toBeInTheDocument()
@@ -284,12 +286,14 @@ describe('AdminUsersPanel - desktop: lista, busca e filtro', () => {
 })
 
 describe('AdminUsersPanel - desktop: detalhe', () => {
-  it('cabecalho com avatar de iniciais, UID mono e etiqueta do status; campos na ordem do mock', async () => {
+  it('cabecalho com avatar de iniciais e etiqueta do status (sem UID); campos na ordem do mock', async () => {
     const { container } = renderPanel()
     await waitFor(() => expect(rows(container)).toHaveLength(4))
     const head = container.querySelector('.au-detail-head')
     expect(head.querySelector('.au-avatar')).toHaveTextContent('MS')
-    expect(head.querySelector('.au-uid')).toHaveTextContent('UID u-1')
+    expect(head.querySelector('.au-uid')).toBeNull()
+    expect(head).not.toHaveTextContent('UID')
+    expect(head).not.toHaveTextContent('u-1')
     expect(head.querySelector('.ad-pill')).toHaveTextContent('Ativo')
     const labels = [...container.querySelectorAll('.au-fields > .field > span:first-child, .au-fields .au-password__row label')].map(
       (node) => node.textContent
@@ -361,7 +365,8 @@ describe('AdminUsersPanel - desktop: detalhe', () => {
     await user.click(screen.getByRole('button', { name: 'Novo usuário' }))
     expect(screen.getByRole('heading', { level: 3, name: 'Novo usuário' })).toBeInTheDocument()
     expect(container.querySelector('.au-detail-head .au-avatar svg')).not.toBeNull()
-    expect(container.querySelector('.au-uid')).toHaveTextContent('UID gerado ao criar')
+    expect(container.querySelector('.au-uid')).toBeNull()
+    expect(container).not.toHaveTextContent('UID')
     expect(screen.getByPlaceholderText('Nome completo')).toHaveValue('')
     expect(screen.getByPlaceholderText(/Defina a senha inicial/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Criar usuário' })).toBeInTheDocument()
@@ -539,14 +544,16 @@ describe('AdminUsersPanel - desktop: rodape do detalhe (Excluir, Bloquear/Ativar
 })
 
 describe('AdminUsersPanel - desktop: fila de aprovacao', () => {
-  it('cartao com nome, e-mail e "Perfil · Area · ID"; contador "N pendentes" em etiqueta de aviso', async () => {
+  it('cartao com nome, e-mail e "Perfil · Area" (sem ID); contador "N pendentes" em etiqueta de aviso', async () => {
     const { container } = renderPanel()
     await waitFor(() => expect(container.querySelectorAll('.au-pending')).toHaveLength(1))
     expect(screen.getByText('1 pendentes')).toHaveClass('ad-pill--warn')
     const card = container.querySelector('.au-pending')
     expect(card.querySelector('.au-pending__name')).toHaveTextContent('Joao Pendente')
     expect(card.querySelector('.au-pending__email')).toHaveTextContent('joao@sqquimica.com')
-    expect(card.querySelector('.au-pending__meta')).toHaveTextContent('Perfil: User · Área: Exportacao · ID: u-2')
+    expect(card.querySelector('.au-pending__meta')).toHaveTextContent('Perfil: User · Área: Exportacao')
+    expect(card.querySelector('.au-pending__meta')).not.toHaveTextContent('ID')
+    expect(card.textContent).not.toContain('u-2')
     expect(card.querySelector('.au-pending__meta strong')).toHaveTextContent('User')
     expect([...card.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['Aprovar', 'Reprovar', 'Abrir detalhe'])
   })
@@ -587,7 +594,8 @@ describe('AdminUsersPanel - desktop: fila de aprovacao', () => {
     expect(screen.getByDisplayValue('Maria Souza')).toBeInTheDocument()
     await user.click(within(container.querySelector('.au-pending')).getByRole('button', { name: 'Abrir detalhe' }))
     expect(screen.getByDisplayValue('joao@sqquimica.com')).toBeInTheDocument()
-    expect(container.querySelector('.au-uid')).toHaveTextContent('UID u-2')
+    expect(container.querySelector('.au-uid')).toBeNull()
+    expect(container).not.toHaveTextContent('UID')
   })
 
   it('sem pendentes: estado vazio e contador "0 pendentes" neutro', async () => {
@@ -607,7 +615,7 @@ describe('AdminUsersPanel - troca ao vivo entre arvores (1041px)', () => {
     await waitFor(() => expect(rows(container)).toHaveLength(4))
     expect(container.querySelector('.admin-panel--users')).not.toBeNull()
 
-    await user.type(screen.getByPlaceholderText('Nome, email, perfil ou ID'), 'o')
+    await user.type(screen.getByPlaceholderText('Nome, email ou perfil'), 'o')
     const name = screen.getByDisplayValue('Maria Souza')
     await user.clear(name)
     await user.type(name, 'Maria Editada')
@@ -616,14 +624,14 @@ describe('AdminUsersPanel - troca ao vivo entre arvores (1041px)', () => {
     media.setDesktop(false)
     expect(container.querySelector('.admin-panel--users')).toBeNull()
     expect(container.querySelector('.dual-grid')).not.toBeNull()
-    expect(screen.getByPlaceholderText('Nome, email, perfil ou ID')).toHaveValue('o')
+    expect(screen.getByPlaceholderText('Nome, email ou perfil')).toHaveValue('o')
     expect(screen.getByDisplayValue('Maria Editada')).toBeInTheDocument()
     expect(screen.getByDisplayValue('segredo9')).toBeInTheDocument()
 
     media.setDesktop(true)
     expect(container.querySelector('.admin-panel--users')).not.toBeNull()
     expect(container.querySelector('.dual-grid')).toBeNull()
-    expect(screen.getByPlaceholderText('Nome, email, perfil ou ID')).toHaveValue('o')
+    expect(screen.getByPlaceholderText('Nome, email ou perfil')).toHaveValue('o')
     expect(screen.getByDisplayValue('Maria Editada')).toBeInTheDocument()
     expect(screen.getByDisplayValue('segredo9')).toBeInTheDocument()
   })
