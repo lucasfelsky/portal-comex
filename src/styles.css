@@ -12420,152 +12420,11 @@ body {
    ficava aqui (hero, KPIs e cards sob .dashboard-heading) foi removido: o
    desktop nao renderiza mais a arvore legada. */
 
-/* ============================================================
-   Ciclo 2b (redesign Fase 2) — Chegadas (lista) desktop: card + painel
-   de filtros + linhas de processo na linguagem da Fase 1, e revelacao
-   do leading icon + chevron (F15.2 os deixa so' no mobile). So' tokens
-   (--radius-*, --shadow-*, --font-heading, --primary-*), sem hex fora
-   do :root. Escopado via `.process-list-card` (classe unica desta
-   tela) pra nao vazar pro Dashboard (2a, `.dashboard-heading ~
-   .stagger`) nem pro detalhe (2c, `ProcessDetailView`). Nao toca
-   nenhum bloco @media (max-width:*) nem o `.chegadas-mobilebar`
-   (mobile-only, F16.4).
-
-   Sub-ciclo 6a (Fase 6, delta de fidelidade vs mockup Chegadas.dc.html):
-   separador entre linhas, hover com --surface-alt, botoes de acao
-   inline como caixa com borda (estilo `.iconbtn` do mockup), meta em
-   destaque (ETA em negrito / atualizada com --danger-700) e grid do
-   painel de filtros em 4 colunas proporcionais + inputs em pill.
-   `.process-item__summary` continua mobile-only (nao tocado aqui).
-   ============================================================ */
-@media (min-width: 1041px) {
-  .process-list-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .process-list-card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  .process-list-card .card-heading h3 {
-    font-family: var(--font-heading);
-  }
-
-  .process-list-card .process-filters--panel {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    grid-template-columns: 1.6fr 1fr 1.3fr 1.2fr;
-  }
-
-  /* Inputs do painel de filtros com cara de pill (mockup `.inp`): a
-     altura de 40px (regra base em styles.css:3232) faz o
-     --radius-full ser clampado pra ~20px, virando estadio/pill em vez
-     de retangulo com cantos levemente arredondados. Cobre texto, os
-     dois <select> (SelectField renderiza <select class="text-input">
-     no desktop) e o range de datas. */
-  .process-list-card .process-filters--panel .text-input {
-    border-radius: var(--radius-full);
-  }
-
-  .process-list-card .process-item {
-    border-radius: var(--radius-sm);
-  }
-
-  /* Separador entre linhas (mockup `.row+.row{border-top}`). O wrapper
-     `.process-swipe-row` (F16.8) usa `display: contents` fora do
-     mobile, entao `.process-item` continua enxergando o irmao anterior
-     no combinador de sibling apesar do wrapper "sumir" da caixa. */
-  .process-list-card .process-item + .process-item {
-    border-top: 1px solid var(--border);
-  }
-
-  /* Hover de linha (mockup `.row:hover{background:var(--card2)}`). So'
-     o background muda aqui; lift/box-shadow/border-color do hover
-     global de `.process-item--button` (styles.css:2317) continuam,
-     igual ao resto do app — nao e' o mesmo caso do D1 (Dashboard, que
-     removeu o hover animado). */
-  .process-list-card .process-item:hover {
-    background: var(--surface-alt);
-  }
-
-  /* Botoes de acao inline como caixa com borda (mockup `.iconbtn`: ~38px,
-     border, radius). `.action-icon-button` (styles.css:8929) e'
-     compartilhado com outras telas (ex.: ProcessDetailView) — por isso
-     o prefixo desce ate `.process-item__inline-actions` pra nao vazar. */
-  .process-list-card .process-item__inline-actions .action-icon-button {
-    width: 38px;
-    height: 38px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-  }
-
-  .process-list-card .process-item__inline-actions .action-icon-button:hover {
-    border-color: var(--border-strong);
-  }
-
-  /* Meta a direita (o grid base de `.process-item__meta`,
-     styles.css:2355, ja usa justify-items:end globalmente) com ETA em
-     destaque. A ordem dos <span> em ProcessRow (ProcessListView.jsx)
-     e' sempre ETD / ETA / Previsao de entrega — nth-child(2) e' o jeito
-     CSS-only de pegar so' a linha de ETA sem precisar de classe nova
-     no JSX. ETA atualizada usa `.eta-meta-highlight` (ja setada pelo
-     JSX via `hasUpdatedEta`); aqui so' se recolore pra --danger-700,
-     escopado a esta tela pra nao mexer no mesmo uso global em
-     `.weekly-arrivals-card`/`.dashboard-favorites-item` (Dashboard). */
-  .process-list-card .process-item__meta span:nth-child(2) {
-    font-weight: 700;
-  }
-
-  /* UX-6a (item 12): antes so' recolorava o texto (--danger-700, vermelho)
-     sobre o fundo verde herdado de .eta-meta-highlight (linha ~2466),
-     5,46:1 no claro / 5,07:1 no dark com os 3 tokens juntos. */
-  .process-list-card .process-item__meta .eta-meta-highlight {
-    color: var(--warning-700);
-    background: var(--warning-50);
-    border-color: var(--warning);
-  }
-
-  /* Revela leading icon (categoria) + chevron — F15.2 os deixa
-     display:none fora do @media (max-width:720px). Reusa os mesmos
-     tokens do bloco mobile (styles.css ~6378-6394) pra ficar
-     dark-aware de graca. As linhas detalhadas que ja existem so' no
-     desktop (categoria, destino, ETD/ETA/previsao, badges) continuam
-     como estao; .process-item__summary (resumo condensado) permanece
-     mobile-only. */
-  .process-list-card .process-item__leading {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
-    background: var(--primary-50);
-    color: var(--primary-700);
-    flex-shrink: 0;
-  }
-
-  .process-list-card .process-item__chevron {
-    display: inline-flex;
-    align-items: center;
-    color: var(--text-faint);
-    flex-shrink: 0;
-  }
-
-  /* Sem isto, o `justify-content: space-between` da regra base
-     (pensada pra so' 2 filhos: main + aside) distribui o espaco livre
-     entre os 4 filhos agora existentes (leading, main, aside, chevron)
-     e afasta main/aside de forma estranha. */
-  .process-list-card .process-item--button {
-    justify-content: flex-start;
-  }
-
-  .process-list-card .process-item__main {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-}
+/* Chegadas (lista) desktop (>= 1041px): reescrito na F4b — ver "REFINO VISUAL
+   F4b — CHEGADAS" (raiz .process-list-card, arvore chg-*). O bloco do ciclo 2b
+   que ficava aqui (card, painel de filtros em pill, linhas .process-item,
+   meta e botoes de acao inline) foi removido: o desktop nao renderiza mais a
+   arvore legada da lista. */
 
 /* ============================================================
    Ciclo 2c (redesign Fase 2) — Chegadas (detalhe) desktop: traz a
@@ -15876,6 +15735,527 @@ body {
   /* ---- Contador de KPI: digitos de largura fixa (sem tremer durante a contagem) ---- */
   .stat-card__value {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ============================================================
+   REFINO VISUAL F4b — CHEGADAS (Chegadas.dc.html, desktop >= 1041px)
+   O desktop renderiza uma arvore propria (`chg-*`, ProcessListDesktop.jsx);
+   tablet e mobile seguem na arvore legada (`process-item*`, swipe, segmented),
+   que este bloco nao toca. Toda regra comeca pela raiz `.process-list-card`
+   (ou `.surface.surface--arrivals`, o <section class="surface"> da pagina):
+   `.process-item`, `.inline-badge`, `.status-tag`, `.filter-chips-row` e
+   `.empty-state` sao classes compartilhadas e ja vazaram para outras telas.
+   Sem hex: so tokens. Segue o mock linha a linha (valores inline do .dc.html);
+   elementos sem line-height no mock usam `normal` para dar a mesma altura.
+   ============================================================ */
+@media (min-width: 1041px) {
+  /* ---- Raiz: sem cartao externo, 18px entre as secoes (main do mock) ---- */
+  .surface.surface--arrivals {
+    padding: 0;
+    gap: 18px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .process-list-card.process-list-card--desktop {
+    --chg-line: var(--navy);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  [data-theme='dark'] .process-list-card.process-list-card--desktop {
+    --chg-line: var(--primary);
+  }
+
+  /* ---- Cabecalho: eyebrow + "Fila de chegadas" + acoes ---- */
+  .process-list-card .chg-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .process-list-card .chg-head__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .process-list-card .chg-head__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .process-list-card .chg-head h2 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .process-list-card .chg-head__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .process-list-card .chg-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .process-list-card .chg-btn--archived {
+    padding: 0 14px;
+  }
+
+  .process-list-card .chg-btn--new {
+    padding: 0 18px;
+  }
+
+  .process-list-card .chg-btn--archived[aria-pressed='true'] {
+    background: var(--navy-50);
+  }
+
+  .process-list-card .chg-icon {
+    flex: none;
+  }
+
+  /* ---- Painel de filtros: busca 2fr + 3 colunas (D19: periodo = 2 datas num contorno) ---- */
+  .process-list-card .chg-filters {
+    display: grid;
+    grid-template-columns: minmax(260px, 2fr) minmax(160px, 1fr) minmax(250px, 1.3fr) minmax(160px, 1fr);
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+  }
+
+  .process-list-card .chg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .process-list-card .chg-field > label,
+  .process-list-card .chg-field__label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .process-list-card .chg-search,
+  .process-list-card .chg-range {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 44px;
+    border: 1.5px solid var(--border-control);
+    border-radius: 10px;
+    background: var(--surface);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .process-list-card .chg-search:hover:not(:focus-within),
+  .process-list-card .chg-range:hover:not(:focus-within) {
+    border-color: var(--border-control-hover);
+  }
+
+  .process-list-card .chg-search:focus-within,
+  .process-list-card .chg-range:focus-within {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 4px var(--primary-a28);
+  }
+
+  .process-list-card .chg-search {
+    gap: 8px;
+    padding: 0 12px;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-search input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+  }
+
+  .process-list-card .chg-search input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .process-list-card .chg-select,
+  .process-list-card .chg-select:hover:not(:disabled):not(:focus) {
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 12px;
+    border: 1.5px solid var(--chg-line);
+    border-radius: 10px;
+    background-color: var(--surface);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .process-list-card .chg-range {
+    gap: 4px;
+    padding: 0 8px 0 12px;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .process-list-card .chg-range__input {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .process-list-card .chg-range__input[value='']:not(:focus) {
+    color: var(--text-muted);
+  }
+
+  .process-list-card .chg-range__input::-webkit-calendar-picker-indicator {
+    margin: 0;
+    padding: 2px;
+  }
+
+  .process-list-card .chg-range__sep {
+    flex: none;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Linha de filtros ativos: chips + "Limpar todos" + contador "X de Y" ---- */
+  .process-list-card .chg-chips {
+    gap: 8px;
+    margin: 0;
+  }
+
+  .process-list-card .chg-chips .filter-chips-row__label {
+    margin: 0;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-chips__count {
+    margin-left: auto;
+    font-size: 13px;
+    line-height: normal;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Lista: um cartao por processo ---- */
+  .process-list-card .chg-results {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .process-list-card .chg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .process-list-card .chg-section-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 20px;
+    align-items: center;
+    padding: 16px 16px 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    line-height: normal;
+    cursor: pointer;
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-list-card .chg-row:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Linha selecionada (selecao automatica da pagina): o mock nao mostra estado
+     selecionado; a borda navy preserva a orientacao ao voltar do detalhe. */
+  .process-list-card .chg-row--selected,
+  .process-list-card .chg-row--selected:hover {
+    border-color: var(--chg-line);
+  }
+
+  /* padding + margem negativa: o anel de foco ganha respiro sem mexer no layout. */
+  .process-list-card .chg-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    margin: -4px -8px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    line-height: normal;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .process-list-card .chg-row__main:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-list-card .chg-row__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .process-list-card .chg-row__name {
+    font-size: 16px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .process-list-card .chg-row__po {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-row__dest {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-row__dest strong {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .process-list-card .chg-row__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Chips: neutro por padrao (contagem de unidades e "+N"); alertas por tom. */
+  .process-list-card .chg-row__chips .inline-badge {
+    background: var(--neutral-50);
+    color: var(--neutral-700);
+  }
+
+  .process-list-card .chg-row__chips .inline-badge--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .process-list-card .chg-row__chips .inline-badge--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  /* ---- Datas: ETD / ETA / Entrega prev. em 3 colunas de 104px ---- */
+  .process-list-card .chg-row__dates {
+    display: grid;
+    grid-template-columns: repeat(3, 104px);
+    gap: 12px;
+  }
+
+  .process-list-card .chg-date {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .process-list-card .chg-date--eta {
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: 8px;
+  }
+
+  .process-list-card .chg-date--updated {
+    background: var(--info-50);
+  }
+
+  .process-list-card .chg-date__label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .process-list-card .chg-date--updated .chg-date__label {
+    color: var(--info-700);
+  }
+
+  .process-list-card .chg-date__value {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Acoes: favorito e arquivar, 44x44 ---- */
+  .process-list-card .chg-row__actions {
+    grid-column: 3;
+    display: flex;
+    gap: 4px;
+  }
+
+  .process-list-card .chg-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-list-card .chg-icon-button:hover {
+    background-color: var(--disabled-bg);
+  }
+
+  .process-list-card .chg-icon-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .process-list-card .chg-icon-button--on {
+    background-color: var(--warning-50);
+  }
+
+  .process-list-card .chg-star {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  .process-list-card .chg-icon-button--on .chg-star {
+    fill: var(--channel-yellow-edge);
+    stroke: var(--warning-700);
+  }
+
+  /* ---- Carregando: cartoes no formato da linha ---- */
+  .process-list-card .chg-skeletons {
+    gap: 10px;
+  }
+
+  .process-list-card .chg-skeletons .process-card-skeleton {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+/* Desktop estreito (1041-1279px): busca em linha inteira e 3 filtros embaixo. */
+@media (min-width: 1041px) and (max-width: 1279px) {
+  .process-list-card .chg-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+
+  .process-list-card .chg-field--search {
+    grid-column: 1 / -1;
+  }
+}
+
+/* REFINO VISUAL F4b — CHEGADAS COMPACTO (notebook, altura <= 800): menos respiro
+   vertical, sem perder nenhuma secao. notebook.css so mira as classes legadas
+   (`process-filters--panel`, `process-list-card` com `.card-heading`). */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .surface.surface--arrivals,
+  .process-list-card.process-list-card--desktop {
+    gap: clamp(12px, 2.2vh, 18px);
+  }
+
+  .process-list-card .chg-head h2 {
+    font-size: 26px;
+  }
+
+  .process-list-card .chg-filters {
+    padding: 12px;
+  }
+
+  .process-list-card .chg-row {
+    padding: 12px 14px 12px 18px;
+    gap: 16px;
+  }
+
+  .process-list-card .chg-row__main {
+    gap: 6px;
+  }
+
+  .process-list-card .chg-results,
+  .process-list-card .chg-list {
+    gap: 8px;
   }
 }
 
