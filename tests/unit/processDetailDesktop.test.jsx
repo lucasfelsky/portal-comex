@@ -1172,3 +1172,170 @@ describe('F4c - abas Itens e Item relacionado', () => {
     expect(container.querySelectorAll('.pdv-items__list > .pdv-item')).toHaveLength(1)
   })
 })
+
+describe('F4c - aba Mensagens (baloes + formulario lateral)', () => {
+  const MESSAGES = [
+    { id: 'm1', authorId: 'u-9', authorName: 'Ana Souza', content: 'A presença de carga já foi informada?', createdAt: '2026-10-18T14:20:00' },
+    { id: 'm2', authorId: 'u-1', authorName: 'Lucas', content: 'Ainda não.\nPrevisão para amanhã cedo.', createdAt: '2026-10-18T15:02:00' },
+  ]
+  const msgProps = (overrides = {}) => ({
+    detailTab: 'messages',
+    processMessages: MESSAGES,
+    profile: { uid: 'u-1', name: 'Lucas', role: 'admin' },
+    ...overrides,
+  })
+
+  it('cabecalho (h3, subtitulo, contagem) e um balao por mensagem com avatar, autor, data curta e texto', () => {
+    const { container } = renderDetail(msgProps())
+    expect(screen.getByRole('heading', { level: 3, name: 'Mensagens para dúvidas' })).toBeInTheDocument()
+    expect(screen.getByText('Histórico vinculado ao processo.')).toBeInTheDocument()
+    expect(container.querySelector('.pdv-items__count')).toHaveTextContent('2 mensagens')
+    const bubbles = [...container.querySelectorAll('.pdv-msg')]
+    expect(bubbles).toHaveLength(2)
+    expect(bubbles[0].querySelector('.pdv-msg__avatar')).toHaveTextContent('A')
+    expect(bubbles[0].querySelector('.pdv-msg__who')).toHaveTextContent(/^Ana Souza · 18\/10( |\/\d{4} )14:20$/)
+    expect(bubbles[0].querySelector('.pdv-msg__text')).toHaveTextContent('A presença de carga já foi informada?')
+    expect(bubbles[0].querySelector('.pdv-msg__who')).toHaveAttribute('title')
+  })
+
+  it('mensagem propria (authorId = uid logado) vai a direita; as demais a esquerda', () => {
+    const { container } = renderDetail(msgProps())
+    const [other, own] = [...container.querySelectorAll('.pdv-msg')]
+    expect(other).not.toHaveClass('pdv-msg--own')
+    expect(own).toHaveClass('pdv-msg--own')
+    expect(own.querySelector('.pdv-msg__avatar')).toHaveTextContent('L')
+  })
+
+  it('sem uid no perfil nenhuma mensagem e marcada como propria', () => {
+    const { container } = renderDetail(msgProps({ profile: { name: 'Lucas', role: 'admin' } }))
+    expect(container.querySelectorAll('.pdv-msg--own')).toHaveLength(0)
+  })
+
+  it('estados: carregando, vazio e contagem no singular', () => {
+    const loading = renderDetail(msgProps({ isLoadingMessages: true, processMessages: [] }))
+    expect(within(loading.container).getByRole('status')).toHaveTextContent('Carregando mensagens')
+    loading.unmount()
+    const empty = renderDetail(msgProps({ processMessages: [] }))
+    expect(empty.container.querySelector('.pdv-msgs__list')).toHaveTextContent('Nenhuma dúvida registrada')
+    expect(empty.container.querySelector('.pdv-items__count')).toHaveTextContent(/^0 mensagens$/)
+    empty.unmount()
+    const one = renderDetail(msgProps({ processMessages: [MESSAGES[0]] }))
+    expect(one.container.querySelector('.pdv-items__count')).toHaveTextContent(/^1 mensagem$/)
+  })
+
+  it('formulario lateral: rotulo, textarea de 5 linhas com o nome do autor, cota e "Registrar mensagem"', async () => {
+    const user = userEvent.setup()
+    const { props } = renderDetail(msgProps({ remainingMessages: 8, messageDraft: 'rascunho' }))
+    const textarea = screen.getByLabelText('Nova mensagem')
+    expect(textarea).toHaveAttribute('rows', '5')
+    expect(textarea).toHaveAttribute('placeholder', 'Escreva uma dúvida ou atualização como Lucas.')
+    expect(textarea).toHaveValue('rascunho')
+    await user.type(textarea, '!')
+    expect(props.onMessageDraftChange).toHaveBeenCalledWith('rascunho!')
+    expect(screen.getByText('Restam 8 mensagens disponíveis nesta conversa para este perfil.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Registrar mensagem' }))
+    expect(props.onSendMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('cota: singular; so o admin ve a cota; enviando desabilita o botao', () => {
+    const one = renderDetail(msgProps({ remainingMessages: 1 }))
+    expect(screen.getByText('Resta 1 mensagem disponível nesta conversa para este perfil.')).toBeInTheDocument()
+    one.unmount()
+    const logistica = renderDetail(
+      msgProps({ isAdmin: false, profile: { uid: 'u-2', name: 'Ana', role: 'logistica' }, remainingMessages: 3 })
+    )
+    expect(logistica.container.querySelector('.pdv-msgs__quota')).toBeNull()
+    logistica.unmount()
+    renderDetail(msgProps({ isSendingMessage: true }))
+    expect(screen.getByRole('button', { name: 'Enviando...' })).toBeDisabled()
+  })
+
+  it('limite atingido: aviso "Limite atingido", textarea desabilitado e botao desabilitado', () => {
+    const { container } = renderDetail(
+      msgProps({ messageLimitReached: true, hasUnlimitedMessages: false, isAdmin: false, profile: { uid: 'u-2', name: 'Ana', role: 'logistica' } })
+    )
+    expect(container.querySelector('.pdv-msgs__limit')).toHaveTextContent('Limite atingido')
+    expect(container.querySelector('.pdv-msgs__limit')).toHaveTextContent('limite de 20 mensagens')
+    expect(screen.getByLabelText('Nova mensagem')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Registrar mensagem' })).toBeDisabled()
+  })
+
+  it('admin com mensagens ilimitadas segue podendo enviar no limite', () => {
+    renderDetail(msgProps({ messageLimitReached: true, hasUnlimitedMessages: true }))
+    expect(screen.getByLabelText('Nova mensagem')).toBeEnabled()
+  })
+
+  it('excluir mensagem (so admin): confirmacao, cancelar nao exclui, confirmar chama onDeleteMessage', async () => {
+    const user = userEvent.setup()
+    const onDeleteMessage = vi.fn().mockResolvedValue(true)
+    renderDetail(msgProps({ onDeleteMessage }))
+    const buttons = screen.getAllByRole('button', { name: 'Excluir' })
+    expect(buttons).toHaveLength(2)
+    await user.click(buttons[0])
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText('Excluir mensagem?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    expect(onDeleteMessage).not.toHaveBeenCalled()
+    await user.click(screen.getAllByRole('button', { name: 'Excluir' })[0])
+    const second = await screen.findByRole('alertdialog')
+    await user.click(within(second).getByRole('button', { name: 'Excluir mensagem' }))
+    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledTimes(1))
+    expect(onDeleteMessage.mock.calls[0][0]).toMatchObject({ id: 'm1' })
+  })
+
+  it('mensagem em exclusao mostra "Excluindo..." e nao-admin nao ve "Excluir"', () => {
+    const deleting = renderDetail(msgProps({ deletingMessageId: 'm1' }))
+    expect(screen.getByRole('button', { name: 'Excluindo...' })).toBeDisabled()
+    deleting.unmount()
+    renderDetail(msgProps({ isAdmin: false, profile: { uid: 'u-2', name: 'Ana', role: 'logistica' } }))
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument()
+  })
+
+  it('tablet (arvore legada) segue com cartoes de mensagem e o formulario abaixo', () => {
+    media.setDesktop(false)
+    const { container } = renderDetail(msgProps())
+    expect(container.querySelector('.pdv-msgs')).toBeNull()
+    expect(container.querySelectorAll('.process-message-card')).toHaveLength(2)
+  })
+})
+
+describe('F4c - aba Historico (linha do tempo vertical)', () => {
+  it('carrega os marcos: data mono curta a esquerda, ponto + trilho e titulo com o autor (o mais novo com ponto menta)', async () => {
+    const { listProcessEvents } = await import('../../src/services/processEventsRepository')
+    listProcessEvents.mockResolvedValueOnce([
+      { id: 'e1', type: 'statusChanged', previousValue: 'Aguardando atracação', value: 'Aguardando registro da DUIMP', occurredAt: '2026-10-19T09:12:00', actorName: '' },
+      { id: 'e2', type: 'fispqUploaded', value: 'Resina', occurredAt: '2026-10-18T16:40:00', actorName: 'Lucas · COMEX' },
+      { id: 'e3', type: 'shipped', occurredAt: '2026-09-13T08:00:00', actorName: 'Ana' },
+    ])
+    const { container } = renderDetail({ detailTab: 'history' })
+    await waitFor(() => expect(container.querySelectorAll('.pdv-hist__item')).toHaveLength(3))
+    expect(screen.getByRole('heading', { level: 3, name: 'Histórico de marcos' })).toBeInTheDocument()
+    const items = [...container.querySelectorAll('.pdv-hist__item')]
+    expect(items[0].querySelector('.pdv-hist__title').textContent).toBe('Status: Aguardando atracação → Aguardando registro da DUIMP')
+    expect(items[0].querySelector('.pdv-hist__by').textContent).toBe('Sistema')
+    expect(items[0].querySelector('.pdv-hist__when').textContent).toMatch(/^19\/10( |\/\d{4} )09:12$/)
+    expect(items[1].querySelector('.pdv-hist__title').textContent).toBe('FISPQ enviada (Resina)')
+    expect(items[1].querySelector('.pdv-hist__by').textContent).toBe('Lucas · COMEX')
+    expect(items[2].querySelector('.pdv-hist__title').textContent).toBe('Embarque realizado')
+    expect(items[0].querySelector('.pdv-hist__dot')).toHaveClass('pdv-hist__dot--latest')
+    expect(items[1].querySelector('.pdv-hist__dot')).not.toHaveClass('pdv-hist__dot--latest')
+  })
+
+  it('Atualizar recarrega; vazio, erro e carregando mantem os estados', async () => {
+    const user = userEvent.setup()
+    const { listProcessEvents } = await import('../../src/services/processEventsRepository')
+    listProcessEvents.mockResolvedValueOnce([])
+    const empty = renderDetail({ detailTab: 'history' })
+    await waitFor(() => expect(empty.container.querySelector('.empty-state')).toHaveTextContent('Nenhum marco registrado'))
+    listProcessEvents.mockRejectedValueOnce(new Error('falha'))
+    await user.click(screen.getByRole('button', { name: 'Atualizar' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar o histórico'))
+    expect(listProcessEvents).toHaveBeenCalledTimes(2)
+  })
+
+  it('so admin/logistica chegam ao historico (usuario comum cai em Detalhes gerais)', () => {
+    renderDetail({ detailTab: 'history', isAdmin: false, profile: { name: 'Zé', role: 'user' } })
+    expect(screen.queryByRole('heading', { name: 'Histórico de marcos' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Detalhes gerais' })).toHaveAttribute('aria-selected', 'true')
+  })
+})

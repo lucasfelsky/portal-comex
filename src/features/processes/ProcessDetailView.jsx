@@ -720,11 +720,13 @@ export default function ProcessDetailView({
         canDeleteMessages={isAdmin}
         deletingMessageId={deletingMessageId}
         onDeleteMessage={onDeleteMessage}
+        variant={isDesktop ? 'desktop' : undefined}
+        currentUserId={profile?.uid}
       />
     ) : null}
 
     {effectiveTab === 'history' ? (
-      <ProcessHistoryPanel processId={selectedProcess.id} />
+      <ProcessHistoryPanel processId={selectedProcess.id} variant={isDesktop ? 'desktop' : undefined} />
     ) : null}
 
     {effectiveTab === 'documents' ? (

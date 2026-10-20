@@ -2685,3 +2685,47 @@ describe('F4c - Itens (valores do Processo.dc.html)', () => {
     expectF4c('.process-detail-view .pdv-item--related', ['grid-template-columns: minmax(0, 1fr) 180px'])
   })
 })
+
+describe('F4c - Mensagens e Historico (valores do Processo.dc.html)', () => {
+  it('mensagens: grid minmax(0,1.4fr) minmax(280px,1fr) gap 14; balao raio 4/14/14/14 (proprio espelhado) fundo --surface-alt / --primary-50', () => {
+    expectF4c('.process-detail-view .pdv-msgs', ['display: grid', 'grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr)', 'gap: 14px', 'align-items: start'])
+    expectF4c('.process-detail-view .pdv-msgs__list', ['display: flex', 'flex-direction: column', 'gap: 12px'])
+    expectF4c('.process-detail-view .pdv-msg', ['display: flex', 'gap: 12px'])
+    expectF4c('.process-detail-view .pdv-msg--own', ['flex-direction: row-reverse'])
+    expectF4c('.process-detail-view .pdv-msg__bubble', [
+      'gap: 4px',
+      'padding: 12px 14px',
+      'border-radius: 4px 14px 14px 14px',
+      'background: var(--surface-alt)',
+    ])
+    expectF4c('.process-detail-view .pdv-msg--own .pdv-msg__bubble', ['border-radius: 14px 4px 14px 14px', 'background: var(--primary-50)'])
+    expectF4c('.process-detail-view .pdv-msg__text', ['font-size: 14px', 'line-height: 1.55'])
+  })
+
+  it('avatar 36x36 raio 10: outros --info-50/--info-700, proprio --navy com texto branco', () => {
+    expectF4c('.process-detail-view .pdv-msg__avatar', ['width: 36px', 'height: 36px', 'border-radius: 10px', 'background: var(--info-50)', 'color: var(--info-700)', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-msg--own .pdv-msg__avatar', ['background: var(--navy)', 'color: var(--sidebar-ink)'])
+    expectF4c('.process-detail-view .pdv-msg__meta', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-msg__who strong', ['color: var(--ink)'])
+  })
+
+  it('formulario: rotulo 14/700, textarea raio 10 sem resize, cota 12 --ink-soft, botao primario 44px de largura total', () => {
+    expectF4c('.process-detail-view .pdv-msgs__label', ['font-size: 14px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-msgs__textarea', ['padding: 12px 14px', 'border-radius: 10px', 'font-size: 14px', 'font-weight: 500', 'resize: none'])
+    expectF4c('.process-detail-view .pdv-msgs__quota', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-msgs__limit', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF4c('.process-detail-view .pdv-msgs__submit', ['width: 100%', 'height: 44px'])
+  })
+
+  it('historico: card padding 20/24 gap 16; linha grid 110px 20px 1fr gap 14; data mono 12 a direita; ponto 12px com halo 3px; trilho 2px --row-divider', () => {
+    expectF4c('.process-detail-view .pdv-history', ['gap: 16px', 'padding: 20px 24px'])
+    expectF4c('.process-detail-view .pdv-hist__item', ['display: grid', 'grid-template-columns: 110px 20px minmax(0, 1fr)', 'gap: 14px'])
+    expectF4c('.process-detail-view .pdv-hist__when', ['font-family: var(--font-mono)', 'font-size: 12px', 'text-align: right', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-hist__dot', ['width: 12px', 'height: 12px', 'margin-top: 3px', 'border-radius: 99px', 'background: var(--primary-700)', 'box-shadow: 0 0 0 3px var(--primary-50)'])
+    expectF4c('.process-detail-view .pdv-hist__dot--latest', ['background: var(--primary)'])
+    expectF4c('.process-detail-view .pdv-hist__line', ['flex-grow: 1', 'width: 2px', 'margin: 4px 0', 'background: var(--row-divider)'])
+    expectF4c('.process-detail-view .pdv-hist__body', ['gap: 2px', 'padding-bottom: 18px'])
+    expectF4c('.process-detail-view .pdv-hist__title', ['font-size: 14px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-hist__by', ['font-size: 12px', 'color: var(--ink-soft)'])
+  })
+})
