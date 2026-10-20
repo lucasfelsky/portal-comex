@@ -47,10 +47,10 @@ const navigation = [
 
 // Icone com 2 glifos: o do tablet (`legacy`) e o do mock (`desk`); o CSS mostra
 // um por breakpoint (.icon--tablet / .icon--desk em styles.css).
-function ResponsiveIcon({ legacy, desk, size = 18, strokeWidth = 1.9 }) {
+function ResponsiveIcon({ legacy, desk, size = 18, legacySize = size, strokeWidth = 1.9 }) {
   return (
     <>
-      <Icon name={legacy} size={size} className="icon--tablet" />
+      <Icon name={legacy} size={legacySize} className="icon--tablet" />
       <Icon name={desk} size={size} strokeWidth={strokeWidth} className="icon--desk" />
     </>
   )
@@ -724,7 +724,7 @@ export default function AppLayout() {
           aria-haspopup="dialog"
           onClick={handleToggleNotificationPanel}
         >
-          <ResponsiveIcon legacy="bell" desk="bell-ring" size={19} />
+          <ResponsiveIcon legacy="bell" desk="bell-ring" size={18} legacySize={19} />
           <span className="notifications__label">Notificações</span>
           {unreadNotifications.length > 0 ? (
             <span className="notifications__count">{unreadNotifications.length}</span>

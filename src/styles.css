@@ -9695,12 +9695,13 @@ body {
     background: none;
   }
 
-  .admin-section .admin-tabs .admin-tab {
+  .admin-section .admin-tabs .tab-button.admin-tab {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
     padding: 12px 14px;
+    font-family: inherit;
     border: 1px solid var(--border);
     border-radius: 14px;
     background: transparent;
@@ -9715,13 +9716,13 @@ body {
       border-color var(--dur-base) var(--ease-out);
   }
 
-  .admin-section .admin-tabs .admin-tab:hover:not(.tab-button--active) {
+  .admin-section .admin-tabs .tab-button.admin-tab:hover:not(.tab-button--active) {
     border-color: var(--border-strong);
     background: transparent;
     color: var(--ink);
   }
 
-  .admin-section .admin-tabs .admin-tab.tab-button--active {
+  .admin-section .admin-tabs .tab-button.admin-tab.tab-button--active {
     border-color: var(--navy);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
@@ -9729,11 +9730,11 @@ body {
     transform: none;
   }
 
-  [data-theme='dark'] .admin-section .admin-tabs .admin-tab.tab-button--active {
+  [data-theme='dark'] .admin-section .admin-tabs .tab-button.admin-tab.tab-button--active {
     border-color: var(--primary);
   }
 
-  .admin-section .admin-tabs .admin-tab:focus-visible {
+  .admin-section .admin-tabs .tab-button.admin-tab:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
   }

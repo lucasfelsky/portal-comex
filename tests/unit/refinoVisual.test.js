@@ -765,8 +765,13 @@ describe('F2 shell - CSS do mock', () => {
       'grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))',
       'gap: 8px',
     ])
-    expectDecls('.admin-section .admin-tabs .admin-tab', ['padding: 12px 14px', 'border-radius: 14px', 'gap: 4px'])
-    expectDecls('.admin-section .admin-tabs .admin-tab.tab-button--active', [
+    expectDecls('.admin-section .admin-tabs .tab-button.admin-tab', [
+      'padding: 12px 14px',
+      'border-radius: 14px',
+      'gap: 4px',
+      'font-family: inherit',
+    ])
+    expectDecls('.admin-section .admin-tabs .tab-button.admin-tab.tab-button--active', [
       'border-color: var(--navy)',
       'background: var(--surface)',
       'box-shadow: var(--shadow-sm)',
