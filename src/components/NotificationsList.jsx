@@ -11,6 +11,7 @@
 //     loadError={string|null}       // UX-2: banner com "Tentar novamente"
 //     onRetry={() => void}          // UX-2: recarrega (some se ausente)
 //     variant="drawer"              // refino F2: lista plana da gaveta desktop
+//     variant="page"                // refino F5a: pagina /notifications no desktop
 //   />
 //
 // Comportamento:
@@ -24,6 +25,7 @@
 //     (nao substitui os grupos ja carregados)
 
 import { useId, useState } from 'react'
+import EmptyState from './EmptyState'
 import Icon from './Icon'
 import Skeleton from './Skeleton'
 import { useSwipeReveal } from '../hooks/useSwipeReveal'
@@ -121,6 +123,94 @@ function DrawerRow({ notification, onOpenNotification, onMarkAsRead, formatRelat
         <Icon name="check" size={16} strokeWidth={1.9} />
       </button>
     ) : null}
+    </div>
+  )
+}
+
+// Refino F5a (Notificacoes.dc.html): "há 8 min • 19/10/2026" — data completa com ano
+// e "ontem" no lugar de "há 1 d". Sem toISOString: formata no fuso local.
+function formatPageDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
+}
+
+// Linha da pagina desktop: grid [ladrilho 40 | corpo | "Marcar como lida"]. O botao
+// que abre a notificacao cobre ladrilho + corpo; o "Marcar como lida" e' irmao dele
+// (nao aninha botao em botao).
+function PageRow({ notification, onOpenNotification, onMarkAsRead, formatRelative }) {
+  const { icon, tone } = getDrawerVisual(notification.type)
+  const relative = formatRelative(notification.createdAt)
+  const stamp = [relative === 'há 1 d' ? 'ontem' : relative, formatPageDate(notification.createdAt)]
+    .filter(Boolean)
+    .join(' • ')
+  return (
+    <div className={`nt-row${notification.isRead ? '' : ' nt-row--unread'}`}>
+      <button
+        type="button"
+        className="nt-row__open"
+        onClick={() => onOpenNotification(notification)}
+        aria-label={buildNotificationAriaLabel(notification, formatRelative)}
+      >
+        <span className={`nt-row__icon nt-row__icon--${tone}`} aria-hidden="true">
+          <Icon name={icon} size={18} strokeWidth={1.9} />
+        </span>
+        <span className="nt-row__body">
+          <span className="nt-row__title">
+            <span className="nt-row__dot" aria-hidden="true" />
+            {notification.title}
+          </span>
+          <span className="nt-row__text">{notification.body}</span>
+          <span className="nt-row__time">{stamp}</span>
+        </span>
+      </button>
+      {onMarkAsRead && !notification.isRead ? (
+        <button
+          type="button"
+          className="nt-row__mark"
+          onClick={() => onMarkAsRead(notification)}
+          aria-label={`Marcar como lida: ${notification.title}`}
+        >
+          Marcar como lida
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+// "Anteriores" no desktop: botao de 56px recolhido (nome + "N notificações" + chevron);
+// aberto, o mesmo cartao revela ate 3 linhas (acordeao com aria-expanded/aria-controls).
+function PageOlderGroup({ group, isExpanded, onToggle, onOpenNotification, onMarkAsRead, formatRelative }) {
+  const itemsId = useId()
+  return (
+    <div className={`nt-older${isExpanded ? ' nt-older--open' : ''}`}>
+      <button
+        type="button"
+        className="nt-older__toggle"
+        aria-expanded={isExpanded}
+        aria-controls={itemsId}
+        onClick={onToggle}
+      >
+        <span className="nt-older__title">{group.title}</span>
+        <span className="nt-older__meta">
+          {formatCount(group.items.length, 'notificação', 'notificações')}
+          <Icon name="chevron-down" size={16} strokeWidth={2} className="nt-older__chevron" />
+        </span>
+      </button>
+      {isExpanded ? (
+        <div id={itemsId} className="nt-older__items">
+          {group.items.slice(0, ITEMS_PER_GROUP).map((notification) => (
+            <PageRow
+              key={notification.id}
+              notification={notification}
+              onOpenNotification={onOpenNotification}
+              onMarkAsRead={onMarkAsRead}
+              formatRelative={formatRelative}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -317,6 +407,15 @@ export default function NotificationsList({
         </div>
       )
     }
+    if (variant === 'page') {
+      return (
+        <EmptyState
+          illustration="inbox"
+          title="Nenhuma notificação"
+          message="As novas dúvidas e respostas dos processos aparecerão aqui."
+        />
+      )
+    }
     return (
       <div className="empty-state">
         <strong>Nenhuma notificação</strong>
@@ -365,6 +464,72 @@ export default function NotificationsList({
       }
       return next
     })
+  }
+
+  if (variant === 'page') {
+    return (
+      <>
+        {errorBanner}
+        {recent.length > 0 ? (
+          <section className="nt-section" aria-label="Recentes">
+            <h2 className="nt-section__title">Recentes</h2>
+            {recent.map((group) => (
+              <div
+                key={`recent-${group.processId || group.latestCreatedAt}-${group.type}`}
+                className="nt-group"
+              >
+                <div className="nt-group__head">
+                  <span className="nt-group__title">{group.title}</span>
+                  <span className="nt-group__meta">
+                    {formatCount(group.items.length, 'notificação', 'notificações')}
+                    {group.unreadCount > 0
+                      ? ` • ${formatCount(group.unreadCount, 'não lida', 'não lidas')}`
+                      : ''}
+                  </span>
+                </div>
+                {group.items.slice(0, ITEMS_PER_GROUP).map((notification) => (
+                  <PageRow
+                    key={notification.id}
+                    notification={notification}
+                    onOpenNotification={onOpenNotification}
+                    onMarkAsRead={onMarkAsRead}
+                    formatRelative={formatRelative}
+                  />
+                ))}
+              </div>
+            ))}
+          </section>
+        ) : null}
+        {older.length > 0 ? (
+          <section className="nt-section" aria-label="Anteriores">
+            <h2 className="nt-section__title">Anteriores</h2>
+            {older.map((group) => {
+              const key = `older-${group.processId || group.latestCreatedAt}-${group.type}`
+              return (
+                <PageOlderGroup
+                  key={key}
+                  group={group}
+                  isExpanded={expandedOlderKeys.has(key)}
+                  onToggle={() => toggleOlderGroup(key)}
+                  onOpenNotification={onOpenNotification}
+                  onMarkAsRead={onMarkAsRead}
+                  formatRelative={formatRelative}
+                />
+              )
+            })}
+            {hasMoreOlder ? (
+              <button
+                type="button"
+                className="nt-section__more"
+                onClick={() => setOlderLimit((value) => value + OLDER_STEP)}
+              >
+                Ver mais {Math.min(OLDER_STEP, allOlder.length - olderLimit)} anteriores
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+      </>
+    )
   }
 
   return (

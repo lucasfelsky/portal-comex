@@ -1590,7 +1590,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'pages/DashboardPage.jsx': [1, 0, 0],
   'pages/DebugClaimsPage.jsx': [1, 0, 0],
   'pages/LoginPage.jsx': [1, 1, 0],
-  'pages/NewsPage.jsx': [5, 4, 0],
+  // F5a: o editor desktop usa .secondary-button (via secondaryButtonClass); sobram "Editar" legado (secondary), "Voltar" (fantasma) e a constante do legado (secondary).
+  'pages/NewsPage.jsx': [3, 2, 0],
   'pages/NotFoundPage.jsx': [1, 1, 0],
   'pages/NotificationsPage.jsx': [3, 1, 2],
   'pages/PendingApprovalPage.jsx': [2, 1, 0],
@@ -3164,5 +3165,265 @@ describe('F4d - JSX/markup', () => {
       expect(noComments(source)).not.toMatch(/toISOString\(\)|console\.log/)
       expect(noComments(source)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F5a - Noticias, Central de notificacoes e Preferencias (Noticias.dc.html,
+// Notificacoes.dc.html, Preferencias.dc.html). Cada tela desktop e uma arvore propria
+// escolhida por matchMedia (nw-*, nt-*, prefs-*); tablet/mobile ficam na arvore legada.
+// CSS = 3 secoes "REFINO VISUAL F5a" (NOTICIAS, CENTRAL DE NOTIFICACOES, PREFERENCIAS),
+// cada uma com UM @media desktop (+ o compacto de notebook nas Noticias), toda regra sob a
+// raiz da tela (.surface--news, .notifications-page, o modal .prefs-modal ou a raiz
+// .notification-prefs--desktop). Os blocos desktop legados (Ciclo 3a / 6d) foram removidos.
+// ---------------------------------------------------------------------------
+const F5A_NEWS = 'REFINO VISUAL F5a — NOTICIAS'
+const F5A_NEWS_COMPACT = 'Notebook / telas baixas (altura <= 800): capas mais baixas'
+const F5A_NOTIF = 'REFINO VISUAL F5a — CENTRAL DE NOTIFICACOES'
+const F5A_PREFS = 'REFINO VISUAL F5a — PREFERENCIAS DE NOTIFICACAO'
+const f5aNewsAt = css.indexOf(F5A_NEWS)
+const f5aNewsCompactAt = css.indexOf(F5A_NEWS_COMPACT)
+const f5aNotifAt = css.indexOf(F5A_NOTIF)
+const f5aPrefsAt = css.indexOf(F5A_PREFS)
+const f5aEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const f5aStartOf = (at) => css.lastIndexOf('/*', at)
+const f5aNewsRules = parseRules(bodyAfter(stripComments(css.slice(f5aStartOf(f5aNewsAt), f5aNewsCompactAt)), DESKTOP_MEDIA))
+const f5aNewsCompactRules = parseRules(
+  bodyAfter(stripComments(css.slice(f5aNewsCompactAt, f5aStartOf(f5aNotifAt))), '@media (min-width: 1041px) and (max-height: 800px) {'),
+)
+const f5aNotifRules = parseRules(bodyAfter(stripComments(css.slice(f5aStartOf(f5aNotifAt), f5aStartOf(f5aPrefsAt))), DESKTOP_MEDIA))
+const f5aPrefsRules = parseRules(bodyAfter(stripComments(css.slice(f5aStartOf(f5aPrefsAt), f5aEnd)), DESKTOP_MEDIA))
+
+function expectF5a(rules, selector, declarations) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F5a: ${selector}`).toBeGreaterThan(0)
+  const body = bodies.join(' ')
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F5a - tokens novos (com contraparte dark)', () => {
+  const light = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
+  const darkStart = css.indexOf(":root[data-theme='dark']")
+  const dark = css.slice(darkStart, css.indexOf('\n  }\n', darkStart) + 1)
+  it('--dialog-footer-bg (#fbfcfc), --on-primary-700, --row-unread-bg e --row-divider-soft existem no claro e no escuro', () => {
+    expect(light).toContain('--dialog-footer-bg: #fbfcfc;')
+    expect(light).toContain('--on-primary-700: #ffffff;')
+    expect(light).toContain('--row-unread-bg: #f7fbfa;')
+    expect(light).toContain('--row-divider-soft: #f0f4f3;')
+    for (const token of ['--dialog-footer-bg', '--on-primary-700', '--row-unread-bg', '--row-divider-soft']) {
+      expect(dark, `dark sem ${token}`).toContain(`${token}:`)
+    }
+  })
+  it('o rodape do formulario em modal usa --dialog-footer-bg (nao mais --surface-alt)', () => {
+    expect(stripComments(css)).toMatch(/\.process-form--dialog \.pfd-footer \{[^}]*background: var\(--dialog-footer-bg\);/)
+  })
+})
+
+describe('F5a - secoes, escopo e ordem', () => {
+  it('as 3 secoes existem, antes do bloco reduce desktop (que segue ultimo)', () => {
+    expect(f5aNewsAt).toBeGreaterThan(0)
+    expect(f5aNotifAt).toBeGreaterThan(f5aNewsAt)
+    expect(f5aPrefsAt).toBeGreaterThan(f5aNotifAt)
+    expect(f5aEnd).toBeGreaterThan(f5aPrefsAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f5aEnd)
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP)).match(/@media/g)).toHaveLength(1)
+  })
+
+  it('nenhum @media (max-width) nas secoes e toda regra comeca pela raiz da tela', () => {
+    const whole = stripComments(css.slice(f5aStartOf(f5aNewsAt), f5aEnd))
+    expect(whole).not.toMatch(/@media\s*\(max-width/)
+    const NEWS_ROOT = /^(\[data-theme='dark'\] )?(\.surface--news|\.surface\.surface--news|\.modal-backdrop\.nw-modal-backdrop|\.modal\.nw-modal|\.nw-modal)/
+    for (const rule of [...f5aNewsRules, ...f5aNewsCompactRules]) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(NEWS_ROOT)
+    }
+    const NOTIF_ROOT = /^(\[data-theme='dark'\] )?(\.surface\.notifications-page|\.notifications-page)/
+    for (const rule of f5aNotifRules) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(NOTIF_ROOT)
+    }
+    const PREFS_ROOT = /^(\.modal-backdrop\.prefs-modal-backdrop|\.modal\.prefs-modal|\.prefs-modal |\.notification-prefs--desktop)/
+    for (const rule of f5aPrefsRules) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(PREFS_ROOT)
+    }
+  })
+
+  it('so tokens: nenhuma cor literal nas tres secoes', () => {
+    const all = [...f5aNewsRules, ...f5aNewsCompactRules, ...f5aNotifRules, ...f5aPrefsRules].map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
+    expect(all.match(/rgba?\([^)]*\)/g)).toBeNull()
+  })
+
+  it('os blocos desktop legados (Ciclo 3a Noticias e 6d Notificacoes) foram substituidos', () => {
+    const clean = stripComments(css)
+    expect(clean).not.toContain('.surface--news .news-grid')
+    expect(clean).not.toContain('.notifications-page .notifications__group')
+    expect(clean).not.toContain('.notifications-page .notifications__filters')
+  })
+})
+
+describe('F5a - Noticias (valores do Noticias.dc.html)', () => {
+  it('cabecalho: eyebrow mono 11/600 1.5px; titulo Sora 30/700 -0.02em; raiz sem cartao', () => {
+    expectF5a(f5aNewsRules, '.surface.surface--news.surface--news-desktop', ['padding: 0', 'gap: 20px', 'border: 0', 'background: none'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-head__eyebrow', ['font-family: var(--font-mono)', 'font-size: 11px', 'letter-spacing: 1.5px', 'color: var(--primary-700)', 'text-transform: uppercase'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-head__title', ['font-family: var(--font-heading)', 'font-size: 30px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-head__new', ['gap: 8px', 'padding: 0 18px'])
+  })
+
+  it('grade auto-fit minmax(380px, 1fr) gap 20; cartao com hover so de sombra + borda (200 ms)', () => {
+    expectF5a(f5aNewsRules, '.surface--news .nw-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr))', 'gap: 20px', 'align-items: start'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card:not(.nw-card--skeleton):hover', ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)'])
+    expect(f5aNewsRules.find((r) => r.selectors.includes('.surface--news .nw-card')).body).toContain('box-shadow var(--dur-base) var(--ease-out)')
+  })
+
+  it('destaque: raio 22, capa 300, corpo 22/24/24, titulo Sora 24 lh 1.25, resumo 15/1.6, "Ler notícia" 14/700', () => {
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured', ['border-radius: 22px', 'overflow: hidden'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured .nw-cover', ['height: 300px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured .nw-card__body', ['gap: 10px', 'padding: 22px 24px 24px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured .nw-card__title', ['font-family: var(--font-heading)', 'font-size: 24px', 'letter-spacing: -0.01em', 'line-height: 1.25'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured .nw-card__summary', ['font-size: 15px', 'line-height: 1.6', 'color: var(--ink-soft)'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card__cta', ['gap: 6px', 'font-size: 14px', 'font-weight: 700', 'color: var(--link-color)'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-cover', ['background: var(--media-placeholder)'])
+  })
+
+  it('fonte em pilula: propria --navy-50/--navy, externa --info-50/--info-700; pilula do destaque 3x10 12px, da linha 2x8 11px', () => {
+    expectF5a(f5aNewsRules, '.surface--news .nw-source--own', ['background: var(--navy-50)', 'color: var(--navy)'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-source--ext', ['background: var(--info-50)', 'color: var(--info-700)'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--featured .nw-source', ['padding: 3px 10px', 'font-size: 12px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--row .nw-source', ['padding: 2px 8px', 'font-size: 11px'])
+    expectF5a(f5aNewsRules, "[data-theme='dark'] .surface--news .nw-source--own", ['color: var(--primary-700)'])
+  })
+
+  it('"Anteriores": titulo Sora 18, linhas 96/1fr/16 gap 14 padding 10/14/10/10 raio 16, capa 72 raio 10, "Carregar mais" 44', () => {
+    expectF5a(f5aNewsRules, '.surface--news .nw-aside__title', ['font-family: var(--font-heading)', 'font-size: 18px', 'margin: 0 0 4px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--row', ['border-radius: 16px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--row .nw-card__link', ['grid-template-columns: 96px minmax(0, 1fr) 16px', 'gap: 14px', 'padding: 10px 14px 10px 10px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--row .nw-cover', ['height: 72px', 'border-radius: 10px'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-card--row .nw-card__title', ['font-size: 14px', 'font-weight: 700', 'line-height: 1.35'])
+    expectF5a(f5aNewsRules, '.surface--news .nw-aside__more', ['height: 44px', 'border: 1px solid var(--border)', 'border-radius: 12px', 'color: var(--navy)', 'font-size: 13px'])
+  })
+
+  it('detalhe: dialogo 22px sobre --scrim, capa 280, "x" de 44 sticky, titulo Sora 26, secoes em cartao; notebook compacta', () => {
+    expectF5a(f5aNewsRules, '.modal-backdrop.nw-modal-backdrop', ['padding: 40px', 'background: var(--scrim)'])
+    expectF5a(f5aNewsRules, '.modal.nw-modal', ['width: min(860px, 100%)', 'padding: 0', 'border-radius: 22px', 'box-shadow: var(--shadow-xl)'])
+    expectF5a(f5aNewsRules, '.nw-modal .nw-detail__cover', ['height: 280px'])
+    expectF5a(f5aNewsRules, '.nw-modal .nw-detail__close', ['position: sticky', 'width: 44px', 'height: 44px', 'border-radius: 12px'])
+    expectF5a(f5aNewsRules, '.nw-modal .nw-detail__title', ['font-family: var(--font-heading)', 'font-size: 26px'])
+    expectF5a(f5aNewsRules, '.nw-modal .nw-detail__section', ['border-radius: 16px', 'background: var(--surface-alt)'])
+    expectF5a(f5aNewsCompactRules, '.surface--news .nw-card--featured .nw-cover', ['height: 220px'])
+    expectF5a(f5aNewsCompactRules, '.modal.nw-modal', ['max-height: calc(100vh - 32px)'])
+  })
+
+  it('JSX: arvore por matchMedia, "Editar" so em manual, bare + nw-modal no detalhe, paginacao de "Anteriores"', () => {
+    const page = read('src/pages/NewsPage.jsx').replace(/\r\n/g, '\n')
+    expect(page).toContain("const isDesktop = useMediaQuery('(min-width: 1041px)')")
+    expect(page).toContain("const canEdit = isAdmin && item.sourceType !== 'automatic'")
+    expect(page).toContain('bare={isDesktop}')
+    expect(page).toContain("className={isDesktop ? 'nw-modal' : 'news-modal'}")
+    expect(page).toContain('const OLDER_PAGE_SIZE = 4')
+    expect(page).toContain('Carregar mais')
+    expect(page).toContain('COMEX · MERCADO · OPERAÇÃO')
+    expect(stripComments(page)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+})
+
+describe('F5a - Central de notificacoes (valores do Notificacoes.dc.html)', () => {
+  it('raiz: max-width 1040, gap 18, sem cartao; cabecalho como o das Noticias; acoes 44', () => {
+    expectF5a(f5aNotifRules, '.surface.notifications-page.notifications-page--desktop', ['max-width: 1040px', 'gap: 18px', 'padding: 0', 'border: 0', 'background: none'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-head__eyebrow', ['font-family: var(--font-mono)', 'font-size: 11px', 'letter-spacing: 1.5px', 'text-transform: uppercase'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-head__title', ['font-size: 30px', 'letter-spacing: -0.02em'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-icon-button', ['width: 44px', 'height: 44px', 'border: 1px solid var(--border)', 'border-radius: 12px'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-icon-button--active', ['border-color: var(--warning)', 'background: var(--warning-50)', 'color: var(--warning-700)'])
+  })
+
+  it('pilulas (FilterPill) com gap 6 e contagem mono 700 opacity .8', () => {
+    expectF5a(f5aNotifRules, '.notifications-page .nt-filters', ['display: flex', 'flex-wrap: wrap', 'gap: 6px'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-filters .nt-filter .filter-pill__count', ['font-weight: 700', 'opacity: 0.8'])
+  })
+
+  it('cartao de grupo raio 18; cabecalho 14/18; linha 40/1fr/auto gap 14 padding 14/18; ladrilho 40 raio 12; ponto 8', () => {
+    expectF5a(f5aNotifRules, '.notifications-page .nt-group', ['border: 1px solid var(--border)', 'border-radius: 18px', 'overflow: hidden'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-group__head', ['padding: 14px 18px', 'border-bottom: 1px solid var(--row-divider)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row', ['gap: 14px', 'padding: 14px 18px', 'border-top: 1px solid var(--row-divider-soft)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row--unread', ['background: var(--row-unread-bg)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row:hover', ['background: var(--bg-tint-1)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__open', ['grid-template-columns: 40px minmax(0, 1fr)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__icon', ['width: 40px', 'height: 40px', 'border-radius: 12px'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__dot', ['width: 8px', 'height: 8px'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row--unread .nt-row__dot', ['background: var(--primary)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__mark', ['height: 36px', 'padding: 0 12px', 'border-radius: 10px', 'font-size: 12px', 'font-weight: 700'])
+  })
+
+  it('tons do ladrilho: info/ok/warn/danger com os tokens do mock', () => {
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__icon--info', ['background: var(--info-50)', 'color: var(--info-700)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__icon--ok', ['background: var(--channel-green-soft)', 'color: var(--channel-green-ink)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__icon--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-row__icon--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+  })
+
+  it('"Anteriores": botao de 56 raio 16, chevron gira 180 ao abrir, "Ver mais" 44 verde', () => {
+    expectF5a(f5aNotifRules, '.notifications-page .nt-older', ['border-radius: 16px', 'border: 1px solid var(--border)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-older__toggle', ['height: 56px', 'padding: 0 18px', 'font-size: 14px', 'font-weight: 700'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-older--open .nt-older__chevron', ['transform: rotate(180deg)'])
+    expectF5a(f5aNotifRules, '.notifications-page .nt-section__more', ['height: 44px', 'color: var(--link-color)', 'font-size: 13px', 'font-weight: 700'])
+  })
+
+  it('JSX: arvore por matchMedia, 10 filtros, FilterPill, DND com os mesmos aria-labels, variant="page"', () => {
+    const page = read('src/pages/NotificationsPage.jsx').replace(/\r\n/g, '\n')
+    expect(page).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect((page.match(/\{ value: '/g) ?? []).length).toBe(10)
+    expect(page).toContain('<FilterPill')
+    expect(page).toContain("'Ativar modo não perturbe por 1 hora'")
+    expect(page).toContain('variant="page"')
+    expect(page).toContain('name="bell-slash"')
+    expect(page).toContain('name="sliders"')
+    const list = read('src/components/NotificationsList.jsx')
+    expect(list).toContain("variant === 'page'")
+    expect(list).toContain('Ver mais {Math.min(OLDER_STEP, allOlder.length - olderLimit)} anteriores')
+    expect(stripComments(list)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+})
+
+describe('F5a - Preferencias (valores do Preferencias.dc.html)', () => {
+  it('dialogo 22px: 664 de largura, padding 26/28, --shadow-xl sobre --scrim; titulo Sora 22; lead 14/1.55', () => {
+    expectF5a(f5aPrefsRules, '.modal-backdrop.prefs-modal-backdrop', ['padding: 28px', 'background: var(--scrim)'])
+    expectF5a(f5aPrefsRules, '.modal.prefs-modal', ['width: min(664px, 100%)', 'padding: 26px 28px', 'border-radius: 22px', 'box-shadow: var(--shadow-xl)'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop', ['gap: 18px'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .prefs-head__title', ['font-family: var(--font-heading)', 'font-size: 22px', 'font-weight: 700', 'letter-spacing: -0.01em'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .notification-prefs__lead', ['font-size: 14px', 'line-height: 1.55', 'color: var(--ink-soft)'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .prefs-head__close', ['width: 44px', 'height: 44px', 'border-radius: 12px', 'background: var(--surface-alt)'])
+  })
+
+  it('tabela: colunas de 96, linhas 14/0 com --row-divider, tipo 15/700, dica 12; alvo 44x44; caixa 22 raio 7 1.5px', () => {
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .notification-prefs__grid thead th', ['width: 96px', 'padding: 0 0 10px', 'font-size: 12px', 'font-weight: 700'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .notification-prefs__grid td', ['padding: 14px 0', 'border-top: 1px solid var(--row-divider)'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .notification-prefs__type', ['font-size: 15px', 'font-weight: 700'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .prefs-check', ['width: 44px', 'height: 44px'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .prefs-check__box', ['width: 22px', 'height: 22px', 'border: 1.5px solid var(--border-control)', 'border-radius: 7px'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .prefs-check input:checked + .prefs-check__box', ['border-color: var(--primary-700)', 'background: var(--primary-700)', 'color: var(--on-primary-700)'])
+  })
+
+  it('rodape: Cancelar (fantasma) 0/16 e "Salvar preferências" (primario) 0/18 a direita, gap 8', () => {
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .action-row', ['justify-content: flex-end', 'gap: 8px'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .action-row .ghost-button', ['padding: 0 16px'])
+    expectF5a(f5aPrefsRules, '.notification-prefs--desktop .action-row .primary-button', ['padding: 0 18px'])
+  })
+
+  it('JSX: bare + prefs-modal no desktop; input nativo dentro do label; fluxo de permissao do navegador mantido', () => {
+    const modal = read('src/components/NotificationPreferencesModal.jsx').replace(/\r\n/g, '\n')
+    expect(modal).toContain('bare={isDesktop}')
+    expect(modal).toContain("className={isDesktop ? 'prefs-modal' : ''}")
+    expect(modal).toContain('<label className="prefs-check">')
+    expect(modal).toContain('await fcm.enable()')
+    expect(modal).toContain('isIosNotInstalled()')
+  })
+})
+
+describe('F5a - icones novos', () => {
+  it('Icon.jsx traz bell-slash, sliders, mail, clock, eye, eye-off, more e robot com os paths dos mock-ups', () => {
+    const icons = read('src/components/Icon.jsx')
+    expect(icons).toContain("'bell-slash': <path d=\"M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H7M10 21h4M3 3l18 18\" />")
+    expect(icons).toContain('M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0')
+    expect(icons).toContain('M12 7v5l3 2')
+    expect(icons).toContain('M12 3v4M9 12h.01M15 12h.01M9 16h6')
+    for (const name of ['sliders', 'mail', 'clock', 'eye', "'eye-off'", 'more', 'robot']) expect(icons).toContain(`${name}:`)
   })
 })

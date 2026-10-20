@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
+import Icon from './Icon'
 import { useToast } from './Toast'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { saveNotificationPreferences } from '../services/usersRepository'
 
 // F9 (backlog 2026-07-12): preferências de notificação por usuário —
@@ -30,6 +32,11 @@ function isIosNotInstalled() {
   return !standalone
 }
 
+// Refino F5a (Preferencias.dc.html): >= 1041px o modal ganha cabecalho proprio
+// (titulo Sora 22 + lead + fechar 44), caixas de 22px e rodape Cancelar/Salvar;
+// tablet/mobile seguem no markup anterior (cabecalho padrao do Modal, input nativo).
+const DESKTOP_QUERY = '(min-width: 1041px)'
+
 export const PREFERENCE_TYPES = [
   { key: 'processos', label: 'Processos', hint: 'Mensagens, atualizações, coleta, pós-recebimento, divergências, anuências e alertas diários' },
   { key: 'noticias', label: 'Notícias', hint: 'Publicações manuais e automáticas' },
@@ -56,6 +63,7 @@ export function buildEffectivePreferences(stored) {
 
 export default function NotificationPreferencesModal({ open, onClose, profile, fcm }) {
   const toast = useToast()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [draft, setDraft] = useState(() => buildEffectivePreferences(profile?.notificationPreferences))
   const [isSaving, setIsSaving] = useState(false)
 
@@ -117,11 +125,32 @@ export default function NotificationPreferencesModal({ open, onClose, profile, f
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Preferências de notificação">
-      <div className="notification-prefs">
-        <p className="notification-prefs__lead">
-          Escolha o que você recebe e por onde. Tudo vem ligado por padrão.
-        </p>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Preferências de notificação"
+      ariaLabel="Preferências de notificação"
+      bare={isDesktop}
+      className={isDesktop ? 'prefs-modal' : ''}
+    >
+      <div className={`notification-prefs${isDesktop ? ' notification-prefs--desktop' : ''}`}>
+        {isDesktop ? (
+          <div className="prefs-head">
+            <div className="prefs-head__text">
+              <h2 className="prefs-head__title">Preferências de notificação</h2>
+              <p className="notification-prefs__lead">
+                Escolha o que você recebe e por onde. Tudo vem ligado por padrão.
+              </p>
+            </div>
+            <button type="button" className="prefs-head__close" aria-label="Fechar" onClick={onClose}>
+              <Icon name="close" size={16} strokeWidth={2} />
+            </button>
+          </div>
+        ) : (
+          <p className="notification-prefs__lead">
+            Escolha o que você recebe e por onde. Tudo vem ligado por padrão.
+          </p>
+        )}
 
         <table className="notification-prefs__grid">
           <thead>
@@ -144,15 +173,29 @@ export default function NotificationPreferencesModal({ open, onClose, profile, f
                 {PREFERENCE_CHANNELS.map((channel) => {
                   const isPushColumn = channel.key === 'push'
                   const disabled = isPushColumn && !pushSupported
+                  const checkbox = (
+                    <input
+                      type="checkbox"
+                      checked={draft[type.key]?.[channel.key] ?? true}
+                      disabled={disabled || isSaving}
+                      onChange={() => toggle(type.key, channel.key)}
+                      aria-label={`${type.label}: ${channel.label}`}
+                    />
+                  )
                   return (
                     <td key={channel.key}>
-                      <input
-                        type="checkbox"
-                        checked={draft[type.key]?.[channel.key] ?? true}
-                        disabled={disabled || isSaving}
-                        onChange={() => toggle(type.key, channel.key)}
-                        aria-label={`${type.label}: ${channel.label}`}
-                      />
+                      {isDesktop ? (
+                        // alvo de 44x44 com a caixa de 22px desenhada; o input nativo
+                        // continua sendo o controle (teclado, leitor de tela, disabled).
+                        <label className="prefs-check">
+                          {checkbox}
+                          <span className="prefs-check__box" aria-hidden="true">
+                            <Icon name="check" size={13} strokeWidth={3} />
+                          </span>
+                        </label>
+                      ) : (
+                        checkbox
+                      )}
                     </td>
                   )
                 })}

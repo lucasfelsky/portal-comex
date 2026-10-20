@@ -180,6 +180,9 @@
   --scrim-soft: rgba(11, 36, 48, 0.32);
   --row-divider: #e3ecea;
   --dialog-footer-bg: #fbfcfc;
+  --on-primary-700: #ffffff;
+  --row-unread-bg: #f7fbfa;
+  --row-divider-soft: #f0f4f3;
 
   /* Marca de produto "Rota e chegada" (BrandMark.jsx) e SQ Quimica (SQLogo) */
   --brand-mark-tile: #004153;
@@ -9460,6 +9463,9 @@ body {
     --scrim-soft: rgba(0, 0, 0, 0.4);
     --row-divider: rgba(74, 222, 200, 0.1);
     --dialog-footer-bg: #12303c;
+    --on-primary-700: #0b2430;
+    --row-unread-bg: #12303c;
+    --row-divider-soft: rgba(74, 222, 200, 0.06);
     --brand-mark-tile: #004153;
     --brand-mark-glyph: #ffffff;
     --brand-mark-dot: #14dda7;
@@ -12594,163 +12600,7 @@ body {
   font-family: var(--font-heading);
 }
 
-/* ============================================================
-   Ciclo 3a (redesign Fase 3) — Noticias desktop: cards da lista
-   (`.news-list-card`/`.news-editor-card`), grid de cards (`.news-grid`/
-   `.news-card`), titulo do form de admin e badge de fonte na
-   linguagem da Fase 1. So' tokens (--radius-*, --shadow-*,
-   --font-heading, --primary-700), sem hex fora do :root. Escopado via
-   `.surface--news` (root de NewsPage.jsx:425, classe unica no app) pra
-   nao vazar pro Dashboard/Chegadas, que reusam `.list-card`/
-   `.card-heading`/`.admin-toolbar`/`.inline-badge` como classes
-   soltas. Mantem a estrutura de grid do desktop (sem introduzir
-   `--featured`/`--row`, que sao mobile-only — comentario em
-   NewsPage.jsx:562-565). `.news-modal` nao e' tocado aqui: e'
-   renderizado via `createPortal` (Modal.jsx:179-211) direto em
-   `document.body`, fora da subarvore de `.surface--news` no DOM —
-   nao seria alcancado por este escopo mesmo se tocado. Nao toca
-   nenhum bloco @media (max-width:*).
-   ============================================================ */
-@media (min-width: 1041px) {
-  .surface--news .news-list-card,
-  .surface--news .news-editor-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .surface--news .news-list-card:hover,
-  .surface--news .news-editor-card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  .surface--news .card-heading h3 {
-    font-family: var(--font-heading);
-  }
-
-  .surface--news .news-grid {
-    grid-template-columns: 1.4fr 1fr;
-    align-items: start;
-    gap: 20px;
-  }
-
-  .surface--news .news-card {
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .surface--news .news-card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  .surface--news .news-card strong {
-    font-family: var(--font-heading);
-  }
-
-  .surface--news .news-card__meta .inline-badge {
-    color: var(--primary-700);
-  }
-
-  /* Sub-ciclo 6c (Fase 6) — layout "featured + rows" também no desktop
-     (o JSX já marca `news-card--featured`/`news-card--row`/
-     `news-section-label`, F16.6, mobile-only até aqui — comentário em
-     NewsPage.jsx:562-565). Featured ocupa a coluna 1; `.news-aside`
-     (rótulo "Anteriores" + rows) ocupa a coluna 2.
-     Fix ESTRUTURAL (2026-08-26): o hack anterior (`grid-row: 1 / -1` no
-     featured, sem `grid-template-rows` explícito) colapsava — sem linha
-     explícita final, `-1` resolvia pra row 1 e o featured nunca cobria as
-     rows abaixo, que caíam para rows 2, 3... (abaixo do featured, não ao
-     lado). Fix real: `.news-aside` (NewsPage.jsx) agrupa label+rows num
-     ÚNICO filho do `.news-grid`, que ocupa a coluna 2 inteira por ser uma
-     célula própria — sem depender de span de linha. Capa do featured
-     reduzida de 280px pra 200px e resumo de 4 pra 3 linhas para não
-     dominar a tela. */
-  .surface--news .news-card--featured {
-    grid-column: 1;
-  }
-
-  .surface--news .news-aside {
-    grid-column: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    /* Painel 2026-09-30: "Anteriores" rola a partir de 400px */
-    max-height: 400px;
-    overflow-y: auto;
-    padding-right: 6px;
-  }
-
-  /* sem isso o flex espreme os cards para caber nos 400px em vez de rolar */
-  .surface--news .news-aside > * {
-    flex-shrink: 0;
-  }
-
-  .surface--news .news-section-label {
-    display: block;
-    padding: 2px 2px 0;
-    font-size: var(--fs-footnote);
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-subtle);
-  }
-
-  /* Featured: capa alta, corpo com meta + título grande + resumo. */
-  .surface--news .news-card--featured .news-card__button {
-    grid-template-columns: minmax(0, 1fr);
-    height: 100%;
-    padding: 8px;
-  }
-
-  .surface--news .news-card--featured .news-card__image-wrap {
-    width: 100%;
-    min-height: 200px;
-    max-height: 200px;
-  }
-
-  .surface--news .news-card--featured .news-card__body {
-    padding: 24px;
-    gap: 12px;
-  }
-
-  .surface--news .news-card--featured .news-card__body strong {
-    font-size: var(--fs-title);
-    line-height: 1.2;
-  }
-
-  .surface--news .news-card--featured .news-card__summary {
-    -webkit-line-clamp: 3;
-  }
-
-  /* Row: thumb pequena + corpo + chevron, resumo em 2 linhas. */
-  .surface--news .news-card--row .news-card__button {
-    grid-template-columns: 104px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 16px;
-    padding: 14px;
-  }
-
-  .surface--news .news-card--row .news-card__image-wrap {
-    width: 104px;
-    min-height: 88px;
-    max-height: 88px;
-    border-radius: var(--radius-sm);
-  }
-
-  .surface--news .news-card--row .news-card__body {
-    padding: 0;
-    gap: 6px;
-  }
-
-  .surface--news .news-card--row .news-card__summary {
-    -webkit-line-clamp: 2;
-  }
-
-  .surface--news .news-card--row .news-card__chevron {
-    display: inline-flex;
-    align-items: center;
-    color: var(--text-faint);
-  }
-}
+/* Noticias desktop (>= 1041px): reescrito na F5a — ver a secao F5a de Noticias mais abaixo. */
 
 /* ============================================================
    Ciclo 3b (redesign Fase 3) — Notificacoes: DRAWER do desktop
@@ -14052,117 +13902,7 @@ body {
   }
 }
 
-/* ============================================================
-   Sub-ciclo 6d (Fase 6) — Notificacoes: pagina `/notifications`
-   desktop (NotificationsPage.jsx). Raiz PROPRIA `.notifications-page`
-   (classe adicionada ao `<section className="surface">` em
-   NotificationsPage.jsx:34) -- `.notifications__list/__group/__item/
-   __section-label/__filters/__show-more/__group-header` sao
-   COMPARTILHADAS com o drawer (`.notifications__panel`, Ciclo 3b,
-   styles.css:9639-9670) e `.surface` e' raiz generica de outras paginas;
-   sem raiz propria o estilo vazaria pro drawer. Todo seletor comeca por
-   `.notifications-page`. So' tokens (--radius-*, --shadow-*, --primary*,
-   --font-heading, --border-strong, --surface-alt, --bg-tint-1), sem hex
-   fora do :root, sem dependencia nova.
-
-   Trap tema escuro (documentado em styles.css:7579-7582): ha' overrides
-   `[data-theme='dark'] .notifications__group/.notifications__item/--unread`
-   FORA de media que setam `background`. Por isso este bloco NAO seta
-   `background`/`color` dessas duas classes -- so' radius/shadow/border/
-   spacing/tipografia. `.notifications__filters`/`.notifications__group-header`/
-   `.notifications__section-label`/`.notifications__show-more` NAO tem
-   override dark fora de media (confirmado por grep), entao podem usar
-   `background`/`color` com tokens normalmente (ja' dark-aware via
-   :root[data-theme='dark'], styles.css:7470-7533).
-
-   DECISAO do plano (6d): manter a tab-row de 5 filtros (Todas/Duvidas/
-   Respostas/Favoritos/Pos-recebimento) em vez do `<select>` do mockup --
-   estiliza-la aqui como pill-tabs (mesma linguagem do segmented control
-   generico de styles.css:6669-6688, que exclui `.notifications__filters`
-   de proposito) so' dentro de `.notifications-page`, sem tocar
-   `.notifications__filters` fora dessa raiz (o drawer, Ciclo 3b, continua
-   com o underline). Nao revela `.notifications__item-icon` no desktop
-   (fica `display:none` fora do mobile, F15.2 — styles.css:6726-6729) -- o
-   markup nao expoe cor por tipo, entao mantem como ja' esta', sem
-   fabricar variacao. Nao toca nenhum bloco @media (max-width:*).
-   ============================================================ */
-@media (min-width: 1041px) {
-  .notifications-page {
-    max-width: 860px;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  /* UX-6a (D9i): a pagina /notifications (fora do drawer) fica com altura
-     fixa herdada de .notifications__list (420px) — deixa a lista fluir. */
-  .notifications-page .notifications__list {
-    max-height: none;
-    overflow: visible;
-  }
-
-  .notifications-page .notifications__section-label {
-    color: var(--primary-700);
-  }
-
-  .notifications-page .notifications__group {
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .notifications-page .notifications__group--unread {
-    border-left: 3px solid var(--primary);
-  }
-
-  .notifications-page .notifications__group-header strong {
-    font-family: var(--font-heading);
-    font-size: var(--fs-body);
-  }
-
-  .notifications-page .notifications__item {
-    transition:
-      box-shadow 140ms ease,
-      border-color 140ms ease;
-  }
-
-  .notifications-page .notifications__item:hover {
-    box-shadow: var(--shadow-sm);
-    border-color: var(--border-strong);
-  }
-
-  .notifications-page .notifications__filters {
-    display: inline-flex;
-    width: auto;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    padding: 4px;
-    gap: 2px;
-  }
-
-  .notifications-page .notifications__filters .tab-button {
-    margin-right: 0;
-    border-radius: var(--radius-full);
-  }
-
-  .notifications-page .notifications__filters .tab-button::after {
-    display: none;
-  }
-
-  .notifications-page .notifications__filters .tab-button:hover:not(.tab-button--active) {
-    background: var(--bg-tint-1);
-    color: var(--primary-700);
-  }
-
-  .notifications-page .notifications__filters .tab-button--active {
-    background: var(--surface);
-    color: var(--ink);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .notifications-page .notifications__show-more {
-    margin-top: 18px;
-  }
-}
+/* Central de notificacoes desktop (>= 1041px): reescrita na F5a — ver a secao F5a da Central de notificacoes mais abaixo. */
 
 /* F17.6: painel de lead time por modal x porto (/admin/lead-time). */
 .lead-time-cell {
@@ -18893,6 +18633,1390 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F5a — NOTICIAS (Noticias.dc.html, desktop >= 1041px)
+   NewsPage.jsx renderiza uma arvore propria no desktop (`nw-*`) sob a raiz `.surface--news`;
+   tablet/mobile seguem na arvore legada (`news-*`), que este bloco nao toca. Lista: cabecalho
+   (eyebrow mono + h2 Sora 30 + "Nova notícia" primario), grid auto-fit minmax(380px, 1fr) gap 20
+   com o destaque (capa 300, fonte em pilula, titulo Sora 24, resumo 15/1.6, "Ler notícia") e a
+   coluna "Anteriores" (linhas 96/1fr/16, capa 72 raio 10, "Carregar mais"). O detalhe da
+   noticia (.nw-modal) e o editor (.nw-editor) nao tem prancheta propria: seguem o dialogo de
+   22px e os campos do restante do refino. Sem hex: so tokens.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .surface.surface--news.surface--news-desktop {
+    padding: 0;
+    gap: 20px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* ---- cabecalho ---- */
+  .surface--news .nw-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .surface--news .nw-head__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .surface--news .nw-head__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .surface--news .nw-head__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .surface--news .nw-head__new {
+    gap: 8px;
+    padding: 0 18px;
+  }
+
+  .surface--news .nw-head__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .surface--news .nw-head__actions .ghost-button,
+  .surface--news .nw-head__actions .secondary-button {
+    gap: 6px;
+    padding: 0 16px;
+  }
+
+  /* ---- grade: destaque + "Anteriores" ---- */
+  .surface--news .nw-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  .surface--news .nw-card {
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .surface--news .nw-card:not(.nw-card--skeleton):hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .surface--news .nw-card__link {
+    display: flex;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .surface--news .nw-card__link:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px var(--focus-ring);
+  }
+
+  .surface--news .nw-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--media-placeholder);
+  }
+
+  .surface--news .nw-cover__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* sem capa: a imagem padrao (logo) pequena e centrada no placeholder */
+  .surface--news .nw-cover--empty .nw-cover__image {
+    width: auto;
+    height: auto;
+    max-width: 44%;
+    max-height: 56%;
+    object-fit: contain;
+    /* o PNG padrao e um quadrado branco: no claro ele se funde ao placeholder */
+    mix-blend-mode: multiply;
+  }
+
+  [data-theme='dark'] .surface--news .nw-cover--empty .nw-cover__image,
+  [data-theme='dark'] .nw-modal .nw-detail__cover--empty .nw-detail__cover-image {
+    border-radius: 14px;
+    mix-blend-mode: normal;
+  }
+
+  .surface--news .nw-card__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .surface--news .nw-card__meta {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .surface--news .nw-source {
+    border-radius: 99px;
+    font-weight: 700;
+    line-height: normal;
+    white-space: nowrap;
+  }
+
+  .surface--news .nw-source--own {
+    background: var(--navy-50);
+    color: var(--navy);
+  }
+
+  .surface--news .nw-source--ext {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  [data-theme='dark'] .surface--news .nw-source--own,
+  [data-theme='dark'] .nw-modal .nw-source--own {
+    color: var(--primary-700);
+  }
+
+  .surface--news .nw-card__time {
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .surface--news .nw-card__title {
+    color: var(--ink);
+  }
+
+  /* destaque */
+  .surface--news .nw-card--featured {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 22px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__link {
+    flex-direction: column;
+  }
+
+  .surface--news .nw-card--featured .nw-cover {
+    height: 300px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__body {
+    gap: 10px;
+    padding: 22px 24px 24px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__meta {
+    gap: 10px;
+  }
+
+  .surface--news .nw-card--featured .nw-source {
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__time {
+    font-size: 12px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__title {
+    font-family: var(--font-heading);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+  }
+
+  .surface--news .nw-card--featured .nw-card__summary {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+
+  .surface--news .nw-card__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--link-color);
+  }
+
+  /* "Editar" (so admin, so noticia manual): irmao do botao que abre a noticia */
+  .surface--news .nw-card__edit {
+    flex: none;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .surface--news .nw-card--featured .nw-card__edit {
+    position: absolute;
+    right: 24px;
+    bottom: 18px;
+  }
+
+  /* coluna "Anteriores" */
+  .surface--news .nw-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .surface--news .nw-aside__title {
+    margin: 0 0 4px;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .surface--news .nw-card--row {
+    display: flex;
+    align-items: center;
+    border-radius: 16px;
+  }
+
+  .surface--news .nw-card--row .nw-card__link {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 96px minmax(0, 1fr) 16px;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    width: auto;
+    padding: 10px 14px 10px 10px;
+    border-radius: 16px;
+  }
+
+  .surface--news .nw-card--row .nw-cover {
+    height: 72px;
+    border-radius: 10px;
+  }
+
+  .surface--news .nw-card--row .nw-cover--empty .nw-cover__image {
+    max-width: 62%;
+    max-height: 64%;
+  }
+
+  .surface--news .nw-card--row .nw-card__body {
+    gap: 4px;
+  }
+
+  .surface--news .nw-card--row .nw-card__meta {
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .surface--news .nw-card--row .nw-source {
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  .surface--news .nw-card--row .nw-card__time {
+    font-size: 11px;
+  }
+
+  .surface--news .nw-card--row .nw-card__title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .surface--news .nw-card__chevron {
+    color: var(--ink-soft);
+  }
+
+  .surface--news .nw-card--row.nw-card--editable .nw-card__link {
+    padding-right: 10px;
+  }
+
+  .surface--news .nw-card--row .nw-card__edit {
+    margin-right: 14px;
+  }
+
+  .surface--news .nw-aside__more {
+    box-sizing: border-box;
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--navy);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  [data-theme='dark'] .surface--news .nw-aside__more {
+    color: var(--primary);
+  }
+
+  .surface--news .nw-aside__more:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+  }
+
+  .surface--news .nw-aside__more:active {
+    transform: scale(0.97);
+  }
+
+  .surface--news .nw-aside__more:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-ring);
+  }
+
+  /* carregando: mesmo formato do destaque e das linhas */
+  .surface--news .nw-card--skeleton.nw-card--featured .nw-card__body {
+    gap: 10px;
+  }
+
+  .surface--news .nw-card--skeleton.nw-card--row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 14px;
+    padding: 10px;
+  }
+
+  /* ---- editor (admin): cartao de 22px com os campos do refino ---- */
+  .surface--news .nw-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 28px;
+    border-radius: 22px;
+    box-shadow: none;
+  }
+
+  .surface--news .nw-editor:hover {
+    box-shadow: none;
+  }
+
+  .surface--news .nw-editor .nw-head--editor {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--row-divider);
+  }
+
+  .surface--news .nw-editor .nw-head__title {
+    font-size: 26px;
+  }
+
+  .surface--news .nw-editor .detail-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .surface--news .nw-editor .detail-card--split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* seletor de arquivo: o botao nativo vira o secundario do refino (navy 1.5px, raio 10) */
+  .surface--news .nw-editor input[type='file'] {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .surface--news .nw-editor input[type='file']::file-selector-button {
+    box-sizing: border-box;
+    height: 32px;
+    margin-right: 12px;
+    padding: 0 12px;
+    border: 1.5px solid var(--navy);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--navy);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  [data-theme='dark'] .surface--news .nw-editor input[type='file']::file-selector-button {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .surface--news .nw-editor .news-image-preview {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+  }
+
+  .surface--news .nw-editor .news-image-preview img {
+    width: 280px;
+    height: 160px;
+    border-radius: 14px;
+    object-fit: cover;
+  }
+
+  .surface--news .nw-editor .news-media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .surface--news .nw-editor .news-media-thumb {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-alt);
+  }
+
+  .surface--news .nw-editor .news-media-thumb img {
+    border-radius: 10px;
+  }
+
+  .surface--news .nw-editor .news-media-file {
+    border-radius: 10px;
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+
+  .surface--news .nw-editor .news-media-file strong {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .surface--news .nw-editor .news-media-thumb .secondary-button {
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    justify-self: start;
+    font-size: 13px;
+  }
+
+  .surface--news .nw-editor .news-media-file__badge {
+    background: var(--primary-50);
+    color: var(--success-700);
+  }
+
+  .surface--news .nw-editor .action-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0;
+  }
+
+  /* ---- detalhe da noticia (modal bare de 22px) ---- */
+  .modal-backdrop.nw-modal-backdrop {
+    padding: 40px;
+    background: var(--scrim);
+  }
+
+  .modal.nw-modal {
+    width: min(860px, 100%);
+    max-width: none;
+    max-height: calc(100vh - 80px);
+    padding: 0;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .nw-modal .modal__body {
+    display: block;
+  }
+
+  .nw-modal .nw-detail__cover {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 280px;
+    overflow: hidden;
+    background: var(--media-placeholder);
+  }
+
+  .nw-modal .nw-detail__cover-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .nw-modal .nw-detail__cover--empty .nw-detail__cover-image {
+    width: auto;
+    height: auto;
+    max-width: 30%;
+    max-height: 56%;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+  }
+
+  /* "x" colado no topo do dialogo: acompanha a rolagem (sticky) e sobrepoe a capa */
+  .nw-modal .nw-detail__close {
+    position: sticky;
+    top: 16px;
+    z-index: 2;
+    margin: 16px 16px -60px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .nw-modal .nw-detail__close:hover {
+    background: var(--surface-alt);
+  }
+
+  .nw-modal .nw-detail__close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .nw-modal .nw-detail__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 28px 28px;
+  }
+
+  .nw-modal .nw-card__meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .nw-modal .nw-source {
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: normal;
+  }
+
+  .nw-modal .nw-source--own {
+    background: var(--navy-50);
+    color: var(--navy);
+  }
+
+  .nw-modal .nw-source--ext {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .nw-modal .nw-card__time {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .nw-modal .nw-detail__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .nw-modal .nw-detail__text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
+  .nw-modal .nw-detail__gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .nw-modal .nw-detail__gallery-image {
+    display: block;
+    width: 100%;
+    height: 180px;
+    border-radius: 14px;
+    object-fit: cover;
+  }
+
+  .nw-modal .nw-detail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-alt);
+  }
+
+  .nw-modal .nw-detail__label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .nw-modal .nw-detail__files,
+  .nw-modal .nw-detail__refs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .nw-modal .nw-detail__file {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .nw-modal .nw-detail__file:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .nw-modal .nw-detail__file strong {
+    font-size: 14px;
+    word-break: break-word;
+  }
+
+  .nw-modal .nw-detail__file span {
+    font-size: 12px;
+    color: var(--ink-soft);
+    word-break: break-word;
+  }
+
+  .nw-modal .nw-detail__refs a {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--link-color);
+    word-break: break-word;
+  }
+
+  .nw-modal .nw-detail__refs a:hover {
+    color: var(--link-color-hover);
+  }
+
+  .nw-modal .nw-detail__actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+/* Notebook / telas baixas (altura <= 800): capas mais baixas e o dialogo ocupa a janela. */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .surface--news .nw-card--featured .nw-cover {
+    height: 220px;
+  }
+
+  .modal-backdrop.nw-modal-backdrop {
+    padding: 16px;
+  }
+
+  .modal.nw-modal {
+    max-height: calc(100vh - 32px);
+  }
+
+  .nw-modal .nw-detail__cover {
+    height: 200px;
+  }
+}
+
+/* ============================================================
+   REFINO VISUAL F5a — CENTRAL DE NOTIFICACOES (Notificacoes.dc.html, desktop >= 1041px)
+   A pagina /notifications renderiza uma arvore propria (`nt-*`, NotificationsPage.jsx +
+   NotificationsList variant="page") sob a raiz `.notifications-page`; tablet/mobile seguem na
+   arvore legada (`notifications__*`), que este bloco nao toca. Classes novas = nenhum dos
+   overrides `[data-theme='dark'] .notifications__group/__item` (trap do bloco antigo) as
+   alcanca. Valores do .dc.html: max-width 1040, gap 18, cabecalho com eyebrow mono + h2
+   Sora 30 e acoes (secundario 44 + 2 icones 44), pilulas 36 (FilterPill), cartoes de
+   grupo raio 18, linhas 40/1fr/auto, "Anteriores" 56px recolhidos. So tokens.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .surface.notifications-page.notifications-page--desktop {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0;
+    padding: 0;
+    gap: 18px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* ---- cabecalho ---- */
+  .notifications-page .nt-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notifications-page .nt-head__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .notifications-page .nt-head__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    line-height: normal;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .notifications-page .nt-head__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .notifications-page .nt-head__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .notifications-page .nt-head__mark-all {
+    padding: 0 16px;
+  }
+
+  .notifications-page .nt-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .notifications-page .nt-icon-button:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+  }
+
+  .notifications-page .nt-icon-button:active {
+    transform: scale(0.97);
+  }
+
+  .notifications-page .nt-icon-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--focus-ring);
+  }
+
+  /* Silenciado (o mock nao mostra o estado ligado): fundo de aviso + sino cortado. */
+  .notifications-page .nt-icon-button--active,
+  .notifications-page .nt-icon-button--active:hover {
+    border-color: var(--warning);
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  /* ---- pilulas de filtro (FilterPill) ---- */
+  .notifications-page .nt-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .notifications-page .nt-filters .nt-filter {
+    gap: 6px;
+  }
+
+  .notifications-page .nt-filters .nt-filter .filter-pill__count {
+    padding: 0;
+    background: none;
+    color: inherit;
+    font-weight: 700;
+    opacity: 0.8;
+  }
+
+  /* ---- secoes ---- */
+  .notifications-page .nt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .notifications-page .nt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .notifications-page .nt-section__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .notifications-page .nt-section__more {
+    align-self: center;
+    box-sizing: border-box;
+    height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--link-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .notifications-page .nt-section__more:hover {
+    color: var(--link-color-hover);
+  }
+
+  .notifications-page .nt-section__more:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* ---- cartao de grupo ---- */
+  .notifications-page .nt-group {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+  }
+
+  .notifications-page .nt-group__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--row-divider);
+  }
+
+  .notifications-page .nt-group__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .notifications-page .nt-group__meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  /* ---- linha ---- */
+  .notifications-page .nt-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--row-divider-soft);
+    background: var(--surface);
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .notifications-page .nt-row--unread {
+    background: var(--row-unread-bg);
+  }
+
+  .notifications-page .nt-row:hover {
+    background: var(--bg-tint-1);
+  }
+
+  .notifications-page .nt-row__open {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .notifications-page .nt-row__open:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .notifications-page .nt-row__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .notifications-page .nt-row__icon--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .notifications-page .nt-row__icon--ok {
+    background: var(--channel-green-soft);
+    color: var(--channel-green-ink);
+  }
+
+  .notifications-page .nt-row__icon--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .notifications-page .nt-row__icon--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .notifications-page .nt-row__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .notifications-page .nt-row__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .notifications-page .nt-row__dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: transparent;
+  }
+
+  .notifications-page .nt-row--unread .nt-row__dot {
+    background: var(--primary);
+  }
+
+  .notifications-page .nt-row__text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .notifications-page .nt-row__time {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .notifications-page .nt-row__mark {
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--navy);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .notifications-page .nt-row__mark:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-alt);
+  }
+
+  .notifications-page .nt-row__mark:active {
+    transform: scale(0.97);
+  }
+
+  .notifications-page .nt-row__mark:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  [data-theme='dark'] .notifications-page .nt-row__mark {
+    color: var(--primary);
+  }
+
+  /* ---- "Anteriores": botao de 56px recolhido; aberto, o mesmo cartao revela as linhas ---- */
+  .notifications-page .nt-older {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+
+  .notifications-page .nt-older__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    width: 100%;
+    height: 56px;
+    padding: 0 18px;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .notifications-page .nt-older__toggle:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--focus-ring);
+  }
+
+  .notifications-page .nt-older__meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .notifications-page .nt-older__chevron {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .notifications-page .nt-older--open .nt-older__chevron {
+    transform: rotate(180deg);
+  }
+
+}
+
+/* ============================================================
+   REFINO VISUAL F5a — PREFERENCIAS DE NOTIFICACAO (Preferencias.dc.html, desktop >= 1041px)
+   Modal `bare` (NotificationPreferencesModal.jsx) com cabecalho proprio: titulo Sora 22 +
+   lead 14 + fechar 44; tabela "Tipo x No portal / E-mail / Navegador" com alvos de 44x44 e
+   caixa de 22px (raio 7; marcada = --primary-700 + check); rodape Cancelar (fantasma) +
+   "Salvar preferências" (primario). O input nativo segue sendo o controle (aria-label,
+   teclado, disabled); a caixa e so desenho. Tablet/mobile ficam no markup anterior.
+   Escopo: o modal (.prefs-modal) e a raiz .notification-prefs--desktop. So tokens.
+   D1: a borda da caixa desmarcada e --border-control (#6b7f88), nao o #9fb1b8 do mock.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .modal-backdrop.prefs-modal-backdrop {
+    padding: 28px;
+    background: var(--scrim);
+  }
+
+  .modal.prefs-modal {
+    width: min(664px, 100%);
+    max-width: none;
+    padding: 26px 28px;
+    border: 0;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .prefs-modal .modal__body {
+    display: block;
+  }
+
+  .notification-prefs--desktop {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    color: var(--ink);
+  }
+
+  .notification-prefs--desktop .prefs-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .notification-prefs--desktop .prefs-head__text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .notification-prefs--desktop .prefs-head__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: normal;
+    color: var(--ink);
+  }
+
+  .notification-prefs--desktop .notification-prefs__lead {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+
+  .notification-prefs--desktop .prefs-head__close {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+
+  .notification-prefs--desktop .prefs-head__close:hover {
+    background: var(--disabled-bg);
+  }
+
+  .notification-prefs--desktop .prefs-head__close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* ---- tabela ---- */
+  .notification-prefs--desktop .notification-prefs__grid {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+
+  .notification-prefs--desktop .notification-prefs__grid th,
+  .notification-prefs--desktop .notification-prefs__grid td {
+    padding: 14px 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--row-divider);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .notification-prefs--desktop .notification-prefs__grid thead th {
+    width: 96px;
+    padding: 0 0 10px;
+    border-top: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+
+  .notification-prefs--desktop .notification-prefs__grid thead th:first-child {
+    width: auto;
+    text-align: left;
+  }
+
+  .notification-prefs--desktop .notification-prefs__grid th[scope='row'] {
+    font-weight: 400;
+    text-align: left;
+  }
+
+  .notification-prefs--desktop .notification-prefs__type {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .notification-prefs--desktop .notification-prefs__grid th[scope='row'] .notification-prefs__hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .notification-prefs--desktop > .notification-prefs__hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .notification-prefs--desktop .prefs-check {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+  }
+
+  .notification-prefs--desktop .prefs-check input[type='checkbox'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+
+  .notification-prefs--desktop .prefs-check__box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border: 1.5px solid var(--border-control);
+    border-radius: 7px;
+    background: var(--surface);
+    color: transparent;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .notification-prefs--desktop .prefs-check:hover .prefs-check__box {
+    border-color: var(--border-control-hover);
+  }
+
+  .notification-prefs--desktop .prefs-check input:checked + .prefs-check__box {
+    border-color: var(--primary-700);
+    background: var(--primary-700);
+    color: var(--on-primary-700);
+  }
+
+  .notification-prefs--desktop .prefs-check input:focus-visible + .prefs-check__box {
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+  }
+
+  .notification-prefs--desktop .prefs-check input:disabled + .prefs-check__box {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ---- rodape ---- */
+  .notification-prefs--desktop .action-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .notification-prefs--desktop .action-row .ghost-button {
+    padding: 0 16px;
+  }
+
+  .notification-prefs--desktop .action-row .primary-button {
+    padding: 0 18px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -18956,6 +20080,20 @@ body {
   .process-form--dialog .process-form-switch__track,
   .process-form--dialog .pfd-step__bar {
     transition: none;
+  }
+
+  /* Refino F5a: sem transicao de sombra/chevron e sem "press" nos controles novos. */
+  .surface--news .nw-card,
+  .notifications-page .nt-row,
+  .notifications-page .nt-older__chevron,
+  .notification-prefs--desktop .prefs-check__box {
+    transition: none;
+  }
+
+  .surface--news .nw-aside__more:active,
+  .notifications-page .nt-icon-button:active,
+  .notifications-page .nt-row__mark:active {
+    transform: none;
   }
 
   .primary-button .spinner,
