@@ -238,6 +238,10 @@ const LAT_LABELS = [
   '24°20′S',
   '24°25′S',
 ]
+// Refino F5b (D16): a assinatura SQ Quimica ocupa o canto inferior direito da carta; a partir de
+// 24°10′S os rotulos deixam de ser desenhados. Filtra por indice (as posicoes y = 144 + 180·k dos
+// que ficam nao mudam; nada e removido do meio do array).
+const LAT_VISIBLE_COUNT = 4
 const GRID_X = Array.from({ length: 13 }, (_, k) => 700 + 160 * k)
 const GRID_Y = Array.from({ length: 8 }, (_, k) => 150 + 180 * k)
 
@@ -302,11 +306,13 @@ export function LoginSeaChart() {
       </svg>
 
       <svg className="login-chart__lat" focusable="false">
-        {LAT_LABELS.map((label, k) => (
-          <text key={label} x="110" y={144 + 180 * k} textAnchor="end">
-            {label}
-          </text>
-        ))}
+        {LAT_LABELS.map((label, k) =>
+          k < LAT_VISIBLE_COUNT ? (
+            <text key={label} x="110" y={144 + 180 * k} textAnchor="end">
+              {label}
+            </text>
+          ) : null,
+        )}
       </svg>
 
       <svg className="login-chart__lane login-chart__lane--top" focusable="false">

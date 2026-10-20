@@ -3185,7 +3185,8 @@ const f5aNewsAt = css.indexOf(F5A_NEWS)
 const f5aNewsCompactAt = css.indexOf(F5A_NEWS_COMPACT)
 const f5aNotifAt = css.indexOf(F5A_NOTIF)
 const f5aPrefsAt = css.indexOf(F5A_PREFS)
-const f5aEnd = css.indexOf('/* Roadmap 11 / PR #223')
+// O fim das secoes F5a e o comeco da secao F5b (que vem logo depois, antes do bloco reduce).
+const f5aEnd = css.lastIndexOf('/*', css.indexOf('REFINO VISUAL F5b — LOGIN E ESTADOS DE ACESSO'))
 const f5aStartOf = (at) => css.lastIndexOf('/*', at)
 const f5aNewsRules = parseRules(bodyAfter(stripComments(css.slice(f5aStartOf(f5aNewsAt), f5aNewsCompactAt)), DESKTOP_MEDIA))
 const f5aNewsCompactRules = parseRules(
@@ -3429,5 +3430,333 @@ describe('F5a - icones novos', () => {
     expect(icons).toContain('M12 7v5l3 2')
     expect(icons).toContain('M12 3v4M9 12h.01M15 12h.01M9 16h6')
     for (const name of ['sliders', 'mail', 'clock', 'eye', "'eye-off'", 'more', 'robot']) expect(icons).toContain(`${name}:`)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F5b - Login e estados de acesso (Login.dc.html, AcessoEstados.dc.html).
+// CSS = 1 secao "REFINO VISUAL F5b" com um bloco base (elementos novos escondidos, sem media),
+// UM @media desktop e o compacto de notebook dos estados (altura <= 800); o login compacta em
+// src/notebook.css. Toda regra comeca por uma raiz propria (.auth-screen--login|verify|pending|
+// not-found) porque `.auth-screen` e compartilhado por 7 telas. Sem @media (max-width): tablet e
+// mobile nao mudam (D2).
+// ---------------------------------------------------------------------------
+const F5B_MARK = 'REFINO VISUAL F5b — LOGIN E ESTADOS DE ACESSO'
+const f5bMarkAt = css.indexOf(F5B_MARK)
+const f5bStart = css.lastIndexOf('/*', f5bMarkAt)
+const f5bEnd = css.indexOf('/* Roadmap 11 / PR #223')
+const F5B_COMPACT_MEDIA = '@media (min-width: 1041px) and (max-height: 800px) {'
+const f5bSection = stripComments(css.slice(f5bStart, f5bEnd))
+const f5bMediaAt = f5bSection.indexOf(DESKTOP_MEDIA)
+const f5bBaseRules = parseRules(f5bSection.slice(0, f5bMediaAt))
+const f5bRules = parseRules(bodyAfter(f5bSection, DESKTOP_MEDIA))
+const f5bCompactRules = parseRules(bodyAfter(f5bSection, F5B_COMPACT_MEDIA))
+
+function expectF5b(rules, selector, declarations) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F5b: ${selector}`).toBeGreaterThan(0)
+  const body = bodies.join(' ')
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F5b - tokens novos (com contraparte dark)', () => {
+  const lightBlock = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
+  const darkStart = css.indexOf(":root[data-theme='dark']")
+  const darkBlock = css.slice(darkStart, css.indexOf('\n  }\n', darkStart) + 1)
+  it('--auth-brand-ink, --auth-card-shadow, --auth-state-shadow, --auth-seg-shadow, --on-navy-line e --on-navy-fill (claro e escuro)', () => {
+    expect(lightBlock).toContain('--auth-brand-ink: #e8f4f6;')
+    expect(lightBlock).toContain('--auth-card-shadow: 0 20px 48px rgba(0, 65, 83, 0.14);')
+    expect(lightBlock).toContain('--auth-state-shadow: 0 6px 18px rgba(0, 65, 83, 0.08);')
+    expect(lightBlock).toContain('--auth-seg-shadow: 0 1px 3px rgba(0, 65, 83, 0.14);')
+    expect(lightBlock).toContain('--on-navy-line: rgba(255, 255, 255, 0.3);')
+    expect(lightBlock).toContain('--on-navy-fill: rgba(255, 255, 255, 0.06);')
+    for (const token of ['--auth-brand-ink', '--auth-card-shadow', '--auth-state-shadow', '--auth-seg-shadow', '--on-navy-line', '--on-navy-fill']) {
+      expect(darkBlock, `dark sem ${token}`).toContain(`${token}:`)
+    }
+  })
+})
+
+describe('F5b - secao, escopo e ordem', () => {
+  it('a secao existe antes do bloco reduce desktop (que segue ultimo) e depois das tres secoes F5a', () => {
+    expect(f5bMarkAt).toBeGreaterThan(css.indexOf('REFINO VISUAL F5a — PREFERENCIAS DE NOTIFICACAO'))
+    expect(f5bEnd).toBeGreaterThan(f5bMarkAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f5bEnd)
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP)).match(/@media/g)).toHaveLength(1)
+  })
+
+  it('nenhum @media (max-width): tablet e mobile ficam como estao (D2)', () => {
+    expect(f5bSection).not.toMatch(/@media\s*\(max-width/)
+    expect(f5bSection.match(/@media/g)).toHaveLength(2)
+  })
+
+  it('toda regra comeca por uma raiz propria (.auth-screen--login|verify|pending|not-found)', () => {
+    const ROOT = /^\.auth-screen--(login|verify|pending|not-found)\b/
+    for (const rule of [...f5bBaseRules, ...f5bRules, ...f5bCompactRules]) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem raiz: ${selector}`).toMatch(ROOT)
+    }
+    expect(f5bRules.length).toBeGreaterThan(90)
+  })
+
+  it('o bloco base so esconde os elementos novos (ficam fora de tablet/mobile)', () => {
+    const hidden = f5bBaseRules.find((r) => r.selectors.includes('.auth-screen--login .auth-sq-signature'))
+    expect(hidden.body).toBe('display: none;')
+    for (const selector of [
+      '.auth-screen--login .auth-brand__mark',
+      '.auth-screen--login .auth-card__legal',
+      '.auth-screen--verify .auth-state__icon',
+      '.auth-screen--verify .auth-status__headline',
+      '.auth-screen--pending .auth-state__icon',
+      '.auth-screen--pending .auth-diagnostic-toggle',
+    ]) {
+      expect(hidden.selectors, selector).toContain(selector)
+    }
+    expectF5b(f5bBaseRules, '.auth-screen--login .auth-brand__head', ['display: contents'])
+    expectF5b(f5bBaseRules, '.auth-screen--verify .auth-state__actions', ['display: contents'])
+  })
+
+  it('so tokens: nenhuma cor literal na secao', () => {
+    const all = [...f5bBaseRules, ...f5bRules, ...f5bCompactRules].map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
+    expect(all.match(/rgba?\([^)]*\)/g)).toBeNull()
+  })
+
+  it('o bloco legado do painel de marca (560px, raio 22) foi removido do Ciclo 3c/6e', () => {
+    const clean = stripComments(css)
+    expect(clean).not.toContain('flex: 0 0 560px')
+    expect(clean).not.toMatch(/\n  \.auth-brand \{/)
+    expect(clean).not.toContain('.auth-brand__feat small {\n    color: var(--sidebar-ink-soft);\n    font-size: var(--fs-caption);')
+  })
+
+  it('movimento: as transicoes novas entram no bloco reduce existente (sem bloco reduce novo)', () => {
+    const reduce = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    for (const selector of [
+      '.auth-screen--login .auth-toggle__item',
+      '.auth-screen--login .auth-password',
+      '.auth-screen--login .auth-password__toggle',
+      '.auth-screen--pending .auth-diagnostic-toggle svg',
+    ]) {
+      expect(reduce, selector).toContain(selector)
+    }
+  })
+})
+
+describe('F5b - Login (valores do Login.dc.html)', () => {
+  it('painel da marca: 600px em altura total, padding 56 56 0, gap 28, sem raio nem sombra', () => {
+    expectF5b(f5bRules, '.auth-screen--login', ['align-items: stretch', 'gap: 0', 'padding: 0'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand', [
+      'flex: 0 0 600px',
+      'max-width: 600px',
+      'gap: 28px',
+      'padding: 56px 56px 0',
+      'border-radius: 0',
+      'background: var(--sidebar-bg)',
+      'box-shadow: none',
+      'color: var(--auth-brand-ink)',
+    ])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__logo', ['display: none'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__eyebrow', ['display: none'])
+  })
+
+  it('cabecalho: marca de 56 + h1 Sora 52/700 -0.02em lh 1.05 + paragrafo 17/1.6 max 440', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__head', ['display: flex', 'flex-direction: column', 'gap: 16px', 'margin-top: 24px'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand h1', ['font-family: var(--font-heading)', 'font-size: 52px', 'font-weight: 700', 'letter-spacing: -0.02em', 'line-height: 1.05'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand p', ['max-width: 440px', 'font-size: 17px', 'line-height: 1.6', 'color: var(--sidebar-ink-soft)'])
+  })
+
+  it('2 features: ladrilho 40 raio 12 (menta 16%) + titulo 15 branco + texto 14', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__feats', ['gap: 16px'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__feat', ['gap: 14px', 'align-items: flex-start'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__feat-icon', ['width: 40px', 'height: 40px', 'border-radius: 12px', 'background: var(--sidebar-pill-active)', 'color: var(--primary)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__feat strong', ['font-size: 15px', 'color: var(--sidebar-ink)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-brand__feat small', ['font-size: 14px', 'color: var(--sidebar-ink-soft)'])
+  })
+
+  it('assinatura SQ Quimica: canto inferior direito (right 40, bottom 32), acima da arte', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-sq-signature', ['display: block', 'position: absolute', 'right: 40px', 'bottom: 32px', 'z-index: 2', 'pointer-events: none'])
+  })
+
+  it('card: 440px, padding 36, raio 22, sombra do mock, gap 18; eyebrow mono 11/600 1.5px', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-card', ['width: min(100%, 440px)', 'padding: 36px', 'border-radius: 22px', 'background: var(--surface)', 'box-shadow: var(--auth-card-shadow)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-card--form', ['gap: 18px'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-panel .brand__eyebrow', ['font-family: var(--font-mono)', 'font-size: 11px', 'font-weight: 600', 'letter-spacing: 1.5px', 'text-transform: uppercase', 'color: var(--primary-700)'])
+  })
+
+  it('segmentado: trilho --bg raio 12 padding 4; item 40px raio 9 14/700; ativo --surface + sombra', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-toggle', ['gap: 0', 'padding: 4px', 'border-radius: 12px', 'background: var(--bg)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-toggle__item', ['height: 40px', 'border-radius: 9px', 'font-size: 14px', 'font-weight: 700', 'color: var(--ink-soft)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-toggle__item--active', ['background: var(--surface)', 'box-shadow: var(--auth-seg-shadow)', 'color: var(--ink)'])
+  })
+
+  it('titulo Sora 26/700; paragrafo do modo login escondido (D20) e visivel no cadastro', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-card h1', ['font-family: var(--font-heading)', 'font-size: 26px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-card__lead--login', ['display: none'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-card__lead', ['font-size: 13px', 'color: var(--ink-soft)'])
+  })
+
+  it('campos 48px raio 12 15/500; rotulo da senha 13/600 sem caixa-alta; "Esqueci minha senha" 13/700 verde', () => {
+    expectF5b(f5bRules, '.auth-screen--login input.text-input', ['height: 48px', 'min-height: 48px', 'padding: 0 14px', 'border-radius: 12px', 'font-size: 15px', 'font-weight: 500'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-field__row', ['display: flex', 'justify-content: space-between'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-field__label', ['margin: 0', 'font-size: 13px', 'font-weight: 600', 'text-transform: none', 'color: var(--ink)'])
+    expectF5b(f5bRules, '.auth-screen--login label.field', ['margin-bottom: 0'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-link-button', ['font-size: 13px', 'font-weight: 700', 'color: var(--link-color)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-link-button:hover', ['color: var(--link-color-hover)'])
+  })
+
+  it('senha: contorno 1.5px --border-control (D1) no wrapper, foco navy + halo, botao olho 40x40 raio 10', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-password', ['height: 48px', 'padding: 0 4px 0 14px', 'border: 1.5px solid var(--border-control)', 'border-radius: 12px'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-password:focus-within', ['border-color: var(--focus-ring)', 'box-shadow: 0 0 0 4px var(--primary-a28)'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-password input.text-input', ['border: 0', 'box-shadow: none', 'padding: 0'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-password__toggle', ['width: 40px', 'height: 40px', 'border-radius: 10px', 'color: var(--ink-soft)'])
+  })
+
+  it('Entrar 48px 15/700; rodape "Acesso restrito" 12 centralizado; banners sem sombra e raio 14', () => {
+    expectF5b(f5bRules, '.auth-screen--login .auth-button', ['width: 100%', 'min-height: 48px', 'font-size: 15px'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-card__legal', ['display: block', 'font-size: 12px', 'text-align: center', 'color: var(--ink-soft)'])
+    expectF5b(f5bRules, '.auth-screen--login .error-banner', ['border-radius: 14px', 'box-shadow: none'])
+    expectF5b(f5bRules, '.auth-screen--login .auth-reset-panel', ['border-radius: 14px', 'background: var(--surface-alt)', 'box-shadow: none'])
+  })
+
+  it('carta nautica: painel de 600 (cena do porto sangra 56 de cada lado), navios a 25vw + 340 e o de volta como no mock (-712 a 1440)', () => {
+    const art = stripComments(css.slice(css.indexOf('/* LOGIN-ART:START */'), css.indexOf('/* LOGIN-ART:END */')))
+    expect(art).toMatch(/\.login-port-scene \{[^}]*width: calc\(100% \+ 112px\);[^}]*margin: auto -56px 0;/)
+    expect(art).toContain('transform: translateX(calc(25vw + 340px));')
+    expect(art).toContain('transform: translateX(calc((25vw + 340px) / 0.75));')
+    expect(art).toContain('transform: translateX(calc(-25vw - 352px));')
+    // longitudes saem da coluna de latitude; latitudes nao descem para a assinatura
+    expect(art).toMatch(/\.login-chart__lon \{[^}]*mask-image: linear-gradient\(to left, transparent 100px, black 170px\);/)
+    expect(art).toMatch(/\.login-chart__lat \{[^}]*mask-image: linear-gradient\(to bottom, black calc\(100% - 84px\), transparent calc\(100% - 84px\)\);/)
+  })
+})
+
+describe('F5b - Verificar e-mail, Acesso pendente e 404 (valores do AcessoEstados.dc.html)', () => {
+  const ROOTS = ['.auth-screen--verify', '.auth-screen--pending', '.auth-screen--not-found']
+
+  it('card: 424px, padding 32, raio 22, sombra do mock, gap 16; titulo Sora 24/700 -0.01em; eyebrow escondido', () => {
+    for (const root of ROOTS) {
+      expectF5b(f5bRules, `${root} .auth-card`, ['width: min(100%, 424px)', 'padding: 32px', 'border-radius: 22px', 'box-shadow: var(--auth-state-shadow)'])
+      expectF5b(f5bRules, `${root} .auth-card--form`, ['gap: 16px'])
+      expectF5b(f5bRules, `${root} .brand__eyebrow`, ['display: none'])
+      expectF5b(f5bRules, `${root} .auth-card h1`, ['font-family: var(--font-heading)', 'font-size: 24px', 'font-weight: 700', 'letter-spacing: -0.01em'])
+    }
+    expectF5b(f5bRules, '.auth-screen--verify .auth-card > p', ['font-size: 15px', 'line-height: 1.6', 'color: var(--ink-soft)'])
+  })
+
+  it('ladrilho de icone 56 raio 16: e-mail = info, relogio = aviso, alerta = perigo', () => {
+    expectF5b(f5bRules, '.auth-screen--verify .auth-state__icon', ['width: 56px', 'height: 56px', 'border-radius: 16px'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-state__icon--info', ['background: var(--info-50)', 'color: var(--info-700)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-state__icon--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-state__icon--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+  })
+
+  it('caixa de status: padding 14 16 raio 14, rotulo mono 10/600 1.5px; proximo passo em aviso/perigo', () => {
+    expectF5b(f5bRules, '.auth-screen--verify .auth-status', ['padding: 14px 16px', 'border-radius: 14px', 'background: var(--surface-alt)', 'gap: 4px'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-status strong', ['font-family: var(--font-mono)', 'font-size: 10px', 'font-weight: 600', 'letter-spacing: 1.5px', 'text-transform: uppercase', 'color: var(--ink-soft)'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-status__headline', ['display: block', 'font-size: 14px', 'font-weight: 700'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-next-step--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-next-step--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-next-step p', ['font-size: 14px', 'font-weight: 600', 'line-height: 1.5'])
+  })
+
+  it('"Status atual" vira etiqueta de 26px no tom do estado', () => {
+    expectF5b(f5bRules, '.auth-screen--pending .auth-status-line', ['height: 26px', 'padding: 0 10px', 'border-radius: 999px', 'font-size: 12px', 'font-weight: 700'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-status-line::before', ['content: none'])
+  })
+
+  it('diagnostico: botao de 44px com borda tracejada (--border-strong), recolhido por padrao', () => {
+    expectF5b(f5bRules, '.auth-screen--pending .auth-diagnostic-toggle', ['height: 44px', 'padding: 0 14px', 'border: 1px dashed var(--border-strong)', 'border-radius: 12px', 'font-size: 13px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-diagnostic-toggle[aria-expanded=\'true\'] svg', ['transform: rotate(180deg)'])
+    expectF5b(f5bRules, '.auth-screen--pending .auth-diagnostic--collapsed', ['display: none'])
+  })
+
+  it('acoes empilhadas (gap 8): primario 48 15/700, secundario e fantasma 44; "Sair" em --ink-soft', () => {
+    for (const root of ROOTS) expectF5b(f5bRules, `${root} .auth-state__actions`, ['display: flex', 'flex-direction: column', 'gap: 8px'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-state__actions .primary-button', ['min-height: 48px', 'font-size: 15px', 'width: 100%'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-state__actions .ghost-button', ['min-height: 44px', 'width: 100%'])
+    expectF5b(f5bRules, '.auth-screen--verify .auth-state__actions .ghost-button:not(.ghost-button--secondary)', ['color: var(--ink-soft)'])
+  })
+
+  it('404: card navy; "404" mono 64/600 menta; caminho mono 12 em --on-navy-fill; secundario com contorno translucido (6a)', () => {
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-card', ['background: var(--navy)', 'box-shadow: none', 'color: var(--auth-brand-ink)'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-card h1', ['color: var(--sidebar-ink)'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-state__title p', ['color: var(--sidebar-ink-soft)'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-error-code', ['order: -1'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-error-code code', ['font-family: var(--font-mono)', 'font-size: 64px', 'font-weight: 600', 'letter-spacing: -0.02em', 'line-height: 1', 'color: var(--primary)'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-error-path', ['padding: 10px 12px', 'border-radius: 10px', 'background: var(--on-navy-fill)', 'font-family: var(--font-mono)', 'font-size: 12px'])
+    expectF5b(f5bRules, '.auth-screen--not-found .auth-state__actions .ghost-button.ghost-button--secondary', ['border: 1.5px solid var(--on-navy-line)', 'background: transparent', 'color: var(--sidebar-ink)'])
+  })
+
+  it('notebook (altura <= 800): estados compactam (padding 24, gap 12, icone 44)', () => {
+    for (const root of ROOTS) expectF5b(f5bCompactRules, `${root} .auth-card`, ['padding: 24px'])
+    expectF5b(f5bCompactRules, '.auth-screen--verify .auth-state__icon', ['width: 44px', 'height: 44px'])
+    expectF5b(f5bCompactRules, '.auth-screen--not-found .auth-error-code code', ['font-size: 48px'])
+  })
+})
+
+describe('F5b - notebook.css (login compacto do #244 sobre o painel novo)', () => {
+  const notebook = stripComments(read('src/notebook.css'))
+  it('o painel parte de x = 0: deslocamento da carta = --nb-login-w - 600px e formulas dos navios recalculadas', () => {
+    expect(notebook).toContain('--nb-login-shift: calc(var(--nb-login-w) - 600px);')
+    expect(notebook).toContain('transform: translateX(calc(25vw + 490px - var(--nb-login-w) / 4));')
+    expect(notebook).toContain('transform: translateX(calc((25vw + 490px - var(--nb-login-w) / 4) / 0.75));')
+    expect(notebook).toContain('transform: translateX(calc(var(--nb-login-w) / 4 - 25vw - 502px));')
+    expect(notebook).toContain('right: calc(25vw - var(--nb-login-w) / 4 - 146px);')
+  })
+  it('sem lista de recursos, marca de 44 e campos/botao baixos (clamp) no login', () => {
+    expect(notebook).toMatch(/\.auth-screen--login \.auth-brand__mark \{\s*width: 44px;\s*height: 44px;/)
+    expect(notebook).toMatch(/\.auth-screen--login \.auth-brand__feats \{\s*display: none;/)
+    expect(notebook).toMatch(/\.auth-screen--login input\.text-input,\s*\.auth-screen--login \.auth-password \{\s*height: clamp\(40px, 7vh, 48px\);/)
+    expect(notebook).toMatch(/\.auth-screen--login \.auth-button \{\s*min-height: clamp\(40px, 7vh, 48px\);/)
+  })
+})
+
+// Fontes lidas uma vez: cada tela tem o proprio describe (e o proprio commit da fase).
+const f5bReadLf = (rel) => read(rel).replace(/\r\n/g, '\n')
+const f5bNoComments = (src) => stripComments(src).replace(/^\s*\/\/.*$/gm, '')
+const f5bLogin = f5bReadLf('src/pages/LoginPage.jsx')
+const f5bVerify = f5bReadLf('src/pages/VerifyEmailPage.jsx')
+const f5bPending = f5bReadLf('src/pages/PendingApprovalPage.jsx')
+const f5bNotFound = f5bReadLf('src/pages/NotFoundPage.jsx')
+const f5bArt = f5bReadLf('src/components/LoginArt.jsx')
+
+describe('F5b - JSX Login', () => {
+  it('marca do produto no painel, assinatura SQ Quimica e campo de senha por matchMedia', () => {
+    expect(f5bLogin).toContain("import { ProductMark, SqQuimicaLogo } from '../components/BrandMark'")
+    expect(f5bLogin).toContain('<ProductMark product="comex" tone="dark" size={56} className="auth-brand__mark" />')
+    expect(f5bLogin).toContain('<SqQuimicaLogo variant="minusc" tone="light" size={36} label="SQ Química" />')
+    expect(f5bLogin).toContain('className="auth-sq-signature"')
+    expect(f5bLogin).toContain("import useMediaQuery from '../hooks/useMediaQuery'")
+    expect(f5bLogin).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(f5bLogin).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    // o hook vem antes de qualquer retorno antecipado (regra dos hooks)
+    expect(f5bLogin.indexOf('useMediaQuery(DESKTOP_QUERY)')).toBeLessThan(f5bLogin.indexOf('<Navigate'))
+    expect(f5bLogin).toContain("aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}")
+    expect(f5bLogin).toContain('aria-pressed={showPassword}')
+    expect(f5bLogin).toContain('placeholder="Sua senha"')
+    expect(f5bLogin).toContain('Acesso restrito a colaboradores e parceiros da SQ Química.')
+  })
+
+  it('eyebrow e logo PNG continuam no DOM (cabecalho mobile) e o h1 do painel e unico', () => {
+    expect(f5bLogin).toContain('<img src={sqQuimicaLogo} alt="SQ Química" />')
+    expect(f5bLogin).toContain('SQ Química · Suite COMEX')
+    expect((f5bLogin.match(/<h1>Portal COMEX<\/h1>/g) ?? []).length).toBe(1)
+  })
+
+  it('icones das features do mock (nav-arrivals e bell-ring, 18 / traco 1.9)', () => {
+    expect(f5bLogin).toContain('<Icon name="nav-arrivals" size={18} strokeWidth={1.9} />')
+    expect(f5bLogin).toContain('<Icon name="bell-ring" size={18} strokeWidth={1.9} />')
+  })
+
+  it('LoginArt: latitudes a partir de 24°10′S deixam de ser desenhadas (D16), sem remover do array', () => {
+    expect(f5bArt).toContain('const LAT_VISIBLE_COUNT = 4')
+    expect(f5bArt).toMatch(/LAT_LABELS\.map\(\(label, k\) =>\s*k < LAT_VISIBLE_COUNT \?/)
+    expect(f5bArt).toContain("'24°25′S',")
+    expect(f5bArt).toContain('y={144 + 180 * k}')
+  })
+
+  it('sem toISOString, console.log nem hex nos JSX do login', () => {
+    for (const source of [f5bLogin, f5bArt]) {
+      expect(f5bNoComments(source)).not.toMatch(/toISOString\(\)|console\.log/)
+      expect(f5bNoComments(source)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    }
   })
 })

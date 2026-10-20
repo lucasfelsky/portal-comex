@@ -184,6 +184,14 @@
   --row-unread-bg: #f7fbfa;
   --row-divider-soft: #f0f4f3;
 
+  /* Login e estados de acesso (F5b): Login.dc.html / AcessoEstados.dc.html */
+  --auth-brand-ink: #e8f4f6;
+  --auth-card-shadow: 0 20px 48px rgba(0, 65, 83, 0.14);
+  --auth-state-shadow: 0 6px 18px rgba(0, 65, 83, 0.08);
+  --auth-seg-shadow: 0 1px 3px rgba(0, 65, 83, 0.14);
+  --on-navy-line: rgba(255, 255, 255, 0.3);
+  --on-navy-fill: rgba(255, 255, 255, 0.06);
+
   /* Marca de produto "Rota e chegada" (BrandMark.jsx) e SQ Quimica (SQLogo) */
   --brand-mark-tile: #004153;
   --brand-mark-glyph: #ffffff;
@@ -9466,6 +9474,12 @@ body {
     --on-primary-700: #0b2430;
     --row-unread-bg: #12303c;
     --row-divider-soft: rgba(74, 222, 200, 0.06);
+    --auth-brand-ink: #e8f4f6;
+    --auth-card-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+    --auth-state-shadow: 0 14px 30px rgba(0, 0, 0, 0.5);
+    --auth-seg-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --on-navy-line: rgba(255, 255, 255, 0.3);
+    --on-navy-fill: rgba(255, 255, 255, 0.06);
     --brand-mark-tile: #004153;
     --brand-mark-glyph: #ffffff;
     --brand-mark-dot: #14dda7;
@@ -12696,96 +12710,9 @@ body {
     gap: 40px;
   }
 
-  .auth-brand {
-    display: flex;
-    flex: 0 0 560px;
-    max-width: 560px;
-    flex-direction: column;
-    align-self: stretch;
-    padding: 48px 44px;
-    border-radius: var(--radius-lg);
-    background: var(--sidebar-bg);
-    color: var(--sidebar-ink);
-    box-shadow: var(--shadow-lg);
-  }
-
-  .auth-brand__logo {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--radius-md);
-    background: var(--surface);
-  }
-
-  .auth-brand__logo img {
-    width: 44px;
-    height: 44px;
-    object-fit: contain;
-  }
-
-  .auth-brand__eyebrow {
-    margin-top: 40px;
-    color: var(--sidebar-ink-soft);
-    font-size: var(--fs-caption);
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-
-  .auth-brand h1 {
-    margin-top: 12px;
-    margin-bottom: 0;
-    color: var(--sidebar-ink);
-    font-size: 2.5rem;
-  }
-
-  .auth-brand p {
-    margin-top: 16px;
-    max-width: 380px;
-    color: var(--sidebar-ink-soft);
-    line-height: 1.6;
-  }
-
-  .auth-brand__feats {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    /* login-arte: feats sobem; o pe do painel e da cena do porto */
-    margin-top: 32px;
-    margin-bottom: 24px;
-  }
-
-  .auth-brand__feat {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-  }
-
-  .auth-brand__feat-icon {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
-    background: var(--sidebar-pill-hover);
-    color: var(--primary);
-  }
-
-  .auth-brand__feat strong {
-    display: block;
-    color: var(--sidebar-ink);
-    font-size: var(--fs-subhead);
-    font-weight: 600;
-  }
-
-  .auth-brand__feat small {
-    color: var(--sidebar-ink-soft);
-    font-size: var(--fs-caption);
-  }
+  /* Refino F5b: o painel de marca (.auth-brand e filhos) agora e escrito na secao
+     "REFINO VISUAL F5b" (600px, altura total); aqui ficam so as regras genericas
+     do card de autenticacao. */
 
   .auth-panel {
     display: flex;
@@ -13052,8 +12979,8 @@ body {
     flex: 1 1 0;
     min-height: 120px;
     max-height: 382px;
-    width: calc(100% + 88px);
-    margin: auto -44px -48px;
+    width: calc(100% + 112px);
+    margin: auto -56px 0;
   }
 
   .login-chart {
@@ -13081,8 +13008,8 @@ body {
     left: 0;
     width: 100%;
     height: 60px;
-    -webkit-mask-image: linear-gradient(to left, transparent 24px, black 120px);
-    mask-image: linear-gradient(to left, transparent 24px, black 120px);
+    -webkit-mask-image: linear-gradient(to left, transparent 100px, black 170px);
+    mask-image: linear-gradient(to left, transparent 100px, black 170px);
   }
 
   .login-chart__lat {
@@ -13090,6 +13017,10 @@ body {
     right: 0;
     width: 140px;
     height: 100%;
+    /* Refino F5b: a assinatura SQ Quimica ocupa os 84px de baixo (32 + 36 + folga); rotulo
+       de latitude que cairia ali (alturas de notebook) deixa de ser desenhado. */
+    -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 84px), transparent calc(100% - 84px));
+    mask-image: linear-gradient(to bottom, black calc(100% - 84px), transparent calc(100% - 84px));
   }
 
   .login-chart__lane {
@@ -13113,15 +13044,15 @@ body {
   }
 
   /* Posicoes estaticas (base, valem sem animacao): meio da folga ESQUERDA do
-     card (painel termina em 584; card comeca em 50vw + 80) = 25vw + 332. A
+     card (painel termina em 600; card comeca em 50vw + 80) = 25vw + 340. A
      direita do card, abaixo de 1440, a folga e' estreita e os rotulos de
      latitude (coluna de 140px na borda) ficam por baixo do navio. */
   .login-chart__ship--out {
-    transform: translateX(calc(25vw + 332px));
+    transform: translateX(calc(25vw + 340px));
   }
 
   .login-chart__ship--far {
-    transform: translateX(calc((25vw + 332px) / 0.75));
+    transform: translateX(calc((25vw + 340px) / 0.75));
   }
 
   .login-chart__ship--back {
@@ -20044,6 +19975,801 @@ body {
   }
 }
 
+/* ============================================================
+   REFINO VISUAL F5b — LOGIN E ESTADOS DE ACESSO (desktop >= 1041px)
+   Fontes: Login.dc.html e AcessoEstados.dc.html (valores inline).
+   Escopo: `.auth-screen` e compartilhado por 7 telas (App/ProtectedRoute/
+   DebugClaims usam a raiz pura), entao toda regra daqui comeca por uma raiz
+   propria: `.auth-screen--login`, `.auth-screen--verify`,
+   `.auth-screen--pending` ou `.auth-screen--not-found`. Tablet e mobile nao
+   mudam: os elementos novos nascem escondidos (primeiro bloco, sem media) e so
+   o @media >= 1041px os revela; nao ha regra @media (max-width) aqui.
+   Login: painel de marca de 600px em altura total (sem raio nem sombra), carta
+   nautica + cena do porto do LoginArt intactas (so tokens), assinatura SQ
+   Quimica no canto inferior direito da area clara, card de 440px.
+   Estados: card de 424px (a coluna do mock), icone de 56px, caixa de status em
+   mono 10, diagnostico recolhido por padrao (so desktop); 404 em card navy.
+   Notebook: o login compacta em src/notebook.css (--nb-*); os estados compactam
+   no ultimo @media desta secao (altura <= 800).
+   ============================================================ */
+.auth-screen--login .auth-brand__head {
+  display: contents;
+}
+
+.auth-screen--login .auth-brand__mark,
+.auth-screen--login .auth-card__legal,
+.auth-screen--login .auth-sq-signature,
+.auth-screen--verify .auth-state__icon,
+.auth-screen--verify .auth-status__headline,
+.auth-screen--pending .auth-state__icon,
+.auth-screen--pending .auth-diagnostic-toggle {
+  display: none;
+}
+
+.auth-screen--verify .auth-state__actions {
+  display: contents;
+}
+
+@media (min-width: 1041px) {
+  /* ---------- Login: raiz e painel da marca ---------- */
+  .auth-screen--login {
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+  }
+
+  .auth-screen--login .auth-brand {
+    box-sizing: border-box;
+    display: flex;
+    flex: 0 0 600px;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 28px;
+    max-width: 600px;
+    padding: 56px 56px 0;
+    border-radius: 0;
+    background: var(--sidebar-bg);
+    box-shadow: none;
+    color: var(--auth-brand-ink);
+  }
+
+  .auth-screen--login .auth-brand__logo,
+  .auth-screen--login .auth-brand__eyebrow {
+    display: none;
+  }
+
+  .auth-screen--login .auth-brand__head {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .auth-screen--login .auth-brand__mark {
+    display: block;
+    flex: none;
+  }
+
+  .auth-screen--login .auth-brand h1 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--auth-brand-ink);
+  }
+
+  .auth-screen--login .auth-brand p {
+    max-width: 440px;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--sidebar-ink-soft);
+  }
+
+  .auth-screen--login .auth-brand__feats {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0;
+  }
+
+  .auth-screen--login .auth-brand__feat {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .auth-screen--login .auth-brand__feat-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--sidebar-pill-active);
+    color: var(--primary);
+  }
+
+  .auth-screen--login .auth-brand__feat-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .auth-screen--login .auth-brand__feat strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--sidebar-ink);
+  }
+
+  .auth-screen--login .auth-brand__feat small {
+    font-size: 14px;
+    color: var(--sidebar-ink-soft);
+  }
+
+  /* Assinatura SQ Quimica: canto inferior direito da area clara, acima da arte. */
+  .auth-screen--login .auth-sq-signature {
+    display: block;
+    position: absolute;
+    right: 40px;
+    bottom: 32px;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ---------- Login: card do formulario ---------- */
+  .auth-screen--login .auth-panel {
+    box-sizing: border-box;
+    padding: 24px;
+  }
+
+  .auth-screen--login .auth-card {
+    box-sizing: border-box;
+    width: min(100%, 440px);
+    padding: 36px;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--auth-card-shadow);
+  }
+
+  .auth-screen--login .auth-card--form {
+    gap: 18px;
+  }
+
+  .auth-screen--login .auth-panel .brand__eyebrow {
+    display: block;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--primary-700);
+  }
+
+  .auth-screen--login .auth-toggle {
+    gap: 0;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--bg);
+  }
+
+  .auth-screen--login .auth-toggle__item {
+    height: 40px;
+    padding: 0;
+    border-radius: 9px;
+    background: transparent;
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out);
+  }
+
+  .auth-screen--login .auth-toggle__item:hover:not(.auth-toggle__item--active) {
+    background: transparent;
+    color: var(--ink);
+  }
+
+  .auth-screen--login .auth-toggle__item--active {
+    background: var(--surface);
+    box-shadow: var(--auth-seg-shadow);
+    color: var(--ink);
+  }
+
+  .auth-screen--login .auth-toggle__item:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .auth-screen--login .auth-card h1 {
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  /* D20: o paragrafo "Use sua conta corporativa..." nao existe no mock; fica so no cadastro. */
+  .auth-screen--login .auth-card__lead {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--login .auth-card__lead--login {
+    display: none;
+  }
+
+  .auth-screen--login .error-banner,
+  .auth-screen--login .success-banner {
+    margin: 0;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .auth-screen--login input.text-input {
+    height: 48px;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .auth-screen--login .auth-field__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  /* <label> global e caixa-alta com margem: o rotulo da senha segue o do mock (13/600). */
+  .auth-screen--login .auth-field__label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .auth-screen--login label.field {
+    margin-bottom: 0;
+  }
+
+  .auth-screen--login .auth-link-button {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--link-color);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .auth-screen--login .auth-link-button:hover {
+    color: var(--link-color-hover);
+  }
+
+  /* Senha: o contorno e do wrapper (campo + botao mostrar/ocultar de 40x40). */
+  .auth-screen--login .auth-password {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 48px;
+    padding: 0 4px 0 14px;
+    border: 1.5px solid var(--border-control);
+    border-radius: 12px;
+    background: var(--surface);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .auth-screen--login .auth-password:hover:not(:focus-within) {
+    border-color: var(--border-control-hover);
+  }
+
+  .auth-screen--login .auth-password:focus-within {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 4px var(--primary-a28);
+  }
+
+  .auth-screen--login .auth-password input.text-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .auth-screen--login .auth-password__toggle {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .auth-screen--login .auth-password__toggle:hover {
+    background: var(--surface-alt);
+    color: var(--ink);
+  }
+
+  .auth-screen--login .auth-password__toggle:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .auth-screen--login .auth-reset-panel {
+    gap: 8px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--surface-alt);
+    box-shadow: none;
+  }
+
+  .auth-screen--login .auth-reset-panel strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .auth-screen--login .auth-reset-panel p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--login .auth-button {
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .auth-screen--login .auth-card__legal {
+    display: block;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+
+  /* ---------- Estados de acesso: card, titulo, texto, acoes ---------- */
+  .auth-screen--verify .auth-card,
+  .auth-screen--pending .auth-card,
+  .auth-screen--not-found .auth-card {
+    box-sizing: border-box;
+    width: min(100%, 424px);
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--auth-state-shadow);
+  }
+
+  .auth-screen--verify .auth-card--form,
+  .auth-screen--pending .auth-card--form,
+  .auth-screen--not-found .auth-card--form {
+    gap: 16px;
+  }
+
+  .auth-screen--verify .brand__eyebrow,
+  .auth-screen--pending .brand__eyebrow,
+  .auth-screen--not-found .brand__eyebrow {
+    display: none;
+  }
+
+  .auth-screen--verify .auth-card h1,
+  .auth-screen--pending .auth-card h1,
+  .auth-screen--not-found .auth-card h1 {
+    font-family: var(--font-heading);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .auth-screen--verify .auth-card > p,
+  .auth-screen--pending .auth-card > p,
+  .auth-screen--not-found .auth-state__title p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--verify .auth-card > p strong,
+  .auth-screen--pending .auth-card > p strong {
+    color: var(--ink);
+  }
+
+  .auth-screen--verify .error-banner,
+  .auth-screen--verify .success-banner {
+    margin: 0;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  /* Ladrilho de icone 56x56 (e-mail = info, relogio = aviso, alerta = perigo). */
+  .auth-screen--verify .auth-state__icon,
+  .auth-screen--pending .auth-state__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+
+  .auth-screen--verify .auth-state__icon--info {
+    background: var(--info-50);
+    color: var(--info-700);
+  }
+
+  .auth-screen--pending .auth-state__icon--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .auth-screen--pending .auth-state__icon--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  /* Caixa de status (mono 10 "STATUS" / "PROXIMO PASSO"). */
+  .auth-screen--verify .auth-status,
+  .auth-screen--pending .auth-next-step {
+    gap: 4px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .auth-screen--verify .auth-status {
+    background: var(--surface-alt);
+  }
+
+  .auth-screen--verify .auth-status strong,
+  .auth-screen--pending .auth-next-step strong {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--verify .auth-status__headline {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .auth-screen--verify .auth-status p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--pending .auth-next-step--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .auth-screen--pending .auth-next-step--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .auth-screen--pending .auth-next-step strong {
+    color: inherit;
+  }
+
+  .auth-screen--pending .auth-next-step p {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: inherit;
+  }
+
+  /* "Status atual: X" (existia como banner verde): vira etiqueta de 26px no tom do estado. */
+  .auth-screen--pending .auth-status-line {
+    display: inline-flex;
+    align-items: center;
+    align-self: start;
+    justify-self: start;
+    height: 26px;
+    margin: 0;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .auth-screen--pending .auth-status-line::before {
+    content: none;
+  }
+
+  .auth-screen--pending .auth-status-line--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .auth-screen--pending .auth-status-line--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  /* Diagnostico (para o suporte): botao recolhivel de 44px com borda tracejada. */
+  .auth-screen--pending .auth-diagnostic-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  .auth-screen--pending .auth-diagnostic-toggle:hover {
+    border-color: var(--border-control);
+    color: var(--ink);
+  }
+
+  .auth-screen--pending .auth-diagnostic-toggle:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .auth-screen--pending .auth-diagnostic-toggle svg {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .auth-screen--pending .auth-diagnostic-toggle[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+
+  .auth-screen--pending .auth-diagnostic--collapsed {
+    display: none;
+  }
+
+  .auth-screen--pending .auth-diagnostic {
+    gap: 6px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--surface-alt);
+    box-shadow: none;
+  }
+
+  .auth-screen--pending .auth-diagnostic strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .auth-screen--pending .auth-diagnostic p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--pending .auth-diagnostic code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  /* Acoes empilhadas no rodape: primario 48, secundario/fantasma 44. */
+  .auth-screen--verify .auth-state__actions,
+  .auth-screen--pending .auth-state__actions,
+  .auth-screen--not-found .auth-state__actions {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .auth-screen--verify .auth-state__actions .primary-button,
+  .auth-screen--not-found .auth-state__actions .primary-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+    text-decoration: none;
+  }
+
+  .auth-screen--verify .auth-state__actions .ghost-button,
+  .auth-screen--pending .auth-state__actions .ghost-button,
+  .auth-screen--not-found .auth-state__actions .ghost-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    text-decoration: none;
+  }
+
+  .auth-screen--verify .auth-state__actions .ghost-button:not(.ghost-button--secondary),
+  .auth-screen--pending .auth-state__actions .ghost-button:not(.ghost-button--secondary) {
+    color: var(--ink-soft);
+  }
+
+  .auth-screen--verify .auth-state__actions .ghost-button:not(.ghost-button--secondary):hover:not(:disabled),
+  .auth-screen--pending .auth-state__actions .ghost-button:not(.ghost-button--secondary):hover:not(:disabled) {
+    color: var(--ink);
+  }
+
+  /* ---------- 404: card navy ---------- */
+  .auth-screen--not-found .auth-card {
+    border-color: transparent;
+    background: var(--navy);
+    box-shadow: none;
+    color: var(--auth-brand-ink);
+  }
+
+  .auth-screen--not-found .auth-state__title,
+  .auth-screen--not-found .auth-error-details {
+    display: contents;
+  }
+
+  .auth-screen--not-found .auth-card h1 {
+    color: var(--sidebar-ink);
+  }
+
+  .auth-screen--not-found .auth-state__title p {
+    color: var(--sidebar-ink-soft);
+  }
+
+  /* "404" grande em mono; o rotulo "Codigo:" continua no DOM, so para leitor de tela. */
+  .auth-screen--not-found .auth-error-code {
+    order: -1;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .auth-screen--not-found .auth-error-code__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .auth-screen--not-found .auth-error-code code {
+    font-family: var(--font-mono);
+    font-size: 64px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--primary);
+  }
+
+  .auth-screen--not-found .auth-error-path {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--on-navy-fill);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--sidebar-ink-soft);
+  }
+
+  .auth-screen--not-found .auth-error-path code {
+    font: inherit;
+    color: inherit;
+  }
+
+  .auth-screen--not-found .auth-state__actions .ghost-button.ghost-button--secondary {
+    border: 1.5px solid var(--on-navy-line);
+    background: transparent;
+    color: var(--sidebar-ink);
+  }
+
+  .auth-screen--not-found .auth-state__actions .ghost-button.ghost-button--secondary:hover:not(:disabled) {
+    border-color: var(--on-navy-line);
+    background: var(--on-navy-fill);
+  }
+
+  .auth-screen--not-found .auth-state__actions .ghost-button.ghost-button--secondary:active:not(:disabled) {
+    border-color: var(--on-navy-line);
+    background: var(--on-navy-line);
+  }
+
+  .auth-screen--not-found .auth-state__actions a:focus-visible {
+    --focus-ring: var(--primary);
+  }
+
+  .auth-screen--not-found .field-hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--sidebar-ink-soft);
+  }
+}
+
+/* Notebook / telas baixas (altura <= 800): os estados de acesso compactam para caber sem rolagem
+   (o login compacta em src/notebook.css). */
+@media (min-width: 1041px) and (max-height: 800px) {
+  .auth-screen--verify .auth-card,
+  .auth-screen--pending .auth-card,
+  .auth-screen--not-found .auth-card {
+    padding: 24px;
+  }
+
+  .auth-screen--verify .auth-card--form,
+  .auth-screen--pending .auth-card--form,
+  .auth-screen--not-found .auth-card--form {
+    gap: 12px;
+  }
+
+  .auth-screen--verify .auth-state__icon,
+  .auth-screen--pending .auth-state__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .auth-screen--verify .auth-card > p,
+  .auth-screen--pending .auth-card > p,
+  .auth-screen--not-found .auth-state__title p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .auth-screen--verify .auth-state__actions .primary-button,
+  .auth-screen--not-found .auth-state__actions .primary-button {
+    min-height: 44px;
+  }
+
+  .auth-screen--not-found .auth-error-code code {
+    font-size: 48px;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -20121,6 +20847,16 @@ body {
   .notifications-page .nt-icon-button:active,
   .notifications-page .nt-row__mark:active {
     transform: none;
+  }
+
+  /* Refino F5b: sem transicao nos controles do login e do diagnostico. */
+  .auth-screen--login .auth-toggle__item,
+  .auth-screen--login .auth-link-button,
+  .auth-screen--login .auth-password,
+  .auth-screen--login .auth-password__toggle,
+  .auth-screen--pending .auth-diagnostic-toggle,
+  .auth-screen--pending .auth-diagnostic-toggle svg {
+    transition: none;
   }
 
   .primary-button .spinner,
