@@ -445,3 +445,258 @@ describe('F4c - abas (controle segmentado)', () => {
     expect(screen.getByRole('tabpanel')).not.toBe(first)
   })
 })
+
+// --- fixtures ERP (mesmas da arvore legada; ver tests/ui/ProcessDetailView.test.jsx) ---
+const ERP_SNAPSHOT = { snapshotId: 'AAAAAAAAAAAAAAAAAAAA', updatedAtMs: new Date(2026, 9, 2, 14, 30).getTime() }
+const ERP_STAMP = 'planilha de 02/10/2026'
+const ERP_EMPTY_TRANSPORT = {
+  etd: '', eta: '', vessel: { name: '', raw: '', voyage: '' }, blAwb: '', origin: '', destination: '', diNumber: '', diDate: '',
+}
+function erpShipment({ transport = {}, ...overrides } = {}) {
+  return {
+    kind: 'FCL', portalCategory: 'FCL', key: 'BETA SEA 904-26', incoterm: '', originHint: '', stage: 1,
+    statuses: ['EMBARCOU'], statusNf: [], orders: [], items: [], conflicts: [],
+    transport: { ...ERP_EMPTY_TRANSPORT, ...transport },
+    ...overrides,
+  }
+}
+const erpReferenceOf = (shipment, matchRule = 'pedido') => ({
+  snapshot: ERP_SNAPSHOT,
+  hint: { snapshotId: ERP_SNAPSHOT.snapshotId, matchRule, shipment },
+})
+
+describe('F4c - aba Detalhes gerais', () => {
+  const pendingProcess = () =>
+    makeProcess({ etd: '', eta: '', carrierName: '', supplierName: '', processStatus: 'Aguardando Embarque' })
+
+  it('faixa "Dados pendentes (N)" (so admin): role=note, lista curta e "Completar agora" abre a edicao no 1o campo pendente', async () => {
+    const user = userEvent.setup()
+    const { props } = renderDetail({ selectedProcess: pendingProcess() })
+    const note = screen.getByRole('note')
+    expect(within(note).getByText(/^Dados pendentes \(\d+\)$/)).toBeInTheDocument()
+    const labels = within(note).getAllByRole('listitem').map((li) => li.textContent)
+    expect(labels.length).toBeGreaterThan(1)
+    expect(labels).toContain('ETD')
+    expect(labels).toContain('ETA')
+    await user.click(within(note).getByRole('button', { name: 'Completar agora' }))
+    expect(props.onEditMode).toHaveBeenCalledTimes(1)
+    // o 1o argumento e' a chave do 1o campo pendente (string), nao um evento
+    expect(typeof props.onEditMode.mock.calls[0][0]).toBe('string')
+  })
+
+  it('nao-admin: nenhuma faixa de pendencias', () => {
+    renderDetail({ isAdmin: false, profile: { name: 'Ana', role: 'logistica' }, selectedProcess: pendingProcess() })
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('4 cartoes de resumo: destino, ETD/ETA (mono, curtas, com a data completa no title), previsao e canal', () => {
+    const { container } = renderDetail({
+      selectedProcess: makeProcess({ terminalName: 'Portonave' }),
+    })
+    const cards = [...container.querySelectorAll('.pdv-stat')]
+    expect(cards.map((card) => card.querySelector('.pdv-stat__label').textContent)).toEqual([
+      'Porto de Atracação',
+      'ETD / ETA atualizada',
+      'Previsão de entrega no armazém',
+      'Canal',
+    ])
+    expect(cards[0].querySelector('.pdv-stat__value')).toHaveTextContent('Itajaí')
+    expect(cards[0].querySelector('.pdv-stat__hint')).toHaveTextContent('Terminal: Portonave')
+    const eta = cards[1]
+    expect(eta).toHaveClass('pdv-stat--info')
+    expect(eta.querySelector('.pdv-stat__value')).toHaveTextContent('12/09 · 20/10')
+    expect(eta.querySelector('.pdv-stat__value--mono')).not.toBeNull()
+    expect([...eta.querySelectorAll('.pdv-stat__value span')].map((el) => el.getAttribute('title'))).toEqual(['12/09/2026', '20/10/2026'])
+    expect(eta.querySelector('.pdv-stat__hint')).toHaveTextContent('ETA original: 18/10')
+    expect(cards[2].querySelector('.pdv-stat__value')).toHaveTextContent('23/10')
+    expect(cards[2].querySelector('.pdv-stat__hint')).toHaveTextContent('Data definida manualmente por um admin.')
+    expect(cards[3].querySelector('.pdv-stat__value')).toHaveTextContent('—')
+    expect(cards[3].querySelector('.pdv-stat__hint')).toHaveTextContent('Aguardando parametrização da DUIMP.')
+  })
+
+  it('ETA sem atualizacao: rotulo "ETD / ETA", sem tom info e sem "ETA original"; previsao automatica', () => {
+    const { container } = renderDetail({
+      selectedProcess: makeProcess({ etaOriginal: '', warehouseDeliveryDateOverride: '' }),
+    })
+    const cards = [...container.querySelectorAll('.pdv-stat')]
+    expect(cards[1].querySelector('.pdv-stat__label')).toHaveTextContent(/^ETD \/ ETA$/)
+    expect(cards[1]).not.toHaveClass('pdv-stat--info')
+    expect(cards[1].querySelector('.pdv-stat__hint')).toBeNull()
+    expect(cards[2].querySelector('.pdv-stat__hint')).toHaveTextContent('Data calculada automaticamente pelo sistema.')
+  })
+
+  it('aereo usa "Aeroporto de Destino"; canal com valor e tom por canal', () => {
+    const { container } = renderDetail({
+      selectedProcess: makeProcess({ category: 'AEREO', destination: 'GRU', parameterizationChannel: 'Vermelho', containerQuantity: 0 }),
+    })
+    const cards = [...container.querySelectorAll('.pdv-stat')]
+    expect(cards[0].querySelector('.pdv-stat__label')).toHaveTextContent('Aeroporto de Destino')
+    expect(cards[3].querySelector('.pdv-stat__value')).toHaveTextContent('Vermelho')
+    expect(cards[3].querySelector('.pdv-stat__value')).toHaveClass('pdv-stat__value--danger')
+    expect(cards[3].querySelector('.pdv-stat__hint')).toHaveTextContent('Canal de parametrização da DUIMP.')
+  })
+
+  it('canal vazio para quem nao ve a DUIMP antes da atracacao: dica neutra (sem "Aguardando parametrizacao")', () => {
+    const { container } = renderDetail({
+      isAdmin: false,
+      canSeeName: false,
+      profile: { name: 'Zé', role: 'user' },
+    })
+    const hint = [...container.querySelectorAll('.pdv-stat')][3].querySelector('.pdv-stat__hint')
+    expect(hint).toHaveTextContent('Canal ainda não definido.')
+  })
+
+  it('Identificacao em dl de 2 colunas: fornecedor, origem, incoterm, navio · viagem, House BL e agente (so o que existe)', () => {
+    const { container } = renderDetail({
+      selectedProcess: makeProcess({
+        supplierName: 'ALFA CHEM',
+        originLocation: 'Shanghai, CN',
+        incoterm: 'CFR',
+        vesselName: 'MSC Aurora',
+        voyage: '123W',
+        houseBl: 'MEDU0000000',
+        forwarderName: 'Agente X',
+      }),
+    })
+    const rows = [...container.querySelectorAll('.pdv-section .pdv-kv')].map((row) => [
+      row.querySelector('dt').textContent,
+      row.querySelector('dd').textContent,
+    ])
+    expect(rows).toEqual([
+      ['Fornecedor', 'ALFA CHEM'],
+      ['Origem', 'Shanghai, CN'],
+      ['Incoterm', 'CFR'],
+      ['Navio · Viagem', 'MSC Aurora · 123W'],
+      ['House BL', 'MEDU0000000'],
+      ['Agente de carga', 'Agente X'],
+    ])
+    expect(screen.getByRole('heading', { level: 3, name: 'Identificação' })).toBeInTheDocument()
+  })
+
+  it('aereo: Voo e MAWB no lugar de Navio · Viagem e House BL; fornecedor mascarado fica de fora', () => {
+    const { container } = renderDetail({
+      isAdmin: false,
+      canSeeName: false,
+      profile: { name: 'Zé', role: 'user' },
+      selectedProcess: makeProcess({
+        category: 'AEREO',
+        supplierName: 'SEGREDO LTDA',
+        originLocation: 'Frankfurt',
+        flightNumber: 'LH8140',
+        mawb: '020-1234',
+        containerQuantity: 0,
+      }),
+    })
+    const labels = [...container.querySelectorAll('.pdv-section .pdv-kv dt')].map((dt) => dt.textContent)
+    expect(labels).toEqual(['Origem', 'Voo', 'MAWB'])
+    expect(container.textContent).not.toContain('SEGREDO LTDA')
+  })
+
+  it('Identificacao vazia: placeholder tracejado no lugar do dl', () => {
+    const { container } = renderDetail({ selectedProcess: makeProcess() })
+    expect(container.querySelector('.pdv-kv-grid')).toBeNull()
+    expect(container.querySelector('.pdv-empty')).toHaveTextContent('Dados de identificação ainda não informados.')
+  })
+
+  it('Itens vinculados: contagem singular/plural, 2 linhas de previa e "Ver itens do processo" leva a aba Itens', async () => {
+    const user = userEvent.setup()
+    const items = [
+      { id: 'i1', commercialName: 'Resina epóxi líquida EP-128', quantity: 36000 },
+      { id: 'i2', commercialName: 'Endurecedor amínico', quantity: 4000 },
+      { id: 'i3', commercialName: 'Terceiro item', quantity: 5 },
+    ]
+    const { container, props } = renderDetail({ selectedProcess: makeProcess({ items }) })
+    const section = container.querySelector('.pdv-section--items')
+    expect(within(section).getByRole('heading', { level: 3, name: 'Itens vinculados' })).toBeInTheDocument()
+    expect(section.querySelector('.pdv-section__sub')).toHaveTextContent('3 itens cadastrados para este processo.')
+    const preview = [...section.querySelectorAll('.pdv-preview li')].map((li) => li.textContent)
+    expect(preview).toEqual(['Resina epóxi líquida EP-128' + (36000).toLocaleString('pt-BR'), 'Endurecedor amínico' + (4000).toLocaleString('pt-BR')])
+    await user.click(within(section).getByRole('button', { name: 'Ver itens do processo' }))
+    expect(props.onDetailTabChange).toHaveBeenCalledWith('items')
+  })
+
+  it('Itens vinculados: 1 item e sem itens (sem previa)', () => {
+    const { container, unmount } = renderDetail({
+      selectedProcess: makeProcess({ items: [{ id: 'i1', commercialName: 'Único', quantity: 1 }] }),
+    })
+    expect(container.querySelector('.pdv-section__sub')).toHaveTextContent('1 item cadastrado para este processo.')
+    unmount()
+    const empty = renderDetail({ selectedProcess: makeProcess({ items: [] }) })
+    expect(empty.container.querySelector('.pdv-section__sub')).toHaveTextContent('0 itens cadastrados para este processo.')
+    expect(empty.container.querySelector('.pdv-preview')).toBeNull()
+  })
+
+  it('CONSOLIDADO: card "POs consolidadas" com cada PO (referencia e fornecedor so para quem ve o nome)', () => {
+    const process = makeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: [
+        { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+        { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'OUTRO' },
+      ],
+    })
+    const { container, unmount } = renderDetail({ selectedProcess: process })
+    expect(screen.getByRole('heading', { level: 3, name: 'POs consolidadas' })).toBeInTheDocument()
+    const lines = [...container.querySelectorAll('.pdv-pos li')].map((li) => li.textContent)
+    expect(lines).toEqual(['9010 · Ref.: ALFA SEA 905-26 · Fornecedor: ALFA CHEM', '9011 · Ref.: GAMA SEA 906-26 · Fornecedor: OUTRO'])
+    unmount()
+    const masked = renderDetail({ selectedProcess: process, canSeeName: false, isAdmin: false, profile: { name: 'Zé', role: 'user' } })
+    expect([...masked.container.querySelectorAll('.pdv-pos li')].map((li) => li.textContent)).toEqual(['9010', '9011'])
+  })
+
+  it('avisos ERP (admin): destino, ETD, ETA e fornecedor da Identificacao; nao-admin nao ve nenhum', () => {
+    const process = makeProcess({
+      category: 'FCL', processNumber: '9036', destination: 'NAVEGANTES', etd: '2026-09-30', eta: '2026-10-20',
+      vesselName: 'ALFA MAERSK', voyage: '639W', masterBl: 'MBL-A', supplierName: 'ALFA CHEM', incoterm: 'FOB',
+      etaOriginal: '', warehouseDeliveryDateOverride: '',
+    })
+    const shipment = erpShipment({
+      incoterm: 'CFR',
+      orders: [{ pedido: '9036', poRef: 'BETA SEA 904-26', poBase: '', exporter: 'BETA TRADING' }],
+      transport: {
+        destination: 'ITAJAI', etd: '2026-10-06', eta: '2026-10-14', blAwb: 'MBL-B', diNumber: 'DU-B', diDate: '2026-10-20',
+        vessel: { name: 'BETA FAME', raw: 'BETA FAME 12W', voyage: '12W' },
+      },
+    })
+    const view = renderDetail({ selectedProcess: process, erpReference: erpReferenceOf(shipment) })
+    const chip = (name) => screen.getByRole('button', { name })
+    expect(chip('Destino no ERP: ITAJAI').closest('.pdv-stat')).not.toBeNull()
+    expect(chip('ETD no ERP: 06/10/2026')).toHaveAccessibleDescription(`No ERP: 06/10/2026 · ${ERP_STAMP}`)
+    expect(chip('ETA no ERP: 14/10/2026').closest('.pdv-stat')).not.toBeNull()
+    expect(chip('Incoterm no ERP: CFR').closest('.pdv-kv')).toHaveTextContent(/^IncotermFOB/)
+    expect(chip('Fornecedor no ERP: BETA TRADING').closest('.pdv-kv')).toHaveTextContent(/^FornecedorALFA CHEM/)
+    view.unmount()
+    renderDetail({
+      selectedProcess: process,
+      erpReference: erpReferenceOf(shipment),
+      isAdmin: false,
+      profile: { name: 'Ana', role: 'logistica' },
+    })
+    expect(screen.queryAllByRole('button', { name: /no ERP/ })).toHaveLength(0)
+  })
+
+  it('CONSOLIDADO + ERP: aviso no titulo "POs consolidadas" e na PO divergente', () => {
+    const process = makeProcess({
+      id: 'p-con', name: 'CON CN 929-26', category: 'CONSOLIDADO', processNumber: '', destination: 'NAVEGANTES',
+      purchaseOrders: [
+        { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+        { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'OUTRO' },
+      ],
+    })
+    const shipment = erpShipment({
+      kind: 'CONSOLIDADO', portalCategory: 'CONSOLIDADO', key: 'CON CN 929-26',
+      transport: { destination: 'NAVEGANTES' },
+      orders: [
+        { pedido: '9010', poRef: 'ALFA SEA 905-26', poBase: '', exporter: 'ALFA CHEM' },
+        { pedido: '9011', poRef: 'GAMA SEA 906-26', poBase: '', exporter: 'GAMA TRADING' },
+        { pedido: '9012', poRef: 'DELTA SEA 907-26', poBase: '', exporter: 'DELTA TRADING' },
+      ],
+    })
+    renderDetail({ selectedProcess: process, erpReference: erpReferenceOf(shipment, 'consolidado:ref') })
+    const title = screen.getByRole('heading', { level: 3, name: /POs consolidadas/ })
+    expect(title.querySelector('.erp-hint')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'POs consolidadas no ERP: 9010, 9011, 9012' })).toBeInTheDocument()
+    const poChip = screen.getByRole('button', { name: 'PO 9011 no ERP: Fornecedor GAMA TRADING' })
+    expect(poChip.closest('li')).toHaveTextContent('9011')
+  })
+})

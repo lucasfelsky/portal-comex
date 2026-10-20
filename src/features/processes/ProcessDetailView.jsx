@@ -28,6 +28,7 @@ import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from '
 import { getProcessStage, PROCESS_STAGES } from './processStage'
 import { getPendingFields } from './pendingFields'
 import { DetailHeaderCard, DetailTabs } from './ProcessDetailDesktop'
+import ProcessGeneralDesktop from './ProcessGeneralDesktop'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
@@ -742,7 +743,23 @@ export default function ProcessDetailView({
           className={`pdv-panel pdv-panel--${effectiveTab}`}
           key={effectiveTab}
         >
-          {tabPanels}
+          {effectiveTab === 'general' ? (
+            <ProcessGeneralDesktop
+              process={selectedProcess}
+              canSeeName={canSeeName}
+              isAdmin={isAdmin}
+              pendingFields={pendingFields}
+              erpHints={erpHints}
+              consolidatedOrders={consolidatedOrders}
+              poSetHint={poSetHint}
+              emptyPoSetHint={emptyPoSetHint}
+              etdHint={etdHint}
+              onEditMode={isAdmin ? onEditMode : undefined}
+              onOpenItems={() => onDetailTabChange('items')}
+            />
+          ) : (
+            tabPanels
+          )}
         </div>
       </article>
     )

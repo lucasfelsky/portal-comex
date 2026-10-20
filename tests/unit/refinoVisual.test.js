@@ -2504,3 +2504,78 @@ describe('F4c - JSX/markup', () => {
     expect(desktop.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
   })
 })
+
+describe('F4c - Detalhes gerais (valores do Processo.dc.html)', () => {
+  it('faixa "Dados pendentes": warn-50/warn-700, padding 14/18, raio 16, gap 10/16, acao a direita sublinhada', () => {
+    expectF4c('.process-detail-view .pdv-panel--general', ['--pdv-gap: 16px'])
+    expectF4c('.process-detail-view .pdv-pending', [
+      'display: flex',
+      'flex-wrap: wrap',
+      'align-items: center',
+      'gap: 10px 16px',
+      'padding: 14px 18px',
+      'border-radius: 16px',
+      'background: var(--warning-50)',
+      'color: var(--warning-700)',
+    ])
+    expectF4c('.process-detail-view .pdv-pending__title', ['font-size: 14px'])
+    expectF4c('.process-detail-view .pdv-pending__list', ['font-size: 13px'])
+    expectF4c('.process-detail-view .pdv-pending__action', [
+      'margin-left: auto',
+      'color: var(--warning-700)',
+      'font-size: 13px',
+      'font-weight: 700',
+      'text-decoration: underline',
+    ])
+  })
+
+  it('cartoes de resumo: grid auto-fit minmax(220px,1fr) gap 14; cartao padding 18, raio 16, borda --border; valor 22/700 (Sora ou mono)', () => {
+    expectF4c('.process-detail-view .pdv-summary', ['display: grid', 'grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))', 'gap: 14px'])
+    expectF4c('.process-detail-view .pdv-stat', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 6px',
+      'padding: 18px',
+      'border: 1px solid var(--border)',
+      'border-radius: 16px',
+      'background: var(--surface)',
+    ])
+    expectF4c('.process-detail-view .pdv-stat__label', ['font-size: 12px', 'font-weight: 700', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-stat--info .pdv-stat__label', ['color: var(--info-700)'])
+    expectF4c('.process-detail-view .pdv-stat__value', ['font-family: var(--font-heading)', 'font-size: 22px', 'font-weight: 700', 'letter-spacing: -0.01em'])
+    expectF4c('.process-detail-view .pdv-stat__value--mono', ['font-family: var(--font-mono)'])
+    expectF4c('.process-detail-view .pdv-stat__hint', ['font-size: 12px', 'line-height: 1.45', 'color: var(--ink-soft)'])
+  })
+
+  it('cartoes de secao: grid auto-fit minmax(min(100%,380px),1fr) gap 14; padding 20, raio 16, gap 12; titulo Sora 16/700; dl 2 colunas', () => {
+    expectF4c('.process-detail-view .pdv-pair', ['display: grid', 'grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr))', 'gap: 14px'])
+    expectF4c('.process-detail-view .pdv-section', [
+      'display: flex',
+      'flex-direction: column',
+      'gap: 12px',
+      'padding: 20px',
+      'border: 1px solid var(--border)',
+      'border-radius: 16px',
+      'background: var(--surface)',
+    ])
+    expectF4c('.process-detail-view .pdv-section__title', ['font-family: var(--font-heading)', 'font-size: 16px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-kv-grid--two', ['grid-template-columns: repeat(2, minmax(0, 1fr))'])
+    expectF4c('.process-detail-view .pdv-kv dt', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-kv dd', ['font-size: 14px', 'font-weight: 600'])
+  })
+
+  it('previa dos itens: linhas --surface-alt raio 10 padding 10/12 13/600, quantidade mono; vazio = tracejado --border-strong', () => {
+    expectF4c('.process-detail-view .pdv-preview li', [
+      'display: flex',
+      'justify-content: space-between',
+      'padding: 10px 12px',
+      'border-radius: 10px',
+      'background: var(--surface-alt)',
+      'font-size: 13px',
+      'font-weight: 600',
+    ])
+    expectF4c('.process-detail-view .pdv-preview__qty', ['font-family: var(--font-mono)', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-empty', ['padding: 14px', 'border: 1px dashed var(--border-strong)', 'border-radius: 12px', 'font-size: 13px'])
+    expectF4c('.process-detail-view .pdv-btn--start', ['align-self: flex-start'])
+  })
+})
