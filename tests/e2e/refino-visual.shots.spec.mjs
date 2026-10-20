@@ -474,7 +474,7 @@ PHASES.f4b = [
       await page.getByLabel('Categoria').selectOption('FCL')
       await page.getByLabel('ETA de').fill(dateKey(-12))
       await page.getByLabel('ETA até').fill(dateKey(40))
-      await page.getByLabel('Etapa operacional').selectOption('DUIMP pendente')
+      await page.getByLabel('Etapa operacional').selectOption('Dados pendentes')
       await expect(page.locator('.chg-chips__count')).toBeVisible()
     },
     afterShot: restoreViewport,
