@@ -1912,10 +1912,12 @@ export default function ProcessesPage() {
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onNewProcess={isAdmin ? handleCreateMode : undefined}
           onReconcileErp={isAdmin ? () => setIsErpReconcileOpen(true) : undefined}
-          onExport={async () => {
+          onExport={async (rows) => {
             setIsExporting(true)
             try {
-              const exportedCount = await exportProcessesToXlsx(filteredProcesses, new Date(), {
+              // A arvore desktop manda as linhas que o botao conta (filtradas ou
+              // arquivadas); a legada chama sem argumento (so as filtradas).
+              const exportedCount = await exportProcessesToXlsx(Array.isArray(rows) ? rows : filteredProcesses, new Date(), {
                 canSeeName,
               })
               toast.success(`Exportados ${exportedCount} processos para Excel.`)

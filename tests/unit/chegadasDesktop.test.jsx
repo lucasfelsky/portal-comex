@@ -273,6 +273,16 @@ describe('F4b - cabecalho e acoes', () => {
     expect(props.onNewProcess).toHaveBeenCalledTimes(1)
   })
 
+  it('Exportar (N) conta o que sai na planilha: filtradas fora de Arquivados, arquivadas dentro', async () => {
+    const user = userEvent.setup()
+    const { props } = renderView()
+    await user.click(screen.getByRole('button', { name: 'Exportar (4)' }))
+    expect(props.onExport).toHaveBeenLastCalledWith(PROCESSES)
+    await user.click(screen.getByRole('button', { name: 'Arquivados (1)' }))
+    await user.click(screen.getByRole('button', { name: 'Exportar (1)' }))
+    expect(props.onExport).toHaveBeenLastCalledWith(ARCHIVED)
+  })
+
   it('Exportar fica desabilitado sem linhas ou exportando', () => {
     const { unmount } = renderView({ filteredProcesses: [] })
     expect(screen.getByRole('button', { name: 'Exportar (0)' })).toBeDisabled()
@@ -437,6 +447,15 @@ describe('F4b - linha do processo', () => {
     expect(badges[2]).toHaveClass('inline-badge--warn')
     expect(badges[3]).toHaveClass('inline-badge--more')
     expect(badges[3]).toHaveAttribute('title', '2 alerta(s) a mais: Reefer, ISO tank')
+    // carry-over F4b: o "+N" e focavel e leitores de tela leem os alertas ocultos
+    expect(badges[3]).toHaveAttribute('tabindex', '0')
+    expect(badges[3]).toHaveAttribute('aria-label', '2 alerta(s) a mais: Reefer, ISO tank')
+  })
+
+  it('ETA e Entrega prev. tem title com a data completa (como o ETD)', () => {
+    const { container } = renderView()
+    const values = [...rowOf(container, 'Resina epóxi líquida').querySelectorAll('.chg-date__value')]
+    expect(values.map((value) => value.getAttribute('title'))).toEqual(['12/09/2026', '20/10/2026', '23/10/2026'])
   })
 
   it('sem alertas nao ha chip "+N"', () => {

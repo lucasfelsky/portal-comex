@@ -129,6 +129,8 @@ function ArrivalRow({
           {hiddenAlerts.length > 0 ? (
             <span
               className="inline-badge inline-badge--more"
+              tabIndex={0}
+              aria-label={`${hiddenAlerts.length} alerta(s) a mais: ${hiddenAlerts.map((alert) => alert.label).join(', ')}`}
               title={`${hiddenAlerts.length} alerta(s) a mais: ${hiddenAlerts.map((alert) => alert.label).join(', ')}`}
             >
               +{hiddenAlerts.length}
@@ -150,11 +152,15 @@ function ArrivalRow({
             title={etaUpdated ? `ETA anterior: ${formatDate(item.etaOriginal)}` : undefined}
           >
             <span className="chg-date__label">{etaUpdated ? 'ETA atualizada' : 'ETA'}</span>
-            <span className="chg-date__value">{formatShortDate(item.eta)}</span>
+            <span className="chg-date__value" title={formatDate(item.eta)}>
+              {formatShortDate(item.eta)}
+            </span>
           </span>
           <span className="chg-date" title="Previsão de entrega no armazém">
             <span className="chg-date__label">Entrega prev.</span>
-            <span className="chg-date__value">{formatShortDate(deliveryKey)}</span>
+            <span className="chg-date__value" title={formatDate(deliveryKey)}>
+              {formatShortDate(deliveryKey)}
+            </span>
           </span>
         </div>
       ) : null}
@@ -248,6 +254,9 @@ export default function ProcessListDesktop({
 
   const total = typeof totalCount === 'number' ? totalCount : filteredProcesses.length
   const archivedCount = archivedProcesses.length
+  // "Exportar (N)" conta o que realmente sai na planilha: com "Arquivados" aberto
+  // exporta as linhas arquivadas; fora dele, as linhas filtradas.
+  const exportRows = isShowingArchived ? archivedProcesses : filteredProcesses
 
   let eyebrow
   if (isLoading) eyebrow = 'Carregando fila · ordem por ETA'
@@ -328,12 +337,16 @@ export default function ProcessListDesktop({
           <button
             type="button"
             className="secondary-button chg-btn chg-btn--export"
-            disabled={filteredProcesses.length === 0 || isExporting}
-            title="Baixar as linhas visíveis (filtros aplicados) em Excel"
-            onClick={onExport}
+            disabled={exportRows.length === 0 || isExporting}
+            title={
+              isShowingArchived
+                ? 'Baixar os processos arquivados em Excel'
+                : 'Baixar as linhas visíveis (filtros aplicados) em Excel'
+            }
+            onClick={() => onExport(exportRows)}
           >
             {isExporting ? <Spinner size={14} /> : <MockIcon name="download" />}
-            Exportar ({filteredProcesses.length})
+            Exportar ({exportRows.length})
           </button>
           {isAdmin && onReconcileErp ? (
             <button
