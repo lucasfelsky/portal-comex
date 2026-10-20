@@ -166,4 +166,23 @@ describe('Toast', () => {
     )
     consoleError.mockRestore()
   })
+
+  it('unmount do provider cancela os timers pendentes (auto-dismiss e saida)', () => {
+    let api
+    const { unmount } = render(
+      <ToastProvider>
+        <ToastHarness onReady={(t) => (api = t)} />
+      </ToastProvider>
+    )
+    act(() => {
+      api.success('pendente') // agenda o auto-dismiss de 4s
+      api.dismiss('toast-qualquer') // agenda o timer de 200ms da saida
+    })
+    expect(vi.getTimerCount()).toBe(2)
+
+    unmount()
+    // Sem timer vivo, nada chama setToasts depois do teardown do jsdom
+    // (flake "window is not defined" em tests/ui/ProcessesPage.test.jsx).
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
