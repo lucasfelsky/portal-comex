@@ -1105,7 +1105,7 @@ async function seedF4c(adminUid) {
     licenses: [{ id: 'lic-1', agency: 'MAPA', status: 'Em análise' }],
     warehouseDeliveryDateOverride: dateKey(3),
     processNotes: 'Cliente pediu priorização da entrega no CD.',
-    documentIndex: { fispqItemIds: ['it-1'], containerWashIds: [], processSlotKeys: ['bl', 'invoice'] },
+    documentIndex: { fispqItemIds: ['it-1'], containerWashIds: [], processSlotKeys: ['bl', 'invoice', 'packingList'] },
     archived: false,
     updatedAt: isoMinutesAgo(5),
   }
