@@ -18,7 +18,9 @@
 // F3: componentes e movimento — botoes, campos, chips, toast, vazio, skeleton,
 // hover sem levantar, timeline + um catalogo de estados com asserts de CSS
 // computado, ver o fim do arquivo; F4a: Dashboard — secoes com dados, estados
-// carregando/erro/vazio, notebook, tablet e mobile).
+// carregando/erro/vazio, notebook, tablet e mobile; F4b: Chegadas — lista, filtros
+// aplicados, hover, foco, vazio, carregando, arquivados, nao-admin (nomes
+// mascarados), notebook, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -443,7 +445,171 @@ PHASES.f4a = [
     afterShot: restoreViewport,
   },
 ]
-const PHASE = process.env.REFINO_PHASE || 'f4a'
+
+// Refino F4b (Chegadas): a rolagem e do .main-content (nao da janela), entao as capturas
+// da lista usam viewport mais alta (1440x1500 mostra o cabecalho e as ~11 linhas).
+const chegadasReady = (page) => page.getByRole('heading', { level: 2, name: 'Fila de chegadas' })
+const chegadasRows = (page) => page.locator('.chg-row')
+const chegadasLoaded = async (page) => {
+  await expect(chegadasRows(page).first()).toBeVisible({ timeout: 15_000 })
+}
+PHASES.f4b = [
+  {
+    name: 'chegadas',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1440, 1500)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-filtros-aplicados',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1440, 1100)(page)
+      await chegadasLoaded(page)
+      await page.getByLabel('Categoria').selectOption('FCL')
+      await page.getByLabel('ETA de').fill(dateKey(-12))
+      await page.getByLabel('ETA até').fill(dateKey(40))
+      await page.getByLabel('Etapa operacional').selectOption('DUIMP pendente')
+      await expect(page.locator('.chg-chips__count')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-busca-com-chip',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').fill('solvente')
+      await expect(chegadasRows(page)).toHaveCount(1)
+      await expect(page.locator('.chg-chips__count')).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-hover',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await chegadasRows(page).nth(2).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-hover-botao-icone',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await chegadasRows(page).nth(1).getByRole('button', { name: /Arquivar processo/ }).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-foco-teclado',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.mouse.move(700, 880)
+      await chegadasRows(page).nth(1).locator('.chg-row__main').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(chegadasRows(page).nth(1).locator('.chg-row__main')).toBeFocused()
+    },
+  },
+  {
+    name: 'chegadas-foco-busca',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.getByLabel('Buscar processo')).toBeFocused()
+    },
+  },
+  {
+    name: 'chegadas-vazio',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').fill('zzzz-sem-resultado')
+      await expect(page.locator('.chg-results .empty-state')).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-carregando',
+    route: '/processos',
+    ready: chegadasReady,
+    beforeGoto: delayDashboardQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.chg-skeletons .process-card-skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-arquivados',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByRole('button', { name: /Arquivados \(\d+\)/ }).click()
+      await expect(page.locator('.chg-section-label')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-notebook-1366x768',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-desktop-estreito-1100',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1100, 1300)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1000)(page)
+      await expect(page.locator('.process-item--button').first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.chg-row')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await expect(page.locator('.process-item--button').first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.chg-row')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+]
+const PHASE = process.env.REFINO_PHASE || 'f4b'
 
 // --- helpers de seed -------------------------------------------------------
 
@@ -651,6 +817,34 @@ function buildProcesses() {
       collectionStatus: 'Carga disponível em estoque',
       updatedAt: updatedAt(80),
     },
+    // F4b: 4 alertas (inflamavel, perigosa, Reefer, ISO tank) -> 2 chips + "+2".
+    {
+      id: 'shot-alertas-multiplos',
+      ...base,
+      name: 'Acetona técnica — Rotterdam',
+      processNumber: '4500129588',
+      processStatus: 'Aguardando Embarque',
+      etd: dateKey(10),
+      eta: dateKey(38),
+      items: [{ id: 'it-1', commercialName: 'Acetona', dangerousGoods: true, imoClass: '3', unNumber: '1090' }],
+      containers: [
+        { id: 'ct-1', type: 'ISOTANK', number: '' },
+        { id: 'ct-2', type: '20RF', number: '' },
+      ],
+      updatedAt: updatedAt(85),
+    },
+    // F4b: arquivados (o admin ve "Arquivados (3)").
+    ...['Fosfato monoamônico — Qingdao', 'Carbonato de cálcio — Mumbai', 'Óxido de zinco — Lisboa'].map((name, index) => ({
+      id: `shot-arquivado-${index + 1}`,
+      ...base,
+      name,
+      processNumber: `450013000${index + 1}`,
+      processStatus: 'Carga recebida',
+      etd: dateKey(-80 - index),
+      eta: dateKey(-50 - index),
+      archived: true,
+      updatedAt: updatedAt(120 + index),
+    })),
     // Dados pendentes: sem ETD/ETA nem transportadora.
     {
       id: 'shot-dados-pendentes',
@@ -832,6 +1026,36 @@ for (const theme of THEMES) {
       if (screen.afterShot) await screen.afterShot(page)
     }
 
+    await context.close()
+  })
+}
+
+// F4b - Chegadas para um usuario comum (E2E_USERS.user): nomes mascarados nas categorias
+// restritas (titulo "PO: ...") e sem Novo processo / Importar / Arquivados / Arquivar.
+for (const theme of THEMES) {
+  test(`capturas ${PHASE} - nao-admin - ${theme}`, async ({ browser }) => {
+    test.skip(PHASE !== 'f4b', 'nao-admin so na F4b')
+    test.setTimeout(120_000)
+    const outDir = path.join(OUT_ROOT, PHASE)
+    fs.mkdirSync(outDir, { recursive: true })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+    await login(page, E2E_USERS.user)
+    await page.goto('/processos')
+    await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+    await chegadasLoaded(page)
+    await expect(page.getByRole('button', { name: 'Novo processo' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Arquivados/ })).toHaveCount(0)
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: path.join(outDir, `chegadas-nao-admin-mascarado-${theme}.png`), fullPage: true })
     await context.close()
   })
 }

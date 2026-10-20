@@ -1590,6 +1590,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/processes/ProcessDocumentsPanel.jsx': [15, 1, 12],
   'features/processes/ProcessForm.jsx': [7, 5, 0],
   'features/processes/ProcessHistoryPanel.jsx': [1, 1, 0],
+  // F4b: o desktop vive em ProcessListDesktop: Arquivados = fantasma; Exportar/Importar = .secondary-button.
+  'features/processes/ProcessListDesktop.jsx': [1, 0, 0],
   'features/processes/ProcessListView.jsx': [4, 2, 0],
   'features/processes/ProcessMessagesPanel.jsx': [1, 0, 1],
   'features/processes/PurchaseOrdersEditor.jsx': [2, 2, 0],
@@ -1938,5 +1940,286 @@ describe('F4a - JSX/markup', () => {
     expect(dashboard).toContain('summarizeAnnouncement(lead.content)')
     expect(dashboard).toContain('getCargoHazardBadges(item)')
     expect(dashboard).toContain("label: 'DUIMP'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4b - Chegadas (Chegadas.dc.html). Arvore propria no desktop (chg-*,
+// ProcessListDesktop.jsx), escolhida por matchMedia; tablet/mobile ficam na
+// arvore legada. CSS = uma secao "REFINO VISUAL F4b — CHEGADAS" com UM @media
+// desktop (+ o desktop estreito e o compacto de notebook), toda regra sob a raiz
+// `.process-list-card` (ou `.surface.surface--arrivals`).
+// ---------------------------------------------------------------------------
+const F4B_MARKER = 'REFINO VISUAL F4b — CHEGADAS (Chegadas.dc.html'
+const F4B_COMPACT_MARKER = 'REFINO VISUAL F4b — CHEGADAS COMPACTO'
+const f4bAt = css.indexOf(F4B_MARKER)
+const f4bStart = css.lastIndexOf('/*', f4bAt)
+const f4bCompactAt = css.indexOf(F4B_COMPACT_MARKER)
+const f4bNarrowAt = css.indexOf('/* Desktop estreito (1041-1279px)')
+const f4bRegionEnd = css.lastIndexOf('/*', css.indexOf(F4A_MARKER))
+const f4bMainBody = bodyAfter(stripComments(css.slice(f4bStart, f4bNarrowAt)), DESKTOP_MEDIA)
+const f4bRules = parseRules(f4bMainBody)
+const f4bNarrowRules = parseRules(
+  bodyAfter(stripComments(css.slice(f4bNarrowAt, f4bCompactAt)), '@media (min-width: 1041px) and (max-width: 1279px) {'),
+)
+const f4bCompactRules = parseRules(
+  bodyAfter(
+    stripComments(css.slice(f4bCompactAt, f4bRegionEnd)),
+    '@media (min-width: 1041px) and (max-height: 800px) {',
+  ),
+)
+
+function f4bDecls(selector, rules = f4bRules) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F4b: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectF4b(selector, declarations, rules) {
+  const body = f4bDecls(selector, rules)
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F4b - secao, escopo e ordem', () => {
+  it('a secao existe, vem antes da F4a e do bloco reduce desktop; o antigo ciclo 2b saiu', () => {
+    expect(f4bAt).toBeGreaterThan(0)
+    expect(f4bCompactAt).toBeGreaterThan(f4bAt)
+    expect(f4bRegionEnd).toBeGreaterThan(f4bCompactAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f4bRegionEnd)
+    expect(css).not.toContain('Ciclo 2b (redesign Fase 2)')
+    const before = stripComments(css.slice(f4bStart, css.indexOf(DESKTOP_MEDIA, f4bAt)))
+    expect(before.trim(), 'nada fora do @media na secao principal').toBe('')
+    expect(f4bMainBody).not.toMatch(/@media/)
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail.match(/@media/g)).toHaveLength(1)
+  })
+
+  it('so a secao tem max-width (1279, desktop estreito); toda regra comeca pela raiz da tela', () => {
+    const whole = stripComments(css.slice(f4bStart, f4bRegionEnd))
+    const maxWidths = [...whole.matchAll(/@media[^{]*\(max-width:\s*(\d+)px\)/g)].map((m) => Number(m[1]))
+    expect(maxWidths).toEqual([1279])
+    const ROOT = /^(\[data-theme='dark'\] )?(\.surface\.surface--arrivals|\.process-list-card)/
+    for (const rule of [...f4bRules, ...f4bNarrowRules, ...f4bCompactRules]) {
+      for (const selector of rule.selectors) expect(selector, `seletor sem a raiz: ${selector}`).toMatch(ROOT)
+    }
+  })
+
+  it('sem hex/rgb literal: so tokens (var(--...))', () => {
+    const all = [...f4bRules, ...f4bNarrowRules, ...f4bCompactRules].map((r) => r.body).join(' ')
+    expect(all.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g)).toBeNull()
+  })
+
+  it('o bloco legado (.process-item, tablet/mobile) segue la; o desktop nao o reestiliza', () => {
+    expect(css).toContain('.process-list-card .process-item__summary')
+    expect(css).toContain('.chegadas-mobilebar')
+    for (const rule of f4bRules) for (const selector of rule.selectors) expect(selector).not.toContain('.process-item')
+  })
+
+  it('notebook.css e mobile-redesign.css nao ganharam o desktop novo', () => {
+    expect(read('src/notebook.css')).not.toContain('chg-')
+    expect(read('src/mobile-redesign.css')).not.toContain('chg-')
+    expect(read('src/mobile-redesign.css')).not.toContain('surface--arrivals')
+  })
+})
+
+describe('F4b - valores do mock (Chegadas.dc.html)', () => {
+  it('raiz sem cartao externo, gap 18; cabecalho: eyebrow mono 11/600 1.5px, h2 Sora 30/700 -0.02em', () => {
+    expectF4b('.surface.surface--arrivals', ['padding: 0', 'gap: 18px', 'border: 0', 'background: none', 'box-shadow: none'])
+    expectF4b('.process-list-card.process-list-card--desktop', ['display: flex', 'flex-direction: column', 'gap: 18px', 'padding: 0', 'background: none'])
+    expectF4b('.process-list-card .chg-head', ['display: flex', 'flex-wrap: wrap', 'align-items: flex-end', 'justify-content: space-between', 'gap: 12px'])
+    expectF4b('.process-list-card .chg-head__eyebrow', [
+      'font-family: var(--font-mono)',
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 1.5px',
+      'text-transform: uppercase',
+      'color: var(--primary-700)',
+    ])
+    expectF4b('.process-list-card .chg-head h2', [
+      'font-family: var(--font-heading)',
+      'font-size: 30px',
+      'font-weight: 700',
+      'letter-spacing: -0.02em',
+    ])
+  })
+
+  it('botoes de acao: 44px, 14/700, gap 8, paddings 14/16/18 do mock', () => {
+    expectF4b('.process-list-card .chg-head__actions', ['display: flex', 'flex-wrap: wrap', 'gap: 8px'])
+    expectF4b('.process-list-card .chg-btn', ['height: 44px', 'padding: 0 16px', 'font-size: 14px', 'font-weight: 700', 'gap: 8px', 'align-items: center'])
+    expectF4b('.process-list-card .chg-btn--archived', ['padding: 0 14px'])
+    expectF4b('.process-list-card .chg-btn--new', ['padding: 0 18px'])
+  })
+
+  it('painel de filtros: grid 2fr + 3 colunas, gap 12, padding 16, raio 18, borda --border', () => {
+    expectF4b('.process-list-card .chg-filters', [
+      'display: grid',
+      'grid-template-columns: minmax(260px, 2fr) minmax(160px, 1fr) minmax(250px, 1.3fr) minmax(160px, 1fr)',
+      'gap: 12px',
+      'padding: 16px',
+      'border: 1px solid var(--border)',
+      'border-radius: 18px',
+      'background: var(--surface)',
+    ])
+    expectF4b('.process-list-card .chg-field', ['display: flex', 'flex-direction: column', 'gap: 6px'])
+    expectF4b('.process-list-card .chg-field > label', ['font-size: 12px', 'font-weight: 700'])
+  })
+
+  it('campos 44px raio 10 borda 1.5px; busca/periodo em --border-control, selects navy (mock); foco com halo', () => {
+    expectF4b('.process-list-card .chg-search', ['display: flex', 'align-items: center', 'height: 44px', 'border: 1.5px solid var(--border-control)', 'border-radius: 10px', 'gap: 8px', 'padding: 0 12px'])
+    expectF4b('.process-list-card .chg-search:focus-within', ['border-color: var(--focus-ring)', 'box-shadow: 0 0 0 4px var(--primary-a28)'])
+    expectF4b('.process-list-card .chg-search input', ['font-size: 14px', 'font-weight: 500', 'background: transparent', 'outline: none'])
+    expectF4b('.process-list-card .chg-select', ['height: 44px', 'padding: 0 12px', 'border: 1.5px solid var(--chg-line)', 'border-radius: 10px', 'font-size: 14px', 'font-weight: 600'])
+    expectF4b('.process-list-card .chg-select:hover:not(:disabled):not(:focus)', ['border: 1.5px solid var(--chg-line)'])
+    expectF4b('.process-list-card.process-list-card--desktop', ['--chg-line: var(--navy)'])
+    expectF4b("[data-theme='dark'] .process-list-card.process-list-card--desktop", ['--chg-line: var(--primary)'])
+    // D19: periodo de ETA = 2 datas num unico contorno mono 14/500
+    expectF4b('.process-list-card .chg-range', ['height: 44px', 'border: 1.5px solid var(--border-control)', 'border-radius: 10px', 'font-family: var(--font-mono)', 'font-size: 14px', 'font-weight: 500'])
+    expectF4b('.process-list-card .chg-range__input', ['border: 0', 'background: transparent', 'min-width: 0'])
+  })
+
+  it('chips ativos: gap 8, contador "X de Y" a direita 13px --ink-soft', () => {
+    expectF4b('.process-list-card .chg-chips', ['gap: 8px', 'margin: 0'])
+    expectF4b('.process-list-card .chg-chips__count', ['margin-left: auto', 'font-size: 13px', 'color: var(--ink-soft)'])
+    expectF4b('.process-list-card .chg-list', ['display: flex', 'flex-direction: column', 'gap: 10px'])
+  })
+
+  it('cartao da linha: grid 1fr auto auto, gap 20, padding 16/16/16/20, raio 16, --shadow-sm -> hover --shadow-md + --border-strong', () => {
+    expectF4b('.process-list-card .chg-row', [
+      'display: grid',
+      'grid-template-columns: minmax(0, 1fr) auto auto',
+      'gap: 20px',
+      'align-items: center',
+      'padding: 16px 16px 16px 20px',
+      'border: 1px solid var(--border)',
+      'border-radius: 16px',
+      'background: var(--surface)',
+      'box-shadow: var(--shadow-sm)',
+    ])
+    const body = f4bDecls('.process-list-card .chg-row')
+    expect(body).toContain('box-shadow var(--dur-base) var(--ease-out)')
+    expect(body).toContain('border-color var(--dur-base) var(--ease-out)')
+    expectF4b('.process-list-card .chg-row:hover', ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)'])
+    // o card NAO levanta (sem transform no hover)
+    expect(f4bDecls('.process-list-card .chg-row:hover')).not.toContain('transform')
+    expectF4b('.process-list-card .chg-row--selected', ['border-color: var(--chg-line)'])
+  })
+
+  it('nome 16/700, PO mono 12, destino 13, chips 6px de gap; neutro/warn/danger por token', () => {
+    expectF4b('.process-list-card .chg-row__main', ['display: flex', 'flex-direction: column', 'gap: 8px', 'min-width: 0', 'text-align: left'])
+    expectF4b('.process-list-card .chg-row__title', ['display: flex', 'flex-wrap: wrap', 'align-items: baseline', 'gap: 10px'])
+    expectF4b('.process-list-card .chg-row__name', ['font-size: 16px', 'font-weight: 700'])
+    expectF4b('.process-list-card .chg-row__po', ['font-family: var(--font-mono)', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4b('.process-list-card .chg-row__dest', ['font-size: 13px', 'color: var(--ink-soft)'])
+    expectF4b('.process-list-card .chg-row__dest strong', ['font-weight: 600', 'color: var(--ink)'])
+    expectF4b('.process-list-card .chg-row__chips', ['display: flex', 'flex-wrap: wrap', 'gap: 6px'])
+    expectF4b('.process-list-card .chg-row__chips .inline-badge', ['background: var(--neutral-50)', 'color: var(--neutral-700)'])
+    expectF4b('.process-list-card .chg-row__chips .inline-badge--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF4b('.process-list-card .chg-row__chips .inline-badge--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+  })
+
+  it('datas: 3 colunas de 104px gap 12; rotulo 11/600, valor mono 14/600; ETA atualizada em --info-50/--info-700 (D14)', () => {
+    expectF4b('.process-list-card .chg-row__dates', ['display: grid', 'grid-template-columns: repeat(3, 104px)', 'gap: 12px'])
+    expectF4b('.process-list-card .chg-date', ['display: flex', 'flex-direction: column', 'gap: 2px'])
+    expectF4b('.process-list-card .chg-date--eta', ['padding: 4px 8px', 'margin: -4px -8px', 'border-radius: 8px'])
+    expectF4b('.process-list-card .chg-date--updated', ['background: var(--info-50)'])
+    expectF4b('.process-list-card .chg-date--updated .chg-date__label', ['color: var(--info-700)'])
+    expectF4b('.process-list-card .chg-date__label', ['font-size: 11px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF4b('.process-list-card .chg-date__value', ['font-family: var(--font-mono)', 'font-size: 14px', 'font-weight: 600', 'font-variant-numeric: tabular-nums'])
+  })
+
+  it('acoes 44x44 raio 12: favorito com --warning-50, estrela --channel-yellow-edge / --warning-700, hover --disabled-bg', () => {
+    expectF4b('.process-list-card .chg-row__actions', ['grid-column: 3', 'display: flex', 'gap: 4px'])
+    expectF4b('.process-list-card .chg-icon-button', ['width: 44px', 'height: 44px', 'border-radius: 12px', 'background: transparent', 'color: var(--ink-soft)'])
+    expectF4b('.process-list-card .chg-icon-button:hover', ['background-color: var(--disabled-bg)'])
+    expectF4b('.process-list-card .chg-icon-button--on', ['background-color: var(--warning-50)'])
+    expectF4b('.process-list-card .chg-icon-button--on .chg-star', ['fill: var(--channel-yellow-edge)', 'stroke: var(--warning-700)'])
+    expect(f4bDecls('.process-list-card .chg-icon-button')).toContain('background-color var(--dur-base) var(--ease-out)')
+  })
+
+  it('foco visivel (anel duplo) nos botoes de acao e no bloco principal', () => {
+    for (const selector of ['.process-list-card .chg-row__main:focus-visible', '.process-list-card .chg-icon-button:focus-visible']) {
+      expectF4b(selector, ['box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring)'])
+    }
+  })
+
+  it('desktop estreito: busca em linha inteira; compacto de notebook: menos respiro', () => {
+    expectF4b('.process-list-card .chg-field--search', ['grid-column: 1 / -1'], f4bNarrowRules)
+    expectF4b('.process-list-card .chg-filters', ['grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr)'], f4bNarrowRules)
+    expectF4b('.process-list-card .chg-row', ['padding: 12px 14px 12px 18px'], f4bCompactRules)
+    expectF4b('.process-list-card .chg-filters', ['padding: 12px'], f4bCompactRules)
+  })
+
+  it('carregando: o skeleton da lista ganha a moldura da linha (surface + borda + --shadow-sm)', () => {
+    expectF4b('.process-list-card .chg-skeletons .process-card-skeleton', ['border: 1px solid var(--border)', 'background: var(--surface)', 'box-shadow: var(--shadow-sm)'])
+  })
+})
+
+describe('F4b - JSX/markup', () => {
+  const readLf = (rel) => read(rel).replace(/\r\n/g, '\n')
+  const noComments = (s) => stripComments(s).replace(/^\s*\/\/.*$/gm, '')
+  const desktop = readLf('src/features/processes/ProcessListDesktop.jsx')
+  const view = readLf('src/features/processes/ProcessListView.jsx')
+  const page = readLf('src/pages/ProcessesPage.jsx')
+
+  it('o ListView escolhe a arvore por matchMedia (useMediaQuery) e a legada continua intacta', () => {
+    expect(view).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(view).toContain('useMediaQuery(DESKTOP_QUERY)')
+    expect(view).toContain('if (isDesktop && !isMobile) {')
+    expect(view).toContain('className="chegadas-mobilebar"')
+    expect(view).toContain('className={`list-card process-list-card')
+    expect(view).toContain('<ProcessListDesktop')
+  })
+
+  it('a pagina troca o cabecalho so no desktop da lista (surface--arrivals) e passa totalCount', () => {
+    expect(page).toContain("useMediaQuery('(min-width: 1041px)')")
+    expect(page).toContain("isDesktopLayout && viewMode === 'list'")
+    expect(page).toContain("' surface--arrivals'")
+    expect(page).toContain('totalCount={processes.length - archivedProcesses.length}')
+  })
+
+  it('h2 "Fila de chegadas", 4 acoes na ordem do mock e filtros com rotulos associados', () => {
+    expect(desktop).toContain('<h2>Fila de chegadas</h2>')
+    const at = (needle) => desktop.indexOf(needle)
+    expect(at('Arquivados (')).toBeLessThan(at('Exportar ('))
+    expect(at('Exportar (')).toBeLessThan(at('Importar do DBCorp'))
+    expect(at('Importar do DBCorp')).toBeLessThan(at('Novo processo'))
+    expect(desktop).toContain('htmlFor={ids.search}')
+    expect(desktop).toContain('aria-label="Filtros"')
+    expect(desktop).toContain('aria-label="ETA de"')
+    expect(desktop).toContain('aria-label="ETA até"')
+    expect(desktop).toContain('isAdmin ? <option value="Dados pendentes">')
+  })
+
+  it('botoes migrados: secundario navy (.secondary-button), primario menta, Arquivados fantasma', () => {
+    expect(desktop).toMatch(/secondary-button chg-btn chg-btn--export/)
+    expect(desktop).toMatch(/secondary-button chg-btn chg-btn--import/)
+    expect(desktop).toMatch(/primary-button chg-btn chg-btn--new/)
+    expect(desktop).toMatch(/ghost-button chg-btn chg-btn--archived/)
+    expect(desktop).not.toContain('ghost-button--secondary')
+  })
+
+  it('alertas: no maximo 2 + "+N"; datas curtas sem toISOString; ETA atualizada; previsao pela mesma regra', () => {
+    expect(desktop).toContain('alerts.slice(0, 2)')
+    expect(desktop).toContain('alerts.slice(2)')
+    expect(desktop).toContain("etaUpdated ? 'ETA atualizada' : 'ETA'")
+    expect(desktop).toContain('Entrega prev.')
+    expect(noComments(desktop)).not.toMatch(/toISOString\(\)/)
+    expect(desktop).toContain('getEstimatedDeliveryKey(item)')
+  })
+
+  it('mascara de nome e estrela com mola reaproveitadas dos modulos existentes', () => {
+    expect(desktop).toContain('getProcessTitle(item, canSeeName)')
+    expect(desktop).toContain('getProcessSubtitle(item, canSeeName)')
+    expect(desktop).toContain('useActivationPop(Boolean(isFavorite))')
+    expect(desktop).toContain('favorite-star--pop')
+    expect(desktop).toContain('<Stagger className="chg-list">')
+  })
+
+  it('ordem de severidade dos alertas e a mesma nas duas arvores (processListShared)', () => {
+    expect(desktop).toContain('buildProcessAlerts(item, isAdmin)')
+    expect(view).toContain('buildProcessAlerts(item, isAdmin)')
+    const shared = readLf('src/features/processes/processListShared.js')
+    expect(shared.indexOf("label: 'Anuência indeferida'")).toBeLessThan(shared.indexOf("label: 'Carga inflamável'"))
+    expect(shared.indexOf("label: 'Carga inflamável'")).toBeLessThan(shared.indexOf('label: `Dados pendentes'))
   })
 })
