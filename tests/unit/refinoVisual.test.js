@@ -1228,6 +1228,8 @@ describe('F3 - campos, chips, tags (Componentes.dc.html)', () => {
     expect(light['--radius-field']).toBe('10px')
     expectF3('input.text-input', ['min-height: 44px', 'padding: 0 14px'], 'CAMPOS')
     expectF3('select.text-input', ['min-height: 44px'], 'CAMPOS')
+    // dentro do grid do label, o campo nao estica quando o vizinho tem mensagem de erro
+    expectF3('.field > input.text-input', ['align-self: start'], 'CAMPOS')
     // textarea nao herda min-height de 44 (o .text-area continua com 110px)
     expect(f3Decls('textarea.text-input', 'CAMPOS')).not.toContain('min-height')
     expect(light['--border-control']).toBe('#6b7f88')
@@ -1253,8 +1255,9 @@ describe('F3 - campos, chips, tags (Componentes.dc.html)', () => {
     const S = 'CHIPS E FILTROS'
     expectF3('.filter-pill', ['height: 36px', 'padding: 0 14px', 'border-radius: 999px', 'font-size: 13px', 'font-weight: 600'], S)
     expectF3('.filter-pill--active', ['background: var(--navy)', 'color: #ffffff'], S)
-    expectF3('.filter-pill--active .filter-pill__count', ['background: rgba(255, 255, 255, 0.18)'], S)
-    expectF3('.filter-pill__count', ['font-family: var(--font-mono)', 'font-size: 11px', 'padding: 2px 7px'], S)
+    expectF3('.filter-pill--active .filter-pill__count', ['background: rgba(255, 255, 255, 0.18)', 'padding: 2px 7px', 'border-radius: 999px'], S)
+    expectF3('.filter-pill__count', ['font-family: var(--font-mono)', 'font-size: 11px'], S)
+    expect(f3Decls('.filter-pill__count', S)).not.toContain('padding')
     expectF3('.filter-pill__count--alert', ['color: var(--danger-700)'], S)
     expectF3('.filter-pill--add', ['border-style: dashed'], S)
   })

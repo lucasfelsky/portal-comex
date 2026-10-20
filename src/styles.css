@@ -1624,8 +1624,6 @@ body {
   }
 
   .filter-pill__count {
-    padding: 2px 7px;
-    border-radius: 999px;
     color: var(--ink-soft);
     font-family: var(--font-mono);
     font-size: 11px;
@@ -1636,7 +1634,10 @@ body {
     color: var(--danger-700);
   }
 
+  /* So o contador da pilula ativa tem fundo (e o padding do mock). */
   .filter-pill--active .filter-pill__count {
+    padding: 2px 7px;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.18);
     color: inherit;
   }
@@ -3625,6 +3626,7 @@ body {
   .danger-button .spinner,
   .secondary-button .spinner {
     box-sizing: content-box;
+    flex: none;
     margin-right: 0;
     border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
     border-top-color: currentColor;
@@ -4817,6 +4819,13 @@ body {
   select.text-input {
     min-height: 44px;
     padding: 0 14px;
+  }
+
+  /* O <label class="field"> e um grid: se o vizinho da linha tem mensagem de
+     erro, o label estica e o campo cresceria alem dos 44px. */
+  .field > input.text-input,
+  .field > select.text-input {
+    align-self: start;
   }
 
   textarea.text-input,
