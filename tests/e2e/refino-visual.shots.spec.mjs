@@ -26,7 +26,9 @@
 // processo em modal — os 6 passos em editar/criar/AEREO/CONSOLIDADO, pendentes, validacao,
 // descartar alteracoes, notebook, tablet e mobile; F5a: Noticias (com e sem capas, detalhe, editor,
 // vazio, carregando), Notificacoes (10 filtros, grupos, Anteriores, silenciado, vazio),
-// Preferencias, notebook, tablet e mobile).
+// Preferencias, notebook, tablet e mobile; F5b: Login (padrao, foco, senha visivel, cadastrar, redefinir
+// senha, erro, carregando), Verificar e-mail, Acesso pendente/bloqueado/reprovado (com diagnostico),
+// 404 e "Pagina inicial indisponivel", notebook, 1100, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -1364,6 +1366,180 @@ PHASES.f5a = [
     },
   ]),
 ]
+// --- F5b: Login e estados de acesso (Login.dc.html, AcessoEstados.dc.html) --------------------
+// Login = telas sem sessao (auth: false). Verificar e-mail / Acesso pendente / bloqueado /
+// reprovado exigem um usuario de cada tipo (seedAccessUsers) e sao capturadas pelo teste
+// "estados de acesso" no fim do arquivo. A 404 vive dentro do shell (rota protegida); a variante
+// "Pagina inicial indisponivel" (pathname "/") so existe fora de uma rota real: o spec troca o
+// modulo do Dashboard pelo da NotFoundPage (page.route) so para a captura.
+const loginReady = (page) => page.locator('.auth-screen--login').first()
+const notFoundReady = (page) => page.getByTestId('not-found-card')
+const LOGIN_EMAIL = 'nome@sqquimica.com'
+const fillLogin = async (page, { email = LOGIN_EMAIL, password = 'senha-qualquer' } = {}) => {
+  await page.getByPlaceholder('nome@sqquimica.com').fill(email)
+  await page.getByPlaceholder('Sua senha').fill(password)
+}
+const goRegister = (page) => page.getByRole('button', { name: 'Cadastrar' }).click()
+const goReset = async (page) => {
+  await page.getByRole('button', { name: 'Esqueci minha senha' }).click()
+  await expect(page.getByText('Redefinir senha')).toBeVisible()
+}
+const loginErro = async (page) => {
+  await fillLogin(page, { email: 'ninguem@sqquimica.com', password: 'senha-errada' })
+  await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+  await expect(page.locator('.auth-card .error-banner')).toBeVisible({ timeout: 10_000 })
+}
+const loginCarregando = async (page) => {
+  // A chamada de login nunca responde: o botao fica em "Entrando..." (estado de carregamento).
+  await page.route('**/accounts:signInWithPassword*', () => new Promise(() => {}))
+  await fillLogin(page)
+  await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+  await expect(page.getByRole('button', { name: 'Entrando...' })).toBeVisible()
+}
+const unrouteLogin = (page) => page.unroute('**/accounts:signInWithPassword*')
+const notFoundHome = async (page) => {
+  await page.route('**/src/pages/DashboardPage.jsx*', (route) =>
+    route.fulfill({
+      contentType: 'text/javascript',
+      body: "import NotFoundPage from '/src/pages/NotFoundPage.jsx'\nexport default NotFoundPage\n",
+    }),
+  )
+}
+const withViewport = (width, height, extra) => async (page) => {
+  await resizeTo(width, height)(page)
+  if (extra) await extra(page)
+  await page.waitForTimeout(300)
+}
+PHASES.f5b = [
+  // --- login 1440x900 -----------------------------------------------------------------------
+  { name: 'login', route: '/login', auth: false, ready: loginReady },
+  {
+    name: 'login-foco-email',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await page.getByPlaceholder('nome@sqquimica.com').focus()
+      await page.waitForTimeout(300)
+    },
+  },
+  {
+    name: 'login-senha-visivel',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await fillLogin(page, { password: 'senha-demo-1' })
+      await page.getByRole('button', { name: 'Mostrar senha' }).click()
+      await expect(page.getByPlaceholder('Sua senha')).toHaveAttribute('type', 'text')
+    },
+  },
+  {
+    name: 'login-cadastrar',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await goRegister(page)
+      await expect(page.getByPlaceholder('Nome completo')).toBeVisible()
+    },
+  },
+  { name: 'login-redefinir-senha', route: '/login', auth: false, ready: loginReady, action: goReset },
+  { name: 'login-erro', route: '/login', auth: false, ready: loginReady, action: loginErro },
+  {
+    name: 'login-carregando',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: loginCarregando,
+    afterShot: unrouteLogin,
+  },
+  // --- login: notebook, 1100, tablet e mobile ------------------------------------------------
+  ...[
+    ['1366x768', 1366, 768],
+    ['1280x552', 1280, 552],
+    ['1100x800', 1100, 800],
+  ].flatMap(([suffix, width, height]) => [
+    {
+      name: 'login-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-cadastrar-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goRegister),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-redefinir-senha-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goReset),
+      afterShot: restoreViewport,
+    },
+  ]),
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].flatMap(([suffix, width, height]) => [
+    { name: 'login-' + suffix, route: '/login', auth: false, ready: loginReady, action: withViewport(width, height), afterShot: restoreViewport },
+    {
+      name: 'login-redefinir-senha-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goReset),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-cadastrar-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goRegister),
+      afterShot: restoreViewport,
+    },
+  ]),
+  // --- 404 (dentro do shell, usuario admin) --------------------------------------------------
+  { name: '404', route: '/processos/abc123', ready: notFoundReady },
+  {
+    name: '404-pagina-inicial-indisponivel',
+    route: '/',
+    beforeGoto: notFoundHome,
+    ready: notFoundReady,
+  },
+  {
+    name: '404-notebook-1280x552',
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(1280, 552),
+    afterShot: restoreViewport,
+  },
+  {
+    name: '404-1100x800',
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(1100, 800),
+    afterShot: restoreViewport,
+  },
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].map(([suffix, width, height]) => ({
+    name: '404-' + suffix,
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
 const PHASE = process.env.REFINO_PHASE || 'f4c'
 
 // --- helpers de seed -------------------------------------------------------
@@ -2021,6 +2197,53 @@ async function seedF5a(adminUid) {
   }
 }
 
+// F5b: um usuario por estado de acesso (verificar e-mail, pendente, bloqueado, reprovado).
+const ACCESS_PASSWORD = 'senha-e2e-acesso'
+const ACCESS_USERS = {
+  verify: { email: 'e2e-verificar@sqquimica.com', name: 'Joao Verificar', status: 'Pendente', emailVerified: false },
+  pending: { email: 'e2e-pendente@sqquimica.com', name: 'Maria Pendente', status: 'Pendente', emailVerified: true },
+  blocked: { email: 'e2e-bloqueado@sqquimica.com', name: 'Paulo Bloqueado', status: 'Bloqueado', emailVerified: true },
+  rejected: { email: 'e2e-reprovado@sqquimica.com', name: 'Rita Reprovada', status: 'Reprovado', emailVerified: true },
+}
+
+async function seedAccessUsers() {
+  const post = async (url, body) => {
+    const response = await fetch(AUTH_HOST + url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify(body),
+    })
+    return { ok: response.ok, payload: await response.json() }
+  }
+  for (const user of Object.values(ACCESS_USERS)) {
+    const signUp = await post('/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key', {
+      email: user.email,
+      password: ACCESS_PASSWORD,
+      returnSecureToken: true,
+    })
+    if (!signUp.ok) continue
+    const uid = signUp.payload.localId
+    await post('/identitytoolkit.googleapis.com/v1/projects/' + PROJECT_ID + '/accounts:update', {
+      localId: uid,
+      displayName: user.name,
+      emailVerified: user.emailVerified,
+      customAttributes: JSON.stringify({ role: 'user', status: user.status, name: user.name }),
+    })
+    await putDoc('users', uid, {
+      uid,
+      name: user.name,
+      email: user.email,
+      role: 'user',
+      status: user.status,
+      statusTone: 'warn',
+      area: 'Geral',
+      lastAccess: 'Seed refino visual',
+      notes: 'Seed refino visual',
+      favoriteProcessIds: [],
+    })
+  }
+}
+
 async function seedAll() {
   const adminUid = await uidOf(E2E_USERS.admin)
   const processes = buildProcesses()
@@ -2128,6 +2351,7 @@ async function seedAll() {
 
   if (PHASE === 'f4c' || PHASE === 'f4d') await seedF4c(adminUid)
   if (PHASE === 'f5a') await seedF5a(adminUid)
+  if (PHASE === 'f5b') await seedAccessUsers()
 }
 
 // --- capturas --------------------------------------------------------------
@@ -2149,7 +2373,7 @@ test.beforeAll(async () => {
 for (const theme of THEMES) {
   test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
     // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
-    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' ? 600_000 : 180_000)
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' ? 600_000 : 180_000)
     const outDir = path.join(OUT_ROOT, PHASE)
     fs.mkdirSync(outDir, { recursive: true })
 
@@ -2169,14 +2393,18 @@ for (const theme of THEMES) {
     }, theme)
     const page = await context.newPage()
 
-    const screens = PHASES[PHASE] ?? []
+    // REFINO_FILTER (regex sobre o nome da tela) limita a rodada, ex.: so tablet e mobile.
+    const screenFilter = process.env.REFINO_FILTER ? new RegExp(process.env.REFINO_FILTER) : null
+    const screens = (PHASES[PHASE] ?? []).filter((s) => !screenFilter || screenFilter.test(s.name))
 
     // 1) telas sem login primeiro
     for (const screen of screens.filter((s) => s.auth === false)) {
       await page.goto(screen.route)
       await expect(screen.ready(page)).toBeVisible({ timeout: 15_000 })
+      if (screen.action) await screen.action(page)
       await page.waitForTimeout(600)
       await page.screenshot({ path: path.join(outDir, `${screen.name}-${theme}.png`), fullPage: true })
+      if (screen.afterShot) await screen.afterShot(page)
     }
 
     // 2) telas autenticadas (admin)
@@ -2192,6 +2420,64 @@ for (const theme of THEMES) {
     }
 
     await context.close()
+  })
+}
+
+// F5b - Verificar e-mail, Acesso pendente / bloqueado / reprovado: cada estado e um usuario real
+// do emulador; o login leva a rota certa (/verificar-email ou /aguardando-aprovacao).
+const ACCESS_SCREENS = [
+  { key: 'verify', name: 'verificar-email', ready: 'Confirmação de email' },
+  { key: 'pending', name: 'pendente', ready: 'Acesso pendente' },
+  { key: 'blocked', name: 'bloqueado', ready: 'Acesso bloqueado' },
+  { key: 'rejected', name: 'reprovado', ready: 'Acesso reprovado' },
+]
+for (const theme of THEMES) {
+  test('capturas ' + PHASE + ' - estados de acesso - ' + theme, async ({ browser }) => {
+    test.skip(PHASE !== 'f5b', 'estados de acesso so na F5b')
+    test.setTimeout(300_000)
+    const outDir = path.join(OUT_ROOT, PHASE)
+    fs.mkdirSync(outDir, { recursive: true })
+    for (const screen of ACCESS_SCREENS) {
+      const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
+      await context.addInitScript((value) => {
+        try {
+          window.localStorage.setItem('pc-theme', value)
+        } catch {
+          /* ignora */
+        }
+      }, theme)
+      const page = await context.newPage()
+      const user = ACCESS_USERS[screen.key]
+      await page.goto('/login')
+      await fillLogin(page, { email: user.email, password: ACCESS_PASSWORD })
+      await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+      await expect(page.getByRole('heading', { name: screen.ready })).toBeVisible({ timeout: 15_000 })
+      await page.waitForTimeout(900)
+      const shot = async (suffix) =>
+        page.screenshot({ path: path.join(outDir, screen.name + suffix + '-' + theme + '.png'), fullPage: true })
+      await shot('')
+      if (screen.key === 'pending' || screen.key === 'blocked') {
+        const toggle = page.getByRole('button', { name: /Diagnóstico \(para o suporte\)/ })
+        if (await toggle.count()) {
+          await toggle.click()
+          await page.waitForTimeout(400)
+          await shot('-diagnostico')
+        }
+      }
+      if (screen.key === 'verify' || screen.key === 'pending') {
+        for (const [suffix, width, height] of [
+          ['1280x552', 1280, 552],
+          ['1100x800', 1100, 800],
+          ['tablet-900', 900, 1200],
+          ['mobile-390', 390, 844],
+        ]) {
+          await page.setViewportSize({ width, height })
+          await page.waitForTimeout(500)
+          await shot('-' + suffix)
+        }
+      }
+      await context.close()
+    }
   })
 }
 
