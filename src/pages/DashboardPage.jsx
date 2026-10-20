@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import Skeleton from '../components/Skeleton'
@@ -24,7 +25,6 @@ import {
   shouldShowContainerQuantity,
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
-import { getProcessDerivedStatus } from '../features/processes/processDerivedStatus'
 import { getCargoHazardBadges } from '../features/processes/operationalOptions'
 import WeeklyArrivalsCard, {
   formatPoLine,
@@ -137,25 +137,6 @@ function hasUpdatedEta(process) {
 
 const DESKTOP_QUERY = '(min-width: 1041px)'
 
-function readIsDesktop() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return Boolean(window.matchMedia(DESKTOP_QUERY)?.matches)
-}
-
-function useDesktopLayout() {
-  const [isDesktop, setIsDesktop] = useState(readIsDesktop)
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
-    const mq = window.matchMedia(DESKTOP_QUERY)
-    const handler = (event) => setIsDesktop(event.matches)
-    mq.addEventListener?.('change', handler)
-    return () => mq.removeEventListener?.('change', handler)
-  }, [])
-
-  return isDesktop
-}
-
 // "SEGUNDA · 19 DE OUTUBRO" (o maiusculo vem do CSS): dia da semana sem "-feira".
 function formatDesktopEyebrowDate(value) {
   const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
@@ -172,6 +153,12 @@ function getChannelTone(channel) {
   if (channel === 'Vermelho') return 'danger'
   if (channel === 'Cinza') return 'neutral'
   return ''
+}
+
+// Fatos de valor longo (DUIMP + canal, anuencias, coleta, janelas) ocupam a linha
+// inteira da grade de 3 colunas; os curtos (porto, previsao, presenca...) seguem 1/3.
+function isWideFact(key) {
+  return key === 'licenses' || key === 'duimp' || key === 'collection' || key.startsWith('window-')
 }
 
 // Fatos do card de favorito (3 colunas, quebra de linha se houver mais de 3):
@@ -327,10 +314,7 @@ function FavoriteCard({ item, canSeeName, onOpen, onUnfavorite }) {
       <div className="dash-fav__top">
         <div className="dash-fav__id">
           {eyebrowStatus || eyebrowDate ? (
-            <span
-              className="dash-fav__eyebrow"
-              title={`Status calculado: ${getProcessDerivedStatus(item).label}`}
-            >
+            <span className="dash-fav__eyebrow">
               {eyebrowStatus}
               {eyebrowStatus && eyebrowDate ? ' · ' : ''}
               {eyebrowDate ? (
@@ -344,13 +328,14 @@ function FavoriteCard({ item, canSeeName, onOpen, onUnfavorite }) {
             {title}
           </button>
           {cargoLine ? <span className="dash-fav__meta">{cargoLine}</span> : null}
-          {hazardBadges.length > 0 ? (
-            <span className="dash-fav__tags">
-              {hazardBadges.map((badge) => (
-                <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
-              ))}
-            </span>
-          ) : null}
+          {/* Status derivado visivel (era badge no card legado): tag sob a linha de PO,
+              junto dos selos de carga — fora do eyebrow, que segue o mock. */}
+          <span className="dash-fav__tags">
+            <ProcessDerivedStatusBadge process={item} />
+            {hazardBadges.map((badge) => (
+              <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
+            ))}
+          </span>
         </div>
         <button
           type="button"
@@ -384,7 +369,10 @@ function FavoriteCard({ item, canSeeName, onOpen, onUnfavorite }) {
       {facts.length > 0 ? (
         <dl className="dash-facts">
           {facts.map((fact) => (
-            <div key={fact.key} className="dash-facts__item">
+            <div
+              key={fact.key}
+              className={`dash-facts__item${isWideFact(fact.key) ? ' dash-facts__item--wide' : ''}`}
+            >
               <dt>{fact.label}</dt>
               <dd className={fact.tone ? `dash-facts__value--${fact.tone}` : undefined}>{fact.value}</dd>
             </div>
@@ -448,7 +436,7 @@ function AnnouncementsPanel({ announcements, isLoading, error, onRetry, renderLo
 
 export default function DashboardPage() {
   const { profile, toggleFavoriteProcess } = useAuth()
-  const isDesktop = useDesktopLayout()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const navigate = useNavigate()
   const canSeeName = profile?.role === 'admin' || profile?.role === 'logistica'
   const favoriteKey = (profile?.favoriteProcessIds ?? []).join('|')

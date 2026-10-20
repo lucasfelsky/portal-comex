@@ -16474,6 +16474,21 @@ body {
     box-shadow: 0 0 0 3px var(--surface-alt), 0 0 0 5px var(--focus-ring);
   }
 
+  .surface--dashboard .dash-fav__tags .process-derived-status-badge {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: normal;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
   .surface--dashboard .dash-stages {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -16541,6 +16556,11 @@ body {
     min-width: 0;
   }
 
+  /* valor longo: linha inteira (o mock so tem valores curtos nos 3 fatos) */
+  .surface--dashboard .dash-facts__item--wide {
+    grid-column: 1 / -1;
+  }
+
   .surface--dashboard .dash-facts__item dt {
     margin: 0;
     font-size: 11px;
@@ -16554,7 +16574,7 @@ body {
     font-size: 13px;
     font-weight: 700;
     line-height: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     color: var(--ink);
   }
 
