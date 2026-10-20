@@ -306,3 +306,128 @@ describe('Modal role/initialFocusRef/ariaDescribedBy (UX-1)', () => {
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-describedby', 'msg-id')
   })
 })
+
+// Refino F4d: Modal "bare" (sem cabecalho padrao), pilha de modais e scrim que nao fecha.
+describe('Modal - bare, pilha e closeOnBackdrop (F4d)', () => {
+  it('bare: sem titulo/botao "x"/alca; o conteudo traz o proprio cabecalho', () => {
+    render(
+      <Modal open onClose={() => {}} ariaLabel="Editar processo" bare>
+        <button type="button">Fechar daqui</button>
+      </Modal>
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Editar processo' })
+    expect(dialog.querySelector('.modal__header')).toBeNull()
+    expect(dialog.querySelector('.modal__sheet-handle')).toBeNull()
+    expect(dialog.querySelector('.modal__close')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Fechar daqui' })).toBeInTheDocument()
+  })
+
+  it('closeOnBackdrop={false}: clicar no scrim nao fecha; Esc continua fechando', () => {
+    const onClose = vi.fn()
+    render(
+      <Modal open onClose={onClose} title="Form" closeOnBackdrop={false}>
+        <p>conteudo</p>
+      </Modal>
+    )
+    fireEvent.click(document.querySelector('.modal-backdrop'))
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('modais empilhados: Esc fecha so o do topo e o Tab fica preso no topo', async () => {
+    const onCloseBottom = vi.fn()
+    const onCloseTop = vi.fn()
+    render(
+      <>
+        <Modal open onClose={onCloseBottom} title="Embaixo">
+          <button type="button">A</button>
+        </Modal>
+        <Modal open onClose={onCloseTop} title="Em cima" role="alertdialog">
+          <button type="button">B</button>
+        </Modal>
+      </>
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCloseTop).toHaveBeenCalledTimes(1)
+    expect(onCloseBottom).not.toHaveBeenCalled()
+
+    const top = screen.getByRole('alertdialog')
+    const bottomButton = screen.getByRole('button', { name: 'A' })
+    bottomButton.focus()
+    // O listener do modal de baixo ignora o Tab (nao arrasta o foco de volta para ele).
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(top.contains(document.activeElement)).toBe(true)
+  })
+
+  it('trava de scroll contada: fechar o de baixo antes do de cima nao deixa overflow inline', async () => {
+    document.body.style.overflow = ''
+    function Stack({ bottomOpen, topOpen }) {
+      return (
+        <>
+          {bottomOpen ? <Modal open onClose={() => {}} title="Embaixo"><p>a</p></Modal> : null}
+          <Modal open={topOpen} onClose={() => {}} title="Em cima"><p>b</p></Modal>
+        </>
+      )
+    }
+    const { rerender, unmount } = render(<Stack bottomOpen topOpen />)
+    expect(document.body.style.overflow).toBe('hidden')
+    // o de baixo desmonta na hora (formulario); o de cima (ConfirmDialog) fecha em 240 ms
+    rerender(<Stack bottomOpen={false} topOpen />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack bottomOpen={false} topOpen={false} />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('')
+    unmount()
+  })
+
+  it('trava de scroll contada: restaura o valor original do body quando o ultimo modal fecha', async () => {
+    document.body.style.overflow = 'scroll'
+    function Stack({ a, b }) {
+      return (
+        <>
+          <Modal open={a} onClose={() => {}} title="A"><p>a</p></Modal>
+          <Modal open={b} onClose={() => {}} title="B"><p>b</p></Modal>
+        </>
+      )
+    }
+    const { rerender } = render(<Stack a b={false} />)
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack a b />)
+    // abrir o segundo nao captura "hidden" como original
+    rerender(<Stack a={false} b />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack a={false} b={false} />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('scroll')
+  })
+
+  it('ao fechar o do topo, o de baixo volta a tratar o Esc', async () => {
+    const onCloseBottom = vi.fn()
+    function Stack({ topOpen }) {
+      return (
+        <>
+          <Modal open onClose={onCloseBottom} title="Embaixo"><p>a</p></Modal>
+          {topOpen ? <Modal open onClose={() => {}} title="Em cima"><p>b</p></Modal> : null}
+        </>
+      )
+    }
+    const { rerender } = render(<Stack topOpen />)
+    rerender(<Stack topOpen={false} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCloseBottom).toHaveBeenCalledTimes(1)
+  })
+})

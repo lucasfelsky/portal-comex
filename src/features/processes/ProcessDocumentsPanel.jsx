@@ -93,6 +93,13 @@ function badgeClassForTone(tone) {
   return 'inline-badge documents-badge--neutral'
 }
 
+// Refino F4c: no desktop as linhas das secoes FISPQ/lavacao/sem vinculo ficam na mesma
+// grade de cartoes da secao do processo (`documents-section__rows`); fora dele o DOM
+// e' o de sempre (o mobile-redesign.css mira `.documents-section__rows >`).
+function RowsGroup({ enabled, children }) {
+  return enabled ? <div className="documents-section__rows">{children}</div> : children
+}
+
 function DocumentsSectionHeader({ title, subtitle, badge }) {
   return (
     <div className="documents-section__header">
@@ -105,7 +112,13 @@ function DocumentsSectionHeader({ title, subtitle, badge }) {
   )
 }
 
-export default function ProcessDocumentsPanel({ process, profile, onPendingCountChange }) {
+// Refino F4c: `variant="desktop"` (Processo.dc.html) — a nota "Visivel so' para COMEX e
+// logistica..." sobe para o cabecalho da secao de documentos do processo, os slots
+// viram cartoes numa grade e "Documento adicional" ganha titulo e tag. O resto do
+// painel (envio, troca, exclusao, renomear, vinculo Invoice/Packing List, FISPQ,
+// lavacao, sem vinculo) e' o mesmo; sem a prop o render e' o de sempre.
+export default function ProcessDocumentsPanel({ process, profile, onPendingCountChange, variant }) {
+  const isDesktopVariant = variant === 'desktop'
   const processId = process?.id
   const category = process?.category
   const role = profile?.role
@@ -679,7 +692,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <>
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${includedInInvoice.invoice.name}`}
                   title={`Baixar ${includedInInvoice.invoice.name}`}
                   disabled={downloadingId === includedInInvoice.invoice.id}
@@ -692,7 +705,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {includedInInvoice.canSeparate ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label="Separar Packing List da Invoice"
                     title="Separar Packing List da Invoice"
                     disabled={linkBusyKey === includedInInvoice.invoiceSlotKey}
@@ -706,7 +719,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Baixar ${primary.name}`}
                 title={`Baixar ${primary.name}`}
                 disabled={isRowUploading || downloadingId === primary.id}
@@ -731,7 +744,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 />
                 <button
                   type="button"
-                  className={primary ? 'documents-icon-button ghost-button' : 'primary-button'}
+                  className={primary ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
                   aria-label={primary ? `Substituir ${title}` : uploadLabel}
                   title={primary ? `Substituir ${title}` : uploadLabel}
                   disabled={isRowUploading}
@@ -757,7 +770,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary && onRename ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Renomear ${title}`}
                 title={`Renomear ${title}`}
                 disabled={isRowUploading}
@@ -770,7 +783,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             {primary && canDelete ? (
               <button
                 type="button"
-                className="documents-icon-button ghost-button"
+                className="documents-icon-button ghost-button ghost-button--outline"
                 aria-label={`Excluir ${primary.name}`}
                 title={`Excluir ${primary.name}`}
                 disabled={isRowUploading}
@@ -833,7 +846,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <div className="documents-row__actions">
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${primary.name}`}
                   title={`Baixar ${primary.name}`}
                   disabled={isRowUploading || downloadingId === primary.id}
@@ -846,7 +859,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canUpload ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Substituir ${getDocumentTypeLabel(type)}`}
                     title={`Substituir ${getDocumentTypeLabel(type)}`}
                     disabled={isRowUploading}
@@ -860,7 +873,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canDeleteDocument(profile, primary) ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Excluir ${primary.name}`}
                     title={`Excluir ${primary.name}`}
                     disabled={isRowUploading}
@@ -910,7 +923,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               <div className="documents-row__actions">
                 <button
                   type="button"
-                  className="documents-icon-button ghost-button"
+                  className="documents-icon-button ghost-button ghost-button--outline"
                   aria-label={`Baixar ${invoiceLink.name}`}
                   title={`Baixar ${invoiceLink.name}`}
                   disabled={downloadingId === invoiceLink.id}
@@ -923,7 +936,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 {canUploadDocumentType(role, 'invoice') ? (
                   <button
                     type="button"
-                    className="documents-icon-button ghost-button"
+                    className="documents-icon-button ghost-button ghost-button--outline"
                     aria-label={`Separar Packing List da Invoice da PO ${order.po}`}
                     title="Separar Packing List da Invoice"
                     disabled={linkBusyKey === invoiceSlotKey}
@@ -1012,6 +1025,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
 
   const isEmptyDocuments = documents.length === 0
   const showLoadedContent = !isLoading && !loadError
+  const visibilityNote = `Visível só para COMEX e logística · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`
 
   const missingConsolidatedCount = isConsolidated
     ? purchaseOrders.reduce((count, order) => {
@@ -1065,16 +1079,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 </span>
               ) : null}
             </div>
-            <p className="documents-summary__hint">
-              {`Visível só para COMEX e logística · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`}
-            </p>
+            {isDesktopVariant ? null : <p className="documents-summary__hint">{visibilityNote}</p>}
           </>
         ) : (
           <div className="documents-summary__badges" />
         )}
         <button
           type="button"
-          className="documents-icon-button ghost-button documents-summary__update"
+          className="documents-icon-button ghost-button ghost-button--outline documents-summary__update"
           aria-label="Atualizar lista de documentos"
           title="Atualizar lista de documentos"
           disabled={isRefreshing}
@@ -1120,6 +1132,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             <DocumentsSectionHeader
               title="Documentos do processo"
               subtitle="Cada tipo guarda o arquivo atual e a última versão anterior."
+              badge={
+                isDesktopVariant && showLoadedContent && !isEmptyDocuments ? (
+                  <p className="documents-section__note">{visibilityNote}</p>
+                ) : null
+              }
             />
             <div className="documents-section__rows">
               {PROCESS_LEVEL_TYPES.map((type) => {
@@ -1231,6 +1248,12 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                       if (file) handleAddOtherDocument(file)
                     }}
                   />
+                  {isDesktopVariant ? (
+                    <div className="documents-add-other__head">
+                      <span className="documents-row__label">Documento adicional</span>
+                      <span className="inline-badge documents-badge--info">Opcional</span>
+                    </div>
+                  ) : null}
                   <label className="field documents-add-other__name">
                     <span>Nome do documento (opcional)</span>
                     <input
@@ -1246,7 +1269,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   </label>
                   <button
                     type="button"
-                    className="ghost-button documents-add-other"
+                    className="ghost-button ghost-button--secondary documents-add-other"
                     disabled={uploadingKey === 'other:new'}
                     onClick={() => triggerFilePicker('other:new')}
                   >
@@ -1328,6 +1351,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     : '')
                 }
               />
+              <RowsGroup enabled={isDesktopVariant}>
               {imoItems.map((item) => {
                 const slotKey = buildDocumentSlotKey('fispq', { itemId: item.id })
                 const group = findGroup(slotKey)
@@ -1364,6 +1388,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   onUpload: (file) => handleUploadFile('fispq', slotKey, { itemId: item.id }, file),
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
 
@@ -1373,6 +1398,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 title="Relatório de lavação por contêiner"
                 subtitle="Pendente depois que a devolução do vazio é registrada. A logística também pode enviar."
               />
+              <RowsGroup enabled={isDesktopVariant}>
               {washContainers.map((container, index) => {
                 const { state, slotKey, group, isReturned } = getWashRowState(container)
                 const primary = group?.primary ?? null
@@ -1404,12 +1430,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   onUpload: (file) => handleUploadFile('containerWash', slotKey, { containerId: container.id }, file),
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
 
           {unlinkedGroups.length > 0 ? (
             <div className="documents-section">
               <DocumentsSectionHeader title="Documentos sem vínculo atual" />
+              <RowsGroup enabled={isDesktopVariant}>
               {unlinkedGroups.map((group) => {
                 const metaText = [
                   getDocumentFileKindLabel(group.primary?.mimeType, group.primary?.name),
@@ -1429,6 +1457,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   presentBadgeTone: 'neutral',
                 })
               })}
+              </RowsGroup>
             </div>
           ) : null}
         </div>

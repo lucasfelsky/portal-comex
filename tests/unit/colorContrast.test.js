@@ -210,15 +210,16 @@ describe('sanidade da formula WCAG', () => {
 })
 
 // ---------------------------------------------------------------------------
-// (b) Botao verde: texto branco sobre --button-primary-bg/-hover/-active.
+// (b) Botao primario: texto --on-button-primary sobre --button-primary-bg/
+// -hover/-active. Refino visual F1: o botao aprovado e menta (#14dda7) com
+// texto navy (#0b2430 = 9,11:1); o branco antigo daria 1,76:1.
 // ---------------------------------------------------------------------------
 describe.each(Object.entries(themes))('botao primario (%s)', (themeName, theme) => {
   it.each(['--button-primary-bg', '--button-primary-bg-hover', '--button-primary-bg-active'])(
-    'texto #ffffff sobre %s >= 4.5:1',
+    'texto --on-button-primary sobre %s >= 4.5:1',
     (token) => {
-      const resolvedTokenColor = resolveValue(theme[token], theme)
-      const ratio = contrastRatio(parseColor('#ffffff'), parseColor(resolvedTokenColor))
-      expect(ratio, `${token} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+      const ratio = ratioTokenOverBg('--on-button-primary', theme, token)
+      expect(ratio, `--on-button-primary/${token} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
     }
   )
 })
@@ -361,6 +362,38 @@ describe.each(Object.entries(themes))('--danger-700 texto de erro (%s)', (themeN
 })
 
 // ---------------------------------------------------------------------------
+// Refino visual F1: pares novos da paleta SQ (texto sobre fundo suave, texto
+// da sidebar sobre os 2 extremos do gradiente navy, toast, canais e
+// desabilitado). Todos medidos nos 4 contextos.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes))('refino F1 - pares de texto (%s)', (themeName, theme) => {
+  it.each([
+    ['--info-700', '--info-50'],
+    ['--danger-700', '--danger-50'],
+    ['--toast-ink', '--toast-bg'],
+    ['--channel-green-ink', '--channel-green-soft'],
+    ['--channel-yellow-ink', '--channel-yellow-soft'],
+    ['--channel-red-ink', '--channel-red-soft'],
+    ['--channel-gray-ink', '--channel-gray-soft'],
+  ])('%s sobre %s >= 4.5:1', (fgToken, bgToken) => {
+    const ratio = ratioTokenOverBg(fgToken, theme, bgToken)
+    expect(ratio, `${fgToken}/${bgToken} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(['#003241', '#004153'])('--sidebar-ink-soft sobre %s (extremos do gradiente da sidebar) >= 4.5:1', (bgHex) => {
+    const ratio = ratioTokenOverBg('--sidebar-ink-soft', theme, bgHex)
+    expect(ratio, `--sidebar-ink-soft/${bgHex} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(4.5)
+  })
+
+  // Informativo (3,0:1): texto desabilitado e isento de WCAG 1.4.3, mas nao
+  // pode sumir.
+  it('--disabled-ink sobre --disabled-bg >= 3.0:1', () => {
+    const ratio = ratioTokenOverBg('--disabled-ink', theme, '--disabled-bg')
+    expect(ratio, `--disabled-ink/--disabled-bg (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(3.0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Guardas estruturais (g, h, i).
 // ---------------------------------------------------------------------------
 describe('guardas estruturais', () => {
@@ -464,9 +497,13 @@ describe('guardas estruturais', () => {
     expect(body).toContain('var(--on-warn)')
   })
 
-  it('(n2) existe ".admin-section .scope-chip--active {" com var(--on-button-primary)', () => {
-    const { body } = extractBlock(css, '.admin-section .scope-chip--active {')
+  // F6b: a regra desktop ".admin-section .scope-chip--active" saiu junto com o CSS morto dos Ciclos 4a-4d (o
+  // chip ativo de Previsoes ao desktop e agora o .filter-pill--active). O chip ativo do tablet segue na regra
+  // base, que continua usando o texto de botao primario (menta -> navy).
+  it('(n2) ".scope-chip--active {" (arvore anterior, tablet) contem var(--on-button-primary); a regra desktop morta nao existe mais', () => {
+    const { body } = extractBlock(css, '.scope-chip--active {')
     expect(body).toContain('var(--on-button-primary)')
+    expect(css).not.toContain('.admin-section .scope-chip--active')
   })
 
   it('(q) ".field-hint {" contem text-transform: none', () => {
@@ -486,15 +523,18 @@ describe('guardas estruturais', () => {
   // UX-6b-3 (D5/F2): o no atual da timeline (`--now`) deixa de ser
   // preenchido (halo com anel externo var(--primary) - garante o verde no
   // tema escuro, onde --primary-50 quase some sobre --surface-alt).
-  it('(s) os 2 blocos ".process-timeline__node--now {" tem o halo com --primary/--primary-50/--primary-700, sem preencher o fundo', () => {
+  it('(s) o no atual da timeline: halo no mobile/tablet (--primary/--primary-50/--primary-700, sem preencher) e, no desktop F4c, fundo --primary com anel --navy', () => {
     const mobile = extractBlock(css, '.process-timeline__node--now {')
-    const desktop = extractBlock(css, '.process-detail-view .process-timeline__node--now {')
+    expect(mobile.body).toContain('var(--primary-700)')
+    expect(mobile.body).toContain('var(--primary-50)')
+    expect(mobile.body).toContain('var(--primary)')
+    expect(mobile.body).not.toContain('background: var(--primary-700)')
 
-    for (const { body } of [mobile, desktop]) {
-      expect(body).toContain('var(--primary-700)')
-      expect(body).toContain('var(--primary-50)')
-      expect(body).toContain('var(--primary)')
-      expect(body).not.toContain('background: var(--primary-700)')
-    }
+    // Desktop (Processo.dc.html): ponto atual = fundo #14dda7 (--primary) + anel de 3px
+    // #004153 (--navy; no escuro o anel vira --ink-soft, ver o bloco [data-theme]).
+    const desktop = extractBlock(css, '.process-detail-view .pdv-stage--now .pdv-stage__node {')
+    expect(desktop.body).toContain('background: var(--primary)')
+    expect(desktop.body).toContain('var(--navy)')
+    expect(desktop.body).not.toContain('background: var(--primary-700)')
   })
 })

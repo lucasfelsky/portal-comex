@@ -32,6 +32,36 @@ import { createPortal } from 'react-dom'
 
 const SWIPE_CLOSE_THRESHOLD = 120
 
+// Pilha de modais abertos (do mais antigo ao mais novo). Esc e o focus trap
+// valem so' para o modal do TOPO: o dialogo de "Descartar alteracoes?" abre por
+// cima do formulario de processo (tambem um <Modal>) e, sem a pilha, os dois
+// listeners de `document` brigariam pelo foco e o Esc fecharia os dois.
+const openModalStack = []
+
+// Trava de scroll do body contada pela pilha: o primeiro modal aberto guarda o
+// valor original de `body.style.overflow` e o ultimo a fechar o restaura. Antes
+// cada instancia guardava o proprio "anterior" e, quando o cleanup de um modal que
+// fecha com atraso (ConfirmDialog, 240 ms) rodava depois do de baixo, devolvia
+// `hidden` inline para sempre.
+let scrollLockCount = 0
+let scrollLockOriginal = ''
+
+function lockBodyScroll() {
+  if (scrollLockCount === 0) {
+    scrollLockOriginal = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  scrollLockCount += 1
+}
+
+function unlockBodyScroll() {
+  if (scrollLockCount === 0) return
+  scrollLockCount -= 1
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = scrollLockOriginal
+  }
+}
+
 export default function Modal({
   open,
   onClose,
@@ -43,6 +73,12 @@ export default function Modal({
   role = 'dialog',
   initialFocusRef = null,
   ariaDescribedBy,
+  // `bare`: sem cabecalho padrao (titulo + "x") e sem a alca do bottom sheet — o
+  // conteudo traz o proprio cabecalho (formulario de processo no desktop).
+  bare = false,
+  // `closeOnBackdrop={false}`: clicar no scrim nao fecha (formularios longos:
+  // arrastar a selecao de texto para fora do dialogo gera um click no scrim).
+  closeOnBackdrop = true,
 }) {
   const modalRef = useRef(null)
   const lastFocusedRef = useRef(null)
@@ -75,8 +111,11 @@ export default function Modal({
 
     lastFocusedRef.current = document.activeElement
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const stackToken = {}
+    openModalStack.push(stackToken)
+    const isTopModal = () => openModalStack[openModalStack.length - 1] === stackToken
+
+    lockBodyScroll()
 
     function getFocusableElements() {
       if (!modalRef.current) return []
@@ -101,6 +140,7 @@ export default function Modal({
     }, 30)
 
     function handleKeyDown(event) {
+      if (!isTopModal()) return
       if (event.key === 'Escape') {
         event.preventDefault()
         onCloseRef.current?.()
@@ -136,7 +176,9 @@ export default function Modal({
     return () => {
       window.clearTimeout(initialFocus)
       document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
+      const stackIndex = openModalStack.indexOf(stackToken)
+      if (stackIndex !== -1) openModalStack.splice(stackIndex, 1)
+      unlockBodyScroll()
 
       if (lastFocusedRef.current && typeof lastFocusedRef.current.focus === 'function') {
         lastFocusedRef.current.focus()
@@ -147,7 +189,7 @@ export default function Modal({
   if (!shouldRender) return null
 
   function handleBackdropClick(event) {
-    if (event.target === event.currentTarget) {
+    if (closeOnBackdrop && event.target === event.currentTarget) {
       onClose?.()
     }
   }
@@ -203,24 +245,28 @@ export default function Modal({
         aria-describedby={ariaDescribedBy}
         tabIndex={-1}
       >
-        <div
-          className="modal__sheet-handle"
-          onPointerDown={handleHandlePointerDown}
-          onPointerMove={handleHandlePointerMove}
-          onPointerUp={handleHandlePointerUp}
-          onPointerCancel={handleHandlePointerUp}
-        />
-        <div className="modal__header">
-          {title ? <h2 className="modal__title">{title}</h2> : <span />}
-          <button
-            type="button"
-            className="modal__close"
-            aria-label="Fechar"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
+        {bare ? null : (
+          <>
+            <div
+              className="modal__sheet-handle"
+              onPointerDown={handleHandlePointerDown}
+              onPointerMove={handleHandlePointerMove}
+              onPointerUp={handleHandlePointerUp}
+              onPointerCancel={handleHandlePointerUp}
+            />
+            <div className="modal__header">
+              {title ? <h2 className="modal__title">{title}</h2> : <span />}
+              <button
+                type="button"
+                className="modal__close"
+                aria-label="Fechar"
+                onClick={onClose}
+              >
+                ×
+              </button>
+            </div>
+          </>
+        )}
         <div className="modal__body">{children}</div>
       </div>
     </div>,

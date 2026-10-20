@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useSwipe } from '../hooks/useSwipe'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { useToast } from '../components/Toast'
 import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
@@ -507,10 +508,14 @@ function sanitizeDraft(currentDraft, overrides = {}) {
 
 export default function ProcessesPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { profile, toggleFavoriteProcess } = useAuth()
   const toast = useToast()
   const isAdmin = profile?.role === 'admin'
   const canSeeName = isAdmin || profile?.role === 'logistica'
+  // Refino F4b: na lista, o desktop (>= 1041px) tem cabecalho proprio
+  // (eyebrow + "Fila de chegadas" + acoes) dentro do ProcessListView.
+  const isDesktopLayout = useMediaQuery('(min-width: 1041px)')
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
@@ -805,10 +810,12 @@ export default function ProcessesPage() {
   )
 
   // Atualiza o contexto de processo ativo para o SupportButton
+  // Refino F2: `category` e `viewMode` alimentam o breadcrumb da topbar
+  // ("Chegadas › <processo>", com a mascara de nome por categoria/role).
   useEffect(() => {
-    setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination } : null)
+    setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination, category: selectedProcess.category, viewMode } : null)
     return () => setActiveProcess(null)
-  }, [selectedProcess?.id, selectedProcess?.name, selectedProcess?.processNumber, selectedProcess?.destination])
+  }, [selectedProcess?.id, selectedProcess?.name, selectedProcess?.processNumber, selectedProcess?.destination, selectedProcess?.category, viewMode])
   const canEditSelectedCollectionStatus =
     canEditCollectionStatus && canUsePostCollectionStatuses(selectedProcess)
   const draftPostReceiptImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
@@ -902,6 +909,21 @@ export default function ProcessesPage() {
 
   const remainingMessages = Math.max(0, MAX_PROCESS_MESSAGES - processMessages.length)
   const messageLimitReached = !hasUnlimitedMessages && processMessages.length >= MAX_PROCESS_MESSAGES
+
+  // Refino F2 (D7): a paleta de comandos ("Novo processo", so admin) navega
+  // para /processos com state.openCreate e a pagina abre o modo de criacao —
+  // mesmo caminho do botao "Novo processo" da lista (handleCreateMode).
+  useEffect(() => {
+    if (location.state?.openCreate && isAdmin) {
+      handleCreateMode()
+      // Consome o pedido: sem isso, recarregar a pagina reabriria a criacao
+      // (o state fica no history entry).
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // handleCreateMode e' declarada logo abaixo (function declaration);
+    // a chave e' a navegacao (location.key), nao a identidade da funcao.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key, location.state?.openCreate, isAdmin])
 
   useEffect(() => {
     const processIdFromNotification = location.state?.selectedProcessId
@@ -1070,7 +1092,10 @@ export default function ProcessesPage() {
     setViewMode('create')
   }
 
-  function handleEditMode() {
+  // `focusKey` (opcional, string): campo para focar ao abrir o formulario — usado
+  // por "Completar agora" (Dados pendentes). Chamado como onClick direto o 1o
+  // argumento e' o evento, que e' ignorado.
+  function handleEditMode(focusKey) {
     if (!selectedProcess || !isAdmin) return
     const nextDraft = {
       ...selectedProcess,
@@ -1082,7 +1107,9 @@ export default function ProcessesPage() {
     setDraft(nextDraft)
     baselineRef.current = nextDraft
     setHasAttemptedSave(false)
-    setProcessFocusRequest(null)
+    setProcessFocusRequest(
+      typeof focusKey === 'string' && focusKey ? { key: focusKey, nonce: Date.now() } : null
+    )
     setViewMode('edit')
   }
 
@@ -1839,21 +1866,39 @@ export default function ProcessesPage() {
     }
   }
 
+  // Refino F4d: no desktop (>= 1041px) criar/editar abre como MODAL sobre a propria
+  // pagina (ProcessoForm.dc.html): criar fica sobre a lista, editar sobre o detalhe
+  // do processo. Tablet/mobile seguem como antes (a vista do formulario substitui a
+  // pagina). Fechar o modal de edicao devolve o detalhe; o de criacao, a lista.
+  const isFormDialog = isDesktopLayout && isAdmin && (viewMode === 'create' || viewMode === 'edit')
+  const pageBehindForm = isFormDialog ? (viewMode === 'edit' && selectedProcess ? 'detail' : 'list') : null
+  const showList = viewMode === 'list' || pageBehindForm === 'list'
+  const showDetail = (viewMode === 'detail' || pageBehindForm === 'detail') && Boolean(selectedProcess)
+  const isDesktopList = isDesktopLayout && showList
+  // Refino F4c: no detalhe desktop o cabecalho e' o card do proprio processo
+  // (Processo.dc.html); a pagina nao repete o titulo "Fila de chegadas".
+  const isDesktopDetail = isDesktopLayout && showDetail
+
   return (
-    <section className="surface">
-      <div className="section-heading">
-        <div>
-          <h2>Fila de chegadas</h2>
+    <section
+      className={`surface${isDesktopList ? ' surface--arrivals' : ''}${isDesktopDetail ? ' surface--process-detail' : ''}`}
+    >
+      {isDesktopList || isDesktopDetail ? null : (
+        <div className="section-heading">
+          <div>
+            <h2>Fila de chegadas</h2>
+          </div>
         </div>
-      </div>
+      )}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
 
-      {viewMode === 'list' ? (
+      {showList ? (
         <ProcessListView
           rootClassName={listReturnClass}
           filteredProcesses={filteredProcesses}
+          totalCount={processes.length - archivedProcesses.length}
           isLoading={isLoading}
           isExporting={isExporting}
           selectedProcessId={selectedProcessId}
@@ -1885,10 +1930,12 @@ export default function ProcessesPage() {
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onNewProcess={isAdmin ? handleCreateMode : undefined}
           onReconcileErp={isAdmin ? () => setIsErpReconcileOpen(true) : undefined}
-          onExport={async () => {
+          onExport={async (rows) => {
             setIsExporting(true)
             try {
-              const exportedCount = await exportProcessesToXlsx(filteredProcesses, new Date(), {
+              // A arvore desktop manda as linhas que o botao conta (filtradas ou
+              // arquivadas); a legada chama sem argumento (so as filtradas).
+              const exportedCount = await exportProcessesToXlsx(Array.isArray(rows) ? rows : filteredProcesses, new Date(), {
                 canSeeName,
               })
               toast.success(`Exportados ${exportedCount} processos para Excel.`)
@@ -1930,7 +1977,9 @@ export default function ProcessesPage() {
           dtaStatusOptions={dtaStatusOptions}
           processCategoryOptions={processCategoryOptions}
           onDraftChange={handleDraftChange}
-          onSetViewModeList={() => requestLeave(() => setViewMode('list'))}
+          onSetViewModeList={() =>
+            requestLeave(() => setViewMode(pageBehindForm === 'detail' ? 'detail' : 'list'))
+          }
           onSave={handleSaveProcess}
           onImportItemsFile={handleImportItemsFile}
           onAddItem={handleAddItem}
@@ -1981,7 +2030,7 @@ export default function ProcessesPage() {
         />
       ) : null}
 
-      {viewMode === 'detail' && selectedProcess ? (
+      {showDetail ? (
         <ProcessDetailView
           selectedProcess={selectedProcess}
           detailTab={detailTab}

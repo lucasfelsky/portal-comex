@@ -1,10 +1,16 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { useToast } from '../components/Toast'
 import Icon from '../components/Icon'
+import { ProductMark, SqQuimicaLogo } from '../components/BrandMark'
 import { LoginPortScene, LoginSeaChart, LoginWaves } from '../components/LoginArt'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
+
+// Refino F5b (Login.dc.html): >= 1041px o campo de senha ganha a linha do rotulo com
+// "Esqueci minha senha" e o botao mostrar/ocultar; tablet/mobile ficam com o campo legado.
+const DESKTOP_QUERY = '(min-width: 1041px)'
 
 export default function LoginPage() {
   const {
@@ -19,9 +25,11 @@ export default function LoginPage() {
   } = useAuth()
   const location = useLocation()
   const toast = useToast()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [showResetForm, setShowResetForm] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
@@ -87,6 +95,18 @@ export default function LoginPage() {
     }
   }
 
+  function toggleResetForm() {
+    setShowResetForm((current) => !current)
+    setError('')
+    setFeedback('')
+  }
+
+  function handlePasswordChange(event) {
+    setForm((current) => ({ ...current, password: event.target.value }))
+  }
+
+  const passwordAutoComplete = mode === 'register' ? 'new-password' : 'current-password'
+
   return (
     <div className="auth-screen auth-screen--login">
       <LoginSeaChart />
@@ -96,23 +116,26 @@ export default function LoginPage() {
           <img src={sqQuimicaLogo} alt="SQ Química" />
         </span>
         <span className="auth-brand__eyebrow">SQ Química · Suite COMEX</span>
-        <h1>Portal COMEX</h1>
-        <p>Acompanhe chegadas, comunicados e o fluxo de importação da operação em um só lugar.</p>
+        <div className="auth-brand__head">
+          <ProductMark product="comex" tone="dark" size={56} className="auth-brand__mark" />
+          <h1>Portal COMEX</h1>
+          <p>Acompanhe chegadas, comunicados e o fluxo de importação da operação em um só lugar.</p>
+        </div>
         <div className="auth-brand__feats">
           <div className="auth-brand__feat">
             <span className="auth-brand__feat-icon">
-              <Icon name="arrivals" size={20} />
+              <Icon name="nav-arrivals" size={18} strokeWidth={1.9} />
             </span>
-            <span>
+            <span className="auth-brand__feat-text">
               <strong>Fila de chegadas</strong>
               <small>ETA, DUIMP, anuências e coleta por processo</small>
             </span>
           </div>
           <div className="auth-brand__feat">
             <span className="auth-brand__feat-icon">
-              <Icon name="bell" size={20} />
+              <Icon name="bell-ring" size={18} strokeWidth={1.9} />
             </span>
-            <span>
+            <span className="auth-brand__feat-text">
               <strong>Notificações e comunicados</strong>
               <small>Avisos da operação e das suas cargas</small>
             </span>
@@ -123,10 +146,11 @@ export default function LoginPage() {
       <div className="auth-panel">
       <form className="auth-card auth-card--form" onSubmit={handleSubmit}>
         <span className="brand__eyebrow">Portal COMEX</span>
-        <div className="auth-toggle">
+        <div className="auth-toggle" role="group" aria-label="Modo de acesso">
           <button
             type="button"
             className={`auth-toggle__item${mode === 'login' ? ' auth-toggle__item--active' : ''}`}
+            aria-pressed={mode === 'login'}
             onClick={() => setMode('login')}
           >
             Entrar
@@ -134,13 +158,14 @@ export default function LoginPage() {
           <button
             type="button"
             className={`auth-toggle__item${mode === 'register' ? ' auth-toggle__item--active' : ''}`}
+            aria-pressed={mode === 'register'}
             onClick={() => setMode('register')}
           >
             Cadastrar
           </button>
         </div>
         <h1>{mode === 'register' ? 'Criar acesso corporativo' : 'Acesso ao painel'}</h1>
-        <p>
+        <p className={`auth-card__lead${mode === 'login' ? ' auth-card__lead--login' : ''}`}>
           {mode === 'register'
             ? 'Cadastro permitido apenas para e-mails @sqquimica.com. O acesso exige email verificado e aprovação do admin.'
             : 'Use sua conta corporativa @sqquimica.com para acessar o sistema.'}
@@ -175,35 +200,62 @@ export default function LoginPage() {
           />
         </label>
 
-        <label className="field">
-          <span>Senha</span>
-          <input
-            className="text-input"
-            type="password"
-            value={form.password}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, password: event.target.value }))
-            }
-            placeholder="Sua senha"
-            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-          />
-        </label>
-
-        {mode === 'login' ? (
-          <div className="auth-actions">
-            <button
-              type="button"
-              className="auth-link-button"
-              onClick={() => {
-                setShowResetForm((current) => !current)
-                setError('')
-                setFeedback('')
-              }}
-            >
-              Esqueci minha senha
-            </button>
+        {isDesktop ? (
+          <div className="field auth-field--password">
+            <div className="auth-field__row">
+              <label className="auth-field__label" htmlFor="login-password">
+                Senha
+              </label>
+              {mode === 'login' ? (
+                <button type="button" className="auth-link-button" onClick={toggleResetForm}>
+                  Esqueci minha senha
+                </button>
+              ) : null}
+            </div>
+            <div className="auth-password">
+              <input
+                id="login-password"
+                className="text-input"
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={handlePasswordChange}
+                placeholder="Sua senha"
+                autoComplete={passwordAutoComplete}
+              />
+              <button
+                type="button"
+                className="auth-password__toggle"
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((current) => !current)}
+              >
+                <Icon name={showPassword ? 'eye-off' : 'eye'} size={18} strokeWidth={1.9} />
+              </button>
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <label className="field">
+              <span>Senha</span>
+              <input
+                className="text-input"
+                type="password"
+                value={form.password}
+                onChange={handlePasswordChange}
+                placeholder="Sua senha"
+                autoComplete={passwordAutoComplete}
+              />
+            </label>
+
+            {mode === 'login' ? (
+              <div className="auth-actions">
+                <button type="button" className="auth-link-button" onClick={toggleResetForm}>
+                  Esqueci minha senha
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
 
         {mode === 'login' && showResetForm ? (
           <div className="auth-reset-panel">
@@ -211,7 +263,7 @@ export default function LoginPage() {
             <p>Use o e-mail corporativo da sua conta para receber o link de redefinição.</p>
             <button
               type="button"
-              className="ghost-button auth-reset-panel__button"
+              className="ghost-button ghost-button--secondary auth-reset-panel__button"
               disabled={submitting || loading || !form.email.trim()}
               onClick={handlePasswordReset}
             >
@@ -233,7 +285,11 @@ export default function LoginPage() {
               ? 'Criar conta'
               : 'Entrar'}
         </button>
+        <p className="auth-card__legal">Acesso restrito a colaboradores e parceiros da SQ Química.</p>
       </form>
+      </div>
+      <div className="auth-sq-signature">
+        <SqQuimicaLogo variant="minusc" tone="light" size={36} label="SQ Química" />
       </div>
     </div>
   )

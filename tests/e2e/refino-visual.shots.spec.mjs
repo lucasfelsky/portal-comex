@@ -1,0 +1,4332 @@
+// Capturas do refino visual (PLAN.md §1). NAO e teste de comportamento: gera
+// PNGs a 1440x900 (full page) em `.agent-tmp/refino-shots/<fase>/<tela>-<light|dark>.png`
+// para a comparacao lado a lado com os mock-ups e para o "ok" do Lucas.
+//
+// So roda com REFINO_SHOTS=1 (o job `e2e` do CI nao define a variavel, entao
+// tudo abaixo e `skip` e nenhum seed e executado):
+//   $env:REFINO_SHOTS='1'; npm run test:e2e
+// (JDK 21; sobe auth/firestore/storage e o Vite apontando para os emuladores —
+// nada toca producao.)
+//
+// Seed sintetico via REST do Firestore emulator (`Authorization: Bearer owner`,
+// mesmo padrao de global-setup.mjs): processos em todos os status, canal
+// Vermelho, ETA atualizada, inflamavel, dados pendentes, favoritos do admin,
+// comunicados, barra, notificacoes, chamados e usuarios pendentes.
+//
+// Cada fase ACRESCENTA suas telas em PHASES (F1: login, dashboard, chegadas;
+// F2: shell — sidebar, topbar, abas do admin, gaveta, paleta, suporte;
+// F3: componentes e movimento — botoes, campos, chips, toast, vazio, skeleton,
+// hover sem levantar, timeline + um catalogo de estados com asserts de CSS
+// computado, ver o fim do arquivo; F4a: Dashboard — secoes com dados, estados
+// carregando/erro/vazio, notebook, tablet e mobile; F4b: Chegadas — lista, filtros
+// aplicados, hover, foco, vazio, carregando, arquivados, nao-admin (nomes
+// mascarados), notebook, tablet e mobile; F4c: Detalhe do processo — as 6 abas em
+// FCL/AEREO/CONSOLIDADO/carga recebida, estados vazios, menu e confirmacao de
+// exclusao, foco, usuario comum, logistica, notebook, tablet e mobile; F4d: formulario de
+// processo em modal — os 6 passos em editar/criar/AEREO/CONSOLIDADO, pendentes, validacao,
+// descartar alteracoes, notebook, tablet e mobile; F5a: Noticias (com e sem capas, detalhe, editor,
+// vazio, carregando), Notificacoes (10 filtros, grupos, Anteriores, silenciado, vazio),
+// Preferencias, notebook, tablet e mobile; F5b: Login (padrao, foco, senha visivel, cadastrar, redefinir
+// senha, erro, carregando), Verificar e-mail, Acesso pendente/bloqueado/reprovado (com diagnostico),
+// 404 e "Pagina inicial indisponivel", notebook, 1100, tablet e mobile; F6a: Admin — Usuarios (lista, detalhe,
+// novo, filtros, fila, vazio, confirmacoes), Comunicados (lista, editor, novo, vazio) e Barra do porto (cada
+// status e os avisos do robo ZP21: coincide, difere, falha, atrasado), notebook, 1100, tablet e mobile;
+// F6b: Admin — Previsoes (normal, editada, erro, restaurar, sem historico), Lead time (dados, divergencias,
+// Outros trechos, periodo, dados insuficientes) e Suporte (cada aba, 2o chamado, resolvido, resposta, vazio),
+// notebook, 1100, tablet e mobile).
+// Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
+// paleta, modal) antes da captura.
+import fs from 'node:fs'
+import path from 'node:path'
+import { expect, test } from '@playwright/test'
+import { E2E_USERS } from './global-setup.mjs'
+
+test.skip(!process.env.REFINO_SHOTS, 'defina REFINO_SHOTS=1 para gerar as capturas do refino visual')
+
+const AUTH_HOST = 'http://127.0.0.1:9099'
+const FIRESTORE_HOST = 'http://127.0.0.1:8080'
+const PROJECT_ID = 'demo-sqcomex'
+const DOCS = `${FIRESTORE_HOST}/v1/projects/${PROJECT_ID}/databases/(default)/documents`
+const OUT_ROOT = path.resolve(process.cwd(), '.agent-tmp', 'refino-shots')
+// REFINO_OUTDIR (opcional) redireciona a saida da rodada, ex.: .agent-tmp/refino-shots/rc1/_raw/f4a.
+const outDirFor = () => (process.env.REFINO_OUTDIR ? path.resolve(process.cwd(), process.env.REFINO_OUTDIR) : path.join(OUT_ROOT, PHASE))
+const THEMES = ['light', 'dark']
+const VIEWPORT = { width: 1440, height: 900 }
+
+const shell = (page) => page.locator('.topbar').first()
+
+// Telas por fase. `auth: false` = sem login (tela de acesso).
+const PHASES = {
+  f1: [
+    { name: 'login', route: '/login', auth: false, ready: (page) => page.locator('.auth-screen--login').first() },
+    { name: 'dashboard', route: '/', ready: (page) => page.getByRole('heading', { name: 'Visão geral' }) },
+    { name: 'chegadas', route: '/processos', ready: (page) => page.locator('.process-list-card').first() },
+    // Recolor das demais rotas (layout ainda antigo; prova que a paleta global nao quebrou nada).
+    { name: 'noticias', route: '/news', ready: shell },
+    { name: 'notificacoes', route: '/notifications', ready: shell },
+    { name: 'admin-usuarios', route: '/admin/usuarios', ready: shell },
+    { name: 'admin-comunicados', route: '/admin/comunicados', ready: shell },
+    { name: 'admin-barra', route: '/admin/barra', ready: shell },
+    { name: 'admin-previsoes', route: '/admin/previsoes', ready: shell },
+    { name: 'admin-lead-time', route: '/admin/lead-time', ready: shell },
+    { name: 'admin-suporte', route: '/admin/suporte', ready: shell },
+    { name: '404', route: '/rota-que-nao-existe', ready: shell },
+  ],
+}
+// Refino F2 (shell): as capturas mostram sidebar + topbar em todas as telas e
+// os flutuantes abertos (gaveta, paleta, suporte, menu do usuario).
+const dashboardReady = (page) => page.getByRole('heading', { name: 'Visão geral' })
+PHASES.f2 = [
+  { name: 'shell-dashboard', route: '/', ready: dashboardReady },
+  { name: 'shell-chegadas', route: '/processos', ready: (page) => page.locator('.process-list-card').first() },
+  {
+    name: 'shell-detalhe-breadcrumb',
+    route: '/processos',
+    ready: (page) => page.locator('.process-list-card').first(),
+    action: async (page) => {
+      await page.locator('.process-item--button').first().click()
+      await expect(page.locator('.topbar .breadcrumb')).toBeVisible()
+    },
+  },
+  { name: 'shell-admin-usuarios', route: '/admin/usuarios', ready: shell },
+  { name: 'shell-admin-barra', route: '/admin/barra', ready: shell },
+  {
+    name: 'gaveta-notificacoes',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar .notifications__trigger').click()
+      await expect(page.locator('.notifications__panel--drawer .notif-row').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'paleta-busca',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar__search').click()
+      await page.getByLabel('Buscar comandos').fill('Solvente')
+      await expect(page.locator('.command-palette__item--process').first()).toBeVisible({ timeout: 10_000 })
+    },
+  },
+  {
+    name: 'paleta-vazia',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar__search').click()
+      await expect(page.locator('.command-palette__item').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'suporte-modal',
+    route: '/processos',
+    ready: (page) => page.locator('.process-list-card').first(),
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Abrir suporte' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+    },
+  },
+  {
+    name: 'suporte-meus-chamados',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Abrir suporte' }).click()
+      await page.getByRole('button', { name: 'Meus chamados' }).click()
+      await expect(page.getByRole('button', { name: 'Novo chamado' })).toBeVisible()
+    },
+  },
+  {
+    name: 'menu-usuario',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.locator('.topbar .topbar__user').click()
+      await expect(page.getByRole('menu')).toBeVisible()
+    },
+  },
+]
+// Refino F3 (componentes e movimento): estados que aparecem nas paginas reais.
+// `beforeGoto(page)` roda antes da navegacao (ex.: atrasar o Firestore para
+// capturar o skeleton); `afterShot(page)` desfaz. As capturas usam movimento
+// reduzido (instantaneo); o movimento em si e conferido pelos asserts de CSS
+// computado do catalogo (fim do arquivo).
+const delayProcessQueries = (ms) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"')) await new Promise((resolve) => setTimeout(resolve, ms))
+    // O unroute da tela pode chegar antes do fim do atraso: ignora "already handled".
+    await route.continue().catch(() => {})
+  })
+}
+const failProcessQueries = async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"')) return route.abort('failed').catch(() => {})
+    return route.continue().catch(() => {})
+  })
+}
+const unrouteFirestore = (page) => page.unroute('**/127.0.0.1:8080/**')
+const listReady = (page) => page.locator('.process-list-card').first()
+
+PHASES.f3 = [
+  { name: 'chegadas-botoes-campos', route: '/processos', ready: listReady },
+  {
+    name: 'chegadas-filtros-chips-foco',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.getByLabel('Categoria').first().selectOption({ index: 1 })
+      const search = page.locator('.process-filters__search')
+      await search.fill('Resina')
+      await expect(page.locator('.filter-chips-row .filter-chip').first()).toBeVisible()
+      await search.focus()
+    },
+  },
+  {
+    name: 'chegadas-vazio',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.locator('.process-filters__search').fill('zzzz-nao-existe')
+      await expect(page.locator('.empty-state').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-hover-card',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      const row = page.locator('.process-item--button').nth(1)
+      await expect(row).toBeVisible()
+      await row.hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-foco-teclado-botao',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Novo processo' }).focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+    },
+  },
+  {
+    name: 'chegadas-carregando-skeleton',
+    route: '/processos',
+    ready: listReady,
+    beforeGoto: delayProcessQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.process-card-skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-carregando-skeleton',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: delayProcessQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.process-card-skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-erro-alerta-inline',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: failProcessQueries,
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.error-banner--retry').first()).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'toast-sucesso',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: /^Exportar/ }).click()
+      await expect(page.locator('.toast--success')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'toast-erro',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Abrir suporte' }).click()
+      await page.getByRole('dialog').locator('textarea').fill('Mensagem de teste para o toast de erro.')
+      await page.context().setOffline(true)
+      await page.getByRole('button', { name: 'Enviar chamado' }).click()
+      await expect(page.locator('.toast--error')).toBeVisible({ timeout: 20_000 })
+      await page.context().setOffline(false)
+    },
+  },
+  {
+    name: 'detalhe-timeline-favorito',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.locator('.process-item--button').nth(1).click()
+      await expect(page.locator('.process-detail-view .process-timeline')).toBeVisible()
+    },
+  },
+  {
+    name: 'detalhe-confirmar-excluir-destrutivo',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.locator('.process-item--button').nth(1).click()
+      await page.getByRole('button', { name: 'Mais ações' }).click()
+      await page.getByRole('menuitem', { name: /Excluir processo/ }).click()
+      await expect(page.locator('.confirm-dialog')).toBeVisible()
+    },
+  },
+  {
+    name: 'novo-processo-campos',
+    route: '/processos',
+    ready: listReady,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Novo processo' }).click()
+      await expect(page.locator('.process-form').first()).toBeVisible()
+    },
+  },
+  { name: 'admin-suporte-kpis-tags', route: '/admin/suporte', ready: shell },
+  // Demais rotas: componentes globais (botoes, campos, tags, banners) em telas ainda
+  // no layout antigo — prova de que o recolor/geometria da F3 nao quebrou nada.
+  { name: 'dashboard', route: '/', ready: dashboardReady },
+  { name: 'noticias', route: '/news', ready: shell },
+  { name: 'notificacoes', route: '/notifications', ready: shell },
+  { name: 'admin-usuarios', route: '/admin/usuarios', ready: shell },
+  { name: 'admin-comunicados', route: '/admin/comunicados', ready: shell },
+  { name: 'admin-barra', route: '/admin/barra', ready: shell },
+  { name: 'admin-previsoes', route: '/admin/previsoes', ready: shell },
+  { name: 'admin-lead-time', route: '/admin/lead-time', ready: shell },
+  { name: '404', route: '/rota-que-nao-existe', ready: shell },
+  { name: 'login-campos', route: '/login', auth: false, ready: (page) => page.locator('.auth-screen--login').first() },
+]
+// Refino F4a (Dashboard.dc.html): todas as secoes com dados, os 3 estados de cada
+// uma (carregando, erro, vazio) e as viewports que NAO podem mudar de layout
+// (notebook 1366x768 = modo compacto; tablet 900 e mobile 390 = arvore legada).
+// `emptyDashboardQueries` responde 0 documentos para processos e comunicados
+// (runQuery vazio) - o desktop mostra os 3 estados vazios do mock.
+const emptyDashboardQueries = async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"') || body.includes('"collectionId":"announcements"')) {
+      return route
+        .fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ readTime: new Date().toISOString() }]),
+        })
+        .catch(() => {})
+    }
+    return route.continue().catch(() => {})
+  })
+}
+const delayDashboardQueries = (ms) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"') || body.includes('"collectionId":"announcements"')) {
+      await new Promise((resolve) => setTimeout(resolve, ms))
+    }
+    await route.continue().catch(() => {})
+  })
+}
+const dashboardFull = async (page) => {
+  await expect(page.locator('.dash-arrival').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.dash-fav').first()).toBeVisible()
+  await expect(page.locator('.dash-announce--lead')).toBeVisible()
+}
+const resizeTo = (width, height) => async (page) => {
+  await page.setViewportSize({ width, height })
+  await page.waitForTimeout(400)
+}
+const restoreViewport = (page) => page.setViewportSize(VIEWPORT)
+
+// A rolagem e do .main-content (nao da janela): fullPage nao alcanca o fim da
+// pagina, entao as capturas do Dashboard usam viewport mais alta (1440x1000 = a
+// prancheta do mock; 1440x1700 = pagina inteira, favoritos incluidos).
+PHASES.f4a = [
+  {
+    name: 'dashboard',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-completo',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-hover-chegada-favorito',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await dashboardFull(page)
+      await page.locator('.dash-arrival').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'dashboard-foco-teclado',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await dashboardFull(page)
+      await page.mouse.move(700, 880)
+      await page.locator('.dash-arrival').first().focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.locator('.dash-arrival').first()).toBeFocused()
+    },
+  },
+  {
+    name: 'dashboard-carregando',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: delayDashboardQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrival--skeleton').first()).toBeVisible()
+      await expect(page.locator('.dash-fav--skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-erro',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: failProcessQueries,
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrivals .error-banner--retry')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'dashboard-vazio',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: emptyDashboardQueries,
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrivals .empty-state')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.dash-announcements .empty-state')).toBeVisible()
+      await expect(page.locator('.dash-favorites .empty-state')).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-notebook-1366x768',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-tablet-900',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(900, 1000)(page)
+      await expect(page.locator('.dashboard-heading')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-mobile-390',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await expect(page.locator('.dashboard-heading')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+]
+
+// Refino F4b (Chegadas): a rolagem e do .main-content (nao da janela), entao as capturas
+// da lista usam viewport mais alta (1440x1500 mostra o cabecalho e as ~11 linhas).
+const chegadasReady = (page) => page.getByRole('heading', { level: 2, name: 'Fila de chegadas' })
+const chegadasRows = (page) => page.locator('.chg-row')
+const chegadasLoaded = async (page) => {
+  await expect(chegadasRows(page).first()).toBeVisible({ timeout: 15_000 })
+}
+PHASES.f4b = [
+  {
+    name: 'chegadas',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1440, 1500)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-filtros-aplicados',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1440, 1100)(page)
+      await chegadasLoaded(page)
+      await page.getByLabel('Categoria').selectOption('FCL')
+      await page.getByLabel('ETA de').fill(dateKey(-12))
+      await page.getByLabel('ETA até').fill(dateKey(40))
+      await page.getByLabel('Etapa operacional').selectOption('Dados pendentes')
+      await expect(page.locator('.chg-chips__count')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-busca-com-chip',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').fill('solvente')
+      await expect(chegadasRows(page)).toHaveCount(1)
+      await expect(page.locator('.chg-chips__count')).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-hover',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await chegadasRows(page).nth(2).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-hover-botao-icone',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await chegadasRows(page).nth(1).getByRole('button', { name: /Arquivar processo/ }).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-foco-teclado',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.mouse.move(700, 880)
+      await chegadasRows(page).nth(1).locator('.chg-row__main').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(chegadasRows(page).nth(1).locator('.chg-row__main')).toBeFocused()
+    },
+  },
+  {
+    name: 'chegadas-foco-busca',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.getByLabel('Buscar processo')).toBeFocused()
+    },
+  },
+  {
+    name: 'chegadas-vazio',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByLabel('Buscar processo').fill('zzzz-sem-resultado')
+      await expect(page.locator('.chg-results .empty-state')).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-carregando',
+    route: '/processos',
+    ready: chegadasReady,
+    beforeGoto: delayDashboardQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.chg-skeletons .process-card-skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'chegadas-arquivados',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await chegadasLoaded(page)
+      await page.getByRole('button', { name: /Arquivados \(\d+\)/ }).click()
+      await expect(page.locator('.chg-section-label')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'chegadas-notebook-1366x768',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-desktop-estreito-1100',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1100, 1300)(page)
+      await chegadasLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1000)(page)
+      await expect(page.locator('.process-item--button').first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.chg-row')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'chegadas-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await expect(page.locator('.process-item--button').first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.chg-row')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+]
+// Refino F4c (Detalhe do processo): a rolagem e do .main-content (nao da janela), entao
+// cada captura usa uma viewport alta o bastante para a aba inteira (1440 de largura).
+const detailOpen = async (page, rowText) => {
+  // o Vite do emulador as vezes devolve uma pagina em branco logo apos reotimizar: 1 reload
+  try {
+    await expect(chegadasRows(page).first()).toBeVisible({ timeout: 15_000 })
+  } catch {
+    await page.reload()
+  }
+  await chegadasLoaded(page)
+  await page.locator('.chg-row__main', { hasText: rowText }).first().click()
+  await expect(page.locator('.pdv-head')).toBeVisible({ timeout: 15_000 })
+}
+const detailTab = (rowText, tabName, { height = 1300, after } = {}) => async (page) => {
+  await resizeTo(1440, height)(page)
+  await detailOpen(page, rowText)
+  if (tabName) {
+    await page.getByRole('tab', { name: tabName }).click()
+    await expect(page.getByRole('tab', { name: tabName })).toHaveAttribute('aria-selected', 'true')
+  }
+  await page.waitForTimeout(500)
+  if (after) await after(page)
+}
+const detailShot = (name, rowText, tabName, opts = {}) => ({
+  name,
+  route: '/processos',
+  ready: chegadasReady,
+  action: detailTab(rowText, tabName, opts),
+  afterShot: restoreViewport,
+})
+PHASES.f4c = [
+  // --- FCL completo: as 6 abas -------------------------------------------------
+  detailShot('detalhe-geral', 'Resina epóxi líquida', 'Detalhes gerais'),
+  detailShot('detalhe-processo', 'Resina epóxi líquida', 'Processo', { height: 1900 }),
+  detailShot('detalhe-itens', 'Resina epóxi líquida', 'Itens'),
+  detailShot('detalhe-mensagens', 'Resina epóxi líquida', 'Mensagens'),
+  detailShot('detalhe-historico', 'Resina epóxi líquida', 'Histórico'),
+  detailShot('detalhe-documentos', 'Resina epóxi líquida', 'Documentos', { height: 1800 }),
+  detailShot('detalhe-item-relacionado', 'Resina epóxi líquida', 'Itens', {
+    after: async (page) => {
+      await page.locator('.pdv-item', { hasText: 'Endurecedor amínico' }).click()
+      await expect(page.getByRole('tab', { name: 'Item relacionado' })).toHaveAttribute('aria-selected', 'true')
+      await page.waitForTimeout(400)
+    },
+  }),
+  detailShot('detalhe-mais-acoes', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Mais ações' }).click()
+      await expect(page.getByRole('menuitem', { name: 'Excluir processo' })).toBeVisible()
+    },
+  }),
+  detailShot('detalhe-excluir-confirmacao', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Mais ações' }).click()
+      await page.getByRole('menuitem', { name: 'Excluir processo' }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  }),
+  detailShot('detalhe-foco-aba', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      // abas com roving tabindex: so a ativa entra na ordem do Tab
+      await page.getByRole('tab', { name: 'Detalhes gerais' }).focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.getByRole('tab', { name: 'Detalhes gerais' })).toBeFocused()
+    },
+  }),
+  detailShot('detalhe-hover-botao', 'Resina epóxi líquida', 'Detalhes gerais', {
+    after: async (page) => {
+      await page.getByRole('button', { name: 'Editar processo' }).hover()
+      await page.waitForTimeout(400)
+    },
+  }),
+  // --- AEREO ---------------------------------------------------------------------
+  detailShot('detalhe-geral-aereo', 'Ácido cítrico anidro', 'Detalhes gerais'),
+  detailShot('detalhe-processo-aereo', 'Ácido cítrico anidro', 'Processo', { height: 1500 }),
+  detailShot('detalhe-itens-aereo', 'Ácido cítrico anidro', 'Itens', { height: 900 }),
+  // --- CONSOLIDADO ---------------------------------------------------------------
+  detailShot('detalhe-geral-consolidado', 'CON CN 929-26', 'Detalhes gerais'),
+  detailShot('detalhe-processo-consolidado', 'CON CN 929-26', 'Processo', { height: 1900 }),
+  detailShot('detalhe-itens-consolidado', 'CON CN 929-26', 'Itens'),
+  detailShot('detalhe-documentos-consolidado', 'CON CN 929-26', 'Documentos', { height: 1500 }),
+  // --- carga recebida: timeline completa, observacoes e divergencia ----------------
+  detailShot('detalhe-geral-recebida', 'Glicerina bidestilada', 'Detalhes gerais'),
+  detailShot('detalhe-processo-recebida', 'Glicerina bidestilada', 'Processo', { height: 2100 }),
+  detailShot('detalhe-documentos-recebida', 'Glicerina bidestilada', 'Documentos', { height: 1500 }),
+  // --- estados vazios (processo sem dados) -----------------------------------------
+  detailShot('detalhe-vazio-geral', 'Surfactante', 'Detalhes gerais'),
+  detailShot('detalhe-vazio-processo', 'Surfactante', 'Processo', { height: 1500 }),
+  detailShot('detalhe-vazio-itens', 'Surfactante', 'Itens', { height: 800 }),
+  detailShot('detalhe-vazio-mensagens', 'Surfactante', 'Mensagens', { height: 800 }),
+  detailShot('detalhe-vazio-historico', 'Surfactante', 'Histórico', { height: 800 }),
+  detailShot('detalhe-vazio-documentos', 'Surfactante', 'Documentos', { height: 1100 }),
+  // --- notebook, tablet e mobile ---------------------------------------------------
+  {
+    name: 'detalhe-notebook-1366x768-geral',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-notebook-1366x768-processo',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.getByRole('tab', { name: 'Processo' }).click()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-desktop-estreito-1100',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(1100, 1500)(page)
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1200)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.pdv-head')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'detalhe-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.pdv-head')).toHaveCount(0)
+    },
+    afterShot: restoreViewport,
+  },
+]
+// Refino F4d (Editar/criar processo — ProcessoForm.dc.html): o formulario e um MODAL fixo na
+// janela (nao rola com a pagina), entao as capturas usam a viewport padrao 1440x900. Cada tela
+// abre o dialogo pela UI (detalhe -> "Editar processo" | lista -> "Novo processo") e navega
+// pelo stepper. Seed = o da F4c (FCL "Resina epóxi líquida", AEREO, CONSOLIDADO, recebida,
+// vazio "Surfactante").
+const F4D_STEPS = ['Identificação', 'Embarque', 'Carga', 'Chegada e liberação', 'Coleta', 'Itens']
+const F4D_STEP_SLUGS = ['identificacao', 'embarque', 'carga', 'chegada', 'coleta', 'itens']
+const formDialog = (page, title = 'Editar processo') => page.getByRole('dialog', { name: title })
+const stepButton = (page, label) => page.locator('.pfd-step__button', { hasText: label })
+const gotoStep = async (page, index) => {
+  await stepButton(page, F4D_STEPS[index]).click()
+  await expect(stepButton(page, F4D_STEPS[index])).toHaveAttribute('aria-current', 'step')
+  await page.waitForTimeout(250)
+}
+const editOpen = async (page, rowText) => {
+  await detailOpen(page, rowText)
+  await page.getByRole('button', { name: 'Editar processo' }).click()
+  await expect(formDialog(page)).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(400)
+}
+const createOpen = async (page) => {
+  await chegadasLoaded(page)
+  await page.getByRole('button', { name: 'Novo processo' }).click()
+  await expect(formDialog(page, 'Criar processo')).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(400)
+}
+const formShot = (name, open, { step = 0, before, after } = {}) => ({
+  name,
+  route: '/processos',
+  ready: chegadasReady,
+  action: async (page) => {
+    await open(page)
+    if (before) await before(page)
+    if (step > 0) await gotoStep(page, step)
+    if (after) await after(page)
+    await page.waitForTimeout(300)
+  },
+  afterShot: restoreViewport,
+})
+const stepsOf = (prefix, open, opts = {}) =>
+  F4D_STEPS.map((_, index) => formShot(`${prefix}-${index + 1}-${F4D_STEP_SLUGS[index]}`, open, { ...opts, step: index }))
+const openFcl = (page) => editOpen(page, 'Resina epóxi líquida')
+const openAereo = (page) => editOpen(page, '4500129902')
+const openCon = (page) => editOpen(page, 'CON CN 929-26')
+const fillCreateIdentification = async (page) => {
+  const dialog = formDialog(page, 'Criar processo')
+  await dialog.getByLabel('Nome do processo').fill('Resina acrílica — Shanghai')
+  await dialog.getByLabel('Código do processo').fill('4500130001')
+  await dialog.getByLabel('Destino').fill('ITAJAI')
+  await dialog.getByLabel('Fornecedor').fill('ACRYL CHEM CO.')
+  await dialog.getByLabel('Origem').fill('Shanghai, CN')
+}
+const resizeAndEdit = (width, height, rowText = 'Resina epóxi líquida') => async (page) => {
+  await resizeTo(width, height)(page)
+  await editOpen(page, rowText)
+}
+PHASES.f4d = [
+  // --- editar FCL: os 6 passos -----------------------------------------------------
+  ...stepsOf('form-editar', openFcl),
+  // --- criar: os 6 passos (passo 1 preenchido) ---------------------------------------
+  formShot('form-criar-0-vazio', createOpen),
+  ...stepsOf('form-criar', createOpen, { before: fillCreateIdentification }),
+  // --- AEREO e CONSOLIDADO -------------------------------------------------------------
+  ...stepsOf('form-aereo', openAereo),
+  ...stepsOf('form-consolidado', openCon),
+  // --- estados -----------------------------------------------------------------------------
+  formShot('form-embarque-transbordo-ativo', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByRole('switch', { name: 'Transbordo' }).click({ force: true })
+      await expect(formDialog(page).getByLabel('Porto/aeroporto de transbordo')).toBeVisible()
+    },
+  }),
+  formShot('form-foco-campo-navio', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByRole('textbox', { name: /^Navio/ }).focus()
+      await page.waitForTimeout(250)
+    },
+  }),
+  formShot('form-carga-aviso-iso6346', openFcl, {
+    step: 2,
+    after: async (page) => {
+      await formDialog(page).getByPlaceholder('Ex.: CSQU3054383').first().fill('MSCU1234567')
+      await expect(formDialog(page).getByText(/ISO 6346|dígito verificador/i).first()).toBeVisible()
+    },
+  }),
+  formShot('form-erro-validacao', openFcl, {
+    step: 1,
+    after: async (page) => {
+      await formDialog(page).getByLabel('ETD').fill('1999-01-01')
+      await formDialog(page).getByRole('button', { name: 'Salvar alterações' }).click()
+      await expect(formDialog(page).getByRole('alert')).toContainText('Corrija')
+      await page.waitForTimeout(300)
+    },
+  }),
+  formShot('form-pendentes-vazio-passo-1', (page) => editOpen(page, 'Surfactante')),
+  formShot('form-pendentes-vazio-passo-2', (page) => editOpen(page, 'Surfactante'), { step: 1 }),
+  formShot('form-pendentes-vazio-passo-3', (page) => editOpen(page, 'Surfactante'), { step: 2 }),
+  // carga recebida: transportadora, devolucao do vazio e janela de coleta (so existem depois da liberacao)
+  formShot('form-chegada-recebida', (page) => editOpen(page, 'Glicerina bidestilada'), { step: 3 }),
+  formShot('form-coleta-recebida', (page) => editOpen(page, 'Glicerina bidestilada'), { step: 4 }),
+  formShot('form-descartar-alteracoes', openFcl, {
+    after: async (page) => {
+      await formDialog(page).getByLabel('Nome do processo').fill('Resina epóxi líquida (editada)')
+      await formDialog(page).getByRole('button', { name: 'Fechar' }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+  }),
+  {
+    name: 'form-completar-agora',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await detailOpen(page, 'Resina epóxi líquida')
+      await page.getByRole('button', { name: 'Completar agora' }).click()
+      await expect(formDialog(page)).toBeVisible({ timeout: 15_000 })
+      await page.waitForTimeout(700)
+    },
+  },
+  // --- notebook ----------------------------------------------------------------------------
+  {
+    name: 'form-notebook-1366x768-passo-2',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1366, 768)(page)
+      await gotoStep(page, 1)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1366x768-passo-4',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1366, 768)(page)
+      await gotoStep(page, 3)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-1',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-3',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+      await gotoStep(page, 2)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-notebook-1280x552-passo-4-rolado',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeAndEdit(1280, 552)(page)
+      await gotoStep(page, 3)
+      await page.locator('.pfd-body').evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      await page.waitForTimeout(300)
+    },
+    afterShot: restoreViewport,
+  },
+  // --- tablet e mobile: vista legada (a pagina, nao o modal) ------------------------------------
+  {
+    name: 'form-tablet-900',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(900, 1200)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Editar processo' }).first().click()
+      await expect(page.locator('.process-form.list-card')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.process-form--dialog')).toHaveCount(0)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'form-mobile-390',
+    route: '/processos',
+    ready: chegadasReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await page.locator('.process-item--button', { hasText: 'Resina epóxi líquida' }).first().click()
+      await expect(page.locator('.process-timeline')).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Editar processo' }).first().click()
+      await expect(page.locator('.process-form.list-card')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.process-form--dialog')).toHaveCount(0)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+]
+// ---------------------------------------------------------------------------
+// Refino F5a (Noticias.dc.html, Notificacoes.dc.html, Preferencias.dc.html):
+// lista de noticias com e sem capas, detalhe, editor (admin), vazio/carregando;
+// central de notificacoes em cada filtro, grupos, "Anteriores" aberto, silenciado,
+// vazio; modal de preferencias; notebook, tablet e mobile. A rolagem e do
+// .main-content: as capturas usam viewport mais alta (1440x1000 = prancheta do mock).
+// ---------------------------------------------------------------------------
+const emptyCollections = (collectionIds) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (collectionIds.some((id) => body.includes(`"collectionId":"${id}"`))) {
+      return route
+        .fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ readTime: new Date().toISOString() }]),
+        })
+        .catch(() => {})
+    }
+    return route.continue().catch(() => {})
+  })
+}
+const delayCollections = (collectionIds, ms) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (collectionIds.some((id) => body.includes(`"collectionId":"${id}"`))) {
+      await new Promise((resolve) => setTimeout(resolve, ms))
+    }
+    await route.continue().catch(() => {})
+  })
+}
+const newsDesktopReady = (page) => page.locator('.surface--news-desktop .nw-head__title').first()
+const newsLoaded = async (page) => {
+  await expect(page.locator('.surface--news-desktop .nw-card--featured:not(.nw-card--skeleton)')).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(300)
+}
+const NEWS_IDS = ['shot-news-1', 'shot-news-3', 'shot-news-5', 'shot-news-7']
+const stripCovers = async () => {
+  for (const id of NEWS_IDS) await patchFields('news', id, { coverImage: '' })
+  for (const id of ['shot-ext-2', 'shot-ext-4', 'shot-ext-6']) await patchFields('externalNews', id, { coverImage: '' })
+}
+const restoreCovers = async () => {
+  for (const [index, id] of NEWS_IDS.entries()) await patchFields('news', id, { coverImage: coverDataUri(index) })
+  for (const [index, id] of ['shot-ext-2', 'shot-ext-4', 'shot-ext-6'].entries()) {
+    await patchFields('externalNews', id, { coverImage: coverDataUri(index + 4) })
+  }
+}
+const notifLoaded = async (page) => {
+  await expect(page.locator('.notifications-page--desktop .nt-group').first()).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(300)
+}
+const notifReady = (page) => page.locator('.notifications-page--desktop .nt-head__title').first()
+
+const NOTIF_FILTERS = [
+  ['todas', 'Todas'],
+  ['duvidas', 'Dúvidas'],
+  ['respostas', 'Respostas'],
+  ['favoritos', 'Favoritos'],
+  ['pos-recebimento', 'Pós-recebimento'],
+  ['coleta', 'Coleta'],
+  ['divergencias', 'Divergências'],
+  ['anuencias', 'Anuências'],
+  ['alertas', 'Alertas'],
+  ['documentos', 'Documentos'],
+]
+
+PHASES.f5a = [
+  // --- noticias --------------------------------------------------------------------
+  {
+    name: 'noticias-lista-com-capas',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-hover-card',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--row').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-com-galeria-anexos-referencias',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1500)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__link').click()
+      await expect(page.locator('.nw-modal .nw-detail__title')).toBeVisible()
+      await expect(page.locator('.nw-modal .nw-detail__file').first()).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-fonte-externa',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--row', { hasText: 'Portos e Navios' }).locator('.nw-card__link').click()
+      await expect(page.getByRole('link', { name: 'Abrir fonte oficial' })).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-editor-editar',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1300)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__edit').click()
+      await expect(page.locator('.nw-editor')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-editor-nova',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+      await page.getByRole('button', { name: 'Nova notícia' }).click()
+      await expect(page.locator('.nw-editor')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-lista-sem-capas',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: async () => {
+      await stripCovers()
+    },
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await newsLoaded(page)
+    },
+    afterShot: async (page) => {
+      await restoreCovers()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'noticias-vazio',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: emptyCollections(['news', 'externalNews']),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.surface--news-desktop .empty-state')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'noticias-carregando',
+    route: '/news',
+    ready: newsDesktopReady,
+    beforeGoto: delayCollections(['news', 'externalNews'], 4000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.surface--news-desktop .nw-card--skeleton').first()).toBeVisible()
+    },
+  },
+  // --- notificacoes -----------------------------------------------------------------
+  ...NOTIF_FILTERS.map(([slug, label]) => ({
+    name: `notificacoes-filtro-${slug}`,
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, slug === 'todas' ? 1700 : 1100)(page)
+      await notifLoaded(page)
+      await page.locator('.nt-filters').getByRole('button', { name: new RegExp(`^${label}`) }).click()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  })),
+  {
+    name: 'notificacoes-anteriores-aberto',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await notifLoaded(page)
+      await page.locator('.nt-older__toggle').first().click()
+      await page.locator('.nt-older__toggle').nth(1).click()
+      await expect(page.locator('.nt-older--open')).toHaveCount(2)
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-ver-mais-anteriores',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: /^Ver mais \d+ anteriores/ }).click()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-silenciado',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: /Ativar modo não perturbe/ }).click()
+      await expect(page.locator('.nt-icon-button--active')).toBeVisible()
+      await page.waitForTimeout(400)
+    },
+    afterShot: async (page) => {
+      await page.getByRole('button', { name: /Desativar modo não perturbe/ }).click()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'notificacoes-hover-linha',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await notifLoaded(page)
+      await page.locator('.nt-row').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-vazio',
+    route: '/notifications',
+    ready: notifReady,
+    beforeGoto: emptyCollections(['notifications']),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.notifications-page--desktop .empty-state')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'notificacoes-carregando',
+    route: '/notifications',
+    ready: notifReady,
+    beforeGoto: delayCollections(['notifications'], 4000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await expect(page.locator('.notifications-page--desktop [aria-busy="true"]')).toBeVisible()
+    },
+  },
+  // --- preferencias -----------------------------------------------------------------
+  {
+    name: 'preferencias-modal',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+  },
+  {
+    name: 'preferencias-modal-marcacoes',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.getByRole('checkbox', { name: 'Notícias: E-mail' }).uncheck({ force: true })
+      await page.getByRole('checkbox', { name: 'Suporte: Navegador' }).uncheck({ force: true })
+      await page.getByRole('checkbox', { name: 'Suporte: No portal' }).focus()
+      await page.waitForTimeout(400)
+    },
+  },
+  // --- notebook ---------------------------------------------------------------------
+  {
+    name: 'noticias-notebook-1280x552',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await newsLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'noticias-detalhe-notebook-1280x552',
+    route: '/news',
+    ready: newsDesktopReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await newsLoaded(page)
+      await page.locator('.nw-card--featured .nw-card__link').click()
+      await expect(page.locator('.nw-modal .nw-detail__title')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'notificacoes-notebook-1280x552',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await notifLoaded(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'preferencias-notebook-1280x552',
+    route: '/notifications',
+    ready: notifReady,
+    action: async (page) => {
+      await resizeTo(1280, 552)(page)
+      await notifLoaded(page)
+      await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+      await expect(page.locator('.notification-prefs--desktop')).toBeVisible()
+      await page.waitForTimeout(500)
+    },
+    afterShot: restoreViewport,
+  },
+  // --- tablet e mobile: arvores legadas, nada muda de layout --------------------------------
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].flatMap(([suffix, width, height]) => [
+    {
+      name: `noticias-${suffix}`,
+      route: '/news',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.news-card--featured')).toBeVisible({ timeout: 15_000 })
+        await expect(page.locator('.surface--news-desktop')).toHaveCount(0)
+        await page.waitForTimeout(400)
+      },
+      afterShot: restoreViewport,
+    },
+    {
+      name: `notificacoes-${suffix}`,
+      route: '/notifications',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.notifications__group').first()).toBeVisible({ timeout: 15_000 })
+        await expect(page.locator('.notifications-page--desktop')).toHaveCount(0)
+        await page.waitForTimeout(400)
+      },
+      afterShot: restoreViewport,
+    },
+    {
+      name: `preferencias-${suffix}`,
+      route: '/notifications',
+      ready: shell,
+      action: async (page) => {
+        await resizeTo(width, height)(page)
+        await expect(page.locator('.notifications__group').first()).toBeVisible({ timeout: 15_000 })
+        await page.getByRole('button', { name: 'Preferências de notificação' }).click()
+        await expect(page.locator('.notification-prefs')).toBeVisible()
+        await expect(page.locator('.notification-prefs--desktop')).toHaveCount(0)
+        await page.waitForTimeout(500)
+      },
+      afterShot: restoreViewport,
+    },
+  ]),
+]
+// --- F5b: Login e estados de acesso (Login.dc.html, AcessoEstados.dc.html) --------------------
+// Login = telas sem sessao (auth: false). Verificar e-mail / Acesso pendente / bloqueado /
+// reprovado exigem um usuario de cada tipo (seedAccessUsers) e sao capturadas pelo teste
+// "estados de acesso" no fim do arquivo. A 404 vive dentro do shell (rota protegida); a variante
+// "Pagina inicial indisponivel" (pathname "/") so existe fora de uma rota real: o spec troca o
+// modulo do Dashboard pelo da NotFoundPage (page.route) so para a captura.
+const loginReady = (page) => page.locator('.auth-screen--login').first()
+const notFoundReady = (page) => page.getByTestId('not-found-card')
+const LOGIN_EMAIL = 'nome@sqquimica.com'
+const fillLogin = async (page, { email = LOGIN_EMAIL, password = 'senha-qualquer' } = {}) => {
+  await page.getByPlaceholder('nome@sqquimica.com').fill(email)
+  await page.getByPlaceholder('Sua senha').fill(password)
+}
+const goRegister = (page) => page.getByRole('button', { name: 'Cadastrar' }).click()
+const goReset = async (page) => {
+  await page.getByRole('button', { name: 'Esqueci minha senha' }).click()
+  await expect(page.getByText('Redefinir senha')).toBeVisible()
+}
+const loginErro = async (page) => {
+  await fillLogin(page, { email: 'ninguem@sqquimica.com', password: 'senha-errada' })
+  await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+  await expect(page.locator('.auth-card .error-banner')).toBeVisible({ timeout: 10_000 })
+}
+const loginCarregando = async (page) => {
+  // A chamada de login nunca responde: o botao fica em "Entrando..." (estado de carregamento).
+  await page.route('**/accounts:signInWithPassword*', () => new Promise(() => {}))
+  await fillLogin(page)
+  await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+  await expect(page.getByRole('button', { name: 'Entrando...' })).toBeVisible()
+}
+const unrouteLogin = (page) => page.unroute('**/accounts:signInWithPassword*')
+const notFoundHome = async (page) => {
+  await page.route('**/src/pages/DashboardPage.jsx*', (route) =>
+    route.fulfill({
+      contentType: 'text/javascript',
+      body: "import NotFoundPage from '/src/pages/NotFoundPage.jsx'\nexport default NotFoundPage\n",
+    }),
+  )
+}
+const withViewport = (width, height, extra) => async (page) => {
+  await resizeTo(width, height)(page)
+  if (extra) await extra(page)
+  await page.waitForTimeout(300)
+}
+PHASES.f5b = [
+  // --- login 1440x900 -----------------------------------------------------------------------
+  { name: 'login', route: '/login', auth: false, ready: loginReady },
+  {
+    name: 'login-foco-email',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await page.getByPlaceholder('nome@sqquimica.com').focus()
+      await page.waitForTimeout(300)
+    },
+  },
+  {
+    name: 'login-senha-visivel',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await fillLogin(page, { password: 'senha-demo-1' })
+      await page.getByRole('button', { name: 'Mostrar senha' }).click()
+      await expect(page.getByPlaceholder('Sua senha')).toHaveAttribute('type', 'text')
+    },
+  },
+  {
+    name: 'login-cadastrar',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: async (page) => {
+      await goRegister(page)
+      await expect(page.getByPlaceholder('Nome completo')).toBeVisible()
+    },
+  },
+  { name: 'login-redefinir-senha', route: '/login', auth: false, ready: loginReady, action: goReset },
+  { name: 'login-erro', route: '/login', auth: false, ready: loginReady, action: loginErro },
+  {
+    name: 'login-carregando',
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: loginCarregando,
+    afterShot: unrouteLogin,
+  },
+  // --- login: notebook, 1100, tablet e mobile ------------------------------------------------
+  ...[
+    ['1366x768', 1366, 768],
+    ['1280x552', 1280, 552],
+    ['1100x800', 1100, 800],
+  ].flatMap(([suffix, width, height]) => [
+    {
+      name: 'login-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-cadastrar-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goRegister),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-redefinir-senha-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goReset),
+      afterShot: restoreViewport,
+    },
+  ]),
+  // Larguras maiores: a assinatura SQ Quimica e as marcas de onda nao podem se sobrepor.
+  ...[
+    ['1600x900', 1600, 900],
+    ['1920x1080', 1920, 1080],
+  ].map(([suffix, width, height]) => ({
+    name: 'login-' + suffix,
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].flatMap(([suffix, width, height]) => [
+    { name: 'login-' + suffix, route: '/login', auth: false, ready: loginReady, action: withViewport(width, height), afterShot: restoreViewport },
+    {
+      name: 'login-redefinir-senha-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goReset),
+      afterShot: restoreViewport,
+    },
+    {
+      name: 'login-cadastrar-' + suffix,
+      route: '/login',
+      auth: false,
+      ready: loginReady,
+      action: withViewport(width, height, goRegister),
+      afterShot: restoreViewport,
+    },
+  ]),
+  // --- 404 (dentro do shell, usuario admin) --------------------------------------------------
+  { name: '404', route: '/processos/abc123', ready: notFoundReady },
+  {
+    name: '404-pagina-inicial-indisponivel',
+    route: '/',
+    beforeGoto: notFoundHome,
+    ready: notFoundReady,
+  },
+  {
+    name: '404-notebook-1280x552',
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(1280, 552),
+    afterShot: restoreViewport,
+  },
+  {
+    name: '404-1100x800',
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(1100, 800),
+    afterShot: restoreViewport,
+  },
+  ...[
+    ['tablet-900', 900, 1200],
+    ['mobile-390', 390, 844],
+  ].map(([suffix, width, height]) => ({
+    name: '404-' + suffix,
+    route: '/processos/abc123',
+    ready: notFoundReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
+// --- F6a: Admin — Usuarios, Comunicados e Barra do porto ---------------------------------------
+// Prancheta de 1440x1060 (a dos mocks AdminUsuarios/AdminComunicados/AdminBarra). A rolagem e do
+// .main-content, entao cada captura usa a altura da prancheta; os estados com dado (barra, vazio)
+// regravam o doc no emulador antes da navegacao e restauram depois.
+const adminShot = (extra) => async (page) => {
+  await resizeTo(1440, 1060)(page)
+  if (extra) await extra(page)
+  await page.waitForTimeout(300)
+}
+const usersReady = (page) => page.locator('.admin-panel--users').first()
+const usersLegacyReady = (page) => page.getByRole('heading', { name: 'Gestão de usuários' })
+const annReady = (page) => page.locator('.admin-panel--announcements').first()
+const annLegacyReady = (page) => page.getByRole('heading', { name: 'Comunicados internos' })
+const barReady = (page) => page.locator('.admin-panel--bar').first()
+const barLegacyReady = (page) => page.getByRole('heading', { name: 'Barra Itajaí/Navegantes' })
+const clickUserRow = (name) => async (page) => {
+  await page.locator('.au-row', { hasText: name }).click()
+  await expect(page.locator('.au-row--selected', { hasText: name })).toBeVisible()
+}
+const clickAnnouncement = (title) => async (page) => {
+  await page.locator('.ac-row', { hasText: title }).click()
+  await expect(page.locator('.ac-row--selected', { hasText: title })).toBeVisible()
+}
+const confirmDialogOpen = (opener) => async (page) => {
+  await page.getByRole('button', { name: opener }).click()
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await page.waitForTimeout(500)
+}
+const closeDialog = async (page) => {
+  const cancel = page.getByRole('alertdialog').getByRole('button', { name: 'Cancelar' })
+  if (await cancel.count()) await cancel.click()
+  await restoreViewport(page)
+}
+const barStatusState = (status, suggestion) => async () => {
+  await putDoc('barra', 'current', { status, notes: 'Restrição de calado para navios acima de 12 m.', updatedAt: isoMinutesAgo(25) })
+  if (suggestion === null) await deleteDocFs('barra', 'suggestion')
+  else if (suggestion) await putDoc('barra', 'suggestion', suggestion)
+}
+const zp21 = (overrides) => ({
+  sourceName: 'Praticagem ZP21',
+  sourceUrl: 'https://www.praticagem-zp21.example/cond-barra',
+  fetchedAt: isoMinutesAgo(12),
+  lastAttemptAt: isoMinutesAgo(12),
+  lastSuccessAt: isoMinutesAgo(12),
+  lastError: '',
+  lastAppliedAt: isoMinutesAgo(12),
+  ...overrides,
+})
+const PRATICAVEL_COM_RESTRICOES = {
+  status: 'PRATICAVEL_RESTRICOES',
+  siteDescription: 'PRATICÁVEL COM RESTRIÇÕES',
+  restriction: 'calado máximo de 11,5 m e janela de maré',
+}
+const restoreBarDefault = barStatusState('PRATICAVEL_RESTRICOES', zp21(PRATICAVEL_COM_RESTRICOES))
+const sized = [
+  ['notebook-1366x768', 1366, 768],
+  ['notebook-1280x552', 1280, 552],
+  ['1100x800', 1100, 800],
+  ['tablet-900', 900, 1300],
+  ['mobile-390', 390, 1500],
+]
+PHASES.f6a = [
+  // --- Usuarios ---------------------------------------------------------------------------------
+  { name: 'usuarios-lista', route: '/admin/usuarios', ready: usersReady, action: adminShot(), afterShot: restoreViewport },
+  // Pagina inteira (fila de aprovacao incluida): a prancheta de 1060 corta a fila.
+  {
+    name: 'usuarios-lista-completa',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: withViewport(1440, 1500),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-detalhe-bloqueado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(clickUserRow('Daniela Martins')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-detalhe-reprovado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(clickUserRow('Eduardo Ferraz')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-novo',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo usuário' }).click()
+      await expect(page.getByRole('heading', { name: 'Novo usuário' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-filtro-bloqueado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.locator('.au-filters select').selectOption('Bloqueado')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-busca-sem-resultado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByPlaceholder('Nome, email, perfil ou ID').fill('zzz')
+      await expect(page.getByText('Nenhum usuário encontrado')).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-senha-visivel',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Senha').fill('NovaSenha#2026')
+      await expect(page.getByRole('button', { name: 'Ocultar senha' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-foco-teclado',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(async (page) => {
+      await page.getByPlaceholder('Nome, email, perfil ou ID').focus()
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'usuarios-confirmar-bloqueio',
+    route: '/admin/usuarios',
+    ready: usersReady,
+    action: adminShot(confirmDialogOpen('Bloquear usuário')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'usuarios-fila-vazia',
+    route: '/admin/usuarios',
+    beforeGoto: async () => {
+      for (const id of ['shot-pending-1', 'shot-pending-2']) await patchFields('users', id, { status: 'Ativo', statusTone: 'ok' })
+    },
+    ready: usersReady,
+    action: withViewport(1440, 1500, async (page) => {
+      await expect(page.getByText('Nenhum cadastro pendente')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      for (const id of ['shot-pending-1', 'shot-pending-2']) await patchFields('users', id, { status: 'Pendente', statusTone: 'warn' })
+      await restoreViewport(page)
+    },
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `usuarios-${suffix}`,
+    route: '/admin/usuarios',
+    ready: width > 1040 ? usersReady : usersLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Comunicados ------------------------------------------------------------------------------
+  { name: 'comunicados-lista', route: '/admin/comunicados', ready: annReady, action: adminShot(), afterShot: restoreViewport },
+  {
+    name: 'comunicados-editar-resumo-longo',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(clickAnnouncement('Mudança no horário de corte')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-novo',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo comunicado' }).first().click()
+      await expect(page.getByRole('heading', { name: 'Novo comunicado' })).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-novo-digitando',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Novo comunicado' }).first().click()
+      await page.getByLabel('Título').fill('Atualização do prazo de armazenagem')
+      await page.getByLabel('Mensagem').fill('A partir de segunda-feira, o prazo de armazenagem gratuita no terminal passa de 5 para 7 dias úteis para cargas FCL. Confirme as datas com a logística antes de reagendar coletas.')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'comunicados-confirmar-exclusao',
+    route: '/admin/comunicados',
+    ready: annReady,
+    action: adminShot(confirmDialogOpen('Excluir comunicado')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'comunicados-vazio',
+    route: '/admin/comunicados',
+    beforeGoto: async () => {
+      for (const id of ['shot-ann-1', 'shot-ann-2', 'shot-ann-3', 'shot-ann-4']) await deleteDocFs('announcements', id)
+    },
+    ready: annReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Nenhum comunicado publicado')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await seedAnnouncementsF6a()
+      await restoreViewport(page)
+    },
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `comunicados-${suffix}`,
+    route: '/admin/comunicados',
+    ready: width > 1040 ? annReady : annLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Barra do porto ---------------------------------------------------------------------------
+  {
+    name: 'barra-praticavel',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('PRATICAVEL', zp21({ status: 'PRATICAVEL', siteDescription: 'PRATICÁVEL', restriction: '' })),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-restricoes',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-impraticavel',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('IMPRATICAVEL', zp21({ status: 'IMPRATICAVEL', siteDescription: 'IMPRATICÁVEL', restriction: 'ressaca na barra' })),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-difere',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({ status: 'IMPRATICAVEL', siteDescription: 'IMPRATICÁVEL', restriction: 'ressaca na barra', lastAppliedAt: null })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-falha',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({
+        ...PRATICAVEL_COM_RESTRICOES,
+        lastAttemptAt: isoMinutesAgo(20),
+        lastSuccessAt: isoMinutesAgo(60 * 3),
+        lastError: 'Falha ao ler o site da Praticagem ZP21 (HTTP 503).',
+        lastAppliedAt: null,
+      })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-robo-atrasado',
+    route: '/admin/barra',
+    beforeGoto: barStatusState(
+      'PRATICAVEL_RESTRICOES',
+      zp21({ ...PRATICAVEL_COM_RESTRICOES, lastAttemptAt: isoMinutesAgo(60 * 9 + 10), lastSuccessAt: isoMinutesAgo(60 * 9 + 10), lastAppliedAt: null })
+    ),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-sem-robo',
+    route: '/admin/barra',
+    beforeGoto: barStatusState('PRATICAVEL_RESTRICOES', null),
+    ready: barReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-selecao-nao-salva',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('radio', { name: 'Impraticável' }).check({ force: true })
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'barra-foco-teclado',
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: barReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('radio', { name: 'Praticável c/ restrições' }).focus()
+      await page.keyboard.press('ArrowDown')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `barra-${suffix}`,
+    route: '/admin/barra',
+    beforeGoto: restoreBarDefault,
+    ready: width > 1040 ? barReady : barLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
+// --- F6b: Admin — Previsoes, Lead time e Suporte ------------------------------------------------
+// Prancheta de 1440x1060 (a dos mocks AdminPrevisoes/AdminLeadTime/AdminSuporte). Os estados com dado
+// (regras de previsao, historico de marcos, chamados) regravam os docs no emulador antes da navegacao e
+// restauram depois.
+const forecastReady = (page) => page.locator('.admin-panel--forecast .af-grid').first()
+const forecastLegacyReady = (page) => page.getByRole('heading', { name: 'Destinos e cutoff' })
+const leadReady = (page) => page.locator('.admin-panel--lead-time .al-head').first()
+// A captura em tablet/mobile abre a pagina no viewport desktop e so depois redimensiona: o "pronto" tem de
+// existir nas duas arvores (o seletor Período e comum a ambas).
+const leadLegacyReady = (page) => page.getByText('Período', { exact: true })
+const supportReady = (page) => page.locator('.admin-panel--support .as-grid, .admin-panel--support .empty-state').first()
+const supportLegacyReady = (page) => page.getByRole('heading', { name: 'Chamados de suporte' })
+const clickSupportTab = (name) => async (page) => {
+  await page.getByRole('tab', { name }).click()
+  await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true')
+}
+const F6B_DESTINATIONS_FORECAST = [
+  { match: 'navegantes', label: 'Navegantes', cutoffHour: 14, cutoffMinute: 0 },
+  { match: 'itapoa', label: 'Itapoá', cutoffHour: 12, cutoffMinute: 0 },
+  { match: 'itajai', label: 'Itajaí', cutoffHour: 10, cutoffMinute: 30 },
+]
+const F6B_DESTINATIONS_LEAD = [
+  ...F6B_DESTINATIONS_FORECAST,
+  { match: 'paranagua', label: 'Paranaguá', cutoffHour: 9, cutoffMinute: 0 },
+  { match: 'viracopos', label: 'Viracopos', cutoffHour: 16, cutoffMinute: 0 },
+  { match: 'guarulhos', label: 'Guarulhos', cutoffHour: 15, cutoffMinute: 30 },
+]
+const forecastDoc = (overrides = {}) => ({
+  destinations: F6B_DESTINATIONS_FORECAST,
+  categoryBusinessDays: { FCL: 3, LCL: 5, AEREO: 2, CONSOLIDADO: 4 },
+  rollingCustoms: {
+    enabled: true,
+    businessDaysAfterBerth: 3,
+    appliesTo: ['FCL', 'CONSOLIDADO'],
+    duimpStatuses: ['aguardando registro', 'aguardando parametrizacao'],
+  },
+  operationalAlerts: { clearanceOverdueDays: 2 },
+  updatedAt: isoMinutesAgo(60 * 26),
+  updatedBy: { uid: 'shot-admin', name: 'Admin E2E' },
+  ...overrides,
+})
+const forecastState = (overrides) => async () => {
+  await putDoc('forecastSettings', 'current', forecastDoc(overrides))
+}
+const setLeadProcessesArchived = (archived) => async () => {
+  for (const id of F6B_LEAD_PROCESS_IDS) await patchFields('processes', id, { archived })
+}
+PHASES.f6b = [
+  // --- Previsoes --------------------------------------------------------------------------------
+  {
+    name: 'previsoes-normal',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-editada',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 1').fill('15')
+      await page.getByLabel('Match do destino 3').fill('itajai-cd')
+      await page.getByRole('button', { name: '+ Adicionar destino' }).click()
+      await page.getByLabel('Match do destino 4').fill('paranagua')
+      await page.getByLabel('Rótulo do destino 4').fill('Paranaguá')
+      await page.getByLabel('Dias úteis após atracar').fill('4')
+      await page.getByRole('button', { name: 'LCL' }).click()
+      await page.getByLabel('Novo status DUIMP').fill('desembaraco em analise')
+      await page.getByRole('button', { name: 'Adicionar', exact: true }).click()
+      await page.getByLabel('Novo status DUIMP').focus()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-erro',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 1').fill('25')
+      await page.getByLabel('Minutos do destino 2').fill('75')
+      await page.getByLabel('Match do destino 3').fill('')
+      await page.getByLabel('Dias sem desembaraço após parametrização').fill('0')
+      await expect(page.getByText('Verifique os campos:')).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'previsoes-restaurar',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(confirmDialogOpen('Restaurar padrões')),
+    afterShot: closeDialog,
+  },
+  {
+    name: 'previsoes-sem-historico-rolling-desligado',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState({
+      updatedAt: null,
+      updatedBy: null,
+      rollingCustoms: { enabled: false, businessDaysAfterBerth: 3, appliesTo: ['FCL', 'CONSOLIDADO'], duimpStatuses: ['aguardando registro'] },
+    }),
+    ready: forecastReady,
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  // "Fallback local": sem Firebase configurado o app nao tem login, entao o selo so aparece em teste. A captura
+  // troca, so no modulo da pagina, a leitura de isFirebaseConfigured por false (o resto do app segue no emulador).
+  {
+    name: 'previsoes-fallback-local',
+    route: '/admin/previsoes',
+    beforeGoto: async (page) => {
+      await forecastState()()
+      await page.route(/\/src\/pages\/AdminForecastPage\.jsx/, async (route) => {
+        const response = await route.fetch()
+        const body = (await response.text()).replaceAll('isFirebaseConfigured ?', 'false ?')
+        await route.fulfill({ response, body })
+      })
+    },
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Fallback local')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await page.unroute(/\/src\/pages\/AdminForecastPage\.jsx/)
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'previsoes-foco-teclado',
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: forecastReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Cutoff em horas do destino 2').focus()
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `previsoes-${suffix}`,
+    route: '/admin/previsoes',
+    beforeGoto: forecastState(),
+    ready: width > 1040 ? forecastReady : forecastLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Lead time --------------------------------------------------------------------------------
+  {
+    name: 'lead-time-dados',
+    route: '/admin/lead-time',
+    beforeGoto: async () => {
+      await forecastState({ destinations: F6B_DESTINATIONS_LEAD })()
+      await setLeadProcessesArchived(false)()
+    },
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-pagina-inteira',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: withViewport(1440, 1500),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-outros-trechos',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: withViewport(1440, 2600, async (page) => {
+      await page.getByRole('button', { name: /Outros trechos/ }).click()
+      await expect(page.locator('.al-segment').first()).toBeVisible()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-periodo-90',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(async (page) => {
+      await page.locator('.al-period select').selectOption('90')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'lead-time-dados-insuficientes',
+    route: '/admin/lead-time',
+    beforeGoto: async () => {
+      await forecastState({ destinations: F6B_DESTINATIONS_LEAD })()
+      await setLeadProcessesArchived(true)()
+    },
+    ready: (page) => page.getByText('Dados insuficientes'),
+    action: adminShot(),
+    afterShot: async (page) => {
+      await setLeadProcessesArchived(false)()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'lead-time-foco-teclado',
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: (page) => page.locator('.admin-panel--lead-time .al-card').first(),
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: /Aplicar \d+ dias/ }).first().focus()
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `lead-time-${suffix}`,
+    route: '/admin/lead-time',
+    beforeGoto: forecastState({ destinations: F6B_DESTINATIONS_LEAD }),
+    ready: width > 1040 ? leadReady : leadLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+  // --- Suporte ----------------------------------------------------------------------------------
+  { name: 'suporte-abertos', route: '/admin/suporte', ready: supportReady, action: adminShot(), afterShot: restoreViewport },
+  {
+    name: 'suporte-abertos-2',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('button', { name: 'Próximo chamado' }).click()
+      await expect(page.locator('.as-pager__counter')).toHaveText('2/3')
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-em-andamento',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Em andamento')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-resolvidos',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Resolvidos')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-todos',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(clickSupportTab('Todos')),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-resposta-digitada',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByLabel('Nova resposta').fill('Obrigado pelo relato. Já estamos olhando o filtro de ETA; retorno ainda hoje.')
+      await page.getByLabel('Mensagem de encerramento (opcional)').fill('Corrigido na versão de hoje: o filtro agora respeita o fuso de Brasília.')
+      await page.getByRole('button', { name: 'Enviar resposta' }).focus()
+    }),
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'suporte-vazio',
+    route: '/admin/suporte',
+    beforeGoto: async () => {
+      for (const id of F6B_TICKET_IDS) await deleteDocFs('supportTickets', id)
+    },
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await expect(page.getByText('Nenhum chamado por aqui')).toBeVisible()
+    }),
+    afterShot: async (page) => {
+      await seedSupportTicketsF6b()
+      await restoreViewport(page)
+    },
+  },
+  {
+    name: 'suporte-foco-teclado',
+    route: '/admin/suporte',
+    ready: supportReady,
+    action: adminShot(async (page) => {
+      await page.getByRole('tab', { name: /Abertos/ }).focus()
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(200)
+    }),
+    afterShot: restoreViewport,
+  },
+  ...sized.map(([suffix, width, height]) => ({
+    name: `suporte-${suffix}`,
+    route: '/admin/suporte',
+    ready: width > 1040 ? supportReady : supportLegacyReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
+]
+const PHASE = process.env.REFINO_PHASE || 'f4c'
+
+// --- helpers de seed -------------------------------------------------------
+
+// YYYY-MM-DD local manual (nunca toISOString: quebra em BRT).
+function dateKey(offsetDays) {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetDays)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function isoMinutesAgo(minutes) {
+  return new Date(Date.now() - minutes * 60_000).toISOString()
+}
+
+function fsValue(value) {
+  if (value === null || value === undefined) return { nullValue: null }
+  if (typeof value === 'boolean') return { booleanValue: value }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value }
+  }
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(fsValue) } }
+  if (typeof value === 'object') {
+    return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fsValue(v)])) } }
+  }
+  return { stringValue: String(value) }
+}
+
+async function putDoc(collection, id, data) {
+  const response = await fetch(`${DOCS}/${collection}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, fsValue(v)])) }),
+  })
+  if (!response.ok) throw new Error(`seed ${collection}/${id}: ${await response.text()}`)
+}
+
+async function patchFields(collection, id, data) {
+  const mask = Object.keys(data)
+    .map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
+    .join('&')
+  const response = await fetch(`${DOCS}/${collection}/${id}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, fsValue(v)])) }),
+  })
+  if (!response.ok) throw new Error(`patch ${collection}/${id}: ${await response.text()}`)
+}
+
+async function uidOf({ email, password }) {
+  const response = await fetch(
+    `${AUTH_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-api-key`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    }
+  )
+  const payload = await response.json()
+  if (!response.ok) throw new Error(`signIn ${email}: ${JSON.stringify(payload)}`)
+  return payload.localId
+}
+
+function buildProcesses() {
+  const base = {
+    category: 'FCL',
+    destination: 'ITAJAI',
+    containerQuantity: 2,
+    palletQuantity: 0,
+    processNotes: '',
+    carrierName: 'MSC',
+    archived: false,
+  }
+  const updatedAt = (n) => isoMinutesAgo(n)
+  return [
+    {
+      id: 'shot-aguardando-embarque',
+      ...base,
+      name: 'Resina epóxi — Shanghai',
+      processNumber: '4500128734',
+      processStatus: 'Aguardando Embarque',
+      etd: dateKey(6),
+      eta: dateKey(34),
+      updatedAt: updatedAt(10),
+    },
+    {
+      id: 'shot-embarcou',
+      ...base,
+      name: 'Solvente industrial — Ningbo',
+      processNumber: '4500128801',
+      processStatus: 'Embarcou',
+      etd: dateKey(-12),
+      eta: dateKey(9),
+      shippedAt: dateKey(-12),
+      etaOriginal: dateKey(6),
+      warehouseDeliveryDateOverride: dateKey(4),
+      updatedAt: updatedAt(20),
+    },
+    {
+      id: 'shot-aguardando-atracacao',
+      ...base,
+      name: 'Pigmento orgânico — Hamburgo',
+      processNumber: '4500128915',
+      processStatus: 'Aguardando atracação',
+      etd: dateKey(-25),
+      eta: dateKey(2),
+      shippedAt: dateKey(-25),
+      warehouseDeliveryDateOverride: dateKey(5),
+      updatedAt: updatedAt(30),
+    },
+    // Atrasado: ETA vencida sem sinal de chegada (aereo) com previsao de entrega na semana.
+    {
+      id: 'shot-atrasado',
+      ...base,
+      category: 'AEREO',
+      containerQuantity: 0,
+      name: 'Ácido cítrico anidro — Frankfurt',
+      processNumber: '4500129355',
+      processStatus: 'Embarcou',
+      etd: dateKey(-9),
+      eta: dateKey(-3),
+      shippedAt: dateKey(-9),
+      warehouseDeliveryDateOverride: dateKey(1),
+      updatedAt: updatedAt(35),
+    },
+    {
+      id: 'shot-atracacao-confirmada',
+      ...base,
+      name: 'Aditivo plastificante — Antuérpia',
+      processNumber: '4500129022',
+      processStatus: 'Atracação Confirmada',
+      etd: dateKey(-30),
+      eta: dateKey(0),
+      shippedAt: dateKey(-30),
+      berthed: true,
+      berthedAt: `${dateKey(0)}T08:00`,
+      dangerousGoods: true,
+      imoClass: '3',
+      unNumber: '1263',
+      updatedAt: updatedAt(40),
+    },
+    {
+      id: 'shot-duimp-registro',
+      ...base,
+      name: 'Catalisador — Houston',
+      processNumber: '4500129133',
+      processStatus: 'Aguardando registro da DUIMP',
+      etd: dateKey(-33),
+      eta: dateKey(-3),
+      shippedAt: dateKey(-33),
+      berthed: true,
+      berthedAt: `${dateKey(-3)}T09:00`,
+      updatedAt: updatedAt(50),
+    },
+    {
+      id: 'shot-canal-vermelho',
+      ...base,
+      name: 'Silicone grau técnico — Xangai',
+      processNumber: '4500129244',
+      processStatus: 'Aguardando parametrização da DUIMP',
+      etd: dateKey(-38),
+      eta: dateKey(-6),
+      shippedAt: dateKey(-38),
+      berthed: true,
+      berthedAt: `${dateKey(-6)}T10:00`,
+      duimpStatus: 'Parametrizada',
+      parameterizationChannel: 'Vermelho',
+      updatedAt: updatedAt(60),
+    },
+    {
+      id: 'shot-coleta-agendada',
+      ...base,
+      name: 'Emulsificante — Rotterdam',
+      processNumber: '4500129355',
+      processStatus: 'Coleta Agendada',
+      etd: dateKey(-40),
+      eta: dateKey(-9),
+      shippedAt: dateKey(-40),
+      berthed: true,
+      berthedAt: `${dateKey(-9)}T07:30`,
+      // valores longos de proposito: DUIMP + canal e anuencias ocupam a linha inteira do cartao
+      duimpStatus: 'Parametrizada',
+      licenses: [
+        { id: 'lic-1', agency: 'MAPA', status: 'Deferida' },
+        { id: 'lic-2', agency: 'ANVISA', status: 'Deferida' },
+      ],
+      parameterizationChannel: 'Verde',
+      clearanceCompletedAt: `${dateKey(-5)}T14:00`,
+      collectionStatus: 'Coleta Agendada',
+      collectionWindows: [{ id: 'w1', scheduledAt: `${dateKey(1)}T09:00`, notes: '' }],
+      updatedAt: updatedAt(70),
+    },
+    {
+      id: 'shot-carga-recebida',
+      ...base,
+      name: 'Antiespumante — Busan',
+      processNumber: '4500129466',
+      processStatus: 'Carga recebida',
+      etd: dateKey(-52),
+      eta: dateKey(-20),
+      shippedAt: dateKey(-52),
+      berthed: true,
+      berthedAt: `${dateKey(-20)}T11:00`,
+      cargoReceivedAt: `${dateKey(-1)}T16:00`,
+      collectionStatus: 'Carga disponível em estoque',
+      updatedAt: updatedAt(80),
+    },
+    // F4b: 4 alertas (inflamavel, perigosa, Reefer, ISO tank) -> 2 chips + "+2".
+    {
+      id: 'shot-alertas-multiplos',
+      ...base,
+      name: 'Acetona técnica — Rotterdam',
+      processNumber: '4500129588',
+      processStatus: 'Aguardando Embarque',
+      etd: dateKey(10),
+      eta: dateKey(38),
+      items: [{ id: 'it-1', commercialName: 'Acetona', dangerousGoods: true, imoClass: '3', unNumber: '1090' }],
+      containers: [
+        { id: 'ct-1', type: 'ISOTANK', number: '' },
+        { id: 'ct-2', type: '20RF', number: '' },
+      ],
+      updatedAt: updatedAt(85),
+    },
+    // F4b: arquivados (o admin ve "Arquivados (3)").
+    ...['Fosfato monoamônico — Qingdao', 'Carbonato de cálcio — Mumbai', 'Óxido de zinco — Lisboa'].map((name, index) => ({
+      id: `shot-arquivado-${index + 1}`,
+      ...base,
+      name,
+      processNumber: `450013000${index + 1}`,
+      processStatus: 'Carga recebida',
+      etd: dateKey(-80 - index),
+      eta: dateKey(-50 - index),
+      archived: true,
+      updatedAt: updatedAt(120 + index),
+    })),
+    // Dados pendentes: sem ETD/ETA nem transportadora.
+    {
+      id: 'shot-dados-pendentes',
+      ...base,
+      name: 'Surfactante — a definir',
+      processNumber: '',
+      carrierName: '',
+      processStatus: 'Aguardando Embarque',
+      etd: '',
+      eta: '',
+      updatedAt: updatedAt(90),
+    },
+  ]
+}
+
+// --- F4c: processos ricos para o detalhe (itens, conteineres, mensagens, historico,
+// documentos) e um usuario de logistica. So roda na fase f4c.
+async function createLogisticaUser() {
+  const user = { email: 'e2e-logistica@sqquimica.com', password: 'senha-e2e-logistica', name: 'Ana Logística', role: 'logistica', status: 'Ativo' }
+  const post = async (url, body) => {
+    const response = await fetch(`${AUTH_HOST}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify(body),
+    })
+    return { ok: response.ok, payload: await response.json() }
+  }
+  const signUp = await post('/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key', {
+    email: user.email,
+    password: user.password,
+    returnSecureToken: true,
+  })
+  if (!signUp.ok) return { ...user, uid: await uidOf(user) }
+  const uid = signUp.payload.localId
+  await post(`/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts:update`, {
+    localId: uid,
+    displayName: user.name,
+    emailVerified: true,
+    customAttributes: JSON.stringify({ role: user.role, status: user.status, name: user.name }),
+  })
+  await putDoc('users', uid, {
+    uid,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    statusTone: 'ok',
+    area: 'Logística',
+    lastAccess: 'Seed refino visual',
+    notes: 'Seed refino visual',
+    favoriteProcessIds: [],
+  })
+  return { ...user, uid }
+}
+
+const F4C_LOGISTICA = { email: 'e2e-logistica@sqquimica.com', password: 'senha-e2e-logistica' }
+
+async function seedF4c(adminUid) {
+  const logistica = await createLogisticaUser()
+  const stamp = (offsetDays) => `${dateKey(offsetDays)}T10:00`
+  const fcl = {
+    id: 'shot-f4c-fcl',
+    category: 'FCL',
+    name: 'Resina epóxi líquida',
+    processNumber: '4500129901',
+    destination: 'ITAJAI',
+    processStatus: 'Aguardando registro da DUIMP',
+    etd: dateKey(-38),
+    eta: dateKey(-6),
+    etaOriginal: dateKey(-8),
+    shippedAt: dateKey(-38),
+    berthed: true,
+    berthedAt: stamp(-6),
+    terminalName: 'Portonave',
+    ceMercante: '152605012345678',
+    ceHouse: '152605099999999',
+    cargoPresenceInformed: true,
+    cargoPresenceInformedAt: stamp(-5),
+    freeTimeDays: 14,
+    demurrageDailyRateUsd: 85,
+    supplierName: 'ALFA CHEM CO.',
+    originLocation: 'Shanghai, CN',
+    incoterm: 'CFR',
+    vesselName: 'MSC AURORA',
+    voyage: '123W',
+    houseBl: 'MEDU0000000',
+    forwarderName: 'Agente Global Ltda.',
+    carrierName: 'MSC',
+    grossWeightKg: 41200,
+    volumeM3: 52,
+    packagesQuantity: 160,
+    palletQuantity: 40,
+    containerQuantity: 2,
+    containers: [
+      { id: 'ct-1', type: '20DC', number: 'MSCU4829130', seal: 'FX118204', returnedAt: dateKey(5) },
+      { id: 'ct-2', type: '20DC', number: 'MSCU4829771', seal: '', returnedAt: '' },
+    ],
+    items: [
+      { id: 'it-1', commercialName: 'Resina epóxi líquida EP-128', quantity: 36000, dangerousGoods: true, imoClass: '3', unNumber: '1263' },
+      { id: 'it-2', commercialName: 'Endurecedor amínico', quantity: 4000, dangerousGoods: true, imoClass: '8', unNumber: '2735' },
+    ],
+    licenses: [{ id: 'lic-1', agency: 'MAPA', status: 'Em análise' }],
+    warehouseDeliveryDateOverride: dateKey(3),
+    processNotes: 'Cliente pediu priorização da entrega no CD.',
+    documentIndex: { fispqItemIds: ['it-1'], containerWashIds: [], processSlotKeys: ['bl', 'invoice', 'packingList'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(5),
+  }
+  const aereo = {
+    id: 'shot-f4c-aereo',
+    category: 'AEREO',
+    name: 'Ácido cítrico anidro',
+    processNumber: '4500129902',
+    destination: 'GRU',
+    processStatus: 'Embarcou',
+    etd: dateKey(-9),
+    eta: dateKey(3),
+    shippedAt: dateKey(-9),
+    flightNumber: 'LH8140',
+    mawb: '020-12345678',
+    supplierName: 'CITRIC GMBH',
+    originLocation: 'Frankfurt, DE',
+    incoterm: 'FCA',
+    forwarderName: 'Air Cargo Brasil',
+    grossWeightKg: 1200,
+    chargeableWeightKg: 1500,
+    packagesQuantity: 12,
+    palletQuantity: 3,
+    items: [{ id: 'ai-1', commercialName: 'Ácido cítrico anidro 25 kg', quantity: 1200 }],
+    archived: false,
+    updatedAt: isoMinutesAgo(6),
+  }
+  const consolidado = {
+    id: 'shot-f4c-con',
+    category: 'CONSOLIDADO',
+    name: 'CON CN 929-26',
+    processNumber: '',
+    destination: 'NAVEGANTES',
+    processStatus: 'Embarcou',
+    etd: dateKey(-20),
+    eta: dateKey(10),
+    shippedAt: dateKey(-20),
+    vesselName: 'MAERSK FAME',
+    voyage: '12W',
+    houseBl: 'MAEU9999999',
+    originLocation: 'Ningbo, CN',
+    incoterm: 'FOB',
+    containerQuantity: 2,
+    containers: [
+      { id: 'cc-1', type: '40HC', number: 'MAEU1111111', seal: 'S1' },
+      { id: 'cc-2', type: '40HC', number: 'MAEU2222222', seal: 'S2' },
+    ],
+    purchaseOrders: [
+      { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+      { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'GAMA TRADING' },
+      { po: '9012', reference: 'DELTA SEA 907-26', supplierName: 'DELTA' },
+    ],
+    items: [
+      { id: 'ci-1', commercialName: 'Solvente PI', quantity: 2000, poNumber: '9010' },
+      { id: 'ci-2', commercialName: 'Solvente PI', quantity: 100, poNumber: '9011' },
+      { id: 'ci-3', commercialName: 'Pigmento orgânico', quantity: 500, poNumber: '9012' },
+    ],
+    documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: ['bl', 'invoice:9010'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(7),
+  }
+  const recebida = {
+    id: 'shot-f4c-recebida',
+    category: 'FCL',
+    name: 'Glicerina bidestilada',
+    processNumber: '4500129903',
+    destination: 'ITAJAI',
+    processStatus: 'Carga recebida',
+    etd: dateKey(-60),
+    eta: dateKey(-30),
+    shippedAt: dateKey(-60),
+    berthed: true,
+    berthedAt: stamp(-30),
+    terminalName: 'Itapoá',
+    cargoPresenceInformed: true,
+    cargoPresenceInformedAt: stamp(-29),
+    duimpStatus: 'Parametrizada',
+    duimpNumber: '25BR00001234',
+    duimpRegisteredAt: stamp(-28),
+    parameterizedAt: stamp(-27),
+    parameterizationChannel: 'Verde',
+    clearanceCompletedAt: stamp(-25),
+    collectionStatus: 'Carga disponível em estoque',
+    collectionWindows: [{ id: 'w1', scheduledAt: `${dateKey(-3)}T09:00`, notes: 'Levar EPI' }],
+    carrierName: 'Transportes Delta',
+    cargoReceivedAt: stamp(-2),
+    freeTimeDays: 10,
+    supplierName: 'GLYCO LTD',
+    originLocation: 'Busan, KR',
+    incoterm: 'CIF',
+    vesselName: 'HMM ALGECIRAS',
+    voyage: '44E',
+    houseBl: 'HDMU5555555',
+    containerQuantity: 1,
+    containers: [{ id: 'rc-1', type: '20DC', number: 'HMMU3333333', seal: 'R1', returnedAt: dateKey(-4) }],
+    items: [{ id: 'ri-1', commercialName: 'Glicerina bidestilada', quantity: 18000 }],
+    postReceiptNotes: 'Avaria leve em 2 sacos, fotografada na descarga.',
+    receiptDivergence: true,
+    receiptDivergenceType: 'Avaria',
+    receiptDivergenceNotes: 'Dois sacos rasgados.',
+    documentIndex: { fispqItemIds: [], containerWashIds: ['rc-1'], processSlotKeys: ['bl', 'invoice', 'packingList', 'cargoReport'] },
+    archived: false,
+    updatedAt: isoMinutesAgo(8),
+  }
+  for (const { id, ...data } of [fcl, aereo, consolidado, recebida]) await putDoc('processes', id, data)
+
+  const messages = [
+    [logistica.uid, 'Ana Logística', 'A presença de carga já foi informada? Precisamos programar o CD.', 1500],
+    [adminUid, 'Admin E2E', 'Ainda não. Previsão para amanhã cedo; aviso aqui assim que sair.', 1420],
+    [logistica.uid, 'Ana Logística', 'Perfeito, obrigada!', 1380],
+  ]
+  for (const [index, [authorId, authorName, content, minutes]] of messages.entries()) {
+    await putDoc('processes/shot-f4c-fcl/messages', `m${index + 1}`, {
+      processId: 'shot-f4c-fcl',
+      authorId,
+      authorName,
+      authorEmail: `${authorId}@sqquimica.com`,
+      content,
+      createdAt: isoMinutesAgo(minutes),
+    })
+  }
+
+  const events = [
+    ['statusChanged', 'Aguardando atracação', 'Aguardando registro da DUIMP', 'Automático', 60 * 5],
+    ['fispqUploaded', '', 'Resina epóxi líquida EP-128', 'Admin E2E', 60 * 28],
+    ['containerWashUploaded', '', 'MSCU4829130', 'Ana Logística', 60 * 50],
+    ['berthed', '', '', 'Automático', 60 * 24 * 6],
+    ['shipped', '', '', 'Automático', 60 * 24 * 38],
+  ]
+  for (const [index, [type, previousValue, value, actorName, minutes]] of events.entries()) {
+    await putDoc('processes/shot-f4c-fcl/events', `e${index + 1}`, {
+      type,
+      field: '',
+      previousValue,
+      value,
+      actorId: 'seed',
+      actorName,
+      occurredAt: isoMinutesAgo(minutes),
+      recordedAt: isoMinutesAgo(minutes),
+    })
+  }
+
+  const documentBase = {
+    mimeType: 'application/pdf',
+    size: 245_760,
+    uploadedById: adminUid,
+    uploadedByName: 'Admin E2E',
+    uploadedByRole: 'admin',
+    itemId: '',
+    containerId: '',
+    poNumber: '',
+    description: '',
+    alsoPackingList: false,
+  }
+  const documents = [
+    { id: 'd-bl-2', type: 'bl', slotKey: 'bl', name: 'BL_MEDU0000000.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 12), storagePath: 'processes/shot-f4c-fcl/documents/bl/2.pdf' },
+    { id: 'd-bl-1', type: 'bl', slotKey: 'bl', name: 'BL_rascunho.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 20), storagePath: 'processes/shot-f4c-fcl/documents/bl/1.pdf' },
+    { id: 'd-inv', type: 'invoice', slotKey: 'invoice', name: 'INV-2026-0912.pdf', alsoPackingList: true, uploadedAt: isoMinutesAgo(60 * 24 * 12), storagePath: 'processes/shot-f4c-fcl/documents/invoice/1.pdf' },
+    { id: 'd-fq', type: 'fispq', slotKey: 'fispq:it-1', itemId: 'it-1', name: 'FISPQ_EP128.pdf', uploadedAt: isoMinutesAgo(60 * 28), storagePath: 'processes/shot-f4c-fcl/documents/fispq/it-1/1.pdf' },
+    { id: 'd-oth', type: 'other', slotKey: 'other:cert', name: 'certificado.pdf', description: 'Certificado de análise', uploadedAt: isoMinutesAgo(60 * 24 * 3), storagePath: 'processes/shot-f4c-fcl/documents/other/1.pdf' },
+    { id: 'd-orf', type: 'fispq', slotKey: 'fispq:it-removido', itemId: 'it-removido', name: 'FISPQ_antiga.pdf', uploadedAt: isoMinutesAgo(60 * 24 * 30), storagePath: 'processes/shot-f4c-fcl/documents/fispq/it-removido/1.pdf' },
+  ]
+  for (const { id, ...data } of documents) await putDoc('processes/shot-f4c-fcl/documents', id, { ...documentBase, ...data })
+  for (const [id, type, slotKey, name, poNumber] of [
+    ['d-con-inv', 'invoice', 'invoice:9010', 'INV-9010.pdf', '9010'],
+    ['d-con-bl', 'bl', 'bl', 'BL_MAEU.pdf', ''],
+  ]) {
+    await putDoc('processes/shot-f4c-con/documents', id, {
+      ...documentBase,
+      type,
+      slotKey,
+      name,
+      poNumber,
+      uploadedAt: isoMinutesAgo(60 * 24 * 5),
+      storagePath: `processes/shot-f4c-con/documents/${type}/1.pdf`,
+    })
+  }
+
+  await patchFields('users', adminUid, {
+    favoriteProcessIds: ['shot-aguardando-atracacao', 'shot-coleta-agendada', 'shot-f4c-fcl'],
+  })
+}
+
+// Refino F5a: noticias (manuais e de fonte externa, com capa em data URI e uma com
+// galeria + anexo + referencias) e notificacoes extras (grupos com varias linhas,
+// 7 grupos "Anteriores" para o "Ver mais"). Capa = gradiente SVG em data URI: nada de
+// rede nem de Storage.
+function coverDataUri(index) {
+  const palettes = [
+    ['#004153', '#14dda7'],
+    ['#0a5468', '#7fe3cf'],
+    ['#003241', '#2f6f7c'],
+    ['#0f2b35', '#14dda7'],
+    ['#155793', '#7cb8ec'],
+    ['#8a5a0a', '#f2c14e'],
+    ['#2f6f7c', '#e2f6f0'],
+  ]
+  const [from, to] = palettes[index % palettes.length]
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>` +
+    `<rect width="900" height="600" fill="url(#g)"/>` +
+    `<path d="M0 430 Q225 360 450 430 T900 430 V600 H0Z" fill="rgba(255,255,255,.14)"/>` +
+    `<path d="M0 480 Q225 410 450 480 T900 480 V600 H0Z" fill="rgba(255,255,255,.12)"/>` +
+    `</svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+async function seedF5a(adminUid) {
+  const manual = [
+    {
+      id: 'shot-news-1',
+      title: 'Portal COMEX ganha novo visual: mais claro, mais rápido e igual em todas as telas',
+      content:
+        'A nova identidade do Portal COMEX chegou ao desktop com a paleta navy e menta da SQ Química, tipografia Sora e movimento mais suave.\n\nO que muda para quem acompanha as chegadas: a fila ficou mais compacta, o detalhe do processo ganhou linha do tempo com datas e o formulário de edição passou a abrir em uma janela própria.\n\nO que não muda: todos os dados, filtros e rotinas continuam exatamente como antes.',
+      // um pouco no futuro: a noticia semeada pelo global-setup e' de agora e nao pode ser o destaque
+      minutesAgo: -3,
+      cover: 0,
+      references: ['https://www.gov.br/siscomex/pt-br', 'https://www.portodeitajai.com.br'],
+      withMedia: true,
+    },
+    {
+      id: 'shot-news-3',
+      title: 'Terminal de Itajaí amplia o free time para cargas de importação',
+      content: 'A partir do próximo mês, o terminal concede 7 dias de free time para contêineres de importação em operação regular.',
+      minutesAgo: 60 * 20,
+      cover: 1,
+    },
+    {
+      id: 'shot-news-5',
+      title: 'Receita publica novo prazo para anuência de produtos químicos controlados',
+      content: 'O prazo de análise das anuências passou de 10 para 7 dias úteis, conforme comunicado da Receita.',
+      minutesAgo: 60 * 40,
+      cover: 2,
+    },
+    {
+      id: 'shot-news-7',
+      title: 'Boas práticas de documentação: Invoice e Packing List no mesmo arquivo',
+      content: 'Quando o fornecedor emite a Packing List dentro da Invoice, marque o vínculo no processo para evitar pendências.',
+      minutesAgo: 60 * 46,
+      cover: 3,
+    },
+  ]
+  for (const item of manual) {
+    const stamp = isoMinutesAgo(item.minutesAgo)
+    await putDoc('news', item.id, {
+      title: item.title,
+      content: item.content,
+      coverImage: coverDataUri(item.cover),
+      references: item.references ?? [],
+      mediaItems: item.withMedia
+        ? [
+            { id: 'm-img-1', url: coverDataUri(4), name: 'galeria-1.svg', caption: 'Nova fila de chegadas', mimeType: 'image/svg+xml', kind: 'image' },
+            { id: 'm-img-2', url: coverDataUri(5), name: 'galeria-2.svg', caption: 'Detalhe do processo', mimeType: 'image/svg+xml', kind: 'image' },
+            { id: 'm-file-1', url: 'https://example.com/guia-novo-visual.pdf', name: 'guia-novo-visual.pdf', caption: 'Guia do novo visual', mimeType: 'application/pdf', kind: 'file', size: 482133 },
+            { id: 'm-file-2', url: 'https://example.com/lista-de-mudancas.xlsx', name: 'lista-de-mudancas.xlsx', caption: 'Lista de mudanças', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', kind: 'file', size: 91322 },
+          ]
+        : [],
+      createdAt: stamp,
+      updatedAt: stamp,
+    })
+  }
+
+  const external = [
+    { id: 'shot-ext-2', title: 'Santos registra recorde de movimentação de contêineres em setembro', minutesAgo: 60 * 24, cover: 4, source: 'Portos e Navios' },
+    { id: 'shot-ext-4', title: 'Câmbio: dólar fecha em queda com expectativa sobre juros nos EUA', minutesAgo: 60 * 41, cover: 5, source: 'Valor Econômico' },
+    { id: 'shot-ext-6', title: 'Antaq atualiza norma de cobrança de THC nos terminais', minutesAgo: 60 * 44, cover: 6, source: 'Antaq' },
+  ]
+  for (const item of external) {
+    const stamp = isoMinutesAgo(item.minutesAgo)
+    await putDoc('externalNews', item.id, {
+      title: item.title,
+      content: 'Resumo automático da matéria publicada pela fonte. Abra a fonte oficial para ler a matéria completa.',
+      summary: 'Resumo automático da matéria publicada pela fonte. Abra a fonte oficial para ler a matéria completa.',
+      coverImage: coverDataUri(item.cover),
+      sourceName: item.source,
+      externalUrl: 'https://example.com/materia',
+      mediaItems: [],
+      references: [],
+      createdAt: stamp,
+      updatedAt: stamp,
+      publishedAt: stamp,
+    })
+  }
+
+  // Notificacoes extras (a pagina agrupa por processo: lidas em 6 processos distintos): o grupo de coleta ganha 3 linhas (3 nao lidas) e entram 4 grupos
+  // lidos ("Anteriores": 4 visiveis + "Ver mais 3 anteriores").
+  const extras = [
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · janela de 14h às 18h.', 'shot-aguardando-atracacao', false, 40],
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · transportadora confirmada.', 'shot-aguardando-atracacao', false, 130],
+    ['process_question_answered', 'Nova resposta em Solvente', 'Logística: BL liberado.', 'shot-embarcou', true, 60 * 30],
+    ['process_question_created', 'Nova dúvida', 'Tensoativo: qual o ETA atualizado?', 'shot-carga-recebida', true, 60 * 31],
+    ['receipt_divergence_reported', 'Divergência no recebimento', 'Glicerina bidestilada: quantidade menor que a Invoice.', 'shot-atrasado', true, 60 * 50],
+    ['process_daily_alerts', 'Alertas do dia', '2 processos exigem ação hoje.', 'shot-duimp-registro', true, 60 * 52],
+    ['post_receipt_notes_updated', 'Observações pós-recebimento', 'Antiespumante: observação atualizada.', 'shot-alertas-multiplos', true, 60 * 70],
+    ['favorite_process_message', 'Atualização em processo favoritado', 'Emulsificante: nova mensagem da logística.', 'shot-coleta-agendada', true, 60 * 80],
+  ]
+  for (const [index, [type, title, body, processId, isRead, minutes]] of extras.entries()) {
+    await putDoc('notifications', `shot-notif-extra-${index + 1}`, {
+      recipientUserId: adminUid,
+      actorUserId: 'shot-actor',
+      actorName: 'Equipe COMEX',
+      type,
+      processId,
+      messageId: '',
+      title,
+      body,
+      targetTab: 'details',
+      isRead,
+      createdAt: isoMinutesAgo(minutes),
+      // lidas sao descartadas 24 h depois do readAt (READ_NOTIFICATION_RETENTION_MS)
+      readAt: isRead ? isoMinutesAgo(20 + index * 15) : null,
+    })
+  }
+}
+
+// F5b: um usuario por estado de acesso (verificar e-mail, pendente, bloqueado, reprovado).
+const ACCESS_PASSWORD = 'senha-e2e-acesso'
+const ACCESS_USERS = {
+  verify: { email: 'e2e-verificar@sqquimica.com', name: 'Joao Verificar', status: 'Pendente', emailVerified: false },
+  pending: { email: 'e2e-pendente@sqquimica.com', name: 'Maria Pendente', status: 'Pendente', emailVerified: true },
+  blocked: { email: 'e2e-bloqueado@sqquimica.com', name: 'Paulo Bloqueado', status: 'Bloqueado', emailVerified: true },
+  rejected: { email: 'e2e-reprovado@sqquimica.com', name: 'Rita Reprovada', status: 'Reprovado', emailVerified: true },
+}
+
+async function seedAccessUsers() {
+  const post = async (url, body) => {
+    const response = await fetch(AUTH_HOST + url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify(body),
+    })
+    return { ok: response.ok, payload: await response.json() }
+  }
+  for (const user of Object.values(ACCESS_USERS)) {
+    const signUp = await post('/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key', {
+      email: user.email,
+      password: ACCESS_PASSWORD,
+      returnSecureToken: true,
+    })
+    if (!signUp.ok) continue
+    const uid = signUp.payload.localId
+    await post('/identitytoolkit.googleapis.com/v1/projects/' + PROJECT_ID + '/accounts:update', {
+      localId: uid,
+      displayName: user.name,
+      emailVerified: user.emailVerified,
+      customAttributes: JSON.stringify({ role: 'user', status: user.status, name: user.name }),
+    })
+    await putDoc('users', uid, {
+      uid,
+      name: user.name,
+      email: user.email,
+      role: 'user',
+      status: user.status,
+      statusTone: 'warn',
+      area: 'Geral',
+      lastAccess: 'Seed refino visual',
+      notes: 'Seed refino visual',
+      favoriteProcessIds: [],
+    })
+  }
+}
+
+// F6a: usuarios em todos os status/papeis, comunicados (um com mensagem de mais de 140 caracteres) e a
+// leitura do robo da Praticagem ZP21 (barra/suggestion).
+async function deleteDocFs(collection, id) {
+  const response = await fetch(`${DOCS}/${collection}/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer owner' },
+  })
+  if (!response.ok && response.status !== 404) throw new Error(`delete ${collection}/${id}: ${await response.text()}`)
+}
+
+async function seedAnnouncementsF6a() {
+  const announcements = [
+    {
+      id: 'shot-ann-1',
+      title: 'Janela de manutenção do sistema de câmbio',
+      content: 'O sistema de câmbio ficará indisponível entre 22h e 23h desta sexta-feira. Planeje as remessas com antecedência.',
+      channel: 'Operação',
+      createdAt: isoMinutesAgo(90),
+      updatedAt: isoMinutesAgo(90),
+    },
+    {
+      id: 'shot-ann-2',
+      title: 'Novo prazo de free time no terminal de Itajaí',
+      content: 'O terminal passou a conceder 7 dias de free time para cargas de importação a partir do próximo mês.',
+      channel: 'Banner interno',
+      createdAt: isoMinutesAgo(60 * 26),
+      updatedAt: isoMinutesAgo(60 * 26),
+    },
+    {
+      id: 'shot-ann-3',
+      title: 'Reunião mensal de COMEX',
+      content: 'A reunião mensal acontece na quinta-feira, às 10h, na sala de operações.',
+      channel: 'Operação',
+      createdAt: isoMinutesAgo(60 * 24 * 6),
+      updatedAt: isoMinutesAgo(60 * 24 * 6),
+    },
+    {
+      id: 'shot-ann-4',
+      title: 'Mudança no horário de corte da logística',
+      content:
+        'A partir da próxima semana o horário de corte para solicitar coletas no mesmo dia passa das 15h para as 14h. Pedidos enviados depois desse horário serão agendados para o dia útil seguinte, salvo exceções aprovadas pela coordenação de logística.',
+      channel: 'Sistema',
+      createdAt: isoMinutesAgo(60 * 24 * 11),
+      updatedAt: isoMinutesAgo(60 * 24 * 11),
+    },
+  ]
+  for (const { id, ...data } of announcements) await putDoc('announcements', id, data)
+}
+
+async function seedF6a() {
+  const users = [
+    ['shot-u-beatriz', 'Beatriz Rocha', 'beatriz.rocha@sqquimica.com', 'logistica', 'Geral', 'Ativo', 'ok'],
+    ['shot-u-carlos', 'Carlos Siqueira', 'carlos.siqueira@sqquimica.com', 'user', 'Área Comercial', 'Ativo', 'ok'],
+    ['shot-u-daniela', 'Daniela Martins', 'daniela.martins@sqquimica.com', 'user', 'Geral', 'Bloqueado', 'neutral'],
+    ['shot-u-eduardo', 'Eduardo Ferraz', 'eduardo.ferraz@parceiro.com.br', 'user', 'Geral', 'Reprovado', 'neutral'],
+  ]
+  for (const [id, name, email, role, area, status, statusTone] of users) {
+    await putDoc('users', id, {
+      uid: id,
+      name,
+      email,
+      role,
+      status,
+      statusTone,
+      area,
+      lastAccess: 'Seed refino visual',
+      notes: 'Seed refino visual',
+      favoriteProcessIds: [],
+    })
+  }
+  await seedAnnouncementsF6a()
+  await putDoc('barra', 'suggestion', {
+    sourceName: 'Praticagem ZP21',
+    sourceUrl: 'https://www.praticagem-zp21.example/cond-barra',
+    status: 'PRATICAVEL_RESTRICOES',
+    siteDescription: 'PRATICÁVEL COM RESTRIÇÕES',
+    restriction: 'calado máximo de 11,5 m e janela de maré',
+    fetchedAt: isoMinutesAgo(12),
+    lastAttemptAt: isoMinutesAgo(12),
+    lastSuccessAt: isoMinutesAgo(12),
+    lastError: '',
+    lastAppliedAt: isoMinutesAgo(12),
+  })
+}
+
+// F6b: regras de previsao, historico de marcos para o lead time (processos concluidos com os marcos que
+// alimentam os 6 trechos) e chamados de suporte (3 abertos, 2 em andamento, 3 resolvidos; um com prints,
+// um com conversa e um com resposta de encerramento).
+const F6B_LEAD_SAMPLES = [
+  // [modal, destino, dias uteis entre a chegada e o recebimento de cada processo]
+  ['FCL', 'ITAJAI', [2, 3, 3, 3, 3, 4, 4]],
+  ['FCL', 'NAVEGANTES', [4, 5, 5, 5, 6, 7]],
+  ['FCL', 'PARANAGUA', [4, 4, 5]],
+  ['AEREO', 'VIRACOPOS', [2, 2, 2, 3]],
+  ['AEREO', 'GUARULHOS', [4, 4, 5]],
+]
+const F6B_LEAD_PROCESS_IDS = F6B_LEAD_SAMPLES.flatMap(([category, destination, values]) =>
+  values.map((_, index) => `shot-lt-${category.toLowerCase()}-${destination.toLowerCase()}-${index + 1}`)
+)
+
+// Feriados nacionais fixos usados pelo calendario do app (mesmo conjunto de deliveryForecast.js) para as
+// datas semeadas fecharem exatamente N dias uteis.
+function isF6bBusinessDay(date) {
+  const day = date.getDay()
+  if (day === 0 || day === 6) return false
+  const mmdd = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return !['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].includes(mmdd)
+}
+
+function shiftBusinessDays(startKey, amount) {
+  const [year, month, day] = startKey.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  let remaining = amount
+  while (remaining > 0) {
+    date.setDate(date.getDate() + 1)
+    if (isF6bBusinessDay(date)) remaining -= 1
+  }
+  return dateKeyOf(date)
+}
+
+function dateKeyOf(date) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function shiftCalendarDays(key, amount) {
+  const [year, month, day] = key.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + amount)
+  return dateKeyOf(date)
+}
+
+async function seedLeadTimeF6b() {
+  let counter = 0
+  for (const [category, destination, values] of F6B_LEAD_SAMPLES) {
+    for (const [index, businessDays] of values.entries()) {
+      counter += 1
+      const id = `shot-lt-${category.toLowerCase()}-${destination.toLowerCase()}-${index + 1}`
+      // chegada em dia util, espalhada pelos ultimos ~60 dias
+      let arrival = dateKey(-(8 + counter * 3))
+      while (!isF6bBusinessDay(new Date(`${arrival}T12:00:00`))) arrival = shiftCalendarDays(arrival, 1)
+      const received = shiftBusinessDays(arrival, businessDays)
+      const shipped = shiftCalendarDays(arrival, -(20 + (counter % 6)))
+      const presence = shiftCalendarDays(arrival, 1)
+      const cleared = shiftCalendarDays(arrival, 2 + (counter % 3))
+      const collection = cleared > received ? received : shiftCalendarDays(cleared, 1) > received ? received : shiftCalendarDays(cleared, 1)
+      await putDoc('processes', id, {
+        name: `Lead time ${category} ${destination} ${index + 1}`,
+        processNumber: `45009${String(counter).padStart(5, '0')}`,
+        category,
+        destination,
+        processStatus: 'Carga recebida',
+        containerQuantity: category === 'AEREO' ? 0 : 1,
+        archived: false,
+        updatedAt: isoMinutesAgo(60 * 24 * 3),
+      })
+      const arrivalType = category === 'AEREO' ? 'arrived' : 'berthed'
+      const events = [
+        ['shipped', shipped],
+        [arrivalType, arrival],
+        ['cargoPresence', presence],
+        ['cleared', cleared],
+        ['collectionScheduled', collection],
+        ['received', received],
+      ]
+      for (const [eventIndex, [type, key]] of events.entries()) {
+        await putDoc(`processes/${id}/events`, `e${eventIndex + 1}`, {
+          type,
+          field: '',
+          previousValue: '',
+          value: type === 'collectionScheduled' ? key : '',
+          actorId: 'seed',
+          actorName: 'Automático',
+          occurredAt: `${key}T12:00:00-03:00`,
+          recordedAt: `${key}T12:00:00-03:00`,
+        })
+      }
+    }
+  }
+}
+
+// Capturas de tela dos chamados: SVG embutido (data URI) que imita uma tela do portal.
+function ticketShot(title, accent) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="152" viewBox="0 0 240 152"><rect width="240" height="152" fill="#eef2f1"/><rect width="240" height="18" fill="#004153"/><rect x="8" y="26" width="64" height="118" rx="6" fill="#003241"/><rect x="80" y="26" width="152" height="22" rx="5" fill="#ffffff"/><rect x="80" y="54" width="152" height="40" rx="5" fill="#ffffff"/><rect x="80" y="100" width="72" height="44" rx="5" fill="#ffffff"/><rect x="160" y="100" width="72" height="44" rx="5" fill="${accent}"/><text x="88" y="41" font-family="sans-serif" font-size="9" fill="#0b2430">${title}</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+const F6B_TICKET_IDS = ['shot-ticket-1', 'shot-ticket-2', 'shot-ticket-3', ...Array.from({ length: 8 }, (_, i) => `shot-f6b-ticket-${i + 1}`)]
+
+async function seedSupportTicketsF6b() {
+  const mailOf = (name) => `${name.split(' ')[0].toLowerCase()}@sqquimica.com`
+  const tickets = [
+    {
+      author: ['shot-u-beatriz', 'Beatriz Rocha'],
+      status: 'aberto',
+      priority: 4,
+      minutesAgo: 60 * 2,
+      message:
+        'O filtro de ETA da Central de chegadas está desconsiderando o fuso horário: processos com ETA no fim do dia aparecem na semana seguinte. Tentei limpar os filtros e recarregar a página, mas o resultado é o mesmo.',
+      contextPage: '/processos',
+      contextProcessName: 'Resina epóxi líquida',
+      imageUrls: [ticketShot('Central de chegadas', '#14dda7'), ticketShot('Filtro de ETA', '#f2c14e')],
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Obrigado pelo relato. Pode informar qual processo ficou na semana errada e a ETA cadastrada?',
+          createdAt: isoMinutesAgo(60),
+        },
+        {
+          id: 'r2',
+          authorId: 'shot-u-beatriz',
+          authorName: 'Beatriz Rocha',
+          message: 'É o processo da resina, ETA cadastrada para domingo à noite.',
+          createdAt: isoMinutesAgo(25),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-carlos', 'Carlos Siqueira'],
+      status: 'aberto',
+      priority: 3,
+      minutesAgo: 60 * 20,
+      message: 'Preciso exportar a lista de chegadas em planilha com a coluna de contêineres.',
+      contextPage: '/processos',
+    },
+    {
+      author: ['shot-u-daniela', 'Daniela Martins'],
+      status: 'aberto',
+      priority: 2,
+      minutesAgo: 60 * 31,
+      message: 'A notificação de documento anexado chega duplicada no e-mail e na central.',
+      contextPage: '/notifications',
+    },
+    {
+      author: ['shot-u-eduardo', 'Eduardo Ferraz'],
+      status: 'em_andamento',
+      priority: 3,
+      minutesAgo: 60 * 24 * 9,
+      message: 'Não consigo anexar o BL no processo: o botão de enviar fica desabilitado.',
+      contextPage: '/processos',
+      contextProcessName: 'Solvente industrial',
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Estamos verificando o limite de tamanho do arquivo.',
+          createdAt: isoMinutesAgo(60 * 24 * 8),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-beatriz', 'Beatriz Rocha'],
+      status: 'em_andamento',
+      priority: 2,
+      minutesAgo: 60 * 24 * 16,
+      message: 'O contador de dias de free time não mostra o terminal.',
+      contextPage: '/',
+    },
+    {
+      author: ['shot-u-carlos', 'Carlos Siqueira'],
+      status: 'resolvido',
+      priority: 3,
+      minutesAgo: 60 * 24 * 23,
+      resolvedAfterHours: 4,
+      message: 'Não recebo o e-mail de resumo diário dos processos favoritos.',
+      contextPage: '/notifications',
+      resolutionMessage: 'Ajustamos a preferência de e-mail da sua conta. O próximo resumo chega amanhã às 7h.',
+    },
+    {
+      author: ['shot-u-daniela', 'Daniela Martins'],
+      status: 'resolvido',
+      priority: 4,
+      minutesAgo: 60 * 24 * 30,
+      resolvedAfterHours: 9,
+      message: 'Erro ao salvar a janela de coleta em dois horários no mesmo dia.',
+      contextPage: '/processos',
+      contextProcessName: 'Pigmento orgânico',
+      resolutionMessage: 'Corrigido na versão de ontem: as duas janelas agora são salvas.',
+      replies: [
+        {
+          id: 'r1',
+          authorId: 'shot-admin',
+          authorName: 'Equipe COMEX',
+          message: 'Reproduzimos o problema e já estamos corrigindo.',
+          createdAt: isoMinutesAgo(60 * 24 * 29),
+        },
+      ],
+    },
+    {
+      author: ['shot-u-eduardo', 'Eduardo Ferraz'],
+      status: 'resolvido',
+      priority: 1,
+      minutesAgo: 60 * 24 * 44,
+      resolvedAfterHours: 6,
+      message: 'O nome do processo aparece cortado na lista em telas pequenas.',
+      contextPage: '/processos',
+    },
+  ]
+  for (const [index, ticket] of tickets.entries()) {
+    const [authorId, authorName] = ticket.author
+    const createdAt = isoMinutesAgo(ticket.minutesAgo)
+    const resolvedAt = ticket.resolvedAfterHours
+      ? new Date(Date.now() - ticket.minutesAgo * 60_000 + ticket.resolvedAfterHours * 3_600_000).toISOString()
+      : null
+    await putDoc('supportTickets', `shot-f6b-ticket-${index + 1}`, {
+      authorId,
+      authorName,
+      authorEmail: mailOf(authorName),
+      message: ticket.message,
+      imageUrls: ticket.imageUrls ?? [],
+      status: ticket.status,
+      priority: ticket.priority,
+      createdAt,
+      updatedAt: resolvedAt ?? createdAt,
+      resolvedAt,
+      resolvedByName: resolvedAt ? 'Admin E2E' : null,
+      resolutionMessage: ticket.resolutionMessage ?? null,
+      contextPage: ticket.contextPage ?? null,
+      contextProcessName: ticket.contextProcessName ?? null,
+      replies: ticket.replies ?? [],
+    })
+  }
+}
+
+async function seedF6b() {
+  // os 3 chamados genericos do seed comum saem: a fase usa os 8 proprios
+  for (const id of ['shot-ticket-1', 'shot-ticket-2', 'shot-ticket-3']) await deleteDocFs('supportTickets', id)
+  await seedSupportTicketsF6b()
+  await putDoc('forecastSettings', 'current', forecastDoc())
+  await seedLeadTimeF6b()
+}
+
+async function seedAll() {
+  const adminUid = await uidOf(E2E_USERS.admin)
+  const processes = buildProcesses()
+  for (const { id, ...data } of processes) await putDoc('processes', id, data)
+  // 2 favoritos do admin
+  await patchFields('users', adminUid, {
+    favoriteProcessIds: ['shot-aguardando-atracacao', 'shot-coleta-agendada'],
+  })
+
+  const announcements = [
+    {
+      id: 'shot-ann-1',
+      title: 'Janela de manutenção do sistema de câmbio',
+      content: 'O sistema de câmbio ficará indisponível entre 22h e 23h desta sexta-feira. Planeje as remessas com antecedência.',
+      channel: 'Banner interno',
+      createdAt: isoMinutesAgo(90),
+      updatedAt: isoMinutesAgo(90),
+    },
+    {
+      id: 'shot-ann-2',
+      title: 'Novo prazo de free time no terminal de Itajaí',
+      content: 'O terminal passou a conceder 7 dias de free time para cargas de importação a partir do próximo mês.',
+      channel: 'E-mail',
+      createdAt: isoMinutesAgo(60 * 26),
+      updatedAt: isoMinutesAgo(60 * 26),
+    },
+    {
+      id: 'shot-ann-3',
+      title: 'Reunião mensal de COMEX',
+      content: 'A reunião mensal acontece na quinta-feira, às 10h, na sala de operações.',
+      channel: 'Banner interno',
+      createdAt: isoMinutesAgo(60 * 50),
+      updatedAt: isoMinutesAgo(60 * 50),
+    },
+  ]
+  for (const { id, ...data } of announcements) await putDoc('announcements', id, data)
+
+  await putDoc('barra', 'current', {
+    status: 'PRATICAVEL_RESTRICOES',
+    notes: 'Restrição de calado para navios acima de 12 m.',
+    updatedAt: isoMinutesAgo(25),
+  })
+
+  const notifications = [
+    // Tipos REAIS emitidos pelo app (cobrem os 4 tons da gaveta: info/ok/warn/danger).
+    ['process_question_answered', 'Nova resposta em Resina epóxi', 'Logística: coleta confirmada para amanhã às 09h.', 'shot-aguardando-embarque', false],
+    ['favorite_process_updated', 'Status atualizado', 'Aguardando atracação → Atracação Confirmada.', 'shot-atracacao-confirmada', false],
+    ['license_rejected', 'Anuência rejeitada', 'Silicone grau técnico: licença rejeitada pelo órgão anuente.', 'shot-canal-vermelho', false],
+    ['collection_status_updated', 'Coleta agendada', 'Pigmento orgânico · janela de 08h às 12h.', 'shot-aguardando-atracacao', false],
+    ['process_document_uploaded', 'Documento anexado', 'Solvente industrial · Packing List enviado.', 'shot-embarcou', true],
+    ['process_question_created', 'Nova dúvida', 'Antiespumante: alguém perguntou sobre o ETA.', 'shot-carga-recebida', true],
+  ]
+  for (const [index, [type, title, body, processId, isRead]] of notifications.entries()) {
+    await putDoc('notifications', `shot-notif-${index + 1}`, {
+      recipientUserId: adminUid,
+      actorUserId: 'shot-actor',
+      actorName: 'Equipe COMEX',
+      type,
+      processId,
+      messageId: '',
+      title,
+      body,
+      targetTab: type === 'process_message' ? 'messages' : 'details',
+      isRead,
+      createdAt: isoMinutesAgo(15 + index * 55),
+      readAt: isRead ? isoMinutesAgo(10) : null,
+    })
+  }
+
+  const tickets = [
+    ['aberto', 4, 'O filtro de ETA não considera o fuso horário.'],
+    ['em_andamento', 3, 'Preciso exportar a lista de chegadas em planilha.'],
+    ['resolvido', 2, 'Não consigo anexar o BL no processo.'],
+  ]
+  for (const [index, [status, priority, message]] of tickets.entries()) {
+    await putDoc('supportTickets', `shot-ticket-${index + 1}`, {
+      authorId: 'shot-user',
+      authorName: 'Usuário E2E',
+      authorEmail: E2E_USERS.user.email,
+      message,
+      imageUrls: [],
+      status,
+      priority,
+      createdAt: isoMinutesAgo(60 * (index + 2)),
+      updatedAt: isoMinutesAgo(60 * (index + 1)),
+      contextPage: '/processos',
+      replies: [],
+    })
+  }
+
+  for (const [index, name] of ['Marina Souza', 'Rafael Lima'].entries()) {
+    await putDoc('users', `shot-pending-${index + 1}`, {
+      uid: `shot-pending-${index + 1}`,
+      name,
+      email: `pendente${index + 1}@sqquimica.com`,
+      role: 'user',
+      status: 'Pendente',
+      statusTone: 'warn',
+      area: index === 0 ? 'Comercial' : 'Logística',
+      lastAccess: 'Aguardando aprovação',
+      notes: 'Seed refino visual',
+      favoriteProcessIds: [],
+    })
+  }
+
+  if (PHASE === 'f4c' || PHASE === 'f4d') await seedF4c(adminUid)
+  if (PHASE === 'f5a') await seedF5a(adminUid)
+  if (PHASE === 'f5b') await seedAccessUsers()
+  if (PHASE === 'f6a') await seedF6a()
+  if (PHASE === 'f6b') await seedF6b()
+}
+
+// --- capturas --------------------------------------------------------------
+
+async function login(page, { email, password }) {
+  await page.goto('/login')
+  await page.getByPlaceholder('nome@sqquimica.com').fill(email)
+  await page.getByPlaceholder('Sua senha').fill(password)
+  await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+  await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible({ timeout: 15_000 })
+}
+
+test.describe.configure({ mode: 'serial' })
+
+test.beforeAll(async () => {
+  await seedAll()
+})
+
+for (const theme of THEMES) {
+  test(`capturas ${PHASE} - ${theme}`, async ({ browser }) => {
+    // F4c tem ~35 telas por tema; as demais fases cabem folgado nos 180 s
+    test.setTimeout(PHASE === 'f4c' || PHASE === 'f4d' || PHASE === 'f5a' || PHASE === 'f5b' || PHASE === 'f6a' || PHASE === 'f6b' ? 600_000 : 180_000)
+    const outDir = outDirFor()
+    fs.mkdirSync(outDir, { recursive: true })
+
+    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
+    // Tema antes de qualquer navegacao (o script inline do index.html le o localStorage).
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        // PTAX semeada: sem a callable (emuladores sem functions) o chip mostraria "--".
+        window.localStorage.setItem(
+          'sq-comex-ptax-rates',
+          JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } })
+        )
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+
+    // REFINO_FILTER (regex sobre o nome da tela) limita a rodada, ex.: so tablet e mobile.
+    const screenFilter = process.env.REFINO_FILTER ? new RegExp(process.env.REFINO_FILTER) : null
+    const screens = (PHASES[PHASE] ?? []).filter((s) => !screenFilter || screenFilter.test(s.name))
+
+    // 1) telas sem login primeiro
+    for (const screen of screens.filter((s) => s.auth === false)) {
+      await page.goto(screen.route)
+      await expect(screen.ready(page)).toBeVisible({ timeout: 15_000 })
+      if (screen.action) await screen.action(page)
+      await page.waitForTimeout(600)
+      await page.screenshot({ path: path.join(outDir, `${screen.name}-${theme}.png`), fullPage: true })
+      if (screen.afterShot) await screen.afterShot(page)
+    }
+
+    // 2) telas autenticadas (admin)
+    await login(page, E2E_USERS.admin)
+    for (const screen of screens.filter((s) => s.auth !== false)) {
+      if (screen.beforeGoto) await screen.beforeGoto(page)
+      await page.goto(screen.route)
+      await expect(screen.ready(page)).toBeVisible({ timeout: 15_000 })
+      if (screen.action) await screen.action(page)
+      await page.waitForTimeout(800)
+      await page.screenshot({ path: path.join(outDir, `${screen.name}-${theme}.png`), fullPage: true })
+      if (screen.afterShot) await screen.afterShot(page)
+    }
+
+    await context.close()
+  })
+}
+
+// F5b - Verificar e-mail, Acesso pendente / bloqueado / reprovado: cada estado e um usuario real
+// do emulador; o login leva a rota certa (/verificar-email ou /aguardando-aprovacao).
+const ACCESS_SCREENS = [
+  { key: 'verify', name: 'verificar-email', ready: 'Confirmação de email' },
+  { key: 'pending', name: 'pendente', ready: 'Acesso pendente' },
+  { key: 'blocked', name: 'bloqueado', ready: 'Acesso bloqueado' },
+  { key: 'rejected', name: 'reprovado', ready: 'Acesso reprovado' },
+]
+for (const theme of THEMES) {
+  test('capturas ' + PHASE + ' - estados de acesso - ' + theme, async ({ browser }) => {
+    test.skip(PHASE !== 'f5b', 'estados de acesso so na F5b')
+    test.setTimeout(300_000)
+    const outDir = outDirFor()
+    fs.mkdirSync(outDir, { recursive: true })
+    for (const screen of ACCESS_SCREENS) {
+      const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
+      await context.addInitScript((value) => {
+        try {
+          window.localStorage.setItem('pc-theme', value)
+        } catch {
+          /* ignora */
+        }
+      }, theme)
+      const page = await context.newPage()
+      const user = ACCESS_USERS[screen.key]
+      await page.goto('/login')
+      await fillLogin(page, { email: user.email, password: ACCESS_PASSWORD })
+      await page.locator('button[type="submit"]', { hasText: 'Entrar' }).click()
+      await expect(page.getByRole('heading', { name: screen.ready })).toBeVisible({ timeout: 15_000 })
+      await page.waitForTimeout(900)
+      const shot = async (suffix) =>
+        page.screenshot({ path: path.join(outDir, screen.name + suffix + '-' + theme + '.png'), fullPage: true })
+      await shot('')
+      if (screen.key === 'pending' || screen.key === 'blocked') {
+        const toggle = page.getByRole('button', { name: /Diagnóstico \(para o suporte\)/ })
+        if (await toggle.count()) {
+          await toggle.click()
+          await page.waitForTimeout(400)
+          await shot('-diagnostico')
+        }
+      }
+      if (screen.key === 'verify' || screen.key === 'pending') {
+        for (const [suffix, width, height] of [
+          ['1280x552', 1280, 552],
+          ['1100x800', 1100, 800],
+          ['tablet-900', 900, 1200],
+          ['mobile-390', 390, 844],
+        ]) {
+          await page.setViewportSize({ width, height })
+          await page.waitForTimeout(500)
+          await shot('-' + suffix)
+        }
+      }
+      await context.close()
+    }
+  })
+}
+
+// F4b - Chegadas para um usuario comum (E2E_USERS.user): nomes mascarados nas categorias
+// restritas (titulo "PO: ...") e sem Novo processo / Importar / Arquivados / Arquivar.
+for (const theme of THEMES) {
+  test(`capturas ${PHASE} - nao-admin - ${theme}`, async ({ browser }) => {
+    test.skip(PHASE !== 'f4b', 'nao-admin so na F4b')
+    test.setTimeout(120_000)
+    const outDir = outDirFor()
+    fs.mkdirSync(outDir, { recursive: true })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+    await login(page, E2E_USERS.user)
+    await page.goto('/processos')
+    await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+    await chegadasLoaded(page)
+    await expect(page.getByRole('button', { name: 'Novo processo' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Arquivados/ })).toHaveCount(0)
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: path.join(outDir, `chegadas-nao-admin-mascarado-${theme}.png`), fullPage: true })
+    await context.close()
+  })
+}
+
+// RC2 - guarda de geometria dos filtros da Central de chegadas (desktop >= 1041px). Bug do RC1: o
+// "Periodo de ETA" (2 datas num contorno unico, D19) ficava ~6 px ACIMA dos outros 3 controles. CSS
+// computado nao pega isso (cada caixa tem 44 px); so a geometria renderizada: dentro de cada linha da
+// grade, os controles precisam compartilhar topo, base e altura, e os rotulos o mesmo topo/base.
+const FILTER_WIDTHS = [
+  [1041, 900],
+  [1100, 900],
+  [1280, 900],
+  [1366, 900],
+  [1440, 900],
+  [1600, 900],
+  [1920, 1080],
+  [1366, 768], // notebook (altura <= 800)
+  [1280, 552], // notebook baixo
+]
+for (const theme of THEMES) {
+  test(`chegadas - filtros alinhados (geometria) - ${theme}`, async ({ browser }) => {
+    test.skip(PHASE !== 'f4b', 'guarda de geometria dos filtros so na F4b')
+    test.setTimeout(120_000)
+    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' })
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+    await login(page, E2E_USERS.admin)
+    await page.goto('/processos')
+    await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+    await chegadasLoaded(page)
+    for (const [width, height] of FILTER_WIDTHS) {
+      await page.setViewportSize({ width, height })
+      await page.waitForTimeout(300)
+      const fields = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('.chg-filters > .chg-field')).map((field) => {
+          const label = field.querySelector(':scope > label, :scope > .chg-field__label')
+          const control = field.querySelector('.chg-search, .chg-range, select.chg-select')
+          const rect = (el) => {
+            const r = el.getBoundingClientRect()
+            return { top: r.top, bottom: r.bottom, height: r.height }
+          }
+          return { label: label ? rect(label) : null, control: control ? rect(control) : null, field: rect(field) }
+        })
+      )
+      const where = `${width}x${height} ${theme}`
+      expect(fields, where).toHaveLength(4)
+      for (const f of fields) {
+        expect(f.label, where).not.toBeNull()
+        expect(f.control, where).not.toBeNull()
+        expect(f.control.height, `altura do controle ${where}`).toBeCloseTo(44, 0)
+      }
+      // linhas da grade: campos com o mesmo topo; >= 1280 e uma linha so, abaixo disso busca + 3 filtros
+      const rows = new Map()
+      for (const f of fields) {
+        const key = Math.round(f.field.top)
+        rows.set(key, [...(rows.get(key) ?? []), f])
+      }
+      const sizes = Array.from(rows.values()).map((row) => row.length).sort()
+      expect(sizes, `linhas da grade ${where}`).toEqual(width >= 1280 ? [4] : [1, 3])
+      for (const row of rows.values()) {
+        const [first, ...rest] = row
+        for (const f of rest) {
+          expect(f.label.top, `topo do rotulo ${where}`).toBeCloseTo(first.label.top, 1)
+          expect(f.label.bottom, `base do rotulo ${where}`).toBeCloseTo(first.label.bottom, 1)
+          expect(f.control.top, `topo do controle ${where}`).toBeCloseTo(first.control.top, 1)
+          expect(f.control.bottom, `base do controle ${where}`).toBeCloseTo(first.control.bottom, 1)
+        }
+      }
+    }
+    await context.close()
+  })
+}
+
+// =============================================================================
+// F3 - catalogo de componentes (estados forcados via CDP) + CSS computado
+// =============================================================================
+// O catalogo monta, numa camada fixa sobre a app logada, as classes REAIS do app
+// (.primary-button, .text-input, .filter-pill, .toast ...) na grade do
+// Componentes.dc.html e forca :hover/:active/:focus por CDP (CSS.forcePseudoState).
+// Depois le getComputedStyle e compara com o literal do mock (tema claro) e salva
+// catalogo-componentes-<tema>.png. E a prova de "igual ao mock" que o reviewer
+// confere sem precisar abrir o canvas.
+const MOCK = {
+  navy: 'rgb(0, 65, 83)',
+  navy900: 'rgb(0, 50, 65)',
+  navy50: 'rgb(232, 240, 242)',
+  navy100: 'rgb(214, 227, 231)',
+  ink: 'rgb(11, 36, 48)',
+  mint: 'rgb(20, 221, 167)',
+  mintHover: 'rgb(46, 232, 181)',
+  mintActive: 'rgb(15, 185, 140)',
+  danger: 'rgb(194, 54, 43)',
+  dangerHover: 'rgb(168, 45, 35)',
+  dangerActive: 'rgb(143, 37, 29)',
+  disabledBg: 'rgb(227, 236, 234)',
+  disabledInk: 'rgb(107, 127, 136)',
+  border: 'rgb(213, 226, 222)',
+  borderStrong: 'rgb(185, 203, 198)',
+  control: 'rgb(107, 127, 136)',
+  white: 'rgb(255, 255, 255)',
+  bg: 'rgb(238, 242, 241)',
+  transparent: 'rgba(0, 0, 0, 0)',
+}
+
+const ARRIVALS_PATH = 'M3 17h18l-2 3H5zM5 17V9h14v8M9 9V5h6v4'
+
+function catalogHtml() {
+  const states = ['rest', 'hover', 'active', 'focus', 'disabled']
+  const types = [
+    ['primary', 'Primário', 'Salvar'],
+    ['secondary', 'Secundário', 'Exportar'],
+    ['ghost', 'Fantasma', 'Cancelar'],
+    ['danger', 'Destrutivo', 'Excluir'],
+  ]
+  const buttonRows = types
+    .map(([type, label, text]) => {
+      const cells = states
+        .map((state) => {
+          if (type === 'danger' && state === 'disabled') {
+            return `<button type="button" class="danger-button" data-cat="danger-loading" aria-label="Excluindo"><span class="spinner" role="status" style="width:14px;height:14px;display:inline-block"><svg class="spinner__svg" viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9"/></svg></span>Carregando</button>`
+          }
+          return `<button type="button" class="${type}-button" data-cat="${type}-${state}"${state === 'disabled' ? ' disabled' : ''}>${text}</button>`
+        })
+        .join('')
+      return `<span style="font-weight:700;font-size:12px">${label}</span>${cells}`
+    })
+    .join('')
+  const head = `<span></span>${['Repouso', 'Hover', 'Pressionado', 'Foco', 'Desabilitado'].map((s) => `<span style="font-size:11px;color:var(--ink-soft)">${s}</span>`).join('')}`
+
+  const pills = `
+    <button type="button" class="filter-pill filter-pill--active" data-cat="pill-active"><span class="filter-pill__label">Todos</span><span class="filter-pill__count">48</span></button>
+    <button type="button" class="filter-pill" data-cat="pill"><span class="filter-pill__label">Em trânsito</span><span class="filter-pill__count">17</span></button>
+    <button type="button" class="filter-pill" data-cat="pill-alert"><span class="filter-pill__label">Docs pendentes</span><span class="filter-pill__count filter-pill__count--alert">3</span></button>
+    <button type="button" class="filter-pill filter-pill--add" data-cat="pill-add"><span class="filter-pill__label">+ Filtro</span></button>`
+  const chips = `
+    <span class="filter-chip filter-chip--default filter-chip--md" data-cat="chip"><span class="filter-chip__label">Categoria: FCL</span><button type="button" class="filter-chip__remove" aria-label="Remover filtro Categoria" data-cat="chip-remove"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span>
+    <span class="filter-chip filter-chip--info filter-chip--md" data-cat="chip-info"><span class="filter-chip__label">Etapa: DUIMP pendente</span></span>`
+  const tags = `
+    <span class="status-tag status-tag--danger" data-cat="tag-danger">Carga inflamável</span>
+    <span class="status-tag status-tag--warn" data-cat="tag-warn">Dados pendentes (2)</span>
+    <span class="status-tag status-tag--neutral" data-cat="tag-neutral">MSC Aurora</span>
+    <span class="status-tag status-tag--ok" data-cat="tag-ok">Canal verde</span>
+    <span class="inline-badge" data-cat="badge">2 contêineres</span>`
+
+  const skeleton = `
+    <div class="process-card-skeleton" data-cat="skeleton-card"><div class="skeleton-process-card">
+      <span class="skeleton" style="width:40%;height:12px;border-radius:6px"></span>
+      <span class="skeleton" style="width:75%;height:18px;border-radius:6px"></span>
+      <span class="skeleton" style="width:55%;height:12px;border-radius:6px"></span>
+      <span class="skeleton skeleton-process-card__bar" style="width:100%;height:6px;border-radius:6px"></span>
+      <span class="skeleton skeleton-process-card__pill" style="width:48%;height:26px;border-radius:999px"></span>
+    </div></div>`
+
+  return `
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start">
+    <section style="grid-column:1 / -1;background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:18px">
+      <h2 style="margin:0;font-family:var(--font-heading);font-size:18px">Botões</h2>
+      <div style="display:grid;grid-template-columns:96px repeat(5,minmax(140px,1fr));gap:10px 12px;align-items:center">${head}${buttonRows}</div>
+    </section>
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:18px">
+      <h2 style="margin:0;font-family:var(--font-heading);font-size:18px">Campos e filtros</h2>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <label class="field"><span data-cat="field-label">Número da PO</span><input class="text-input" data-cat="field-rest" placeholder="Ex.: 4500128734" /></label>
+        <label class="field"><span>Contêiner</span><input class="text-input text-input--mono" data-cat="field-focus" value="MSCU 482913" /></label>
+        <label class="field"><span>Data de devolução</span><input class="text-input" data-cat="field-error" value="31/02/2026" aria-invalid="true" /><small class="field-error" data-cat="field-error-msg">Data inválida. Use dd/mm/aaaa.</small></label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${pills}</div>
+      <div class="filter-chips-row" style="margin:0"><span class="filter-chips-row__label">Filtros:</span>${chips}<button type="button" class="filter-chips-row__clear" data-cat="chips-clear">Limpar todos</button></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${tags}</div>
+    </section>
+    <section style="background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:26px 28px;display:grid;gap:14px">
+      <h2 style="margin:0;font-family:var(--font-heading);font-size:18px">Feedback</h2>
+      <div class="toast toast--success" role="status" data-cat="toast-success" style="max-width:none"><span class="toast__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span><span class="toast__message">Documento enviado. A equipe COMEX foi avisada.</span><button type="button" class="toast__close" aria-label="Fechar">×</button></div>
+      <div class="toast toast--error" role="alert" data-cat="toast-error" style="max-width:none"><span class="toast__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v6.5M12 17.5h.01"/></svg></span><span class="toast__message">Não foi possível salvar. Verifique a conexão.</span><button type="button" class="toast__close" aria-label="Fechar">×</button></div>
+      <div class="error-banner error-banner--retry" role="alert" data-cat="banner-error"><span>Não foi possível salvar. Verifique a conexão e tente de novo.</span><button type="button" class="ghost-button" data-cat="banner-action">Tentar de novo</button></div>
+      <div class="success-banner" data-cat="banner-success">Preferências salvas.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="empty-state" data-cat="empty"><svg class="icon empty-state__glyph" data-cat="empty-glyph" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ARRIVALS_PATH}"/></svg><strong>Nenhuma chegada nesta semana</strong><p>Os próximos ETAs aparecem aqui assim que forem confirmados.</p></div>
+        ${skeleton}
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding-top:30px"><span class="tooltip tooltip--bottom" data-tooltip="Atualizado há 12 min pela ZP21" data-cat="tooltip" tabindex="0"><button type="button" class="ghost-button">Passe o mouse</button></span></div>
+    </section>
+  </div>`
+}
+
+// pseudo-estados a forcar: [seletor [data-cat], [pseudo...]]
+const FORCED = [
+  ['primary-hover', ['hover']],
+  ['primary-active', ['hover', 'active']],
+  ['primary-focus', ['focus', 'focus-visible']],
+  ['secondary-hover', ['hover']],
+  ['secondary-active', ['hover', 'active']],
+  ['secondary-focus', ['focus', 'focus-visible']],
+  ['ghost-hover', ['hover']],
+  ['ghost-active', ['hover', 'active']],
+  ['ghost-focus', ['focus', 'focus-visible']],
+  ['danger-hover', ['hover']],
+  ['danger-active', ['hover', 'active']],
+  ['danger-focus', ['focus', 'focus-visible']],
+  ['field-focus', ['focus']],
+  ['tooltip', ['hover']],
+]
+
+async function mountCatalog(page, context) {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible({ timeout: 15_000 })
+  await page.evaluate((html) => {
+    const layer = document.createElement('div')
+    layer.id = 'f3-catalog'
+    layer.style.cssText =
+      'position:fixed;inset:0;z-index:2147483000;overflow:auto;box-sizing:border-box;padding:40px 48px;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,sans-serif'
+    layer.innerHTML = html
+    document.body.appendChild(layer)
+  }, catalogHtml())
+  const client = await context.newCDPSession(page)
+  await client.send('DOM.enable')
+  await client.send('CSS.enable')
+  const { root } = await client.send('DOM.getDocument', { depth: -1 })
+  for (const [cat, pseudo] of FORCED) {
+    const { nodeId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: `[data-cat="${cat}"]` })
+    if (!nodeId) throw new Error(`catalogo sem [data-cat=${cat}]`)
+    await client.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: pseudo })
+  }
+  await page.waitForTimeout(500) // transicoes de 120/200 ms
+}
+
+// Estilo computado de [data-cat=cat] (ou do pseudo-elemento).
+function computed(page, cat, props, pseudo = null) {
+  return page.evaluate(
+    ([c, p, ps]) => {
+      const el = document.querySelector(`[data-cat="${c}"]`)
+      const cs = getComputedStyle(el, ps)
+      const out = Object.fromEntries(p.map((name) => [name, cs.getPropertyValue(name)]))
+      if (!ps) {
+        const r = el.getBoundingClientRect()
+        out.__width = Math.round(r.width * 100) / 100
+        out.__height = Math.round(r.height * 100) / 100
+      }
+      return out
+    },
+    [cat, props, pseudo]
+  )
+}
+
+async function expectStyle(page, cat, expected, pseudo = null) {
+  const got = await computed(page, cat, Object.keys(expected).filter((k) => !k.startsWith('__')), pseudo)
+  const sizes = await computed(page, cat, [])
+  for (const [prop, value] of Object.entries(expected)) {
+    const actual = prop.startsWith('__') ? sizes[prop] : got[prop]
+    if (value instanceof RegExp) expect(actual, `${cat} ${prop}`).toMatch(value)
+    else expect(actual, `${cat} ${prop}`).toBe(value)
+  }
+}
+
+for (const theme of THEMES) {
+  test(`catalogo de componentes - ${theme}`, async ({ browser }) => {
+    test.skip(PHASE !== 'f3', 'catalogo so na F3')
+    test.setTimeout(120_000)
+    const outDir = path.join(OUT_ROOT, 'f3')
+    fs.mkdirSync(outDir, { recursive: true })
+    // no-preference: o pressionado (scale .97) e as animacoes so existem fora do movimento reduzido.
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1300 }, reducedMotion: 'no-preference' })
+    await context.addInitScript((value) => {
+      try {
+        window.localStorage.setItem('pc-theme', value)
+        window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+      } catch {
+        /* ignora */
+      }
+    }, theme)
+    const page = await context.newPage()
+    await login(page, E2E_USERS.admin)
+    await mountCatalog(page, context)
+
+    if (theme === 'light') {
+      const common = { __height: 44, 'border-top-left-radius': '12px', 'font-size': '14px', 'font-weight': '700' }
+      // ---- botoes 4 x 5 estados (literais do Componentes.dc.html) ----
+      await expectStyle(page, 'primary-rest', { ...common, 'background-color': MOCK.mint, color: MOCK.ink, 'border-top-width': '0px' })
+      await expectStyle(page, 'primary-hover', {
+        'background-color': MOCK.mintHover,
+        'box-shadow': 'rgba(20, 221, 167, 0.35) 0px 6px 18px 0px',
+      })
+      await expectStyle(page, 'primary-active', { 'background-color': MOCK.mintActive, transform: 'matrix(0.97, 0, 0, 0.97, 0, 0)' })
+      await expectStyle(page, 'primary-focus', {
+        'background-color': MOCK.mint,
+        'box-shadow': `${MOCK.white} 0px 0px 0px 3px, ${MOCK.navy} 0px 0px 0px 5px`,
+      })
+      await expectStyle(page, 'primary-disabled', { 'background-color': MOCK.disabledBg, color: MOCK.disabledInk, opacity: '1' })
+
+      await expectStyle(page, 'secondary-rest', {
+        ...common,
+        'background-color': MOCK.white,
+        color: MOCK.navy,
+        'border-top-width': /^1(\.5)?px$/, // Chrome com DPR 1 arredonda 1.5px para 1px
+        'border-top-color': MOCK.navy,
+      })
+      await expectStyle(page, 'secondary-hover', { 'background-color': MOCK.navy50, 'border-top-color': MOCK.navy })
+      await expectStyle(page, 'secondary-active', {
+        'background-color': MOCK.navy100,
+        'border-top-color': MOCK.navy900,
+        color: MOCK.navy,
+        transform: 'matrix(0.97, 0, 0, 0.97, 0, 0)',
+      })
+      await expectStyle(page, 'secondary-focus', { 'box-shadow': `${MOCK.white} 0px 0px 0px 3px, ${MOCK.navy} 0px 0px 0px 5px` })
+      await expectStyle(page, 'secondary-disabled', {
+        'background-color': MOCK.white,
+        'border-top-color': MOCK.border,
+        color: MOCK.disabledInk,
+      })
+
+      await expectStyle(page, 'ghost-rest', { ...common, 'background-color': MOCK.transparent, color: MOCK.navy, 'border-top-width': '0px' })
+      await expectStyle(page, 'ghost-hover', { 'background-color': MOCK.bg, color: MOCK.navy })
+      await expectStyle(page, 'ghost-active', { 'background-color': MOCK.disabledBg, transform: 'matrix(0.97, 0, 0, 0.97, 0, 0)' })
+      await expectStyle(page, 'ghost-focus', { 'box-shadow': `${MOCK.white} 0px 0px 0px 3px, ${MOCK.navy} 0px 0px 0px 5px` })
+      await expectStyle(page, 'ghost-disabled', { 'background-color': MOCK.transparent, color: MOCK.disabledInk })
+
+      await expectStyle(page, 'danger-rest', { ...common, 'background-color': MOCK.danger, color: MOCK.white })
+      await expectStyle(page, 'danger-hover', { 'background-color': MOCK.dangerHover })
+      await expectStyle(page, 'danger-active', { 'background-color': MOCK.dangerActive, transform: 'matrix(0.97, 0, 0, 0.97, 0, 0)' })
+      await expectStyle(page, 'danger-focus', { 'box-shadow': `${MOCK.white} 0px 0px 0px 3px, ${MOCK.danger} 0px 0px 0px 5px` })
+      // nenhum botao do catalogo corta o proprio conteudo (trilhos do arnes comportam o texto)
+      const clipped = await page.evaluate(() =>
+        [...document.querySelectorAll('#f3-catalog button[data-cat], #f3-catalog [data-cat] button')]
+          .filter((b) => b.scrollWidth > b.clientWidth || b.scrollHeight > b.clientHeight)
+          .map((b) => (b.dataset.cat || b.textContent).trim())
+      )
+      expect(clipped, 'botoes com conteudo cortado').toEqual([])
+      const loading = await page.evaluate(() => {
+        const b = document.querySelector('[data-cat="danger-loading"]')
+        return { sw: b.scrollWidth, cw: b.clientWidth }
+      })
+      expect(loading.sw).toBeLessThanOrEqual(loading.cw)
+      // carregando: spinner 14px + borda 2px (18px no total, como o span do mock), 0,8 s linear
+      const spinner = await page.evaluate(() => {
+        const s = document.querySelector('[data-cat="danger-loading"] .spinner')
+        const cs = getComputedStyle(s)
+        return {
+          w: s.offsetWidth, // offsetWidth ignora a rotacao da animacao
+          border: cs.borderTopWidth,
+          top: cs.borderTopColor,
+          duration: cs.animationDuration,
+          timing: cs.animationTimingFunction,
+          svg: getComputedStyle(s.querySelector('svg')).display,
+        }
+      })
+      expect(spinner).toEqual({ w: 18, border: '2px', top: MOCK.white, duration: '0.8s', timing: 'linear', svg: 'none' })
+
+      // ---- campos: repouso / foco / erro ----
+      await expectStyle(page, 'field-rest', {
+        __height: 44,
+        'border-top-left-radius': '10px',
+        'border-top-width': /^1(\.5)?px$/,
+        'border-top-color': MOCK.control, // D1: #6b7f88 (o mock usa #9fb1b8, reprova WCAG 1.4.11)
+        'font-size': '14px',
+        'font-weight': '500',
+        'padding-left': '14px',
+        'background-color': MOCK.white,
+        color: MOCK.ink,
+      })
+      await expectStyle(page, 'field-focus', {
+        'border-top-color': MOCK.navy,
+        'box-shadow': 'rgba(20, 221, 167, 0.28) 0px 0px 0px 4px',
+        'font-family': /JetBrains Mono/,
+      })
+      await expectStyle(page, 'field-error', { 'border-top-color': MOCK.danger })
+      await expectStyle(page, 'field-error-msg', { color: 'rgb(154, 42, 33)', 'font-size': '11px', 'font-weight': '600' })
+      await expectStyle(page, 'field-label', { 'font-size': '13px', 'font-weight': '600', 'text-transform': 'none', color: MOCK.ink })
+
+      // ---- chips e tags ----
+      await expectStyle(page, 'pill-active', { __height: 36, 'background-color': MOCK.navy, color: MOCK.white, 'border-top-left-radius': '999px', 'font-size': '13px', 'font-weight': '600' })
+      await expectStyle(page, 'pill', { __height: 36, 'background-color': MOCK.white, 'border-top-color': MOCK.border, color: MOCK.ink })
+      await expectStyle(page, 'pill-add', { 'border-top-style': 'dashed', color: 'rgb(74, 100, 114)' })
+      const count = await page.evaluate(() => {
+        const cs = getComputedStyle(document.querySelector('[data-cat="pill-active"] .filter-pill__count'))
+        return { size: cs.fontSize, family: cs.fontFamily, bg: cs.backgroundColor, pad: cs.paddingLeft }
+      })
+      expect(count.size).toBe('11px')
+      expect(count.family).toMatch(/JetBrains Mono/)
+      expect(count.bg).toBe('rgba(255, 255, 255, 0.18)')
+      expect(count.pad).toBe('7px')
+      // contador da pilula inativa: sem fundo nem padding (so o ativo tem a capsula)
+      expect(
+        await page.evaluate(() => {
+          const cs = getComputedStyle(document.querySelector('[data-cat="pill"] .filter-pill__count'))
+          return [cs.paddingLeft, cs.backgroundColor, cs.color]
+        })
+      ).toEqual(['0px', 'rgba(0, 0, 0, 0)', 'rgb(74, 100, 114)'])
+      await expectStyle(page, 'chip', { __height: 32, 'background-color': MOCK.navy50, color: MOCK.navy, 'font-size': '13px', 'font-weight': '700', 'padding-left': '12px', 'padding-right': '6px' })
+      await expectStyle(page, 'chip-info', { __height: 32, 'background-color': MOCK.navy50 }) // variantes semanticas seguem o mock? (so na linha de filtros)
+      await expectStyle(page, 'chip-remove', { __width: 24, __height: 24 })
+      await expectStyle(page, 'chips-clear', { color: 'rgb(154, 42, 33)', 'font-size': '13px', 'font-weight': '700' })
+      await expectStyle(page, 'tag-danger', { __height: 26, 'background-color': 'rgb(253, 236, 234)', color: 'rgb(154, 42, 33)', 'font-size': '12px', 'font-weight': '700', 'padding-left': '10px' })
+      await expectStyle(page, 'tag-warn', { __height: 26, 'background-color': 'rgb(253, 243, 220)', color: 'rgb(138, 90, 10)' })
+      await expectStyle(page, 'tag-neutral', { __height: 26, 'background-color': 'rgb(236, 239, 240)', color: 'rgb(71, 88, 97)' })
+      await expectStyle(page, 'badge', { __height: 26, 'padding-left': '10px', 'font-size': '12px' })
+
+      // ---- feedback ----
+      await expectStyle(page, 'toast-success', {
+        'background-color': MOCK.ink,
+        color: 'rgb(232, 244, 246)',
+        'border-top-left-radius': '14px',
+        'padding-top': '14px',
+        'padding-left': '16px',
+        'font-size': '14px',
+        'font-weight': '600',
+        'box-shadow': 'rgba(0, 65, 83, 0.18) 0px 20px 48px 0px',
+      })
+      const toastIcons = await page.evaluate(() =>
+        ['success', 'error'].map((t) => {
+          const i = document.querySelector(`[data-cat="toast-${t}"] .toast__icon`)
+          const cs = getComputedStyle(i)
+          return { w: i.getBoundingClientRect().width, h: i.getBoundingClientRect().height, r: cs.borderTopLeftRadius, bg: cs.backgroundColor, color: cs.color }
+        })
+      )
+      expect(toastIcons[0]).toEqual({ w: 28, h: 28, r: '999px', bg: MOCK.mint, color: MOCK.ink })
+      expect(toastIcons[1]).toEqual({ w: 28, h: 28, r: '999px', bg: MOCK.danger, color: MOCK.white })
+      await expectStyle(page, 'banner-error', { 'background-color': 'rgb(253, 236, 234)', color: 'rgb(154, 42, 33)', 'border-top-left-radius': '14px', 'font-size': '14px', 'font-weight': '600' })
+      await expectStyle(page, 'banner-error', { width: '20px', height: '20px' }, '::before')
+      await expectStyle(page, 'banner-action', { 'text-decoration-line': 'underline', 'font-size': '13px', 'font-weight': '700' })
+      await expectStyle(page, 'banner-success', { 'background-color': 'rgb(226, 246, 240)', color: 'rgb(0, 96, 79)' })
+      await expectStyle(page, 'empty', {
+        'border-top-style': 'dashed',
+        'border-top-width': '1px',
+        'border-top-color': MOCK.borderStrong,
+        'border-top-left-radius': '16px',
+        'padding-top': '22px',
+        'text-align': 'center',
+      })
+      await expectStyle(page, 'empty-glyph', { __width: 40, __height: 40, color: 'rgb(0, 120, 100)', 'stroke-width': '1.5px' })
+      const empty = await page.evaluate(() => {
+        const e = document.querySelector('[data-cat="empty"]')
+        const t = getComputedStyle(e.querySelector('strong'))
+        const p = getComputedStyle(e.querySelector('p'))
+        return { t: [t.fontSize, t.fontWeight], p: [p.fontSize, p.lineHeight, p.color] }
+      })
+      expect(empty.t).toEqual(['14px', '700'])
+      expect(empty.p).toEqual(['12px', '18px', 'rgb(74, 100, 114)'])
+      // skeleton: shimmer 1,4 s linear infinito, gradiente base -> shine -> base, 200% 100%
+      const skeleton = await page.evaluate(() => {
+        const pieces = [...document.querySelectorAll('[data-cat="skeleton-card"] .skeleton')]
+        const first = getComputedStyle(pieces[0])
+        const card = getComputedStyle(document.querySelector('[data-cat="skeleton-card"]'))
+        return {
+          heights: pieces.map((p) => Math.round(p.getBoundingClientRect().height)),
+          name: first.animationName,
+          duration: first.animationDuration,
+          timing: first.animationTimingFunction,
+          iterations: first.animationIterationCount,
+          size: first.backgroundSize,
+          image: first.backgroundImage,
+          cardBg: card.backgroundColor,
+          cardRadius: card.borderTopLeftRadius,
+          cardPad: card.paddingTop,
+        }
+      })
+      expect(skeleton.heights).toEqual([12, 18, 12, 6, 26])
+      expect(skeleton.name).toBe('motion-shimmer')
+      expect(skeleton.duration).toBe('1.4s')
+      expect(skeleton.timing).toBe('linear')
+      expect(skeleton.iterations).toBe('infinite')
+      expect(skeleton.size).toBe('200% 100%')
+      expect(skeleton.image).toContain('rgb(227, 236, 234)')
+      expect(skeleton.image).toContain('rgb(247, 250, 249)')
+      expect(skeleton.cardBg).toBe('rgb(245, 248, 247)')
+      expect([skeleton.cardRadius, skeleton.cardPad]).toEqual(['16px', '18px'])
+      // tooltip (hover forcado no wrapper)
+      await expectStyle(
+        page,
+        'tooltip',
+        {
+          'background-color': MOCK.ink,
+          color: 'rgb(232, 244, 246)',
+          'font-size': '12px',
+          'font-weight': '600',
+          'border-top-left-radius': '10px',
+          'padding-top': '8px',
+          'padding-left': '12px',
+          opacity: '1',
+        },
+        '::after'
+      )
+    } else {
+      // dark (o mock nao define): so o essencial de legibilidade e a troca navy -> menta
+      await expectStyle(page, 'primary-rest', { 'background-color': MOCK.mint, color: MOCK.ink })
+      await expectStyle(page, 'primary-focus', { 'box-shadow': /rgb\(15, 43, 53\) 0px 0px 0px 3px, rgb\(20, 221, 167\) 0px 0px 0px 5px/ })
+      await expectStyle(page, 'secondary-rest', { color: MOCK.mint, 'border-top-color': MOCK.mint })
+      await expectStyle(page, 'ghost-rest', { color: MOCK.mint })
+      await expectStyle(page, 'primary-disabled', { 'background-color': 'rgb(22, 56, 69)', color: 'rgb(122, 154, 166)' })
+      await expectStyle(page, 'field-focus', { 'border-top-color': MOCK.mint })
+      await expectStyle(page, 'toast-success', { 'background-color': 'rgb(22, 56, 69)', 'border-top-width': '0px', 'border-left-width': '0px' })
+      await expectStyle(page, 'pill-active', { 'background-color': MOCK.mint })
+    }
+
+    await page.screenshot({ path: path.join(outDir, `catalogo-componentes-${theme}.png`) })
+    await context.close()
+  })
+}
+
+// =============================================================================
+// F3 - movimento (CSS computado em paginas reais; movimento NAO reduzido)
+// =============================================================================
+const E = 'cubic-bezier(0.4, 0, 0.2, 1)' // --ease-out
+const E_IN = 'cubic-bezier(0.4, 0, 1, 1)' // --ease-in
+const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)' // --ease-spring
+
+async function newMotionContext(browser, reducedMotion) {
+  const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion })
+  await context.addInitScript(() => {
+    try {
+      window.localStorage.setItem('pc-theme', 'light')
+      window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+    } catch {
+      /* ignora */
+    }
+  })
+  return context
+}
+
+const anim = (page, selector, index = 0, pseudo = null) =>
+  page.evaluate(
+    ([sel, i, ps]) => {
+      const el = document.querySelectorAll(sel)[i]
+      if (!el) return null
+      const cs = getComputedStyle(el, ps)
+      return {
+        name: cs.animationName,
+        duration: cs.animationDuration,
+        delay: cs.animationDelay,
+        timing: cs.animationTimingFunction,
+        fill: cs.animationFillMode,
+      }
+    },
+    [selector, index, pseudo]
+  )
+
+test('movimento (CSS computado) - duracoes e curvas do Movimento.dc.html', async ({ browser }) => {
+  test.skip(PHASE !== 'f3', 'movimento so na F3')
+  test.setTimeout(180_000)
+  const context = await newMotionContext(browser, 'no-preference')
+  const page = await context.newPage()
+  await login(page, E2E_USERS.admin)
+
+  // 1) Entrada de pagina 500 ms + lista escalonada 300 ms (+40 ms, so os 8 primeiros) + contador de KPI
+  await page.evaluate(() => window.sessionStorage.clear())
+  await page.goto('/')
+  const series = await page.evaluate(async () => {
+    const out = []
+    const t0 = performance.now()
+    while (performance.now() - t0 < 4000) {
+      out.push({ t: Math.round(performance.now() - t0), v: [...document.querySelectorAll('.stat-card__value')].map((el) => el.textContent) })
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    return out
+  })
+  const page1 = await anim(page, '.page-fade--visible')
+  expect(page1).toMatchObject({ name: 'motion-rise', duration: '0.5s', timing: E, fill: 'both' })
+  const stagger = await page.evaluate(() =>
+    [...document.querySelectorAll('.stagger__item')].map((el) => {
+      const cs = getComputedStyle(el)
+      return [el.style.getPropertyValue('--stagger-index'), cs.animationName, cs.animationDuration, cs.animationDelay, cs.animationTimingFunction]
+    })
+  )
+  expect(stagger.length).toBeGreaterThanOrEqual(2)
+  stagger.forEach(([idx, name, duration, delay, timing]) => {
+    expect(name).toBe('motion-rise')
+    expect(duration).toBe('0.3s')
+    expect(timing).toBe(E)
+    expect(delay).toBe(`${Math.min(Number(idx), 7) * 0.04}s`.replace(/^0s$/, '0s'))
+  })
+  // contador: sobe de 0 ao valor final em ~600 ms e nunca desce
+  const numeric = series.filter((s) => s.v.some((x) => /^\d+$/.test(x)))
+  expect(numeric.length).toBeGreaterThan(3)
+  const col = series.map((s) => s.v.map((x) => (/^\d+$/.test(x) ? Number(x) : null)))
+  const best = [0, 1, 2, 3].sort((a, b) => Math.max(...col.map((r) => r[b] ?? 0)) - Math.max(...col.map((r) => r[a] ?? 0)))[0]
+  const values = col.map((r) => r[best]).filter((v) => v !== null && v !== undefined)
+  const finalValue = values[values.length - 1]
+  expect(finalValue).toBeGreaterThan(1)
+  expect(values[0]).toBeLessThanOrEqual(Math.ceil(finalValue * 0.3))
+  for (let i = 1; i < values.length; i += 1) expect(values[i]).toBeGreaterThanOrEqual(values[i - 1])
+  const firstNumericAt = series.find((s) => /^\d+$/.test(s.v[best])).t
+  const reachedAt = series.find((s) => s.v[best] === String(finalValue)).t
+  expect(reachedAt - firstNumericAt).toBeGreaterThan(300)
+  expect(reachedAt - firstNumericAt).toBeLessThan(1100)
+  expect(await page.evaluate(() => window.sessionStorage.getItem('pc-kpi-countup'))).toBe('1')
+  // 2a carga da sessao: valor direto (sem contar)
+  await page.goto('/')
+  await expect(page.locator('.stat-card__value').first()).toHaveText(/^\d+$/, { timeout: 15_000 })
+  const instant = await page.locator('.stat-card__value').allTextContents()
+  expect(instant.some((v) => Number(v) === finalValue)).toBe(true)
+
+  // 2) Pressionar: scale(.97) em 120 ms; hover do card so troca sombra/borda em 200 ms (sem levantar)
+  await page.goto('/processos')
+  await expect(page.locator('.process-item--button').first()).toBeVisible()
+  const primary = page.getByRole('button', { name: 'Novo processo' })
+  const box = await primary.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(250)
+  const pressed = await primary.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    return { transform: cs.transform, td: cs.transitionDuration, tp: cs.transitionProperty }
+  })
+  expect(pressed.transform).toBe('matrix(0.97, 0, 0, 0.97, 0, 0)')
+  expect(pressed.tp).toContain('transform')
+  expect(pressed.td.split(', ')).toContain('0.12s')
+  // solta fora do botao: so queremos medir o pressionado, sem disparar o clique (abriria o formulario)
+  await page.mouse.move(5, 5)
+  await page.mouse.up()
+  const card = page.locator('.process-item--button').nth(1)
+  await card.hover()
+  await page.waitForTimeout(400)
+  const hover = await card.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    return { transform: cs.transform, shadow: cs.boxShadow, border: cs.borderTopColor, tp: cs.transitionProperty, td: cs.transitionDuration, tf: cs.transitionTimingFunction }
+  })
+  expect(hover.transform).toBe('none')
+  expect(hover.shadow).toBe('rgba(0, 65, 83, 0.1) 0px 6px 18px 0px')
+  expect(hover.border).toBe('rgb(185, 203, 198)')
+  expect(hover.tp).not.toContain('transform')
+  expect(hover.tp).toContain('box-shadow')
+  expect(hover.tp).toContain('border-color')
+  expect(hover.td.split(', ')).toContain('0.2s')
+  expect(hover.tf).toContain(E)
+
+  // 3) Favorito: scale(0 -> 1) em 300 ms com mola, so ao ativar
+  // (a linha inteira tambem e role=button e herda o nome: usar a classe do botao de icone)
+  const star = await page.locator('.action-icon-button[aria-label="Favoritar processo"]').first().elementHandle()
+  await star.click()
+  await expect(page.locator('.favorite-star--pop')).toHaveCount(1)
+  const pop = await anim(page, '.favorite-star--pop')
+  expect(pop).toMatchObject({ name: 'motion-pop', duration: '0.3s', timing: SPRING })
+  await star.click() // desfavorita: sem animacao (restaura o seed)
+  await page.waitForTimeout(600)
+  await expect(page.locator('.favorite-star--pop')).toHaveCount(0)
+
+  // 4) Timeline: preenche em 600 ms (segmentos em sequencia) e pontos com mola 100 + 150 ms * posicao
+  await page.locator('.process-item--button').nth(1).click()
+  await expect(page.locator('.process-detail-view .process-timeline')).toBeVisible()
+  const timeline = await page.evaluate(() => {
+    const bars = [...document.querySelectorAll('.process-detail-view .process-timeline__bar--done')]
+    const nodes = [...document.querySelectorAll('.process-detail-view .process-timeline__node--done, .process-detail-view .process-timeline__node--now')]
+    const sec = (v) => parseFloat(v)
+    return {
+      fill: bars.map((b) => {
+        const cs = getComputedStyle(b, '::after')
+        return { name: cs.animationName, d: sec(cs.animationDuration), delay: sec(cs.animationDelay), timing: cs.animationTimingFunction, origin: cs.transformOrigin }
+      }),
+      dots: nodes.map((n) => {
+        const cs = getComputedStyle(n)
+        return { name: cs.animationName, d: cs.animationDuration, delay: sec(cs.animationDelay), timing: cs.animationTimingFunction }
+      }),
+    }
+  })
+  expect(timeline.fill.length).toBeGreaterThan(0)
+  const fillEnd = Math.max(...timeline.fill.map((f) => f.d + f.delay))
+  expect(Math.abs(fillEnd - 0.6)).toBeLessThan(0.002) // o trilho todo termina em 600 ms
+  timeline.fill.forEach((f) => expect(f.name).toBe('motion-fill'))
+  timeline.dots.forEach((d, i) => {
+    expect(d.name).toBe('motion-pop')
+    expect(d.d).toBe('0.3s')
+    expect(d.timing).toBe(SPRING)
+    expect(Math.abs(d.delay - (0.1 + 0.15 * i))).toBeLessThan(0.002)
+  })
+
+  // 5) Toast: mola de 300 ms, 5 s, pausa com o mouse, saida de 200 ms ease-in
+  await page.goto('/processos')
+  await expect(page.locator('.process-item--button').first()).toBeVisible()
+  await page.getByRole('button', { name: /^Exportar/ }).click()
+  const toast = page.locator('.toast--success')
+  await expect(toast).toBeVisible({ timeout: 15_000 })
+  expect(await anim(page, '.toast--success')).toMatchObject({ name: 'motion-toast-in', duration: '0.3s', timing: SPRING })
+  await toast.hover()
+  await page.waitForTimeout(6_000) // > 5 s: pausado, continua na tela
+  await expect(toast).toBeVisible()
+  await page.mouse.move(5, 5)
+  await expect(toast).toBeHidden({ timeout: 8_000 })
+  await page.getByRole('button', { name: /^Exportar/ }).click()
+  await expect(page.locator('.toast--success')).toBeVisible({ timeout: 15_000 })
+  await page.locator('.toast--success .toast__close').click()
+  expect(await anim(page, '.toast--closing')).toMatchObject({ name: 'motion-toast-out', duration: '0.2s', timing: E_IN })
+
+  // 6) Gaveta (300 ms ease-out / scrim 200 ms linear) e modal (300 ms) — saidas ~70%
+  await page.locator('.topbar .notifications__trigger').click()
+  await expect(page.locator('.notifications__panel--drawer')).toBeVisible()
+  const drawer = await anim(page, '.notifications__panel--drawer')
+  expect(drawer).toMatchObject({ name: 'notif-drawer-in', duration: '0.3s', timing: E })
+  expect(await anim(page, '.notifications-backdrop')).toMatchObject({ name: 'motion-fade-in', duration: '0.2s', timing: 'linear' })
+  await page.keyboard.press('Escape')
+  const drawerOut = await anim(page, '.notifications__panel--closing')
+  expect(drawerOut).toMatchObject({ name: 'notif-drawer-out', duration: '0.21s', timing: E_IN })
+  expect(await anim(page, '.notifications-backdrop--closing')).toMatchObject({ name: 'motion-fade-out', duration: '0.14s', timing: E_IN })
+  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: 'Abrir suporte' }).click()
+  await expect(page.locator('.support-modal--desktop, .modal').first()).toBeVisible()
+  expect(await anim(page, '.modal-backdrop')).toMatchObject({ name: 'motion-fade-in', duration: '0.2s', timing: 'linear' })
+  expect(await anim(page, '.modal')).toMatchObject({ name: 'motion-rise', duration: '0.3s', timing: E })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+
+  // 7) Skeleton: shimmer 1,4 s e troca por fade de 200 ms
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"')) await new Promise((resolve) => setTimeout(resolve, 3000))
+    await route.continue().catch(() => {})
+  })
+  await page.goto('/processos')
+  await expect(page.locator('.process-card-skeleton .skeleton').first()).toBeVisible()
+  expect(await anim(page, '.process-card-skeleton .skeleton')).toMatchObject({ name: 'motion-shimmer', duration: '1.4s', timing: 'linear' })
+  await expect(page.locator('.process-item--button').first()).toBeVisible({ timeout: 15_000 })
+  expect(await anim(page, '.process-list--scroll.skeleton-reveal')).toMatchObject({ name: 'motion-fade-in', duration: '0.2s', timing: 'linear' })
+  await page.unroute('**/127.0.0.1:8080/**')
+
+  await context.close()
+})
+
+test('movimento reduzido (CSS computado) - so fades de 150 ms, sem contador, escalonamento nem shimmer', async ({ browser }) => {
+  test.skip(PHASE !== 'f3', 'movimento so na F3')
+  test.setTimeout(120_000)
+  const context = await newMotionContext(browser, 'reduce')
+  const page = await context.newPage()
+  await login(page, E2E_USERS.admin)
+  await page.evaluate(() => window.sessionStorage.clear())
+  await page.goto('/')
+  await expect(page.locator('.stat-card__value').first()).toHaveText(/^\d+$/, { timeout: 15_000 })
+  // sem contador: o primeiro valor numerico ja e o final
+  const first = await page.locator('.stat-card__value').allTextContents()
+  await page.waitForTimeout(900)
+  expect(await page.locator('.stat-card__value').allTextContents()).toEqual(first)
+  expect(await anim(page, '.page-fade--visible')).toMatchObject({ name: 'motion-fade-in', duration: '0.15s', timing: 'linear' })
+  const delays = await page.evaluate(() =>
+    [...document.querySelectorAll('.stagger__item')].map((el) => {
+      const cs = getComputedStyle(el)
+      return [cs.animationName, cs.animationDuration, cs.animationDelay]
+    })
+  )
+  delays.forEach((d) => expect(d).toEqual(['motion-fade-in', '0.15s', '0s']))
+
+  await page.goto('/processos')
+  await expect(page.locator('.process-item--button').first()).toBeVisible()
+  await page.getByRole('button', { name: /^Exportar/ }).click()
+  await expect(page.locator('.toast--success')).toBeVisible({ timeout: 15_000 })
+  expect((await anim(page, '.toast--success')).name).toBe('none')
+  const primary = page.getByRole('button', { name: 'Novo processo' })
+  const box = await primary.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(250)
+  expect(await primary.evaluate((el) => getComputedStyle(el).transform)).toBe('none')
+  await page.mouse.move(5, 5)
+  await page.mouse.up()
+
+  await page.locator('.process-item--button').nth(1).click()
+  await expect(page.locator('.process-detail-view .process-timeline')).toBeVisible()
+  const fade = await anim(page, '.process-detail-view .process-timeline__bar--done', 0, '::after')
+  expect(fade).toMatchObject({ name: 'motion-fade-in', duration: '0.15s', delay: '0s' })
+
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"')) await new Promise((resolve) => setTimeout(resolve, 2500))
+    await route.continue().catch(() => {})
+  })
+  await page.goto('/processos')
+  await expect(page.locator('.process-card-skeleton .skeleton').first()).toBeVisible()
+  expect((await anim(page, '.process-card-skeleton .skeleton')).name).toBe('none')
+  await page.unroute('**/127.0.0.1:8080/**')
+  await context.close()
+})
+
+// F4c - o detalhe para um usuario comum (nome mascarado, sem Editar/Mais acoes, sem
+// Historico/Documentos) e para a logistica (Historico + Documentos, sem Editar processo).
+const F4C_ROLE_SHOTS = [
+  {
+    key: 'user',
+    credentials: () => E2E_USERS.user,
+    rowText: '4500129901',
+    tabs: [['geral', 'Detalhes gerais'], ['processo', 'Processo'], ['mensagens', 'Mensagens']],
+    expectNoTabs: ['Histórico', 'Documentos'],
+  },
+  {
+    key: 'logistica',
+    credentials: () => F4C_LOGISTICA,
+    rowText: 'Resina epóxi líquida',
+    tabs: [['geral', 'Detalhes gerais'], ['documentos', 'Documentos'], ['historico', 'Histórico']],
+    expectNoTabs: [],
+  },
+]
+for (const theme of THEMES) {
+  for (const role of F4C_ROLE_SHOTS) {
+    test(`capturas ${PHASE} - ${role.key} - ${theme}`, async ({ browser }) => {
+      test.skip(PHASE !== 'f4c', 'papeis so na F4c')
+      test.setTimeout(150_000)
+      const outDir = outDirFor()
+      fs.mkdirSync(outDir, { recursive: true })
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1500 }, reducedMotion: 'reduce' })
+      await context.addInitScript((value) => {
+        try {
+          window.localStorage.setItem('pc-theme', value)
+          window.localStorage.setItem('sq-comex-ptax-rates', JSON.stringify({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } }))
+        } catch {
+          /* ignora */
+        }
+      }, theme)
+      const page = await context.newPage()
+      await login(page, role.credentials())
+      await page.goto('/processos')
+      await expect(chegadasReady(page)).toBeVisible({ timeout: 15_000 })
+      await detailOpen(page, role.rowText)
+      if (role.key === 'user') {
+        await expect(page.getByRole('heading', { level: 2, name: 'PO: 4500129901' })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Editar processo' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Mais ações' })).toHaveCount(0)
+      } else {
+        await expect(page.getByRole('button', { name: 'Editar processo' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Mais ações' })).toHaveCount(0)
+      }
+      for (const tabName of role.expectNoTabs) await expect(page.getByRole('tab', { name: tabName })).toHaveCount(0)
+      for (const [slug, tabName] of role.tabs) {
+        await page.getByRole('tab', { name: tabName }).click()
+        await expect(page.getByRole('tab', { name: tabName })).toHaveAttribute('aria-selected', 'true')
+        await page.waitForTimeout(800)
+        await page.screenshot({ path: path.join(outDir, `detalhe-${role.key}-${slug}-${theme}.png`), fullPage: true })
+      }
+      await context.close()
+    })
+  }
+}

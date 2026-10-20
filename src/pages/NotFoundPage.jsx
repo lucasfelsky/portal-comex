@@ -18,24 +18,27 @@ export default function NotFoundPage() {
   const subtitle = getErrorSubtitle(location.pathname)
 
   return (
-    <section className="auth-screen">
+    <section className="auth-screen auth-screen--not-found">
       <div className="auth-card auth-card--form" data-testid="not-found-card">
         <span className="brand__eyebrow">Portal COMEX</span>
-        <div>
+        <div className="auth-state__title">
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
 
-        <div className="auth-reset-panel" aria-label="Detalhes do erro">
-          <p>Código: <code>404</code></p>
-          <p>Caminho: <code>{location.pathname || '/'}</code></p>
+        <div className="auth-reset-panel auth-error-details" role="group" aria-label="Detalhes do erro">
+          <p className="auth-error-code">
+            <span className="auth-error-code__label">Código: </span>
+            <code>404</code>
+          </p>
+          <p className="auth-error-path">Caminho: <code>{location.pathname || '/'}</code></p>
         </div>
 
-        <div className="button-row">
+        <div className="button-row auth-state__actions">
           <Link to="/" className="primary-button" data-testid="not-found-home">
             Voltar para o painel
           </Link>
-          <Link to="/news" className="ghost-button" data-testid="not-found-news">
+          <Link to="/news" className="ghost-button ghost-button--secondary" data-testid="not-found-news">
             Ver últimas notícias
           </Link>
         </div>

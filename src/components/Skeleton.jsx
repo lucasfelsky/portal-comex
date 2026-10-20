@@ -9,6 +9,9 @@
 //   <Skeleton variant="card" />     // card com 3 linhas
 //   <Skeleton variant="circle" size={40} />  // avatar circular
 //   <Skeleton.Group count={3} />    // lista de 3 skeletons
+//   <Skeleton.ProcessCard />        // formato real do card de processo
+//                                   // (linha 40% / titulo 75% / linha 55% /
+//                                   // barra 6px / pilula), Componentes.dc.html
 
 const VARIANTS = {
   text: { width: '100%', height: '0.9em', radius: 'var(--radius-sm)' },
@@ -17,6 +20,11 @@ const VARIANTS = {
   card: { width: '100%', height: '120px', radius: 'var(--radius)' },
   circle: { width: '40px', height: '40px', radius: '50%' },
   button: { width: '120px', height: '36px', radius: 'var(--radius-sm)' },
+  // Pecas do card de processo (Componentes.dc.html / Movimento.dc.html).
+  line: { width: '100%', height: '12px', radius: '6px' },
+  heading: { width: '100%', height: '18px', radius: '6px' },
+  bar: { width: '100%', height: '6px', radius: '6px' },
+  pill: { width: '48%', height: '26px', radius: '999px' },
 }
 
 export default function Skeleton({
@@ -42,6 +50,18 @@ export default function Skeleton({
       aria-hidden="true"
       {...rest}
     />
+  )
+}
+
+Skeleton.ProcessCard = function SkeletonProcessCard({ className = '', ...rest }) {
+  return (
+    <div className={`skeleton-process-card ${className}`.trim()} aria-hidden="true" {...rest}>
+      <Skeleton variant="line" width="40%" />
+      <Skeleton variant="heading" width="75%" />
+      <Skeleton variant="line" width="55%" />
+      <Skeleton variant="bar" className="skeleton-process-card__bar" />
+      <Skeleton variant="pill" className="skeleton-process-card__pill" />
+    </div>
   )
 }
 

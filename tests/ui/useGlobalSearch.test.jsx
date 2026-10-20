@@ -249,6 +249,27 @@ describe('useGlobalSearch', () => {
     expect(() => item.action()).not.toThrow()
   })
 
+  // Refino F2: subtitulo da paleta = "PO ... · status" (Flutuantes.dc.html).
+  it('descricao do item: "PO <numero> · <status exibido>" (sem duplicar o prefixo PO)', async () => {
+    mockSearchProcesses.mockResolvedValue([
+      { id: 'p1', name: 'A', processNumber: '4500127710', processStatus: 'Coleta Agendada', category: 'FCL', destination: 'Itajai' },
+      { id: 'p2', name: 'B', processNumber: 'PO 4500126190', processStatus: 'Embarcou', category: 'FCL', destination: 'Santos' },
+      { id: 'p3', name: 'C', processNumber: '', processStatus: '', destination: 'Santos' },
+    ])
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Probe isAdmin />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+    await waitFor(() => expect(lastResult).toHaveLength(3))
+    expect(lastResult[0].description).toBe('PO 4500127710 · Coleta agendada')
+    expect(lastResult[1].description).toBe('PO 4500126190 · Embarcou')
+    // sem numero e sem status: cai no destino, como antes
+    expect(lastResult[2].description).toBe('sem PO · Santos')
+  })
+
   it('searcher com erro: retorna array vazio (graceful)', async () => {
     mockSearchProcesses.mockRejectedValue(new Error('boom'))
 

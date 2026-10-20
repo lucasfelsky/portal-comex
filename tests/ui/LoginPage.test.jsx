@@ -14,7 +14,7 @@
 //   - Submit desabilitado quando submitting=true
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -26,6 +26,7 @@ vi.mock('../../src/hooks/useAuth', () => ({
 }))
 
 import LoginPage from '../../src/pages/LoginPage'
+import { LoginSeaChart, countFittingLatLabels, countFittingLonLabels } from '../../src/components/LoginArt'
 import { ToastProvider } from '../../src/components/Toast'
 
 function defaultAuth() {
@@ -347,5 +348,367 @@ describe('arte do login', () => {
     expect(container.querySelector('.login-chart__ship--out')).not.toBeNull()
     expect(container.querySelector('.login-chart__ship--back')).not.toBeNull()
     expect(container.querySelector('.login-chart__ship--far')).not.toBeNull()
+  })
+})
+
+// Refino F5b (Login.dc.html): >= 1041px o campo de senha ganha a linha do rotulo (com
+// "Esqueci minha senha") e o botao mostrar/ocultar; tablet/mobile ficam com o campo legado.
+// Os testes acima rodam sem matchMedia casando (= legado); aqui o desktop e forcado.
+const originalMatchMedia = window.matchMedia
+
+function stubDesktop(matches = true) {
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
+}
+
+describe('LoginPage - desktop (>= 1041px)', () => {
+  beforeEach(() => stubDesktop(true))
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('"Esqueci minha senha" fica na linha do rotulo "Senha" e o rotulo e associado ao campo', () => {
+    const { container } = renderPage()
+    const row = container.querySelector('.auth-field__row')
+    expect(row).not.toBeNull()
+    expect(row).toHaveTextContent('Senha')
+    expect(row).toContainElement(screen.getByRole('button', { name: 'Esqueci minha senha' }))
+    expect(screen.getByLabelText('Senha')).toBe(screen.getByPlaceholderText('Sua senha'))
+    expect(container.querySelector('.auth-actions')).toBeNull()
+  })
+
+  it('botao mostrar/ocultar senha: aria-label, aria-pressed e tipo do campo alternam', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const input = screen.getByPlaceholderText('Sua senha')
+    const toggle = screen.getByRole('button', { name: 'Mostrar senha' })
+    expect(input).toHaveAttribute('type', 'password')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveAttribute('type', 'button')
+    await user.click(toggle)
+    expect(input).toHaveAttribute('type', 'text')
+    const hide = screen.getByRole('button', { name: 'Ocultar senha' })
+    expect(hide).toHaveAttribute('aria-pressed', 'true')
+    await user.click(hide)
+    expect(input).toHaveAttribute('type', 'password')
+    expect(screen.getByRole('button', { name: 'Mostrar senha' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('o botao do olho nao e o botao primario nem dispara o envio', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Mostrar senha' }))
+    expect(auth.login).not.toHaveBeenCalled()
+    expect(document.querySelector('button.primary-button')).toHaveTextContent('Entrar')
+  })
+
+  it('submit continua chamando login(email, senha) com a senha visivel', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'maria@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'senha123')
+    await user.click(screen.getByRole('button', { name: 'Mostrar senha' }))
+    await user.click(document.querySelector('button.primary-button'))
+    await waitFor(() => {
+      expect(auth.login).toHaveBeenCalledWith('maria@sqquimica.com', 'senha123')
+    })
+  })
+
+  it('redefinir senha continua: painel, e-mail e requestPasswordReset', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    expect(screen.queryByText('Redefinir senha')).not.toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'maria@sqquimica.com')
+    await user.click(screen.getByRole('button', { name: 'Esqueci minha senha' }))
+    expect(screen.getByText('Redefinir senha')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Enviar link de redefini/i }))
+    await waitFor(() => {
+      expect(auth.requestPasswordReset).toHaveBeenCalledWith('maria@sqquimica.com')
+    })
+  })
+
+  it('cadastro: sem "Esqueci minha senha", com o olho, o campo Nome e register({name,email,password})', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    expect(screen.queryByRole('button', { name: 'Esqueci minha senha' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mostrar senha' })).toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('Nome completo'), 'Maria Souza')
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'maria@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'senha123')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await waitFor(() => {
+      expect(auth.register).toHaveBeenCalledWith({ name: 'Maria Souza', email: 'maria@sqquimica.com', password: 'senha123' })
+    })
+  })
+
+  it('erro de autenticacao aparece no banner (campo de senha do desktop)', async () => {
+    const user = userEvent.setup()
+    const auth = defaultAuth()
+    auth.login = vi.fn().mockRejectedValue({ code: 'auth/invalid-credential' })
+    mockUseAuth.mockReturnValue(auth)
+    renderPage()
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'a@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'p')
+    await user.click(document.querySelector('button.primary-button'))
+    await waitFor(() => {
+      expect(screen.getByText(/auth\/invalid-credential/)).toBeInTheDocument()
+    })
+  })
+})
+
+describe('LoginPage - troca ao vivo em 1041px (review r1)', () => {
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('o e-mail e a senha digitados sobrevivem a troca legado <-> desktop (estado no pai)', async () => {
+    const user = userEvent.setup()
+    let listener = null
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn((_event, handler) => {
+        listener = handler
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+    const { container } = renderPage()
+    expect(container.querySelector('.auth-password')).toBeNull()
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'maria@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'senha123')
+    expect(listener).toBeTypeOf('function')
+
+    act(() => listener({ matches: true }))
+    expect(container.querySelector('.auth-password')).not.toBeNull()
+    expect(screen.getByPlaceholderText('nome@sqquimica.com')).toHaveValue('maria@sqquimica.com')
+    expect(screen.getByPlaceholderText('Sua senha')).toHaveValue('senha123')
+
+    act(() => listener({ matches: false }))
+    expect(container.querySelector('.auth-password')).toBeNull()
+    expect(screen.getByPlaceholderText('nome@sqquimica.com')).toHaveValue('maria@sqquimica.com')
+    expect(screen.getByPlaceholderText('Sua senha')).toHaveValue('senha123')
+  })
+
+  it('o segmentado Entrar/Cadastrar e um grupo com nome acessivel', () => {
+    renderPage()
+    const group = screen.getByRole('group', { name: 'Modo de acesso' })
+    expect(group).toHaveClass('auth-toggle')
+    expect(group.querySelectorAll('button')).toHaveLength(2)
+  })
+})
+
+describe('LoginPage - tablet/mobile (< 1041px) mantem o campo legado', () => {
+  it('sem linha do rotulo nem botao do olho; "Esqueci minha senha" na linha propria', () => {
+    const { container } = renderPage()
+    expect(container.querySelector('.auth-field__row')).toBeNull()
+    expect(container.querySelector('.auth-password')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mostrar senha' })).not.toBeInTheDocument()
+    expect(container.querySelector('.auth-actions .auth-link-button')).toHaveTextContent('Esqueci minha senha')
+    expect(container.querySelector('label.field input[type="password"]')).not.toBeNull()
+  })
+})
+
+describe('LoginPage - painel da marca e assinatura (F5b)', () => {
+  it('o painel comeca pela marca do produto (COMEX, tom escuro, 56) e o h1 continua unico', () => {
+    const { container } = renderPage()
+    const head = container.querySelector('aside.auth-brand .auth-brand__head')
+    expect(head).not.toBeNull()
+    const mark = head.querySelector('svg.brand-mark')
+    expect(mark).toHaveClass('brand-mark--comex', 'brand-mark--dark', 'auth-brand__mark')
+    expect(mark).toHaveAttribute('width', '56')
+    expect(mark).toHaveAttribute('aria-hidden', 'true')
+    expect(head.firstElementChild).toBe(mark)
+    expect(head.querySelector('h1')).toHaveTextContent('Portal COMEX')
+    expect(head.querySelector('p')).toHaveTextContent('Acompanhe chegadas, comunicados')
+  })
+
+  it('o PNG e o eyebrow do painel continuam no DOM (cabecalho mobile) e a assinatura nao usa alt', () => {
+    const { container } = renderPage()
+    expect(container.querySelector('.auth-brand__logo img')).toHaveAttribute('alt', 'SQ Química')
+    expect(container.querySelector('.auth-brand__eyebrow')).toHaveTextContent('SQ Química · Suite COMEX')
+    const signature = container.querySelector('.auth-sq-signature')
+    expect(signature).not.toBeNull()
+    const logo = signature.querySelector('.sq-logo')
+    expect(logo).toHaveClass('sq-logo--minusc', 'sq-logo--light')
+    expect(logo).toHaveAttribute('role', 'img')
+    expect(logo).toHaveAttribute('aria-label', 'SQ Química')
+    expect(signature.querySelector('img')).toBeNull()
+    expect(logo.querySelector('svg')).toHaveAttribute('width', '36')
+    expect(container.querySelector('.auth-screen--login').lastElementChild).toBe(signature)
+  })
+
+  it('as 2 features do mock com os icones do mock', () => {
+    const { container } = renderPage()
+    const feats = container.querySelectorAll('.auth-brand__feat')
+    expect(feats).toHaveLength(2)
+    expect(feats[0]).toHaveTextContent('Fila de chegadas')
+    expect(feats[1]).toHaveTextContent('Notificações e comunicados')
+    expect(feats[0].querySelector('path')).toHaveAttribute('d', 'M3 17h18l-2 3H5zM5 17V9h14v8M9 9V5h6v4')
+    expect(feats[1].querySelector('path')).toHaveAttribute('d', 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4')
+  })
+
+  it('D16: so 4 latitudes (23°50′S ... 24°05′S) nas posicoes y = 144 + 180·k', () => {
+    const { container } = renderPage()
+    const labels = [...container.querySelectorAll('.login-chart__lat text')]
+    expect(labels.map((node) => node.textContent)).toEqual(['23°50′S', '23°55′S', '24°00′S', '24°05′S'])
+    expect(labels.map((node) => node.getAttribute('y'))).toEqual(['144', '324', '504', '684'])
+    expect(screen.queryByText('24°10′S')).not.toBeInTheDocument()
+    expect(screen.queryByText('24°25′S')).not.toBeInTheDocument()
+  })
+
+  it('D20: o paragrafo "Use sua conta corporativa" so e escondido (por CSS) no modo login; o cadastro o mostra', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    const lead = container.querySelector('.auth-card__lead')
+    expect(lead).toHaveClass('auth-card__lead--login')
+    expect(lead).toHaveTextContent('Use sua conta corporativa @sqquimica.com')
+    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    expect(container.querySelector('.auth-card__lead')).not.toHaveClass('auth-card__lead--login')
+    expect(container.querySelector('.auth-card__lead')).toHaveTextContent('Cadastro permitido apenas para e-mails @sqquimica.com')
+  })
+
+  it('rodape "Acesso restrito" e o segmentado expoem o estado (aria-pressed)', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    expect(container.querySelector('.auth-card__legal')).toHaveTextContent('Acesso restrito a colaboradores e parceiros da SQ Química.')
+    const [entrar, cadastrar] = container.querySelectorAll('.auth-toggle__item')
+    expect(entrar).toHaveAttribute('aria-pressed', 'true')
+    expect(cadastrar).toHaveAttribute('aria-pressed', 'false')
+    await user.click(cadastrar)
+    expect(entrar).toHaveAttribute('aria-pressed', 'false')
+    expect(cadastrar).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+// Refino F6a (carry-over da F5b): nenhum rotulo da carta aparece cortado. A largura/altura dos SVGs
+// vem do navegador; so cabe o rotulo cuja caixa inteira esta na zona opaca da mascara.
+describe('LoginSeaChart - rotulos que nao cabem nao sao desenhados', () => {
+  const originalRect = Element.prototype.getBoundingClientRect
+  const originalObserver = globalThis.ResizeObserver
+
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = originalRect
+    globalThis.ResizeObserver = originalObserver
+  })
+
+  function stubBoxes({ lon, lat }) {
+    const box = { lon, lat }
+    Element.prototype.getBoundingClientRect = function getRect() {
+      if (this.classList?.contains('login-chart__lon')) return { width: box.lon, height: 60, top: 0, left: 0, right: box.lon, bottom: 60 }
+      if (this.classList?.contains('login-chart__lat')) return { width: 140, height: box.lat, top: 0, left: 0, right: 140, bottom: box.lat }
+      return originalRect.call(this)
+    }
+    return box
+  }
+
+  const lonLabels = (container) => [...container.querySelectorAll('.login-chart__lon text')].map((node) => node.textContent)
+  const latLabels = (container) => [...container.querySelectorAll('.login-chart__lat text')].map((node) => node.textContent)
+
+  it('sem medida (jsdom / carta escondida em <= 1040px) desenha todos: 12 longitudes e 4 latitudes', () => {
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(12)
+    expect(latLabels(container)).toHaveLength(4)
+    expect(countFittingLonLabels(0)).toBe(12)
+    expect(countFittingLatLabels(0)).toBe(4)
+  })
+
+  it('longitudes: so as que cabem inteiras ate 170px antes da borda (x = 706 + 160k, caixa de 56px)', () => {
+    // largura 1340 (1100x800 em modo notebook): 706+56 <= 1170 e 866+56 <= 1170; 1026+56 > 1170
+    expect(countFittingLonLabels(1340)).toBe(3)
+    // 1470 (1280x552): k=3 termina em 1242 <= 1300; k=4 termina em 1402 > 1300
+    expect(countFittingLonLabels(1470)).toBe(4)
+    // 1440 de largura e 900 de altura (sem deslocamento): 1242 <= 1270
+    expect(countFittingLonLabels(1440)).toBe(4)
+    // estreita demais ate para o primeiro
+    expect(countFittingLonLabels(900)).toBe(0)
+    // cada contagem nunca deixa um rotulo na zona de esmaecimento
+    for (const width of [1000, 1100, 1280, 1340, 1366, 1440, 1600, 1920, 2560]) {
+      const count = countFittingLonLabels(width)
+      for (let k = 0; k < count; k += 1) expect(706 + 160 * k + 56).toBeLessThanOrEqual(width - 170)
+      if (count < 12) expect(706 + 160 * count + 56).toBeGreaterThan(width - 170)
+    }
+  })
+
+  it('latitudes: so as que terminam antes dos 84px do rodape (y = 144 + 180k)', () => {
+    expect(countFittingLatLabels(900)).toBe(4)
+    expect(countFittingLatLabels(800)).toBe(4)
+    // 552 de altura: 148 e 328 cabem em 468; 508 nao
+    expect(countFittingLatLabels(552)).toBe(2)
+    // no corte exato do mascara o rotulo e' escondido, nao cortado ao meio
+    expect(countFittingLatLabels(504 + 4 + 84 - 1)).toBe(2)
+    expect(countFittingLatLabels(504 + 4 + 84)).toBe(3)
+    expect(countFittingLatLabels(60)).toBe(0)
+  })
+
+  it('renderiza so os rotulos medidos como inteiros (1100x800 em modo notebook: 3 longitudes; 552 de altura: 2 latitudes)', () => {
+    stubBoxes({ lon: 1340, lat: 552 })
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toEqual(['46°40′W', '46°30′W', '46°20′W'])
+    expect(latLabels(container)).toEqual(['23°50′S', '23°55′S'])
+  })
+
+  it('acompanha o redimensionamento ao vivo (ResizeObserver) sem remontar a carta', () => {
+    const observers = []
+    globalThis.ResizeObserver = class {
+      constructor(callback) {
+        this.callback = callback
+        this.disconnect = vi.fn()
+        observers.push(this)
+      }
+
+      observe() {}
+    }
+    const box = stubBoxes({ lon: 900, lat: 900 })
+    const { container } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(0)
+    box.lon = 1470
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(lonLabels(container)).toHaveLength(4)
+    box.lat = 552
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(latLabels(container)).toHaveLength(2)
+    box.lon = 1100
+    act(() => observers.forEach((observer) => observer.callback()))
+    expect(lonLabels(container)).toHaveLength(2)
+  })
+
+  it('sem ResizeObserver cai para o evento resize da janela e limpa o listener ao desmontar', () => {
+    globalThis.ResizeObserver = undefined
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const box = stubBoxes({ lon: 1340, lat: 900 })
+    const { container, unmount } = render(<LoginSeaChart />)
+    expect(lonLabels(container)).toHaveLength(3)
+    box.lon = 1470
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(lonLabels(container)).toHaveLength(4)
+    expect(add.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThan(0)
+    unmount()
+    expect(remove.mock.calls.filter(([type]) => type === 'resize').length).toBeGreaterThan(0)
+    add.mockRestore()
+    remove.mockRestore()
   })
 })

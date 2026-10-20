@@ -8,6 +8,10 @@
 //   </Stagger>
 //
 // O CSS cuida do resto (opacity 0 -> 1 + translateY).
+//
+// Cada filho recebe duas custom properties: --stagger-delay (ms acumulados; e o
+// que o mobile usa) e --stagger-index (posicao 0-based; o desktop calcula
+// min(indice, 7) * 40 ms, entao so os 8 primeiros escalonam — Movimento.dc.html).
 
 import { Children, cloneElement, isValidElement } from 'react'
 
@@ -28,7 +32,11 @@ export default function Stagger({
         const delay = baseMs + index * stepMs
         return cloneElement(child, {
           key: child.key ?? `stagger-${index}`,
-          style: { ...(child.props.style ?? {}), '--stagger-delay': `${delay}ms` },
+          style: {
+            ...(child.props.style ?? {}),
+            '--stagger-delay': `${delay}ms`,
+            '--stagger-index': index,
+          },
           className: `${child.props.className ?? ''} stagger__item`.trim(),
         })
       })}

@@ -24,7 +24,7 @@ export default function VesselTrackingButton({ process }) {
   if (target.mode === 'search') {
     return (
       <a
-        className="ghost-button"
+        className="ghost-button ghost-button--secondary"
         href={buildVesselFinderSearchUrl(target.name)}
         target="_blank"
         rel="noopener noreferrer"
@@ -39,7 +39,7 @@ export default function VesselTrackingButton({ process }) {
 
   return (
     <>
-      <button type="button" className="ghost-button" onClick={() => setOpen(true)}>
+      <button type="button" className="ghost-button ghost-button--secondary" onClick={() => setOpen(true)}>
         Rastrear navio
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={title} wide>
@@ -54,7 +54,7 @@ export default function VesselTrackingButton({ process }) {
         </div>
         <div className="vessel-tracking__links">
           <a
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             href={buildVesselFinderDetailsUrl(imo)}
             target="_blank"
             rel="noopener noreferrer"
@@ -62,7 +62,7 @@ export default function VesselTrackingButton({ process }) {
             Abrir no VesselFinder
           </a>
           <a
-            className="ghost-button"
+            className="ghost-button ghost-button--secondary"
             href={buildMarineTrafficUrl(imo)}
             target="_blank"
             rel="noopener noreferrer"

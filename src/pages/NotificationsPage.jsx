@@ -1,10 +1,70 @@
-import { useContext } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
+import useAuth from '../hooks/useAuth'
+import { listProcesses } from '../services/processesRepository'
+import { canSeeProcessName, getProcessTitle } from '../features/processes/processLabels'
 import { NotificationsContext } from '../contexts/NotificationsContext'
 import NotificationsList from '../components/NotificationsList'
 import TabButton from '../components/TabButton'
 import Icon from '../components/Icon'
+import { FilterPill } from '../components/FilterChip'
+import useMediaQuery from '../hooks/useMediaQuery'
+
+// Refino F5a (Notificacoes.dc.html): >= 1041px a pagina usa a arvore `nt-*` (cabecalho
+// com acoes em icone, pilulas com contagem, cartoes por grupo); tablet/mobile seguem
+// na arvore anterior. Tema escuro: as classes `nt-*` sao novas — nao herdam os
+// overrides `[data-theme='dark'] .notifications__group/__item` do legado.
+const DESKTOP_QUERY = '(min-width: 1041px)'
+
+// As mesmas 10 categorias do legado (D18), com o tipo de notificacao de cada uma.
+const NOTIFICATION_FILTERS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'process_question_created', label: 'Dúvidas' },
+  { value: 'process_question_answered', label: 'Respostas' },
+  { value: 'favorite_process_message', label: 'Favoritos' },
+  { value: 'post_receipt_notes_updated', label: 'Pós-recebimento' },
+  { value: 'collection_status_updated', label: 'Coleta' },
+  { value: 'receipt_divergence_reported', label: 'Divergências' },
+  { value: 'license_rejected', label: 'Anuências' },
+  { value: 'process_daily_alerts', label: 'Alertas' },
+  { value: 'process_document_uploaded', label: 'Documentos' },
+]
 
 export default function NotificationsPage() {
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const { profile } = useAuth()
+  const canSeeName = canSeeProcessName(profile?.role)
+  // Refino F5a: o titulo do cartao de cada grupo e' o nome do processo (Notificacoes.dc.html).
+  // Os processos sao carregados UMA vez (so no desktop, que e' quem mostra o nome), com a mesma
+  // mascara do resto do app (getProcessTitle: so admin/logistica veem o nome nas categorias
+  // restritas). Falha de carga nao quebra a lista: o titulo cai no da ultima notificacao.
+  const [processes, setProcesses] = useState([])
+  useEffect(() => {
+    if (!isDesktop) return undefined
+    let isMounted = true
+
+    async function loadProcesses() {
+      try {
+        const loaded = await listProcesses()
+        if (isMounted) setProcesses(Array.isArray(loaded) ? loaded : [])
+      } catch (error) {
+        console.error('Falha ao carregar os processos das notificações.', error)
+      }
+    }
+
+    loadProcesses()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isDesktop])
+  const processTitles = useMemo(() => {
+    const titles = {}
+    processes.forEach((process) => {
+      const title = process?.id ? getProcessTitle(process, canSeeName) : ''
+      if (title) titles[process.id] = title
+    })
+    return titles
+  }, [processes, canSeeName])
   const {
     notifications,
     unreadNotifications,
@@ -33,6 +93,103 @@ export default function NotificationsPage() {
     return m > 0 ? `${h}h ${m}min` : `${h}h`
   }
 
+  if (isDesktop) {
+    // Contagem de cada pilula = nao lidas daquela categoria ("Todas" = todas as pendentes).
+    const unreadByFilter = (value) =>
+      value === 'all'
+        ? unreadNotifications.length
+        : unreadNotifications.filter((item) => item.type === value).length
+    const dndLabel = dnd.isActive
+      ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+      : 'Ativar modo não perturbe por 1 hora'
+
+    return (
+      <section className="surface notifications-page notifications-page--desktop">
+        <div className="nt-head">
+          <div className="nt-head__text">
+            <span className="nt-head__eyebrow">
+              {unreadNotifications.length} pendentes
+              {dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''}
+            </span>
+            <h2 className="nt-head__title">Central de notificações</h2>
+          </div>
+          <div className="nt-head__actions">
+            <button
+              type="button"
+              className="secondary-button nt-head__mark-all"
+              onClick={markAllAsRead}
+              disabled={unreadNotifications.length === 0}
+            >
+              Marcar todas como lidas
+            </button>
+            <button
+              type="button"
+              className={`nt-icon-button nt-head__dnd${dnd.isActive ? ' nt-icon-button--active' : ''}`}
+              onClick={() => {
+                if (dnd.isActive) {
+                  dnd.disable()
+                } else {
+                  dnd.enableFor(60 * 60 * 1000)
+                }
+              }}
+              aria-pressed={dnd.isActive}
+              aria-label={dndLabel}
+              title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+            >
+              <Icon name="bell-slash" size={18} strokeWidth={1.9} />
+            </button>
+            <button
+              type="button"
+              className="nt-icon-button nt-head__prefs"
+              onClick={() => setIsPrefsModalOpen(true)}
+              aria-label="Preferências de notificação"
+              title="Preferências de notificação"
+            >
+              <Icon name="sliders" size={18} strokeWidth={1.9} />
+            </button>
+          </div>
+        </div>
+
+        <div className="nt-filters" role="group" aria-label="Filtrar notificações">
+          {NOTIFICATION_FILTERS.map((filter) => {
+            const count = unreadByFilter(filter.value)
+            const isActive = notificationFilter === filter.value
+            return (
+              <FilterPill
+                key={filter.value}
+                className="nt-filter"
+                label={filter.label}
+                count={count > 0 ? count : undefined}
+                active={isActive}
+                aria-label={
+                  count > 0
+                    ? `${filter.label} (${count} ${count === 1 ? 'não lida' : 'não lidas'})`
+                    : filter.label
+                }
+                onClick={() => setNotificationFilter(filter.value)}
+              />
+            )
+          })}
+        </div>
+
+        <div className="nt-list">
+          <NotificationsList
+            variant="page"
+            processTitles={processTitles}
+            grouped={groupedNotifications}
+            onOpenNotification={handleOpenNotification}
+            onMarkAsRead={markOneAsRead}
+            formatRelative={formatRelativeNotificationTime}
+            formatDate={formatNotificationDate}
+            isLoading={isLoadingNotifications}
+            loadError={notificationsLoadError}
+            onRetry={reloadNotifications}
+          />
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="surface notifications-page">
       <div className="section-heading">
@@ -46,7 +203,7 @@ export default function NotificationsPage() {
         <div className="notifications__heading-actions">
           <button
             type="button"
-            className="ghost-button notifications__mark-all"
+            className="ghost-button ghost-button--secondary notifications__mark-all"
             onClick={markAllAsRead}
             disabled={unreadNotifications.length === 0}
           >
@@ -54,7 +211,7 @@ export default function NotificationsPage() {
           </button>
           <button
             type="button"
-            className="ghost-button notifications__prefs"
+            className="ghost-button ghost-button--outline notifications__prefs"
             onClick={() => setIsPrefsModalOpen(true)}
             aria-label="Preferências de notificação"
             title="Preferências de notificação"
@@ -63,7 +220,7 @@ export default function NotificationsPage() {
           </button>
           <button
             type="button"
-            className={`ghost-button notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
+            className={`ghost-button ghost-button--outline notifications__dnd${dnd.isActive ? ' notifications__dnd--active' : ''}`}
             onClick={() => {
               if (dnd.isActive) {
                 dnd.disable()

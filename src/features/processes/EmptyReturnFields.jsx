@@ -1,5 +1,6 @@
 import { getContainerOptionLabel } from './containers'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import PendingFieldHint from './PendingFieldHint'
 
 // F17.4b (B-7, D6): devolucao de vazio - editavel SO pelo admin, no passo
 // "Coleta" do form (FCL/CONSOLIDADO, desde "Aguardando agendamento de coleta"). Importa
@@ -18,6 +19,7 @@ export default function EmptyReturnFields({ containers, onChange, disabled, erro
   return (
     <div className="detail-card">
       <span className="detail-label">Devolução do vazio</span>
+      <PendingFieldHint field="containersReturnedAt" />
       <div className="detail-stack detail-stack--compact">
         {containerList.map((container, index) => {
           const errorKey = `containers.${container.id}.returnedAt`

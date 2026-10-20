@@ -9,6 +9,8 @@
 //     trend={{ delta: 12, period: 'vs. semana passada' }}
 //     sparkline={[10, 14, 12, 18, 22, 19, 25, 30]}
 //     icon="dashboard"     // opcional
+//     note="+4 vs. semana passada"   // opcional (Dashboard desktop, F4a)
+//     noteTone="success"             // success | warning | danger | neutral
 //   />
 //
 // Trend positive (up + cor primary-700), trend negative (down + danger).
@@ -17,6 +19,7 @@
 
 import { useId } from 'react'
 import Icon from './Icon'
+import useCountUp from '../hooks/useCountUp'
 
 const TREND_COLORS = {
   up: 'var(--success-700)',
@@ -69,11 +72,15 @@ export default function StatCard({
   trend,
   sparkline,
   icon,
+  note,
+  noteTone = 'neutral',
   className = '',
 }) {
   // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
   // o navegador pinta a area do sparkline de PRETO (default do fill).
   const gradientId = `sparkline-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  // Contador 600 ms, 1x por sessao (so valor numerico; texto passa direto).
+  const displayedValue = useCountUp(value)
   const direction = trend ? pickTrendDirection(trend.delta) : null
   const sparklineWidth = 100
   const sparklineHeight = 28
@@ -104,7 +111,7 @@ export default function StatCard({
         ) : null}
       </div>
 
-      <strong className="stat-card__value">{value}</strong>
+      <strong className="stat-card__value">{displayedValue}</strong>
 
       {sparklineData ? (
         <svg
@@ -132,6 +139,12 @@ export default function StatCard({
       ) : null}
 
       {trend?.period ? <p className="stat-card__period">{trend.period}</p> : null}
+
+      {/* Nota do KPI (Dashboard.dc.html: 12/600, tom por significado). Renderiza
+          mesmo vazia ('' = erro de carga) para o card nao mudar de altura. */}
+      {note !== undefined && note !== null ? (
+        <p className={`stat-card__note stat-card__note--${noteTone}`}>{note}</p>
+      ) : null}
     </article>
   )
 }

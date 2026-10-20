@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
+import Icon from '../components/Icon'
 
 function buildErrorMessage(error) {
   const details = error?.code ?? error?.message
@@ -77,7 +78,7 @@ export default function VerifyEmailPage() {
 
   if (loading) {
     return (
-      <div className="auth-screen">
+      <div className="auth-screen auth-screen--verify">
         <div className="auth-card">
           <strong>Validando confirmação</strong>
           <p>Carregando o status atual do seu acesso.</p>
@@ -140,8 +141,11 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen--verify">
       <div className="auth-card auth-card--form">
+        <span className="auth-state__icon auth-state__icon--info">
+          <Icon name="mail" size={26} strokeWidth={1.8} />
+        </span>
         <span className="brand__eyebrow">SQ Comex Updates</span>
         <h1>Confirmação de email</h1>
         <p>
@@ -155,8 +159,11 @@ export default function VerifyEmailPage() {
         {feedback ? <div className="success-banner">{feedback}</div> : null}
         {error ? <div className="error-banner">{error}</div> : null}
 
-        <div className="auth-reset-panel">
+        <div className="auth-reset-panel auth-status" role="status">
           <strong>Status</strong>
+          {isAuthenticated ? (
+            <span className="auth-status__headline">Aguardando confirmação</span>
+          ) : null}
           <p>
             {isAuthenticated && hasAccess
               ? 'O acesso ao sistema foi mantido para não interromper a operação. Mesmo assim, conclua a confirmação do email corporativo.'
@@ -167,7 +174,7 @@ export default function VerifyEmailPage() {
         </div>
 
         {isAuthenticated ? (
-          <>
+          <div className="auth-state__actions">
             <button
               type="button"
               className="primary-button auth-button"
@@ -178,7 +185,7 @@ export default function VerifyEmailPage() {
             </button>
             <button
               type="button"
-              className="ghost-button auth-button"
+              className="ghost-button ghost-button--secondary auth-button"
               onClick={handleResendEmail}
               disabled={submitting}
             >
@@ -192,11 +199,13 @@ export default function VerifyEmailPage() {
             >
               Sair
             </button>
-          </>
+          </div>
         ) : (
-          <a className="primary-button auth-button auth-button--link" href="/login">
-            Voltar ao login
-          </a>
+          <div className="auth-state__actions">
+            <a className="primary-button auth-button auth-button--link" href="/login">
+              Voltar ao login
+            </a>
+          </div>
         )}
       </div>
     </div>

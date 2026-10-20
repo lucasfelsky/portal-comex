@@ -9,6 +9,7 @@ import {
   isContainerRemovalLocked,
 } from './containers'
 import { getFieldErrorId } from '../../utils/fieldErrors'
+import PendingFieldHint from './PendingFieldHint'
 
 // F17.2a (D-11): editor de containers[] - lista editavel (tipo, numero +
 // aviso ISO 6346, lacre, remover) + botao "Adicionar contêiner" (desabilita
@@ -66,6 +67,7 @@ export default function ContainersEditor({
             {containers.length} contêiner{containers.length === 1 ? '' : 'es'}
           </span>
           <p>Cadastre tipo, número (ISO 6346) e lacre de cada contêiner.</p>
+          <PendingFieldHint field={['containers', 'containerTypes', 'containerNumbers', 'containerSeals']} />
           {groupError ? (
             <small className="field-error" id={getFieldErrorId(groupDomId)}>
               {groupError}
@@ -74,7 +76,7 @@ export default function ContainersEditor({
         </div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAddMore}
         >
@@ -128,7 +130,7 @@ export default function ContainersEditor({
                   <label className="field">
                     <span className="editor-row__label">Número</span>
                     <input
-                      className="text-input"
+                      className="text-input text-input--mono"
                       type="text"
                       value={container.number}
                       onChange={(event) => handleChange(container.id, { number: event.target.value })}
@@ -145,7 +147,7 @@ export default function ContainersEditor({
                   <label className="field">
                     <span className="editor-row__label">Lacre</span>
                     <input
-                      className="text-input"
+                      className="text-input text-input--mono"
                       type="text"
                       value={container.seal}
                       onChange={(event) => handleChange(container.id, { seal: event.target.value })}

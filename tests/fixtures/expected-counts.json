@@ -15,10 +15,11 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 24,
+    "topLevel": 25,
     "_topLevel_list": [
       "ActionSheet.jsx",
       "AppLayout.jsx",
+      "BrandMark.jsx",
       "Breadcrumb.jsx",
       "CommandPalette.jsx",
       "ConfirmDialog.jsx",

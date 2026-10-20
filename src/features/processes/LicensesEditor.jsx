@@ -8,6 +8,7 @@ import {
   createEmptyLicense,
 } from './licenses'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import PendingFieldHint from './PendingFieldHint'
 
 // F17.2b (D-5): editor de anuencias `licenses[]` - lista editavel (orgao,
 // No LPCO, status, vistoria/deferimento condicionais, observacoes,
@@ -63,6 +64,7 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
             {licenses.length} anuência{licenses.length === 1 ? '' : 's'}
           </span>
           <p>Cadastre o órgão, número da LPCO e status de cada anuência exigida.</p>
+          <PendingFieldHint field={['licenses', 'licenseInspectionDate', 'licenseDeferredDate']} />
           {groupError ? (
             <small className="field-error" id={getFieldErrorId(groupDomId)}>
               {groupError}
@@ -71,7 +73,7 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
         </div>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAddMore}
         >
@@ -125,7 +127,7 @@ export default function LicensesEditor({ value, onChange, disabled = false, erro
                   <label className="field">
                     <span className="editor-row__label">Nº LPCO</span>
                     <input
-                      className="text-input"
+                      className="text-input text-input--mono"
                       type="text"
                       value={license.lpcoNumber}
                       onChange={(event) => handleChange(license.id, { lpcoNumber: event.target.value })}

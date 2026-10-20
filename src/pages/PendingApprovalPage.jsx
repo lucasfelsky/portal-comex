@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { auth, isFirebaseConfigured } from '../lib/firebase'
 import { getUserClaims } from '../lib/claims'
+import Icon from '../components/Icon'
 
 export default function PendingApprovalPage() {
   const { isAuthenticated, hasAccess, isEmailVerified, profile, logout, refreshAuthenticatedUser } = useAuth()
@@ -11,6 +12,9 @@ export default function PendingApprovalPage() {
   const isBlocked = currentStatus === 'Bloqueado'
   const [diagnostic, setDiagnostic] = useState(null)
   const [reloading, setReloading] = useState(false)
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false)
+  // Refino F5b: pendente = ambar (relogio); reprovado/bloqueado = vermelho (alerta).
+  const tone = isRejected || isBlocked ? 'danger' : 'warn'
 
   // Diagnostico inline: mostra o que o front esta' lendo das claims AGORA.
   // Ajuda a distinguir bug do front de claims erradas no Firebase
@@ -69,15 +73,18 @@ export default function PendingApprovalPage() {
   }
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen auth-screen--pending">
       <div className="auth-card auth-card--form">
+        <span className={`auth-state__icon auth-state__icon--${tone}`}>
+          <Icon name={tone === 'danger' ? 'alert-triangle' : 'clock'} size={26} strokeWidth={1.8} />
+        </span>
         <span className="brand__eyebrow">Portal COMEX</span>
         <h1>{isRejected ? 'Acesso reprovado' : isBlocked ? 'Acesso bloqueado' : 'Acesso pendente'}</h1>
         <p>
           O usuário <strong>{profile?.email}</strong> foi criado com sucesso, mas o acesso ainda não
           foi liberado.
         </p>
-        <div className="auth-reset-panel">
+        <div className={`auth-reset-panel auth-next-step auth-next-step--${tone}`}>
           <strong>Próximo passo</strong>
           <p>
             {isRejected
@@ -89,10 +96,29 @@ export default function PendingApprovalPage() {
                   : 'Confirme primeiro o email corporativo e, depois disso, aguarde a liberação manual de um administrador.'}
           </p>
         </div>
-        <div className="success-banner">Status atual: {currentStatus}</div>
+        <div className={`success-banner auth-status-line auth-status-line--${tone}`}>
+          Status atual: {currentStatus}
+        </div>
 
         {diagnostic && (
-          <div className="auth-reset-panel" style={{ fontSize: 'var(--fs-subhead)' }}>
+          <button
+            type="button"
+            className="auth-diagnostic-toggle"
+            aria-expanded={diagnosticOpen}
+            aria-controls="auth-diagnostic-panel"
+            onClick={() => setDiagnosticOpen((current) => !current)}
+          >
+            Diagnóstico (para o suporte)
+            <Icon name="chevron-down" size={14} strokeWidth={2} />
+          </button>
+        )}
+
+        {diagnostic && (
+          <div
+            id="auth-diagnostic-panel"
+            className={`auth-reset-panel auth-diagnostic${diagnosticOpen ? '' : ' auth-diagnostic--collapsed'}`}
+            style={{ fontSize: 'var(--fs-subhead)' }}
+          >
             <strong>Diagnóstico (claims lidas agora)</strong>
             {diagnostic.ok ? (
               <>
@@ -112,10 +138,10 @@ export default function PendingApprovalPage() {
           </div>
         )}
 
-        <div className="button-row">
+        <div className="button-row auth-state__actions">
           <button
             type="button"
-            className="ghost-button auth-button"
+            className="ghost-button ghost-button--secondary auth-button"
             onClick={handleForceReload}
             disabled={reloading}
           >

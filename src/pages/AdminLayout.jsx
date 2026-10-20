@@ -19,17 +19,23 @@ export default function AdminLayout() {
 
   return (
     <section className="surface admin-section">
-      {/* Desktop: tabs normais */}
+      {/* Desktop: tabs normais. Refino F2 (AdminTabs.dc.html): cada aba tem
+          rotulo + ponto de ativo + descricao; ponto e descricao so aparecem no
+          desktop (>=1041px) — no tablet continua a pilula so com o rotulo. */}
       <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
         {sections.map((section) => (
           <NavLink
             key={section.to}
             to={section.to}
             className={({ isActive }) =>
-              `tab-button${isActive ? ' tab-button--active' : ''}`
+              `tab-button admin-tab${isActive ? ' tab-button--active' : ''}`
             }
           >
-            {section.label}
+            <span className="admin-tab__label">
+              <span className="admin-tab__dot" aria-hidden="true" />
+              {section.label}
+            </span>
+            <span className="admin-tab__desc">{section.description}</span>
           </NavLink>
         ))}
       </nav>

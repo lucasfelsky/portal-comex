@@ -13,7 +13,7 @@ const STORAGE_KEY = 'pc-theme'
 const CYCLE_ORDER = ['auto', 'dark', 'light']
 
 // theme-color do chrome do navegador mobile acompanha o tema efetivo.
-const THEME_COLOR = { light: '#00ae91', dark: '#0e1413' }
+const THEME_COLOR = { light: '#004153', dark: '#061a22' }
 
 export function getStoredThemePreference() {
   try {

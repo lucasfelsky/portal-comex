@@ -632,7 +632,7 @@ export default function ErpReconcileModal({
               <span id={fileLabelId}>Arquivo ({source.label})</span>
               <div className="file-picker">
                 <label
-                  className={`ghost-button file-picker__button${isFileDisabled ? ' file-picker__button--disabled' : ''}`}
+                  className={`ghost-button ghost-button--secondary file-picker__button${isFileDisabled ? ' file-picker__button--disabled' : ''}`}
                 >
                   <input
                     className="file-picker__input"

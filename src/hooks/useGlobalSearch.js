@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchProcesses } from '../services/processesRepository'
 import { getProcessTitle } from '../features/processes/processLabels'
+import { getQuickReadProcessStatus } from '../features/processes/processStatus'
 
 const HISTORY_KEY = 'sq-comex:cmd-history'
 const MAX_HISTORY = 5
@@ -71,8 +72,12 @@ export function useGlobalSearch(canSeeName) {
       const processResults = await searchProcesses(trimmed, { canSeeName }).catch(() => [])
 
       return processResults.slice(0, 8).map((process) => {
-        const destination = process.destination ? ` · ${process.destination}` : ''
-        const description = `${process.processNumber ?? 'sem PO'}${destination}`
+        // Refino F2: subtitulo da paleta = "PO ... · status" (Flutuantes.dc.html).
+        // Sem status, cai no destino (comportamento anterior).
+        const number = String(process.processNumber ?? '').trim()
+        const po = number ? (/^po(\s|:|$)/i.test(number) ? number : `PO ${number}`) : 'sem PO'
+        const status = getQuickReadProcessStatus(process) || process.destination
+        const description = [po, status].filter(Boolean).join(' · ')
         return {
           id: `process-${process.id}`,
           label: getProcessTitle(process, canSeeName) ?? 'Processo sem nome',

@@ -12,6 +12,8 @@ import {
   getScheduledCollectionDeliveryShift,
 } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
+import Icon from '../../components/Icon'
+import Skeleton from '../../components/Skeleton'
 import { getCargoHazardBadges } from './operationalOptions'
 
 // PR #13 (2026-07-09): helper pra extrair YYYY-MM-DD em local
@@ -71,6 +73,43 @@ function formatDateOnly(value) {
     month: '2-digit',
     year: 'numeric',
   }).format(date)
+}
+
+// F4a (Dashboard.dc.html): data curta "dd/mm" (mock: "23/10"). Acrescenta
+// "/aaaa" so quando o ano difere do atual (nao ha ambiguidade na semana, mas os
+// favoritos podem apontar para o ano seguinte). Nunca usa toISOString().
+export function formatShortDate(value, now = new Date()) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toDateKeyLocal(value))
+  if (!match) return '-'
+  const [, year, month, day] = match
+  return Number(year) === now.getFullYear() ? `${day}/${month}` : `${day}/${month}/${year}`
+}
+
+// "dd/mm · HH:MM" (horario local). Valor so com data cai em "dd/mm".
+export function formatShortDateTime(value, now = new Date()) {
+  const date = formatShortDate(value, now)
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return date
+  const parsed = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(parsed.getTime())) return date
+  const hours = String(parsed.getHours()).padStart(2, '0')
+  const minutes = String(parsed.getMinutes()).padStart(2, '0')
+  return `${date} · ${hours}:${minutes}`
+}
+
+// Linha mono "PO 4500128734 · FCL" do mock: o subtitulo do app vem como "PO: n".
+export function formatPoLine(subtitle) {
+  return String(subtitle ?? '').replace(/^PO:\s*/, 'PO ')
+}
+
+const MONTH_ABBREVIATIONS =['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
+
+// Ladrilho de data da chegada (mes mono 10/600 + dia Sora 18/700): usa a chegada
+// efetiva (atracacao / chegada aerea) quando existe e, senao, a ETA.
+export function getArrivalTile(process) {
+  const key = toDateKeyLocal(process?.berthedAt || process?.arrivedAt || process?.eta || '')
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(key)
+  if (!match) return { key: '', month: '—', day: '--' }
+  return { key, month: MONTH_ABBREVIATIONS[Number(match[1]) - 1] ?? '—', day: match[2] }
 }
 
 function getWindowDeliveryEstimate(process, window) {
@@ -246,7 +285,7 @@ function UnscheduledItem({ process, estimatedDelivery, canSeeName, onSelectProce
         </ul>
       </div>
       <div className="process-item__meta process-item__meta--top">
-        <span className="ghost-button weekly-arrivals-item__cta" aria-hidden="true">
+        <span className="ghost-button ghost-button--secondary weekly-arrivals-item__cta" aria-hidden="true">
           Abrir processo →
         </span>
       </div>
@@ -305,11 +344,155 @@ function ScheduledItem({ process, windows, canSeeName, onSelectProcess }) {
         </ul>
       </div>
       <div className="process-item__meta process-item__meta--top">
-        <span className="ghost-button weekly-arrivals-item__cta" aria-hidden="true">
+        <span className="ghost-button ghost-button--secondary weekly-arrivals-item__cta" aria-hidden="true">
           Abrir processo →
         </span>
       </div>
     </div>
+  )
+}
+
+// F4a — desktop (>=1041px): linhas do Dashboard.dc.html (ladrilho de data, nome,
+// "PO · categoria", previsao de entrega e tag de status derivado). As secoes
+// "Coleta agendada" / "Previsao de entrega" do legado viram uma lista unica: a
+// diferenca continua legivel pela tag de status e pelas linhas de previsao (uma
+// por janela de coleta, com contêiner, turno e observacao).
+function DesktopArrivalItem({ entry, canSeeName, onSelectProcess }) {
+  const { process } = entry
+  const subtitle = formatPoLine(getProcessSubtitle(process, canSeeName))
+  const meta = [subtitle, process.category].filter(Boolean).join(' · ')
+  const tile = getArrivalTile(process)
+  const hazardBadges = getCargoHazardBadges(process)
+  const rows = entry.windows
+    ? entry.windows.map((window) => ({
+        id: window.id,
+        container: window.containerNumber,
+        delivery: getWindowDeliveryEstimate(process, window),
+        shift: getWindowDeliveryShift(process, window),
+        note: window.notes,
+      }))
+    : [
+        {
+          id: 'estimate',
+          container: '',
+          delivery: entry.estimatedDelivery,
+          shift: '',
+          note: getUnscheduledItemLabel(process),
+        },
+      ]
+
+  return (
+    <div
+      className="dash-arrival"
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelectProcess?.(process.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelectProcess?.(process.id)
+        }
+      }}
+    >
+      <time className="dash-arrival__tile" dateTime={tile.key || undefined}>
+        <span className="dash-arrival__month">{tile.month}</span>
+        <span className="dash-arrival__day">{tile.day}</span>
+      </time>
+      <span className="dash-arrival__body">
+        <span className="dash-arrival__name">{getProcessTitle(process, canSeeName)}</span>
+        {meta ? <span className="dash-arrival__meta">{meta}</span> : null}
+        {rows.map((row) => (
+          <span key={row.id} className="dash-arrival__delivery">
+            {row.container ? `Contêiner ${row.container} · ` : ''}
+            Previsão de entrega no armazém: <strong>{formatShortDate(row.delivery)}</strong>
+            {row.shift ? ` · ${row.shift}` : ''}
+            {row.note ? <small className="dash-arrival__note">{row.note}</small> : null}
+          </span>
+        ))}
+      </span>
+      <span className="dash-arrival__aside">
+        <ProcessDerivedStatusBadge process={process} />
+        {hazardBadges.map((badge) => (
+          <span key={badge.label} className={`inline-badge inline-badge--${badge.tone}`}>{badge.label}</span>
+        ))}
+      </span>
+    </div>
+  )
+}
+
+function DesktopWeeklyArrivals({
+  scheduled,
+  unscheduled,
+  isLoading,
+  loadError,
+  onRetry,
+  onSelectProcess,
+  onViewAll,
+  canSeeName,
+}) {
+  const entries = [...scheduled, ...unscheduled]
+
+  return (
+    <section className="dash-card dash-arrivals" aria-labelledby="dash-arrivals-title">
+      <div className="dash-card__head">
+        <h3 id="dash-arrivals-title">Chegadas da semana</h3>
+        {onViewAll ? (
+          <a
+            className="dash-card__link"
+            href="/processos"
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+              event.preventDefault()
+              onViewAll()
+            }}
+          >
+            Ver todas
+          </a>
+        ) : null}
+      </div>
+
+      {isLoading ? (
+        <div className="dash-arrivals__list" role="status" aria-label="Carregando chegadas">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="dash-arrival dash-arrival--skeleton" aria-hidden="true">
+              <Skeleton width="52px" height="58px" radius="10px" />
+              <span className="dash-arrival__body">
+                <Skeleton variant="heading" width="62%" />
+                <Skeleton variant="line" width="38%" />
+                <Skeleton variant="line" width="70%" />
+              </span>
+              <Skeleton variant="pill" width="110px" />
+            </div>
+          ))}
+        </div>
+      ) : loadError ? (
+        <div className="error-banner error-banner--retry" role="alert">
+          <span>{loadError}</span>
+          {onRetry ? (
+            <button type="button" className="ghost-button" onClick={onRetry}>
+              Tentar novamente
+            </button>
+          ) : null}
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="empty-state">
+          <Icon name="nav-arrivals" size={40} strokeWidth={1.5} className="empty-state__glyph" />
+          <strong>Nenhuma chegada prevista</strong>
+          <p>Quando um processo tiver coleta agendada ou entrega prevista para a semana, aparecerá aqui.</p>
+        </div>
+      ) : (
+        <div className="dash-arrivals__list">
+          {entries.map((entry) => (
+            <DesktopArrivalItem
+              key={entry.process.id}
+              entry={entry}
+              canSeeName={canSeeName}
+              onSelectProcess={onSelectProcess}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -320,11 +503,28 @@ export default function WeeklyArrivalsCard({
   loadError = null,
   onRetry,
   onSelectProcess,
+  variant = 'legacy',
+  onViewAll,
 }) {
   const { scheduled, unscheduled } = isLoading || loadError
     ? { scheduled: [], unscheduled: [] }
     : getWeeklyArrivalProcesses(processes)
   const total = scheduled.length + unscheduled.length
+
+  if (variant === 'desktop') {
+    return (
+      <DesktopWeeklyArrivals
+        scheduled={scheduled}
+        unscheduled={unscheduled}
+        isLoading={isLoading}
+        loadError={loadError}
+        onRetry={onRetry}
+        onSelectProcess={onSelectProcess}
+        onViewAll={onViewAll}
+        canSeeName={canSeeName}
+      />
+    )
+  }
 
   return (
     <article className="list-card weekly-arrivals-card">
@@ -355,6 +555,7 @@ export default function WeeklyArrivalsCard({
           </div>
         ) : total === 0 ? (
           <div className="empty-state">
+            <Icon name="nav-arrivals" size={40} strokeWidth={1.5} className="empty-state__glyph" />
             <strong>Nenhuma chegada prevista</strong>
             <p>Quando um processo tiver coleta agendada ou entrega prevista para a semana, aparecerá aqui.</p>
           </div>

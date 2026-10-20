@@ -278,6 +278,95 @@ const ICONS = {
       <path d="M16 3.5l3 2.3" />
     </>
   ),
+  // Refino visual F2 (shell): glifos EXATOS dos mock-ups (Sidebar/Topbar/
+  // Flutuantes .dc.html), em nomes novos para nao alterar os icones que o
+  // resto do app (e o mobile) ja usa. O mock desenha com stroke 1.9: quem
+  // consome passa strokeWidth={1.9}.
+  'nav-dashboard': <path d="M3 4h7v8H3zM14 4h7v5h-7zM14 13h7v7h-7zM3 16h7v4H3z" />,
+  'nav-arrivals': <path d="M3 17h18l-2 3H5zM5 17V9h14v8M9 9V5h6v4" />,
+  'nav-news': <path d="M4 5h12v14H6a2 2 0 0 1-2-2zM16 9h4v8a2 2 0 0 1-2 2M8 9h4M8 13h4" />,
+  'nav-admin': <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" />,
+  'bell-ring': <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4" />,
+  // Nao perturbe (gaveta): sino cortado, mesmo corpo do 'bell-ring' + traco diagonal.
+  'bell-off': <path d="M6 8a6 6 0 0 1 9-5.2M18 8c0 4 1.2 6 2 7.4M3 17s3-2 3-9M10 21h4M3 3l18 18" />,
+  'search-field': (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </>
+  ),
+  'arrow-up-right': <path d="M7 17 17 7M8 7h9v9" />,
+  'logout-door': <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
+  'theme-half': (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" />
+    </>
+  ),
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+  'chevron-down': <path d="m6 9 6 6 6-6" />,
+  message: <path d="M21 12a8 8 0 0 1-11.8 7L3 21l2-6.2A8 8 0 1 1 21 12z" />,
+  truck: <path d="M3 6h11v10H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.1M17 19a2 2 0 1 0 0-.1" />,
+  'alert-triangle': <path d="M12 3 2 20h20zM12 10v4M12 17h.01" />,
+  doc: <path d="M14 3H6v18h12V7zM14 3v4h4M9 13h6M9 17h6" />,
+  image: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 15 5-5 4 4 3-3 6 6" />
+    </>
+  ),
+  // Refino F5a (Notificacoes.dc.html / Noticias.dc.html / AcessoEstados / Login /
+  // AdminBarra / Processo): glifos exatos dos mock-ups.
+  // Silenciar (pagina de notificacoes): sino cortado do mock (o 'bell-off' da F2
+  // e' o da gaveta mobile).
+  'bell-slash': <path d="M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H7M10 21h4M3 3l18 18" />,
+  sliders: (
+    <>
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  // O mock so traz o olho aberto ("Mostrar senha"); o riscado e' o mesmo olho + diagonal.
+  'eye-off': (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 3l18 18" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none" />
+    </>
+  ),
+  robot: (
+    <>
+      <rect x="4" y="7" width="16" height="12" rx="3" />
+      <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

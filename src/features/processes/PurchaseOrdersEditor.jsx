@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { MAX_PURCHASE_ORDERS, getPurchaseOrderNumbers, normalizePurchaseOrders } from './purchaseOrders'
 import { getFieldErrorId } from '../../utils/fieldErrors'
 import ErpFormFieldHint from './ErpFormFieldHint'
+import PendingFieldHint from './PendingFieldHint'
 
 // F17.2d-2 (D-7): editor de `purchaseOrders[]` (POs do CONSOLIDADO) - cada
 // PO agora e' um objeto `{ po, reference, supplierName }`. Linha de adicao
@@ -90,6 +91,7 @@ export default function PurchaseOrdersEditor({
           <span className="detail-label">
             {purchaseOrders.length} PO{purchaseOrders.length === 1 ? '' : 's'}
           </span>
+          <PendingFieldHint field={['purchaseOrders', 'purchaseOrderSupplier']} />
           {groupError ? (
             <small className="field-error" id={getFieldErrorId(groupDomId)}>
               {groupError}
@@ -107,7 +109,7 @@ export default function PurchaseOrdersEditor({
         <label className="field">
           <span>Nova PO</span>
           <input
-            className="text-input"
+            className="text-input text-input--mono"
             type="text"
             value={draftPo}
             onChange={(event) => setDraftPo(event.target.value)}
@@ -142,7 +144,7 @@ export default function PurchaseOrdersEditor({
         </label>
         <button
           type="button"
-          className="ghost-button"
+          className="ghost-button ghost-button--secondary"
           onClick={handleAdd}
           disabled={disabled || !canAdd}
         >
@@ -192,7 +194,7 @@ export default function PurchaseOrdersEditor({
                     </label>
                     <button
                       type="button"
-                      className="ghost-button collection-windows-editor__remove"
+                      className="ghost-button ghost-button--secondary collection-windows-editor__remove"
                       onClick={() => handleRemove(po)}
                       disabled={disabled}
                     >

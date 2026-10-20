@@ -87,4 +87,31 @@ describe('AdminLayout', () => {
     // Os outros nao
     expect(links[0].className).not.toMatch(/tab-button--active/)
   })
+
+  // Refino F2 (AdminTabs.dc.html): cada aba = rotulo + ponto de ativo + descricao.
+  it('cada aba tem rotulo, ponto e descricao (a do section.description)', () => {
+    renderPage()
+    const links = screen.getAllByRole('link')
+    const expected = [
+      ['Usuários', 'Cadastros, perfis e pendências'],
+      ['Comunicados', 'Avisos internos da operação'],
+      ['Barra do porto', 'Status operacional do canal'],
+      ['Previsões', 'Regras de entrega e cutoff'],
+      ['Lead time', 'Tempo real por modal e porto'],
+      ['Suporte', 'Chamados abertos pelos usuários'],
+    ]
+    links.forEach((link, index) => {
+      expect(link.querySelector('.admin-tab__label')).toHaveTextContent(expected[index][0])
+      expect(link.querySelector('.admin-tab__dot')).not.toBeNull()
+      expect(link.querySelector('.admin-tab__desc')).toHaveTextContent(expected[index][1])
+      expect(link).toHaveClass('tab-button', 'admin-tab')
+    })
+  })
+
+  it('aba ativa: aria-current="page" so nela', () => {
+    renderPage({ initialEntries: ['/admin/lead-time'] })
+    const links = screen.getAllByRole('link')
+    expect(links[4]).toHaveAttribute('aria-current', 'page')
+    expect(links.filter((link) => link.getAttribute('aria-current') === 'page')).toHaveLength(1)
+  })
 })

@@ -48,7 +48,7 @@ test('usuário abre chamado de suporte e vê em "Meus chamados"', async ({ page 
 
   await page.getByRole('button', { name: 'Abrir suporte' }).click()
   await page
-    .getByPlaceholder(/Descreva o problema/)
+    .getByLabel('O que aconteceu?')
     .fill('E2E: o gráfico do dashboard não carrega no meu navegador.')
   await page.getByRole('button', { name: 'Enviar chamado' }).click()
 
@@ -69,14 +69,15 @@ test('admin vê o chamado em /admin/suporte e resolve (Suporte v2)', async ({ pa
   await page.getByRole('button', { name: 'Iniciar atendimento' }).click()
 
   // Ao virar em_andamento o ticket SAI do filtro "Abertos" (default) —
-  // trocar pra aba "Em andamento" antes de resolver.
-  await page.getByRole('tablist').getByRole('button', { name: 'Em andamento' }).click()
+  // trocar pra aba "Em andamento" antes de resolver. Desde a F6b do refino visual
+  // os filtros sao role="tab" (com contagem no nome, ex.: "Em andamento 1").
+  await page.getByRole('tablist').getByRole('tab', { name: /Em andamento/ }).click()
   await expect(
     page.getByText('E2E: o gráfico do dashboard não carrega no meu navegador.')
   ).toBeVisible()
 
   await page.getByRole('button', { name: 'Marcar como resolvido' }).click()
 
-  await page.getByRole('tablist').getByRole('button', { name: 'Resolvidos' }).click()
+  await page.getByRole('tablist').getByRole('tab', { name: /Resolvidos/ }).click()
   await expect(page.getByText(/Resolvido por Admin E2E/)).toBeVisible()
 })

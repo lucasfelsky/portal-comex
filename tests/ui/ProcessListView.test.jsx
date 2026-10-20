@@ -255,6 +255,72 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
   })
 })
 
+// Refino F3: estrela de favorito com mola (scale 0 -> 1, 300 ms) so ao ATIVAR, e
+// skeleton no formato real do card no desktop (o antigo segue para tablet/mobile).
+describe('ProcessListView — movimento (refino F3)', () => {
+  beforeEach(() => stubMatchMedia(false))
+
+  const starOf = (container, index = 0) => container.querySelectorAll('.process-item--button .action-icon-button')[index]
+
+  it('a estrela ganha a classe da mola so na transicao desativado -> ativado', () => {
+    const { container, rerender } = renderView({ onToggleFavorite: vi.fn(), favoriteProcessIds: [] })
+    expect(starOf(container).querySelector('svg')).not.toHaveClass('favorite-star--pop')
+
+    const props = {
+      filteredProcesses: PROCESSES,
+      isLoading: false,
+      selectedProcessId: null,
+      isAdmin: false,
+      searchTerm: '',
+      categoryFilter: 'Todos',
+      etaStartDate: '',
+      etaEndDate: '',
+      operationFilter: 'Todos',
+      hasActiveFilters: false,
+      processCategoryOptions: ['FCL'],
+      onSearchTermChange: vi.fn(),
+      onCategoryFilterChange: vi.fn(),
+      onEtaStartDateChange: vi.fn(),
+      onEtaEndDateChange: vi.fn(),
+      onOperationFilterChange: vi.fn(),
+      onClearAllFilters: vi.fn(),
+      onSelectProcess: vi.fn(),
+      onExport: vi.fn(),
+      onToggleFavorite: vi.fn(),
+    }
+    rerender(<ProcessListView {...props} favoriteProcessIds={['p-sea-active']} />)
+    const first = starOf(container)
+    expect(first).toHaveAttribute('aria-label', 'Desfavoritar processo')
+    expect(first.querySelector('svg')).toHaveClass('favorite-star--pop')
+
+    // desfavoritar remove a classe
+    rerender(<ProcessListView {...props} favoriteProcessIds={[]} />)
+    expect(starOf(container).querySelector('svg')).not.toHaveClass('favorite-star--pop')
+  })
+
+  it('lista que monta com favoritos ja ativos nao anima a estrela', () => {
+    const { container } = renderView({ onToggleFavorite: vi.fn(), favoriteProcessIds: ['p-sea-active'] })
+    expect(starOf(container).querySelector('svg')).not.toHaveClass('favorite-star--pop')
+  })
+
+  it('carregando: skeleton no formato do card (5 pecas) + o antigo (4 pecas) para tablet/mobile', () => {
+    const { container } = renderView({ isLoading: true })
+    const cards = container.querySelectorAll('.process-card-skeleton')
+    expect(cards).toHaveLength(4)
+    expect(cards[0].querySelectorAll('.skeleton')).toHaveLength(5)
+    const legacy = container.querySelectorAll('.skeleton-legacy .process-item--skeleton')
+    expect(legacy).toHaveLength(4)
+    expect(legacy[0].querySelectorAll('.skeleton')).toHaveLength(4)
+    // sem o fade de revelacao enquanto carrega; com ele depois
+    expect(container.querySelector('.process-list--scroll')).not.toHaveClass('skeleton-reveal')
+  })
+
+  it('terminou de carregar: o conteudo entra com a classe de fade (skeleton -> conteudo)', () => {
+    const { container } = renderView({ isLoading: false })
+    expect(container.querySelector('.process-list--scroll')).toHaveClass('skeleton-reveal')
+  })
+})
+
 // UX-4 (A7): painel de filtros inline no mobile com botão "Filtros (n)".
 describe('ProcessListView — painel de filtros inline no mobile (UX-4)', () => {
   describe('mobile (≤720px)', () => {
