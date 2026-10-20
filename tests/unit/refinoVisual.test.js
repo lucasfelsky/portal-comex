@@ -8,6 +8,7 @@
 // PLAN.md secao 2. Valores copiados exatamente, sem simplificar.
 import fs from 'node:fs'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
@@ -325,6 +326,8 @@ describe('F1 tokens', () => {
       ['.support-fab__trigger {', '--on-button-primary'],
       ['.menu-profile__avatar {', '--on-primary'],
       ['  .notifications-swipe-row__action {', '--on-button-primary'],
+      ['  .process-swipe-row__action--restore {', '--on-button-primary'],
+      [".ios-row__icon[style*='--primary'] {", '--on-primary'],
     ]
     for (const [opener, token] of cases) {
       // ancorado no inicio da linha: evita casar `.x .tab-button--active {` etc.
@@ -342,6 +345,41 @@ describe('F1 tokens', () => {
     const skeleton = bodyAfter(css, "[data-theme='dark'] .skeleton {")
     expect(skeleton).toContain('var(--skeleton-base)')
     expect(skeleton).toContain('var(--skeleton-shine)')
+  })
+
+  // Varredura: regra com fundo menta (--primary / --button-primary-bg*) que
+  // declara `color` explicito nunca usa branco (1,76:1 sobre #14dda7).
+  it('nenhuma regra com fundo menta declara color branco', () => {
+    const offenders = []
+    for (const m of cssNoComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const body = m[2]
+      const mint = /background(-color)?:[^;]*(var\(--primary\)|var\(--button-primary-bg(-hover|-active)?\))/.test(body)
+      const white = /(^|[;\s])color:\s*(#fff|#ffffff|white)\s*;/i.test(body)
+      if (mint && white) offenders.push(m[1].trim().split('\n').pop())
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('eyebrow fora da sidebar nao usa --primary (menta) como texto', () => {
+    for (const m of cssNoComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selectors = m[1].split(',').map((s) => s.trim().split('\n').pop().trim())
+      for (const selector of selectors) {
+        if (!/\.brand__eyebrow\b/.test(selector) || /\.sidebar\b/.test(selector)) continue
+        expect(m[2], selector).not.toMatch(/(^|[;\s])color:\s*var\(--primary\)\s*;/)
+      }
+    }
+    expect(bodyAfter(css, '\n.brand__eyebrow {')).toContain('var(--primary-700)')
+  })
+
+  it('aviso da barra no dashboard usa --warning-700 como texto (nao --warning)', () => {
+    expect(bodyAfter(css, '\n.dashboard-bar-card__text--warn {')).toContain('var(--warning-700)')
+  })
+
+  it('logo SQ tom dark usa tokens (sem hex)', () => {
+    const body = bodyAfter(css, '\n.sq-logo--dark {')
+    expect(body).toContain('var(--sidebar-ink)')
+    expect(body).toContain('var(--sidebar-ink-soft)')
+    expect(/#[0-9a-fA-F]{3,8}\b/.test(body)).toBe(false)
   })
 })
 
@@ -380,6 +418,60 @@ describe('F1 fontes, favicon e manifest', () => {
       // cabecalho PNG: assinatura (8) + IHDR (len 4 + tipo 4) -> largura/altura nos bytes 16..24
       expect(png.readUInt32BE(16)).toBe(w)
       expect(png.readUInt32BE(20)).toBe(h)
+    }
+  })
+
+  // apple-touch-icon / maskable: PNG full-bleed opaco (cantos transparentes
+  // viram preto no iOS). favicon.svg segue com cantos arredondados.
+  it('icones PNG sao opacos: cantos e centro com alpha 255', () => {
+    for (const name of ['icon-225.png', 'icon-512.png']) {
+      const png = fs.readFileSync(path.resolve(ROOT, 'public/icons', name))
+      const width = png.readUInt32BE(16)
+      const height = png.readUInt32BE(20)
+      const colorType = png[25]
+      expect(png[24], 'bit depth').toBe(8)
+      const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 0
+      expect(channels, `color type ${colorType}`).toBeGreaterThan(0)
+      let offset = 8
+      const idat = []
+      while (offset < png.length) {
+        const length = png.readUInt32BE(offset)
+        const type = png.toString('ascii', offset + 4, offset + 8)
+        if (type === 'IDAT') idat.push(png.subarray(offset + 8, offset + 8 + length))
+        offset += 12 + length
+      }
+      const raw = zlib.inflateSync(Buffer.concat(idat))
+      const stride = width * channels
+      const rows = []
+      for (let y = 0; y < height; y += 1) {
+        const filter = raw[y * (stride + 1)]
+        const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)))
+        const prev = y > 0 ? rows[y - 1] : Buffer.alloc(stride)
+        for (let x = 0; x < stride; x += 1) {
+          const a = x >= channels ? line[x - channels] : 0
+          const b = prev[x]
+          const c = x >= channels ? prev[x - channels] : 0
+          let add = 0
+          if (filter === 1) add = a
+          else if (filter === 2) add = b
+          else if (filter === 3) add = Math.floor((a + b) / 2)
+          else if (filter === 4) {
+            const p = a + b - c
+            const pa = Math.abs(p - a)
+            const pb = Math.abs(p - b)
+            const pc = Math.abs(p - c)
+            add = pa <= pb && pa <= pc ? a : pb <= pc ? b : c
+          }
+          line[x] = (line[x] + add) & 255
+        }
+        rows.push(line)
+      }
+      const pixel = (x, y) => Array.from(rows[y].subarray(x * channels, x * channels + channels))
+      for (const [x, y] of [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]]) {
+        const p = pixel(x, y)
+        expect(p.slice(0, 3), `${name} canto ${x},${y}`).toEqual([0, 65, 83]) // --navy #004153
+        if (channels === 4) expect(p[3]).toBe(255)
+      }
     }
   })
 

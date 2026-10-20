@@ -2408,7 +2408,7 @@ body {
 }
 
 .dashboard-bar-card__text--warn {
-  color: var(--warning);
+  color: var(--warning-700);
 }
 
 .dashboard-bar-card__text--info {
@@ -5456,7 +5456,7 @@ body {
   }
 
   .mobile-notifications-fab__trigger.notifications__trigger--active::before {
-    filter: brightness(0) invert(1);
+    filter: brightness(0);
   }
 
   .sidebar,
@@ -8968,9 +8968,9 @@ body {
     color: var(--sidebar-ink);
   }
 
-  /* Accent teal ja' contrasta bem sobre o navy (mantido igual ao claro);
-     redeclarado aqui so' pra deixar explicito que foi revisado pro shell. */
-  .brand__eyebrow {
+  /* Accent verde SQ so' contrasta sobre o navy da sidebar; fora dela o
+     eyebrow (card de login, Verificar/Pendente/404) usa --primary-700. */
+  .sidebar .brand__eyebrow {
     color: var(--primary);
   }
 
@@ -9283,6 +9283,12 @@ body {
   justify-content: center;
   color: #fff;
   flex-shrink: 0;
+}
+
+/* Refino F1: o icone "Painel administrativo" (MenuPage) pinta o fundo inline
+   com --primary (menta); o branco herdado reprova, entao texto navy. */
+.ios-row__icon[style*='--primary'] {
+  color: var(--on-primary);
 }
 
 .ios-row__body {
@@ -10182,6 +10188,7 @@ body {
 
   .process-swipe-row__action--restore {
     background: var(--button-primary-bg);
+    color: var(--on-button-primary);
   }
 }
 
@@ -13587,9 +13594,9 @@ body {
 }
 
 .sq-logo--dark {
-  --sq-logo-ring: #ffffff;
-  --sq-logo-ink: #ffffff;
-  --sq-logo-ink-2: #b8ccd3;
+  --sq-logo-ring: var(--sidebar-ink);
+  --sq-logo-ink: var(--sidebar-ink);
+  --sq-logo-ink-2: var(--sidebar-ink-soft);
 }
 
 .sq-logo__symbol {
