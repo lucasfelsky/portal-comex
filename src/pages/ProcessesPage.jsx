@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useSwipe } from '../hooks/useSwipe'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { useToast } from '../components/Toast'
 import { exportProcessesToXlsx } from '../utils/exportProcesses'
 import { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
@@ -512,6 +513,9 @@ export default function ProcessesPage() {
   const toast = useToast()
   const isAdmin = profile?.role === 'admin'
   const canSeeName = isAdmin || profile?.role === 'logistica'
+  // Refino F4b: na lista, o desktop (>= 1041px) tem cabecalho proprio
+  // (eyebrow + "Fila de chegadas" + acoes) dentro do ProcessListView.
+  const isDesktopLayout = useMediaQuery('(min-width: 1041px)')
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
@@ -1857,13 +1861,17 @@ export default function ProcessesPage() {
     }
   }
 
+  const isDesktopList = isDesktopLayout && viewMode === 'list'
+
   return (
-    <section className="surface">
-      <div className="section-heading">
-        <div>
-          <h2>Fila de chegadas</h2>
+    <section className={`surface${isDesktopList ? ' surface--arrivals' : ''}`}>
+      {isDesktopList ? null : (
+        <div className="section-heading">
+          <div>
+            <h2>Fila de chegadas</h2>
+          </div>
         </div>
-      </div>
+      )}
 
       {error ? <div className="error-banner">{error}</div> : null}
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
@@ -1872,6 +1880,7 @@ export default function ProcessesPage() {
         <ProcessListView
           rootClassName={listReturnClass}
           filteredProcesses={filteredProcesses}
+          totalCount={processes.length - archivedProcesses.length}
           isLoading={isLoading}
           isExporting={isExporting}
           selectedProcessId={selectedProcessId}

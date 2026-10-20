@@ -14,30 +14,20 @@ import {
   shouldHideProcessStatusBadge,
 } from './processStatus'
 import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from './processCategories'
-import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
-import { getPendingFields } from './pendingFields'
-import { getContainerSpecialBadges } from './containers'
-import { hasRejectedLicense } from './licenses'
-import { hasDangerousGoods, hasFlammableGoods } from './operationalOptions'
 import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
+import useMediaQuery from '../../hooks/useMediaQuery'
+import ProcessListDesktop from './ProcessListDesktop'
+import {
+  buildProcessAlerts,
+  formatDate,
+  getDestinationLabel,
+  getEstimatedDeliveryLabel,
+  hasUpdatedEta,
+} from './processListShared'
 
-const getDestinationLabel = (category) =>
-  category === 'AEREO' ? 'Aeroporto de Destino' : 'Porto de Atracação'
-
-const formatDate = (value) => {
-  if (!value) return '-'
-  const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date)
-}
-
-// Previsão de entrega = data manual (override) OU cálculo automático
-// (ETA + dias úteis por categoria / coleta / rolling customs) via
-// getEstimatedDeliveryDate — não repetir só o ETA (regressão do F10.6).
-const getEstimatedDeliveryLabel = (process) => formatDate(getEstimatedDeliveryDate(process))
-
-const hasUpdatedEta = (process) =>
-  Boolean(process?.eta && process?.etaOriginal && process.etaOriginal !== process.eta)
+// Refino F4b: >= 1041px a lista renderiza a arvore propria de Chegadas.dc.html
+// (ProcessListDesktop); tablet e mobile seguem nesta arvore legada.
+const DESKTOP_QUERY = '(min-width: 1041px)'
 
 // F16.8: linha de processo com swipe-to-favoritar (mobile). Componente
 // próprio (não uma função helper chamada em .map()) porque precisa de
@@ -69,23 +59,11 @@ function ProcessRow({
     disabled: !isMobile,
   })
   const hideSchedule = shouldHideProcessCardSchedule(item)
-  // D-E: pendencias so aparecem pro admin (compras/preenche tudo).
-  const pendingFields = isAdmin ? getPendingFields(item) : []
-  // UX-6a (item 1, D7): ordem de severidade — Anuência indeferida > Carga
-  // inflamável > Carga perigosa (só se NÃO inflamável) > Dados pendentes >
-  // Carga perigosa (redundante, quando também é inflamável) > especiais de
-  // conteiner. No mobile so' os 2 primeiros ficam visiveis + "+N"; no desktop
-  // TODOS continuam visiveis (CSS-only via .inline-badge--overflow/--more).
-  const isFlammable = hasFlammableGoods(item)
-  const isDangerous = hasDangerousGoods(item)
-  const alerts = [
-    hasRejectedLicense(item) && { label: 'Anuência indeferida', tone: 'danger' },
-    isFlammable && { label: 'Carga inflamável', tone: 'danger' },
-    isDangerous && !isFlammable && { label: 'Carga perigosa', tone: 'warn' },
-    pendingFields.length > 0 && { label: `Dados pendentes (${pendingFields.length})`, tone: 'warn' },
-    isDangerous && isFlammable && { label: 'Carga perigosa', tone: 'warn' },
-    ...getContainerSpecialBadges(item.containers).map((badge) => ({ label: badge, tone: 'warn' })),
-  ].filter(Boolean)
+  // UX-6a (item 1, D7): ordem de severidade em buildProcessAlerts (D-E:
+  // pendencias so aparecem pro admin). No mobile so' os 2 primeiros ficam
+  // visiveis + "+N"; no desktop legado TODOS continuam visiveis (CSS-only via
+  // .inline-badge--overflow/--more).
+  const alerts = buildProcessAlerts(item, isAdmin)
 
   // Acoes do swipe so' ficam visiveis enquanto a linha esta aberta/arrastando
   // (evita 1px da cor da acao vazando na borda em repouso).
@@ -268,6 +246,7 @@ function ProcessRow({
 export default function ProcessListView({
   rootClassName = '',
   filteredProcesses,
+  totalCount,
   isLoading,
   isExporting,
   selectedProcessId,
@@ -322,6 +301,10 @@ export default function ProcessListView({
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
   )
+  // Refino F4b: arvore desktop (Chegadas.dc.html). Os dois breakpoints sao
+  // excludentes no navegador; `!isMobile` so protege quando um teste forca
+  // matchMedia = true para todas as consultas.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [mobileCategory, setMobileCategory] = useState('all')
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 720px)')
@@ -380,6 +363,45 @@ export default function ProcessListView({
       isArchivedRow
     />
   )
+
+  if (isDesktop && !isMobile) {
+    return (
+      <ProcessListDesktop
+        rootClassName={rootClassName}
+        filteredProcesses={filteredProcesses}
+        totalCount={totalCount}
+        isLoading={isLoading}
+        isExporting={isExporting}
+        selectedProcessId={selectedProcessId}
+        isAdmin={isAdmin}
+        canSeeName={canSeeName}
+        searchTerm={searchTerm}
+        categoryFilter={categoryFilter}
+        etaStartDate={etaStartDate}
+        etaEndDate={etaEndDate}
+        operationFilter={operationFilter}
+        hasActiveFilters={hasActiveFilters}
+        processCategoryOptions={processCategoryOptions}
+        onSearchTermChange={onSearchTermChange}
+        onCategoryFilterChange={onCategoryFilterChange}
+        onEtaStartDateChange={onEtaStartDateChange}
+        onEtaEndDateChange={onEtaEndDateChange}
+        onOperationFilterChange={onOperationFilterChange}
+        onClearAllFilters={onClearAllFilters}
+        onSelectProcess={onSelectProcess}
+        onExport={onExport}
+        onReconcileErp={onReconcileErp}
+        favoriteProcessIds={favoriteProcessIds}
+        onToggleFavorite={onToggleFavorite}
+        archivedProcesses={archivedProcesses}
+        onArchiveProcess={onArchiveProcess}
+        onNewProcess={onNewProcess}
+        canManageArchived={canManageArchived}
+        isShowingArchived={isShowingArchived}
+        onToggleArchived={() => setShowArchived((v) => !v)}
+      />
+    )
+  }
 
   return (
     <article
