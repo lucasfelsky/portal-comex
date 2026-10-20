@@ -137,6 +137,7 @@ const LIGHT_EXPECTED = {
   '--scrim': 'rgba(11, 36, 48, 0.42)',
   '--scrim-soft': 'rgba(11, 36, 48, 0.32)',
   '--row-divider': '#e3ecea',
+  '--dialog-footer-bg': '#fbfcfc',
   '--brand-mark-tile': '#004153',
   '--brand-mark-glyph': '#ffffff',
   '--brand-mark-dot': '#14dda7',
@@ -212,6 +213,7 @@ const DARK_EXPECTED = {
   '--switch-off': '#2b4f5c',
   '--media-placeholder': '#163845',
   '--scrim': 'rgba(0, 0, 0, 0.55)',
+  '--dialog-footer-bg': '#12303c',
   '--navy-50': '#163845',
   '--navy-100': '#1d4250',
   '--brand-mark-tile': '#004153',
@@ -3056,7 +3058,7 @@ describe('F4d - valores do mock (ProcessoForm.dc.html)', () => {
       'gap: 12px',
       'padding: 16px 28px',
       'border-top: 1px solid var(--row-divider)',
-      'background: var(--surface-alt)',
+      'background: var(--dialog-footer-bg)',
     ])
     expectF4d('.process-form--dialog .pfd-footer .ghost-button', ['padding: 0 16px'])
     expectF4d('.process-form--dialog .pfd-footer .secondary-button', ['padding: 0 16px'])

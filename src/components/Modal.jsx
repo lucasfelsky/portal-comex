@@ -38,6 +38,30 @@ const SWIPE_CLOSE_THRESHOLD = 120
 // listeners de `document` brigariam pelo foco e o Esc fecharia os dois.
 const openModalStack = []
 
+// Trava de scroll do body contada pela pilha: o primeiro modal aberto guarda o
+// valor original de `body.style.overflow` e o ultimo a fechar o restaura. Antes
+// cada instancia guardava o proprio "anterior" e, quando o cleanup de um modal que
+// fecha com atraso (ConfirmDialog, 240 ms) rodava depois do de baixo, devolvia
+// `hidden` inline para sempre.
+let scrollLockCount = 0
+let scrollLockOriginal = ''
+
+function lockBodyScroll() {
+  if (scrollLockCount === 0) {
+    scrollLockOriginal = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  scrollLockCount += 1
+}
+
+function unlockBodyScroll() {
+  if (scrollLockCount === 0) return
+  scrollLockCount -= 1
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = scrollLockOriginal
+  }
+}
+
 export default function Modal({
   open,
   onClose,
@@ -91,8 +115,7 @@ export default function Modal({
     openModalStack.push(stackToken)
     const isTopModal = () => openModalStack[openModalStack.length - 1] === stackToken
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockBodyScroll()
 
     function getFocusableElements() {
       if (!modalRef.current) return []
@@ -155,7 +178,7 @@ export default function Modal({
       document.removeEventListener('keydown', handleKeyDown)
       const stackIndex = openModalStack.indexOf(stackToken)
       if (stackIndex !== -1) openModalStack.splice(stackIndex, 1)
-      document.body.style.overflow = previousOverflow
+      unlockBodyScroll()
 
       if (lastFocusedRef.current && typeof lastFocusedRef.current.focus === 'function') {
         lastFocusedRef.current.focus()

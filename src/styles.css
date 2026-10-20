@@ -179,6 +179,7 @@
   --scrim: rgba(11, 36, 48, 0.42);
   --scrim-soft: rgba(11, 36, 48, 0.32);
   --row-divider: #e3ecea;
+  --dialog-footer-bg: #fbfcfc;
 
   /* Marca de produto "Rota e chegada" (BrandMark.jsx) e SQ Quimica (SQLogo) */
   --brand-mark-tile: #004153;
@@ -9458,6 +9459,7 @@ body {
     --scrim: rgba(0, 0, 0, 0.55);
     --scrim-soft: rgba(0, 0, 0, 0.4);
     --row-divider: rgba(74, 222, 200, 0.1);
+    --dialog-footer-bg: #12303c;
     --brand-mark-tile: #004153;
     --brand-mark-glyph: #ffffff;
     --brand-mark-dot: #14dda7;
@@ -18818,7 +18820,7 @@ body {
     gap: 12px;
     padding: 16px 28px;
     border-top: 1px solid var(--row-divider);
-    background: var(--surface-alt);
+    background: var(--dialog-footer-bg);
   }
 
   .process-form--dialog .pfd-footer .ghost-button,

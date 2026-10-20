@@ -363,6 +363,58 @@ describe('Modal - bare, pilha e closeOnBackdrop (F4d)', () => {
     expect(top.contains(document.activeElement)).toBe(true)
   })
 
+  it('trava de scroll contada: fechar o de baixo antes do de cima nao deixa overflow inline', async () => {
+    document.body.style.overflow = ''
+    function Stack({ bottomOpen, topOpen }) {
+      return (
+        <>
+          {bottomOpen ? <Modal open onClose={() => {}} title="Embaixo"><p>a</p></Modal> : null}
+          <Modal open={topOpen} onClose={() => {}} title="Em cima"><p>b</p></Modal>
+        </>
+      )
+    }
+    const { rerender, unmount } = render(<Stack bottomOpen topOpen />)
+    expect(document.body.style.overflow).toBe('hidden')
+    // o de baixo desmonta na hora (formulario); o de cima (ConfirmDialog) fecha em 240 ms
+    rerender(<Stack bottomOpen={false} topOpen />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack bottomOpen={false} topOpen={false} />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('')
+    unmount()
+  })
+
+  it('trava de scroll contada: restaura o valor original do body quando o ultimo modal fecha', async () => {
+    document.body.style.overflow = 'scroll'
+    function Stack({ a, b }) {
+      return (
+        <>
+          <Modal open={a} onClose={() => {}} title="A"><p>a</p></Modal>
+          <Modal open={b} onClose={() => {}} title="B"><p>b</p></Modal>
+        </>
+      )
+    }
+    const { rerender } = render(<Stack a b={false} />)
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack a b />)
+    // abrir o segundo nao captura "hidden" como original
+    rerender(<Stack a={false} b />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('hidden')
+    rerender(<Stack a={false} b={false} />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(document.body.style.overflow).toBe('scroll')
+  })
+
   it('ao fechar o do topo, o de baixo volta a tratar o Esc', async () => {
     const onCloseBottom = vi.fn()
     function Stack({ topOpen }) {
