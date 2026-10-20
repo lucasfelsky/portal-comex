@@ -17,7 +17,8 @@
 // F2: shell — sidebar, topbar, abas do admin, gaveta, paleta, suporte;
 // F3: componentes e movimento — botoes, campos, chips, toast, vazio, skeleton,
 // hover sem levantar, timeline + um catalogo de estados com asserts de CSS
-// computado, ver o fim do arquivo).
+// computado, ver o fim do arquivo; F4a: Dashboard — secoes com dados, estados
+// carregando/erro/vazio, notebook, tablet e mobile).
 // Uma tela pode ter `action(page)`: interacao depois do `ready` (abrir gaveta,
 // paleta, modal) antes da captura.
 import fs from 'node:fs'
@@ -291,7 +292,158 @@ PHASES.f3 = [
   { name: '404', route: '/rota-que-nao-existe', ready: shell },
   { name: 'login-campos', route: '/login', auth: false, ready: (page) => page.locator('.auth-screen--login').first() },
 ]
-const PHASE = process.env.REFINO_PHASE || 'f3'
+// Refino F4a (Dashboard.dc.html): todas as secoes com dados, os 3 estados de cada
+// uma (carregando, erro, vazio) e as viewports que NAO podem mudar de layout
+// (notebook 1366x768 = modo compacto; tablet 900 e mobile 390 = arvore legada).
+// `emptyDashboardQueries` responde 0 documentos para processos e comunicados
+// (runQuery vazio) - o desktop mostra os 3 estados vazios do mock.
+const emptyDashboardQueries = async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"') || body.includes('"collectionId":"announcements"')) {
+      return route
+        .fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{ readTime: new Date().toISOString() }]),
+        })
+        .catch(() => {})
+    }
+    return route.continue().catch(() => {})
+  })
+}
+const delayDashboardQueries = (ms) => async (page) => {
+  await page.route('**/127.0.0.1:8080/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (body.includes('"collectionId":"processes"') || body.includes('"collectionId":"announcements"')) {
+      await new Promise((resolve) => setTimeout(resolve, ms))
+    }
+    await route.continue().catch(() => {})
+  })
+}
+const dashboardFull = async (page) => {
+  await expect(page.locator('.dash-arrival').first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.dash-fav').first()).toBeVisible()
+  await expect(page.locator('.dash-announce--lead')).toBeVisible()
+}
+const resizeTo = (width, height) => async (page) => {
+  await page.setViewportSize({ width, height })
+  await page.waitForTimeout(400)
+}
+const restoreViewport = (page) => page.setViewportSize(VIEWPORT)
+
+// A rolagem e do .main-content (nao da janela): fullPage nao alcanca o fim da
+// pagina, entao as capturas do Dashboard usam viewport mais alta (1440x1000 = a
+// prancheta do mock; 1440x1700 = pagina inteira, favoritos incluidos).
+PHASES.f4a = [
+  {
+    name: 'dashboard',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1440, 1000)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-completo',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1440, 1700)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-hover-chegada-favorito',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await dashboardFull(page)
+      await page.locator('.dash-arrival').nth(1).hover()
+      await page.waitForTimeout(400)
+    },
+  },
+  {
+    name: 'dashboard-foco-teclado',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await dashboardFull(page)
+      await page.mouse.move(700, 880)
+      await page.locator('.dash-arrival').first().focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(page.locator('.dash-arrival').first()).toBeFocused()
+    },
+  },
+  {
+    name: 'dashboard-carregando',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: delayDashboardQueries(6_000),
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrival--skeleton').first()).toBeVisible()
+      await expect(page.locator('.dash-fav--skeleton').first()).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-erro',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: failProcessQueries,
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrivals .error-banner--retry')).toBeVisible({ timeout: 15_000 })
+    },
+  },
+  {
+    name: 'dashboard-vazio',
+    route: '/',
+    ready: dashboardReady,
+    beforeGoto: emptyDashboardQueries,
+    afterShot: unrouteFirestore,
+    action: async (page) => {
+      await expect(page.locator('.dash-arrivals .empty-state')).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator('.dash-announcements .empty-state')).toBeVisible()
+      await expect(page.locator('.dash-favorites .empty-state')).toBeVisible()
+    },
+  },
+  {
+    name: 'dashboard-notebook-1366x768',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(1366, 768)(page)
+      await dashboardFull(page)
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-tablet-900',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(900, 1000)(page)
+      await expect(page.locator('.dashboard-heading')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+  {
+    name: 'dashboard-mobile-390',
+    route: '/',
+    ready: dashboardReady,
+    action: async (page) => {
+      await resizeTo(390, 844)(page)
+      await expect(page.locator('.dashboard-heading')).toBeVisible()
+    },
+    afterShot: restoreViewport,
+  },
+]
+const PHASE = process.env.REFINO_PHASE || 'f4a'
 
 // --- helpers de seed -------------------------------------------------------
 
@@ -371,7 +523,7 @@ function buildProcesses() {
       id: 'shot-aguardando-embarque',
       ...base,
       name: 'Resina epóxi — Shanghai',
-      processNumber: 'PO 4500128734',
+      processNumber: '4500128734',
       processStatus: 'Aguardando Embarque',
       etd: dateKey(6),
       eta: dateKey(34),
@@ -381,30 +533,47 @@ function buildProcesses() {
       id: 'shot-embarcou',
       ...base,
       name: 'Solvente industrial — Ningbo',
-      processNumber: 'PO 4500128801',
+      processNumber: '4500128801',
       processStatus: 'Embarcou',
       etd: dateKey(-12),
       eta: dateKey(9),
       shippedAt: dateKey(-12),
       etaOriginal: dateKey(6),
+      warehouseDeliveryDateOverride: dateKey(4),
       updatedAt: updatedAt(20),
     },
     {
       id: 'shot-aguardando-atracacao',
       ...base,
       name: 'Pigmento orgânico — Hamburgo',
-      processNumber: 'PO 4500128915',
+      processNumber: '4500128915',
       processStatus: 'Aguardando atracação',
       etd: dateKey(-25),
       eta: dateKey(2),
       shippedAt: dateKey(-25),
+      warehouseDeliveryDateOverride: dateKey(5),
       updatedAt: updatedAt(30),
+    },
+    // Atrasado: ETA vencida sem sinal de chegada (aereo) com previsao de entrega na semana.
+    {
+      id: 'shot-atrasado',
+      ...base,
+      category: 'AEREO',
+      containerQuantity: 0,
+      name: 'Ácido cítrico anidro — Frankfurt',
+      processNumber: '4500129355',
+      processStatus: 'Embarcou',
+      etd: dateKey(-9),
+      eta: dateKey(-3),
+      shippedAt: dateKey(-9),
+      warehouseDeliveryDateOverride: dateKey(1),
+      updatedAt: updatedAt(35),
     },
     {
       id: 'shot-atracacao-confirmada',
       ...base,
       name: 'Aditivo plastificante — Antuérpia',
-      processNumber: 'PO 4500129022',
+      processNumber: '4500129022',
       processStatus: 'Atracação Confirmada',
       etd: dateKey(-30),
       eta: dateKey(0),
@@ -420,7 +589,7 @@ function buildProcesses() {
       id: 'shot-duimp-registro',
       ...base,
       name: 'Catalisador — Houston',
-      processNumber: 'PO 4500129133',
+      processNumber: '4500129133',
       processStatus: 'Aguardando registro da DUIMP',
       etd: dateKey(-33),
       eta: dateKey(-3),
@@ -433,7 +602,7 @@ function buildProcesses() {
       id: 'shot-canal-vermelho',
       ...base,
       name: 'Silicone grau técnico — Xangai',
-      processNumber: 'PO 4500129244',
+      processNumber: '4500129244',
       processStatus: 'Aguardando parametrização da DUIMP',
       etd: dateKey(-38),
       eta: dateKey(-6),
@@ -448,7 +617,7 @@ function buildProcesses() {
       id: 'shot-coleta-agendada',
       ...base,
       name: 'Emulsificante — Rotterdam',
-      processNumber: 'PO 4500129355',
+      processNumber: '4500129355',
       processStatus: 'Coleta Agendada',
       etd: dateKey(-40),
       eta: dateKey(-9),
@@ -466,7 +635,7 @@ function buildProcesses() {
       id: 'shot-carga-recebida',
       ...base,
       name: 'Antiespumante — Busan',
-      processNumber: 'PO 4500129466',
+      processNumber: '4500129466',
       processStatus: 'Carga recebida',
       etd: dateKey(-52),
       eta: dateKey(-20),
@@ -474,6 +643,7 @@ function buildProcesses() {
       berthed: true,
       berthedAt: `${dateKey(-20)}T11:00`,
       cargoReceivedAt: `${dateKey(-1)}T16:00`,
+      collectionStatus: 'Carga disponível em estoque',
       updatedAt: updatedAt(80),
     },
     // Dados pendentes: sem ETD/ETA nem transportadora.
@@ -497,7 +667,7 @@ async function seedAll() {
   for (const { id, ...data } of processes) await putDoc('processes', id, data)
   // 2 favoritos do admin
   await patchFields('users', adminUid, {
-    favoriteProcessIds: ['shot-embarcou', 'shot-canal-vermelho'],
+    favoriteProcessIds: ['shot-aguardando-atracacao', 'shot-coleta-agendada'],
   })
 
   const announcements = [

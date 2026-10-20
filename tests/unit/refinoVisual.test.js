@@ -1595,7 +1595,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/processes/PurchaseOrdersEditor.jsx': [2, 2, 0],
   'features/processes/RenameDocumentDialog.jsx': [1, 0, 0],
   'features/processes/VesselTrackingButton.jsx': [4, 4, 0],
-  'features/processes/WeeklyArrivalsCard.jsx': [3, 2, 0],
+  // F4a: +1 "Tentar novamente" (fantasma) no banner de erro da lista desktop.
+  'features/processes/WeeklyArrivalsCard.jsx': [4, 2, 0],
   'pages/AdminForecastPage.jsx': [5, 4, 0],
   'pages/DashboardPage.jsx': [1, 0, 0],
   'pages/DebugClaimsPage.jsx': [1, 0, 0],
@@ -1681,5 +1682,255 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
     expect(body('.ghost-button.ghost-button--secondary:active:not(:disabled)')).toContain('background: var(--navy-100);')
     expect(body('.ghost-button.ghost-button--outline')).toContain('border: 1px solid var(--border);')
     expect(body('.ghost-button.ghost-button--outline:disabled')).toContain('color: var(--disabled-ink);')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4a - Dashboard (Dashboard.dc.html). Arvore propria no desktop (dash-*),
+// escolhida por matchMedia; tablet/mobile ficam na arvore legada. CSS = uma
+// secao "REFINO VISUAL F4a — DASHBOARD" com UM @media desktop, toda regra sob
+// `.surface--dashboard`, mais o modo compacto de notebook.
+// ---------------------------------------------------------------------------
+const F4A_MARKER = 'REFINO VISUAL F4a — DASHBOARD (Dashboard.dc.html'
+const F4A_COMPACT_MARKER = 'REFINO VISUAL F4a — DASHBOARD COMPACTO'
+const f4aAt = css.indexOf(F4A_MARKER)
+const f4aCompactAt = css.indexOf(F4A_COMPACT_MARKER)
+const f4aMainEnd = f4aCompactAt > 0 ? css.lastIndexOf('/*', f4aCompactAt) : -1
+const f4aStart = css.lastIndexOf('/*', f4aAt)
+const f4aMedia = stripComments(css.slice(f4aStart, f4aMainEnd))
+const f4aMediaBody = bodyAfter(f4aMedia, DESKTOP_MEDIA)
+const f4aRules = parseRules(f4aMediaBody)
+const f4aCompactRules = parseRules(
+  bodyAfter(
+    stripComments(css.slice(f4aCompactAt, css.indexOf('/* Roadmap 11 / PR #223'))),
+    '@media (min-width: 1041px) and (max-height: 800px) {',
+  ),
+)
+
+function f4aDecls(selector, rules = f4aRules) {
+  const bodies = rules.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F4a: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectF4a(selector, declarations, rules) {
+  const body = f4aDecls(selector, rules)
+  for (const declaration of declarations) expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+}
+
+describe('F4a - secao, escopo e ordem', () => {
+  it('a secao existe, vem antes do bloco reduce desktop e tem UM @media desktop (+ o compacto)', () => {
+    expect(f4aAt).toBeGreaterThan(0)
+    expect(f4aCompactAt).toBeGreaterThan(f4aAt)
+    expect(css.lastIndexOf(REDUCE_DESKTOP)).toBeGreaterThan(f4aCompactAt)
+    const before = stripComments(css.slice(f4aStart, css.indexOf(DESKTOP_MEDIA, f4aAt)))
+    expect(before.trim(), 'nada fora do @media na secao principal').toBe('')
+    expect(f4aMediaBody).not.toMatch(/@media/)
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail.match(/@media/g)).toHaveLength(1)
+  })
+
+  it('nenhuma regra usa @media (max-width) e toda regra comeca pela raiz .surface--dashboard', () => {
+    const whole = stripComments(css.slice(f4aStart, css.indexOf('/* Roadmap 11 / PR #223')))
+    expect(whole).not.toMatch(/@media\s*\(max-width/)
+    for (const rule of [...f4aRules, ...f4aCompactRules]) {
+      for (const selector of rule.selectors) {
+        expect(selector, `seletor sem a raiz: ${selector}`).toMatch(
+          /^(\[data-theme='dark'\] )?\.surface(\.surface--dashboard| \.surface--dashboard|--dashboard)/,
+        )
+      }
+    }
+  })
+
+  it('sem hex/rgb literal: so tokens (var(--...))', () => {
+    const colors = (f4aMediaBody + f4aCompactRules.map((r) => r.body).join(' ')).match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g)
+    expect(colors).toBeNull()
+  })
+
+  it('o bloco desktop antigo do Dashboard (.dashboard-heading ~ ...) saiu do desktop; o legado de tablet/mobile fica', () => {
+    const desktopBlocks = [...css.matchAll(/@media \(min-width: 1041px\) \{/g)].map((m) => bodyAfter(css.slice(m.index), DESKTOP_MEDIA))
+    for (const block of desktopBlocks) expect(block).not.toContain('.dashboard-heading ~')
+    expect(css).toContain('.dashboard-heading .dashboard-bar-inline')
+  })
+
+  it('reduce desktop: a entrada das secoes entra no bloco existente (fade de 150 ms)', () => {
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail).toContain('.surface--dashboard .dash-rise')
+  })
+})
+
+describe('F4a - valores do mock (Dashboard.dc.html)', () => {
+  it('raiz sem cartao externo, gap 22; cabecalho: eyebrow mono 11/600 1.5px, titulo Sora 30/700 -0.02em', () => {
+    expectF4a('.surface.surface--dashboard', ['padding: 0', 'gap: 22px', 'border: 0', 'background: none', 'box-shadow: none'])
+    expectF4a('.surface--dashboard .dash-head__eyebrow', [
+      'font-family: var(--font-mono)',
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 1.5px',
+      'text-transform: uppercase',
+      'color: var(--primary-700)',
+    ])
+    expectF4a('.surface--dashboard .dash-head h2', [
+      'font-family: var(--font-heading)',
+      'font-size: 30px',
+      'font-weight: 700',
+      'letter-spacing: -0.02em',
+    ])
+  })
+
+  it('pilula da barra: 36px, raio 99, 13/700, ponto 8px; tons por token', () => {
+    expectF4a('.surface--dashboard .dash-bar', ['height: 36px', 'padding: 0 14px', 'border-radius: 99px', 'font-size: 13px', 'font-weight: 700'])
+    expectF4a('.surface--dashboard .dash-bar__dot', ['width: 8px', 'height: 8px'])
+    expectF4a('.surface--dashboard .dash-bar--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF4a('.surface--dashboard .dash-bar--warn .dash-bar__dot', ['background: var(--warning)'])
+  })
+
+  it('KPIs: grid auto-fit 180/gap 14; card 18/20, raio 18; rotulo 13/600; valor Sora 40/700 lh 1.05; nota 12/600', () => {
+    expectF4a('.surface--dashboard .dash-kpis', ['grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))', 'gap: 14px'])
+    expectF4a('.surface--dashboard .dash-kpis .stat-card.dash-kpi', ['padding: 18px 20px', 'border-radius: 18px', 'gap: 6px', 'box-shadow: var(--shadow-sm)', 'transform: none'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__label', ['font-size: 13px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__value', [
+      'font-family: var(--font-heading)',
+      'font-size: 40px',
+      'font-weight: 700',
+      'letter-spacing: -0.02em',
+      'line-height: 1.05',
+      'font-variant-numeric: tabular-nums',
+    ])
+    expectF4a('.surface--dashboard .dash-kpi--alert .stat-card__value', ['color: var(--danger-700)'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__note', ['font-size: 12px', 'font-weight: 600'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__note--success', ['color: var(--success-700)'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__note--warning', ['color: var(--warning-700)'])
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__note--danger', ['color: var(--danger-700)'])
+  })
+
+  it('cartoes: raio 22, padding 22, titulo Sora 20/700 -0.01em; grade 2 colunas minmax(min(100%, 400px), 1fr) gap 20', () => {
+    expectF4a('.surface--dashboard .dash-card', ['padding: 22px', 'border-radius: 22px', 'gap: 14px', 'box-shadow: var(--shadow-sm)'])
+    expectF4a('.surface--dashboard .dash-card h3', ['font-family: var(--font-heading)', 'font-size: 20px', 'font-weight: 700', 'letter-spacing: -0.01em'])
+    expectF4a('.surface--dashboard .dash-card__link', ['font-size: 13px', 'font-weight: 700', 'color: var(--link-color)'])
+    expectF4a('.surface--dashboard .dash-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr))', 'gap: 20px', 'align-items: start'])
+  })
+
+  it('chegada: grid 52px/1fr/auto gap 14, padding 12/14, raio 14, fundo --surface-alt; hover so troca sombra e borda em 200 ms', () => {
+    expectF4a('.surface--dashboard .dash-arrival', [
+      'grid-template-columns: 52px minmax(0, 1fr) auto',
+      'gap: 14px',
+      'padding: 12px 14px',
+      'border-radius: 14px',
+      'background: var(--surface-alt)',
+    ])
+    expect(f4aDecls('.surface--dashboard .dash-arrival')).toContain('box-shadow var(--dur-base) var(--ease-out)')
+    expect(f4aDecls('.surface--dashboard .dash-arrival')).toContain('border-color var(--dur-base) var(--ease-out)')
+    expectF4a('.surface--dashboard .dash-arrival:hover', ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)'])
+    expect(f4aDecls('.surface--dashboard .dash-arrival:hover')).not.toContain('transform')
+    expect(f4aDecls('.surface--dashboard .dash-arrival:focus-visible')).toContain('var(--focus-ring)')
+  })
+
+  it('ladrilho de data (mes mono 10/600, dia Sora 18/700 lh 1.1), nome 14/700, PO mono 11, previsao 12, tag 26px', () => {
+    expectF4a('.surface--dashboard .dash-arrival__tile', ['padding: 6px 0', 'border-radius: 10px', 'background: var(--surface)'])
+    expectF4a('.surface--dashboard .dash-arrival__month', ['font-family: var(--font-mono)', 'font-size: 10px', 'font-weight: 600'])
+    expectF4a('.surface--dashboard .dash-arrival__day', ['font-family: var(--font-heading)', 'font-size: 18px', 'font-weight: 700', 'line-height: 1.1'])
+    expectF4a('.surface--dashboard .dash-arrival__name', ['font-size: 14px', 'font-weight: 700', 'text-overflow: ellipsis', 'white-space: nowrap'])
+    expectF4a('.surface--dashboard .dash-arrival__meta', ['font-family: var(--font-mono)', 'font-size: 11px'])
+    expectF4a('.surface--dashboard .dash-arrival__delivery', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF4a('.surface--dashboard .dash-arrival__aside .process-derived-status-badge', ['height: 26px', 'padding: 0 10px', 'font-size: 12px', 'font-weight: 700', 'text-transform: none'])
+    expectF4a('.surface--dashboard .dash-arrivals__list', ['max-height: 440px', 'overflow-y: auto'])
+  })
+
+  it('comunicados: destaque --info-50 (raio 14, padding 16), eyebrow mono 10 --info-700, titulo 15/700, resumo 13/1.55; linhas 11 + 14/600 com divisor', () => {
+    expectF4a('.surface--dashboard .dash-announce--lead', ['padding: 16px', 'border-radius: 14px', 'background: var(--info-50)', 'gap: 6px'])
+    expectF4a('.surface--dashboard .dash-announce__eyebrow', ['font-family: var(--font-mono)', 'font-size: 10px', 'font-weight: 600', 'letter-spacing: 1.5px', 'color: var(--info-700)'])
+    expectF4a('.surface--dashboard .dash-announce--lead .dash-announce__title', ['font-size: 15px', 'font-weight: 700', 'line-height: 1.4'])
+    expectF4a('.surface--dashboard .dash-announce__summary', ['font-size: 13px', 'line-height: 1.55'])
+    expectF4a('.surface--dashboard .dash-announce--row', ['padding: 12px 4px 4px', 'border-top: 1px solid var(--row-divider)'])
+    expectF4a('.surface--dashboard .dash-announce__when', ['font-size: 11px', 'color: var(--ink-soft)'])
+    expectF4a('.surface--dashboard .dash-announce--row .dash-announce__title', ['font-size: 14px', 'font-weight: 600', 'line-height: 1.4'])
+  })
+
+  it('favoritos: grade minmax(min(100%, 340px), 1fr) gap 14; cartao 18/raio 16/--surface-alt; estrela 44 --warning-50; barra de 6px; 3 fatos', () => {
+    expectF4a('.surface--dashboard .dash-favorites__grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr))', 'gap: 14px'])
+    expectF4a('.surface--dashboard .dash-fav', ['padding: 18px', 'border-radius: 16px', 'background: var(--surface-alt)', 'gap: 12px'])
+    expectF4a('.surface--dashboard .dash-fav:hover', ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)'])
+    expectF4a('.surface--dashboard .dash-fav__eyebrow', ['font-family: var(--font-mono)', 'font-size: 11px', 'letter-spacing: 1.5px', 'color: var(--primary-700)'])
+    expectF4a('.surface--dashboard .dash-fav__eta--updated', ['color: var(--info-700)'])
+    expectF4a('.surface--dashboard .dash-fav__name', ['font-size: 16px', 'font-weight: 700'])
+    expectF4a('.surface--dashboard .dash-fav__star', ['width: 44px', 'height: 44px', 'border-radius: 12px', 'background: var(--warning-50)'])
+    expectF4a('.surface--dashboard .dash-fav__star svg', ['fill: var(--channel-yellow-edge)', 'stroke: var(--warning-700)'])
+    expectF4a('.surface--dashboard .dash-stages', ['grid-template-columns: repeat(5, minmax(0, 1fr))', 'gap: 6px'])
+    expectF4a('.surface--dashboard .dash-stages__bar', ['height: 6px', 'border-radius: 99px', 'background: var(--row-divider)'])
+    expectF4a('.surface--dashboard .dash-stages__item--done .dash-stages__bar', ['background: var(--primary-700)'])
+    expectF4a('.surface--dashboard .dash-stages__item--now .dash-stages__bar', ['background: var(--primary)'])
+    // escuro: concluida != atual (nos dois temas --primary-700 / --primary sao o mesmo menta no dark)
+    expect(f4aDecls("[data-theme='dark'] .surface--dashboard .dash-stages__item--done .dash-stages__bar")).toContain(
+      'color-mix(in srgb, var(--primary) 55%, var(--surface-alt))',
+    )
+    expectF4a('.surface--dashboard .dash-stages__label', ['font-size: 11px', 'font-weight: 500'])
+    expectF4a('.surface--dashboard .dash-stages__item--now .dash-stages__label', ['font-weight: 700'])
+    expectF4a('.surface--dashboard .dash-facts', ['grid-template-columns: repeat(3, minmax(0, 1fr))', 'gap: 8px', 'padding-top: 10px', 'border-top: 1px solid var(--row-divider)'])
+    expectF4a('.surface--dashboard .dash-facts__item dt', ['font-size: 11px', 'color: var(--ink-soft)'])
+    expectF4a('.surface--dashboard .dash-facts__item dd', ['font-size: 13px', 'font-weight: 700'])
+  })
+
+  it('entrada: dash-rise = motion-rise 500 ms com atraso por variavel (0/80/160 ms no JSX)', () => {
+    expect(f4aDecls('.surface--dashboard .dash-rise')).toContain('animation: motion-rise var(--dur-page) var(--ease-out) both')
+    expect(f4aDecls('.surface--dashboard .dash-rise')).toContain('animation-delay: var(--dash-rise-delay, 0ms)')
+    expect(read('src/pages/DashboardPage.jsx')).toContain("'--dash-rise-delay': '80ms'")
+    expect(read('src/pages/DashboardPage.jsx')).toContain("'--dash-rise-delay': '160ms'")
+  })
+
+  it('notebook (altura <= 800): compacta KPIs e cartoes e mantem o gap por vh', () => {
+    expectF4a('.surface.surface--dashboard', ['gap: clamp(12px, 2.2vh, 18px)'], f4aCompactRules)
+    expectF4a('.surface--dashboard .dash-kpi .stat-card__value', ['font-size: 32px'], f4aCompactRules)
+    expectF4a('.surface--dashboard .dash-kpis .stat-card.dash-kpi', ['padding: 12px 16px'], f4aCompactRules)
+  })
+})
+
+describe('F4a - JSX/markup', () => {
+  // arquivos CRLF no Windows; comentarios de linha/bloco ficam fora das asserts de "nao contem".
+  const readLf = (rel) => read(rel).replace(/\r\n/g, '\n')
+  const noComments = (s) => stripComments(s).replace(/^\s*\/\/.*$/gm, '')
+  const dashboard = readLf('src/pages/DashboardPage.jsx')
+  const weekly = readLf('src/features/processes/WeeklyArrivalsCard.jsx')
+  const statCard = readLf('src/components/StatCard.jsx')
+
+  it('raiz .surface--dashboard e escolha desktop/legado por matchMedia (sem DOM duplicado)', () => {
+    expect(dashboard).toContain('className="surface surface--dashboard"')
+    expect(dashboard).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(dashboard).toContain('if (isDesktop) {')
+    // a arvore legada continua la, intacta
+    expect(dashboard).toContain('className="section-heading dashboard-heading"')
+    expect(dashboard).toContain('className="dashboard-stat-row"')
+  })
+
+  it('mobile-redesign.css segue sem o desktop novo e sem alteracao', () => {
+    expect(read('src/mobile-redesign.css')).not.toContain('dash-')
+    expect(read('src/mobile-redesign.css')).not.toContain('surface--dashboard')
+  })
+
+  it('ordem desktop do mock (Chegadas, Comunicados, Favoritos) no JSX', () => {
+    const at = (needle) => dashboard.indexOf(needle)
+    expect(at('<WeeklyArrivalsCard\n            variant="desktop"')).toBeGreaterThan(0)
+    expect(at('<AnnouncementsPanel')).toBeGreaterThan(at('<WeeklyArrivalsCard\n            variant="desktop"'))
+    expect(at('id="dash-favorites-title"')).toBeGreaterThan(at('<AnnouncementsPanel'))
+  })
+
+  it('StatCard ganhou note/noteTone e a nota do desktop (D12) vem de dashboardKpis', () => {
+    expect(statCard).toContain('noteTone')
+    expect(statCard).toContain('stat-card__note')
+    expect(dashboard).toContain('getDashboardKpiNotes')
+    expect(dashboard).toContain('getPreviousWeekArrivalsCount')
+  })
+
+  it('datas curtas sem toISOString (BRT) e dois calendarios de coleta (legado + janelas)', () => {
+    expect(noComments(weekly)).not.toMatch(/toISOString\(\)/)
+    expect(noComments(dashboard)).not.toMatch(/toISOString\(\)/)
+    expect(dashboard).toContain('getCollectionWindows(item)')
+    expect(weekly).toContain('entry.windows')
+  })
+
+  it('comunicado: resumo de 140 caracteres (D10) e favorito mantem selos de carga e DUIMP', () => {
+    expect(dashboard).toContain('summarizeAnnouncement(lead.content)')
+    expect(dashboard).toContain('getCargoHazardBadges(item)')
+    expect(dashboard).toContain("label: 'DUIMP'")
   })
 })
