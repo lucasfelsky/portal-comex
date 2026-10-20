@@ -1564,6 +1564,147 @@ body {
   text-decoration: none;
 }
 
+/* ============================================================
+   REFINO VISUAL F3 — CHIPS E FILTROS (desktop >= 1041px)
+   Fonte: Componentes.dc.html ("Campos e filtros") e Chegadas.dc.html (chips de
+   filtro ativo: 32px, 0 6px 0 12px, --navy-50/--navy 13/700, remover 24px).
+   .filter-pill = seletor de filtro com contador; .filter-chip = filtro ja
+   aplicado (removivel). Dark: o navy vira --primary / --ink.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .filter-pill:hover:not(.filter-pill--active) {
+    border-color: var(--border-strong);
+  }
+
+  .filter-pill:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .filter-pill--active {
+    border-color: var(--navy);
+    background: var(--navy);
+    color: #ffffff;
+  }
+
+  [data-theme='dark'] .filter-pill--active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  .filter-pill--add {
+    border-style: dashed;
+    border-color: var(--border-control);
+    background: transparent;
+    color: var(--ink-soft);
+  }
+
+  .filter-pill__count {
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .filter-pill__count--alert {
+    color: var(--danger-700);
+  }
+
+  .filter-pill--active .filter-pill__count {
+    background: rgba(255, 255, 255, 0.18);
+    color: inherit;
+  }
+
+  [data-theme='dark'] .filter-pill--active .filter-pill__count {
+    background: rgba(11, 36, 48, 0.18);
+  }
+
+  /* Filtro aplicado (chip removivel): 32px, 0 6px 0 12px, 13/700. */
+  .filter-chip {
+    box-sizing: border-box;
+    min-height: 32px;
+    gap: 6px;
+    padding: 0 6px 0 12px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .filter-chip--md,
+  .filter-chip--sm {
+    padding: 0 6px 0 12px;
+    font-size: 13px;
+  }
+
+  /* Na linha de filtros ativos TODOS os chips seguem o mock (navy-50 / navy),
+     qualquer que seja a variante semantica passada pelo chamador. */
+  .filter-chip--default,
+  .filter-chips-row .filter-chip {
+    border-color: transparent;
+    background: var(--navy-50);
+    color: var(--navy);
+  }
+
+  [data-theme='dark'] .filter-chip--default,
+  [data-theme='dark'] .filter-chips-row .filter-chip {
+    color: var(--ink);
+  }
+
+  .filter-chip__remove {
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .filter-chip__remove:hover {
+    background: var(--navy-100);
+  }
+
+  .filter-chips-row__label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .filter-chips-row__clear {
+    min-height: 32px;
+    padding: 0 10px;
+    color: var(--danger-700);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .filter-chips-row__clear:hover {
+    background: var(--danger-50);
+  }
+}
+
 /* Linha de stat-cards do Dashboard (backlog v0.12): grid responsivo,
    3 colunas no desktop, empilha no mobile. */
 .dashboard-stat-row {
@@ -2143,6 +2284,96 @@ body {
   background: var(--primary-50);
   color: var(--primary-700);
   font-weight: 600;
+}
+
+/* ============================================================
+   REFINO VISUAL F3 — ALERTA INLINE (desktop >= 1041px)
+   Fonte: Componentes.dc.html ("Feedback"): fundo soft + ink do tom, raio 14,
+   padding 14/16, icone de 20px (circulo com "!" / check, traco 1.9), texto
+   14/600 e acao sublinhada 13/700 a direita. O icone e decorativo e vem de
+   ::before (mesmos tracos do mock), assim os ~37 banners do app o recebem sem
+   tocar em cada JSX (posicionado a esquerda; o corpo do banner continua em
+   fluxo normal, entao banners com <strong>/<ul> dentro nao quebram).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .error-banner,
+  .success-banner {
+    position: relative;
+    padding: 14px 16px 14px 48px;
+    border: 0;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .error-banner {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .success-banner {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .error-banner::before,
+  .success-banner::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+
+  .error-banner::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 8v5M12 16h.01'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 8v5M12 16h.01'/%3E%3C/svg%3E");
+  }
+
+  .success-banner::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m8 12.5 3 3 5-6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m8 12.5 3 3 5-6'/%3E%3C/svg%3E");
+  }
+
+  /* Banner com acao (tentar de novo): o texto ocupa a linha e a acao vai a
+     direita, como link sublinhado 13/700 na cor do tom. */
+  .error-banner--retry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .error-banner--retry > span {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .error-banner--retry .ghost-button {
+    min-height: 0;
+    padding: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
+  .error-banner--retry .ghost-button:hover:not(:disabled) {
+    background: transparent;
+    color: inherit;
+  }
 }
 
 /* F13: banner de sugestão da barra (fonte externa via OCR da Praticagem). */
@@ -3020,6 +3251,20 @@ body {
   color: var(--danger-700);
 }
 
+/* REFINO VISUAL F3 — TAG DE STATUS (desktop >= 1041px)
+   Componentes.dc.html ("Card de processo"): pilula de 26px, padding 0 10px,
+   12/700; tons soft + ink dos tokens (ok/warn/danger/info/neutral). */
+@media (min-width: 1041px) {
+  .status-tag {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 1;
+  }
+}
+
 .admin-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3219,6 +3464,182 @@ body {
   box-shadow: none;
 }
 
+/* ============================================================
+   REFINO VISUAL F3 — BOTOES (desktop >= 1041px)
+   Fonte: Componentes.dc.html (tabela Botoes 4 x 5 estados) e Movimento.dc.html
+   (.mv-btn: pressionado scale(.97) em 120 ms; cor em 200 ms). Tablet/mobile nao
+   mudam. Este bloco fica logo depois da base dos botoes (e nao no fim do
+   arquivo) de proposito: as variantes de 1 classe que vem depois
+   (.documents-icon-button etc.) continuam vencendo por ordem.
+   Dark (o mock nao define): o navy vira --primary (mesma troca do shell).
+   ============================================================ */
+@media (min-width: 1041px) {
+  .primary-button,
+  .ghost-button,
+  .danger-button,
+  .secondary-button {
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 10px 20px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0;
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  .secondary-button,
+  .ghost-button {
+    --btn-ink: var(--navy);
+    --btn-line-active: var(--navy-900);
+  }
+
+  [data-theme='dark'] .secondary-button,
+  [data-theme='dark'] .ghost-button {
+    --btn-ink: var(--primary);
+    --btn-line-active: var(--primary);
+  }
+
+  /* Primario: menta + texto navy; hover mais claro com halo; pressionado mais escuro. */
+  .primary-button {
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    box-shadow: none;
+  }
+
+  .primary-button:hover:not(:disabled) {
+    background: var(--button-primary-bg-hover);
+    color: var(--on-button-primary);
+    box-shadow: 0 6px 18px rgba(20, 221, 167, 0.35);
+  }
+
+  .primary-button:active:not(:disabled) {
+    background: var(--button-primary-bg-active);
+    box-shadow: none;
+  }
+
+  /* Secundario: contorno 1.5px navy, fundo --surface. */
+  .secondary-button {
+    border: 1.5px solid var(--btn-ink);
+    background: var(--surface);
+    color: var(--btn-ink);
+  }
+
+  .secondary-button:hover:not(:disabled) {
+    background: var(--navy-50);
+    color: var(--btn-ink);
+  }
+
+  .secondary-button:active:not(:disabled) {
+    background: var(--navy-100);
+    border-color: var(--btn-line-active);
+    color: var(--btn-ink);
+  }
+
+  /* Fantasma: sem fundo nem borda; hover --bg; pressionado --disabled-bg. */
+  .ghost-button {
+    border-color: transparent;
+    background: transparent;
+    color: var(--btn-ink);
+  }
+
+  .ghost-button:hover:not(:disabled) {
+    background: var(--bg);
+    border-color: transparent;
+  }
+
+  .ghost-button:active:not(:disabled) {
+    background: var(--disabled-bg);
+  }
+
+  /* Destrutivo: --danger / --danger-bg-hover / --danger-bg-active. */
+  .danger-button {
+    background: var(--danger);
+    color: var(--on-danger);
+    box-shadow: none;
+  }
+
+  .danger-button:hover:not(:disabled) {
+    background: var(--danger-bg-hover);
+    box-shadow: none;
+  }
+
+  .danger-button:active:not(:disabled) {
+    background: var(--danger-bg-active);
+  }
+
+  /* Pressionado: scale(.97) em 120 ms (transform da transicao acima). */
+  .primary-button:active:not(:disabled),
+  .ghost-button:active:not(:disabled),
+  .danger-button:active:not(:disabled),
+  .secondary-button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  /* Foco: anel duplo (superficie + --focus-ring: navy no claro, menta no dark).
+     No destrutivo o anel externo e --danger (mock). */
+  .primary-button:focus-visible:not(:disabled),
+  .ghost-button:focus-visible:not(:disabled),
+  .secondary-button:focus-visible:not(:disabled),
+  .danger-button:focus-visible:not(:disabled) {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+  }
+
+  .danger-button:focus-visible:not(:disabled) {
+    --focus-ring: var(--danger);
+  }
+
+  /* Desabilitado: --disabled-bg / --disabled-ink (sem opacidade). */
+  .primary-button:disabled,
+  .danger-button:disabled {
+    background: var(--disabled-bg);
+    color: var(--disabled-ink);
+    opacity: 1;
+    box-shadow: none;
+  }
+
+  .secondary-button:disabled {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--disabled-ink);
+    opacity: 1;
+  }
+
+  .ghost-button:disabled {
+    background: transparent;
+    color: var(--disabled-ink);
+    opacity: 1;
+  }
+
+  /* Carregando: spinner de 14px (borda 2px a 40%, topo cheio, 0,8 s) ao lado do texto. */
+  .primary-button .spinner,
+  .ghost-button .spinner,
+  .danger-button .spinner,
+  .secondary-button .spinner {
+    box-sizing: content-box;
+    margin-right: 0;
+    border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
+    border-top-color: currentColor;
+    border-radius: 999px;
+    animation: spinner-rotate 0.8s linear infinite;
+  }
+
+  .primary-button .spinner__svg,
+  .ghost-button .spinner__svg,
+  .danger-button .spinner__svg,
+  .secondary-button .spinner__svg {
+    display: none;
+  }
+}
+
 /* C9: logout no drawer mobile. display:none aqui (depois de .ghost-button)
    para que o display:inline-flex do .ghost-button nao sobrescreva por
    ordem de cascade. Em <=720px o bloco mobile ativa display:flex. */
@@ -3258,6 +3679,22 @@ body {
 .inline-badge--danger {
   background: var(--danger-50);
   color: var(--danger-700);
+}
+
+/* REFINO VISUAL F3 — BADGE INLINE (desktop >= 1041px)
+   Mesmo formato da tag de status (26px, 0 10px, 12/700). So geometria: as
+   cores seguem os modificadores --ok/--warn/--danger de cima e os blocos de
+   tela (.process-list-card, .admin-section...) continuam escopados. */
+@media (min-width: 1041px) {
+  .inline-badge {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
 }
 
 /* UX-6a (item 1, D7): "+N" de alertas cortados no card mobile. Escondido
@@ -4344,6 +4781,82 @@ body {
   resize: vertical;
 }
 
+/* ============================================================
+   REFINO VISUAL F3 — CAMPOS (desktop >= 1041px)
+   Fonte: Componentes.dc.html ("Campos e filtros"): altura 44, raio 10, borda
+   1.5px --border-control (D1: #6b7f88, nao o #9fb1b8 do mock), 14/500, padding
+   0 14px; foco = borda --focus-ring (navy no claro, menta no dark) + halo de
+   4px menta a 28%; erro = borda --danger + mensagem 11/600 --danger-700.
+   Rotulo 13/600 (12/700 nos filtros, definido nas telas). Datas/horas em mono.
+   ============================================================ */
+@media (min-width: 1041px) {
+  .field {
+    gap: 6px;
+  }
+
+  .field > span {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+
+  .text-input {
+    box-sizing: border-box;
+    border: 1.5px solid var(--border-control);
+    border-radius: var(--radius-field);
+    font-size: 14px;
+    font-weight: 500;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  input.text-input,
+  select.text-input {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+
+  textarea.text-input,
+  .text-input--textarea,
+  .text-area {
+    padding: 12px 14px;
+  }
+
+  .text-input:focus {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 4px var(--primary-a28);
+  }
+
+  .text-input[aria-invalid='true'],
+  .select-field__trigger[aria-invalid='true'] {
+    border-color: var(--danger);
+  }
+
+  .text-input[aria-invalid='true']:focus,
+  .select-field__trigger[aria-invalid='true']:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent);
+  }
+
+  .text-input[type='date'],
+  .text-input[type='time'],
+  .text-input--mono {
+    min-height: 44px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  .field-error {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+}
+
 .detail-stack {
   display: grid;
   gap: 12px;
@@ -5194,6 +5707,76 @@ body {
   line-height: 1.6;
   color: var(--ink-soft);
 }
+
+/* ============================================================
+   REFINO VISUAL F3 — ESTADO VAZIO (desktop >= 1041px)
+   Componentes.dc.html ("Feedback"): borda 1px tracejada --border-strong, raio
+   16, padding 22/16, centralizado; icone de 40px (traco 1.5, --primary-700),
+   titulo 14/700, texto 12/1.5 --ink-soft. A ilustracao grande (EmptyState)
+   fica so no tablet/mobile; o glifo (.empty-state__glyph) so aparece aqui.
+   ============================================================ */
+.empty-state__glyph {
+  display: none;
+}
+
+@media (min-width: 1041px) {
+  .empty-state,
+  .empty-state--rich {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 22px 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 16px;
+    background: transparent;
+    text-align: center;
+  }
+
+  .empty-state strong,
+  .empty-state__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .empty-state p,
+  .empty-state__message {
+    max-width: none;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  .empty-state__glyph {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    color: var(--primary-700);
+  }
+
+  .empty-state__icon {
+    display: block;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    color: var(--primary-700);
+  }
+
+  .empty-state__icon svg {
+    display: block;
+    width: 40px;
+    height: 40px;
+    stroke-width: 1.5;
+  }
+
+  .empty-state__illustration {
+    display: none;
+  }
+}
+
 
 .announcement-card__meta {
   display: flex;
@@ -7377,6 +7960,26 @@ body {
   .tooltip[data-tooltip]:focus-visible::after {
     transition: none;
     transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* REFINO VISUAL F3 — TOOLTIP (desktop >= 1041px)
+   Componentes.dc.html ("Feedback"): fundo --toast-bg, texto --toast-ink 12/600,
+   raio 10, padding 8x12, sem sombra. Entrada/saida em 120 ms (so
+   opacity/transform). */
+@media (min-width: 1041px) {
+  .tooltip::after {
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    box-shadow: none;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
   }
 }
 
@@ -15044,6 +15647,357 @@ body {
   color: var(--sq-logo-ink-2);
 }
 
+/* ============================================================
+   REFINO VISUAL F3 — MOVIMENTO, TOAST, SKELETON E ESTADOS (desktop >= 1041px)
+   Fonte: Movimento.dc.html (<style> + dados) e Componentes.dc.html.
+   Duracoes 120/200/300/500/600 ms e curvas via tokens --dur-* / --ease-*.
+   Regras: so transform/opacity animam (unica excecao: o shimmer do skeleton
+   anima background-position, como no mock); cards nao levantam no hover (so
+   sombra e borda); saidas ~70% da entrada com --ease-in; mola (--ease-spring)
+   so em toast, pontos da timeline e estrela de favorito.
+   Movimento reduzido: NAO ha bloco reduce novo — as regras reduce desta secao
+   entram no bloco desktop existente, que continua sendo o ultimo do arquivo
+   (tests/unit/desktopReducedMotion.test.js).
+   ============================================================ */
+
+/* Keyframes do Movimento.dc.html (nomes novos: nao alteram os antigos). */
+@keyframes motion-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes motion-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes motion-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes motion-pop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes motion-toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes motion-toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+@keyframes motion-modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes motion-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Elementos so do desktop: escondidos no tablet/mobile (o markup e o mesmo). */
+.toast__icon {
+  display: none;
+}
+
+.process-list-skeletons--card {
+  display: none;
+}
+
+.skeleton-process-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 1041px) {
+  /* ---- Entrada de pagina: 500 ms, sobe 12px (sidebar e topo nao se movem) ---- */
+  .page-fade--visible {
+    animation: motion-rise var(--dur-page) var(--ease-out) both;
+  }
+
+  /* ---- Lista escalonada: 300 ms, +40 ms por item, so os 8 primeiros ---- */
+  .stagger__item {
+    animation: motion-rise var(--dur-slow) var(--ease-out) both;
+    animation-delay: calc(min(var(--stagger-index, 0), 7) * 40ms);
+  }
+
+  /* ---- Skeleton: shimmer de 1,4 s; no formato real do card; troca por fade de 200 ms ---- */
+  .skeleton,
+  [data-theme='dark'] .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--skeleton-base) 0%,
+      var(--skeleton-shine) 50%,
+      var(--skeleton-base) 100%
+    );
+    background-size: 200% 100%;
+    animation: motion-shimmer 1.4s linear infinite;
+  }
+
+  .skeleton-legacy {
+    display: none;
+  }
+
+  .process-list-skeletons--card {
+    display: grid;
+    gap: 12px;
+  }
+
+  .process-card-skeleton {
+    padding: 18px;
+    border-radius: 16px;
+    background: var(--surface-alt);
+  }
+
+  .skeleton-process-card__bar {
+    margin-top: 8px;
+  }
+
+  .skeleton-process-card__pill {
+    margin-top: 6px;
+  }
+
+  .skeleton-reveal {
+    animation: motion-fade-in var(--dur-base) linear both;
+  }
+
+  /* ---- Toast: navy, circulo de icone por tom, mola de 300 ms, saida de 200 ms ---- */
+  .toast-container {
+    gap: 10px;
+  }
+
+  .toast,
+  .toast.toast--success,
+  .toast.toast--error,
+  .toast.toast--warning,
+  .toast.toast--info,
+  [data-theme='dark'] .toast,
+  [data-theme='dark'] .toast.toast--success,
+  [data-theme='dark'] .toast.toast--error,
+  [data-theme='dark'] .toast.toast--warning,
+  [data-theme='dark'] .toast.toast--info {
+    gap: 12px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    box-shadow: var(--shadow-lg);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* animation em seletor de 1 classe: o bloco reduce desktop (.toast /
+     .toast--closing, ultimo do arquivo) continua vencendo. */
+  .toast {
+    animation: motion-toast-in var(--dur-slow) var(--ease-spring) both;
+  }
+
+  .toast--closing {
+    animation: motion-toast-out var(--dur-base) var(--ease-in) both;
+  }
+
+  .toast__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+  }
+
+  .toast--success .toast__icon {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  .toast--error .toast__icon {
+    background: var(--danger);
+    color: var(--on-danger);
+  }
+
+  .toast--warning .toast__icon {
+    background: var(--warning);
+    color: var(--on-warn);
+  }
+
+  .toast--info .toast__icon {
+    background: var(--info);
+    color: var(--surface);
+  }
+
+  /* ---- Scrim (fade de 200 ms, saida 140 ms) e modal (300 ms; saida 210 ms) ---- */
+  .modal-backdrop,
+  .news-modal-backdrop {
+    background: var(--scrim);
+    animation: motion-fade-in var(--dur-base) linear both;
+  }
+
+  .modal-backdrop--closing {
+    animation: motion-fade-out 140ms var(--ease-in) both;
+  }
+
+  .modal {
+    animation: motion-rise var(--dur-slow) var(--ease-out) both;
+  }
+
+  .modal--sheet-closing {
+    animation: motion-modal-out 210ms var(--ease-in) both;
+  }
+
+  .notifications-backdrop {
+    animation: motion-fade-in var(--dur-base) linear both;
+  }
+
+  .notifications-backdrop--closing {
+    animation: motion-fade-out 140ms var(--ease-in) both;
+  }
+
+  /* ---- Cards nao levantam: o hover so troca sombra e borda em 200 ms ---- */
+  .stat-card {
+    box-shadow: var(--shadow-sm);
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .stat-card:hover {
+    transform: none;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .process-item--button,
+  .admin-user-row--button,
+  .announcement-card--button {
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-item--button:not(.process-item--selected),
+  .admin-user-row--button:not(.admin-user-row--selected),
+  .announcement-card--button:not(.announcement-card--selected) {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .process-item--button:hover,
+  .admin-user-row--button:hover,
+  .announcement-card--button:hover {
+    transform: none;
+  }
+
+  .process-item--button:not(.process-item--selected):hover,
+  .admin-user-row--button:not(.admin-user-row--selected):hover,
+  .announcement-card--button:not(.announcement-card--selected):hover {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .process-related-item-button {
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .process-related-item-button:hover,
+  [data-theme='dark'] .process-detail-view .process-related-item-button:hover,
+  .process-detail-view .process-related-item-button:hover {
+    transform: none;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .news-attachment {
+    transition:
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .news-attachment:hover {
+    transform: none;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .weekly-arrivals-item--clickable {
+    transition:
+      background-color var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out),
+      border-color var(--dur-base) var(--ease-out);
+  }
+
+  .weekly-arrivals-item--clickable:hover {
+    transform: none;
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .notifications__show-more:hover {
+    transform: none;
+  }
+
+  /* ---- Timeline do detalhe: o trilho verde preenche em 600 ms (segmentos em
+     sequencia, via --seg-index/--seg-count do JSX) e os pontos entram com mola,
+     atrasados 100 + 150 ms * posicao (--dot-delay) ---- */
+  .process-detail-view .process-timeline__bar {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .process-detail-view .process-timeline__bar--done {
+    background: var(--border);
+  }
+
+  .process-detail-view .process-timeline__bar--done::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--primary-700);
+    transform-origin: left center;
+    animation: motion-fill calc(var(--dur-fill) / var(--seg-count, 1)) linear both;
+    animation-delay: calc(var(--dur-fill) / var(--seg-count, 1) * var(--seg-index, 0));
+  }
+
+  .process-detail-view .process-timeline__node--done,
+  .process-detail-view .process-timeline__node--now {
+    animation: motion-pop var(--dur-slow) var(--ease-spring) both;
+    animation-delay: var(--dot-delay, 100ms);
+  }
+
+  .process-detail-view .process-timeline__cell:nth-child(1) { --dot-delay: 100ms; }
+  .process-detail-view .process-timeline__cell:nth-child(2) { --dot-delay: 250ms; }
+  .process-detail-view .process-timeline__cell:nth-child(3) { --dot-delay: 400ms; }
+  .process-detail-view .process-timeline__cell:nth-child(4) { --dot-delay: 550ms; }
+  .process-detail-view .process-timeline__cell:nth-child(5) { --dot-delay: 700ms; }
+
+  /* ---- Estrela de favorito: scale(0 -> 1) em 300 ms com mola, so ao ativar ---- */
+  .favorite-star--pop {
+    animation: motion-pop var(--dur-slow) var(--ease-spring) both;
+  }
+
+  /* ---- Contador de KPI: digitos de largura fixa (sem tremer durante a contagem) ---- */
+  .stat-card__value {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
    complementar a mobile-redesign.css. Fechamento por timer (Modal, Toast,
    AppLayout); nada depende de animationend/transitionend. Fica no fim para
@@ -15068,5 +16022,42 @@ body {
     animation: none;
     opacity: 0;
     pointer-events: none;
+  }
+
+  /* Refino F3: movimento reduzido = so fades de 150 ms (linear), sem
+     escalonamento, sem contador e sem shimmer (Movimento.dc.html). A entrada da
+     gaveta, do modal e do toast continua instantanea (regras acima). */
+  .page-fade--visible,
+  .skeleton-reveal,
+  .favorite-star--pop,
+  .process-detail-view .process-timeline__bar--done::after,
+  .process-detail-view .process-timeline__node--done,
+  .process-detail-view .process-timeline__node--now {
+    animation: motion-fade-in 150ms linear both;
+    animation-delay: 0ms;
+  }
+
+  .stagger__item {
+    animation: motion-fade-in 150ms linear both;
+    animation-delay: 0ms;
+  }
+
+  .skeleton,
+  [data-theme='dark'] .skeleton {
+    animation: none;
+  }
+
+  .primary-button:active:not(:disabled),
+  .ghost-button:active:not(:disabled),
+  .danger-button:active:not(:disabled),
+  .secondary-button:active:not(:disabled) {
+    transform: none;
+  }
+
+  .primary-button .spinner,
+  .ghost-button .spinner,
+  .danger-button .spinner,
+  .secondary-button .spinner {
+    animation-duration: 2s;
   }
 }

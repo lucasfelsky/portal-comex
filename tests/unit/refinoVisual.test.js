@@ -1004,3 +1004,536 @@ describe('F2 shell - JSX/markup', () => {
     expect(support).toContain("window.matchMedia('(max-width: 1040px)')")
   })
 })
+
+// ---------------------------------------------------------------------------
+// F3 - componentes, estados e movimento.
+// Valores copiados de Componentes.dc.html (botoes, campos, filtros, feedback) e
+// Movimento.dc.html (duracoes, curvas, 8 animacoes). A F3 NAO tem uma secao
+// unica: cada bloco fica logo depois da base do componente (assim as variantes
+// de 1 classe que vem depois continuam vencendo por ordem) — todos abrem com o
+// cabecalho "REFINO VISUAL F3 — <NOME>" e tem UM @media (min-width: 1041px).
+// ---------------------------------------------------------------------------
+const F3_HEADERS = [
+  'CHIPS E FILTROS',
+  'ALERTA INLINE',
+  'TAG DE STATUS',
+  'BOTOES',
+  'BADGE INLINE',
+  'CAMPOS',
+  'ESTADO VAZIO',
+  'TOOLTIP',
+  'MOVIMENTO, TOAST, SKELETON E ESTADOS',
+]
+const F3_MOTION = 'MOVIMENTO, TOAST, SKELETON E ESTADOS'
+const DESKTOP_MEDIA = '@media (min-width: 1041px) {'
+const REDUCE_DESKTOP = '@media (min-width: 1041px) and (prefers-reduced-motion: reduce)'
+
+// Texto do bloco F3 `name`: do comentario de cabecalho ate o fim do 1o @media desktop.
+function f3Section(name) {
+  const marker = `REFINO VISUAL F3 — ${name}`
+  const at = css.indexOf(marker)
+  expect(at, `secao F3 ausente: ${name}`).toBeGreaterThan(0)
+  const from = css.lastIndexOf('/*', at)
+  const mediaAt = css.indexOf(DESKTOP_MEDIA, at)
+  expect(mediaAt, `secao ${name} sem @media desktop`).toBeGreaterThan(at)
+  const body = bodyAfter(css.slice(mediaAt), DESKTOP_MEDIA)
+  return {
+    before: stripComments(css.slice(from, mediaAt)), // base (fora do @media)
+    media: stripComments(body),
+    start: from,
+  }
+}
+
+const f3 = Object.fromEntries(F3_HEADERS.map((name) => [name, f3Section(name)]))
+const f3Rules = Object.fromEntries(Object.entries(f3).map(([name, s]) => [name, parseRules(s.media)]))
+const allF3Rules = Object.values(f3Rules).flat()
+
+function f3Decls(selector, section) {
+  const pool = section ? f3Rules[section] : allF3Rules
+  const bodies = pool.filter((r) => r.selectors.includes(selector)).map((r) => r.body)
+  expect(bodies.length, `seletor sem regra no bloco F3: ${selector}`).toBeGreaterThan(0)
+  return bodies.join(' ')
+}
+
+function expectF3(selector, declarations, section) {
+  const body = f3Decls(selector, section)
+  for (const declaration of declarations) {
+    expect(body, `${selector} -> ${declaration}`).toContain(`${declaration};`)
+  }
+}
+
+describe('F3 - secoes e escopo', () => {
+  it('as 9 secoes existem, vem antes do bloco reduce desktop e cada uma tem UM @media (min-width: 1041px)', () => {
+    const reduceAt = css.lastIndexOf(REDUCE_DESKTOP)
+    for (const [name, section] of Object.entries(f3)) {
+      expect(section.start, name).toBeLessThan(reduceAt)
+      // Entre o cabecalho e o @media da secao so pode haver base (keyframes/elementos
+      // escondidos), nunca outro @media: o bloco e UM so, escopado ao desktop.
+      expect(section.before, `${name}: @media antes do bloco desktop`).not.toMatch(/@media/)
+      expect(section.media, `${name}: @media aninhado`).not.toMatch(/@media/)
+    }
+  })
+
+  it('nenhuma secao F3 usa @media (max-width) e o bloco reduce desktop continua sendo o ultimo do arquivo', () => {
+    for (const [name, section] of Object.entries(f3)) {
+      expect(section.before + section.media, name).not.toMatch(/@media\s*\(max-width/)
+    }
+    const tail = css.slice(css.lastIndexOf(REDUCE_DESKTOP))
+    expect(tail.match(/@media/g)).toHaveLength(1)
+  })
+
+  it('fora do @media desktop so ha elementos novos escondidos, keyframes e a base do skeleton do card', () => {
+    const outside = Object.values(f3).map((s) => s.before).join('\n')
+    // remove os @keyframes (corpo aninhado) antes de listar seletores
+    let stripped = outside
+    for (const m of [...outside.matchAll(/@keyframes\s+[a-z-]+\s*\{/g)]) {
+      const body = bodyAfter(outside.slice(m.index), m[0].slice(0, -1))
+      stripped = stripped.replace(`${m[0]}${body}}`, '')
+    }
+    const selectors = [...stripped.matchAll(/([^{}]+)\{/g)].map((m) => norm(m[1])).filter(Boolean)
+    for (const selector of selectors) {
+      expect(
+        ['.empty-state__glyph', '.toast__icon', '.process-list-skeletons--card', '.skeleton-process-card'],
+        `regra F3 fora do desktop: ${selector}`,
+      ).toContain(selector)
+    }
+  })
+})
+
+describe('F3 - botoes (Componentes.dc.html)', () => {
+  const four = ['.primary-button', '.ghost-button', '.danger-button', '.secondary-button']
+
+  it('altura unica de 44px, raio 12, 14/700 e transicoes de 120 ms (transform) e 200 ms (cor/sombra)', () => {
+    expectF3('.primary-button', ['min-height: 44px', 'border-radius: 12px', 'font-size: 14px', 'font-weight: 700'], 'BOTOES')
+    const base = f3Decls('.secondary-button', 'BOTOES')
+    expect(base).toContain('transform var(--dur-fast) var(--ease-out)')
+    expect(base).toContain('background-color var(--dur-base) var(--ease-out)')
+    expect(base).toContain('box-shadow var(--dur-base) var(--ease-out)')
+    expect(light['--dur-fast']).toBe('120ms')
+    expect(light['--dur-base']).toBe('200ms')
+  })
+
+  it('primario: menta + navy; hover com halo 0 6px 18px a 35%; pressionado --button-primary-bg-active', () => {
+    expectF3('.primary-button', ['background: var(--button-primary-bg)', 'color: var(--on-button-primary)'], 'BOTOES')
+    expectF3(
+      '.primary-button:hover:not(:disabled)',
+      ['background: var(--button-primary-bg-hover)', 'box-shadow: 0 6px 18px rgba(20, 221, 167, 0.35)'],
+      'BOTOES',
+    )
+    expectF3('.primary-button:active:not(:disabled)', ['background: var(--button-primary-bg-active)'], 'BOTOES')
+  })
+
+  it('pressionado: scale(.97) nos 4 tipos', () => {
+    const rule = f3Rules.BOTOES.find(
+      (r) => r.selectors.includes('.secondary-button:active:not(:disabled)') && r.body.includes('scale'),
+    )
+    expect(rule.body).toContain('transform: scale(0.97);')
+    for (const type of four) expect(rule.selectors).toContain(`${type}:active:not(:disabled)`)
+  })
+
+  it('foco: anel duplo (3px --surface + 5px --focus-ring); no destrutivo o anel externo e --danger', () => {
+    for (const type of four) {
+      expectF3(
+        `${type}:focus-visible:not(:disabled)`,
+        ['box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring)'],
+        'BOTOES',
+      )
+    }
+    expectF3('.danger-button:focus-visible:not(:disabled)', ['--focus-ring: var(--danger)'], 'BOTOES')
+    // guarda (h) do colorContrast: outline:none sempre com --focus-ring no mesmo bloco
+    for (const rule of f3Rules.BOTOES.filter((r) => r.body.includes('outline: none'))) {
+      expect(rule.body).toContain('var(--focus-ring)')
+    }
+  })
+
+  it('secundario: contorno 1.5px navy; hover --navy-50; pressionado --navy-100 + borda --navy-900', () => {
+    expectF3('.secondary-button', ['border: 1.5px solid var(--btn-ink)', 'background: var(--surface)', 'color: var(--btn-ink)'], 'BOTOES')
+    expectF3('.secondary-button', ['--btn-ink: var(--navy)', '--btn-line-active: var(--navy-900)'], 'BOTOES')
+    expectF3('.secondary-button:hover:not(:disabled)', ['background: var(--navy-50)'], 'BOTOES')
+    expectF3(
+      '.secondary-button:active:not(:disabled)',
+      ['background: var(--navy-100)', 'border-color: var(--btn-line-active)'],
+      'BOTOES',
+    )
+    // dark: o navy vira --primary
+    expectF3("[data-theme='dark'] .secondary-button", ['--btn-ink: var(--primary)'], 'BOTOES')
+  })
+
+  it('fantasma: transparente + navy; hover --bg; pressionado --disabled-bg', () => {
+    expectF3('.ghost-button', ['background: transparent', 'color: var(--btn-ink)', 'border-color: transparent'], 'BOTOES')
+    expectF3('.ghost-button:hover:not(:disabled)', ['background: var(--bg)'], 'BOTOES')
+    expectF3('.ghost-button:active:not(:disabled)', ['background: var(--disabled-bg)'], 'BOTOES')
+  })
+
+  it('destrutivo: --danger / --danger-bg-hover / --danger-bg-active com --on-danger (guarda (l))', () => {
+    expectF3('.danger-button', ['background: var(--danger)', 'color: var(--on-danger)'], 'BOTOES')
+    expectF3('.danger-button:hover:not(:disabled)', ['background: var(--danger-bg-hover)'], 'BOTOES')
+    expectF3('.danger-button:active:not(:disabled)', ['background: var(--danger-bg-active)'], 'BOTOES')
+  })
+
+  it('desabilitado: --disabled-bg / --disabled-ink sem opacidade (secundario com borda --border)', () => {
+    expectF3('.primary-button:disabled', ['background: var(--disabled-bg)', 'color: var(--disabled-ink)', 'opacity: 1'], 'BOTOES')
+    expectF3(
+      '.secondary-button:disabled',
+      ['background: var(--surface)', 'border-color: var(--border)', 'color: var(--disabled-ink)'],
+      'BOTOES',
+    )
+    expectF3('.ghost-button:disabled', ['background: transparent', 'color: var(--disabled-ink)'], 'BOTOES')
+  })
+
+  it('carregando: spinner de 14px com borda 2px a 40%, topo cheio, 0,8 s', () => {
+    expectF3(
+      '.primary-button .spinner',
+      [
+        'border: 2px solid color-mix(in srgb, currentColor 40%, transparent)',
+        'border-top-color: currentColor',
+        'animation: spinner-rotate 0.8s linear infinite',
+      ],
+      'BOTOES',
+    )
+    expectF3('.danger-button .spinner__svg', ['display: none'], 'BOTOES')
+  })
+
+  it('os tokens do mock existem nos dois temas (botao primario, destrutivo, desabilitado)', () => {
+    const expected = {
+      '--button-primary-bg': '#14dda7',
+      '--button-primary-bg-hover': '#2ee8b5',
+      '--button-primary-bg-active': '#0fb98c',
+      '--danger': '#c2362b',
+      '--danger-bg-hover': '#a82d23',
+      '--danger-bg-active': '#8f251d',
+      '--disabled-bg': '#e3ecea',
+      '--disabled-ink': '#6b7f88',
+      '--navy-50': '#e8f0f2',
+      '--navy-100': '#d6e3e7',
+      '--navy-900': '#003241',
+    }
+    for (const [token, value] of Object.entries(expected)) expect(light[token], token).toBe(value)
+    for (const token of Object.keys(expected)) expect(dark[token], `dark ${token}`).toBeTruthy()
+  })
+})
+
+describe('F3 - campos, chips, tags (Componentes.dc.html)', () => {
+  it('campo: 44px, raio 10, borda 1.5px --border-control (D1), 14/500, padding 0 14px', () => {
+    expectF3(
+      '.text-input',
+      [
+        'border: 1.5px solid var(--border-control)',
+        'border-radius: var(--radius-field)',
+        'font-size: 14px',
+        'font-weight: 500',
+      ],
+      'CAMPOS',
+    )
+    expect(light['--radius-field']).toBe('10px')
+    expectF3('input.text-input', ['min-height: 44px', 'padding: 0 14px'], 'CAMPOS')
+    expectF3('select.text-input', ['min-height: 44px'], 'CAMPOS')
+    // textarea nao herda min-height de 44 (o .text-area continua com 110px)
+    expect(f3Decls('textarea.text-input', 'CAMPOS')).not.toContain('min-height')
+    expect(light['--border-control']).toBe('#6b7f88')
+  })
+
+  it('foco: borda --focus-ring (navy; menta no dark) + halo 4px a 28%; erro: borda --danger, mensagem 11/600', () => {
+    expectF3('.text-input:focus', ['border-color: var(--focus-ring)', 'box-shadow: 0 0 0 4px var(--primary-a28)'], 'CAMPOS')
+    expect(light['--primary-a28']).toBe('rgba(20, 221, 167, 0.28)')
+    expect(light['--focus-ring']).toBe('#004153')
+    expect(dark['--focus-ring']).toBe('#14dda7')
+    expectF3(".text-input[aria-invalid='true']", ['border-color: var(--danger)'], 'CAMPOS')
+    expectF3('.field-error', ['font-size: 11px'], 'CAMPOS')
+    expectF3('.field > span', ['font-size: 13px', 'font-weight: 600', 'text-transform: none', 'color: var(--ink)'], 'CAMPOS')
+    expectF3('.field', ['gap: 6px'], 'CAMPOS')
+  })
+
+  it('datas e horas (e .text-input--mono) em JetBrains Mono', () => {
+    expectF3(".text-input[type='date']", ['font-family: var(--font-mono)', 'min-height: 44px'], 'CAMPOS')
+    expectF3('.text-input--mono', ['font-family: var(--font-mono)'], 'CAMPOS')
+  })
+
+  it('pilula de filtro: 36px, 13/600, ativa --navy, contador mono 11, "+ Filtro" tracejado', () => {
+    const S = 'CHIPS E FILTROS'
+    expectF3('.filter-pill', ['height: 36px', 'padding: 0 14px', 'border-radius: 999px', 'font-size: 13px', 'font-weight: 600'], S)
+    expectF3('.filter-pill--active', ['background: var(--navy)', 'color: #ffffff'], S)
+    expectF3('.filter-pill--active .filter-pill__count', ['background: rgba(255, 255, 255, 0.18)'], S)
+    expectF3('.filter-pill__count', ['font-family: var(--font-mono)', 'font-size: 11px', 'padding: 2px 7px'], S)
+    expectF3('.filter-pill__count--alert', ['color: var(--danger-700)'], S)
+    expectF3('.filter-pill--add', ['border-style: dashed'], S)
+  })
+
+  it('chip de filtro aplicado: 32px, 0 6px 0 12px, --navy-50/--navy 13/700, remover 24px', () => {
+    const S = 'CHIPS E FILTROS'
+    expectF3('.filter-chip', ['min-height: 32px', 'padding: 0 6px 0 12px', 'font-size: 13px', 'font-weight: 700'], S)
+    expectF3('.filter-chip--default', ['background: var(--navy-50)', 'color: var(--navy)'], S)
+    expectF3('.filter-chips-row .filter-chip', ['background: var(--navy-50)', 'color: var(--navy)'], S)
+    expectF3('.filter-chip__remove', ['width: 24px', 'height: 24px'], S)
+    expectF3('.filter-chips-row__clear', ['color: var(--danger-700)', 'min-height: 32px'], S)
+  })
+
+  it('tag de status e badge: 26px, padding 0 10px, 12/700', () => {
+    expectF3('.status-tag', ['min-height: 26px', 'padding: 0 10px', 'font-size: 12px', 'min-width: 0'], 'TAG DE STATUS')
+    expectF3('.inline-badge', ['min-height: 26px', 'padding: 0 10px', 'font-size: 12px'], 'BADGE INLINE')
+  })
+})
+
+describe('F3 - feedback (Componentes.dc.html)', () => {
+  it('alerta inline: raio 14, padding 14/16, icone de 20px por ::before (mesmos tracos do mock), acao sublinhada 13/700', () => {
+    const S = 'ALERTA INLINE'
+    expectF3('.error-banner', ['background: var(--danger-50)', 'color: var(--danger-700)'], S)
+    expectF3('.success-banner', ['background: var(--success-50)', 'color: var(--success-700)'], S)
+    expectF3('.error-banner', ['border-radius: 14px', 'font-size: 14px', 'font-weight: 600'], S)
+    expectF3('.error-banner::before', ['width: 20px', 'height: 20px'], S)
+    const media = f3[S].media
+    expect(media).toContain("circle cx='12' cy='12' r='9'")
+    expect(media).toContain('M12 8v5M12 16h.01')
+    expect(media).toContain("stroke-width='1.9'")
+    expectF3('.error-banner--retry .ghost-button', ['text-decoration: underline', 'font-size: 13px', 'font-weight: 700'], S)
+  })
+
+  it('estado vazio: borda 1px tracejada --border-strong, raio 16, icone 40px (traco 1.5, --primary-700), 14/700 + 12/1.5', () => {
+    const S = 'ESTADO VAZIO'
+    expectF3('.empty-state', ['border: 1px dashed var(--border-strong)', 'border-radius: 16px', 'padding: 22px 16px'], S)
+    expectF3('.empty-state__glyph', ['width: 40px', 'height: 40px', 'color: var(--primary-700)'], S)
+    expectF3('.empty-state__icon svg', ['width: 40px', 'height: 40px', 'stroke-width: 1.5'], S)
+    expectF3('.empty-state strong', ['font-size: 14px', 'font-weight: 700'], S)
+    expectF3('.empty-state p', ['font-size: 12px', 'line-height: 1.5', 'color: var(--ink-soft)'], S)
+    expectF3('.empty-state__illustration', ['display: none'], S)
+    expect(f3[S].before).toContain('.empty-state__glyph')
+  })
+
+  it('tooltip: --toast-bg/--toast-ink, 12/600, raio 10, padding 8x12', () => {
+    expectF3(
+      '.tooltip::after',
+      [
+        'background: var(--toast-bg)',
+        'color: var(--toast-ink)',
+        'font-size: 12px',
+        'font-weight: 600',
+        'border-radius: 10px',
+        'padding: 8px 12px',
+      ],
+      'TOOLTIP',
+    )
+  })
+
+  it('toast: navy, raio 14, padding 14/16, --shadow-lg, 14/600, circulo de 28px por tom; mola 300 ms, saida 200 ms ease-in', () => {
+    const S = F3_MOTION
+    expectF3(
+      '.toast',
+      [
+        'gap: 12px',
+        'padding: 14px 16px',
+        'border-radius: 14px',
+        'background: var(--toast-bg)',
+        'color: var(--toast-ink)',
+        'box-shadow: var(--shadow-lg)',
+        'font-size: 14px',
+        'font-weight: 600',
+      ],
+      S,
+    )
+    // o dark tambem zera a faixa lateral do F1 (border-left) nas 4 variantes
+    for (const tone of ['success', 'error', 'warning', 'info']) {
+      expectF3(`[data-theme='dark'] .toast.toast--${tone}`, ['border: 0'], S)
+    }
+    expectF3('.toast__icon', ['width: 28px', 'height: 28px', 'border-radius: 999px'], S)
+    expectF3('.toast--success .toast__icon', ['background: var(--primary)', 'color: var(--on-primary)'], S)
+    expectF3('.toast--error .toast__icon', ['background: var(--danger)', 'color: var(--on-danger)'], S)
+    expectF3('.toast--warning .toast__icon', ['background: var(--warning)', 'color: var(--on-warn)'], S)
+    expectF3('.toast--info .toast__icon', ['background: var(--info)'], S)
+    // animation em seletor de 1 classe: o bloco reduce (.toast/.toast--closing) continua vencendo.
+    expectF3('.toast', ['animation: motion-toast-in var(--dur-slow) var(--ease-spring) both'], S)
+    expectF3('.toast--closing', ['animation: motion-toast-out var(--dur-base) var(--ease-in) both'], S)
+  })
+
+  it('skeleton: gradiente base -> shine -> base, 200% 100%, shimmer de 1,4 s linear; legado so no tablet/mobile', () => {
+    const S = F3_MOTION
+    const body = f3Decls('.skeleton', S)
+    expect(body).toContain('var(--skeleton-base) 0%')
+    expect(body).toContain('var(--skeleton-shine) 50%')
+    expect(body).toContain('background-size: 200% 100%')
+    expect(body).toContain('animation: motion-shimmer 1.4s linear infinite')
+    expectF3("[data-theme='dark'] .skeleton", ['animation: motion-shimmer 1.4s linear infinite'], S)
+    expectF3('.skeleton-legacy', ['display: none'], S)
+    expectF3('.process-card-skeleton', ['padding: 18px', 'border-radius: 16px', 'background: var(--surface-alt)'], S)
+    expectF3('.skeleton-reveal', ['animation: motion-fade-in var(--dur-base) linear both'], S)
+  })
+})
+
+describe('F3 - movimento (Movimento.dc.html)', () => {
+  const MOTION = F3_MOTION
+
+  it('keyframes: valores do mock e so transform/opacity (unica excecao: shimmer em background-position)', () => {
+    const text = f3[MOTION].before
+    const keyframes = [...text.matchAll(/@keyframes\s+(motion-[a-z-]+)\s*\{/g)].map((m) => m[1])
+    expect([...keyframes].sort()).toEqual(
+      [
+        'motion-fade-in',
+        'motion-fade-out',
+        'motion-fill',
+        'motion-modal-out',
+        'motion-pop',
+        'motion-rise',
+        'motion-shimmer',
+        'motion-toast-in',
+        'motion-toast-out',
+      ].sort(),
+    )
+    for (const name of keyframes) {
+      const body = bodyAfter(text, `@keyframes ${name}`)
+      const props = [...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1])
+      const allowed = name === 'motion-shimmer' ? ['background-position'] : ['opacity', 'transform']
+      for (const prop of props) expect(allowed, `${name}: ${prop}`).toContain(prop)
+    }
+    const kf = (n) => norm(bodyAfter(text, `@keyframes ${n}`))
+    expect(kf('motion-rise')).toBe('from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; }')
+    expect(kf('motion-fill')).toBe('from { transform: scaleX(0); } to { transform: scaleX(1); }')
+    expect(kf('motion-pop')).toBe('from { transform: scale(0); } to { transform: scale(1); }')
+    expect(kf('motion-toast-in')).toBe(
+      'from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; }',
+    )
+    expect(kf('motion-shimmer')).toBe('from { background-position: 100% 0; } to { background-position: -100% 0; }')
+  })
+
+  it('pagina 500 ms ease-out; lista 300 ms com +40 ms por item (so os 8 primeiros)', () => {
+    expectF3('.page-fade--visible', ['animation: motion-rise var(--dur-page) var(--ease-out) both'], MOTION)
+    expectF3(
+      '.stagger__item',
+      [
+        'animation: motion-rise var(--dur-slow) var(--ease-out) both',
+        'animation-delay: calc(min(var(--stagger-index, 0), 7) * 40ms)',
+      ],
+      MOTION,
+    )
+    expect(light['--dur-page']).toBe('500ms')
+    expect(light['--dur-slow']).toBe('300ms')
+    const bezier = (token) => light[token].replace(/\s+/g, '').replace(/\(0\./g, '(.').replace(/,0\./g, ',.')
+    expect(bezier('--ease-out')).toBe('cubic-bezier(.4,0,.2,1)')
+    expect(bezier('--ease-in')).toBe('cubic-bezier(.4,0,1,1)')
+    expect(bezier('--ease-spring')).toBe('cubic-bezier(.34,1.56,.64,1)')
+  })
+
+  it('timeline: trilho preenche em 600 ms (segmentos em sequencia) e pontos com mola a 100 + 150 ms * posicao', () => {
+    expectF3(
+      '.process-detail-view .process-timeline__bar--done::after',
+      ['animation: motion-fill calc(var(--dur-fill) / var(--seg-count, 1)) linear both', 'transform-origin: left center'],
+      MOTION,
+    )
+    expectF3(
+      '.process-detail-view .process-timeline__node--done',
+      ['animation: motion-pop var(--dur-slow) var(--ease-spring) both', 'animation-delay: var(--dot-delay, 100ms)'],
+      MOTION,
+    )
+    ;[100, 250, 400, 550, 700].forEach((ms, i) => {
+      expectF3(`.process-detail-view .process-timeline__cell:nth-child(${i + 1})`, [`--dot-delay: ${ms}ms`], MOTION)
+    })
+    expect(light['--dur-fill']).toBe('600ms')
+    // o halo do no atual (guarda (s) do colorContrast) nao foi tocado
+    expect(css).toMatch(
+      /\.process-detail-view \.process-timeline__node--now \{[^}]*var\(--primary-700\)[^}]*var\(--primary-50\)[^}]*var\(--primary\)/,
+    )
+  })
+
+  it('estrela de favorito: scale(0 -> 1) em 300 ms com mola', () => {
+    expectF3('.favorite-star--pop', ['animation: motion-pop var(--dur-slow) var(--ease-spring) both'], MOTION)
+  })
+
+  it('cards nao levantam: hover com transform: none e troca de sombra/borda em 200 ms', () => {
+    for (const selector of [
+      '.stat-card:hover',
+      '.process-item--button:hover',
+      '.admin-user-row--button:hover',
+      '.announcement-card--button:hover',
+      '.process-related-item-button:hover',
+      '.news-attachment:hover',
+      '.weekly-arrivals-item--clickable:hover',
+      '.notifications__show-more:hover',
+    ]) {
+      expectF3(selector, ['transform: none'], MOTION)
+    }
+    expectF3('.stat-card:hover', ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)'], MOTION)
+    expectF3(
+      '.process-item--button:not(.process-item--selected):hover',
+      ['border-color: var(--border-strong)', 'box-shadow: var(--shadow-md)', 'background: var(--surface)'],
+      MOTION,
+    )
+    expectF3('.process-item--button:not(.process-item--selected)', ['box-shadow: var(--shadow-sm)'], MOTION)
+    const transition = f3Decls('.process-item--button', MOTION)
+    expect(transition).toContain('box-shadow var(--dur-base) var(--ease-out)')
+    expect(transition).not.toContain('transform')
+    // nenhuma regra desta secao de movimento levanta (translateY negativo) em :hover
+    for (const rule of f3Rules[MOTION].filter((r) => r.selectors.some((s) => s.includes(':hover')))) {
+      expect(rule.body, rule.selectors.join(',')).not.toMatch(/translateY\(-/)
+    }
+  })
+
+  it('scrim 200 ms linear (saida 140 ms ease-in) e modal 300 ms (saida 210 ms ease-in)', () => {
+    expectF3('.modal-backdrop', ['background: var(--scrim)', 'animation: motion-fade-in var(--dur-base) linear both'], MOTION)
+    expectF3('.modal-backdrop--closing', ['animation: motion-fade-out 140ms var(--ease-in) both'], MOTION)
+    expectF3('.modal', ['animation: motion-rise var(--dur-slow) var(--ease-out) both'], MOTION)
+    expectF3('.modal--sheet-closing', ['animation: motion-modal-out 210ms var(--ease-in) both'], MOTION)
+    expectF3('.notifications-backdrop', ['animation: motion-fade-in var(--dur-base) linear both'], MOTION)
+    expectF3('.notifications-backdrop--closing', ['animation: motion-fade-out 140ms var(--ease-in) both'], MOTION)
+  })
+
+  it('a gaveta (F2) segue com 300 ms ease-out / 210 ms ease-in (nao foi alterada)', () => {
+    expect(css).toMatch(/animation: notif-drawer-in var\(--dur-slow\) var\(--ease-out\) forwards/)
+    expect(css).toMatch(/animation: notif-drawer-out 210ms var\(--ease-in\) forwards/)
+  })
+
+  it('movimento reduzido: as regras F3 entram no bloco desktop existente (fade de 150 ms, sem escalonar/shimmer)', () => {
+    const reduceStart = css.lastIndexOf(REDUCE_DESKTOP)
+    const reduceBody = norm(stripComments(bodyAfter(css.slice(reduceStart), REDUCE_DESKTOP)))
+    expect(reduceBody).toContain('.page-fade--visible')
+    expect(reduceBody).toContain('.favorite-star--pop')
+    expect(reduceBody).toContain('.process-detail-view .process-timeline__bar--done::after')
+    expect(reduceBody).toContain('animation: motion-fade-in 150ms linear both')
+    expect(reduceBody).toContain('.stagger__item { animation: motion-fade-in 150ms linear both; animation-delay: 0ms; }')
+    expect(reduceBody).toMatch(/\.skeleton, \[data-theme='dark'\] \.skeleton \{ animation: none; \}/)
+    expect(reduceBody).toContain('.primary-button:active:not(:disabled)')
+    expect(reduceBody).toContain('transform: none')
+    // a regra original do toast continua la (animation: none)
+    expect(reduceBody).toContain('.toast { animation: none; }')
+  })
+})
+
+describe('F3 - JSX dos componentes', () => {
+  const toast = read('src/components/Toast.jsx')
+  const statCard = read('src/components/StatCard.jsx')
+  const stagger = read('src/components/Stagger.jsx')
+  const listView = read('src/features/processes/ProcessListView.jsx')
+  const detailView = read('src/features/processes/ProcessDetailView.jsx')
+  const dashboard = read('src/pages/DashboardPage.jsx')
+
+  it('toast: 5 s, pausa em mouse/foco, icone decorativo por tom, erro sem auto-dismiss', () => {
+    expect(toast).toContain('const TOAST_TIMEOUT_MS = 5000')
+    expect(toast).toContain('onMouseEnter')
+    expect(toast).toContain('onFocus')
+    expect(toast).toContain('className="toast__icon"')
+    expect(toast).toContain("tone !== 'error'")
+  })
+
+  it('stagger expoe --stagger-index; StatCard usa o contador; nenhuma dependencia de animacao nova', () => {
+    expect(stagger).toContain("'--stagger-index': index")
+    expect(statCard).toContain('useCountUp(value)')
+    const pkg = JSON.parse(read('package.json'))
+    expect(Object.keys(pkg.dependencies)).not.toContain('framer-motion')
+  })
+
+  it('estrela com mola so ao ativar (lista e detalhe) e timeline com --seg-index/--seg-count', () => {
+    expect(listView).toContain('useActivationPop(Boolean(isFavorite))')
+    expect(listView).toContain("'favorite-star--pop'")
+    expect(detailView).toContain('useActivationPop(isFavorite)')
+    expect(detailView).toContain("'--seg-index': index - 1")
+    expect(detailView).toContain("'--seg-count': filledSegments")
+  })
+
+  it('skeleton no formato real do card (desktop) com o legado preservado + fade ao revelar', () => {
+    for (const source of [listView, dashboard]) {
+      expect(source).toContain('skeleton-legacy')
+      expect(source).toContain('process-list-skeletons--card')
+      expect(source).toContain('<Skeleton.ProcessCard />')
+      expect(source).toContain('skeleton-reveal')
+    }
+    // o skeleton antigo (4 pecas por card) segue no DOM para tablet/mobile
+    expect(listView).toContain('process-item process-item--skeleton')
+  })
+})
