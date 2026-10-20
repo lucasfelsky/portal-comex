@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import SelectField from '../../components/SelectField'
 import useAuth from '../../hooks/useAuth'
+import useMediaQuery from '../../hooks/useMediaQuery'
 import StatCard from '../../components/StatCard'
 import Skeleton from '../../components/Skeleton'
 import TabButton from '../../components/TabButton'
@@ -31,6 +32,15 @@ import { buildActionErrorMessage } from '../../utils/errorMessages'
 // canais (notifySupportTicketResolved).
 
 const PRIORITY_OPTIONS = [1, 2, 3, 4, 5]
+
+// Refino F6b (AdminSuporte.dc.html): >= 1041px a aba escolhe uma arvore propria (indicadores com sparkline,
+// abas segmentadas com contagem, chamado em 2 colunas); tablet e mobile ficam na arvore anterior, sem
+// mudanca.
+const DESKTOP_QUERY = '(min-width: 1041px)'
+
+// Tom da etiqueta de status no desktop (mock: "Aberto" em perigo); a arvore anterior segue com
+// SUPPORT_TICKET_STATUS_TONES (aberto = aviso).
+const STATUS_PILL_TONES = { aberto: 'danger', em_andamento: 'info', resolvido: 'ok' }
 
 // Traduz pathnames em labels legíveis para o contexto do chamado.
 const PAGE_LABELS = {
@@ -73,8 +83,84 @@ function formatTicketDate(isoDate) {
   })
 }
 
+// "19/10 09:14" pela data LOCAL (com o ano quando nao e o corrente); manual, nunca toISOString (BRT).
+function formatShortDateTime(isoDate, now = new Date()) {
+  if (!isoDate) return '—'
+  const parsed = new Date(isoDate)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  const pad = (number) => String(number).padStart(2, '0')
+  const day = `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}`
+  const year = parsed.getFullYear() === now.getFullYear() ? '' : `/${parsed.getFullYear()}`
+  return `${day}${year} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+}
+
+// So a hora ("09:40") quando e hoje; data + hora nos demais dias.
+function formatShortTime(isoDate, now = new Date()) {
+  const parsed = new Date(isoDate)
+  if (!isoDate || Number.isNaN(parsed.getTime())) return '—'
+  const sameDay =
+    parsed.getFullYear() === now.getFullYear() &&
+    parsed.getMonth() === now.getMonth() &&
+    parsed.getDate() === now.getDate()
+  if (!sameDay) return formatShortDateTime(isoDate, now)
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+}
+
+// Iniciais do autor (ate 2 letras) para o avatar do chamado.
+function getInitials(name) {
+  const parts = String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (parts.length === 0) return '?'
+  const first = parts[0][0]
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
+  return `${first}${last}`.toUpperCase()
+}
+
+// Sparkline 140x40 das ultimas semanas (mock: traco --primary-700, ponto final --primary).
+function Sparkline({ counts }) {
+  if (!Array.isArray(counts) || counts.length < 2) return null
+  const width = 140
+  const height = 40
+  const padX = 3
+  const padY = 6
+  const min = Math.min(...counts)
+  const max = Math.max(...counts)
+  const range = max - min
+  const step = (width - padX * 2) / (counts.length - 1)
+  const points = counts.map((value, index) => [
+    padX + index * step,
+    range === 0 ? height / 2 : height - padY - ((value - min) / range) * (height - padY * 2),
+  ])
+  const [lastX, lastY] = points[points.length - 1]
+
+  return (
+    <svg
+      className="as-spark"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`Tendência das últimas ${counts.length} semanas`}
+    >
+      <polyline
+        className="as-spark__line"
+        points={points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}
+        fill="none"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle className="as-spark__dot" cx={lastX.toFixed(1)} cy={lastY.toFixed(1)} r="3" />
+    </svg>
+  )
+}
+
 export default function AdminSupportPanel() {
   const { profile } = useAuth()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [tickets, setTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('aberto')
@@ -139,6 +225,15 @@ export default function AdminSupportPanel() {
 
   const openCount = useMemo(
     () => tickets.filter((ticket) => ticket.status === 'aberto').length,
+    [tickets]
+  )
+
+  const inProgressCount = useMemo(
+    () => tickets.filter((ticket) => ticket.status === 'em_andamento').length,
+    [tickets]
+  )
+  const resolvedCount = useMemo(
+    () => tickets.filter((ticket) => ticket.status === 'resolvido').length,
     [tickets]
   )
 
@@ -215,6 +310,320 @@ export default function AdminSupportPanel() {
     } finally {
       setSendingReplyTicketId(null)
     }
+  }
+
+  // Refino F6b (AdminSuporte.dc.html): >= 1041px a aba ganha 3 indicadores com sparkline, abas segmentadas
+  // com contagem e o chamado em 2 colunas (conversa a esquerda, resposta/prioridade/acoes a direita).
+  // Tablet/mobile seguem na arvore abaixo, intacta. Estado e handlers sao os mesmos (vivem la em cima),
+  // entao a troca ao vivo de breakpoint mantem os rascunhos de resposta e de encerramento.
+  if (isDesktop) {
+    const statusTabs = [
+      { id: 'aberto', label: 'Abertos', count: openCount },
+      { id: 'em_andamento', label: 'Em andamento', count: inProgressCount },
+      { id: 'resolvido', label: 'Resolvidos', count: resolvedCount },
+      { id: 'todos', label: 'Todos', count: tickets.length },
+    ]
+    const weeklyCounts = supportStats.weeklySeries.counts
+    const weeklyDifference =
+      supportStats.weeklySeries.currentWeekCount - supportStats.weeklySeries.previousWeekCount
+    const ticket = currentTicket
+    const isSaving = ticket ? savingTicketId === ticket.id : false
+    const isResolved = ticket?.status === 'resolvido'
+    const isInProgress = ticket?.status === 'em_andamento'
+    const replyDraft = ticket ? (replyDrafts[ticket.id] ?? '') : ''
+    const isSendingReply = ticket ? sendingReplyTicketId === ticket.id : false
+
+    return (
+      <div className="admin-panel admin-panel--support as-root">
+        {error ? <div className="error-banner">{error}</div> : null}
+
+        <section className="as-kpis" aria-label="Métricas de suporte">
+          <div className="as-kpi">
+            <span className="as-kpi__label">Tempo médio de resolução</span>
+            <span className="as-kpi__value">
+              {isLoading ? '—' : formatResolutionHours(supportStats.avgResolution)}
+            </span>
+          </div>
+          <div className="as-kpi">
+            <span className="as-kpi__label">Em aberto</span>
+            <span className="as-kpi__value">{isLoading ? '—' : supportStats.unresolved.total}</span>
+            <span className={`as-kpi__note${highPriorityCount > 0 ? ' as-kpi__note--danger' : ''}`}>
+              {highPriorityCount > 0 ? `${highPriorityCount} de prioridade alta` : 'Nenhum de prioridade alta'}
+            </span>
+          </div>
+          <div className="as-kpi">
+            <span className="as-kpi__label">Chamados abertos por semana</span>
+            <div className="as-kpi__row">
+              <span className="as-kpi__value">
+                {isLoading ? '—' : supportStats.weeklySeries.currentWeekCount}
+              </span>
+              <Sparkline counts={weeklyCounts} />
+            </div>
+            <span className="as-kpi__note">
+              {`${weeklyDifference > 0 ? '+' : ''}${weeklyDifference} vs. semana anterior`}
+              {supportStats.weeklyDelta !== null
+                ? ` (${supportStats.weeklyDelta > 0 ? '+' : ''}${supportStats.weeklyDelta}%)`
+                : ''}
+            </span>
+          </div>
+        </section>
+
+        <div className="as-head">
+          <div className="as-head__text">
+            <h3 className="as-title">Chamados de suporte</h3>
+            <p className="as-subtitle">
+              Demandas relatadas pelos usuários do portal.
+              {openCount > 0 ? ` ${openCount} em aberto.` : ' Nenhum chamado em aberto.'}
+            </p>
+          </div>
+          <div className="as-tabs" role="tablist" aria-label="Filtro de chamados">
+            {statusTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === tab.id}
+                className={`as-tab${statusFilter === tab.id ? ' as-tab--active' : ''}`}
+                onClick={() => setStatusFilter(tab.id)}
+              >
+                {tab.label} <span className="as-tab__count">{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="as-grid">
+            <Skeleton variant="card" style={{ height: 320 }} />
+            <Skeleton variant="card" style={{ height: 320 }} />
+          </div>
+        ) : visibleTickets.length === 0 || !ticket ? (
+          <div className="empty-state">
+            <strong>Nenhum chamado por aqui</strong>
+            <p>
+              {statusFilter === 'aberto'
+                ? 'Não há chamados em aberto no momento.'
+                : 'Nenhum chamado corresponde ao filtro selecionado.'}
+            </p>
+          </div>
+        ) : (
+          <section className="as-grid">
+            <article className="ad-card as-ticket" key={ticket.id} aria-label="Chamado">
+              <div className="as-ticket__head">
+                <div className="as-author">
+                  <span className="as-avatar" aria-hidden="true">
+                    {getInitials(ticket.authorName)}
+                  </span>
+                  <div className="as-author__text">
+                    <strong className="as-author__name">{ticket.authorName}</strong>
+                    <span className="as-author__meta">
+                      {ticket.authorEmail} · {formatShortDateTime(ticket.createdAt)}
+                    </span>
+                  </div>
+                </div>
+                <div className="as-ticket__tools">
+                  <span className={`ad-pill ad-pill--${STATUS_PILL_TONES[ticket.status] ?? 'danger'}`}>
+                    {SUPPORT_TICKET_STATUS_LABELS[ticket.status] ?? 'Aberto'}
+                  </span>
+                  {visibleTickets.length > 1 ? (
+                    <div className="as-pager">
+                      <button
+                        type="button"
+                        className="as-pager__button"
+                        aria-label="Chamado anterior"
+                        onClick={() =>
+                          setTicketIndex((safeTicketIndex - 1 + visibleTickets.length) % visibleTickets.length)
+                        }
+                      >
+                        <Icon name="chevron-left" size={14} strokeWidth={2.2} />
+                      </button>
+                      <span
+                        className="as-pager__counter"
+                        aria-label={`Chamado ${safeTicketIndex + 1} de ${visibleTickets.length}`}
+                      >
+                        {safeTicketIndex + 1}/{visibleTickets.length}
+                      </span>
+                      <button
+                        type="button"
+                        className="as-pager__button"
+                        aria-label="Próximo chamado"
+                        onClick={() => setTicketIndex((safeTicketIndex + 1) % visibleTickets.length)}
+                      >
+                        <Icon name="chevron-right" size={14} strokeWidth={2.2} />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <p className="as-message">{ticket.message}</p>
+
+              {ticket.contextPage ? (
+                <span className="as-context">
+                  Contexto:{' '}
+                  <strong>
+                    {PAGE_LABELS[ticket.contextPage] ?? ticket.contextPage}
+                    {ticket.contextProcessName
+                      ? ` · ${ticket.contextProcessName}`
+                      : ticket.contextProcessId
+                        ? ` · processo ${ticket.contextProcessId.slice(0, 8)}`
+                        : ''}
+                  </strong>
+                </span>
+              ) : null}
+
+              {ticket.imageUrls.length > 0 ? (
+                <div className="as-shots">
+                  {ticket.imageUrls.map((url, index) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Abrir print ${index + 1}`}
+                      className="as-shot"
+                    >
+                      <img src={url} alt={`Print ${index + 1} do chamado`} loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+
+              {isResolved && ticket.resolvedByName ? (
+                <p className="as-resolved-by">
+                  Resolvido por {ticket.resolvedByName}
+                  {ticket.resolvedAt ? ` em ${formatShortDateTime(ticket.resolvedAt)}` : ''}.
+                </p>
+              ) : null}
+
+              {isResolved && ticket.resolutionMessage ? (
+                <div className="as-resolution">
+                  <h4 className="as-resolution__title">Resposta da equipe</h4>
+                  <p className="as-resolution__text">{ticket.resolutionMessage}</p>
+                </div>
+              ) : null}
+
+              <div className="as-thread">
+                <h4 className="as-thread__title">Conversa com o usuário</h4>
+                {ticket.replies.length > 0 ? (
+                  <ul className="as-thread__list">
+                    {ticket.replies.map((reply) => {
+                      const fromUser = Boolean(reply.authorId) && reply.authorId === ticket.authorId
+                      return (
+                        <li
+                          key={reply.id}
+                          className={`as-bubble${fromUser ? ' as-bubble--user' : ' as-bubble--team'}`}
+                        >
+                          <p className="as-bubble__text">{reply.message}</p>
+                          <span className="as-bubble__meta">
+                            {reply.authorName} · {formatShortTime(reply.createdAt)}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p className="as-thread__empty">Nenhuma resposta enviada ainda.</p>
+                )}
+              </div>
+            </article>
+
+            <aside className="ad-card as-side" aria-label="Atendimento">
+              <label className="field">
+                <span>Nova resposta</span>
+                <textarea
+                  className="text-input text-input--textarea as-reply"
+                  value={replyDraft}
+                  onChange={(event) =>
+                    setReplyDrafts((current) => ({
+                      ...current,
+                      [ticket.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Escreva a resposta ao usuário."
+                  rows={5}
+                  maxLength={SUPPORT_TICKET_MAX_REPLY_LENGTH}
+                  disabled={isSendingReply}
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSendingReply || !replyDraft.trim()}
+                onClick={() => sendTicketReply(ticket)}
+              >
+                {isSendingReply ? 'Enviando...' : 'Enviar resposta'}
+              </button>
+
+              <label className="field">
+                <span>Prioridade</span>
+                <SelectField
+                  className="text-input"
+                  value={ticket.priority}
+                  disabled={isSaving}
+                  onChange={(event) => applyTicketUpdate(ticket, ticket.status, Number(event.target.value))}
+                >
+                  {PRIORITY_OPTIONS.map((priorityOption) => (
+                    <option key={priorityOption} value={priorityOption}>
+                      {PRIORITY_LABELS[priorityOption]}
+                    </option>
+                  ))}
+                </SelectField>
+              </label>
+
+              {!isResolved ? (
+                <label className="field">
+                  <span>Mensagem de encerramento (opcional)</span>
+                  <textarea
+                    className="text-input text-input--textarea as-closing"
+                    value={resolutionDrafts[ticket.id] ?? ''}
+                    onChange={(event) =>
+                      setResolutionDrafts((current) => ({
+                        ...current,
+                        [ticket.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Explique a resolução ou deixe instruções para o usuário"
+                    rows={1}
+                    disabled={isSaving}
+                  />
+                </label>
+              ) : null}
+
+              <div className="as-actions">
+                {!isResolved && !isInProgress ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={isSaving}
+                    onClick={() => applyTicketUpdate(ticket, 'em_andamento', ticket.priority)}
+                  >
+                    {isSaving ? 'Salvando...' : 'Iniciar atendimento'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={
+                    isResolved ? 'secondary-button' : isInProgress ? 'primary-button' : 'ghost-button as-resolve'
+                  }
+                  disabled={isSaving}
+                  onClick={() =>
+                    applyTicketUpdate(
+                      ticket,
+                      isResolved ? 'aberto' : 'resolvido',
+                      ticket.priority,
+                      resolutionDrafts[ticket.id] ?? ''
+                    )
+                  }
+                >
+                  {isSaving ? 'Salvando...' : isResolved ? 'Reabrir chamado' : 'Marcar como resolvido'}
+                </button>
+              </div>
+            </aside>
+          </section>
+        )}
+      </div>
+    )
   }
 
   return (

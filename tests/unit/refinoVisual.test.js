@@ -1559,7 +1559,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/admin/AdminAnnouncementsPanel.jsx': [2, 1, 0],
   'features/admin/AdminBarStatusPanel.jsx': [1, 1, 0],
   'features/admin/AdminLeadTimePanel.jsx': [1, 1, 0],
-  'features/admin/AdminSupportPanel.jsx': [3, 3, 0],
+  // F6b: +1 fantasma de verdade ("Marcar como resolvido", arvore desktop, como no AdminSuporte.dc.html); os 3 secundarios sao da arvore anterior.
+  'features/admin/AdminSupportPanel.jsx': [4, 3, 0],
   // F6a: a arvore desktop (au-*) acrescenta 3 fantasmas sem moldura no mock: Excluir usuario, Reprovar (contorno de perigo proprio) e Abrir detalhe.
   'features/admin/AdminUsersPanel.jsx': [8, 3, 0],
   'features/erp/ErpCreateProcessesPanel.jsx': [1, 0, 0],
@@ -4207,7 +4208,7 @@ describe('F6b - secao, escopo e ordem', () => {
     for (const rule of f6bRules) {
       for (const selector of rule.selectors) expect(selector, `seletor sem raiz: ${selector}`).toMatch(ROOT)
     }
-    expect(f6bRules.length).toBeGreaterThan(40)
+    expect(f6bRules.length).toBeGreaterThan(100)
   })
 
   it('so tokens: nenhuma cor literal na secao', () => {
@@ -4374,5 +4375,88 @@ describe('F6b - Lead time (valores do AdminLeadTime.dc.html)', () => {
     // a arvore anterior continua com a tabela de 6 trechos
     expect(panel).toContain('Previsão × real (dias úteis após a chegada)')
     expect(stripComments(panel)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+})
+
+describe('F6b - Suporte (valores do AdminSuporte.dc.html)', () => {
+  it('indicadores: grade auto-fit 220 gap 14; cartao 18/20 raio 18; rotulo 13/600; valor Sora 34/700 -0.02em; nota 12/600', () => {
+    expectF6b('.admin-panel--support .as-kpis', ['grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))', 'gap: 14px'])
+    expectF6b('.admin-panel--support .as-kpi', ['gap: 6px', 'padding: 18px 20px', 'border: 1px solid var(--border)', 'border-radius: 18px', 'background: var(--surface)'])
+    expectF6b('.admin-panel--support .as-kpi__label', ['font-size: 13px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-kpi__value', ['font-family: var(--font-heading)', 'font-size: 34px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF6b('.admin-panel--support .as-kpi__note', ['font-size: 12px', 'font-weight: 600', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-kpi__note--danger', ['font-weight: 700', 'color: var(--danger-700)'])
+  })
+
+  it('sparkline: traco --primary-700 e ponto final --primary', () => {
+    expectF6b('.admin-panel--support .as-spark__line', ['stroke: var(--primary-700)'])
+    expectF6b('.admin-panel--support .as-spark__dot', ['fill: var(--primary)'])
+  })
+
+  it('titulo Sora 24/700 -0.02em; abas segmentadas: trilho --disabled-bg raio 14, aba 38 raio 10 13/700, ativa --surface + sombra', () => {
+    expectF6b('.admin-panel--support .as-title', ['font-family: var(--font-heading)', 'font-size: 24px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF6b('.admin-panel--support .as-tabs', ['gap: 4px', 'padding: 4px', 'border-radius: 14px', 'background: var(--disabled-bg)'])
+    expectF6b('.admin-panel--support .as-tab', ['height: 38px', 'padding: 0 14px', 'border-radius: 10px', 'font-size: 13px', 'font-weight: 700', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-tab--active', ['background: var(--surface)', 'color: var(--ink)'])
+    expect(f6bRules.find((r) => r.selectors.includes('.admin-panel--support .as-tab--active')).body).toContain('box-shadow: 0 1px 3px')
+    expectF6b('.admin-panel--support .as-tab__count', ['font-family: var(--font-mono)', 'color: var(--ink-soft)'])
+  })
+
+  it('2 colunas minmax(0, 1.5fr) / minmax(280px, 1fr) gap 20; cartao do chamado gap 16', () => {
+    expectF6b('.admin-panel--support .as-grid', ['grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr)', 'align-items: start', 'gap: 20px'])
+    expectF6b('.admin-panel--support .as-ticket', ['gap: 16px'])
+  })
+
+  it('autor: avatar 44 raio 12 --info-50/--info-700; nome 15/700; meta 12; paginador de 40 raio 10 com contador mono 12', () => {
+    expectF6b('.admin-panel--support .as-avatar', ['width: 44px', 'height: 44px', 'border-radius: 12px', 'background: var(--info-50)', 'color: var(--info-700)', 'font-weight: 700'])
+    expectF6b('.admin-panel--support .as-author__name', ['font-size: 15px', 'font-weight: 700'])
+    expectF6b('.admin-panel--support .as-author__meta', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-pager__button', ['width: 40px', 'height: 40px', 'border: 1px solid var(--border)', 'border-radius: 10px', 'background: var(--surface)'])
+    expectF6b('.admin-panel--support .as-pager__counter', ['font-family: var(--font-mono)', 'font-size: 12px', 'color: var(--ink-soft)'])
+  })
+
+  it('mensagem 15/1.6; contexto em chip --surface-alt raio 10 12px; miniaturas 120x76 raio 10 --media-placeholder', () => {
+    expectF6b('.admin-panel--support .as-message', ['font-size: 15px', 'line-height: 1.6'])
+    expectF6b('.admin-panel--support .as-context', ['padding: 6px 12px', 'border-radius: 10px', 'background: var(--surface-alt)', 'font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-shot', ['width: 120px', 'height: 76px', 'border-radius: 10px', 'background: var(--media-placeholder)'])
+  })
+
+  it('conversa: divisor --row-divider; baloes equipe (--primary-50, 14/4/14/14, a direita) e usuario (--surface-alt); max 80%', () => {
+    expectF6b('.admin-panel--support .as-thread', ['padding-top: 14px', 'border-top: 1px solid var(--row-divider)'])
+    expectF6b('.admin-panel--support .as-thread__title', ['font-size: 14px', 'font-weight: 700'])
+    expectF6b('.admin-panel--support .as-bubble', ['max-width: 80%', 'padding: 10px 14px', 'font-size: 14px', 'line-height: 1.5'])
+    expectF6b('.admin-panel--support .as-bubble--team', ['align-self: flex-end', 'border-radius: 14px 4px 14px 14px', 'background: var(--primary-50)'])
+    expectF6b('.admin-panel--support .as-bubble--user', ['align-self: flex-start', 'border-radius: 4px 14px 14px 14px', 'background: var(--surface-alt)'])
+    expectF6b('.admin-panel--support .as-bubble__meta', ['font-size: 11px', 'color: var(--ink-soft)'])
+    expectF6b('.admin-panel--support .as-resolution', ['border-radius: 14px', 'background: var(--primary-50)'])
+  })
+
+  it('coluna lateral: campo de resposta e encerramento (44) redimensionaveis; acoes separadas por divisor, gap 8', () => {
+    expectF6b('.admin-panel--support .as-side textarea.as-reply', ['min-height: 120px', 'resize: vertical'])
+    expectF6b('.admin-panel--support .as-side textarea.as-closing', ['min-height: 44px', 'resize: vertical'])
+    expectF6b('.admin-panel--support .as-actions', ['flex-direction: column', 'gap: 8px', 'padding-top: 12px', 'border-top: 1px solid var(--row-divider)'])
+    expectF6b('.admin-panel--support .as-actions .as-resolve', ['color: var(--ad-accent)'])
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--support, h3 do titulo, tablist/tab, sparkline e status em perigo; sem toISOString', () => {
+    const panel = read('src/features/admin/AdminSupportPanel.jsx').replace(/\r\n/g, '\n')
+    expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(panel).toContain('className="admin-panel admin-panel--support as-root"')
+    expect(panel).toContain('<h3 className="as-title">Chamados de suporte</h3>')
+    expect(panel).toContain('role="tablist" aria-label="Filtro de chamados"')
+    expect(panel).toContain('role="tab"')
+    expect(panel).toContain("const STATUS_PILL_TONES = { aberto: 'danger', em_andamento: 'info', resolvido: 'ok' }")
+    expect(panel).toContain('Escreva a resposta ao usuário.')
+    // a arvore anterior continua com os StatCards e o TabButton
+    expect(panel).toContain('<StatCard')
+    expect(panel).toContain('<TabButton')
+    // o codigo novo (helpers + arvore desktop) nao usa toISOString para chave de data; os que restam sao os
+    // carimbos de "agora" do estado otimista que ja existiam na arvore anterior
+    const desktopBlock =
+      panel.slice(panel.indexOf('function formatShortDateTime'), panel.indexOf('export default function AdminSupportPanel')) +
+      panel.slice(panel.indexOf('  if (isDesktop) {'), panel.indexOf('  return (\n    <>\n      {error ?'))
+    expect(desktopBlock.length).toBeGreaterThan(5000)
+    expect(stripComments(desktopBlock)).not.toMatch(/toISOString\(\)|console\.log/)
   })
 })
