@@ -21493,6 +21493,351 @@ body {
   .admin-panel--announcements .ad-footer {
     padding-top: 12px;
   }
+
+  /* ---------- Barra do porto (AdminBarra.dc.html) ---------- */
+  .admin-panel--bar .ab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+    align-items: start;
+    gap: 20px;
+  }
+
+  /* Sem leitura do robo nao ha segunda coluna: o cartao do status fica na largura de uma coluna. */
+  .admin-panel--bar .ab-grid--single {
+    grid-template-columns: minmax(min(100%, 440px), calc(50% - 10px));
+  }
+
+  .admin-panel--bar .ab-status-card {
+    gap: 18px;
+    padding: 24px;
+  }
+
+  .admin-panel--bar .ab-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .admin-panel--bar .ab-head__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .admin-panel--bar .ab-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  .admin-panel--bar .ab-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  /* Etiqueta do status atual (32px, ponto de 8px no tom do status). */
+  .admin-panel--bar .ab-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .admin-panel--bar .ab-state--ok {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .admin-panel--bar .ab-state--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .admin-panel--bar .ab-state--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .admin-panel--bar .ab-state__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--primary);
+  }
+
+  .admin-panel--bar .ab-state--warn .ab-state__dot {
+    background: var(--warning);
+  }
+
+  .admin-panel--bar .ab-state--danger .ab-state__dot {
+    background: var(--danger);
+  }
+
+  .admin-panel--bar .ab-skeleton {
+    display: grid;
+    gap: 10px;
+  }
+
+  /* 3 cartoes de radio: borda 1.5px, raio 14, padding 16, radio 22 + ponto 10, bolinha de tom 12. */
+  .admin-panel--bar .ab-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .admin-panel--bar .ab-options legend {
+    padding: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .admin-panel--bar .ab-option {
+    position: relative;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    cursor: pointer;
+    transition:
+      border-color var(--dur-base) var(--ease-out),
+      background-color var(--dur-base) var(--ease-out);
+  }
+
+  .admin-panel--bar .ab-option:hover:not(.ab-option--checked) {
+    border-color: var(--border-strong);
+  }
+
+  .admin-panel--bar .ab-option--checked {
+    border-color: var(--ad-accent);
+    background: var(--surface-alt);
+  }
+
+  .admin-panel--bar .ab-option:has(input:focus-visible) {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .admin-panel--bar .ab-option input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+
+  .admin-panel--bar .ab-option__radio {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border-control);
+    border-radius: 99px;
+  }
+
+  .admin-panel--bar .ab-option--checked .ab-option__radio {
+    border-color: var(--ad-accent);
+  }
+
+  .admin-panel--bar .ab-option__radio-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 99px;
+    background: transparent;
+  }
+
+  .admin-panel--bar .ab-option--checked .ab-option__radio-dot {
+    background: var(--ad-accent);
+  }
+
+  .admin-panel--bar .ab-option__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .admin-panel--bar .ab-option__label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .admin-panel--bar .ab-option__hint {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--bar .ab-option__tone {
+    width: 12px;
+    height: 12px;
+    border-radius: 99px;
+    background: var(--primary);
+  }
+
+  .admin-panel--bar .ab-option--warn .ab-option__tone {
+    background: var(--warning);
+  }
+
+  .admin-panel--bar .ab-option--danger .ab-option__tone {
+    background: var(--danger);
+  }
+
+  .admin-panel--bar .ab-save {
+    align-self: flex-end;
+    padding: 0 18px;
+  }
+
+  /* Coluna do robo da Praticagem ZP21. */
+  .admin-panel--bar .ab-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .admin-panel--bar .ab-robot {
+    gap: 12px;
+    padding: 20px;
+  }
+
+  .admin-panel--bar .ab-robot__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .admin-panel--bar .ab-robot__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--navy-50);
+    color: var(--ad-accent);
+  }
+
+  .admin-panel--bar .ab-robot__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .admin-panel--bar .ab-robot__name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .admin-panel--bar .ab-robot__source {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .admin-panel--bar .ab-robot__read {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--surface-alt);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel--bar .ab-robot__read-label {
+    color: var(--ink-soft);
+  }
+
+  /* Avisos do robo: coincide (ok), difere (aviso + Aplicar), falha/atrasado (perigo). */
+  .admin-panel--bar .ab-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .admin-panel--bar .ab-notice svg {
+    flex: none;
+  }
+
+  .admin-panel--bar .ab-notice__text {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .admin-panel--bar .ab-notice--ok {
+    background: var(--success-50);
+    color: var(--success-700);
+  }
+
+  .admin-panel--bar .ab-notice--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .admin-panel--bar .ab-notice--danger {
+    background: var(--danger-50);
+    color: var(--danger-700);
+  }
+
+  .admin-panel--bar .ab-notice__apply {
+    height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--warning-700);
+    color: var(--on-primary-700);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .admin-panel--bar .ab-notice__apply:hover:not(:disabled) {
+    background: var(--ink);
+  }
+
+  .admin-panel--bar .ab-notice__apply:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .admin-panel--bar .ab-notice__apply:disabled {
+    background: var(--disabled-bg);
+    color: var(--disabled-ink);
+    cursor: not-allowed;
+  }
 }
 
 /* Roadmap 11 / PR #223: movimento reduzido no desktop (>= 1041px). Faixa
@@ -21587,6 +21932,7 @@ body {
   /* Refino F6a: sem transicao nas linhas e nos botoes de texto dos paineis do admin. */
   .admin-panel--users .au-row,
   .admin-panel--announcements .ac-row,
+  .admin-panel--bar .ab-option,
   .admin-panel .ad-link-button {
     transition: none;
   }

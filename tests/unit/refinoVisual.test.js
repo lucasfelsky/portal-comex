@@ -4081,3 +4081,82 @@ describe('F6a - Comunicados (valores do AdminComunicados.dc.html)', () => {
     expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP))).toContain('.admin-panel--announcements .ac-row')
   })
 })
+
+describe('F6a - Barra do porto (valores do AdminBarra.dc.html)', () => {
+  it('2 colunas auto-fit minmax(440px, 1fr) gap 20; cartao do status 24/24 gap 18; sem robo = uma coluna', () => {
+    expectF6a('.admin-panel--bar .ab-grid', ['grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr))', 'align-items: start', 'gap: 20px'])
+    expectF6a('.admin-panel--bar .ab-grid--single', ['grid-template-columns: minmax(min(100%, 440px), calc(50% - 10px))'])
+    expectF6a('.admin-panel--bar .ab-status-card', ['gap: 18px', 'padding: 24px'])
+  })
+
+  it('cabecalho: titulo Sora 24/700 -0.02em, subtitulo 14; etiqueta de 32px com ponto de 8px no tom do status', () => {
+    expectF6a('.admin-panel--bar .ab-title', ['font-family: var(--font-heading)', 'font-size: 24px', 'font-weight: 700', 'letter-spacing: -0.02em'])
+    expectF6a('.admin-panel--bar .ab-subtitle', ['font-size: 14px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--bar .ab-state', ['gap: 8px', 'height: 32px', 'padding: 0 12px', 'border-radius: 99px', 'font-size: 13px', 'font-weight: 700'])
+    expectF6a('.admin-panel--bar .ab-state--ok', ['background: var(--success-50)', 'color: var(--success-700)'])
+    expectF6a('.admin-panel--bar .ab-state--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF6a('.admin-panel--bar .ab-state--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+    expectF6a('.admin-panel--bar .ab-state__dot', ['width: 8px', 'height: 8px', 'border-radius: 99px', 'background: var(--primary)'])
+    expectF6a('.admin-panel--bar .ab-state--warn .ab-state__dot', ['background: var(--warning)'])
+    expectF6a('.admin-panel--bar .ab-state--danger .ab-state__dot', ['background: var(--danger)'])
+  })
+
+  it('cartao de radio: grid 22/1fr/auto gap 14, padding 16, borda 1.5px, raio 14; marcado = borda navy + --surface-alt', () => {
+    expectF6a('.admin-panel--bar .ab-options legend', ['padding: 0 0 10px', 'font-size: 13px', 'font-weight: 700'])
+    expectF6a('.admin-panel--bar .ab-options', ['gap: 10px', 'border: 0', 'padding: 0'])
+    expectF6a('.admin-panel--bar .ab-option', ['grid-template-columns: 22px minmax(0, 1fr) auto', 'gap: 14px', 'padding: 16px', 'border: 1.5px solid var(--border)', 'border-radius: 14px', 'background: var(--surface)'])
+    expectF6a('.admin-panel--bar .ab-option--checked', ['border-color: var(--ad-accent)', 'background: var(--surface-alt)'])
+    expectF6a('.admin-panel--bar .ab-option:has(input:focus-visible)', ['outline: 2px solid var(--focus-ring)'])
+  })
+
+  it('radio visual 22 (borda 2px) com ponto de 10; rotulo 15/700; dica 12; bolinha de tom 12 (D1: borda --border-control)', () => {
+    expectF6a('.admin-panel--bar .ab-option input', ['position: absolute', 'width: 1px', 'height: 1px', 'opacity: 0'])
+    expectF6a('.admin-panel--bar .ab-option__radio', ['width: 22px', 'height: 22px', 'border: 2px solid var(--border-control)', 'border-radius: 99px'])
+    expectF6a('.admin-panel--bar .ab-option--checked .ab-option__radio', ['border-color: var(--ad-accent)'])
+    expectF6a('.admin-panel--bar .ab-option__radio-dot', ['width: 10px', 'height: 10px', 'border-radius: 99px'])
+    expectF6a('.admin-panel--bar .ab-option--checked .ab-option__radio-dot', ['background: var(--ad-accent)'])
+    expectF6a('.admin-panel--bar .ab-option__label', ['font-size: 15px', 'font-weight: 700'])
+    expectF6a('.admin-panel--bar .ab-option__hint', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--bar .ab-option__tone', ['width: 12px', 'height: 12px', 'border-radius: 99px', 'background: var(--primary)'])
+    expectF6a('.admin-panel--bar .ab-option--warn .ab-option__tone', ['background: var(--warning)'])
+    expectF6a('.admin-panel--bar .ab-option--danger .ab-option__tone', ['background: var(--danger)'])
+    expectF6a('.admin-panel--bar .ab-save', ['align-self: flex-end', 'padding: 0 18px'])
+  })
+
+  it('cartao do robo: 20/20 gap 12; ladrilho 40 raio 12 --navy-50; nome 15/700; origem 12; texto lido 13/1.55 raio 12', () => {
+    expectF6a('.admin-panel--bar .ab-side', ['gap: 14px'])
+    expectF6a('.admin-panel--bar .ab-robot', ['gap: 12px', 'padding: 20px'])
+    expectF6a('.admin-panel--bar .ab-robot__icon', ['width: 40px', 'height: 40px', 'border-radius: 12px', 'background: var(--navy-50)'])
+    expectF6a('.admin-panel--bar .ab-robot__name', ['font-size: 15px', 'font-weight: 700'])
+    expectF6a('.admin-panel--bar .ab-robot__source', ['font-size: 12px', 'color: var(--ink-soft)'])
+    expectF6a('.admin-panel--bar .ab-robot__read', ['padding: 12px 14px', 'border-radius: 12px', 'background: var(--surface-alt)', 'font-size: 13px', 'line-height: 1.55'])
+    expectF6a('.admin-panel--bar .ab-robot__read-label', ['color: var(--ink-soft)'])
+  })
+
+  it('avisos 12/14 raio 12 13/600: coincide ok, difere aviso, falha/atrasado perigo; Aplicar 36 raio 10 13/700', () => {
+    expectF6a('.admin-panel--bar .ab-notice', ['gap: 10px', 'padding: 12px 14px', 'border-radius: 12px', 'font-size: 13px', 'font-weight: 600'])
+    expectF6a('.admin-panel--bar .ab-notice--ok', ['background: var(--success-50)', 'color: var(--success-700)'])
+    expectF6a('.admin-panel--bar .ab-notice--warn', ['background: var(--warning-50)', 'color: var(--warning-700)'])
+    expectF6a('.admin-panel--bar .ab-notice--danger', ['background: var(--danger-50)', 'color: var(--danger-700)'])
+    expectF6a('.admin-panel--bar .ab-notice__apply', ['height: 36px', 'padding: 0 14px', 'border-radius: 10px', 'background: var(--warning-700)', 'color: var(--on-primary-700)', 'font-size: 13px', 'font-weight: 700'])
+  })
+
+  it('JSX: arvore por matchMedia, raiz .admin-panel--bar, radios (fieldset/legend) com as mesmas opcoes do repositorio, sem select', () => {
+    const panel = read('src/features/admin/AdminBarStatusPanel.jsx').replace(/\r\n/g, '\n')
+    expect(panel).toContain("const DESKTOP_QUERY = '(min-width: 1041px)'")
+    expect(panel).toContain('const isDesktop = useMediaQuery(DESKTOP_QUERY)')
+    expect(panel).toContain('className="admin-panel admin-panel--bar ab-root"')
+    expect(panel).toContain('<h3 className="ab-title">Barra Itajaí/Navegantes</h3>')
+    expect(panel).toContain('<legend>Status atual</legend>')
+    expect(panel).toContain('type="radio"')
+    expect(panel).toContain('BAR_STATUS_OPTIONS.map((option) => {')
+    expect(panel).toContain("PRATICAVEL_RESTRICOES: { label: 'Praticável c/ restrições'")
+    // a arvore anterior continua com o select
+    expect(panel).toContain('<SelectField')
+    expect(stripComments(panel)).not.toMatch(/toISOString\(\)|console\.log/)
+  })
+
+  it('movimento: a transicao do cartao de radio entra no bloco reduce existente', () => {
+    expect(css.slice(css.lastIndexOf(REDUCE_DESKTOP))).toContain('.admin-panel--bar .ab-option')
+  })
+})
