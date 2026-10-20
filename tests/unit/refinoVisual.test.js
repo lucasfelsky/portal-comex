@@ -4460,3 +4460,48 @@ describe('F6b - Suporte (valores do AdminSuporte.dc.html)', () => {
     expect(stripComments(desktopBlock)).not.toMatch(/toISOString\(\)|console\.log/)
   })
 })
+
+describe('F6b - CSS legado dos Ciclos 4a-4d removido (so as abas da moldura ficam)', () => {
+  const DEAD_SELECTORS = [
+    '.admin-section .dual-grid',
+    '.admin-section .admin-user-list--scroll',
+    '.admin-section .list-card',
+    '.admin-section .card-heading',
+    '.admin-section .invite-card',
+    '.admin-section .admin-user-row',
+    '.admin-section .detail-card',
+    '.admin-section .scope-chip',
+    '.admin-section .admin-toolbar',
+    '.admin-section .detail-stack',
+    '.admin-section .announcement-',
+    '.admin-section .suggestion-banner',
+    '.admin-section .admin-feature-stack',
+    '.admin-section .admin-table',
+    '.admin-section .admin-feature-footer',
+    '.admin-section .toggle',
+    '.admin-section .chip-add',
+    '.admin-section .admin-grid--',
+    '.admin-section .support-',
+    '.admin-section .dashboard-stat-row',
+  ]
+
+  it('nenhuma regra desktop da arvore anterior (list-card, detail-card, dual-grid, admin-table, support-*...) sobrou', () => {
+    for (const selector of DEAD_SELECTORS) expect(css, selector).not.toContain(selector)
+  })
+
+  it('as regras das abas da moldura (vivas no desktop) continuam, num unico @media desktop sem max-width', () => {
+    const start = css.indexOf('Centro Administrativo (desktop >= 1041px): abas da moldura')
+    expect(start).toBeGreaterThan(0)
+    const section = stripComments(css.slice(css.lastIndexOf('/*', start), css.indexOf('/* Central de notificacoes desktop (>= 1041px): reescrita na F5a')))
+    expect(section.match(/@media/g)).toHaveLength(1)
+    expect(section).not.toMatch(/@media\s*\(max-width/)
+    const rules = parseRules(bodyAfter(section, DESKTOP_MEDIA))
+    expect(rules.map((r) => r.selectors.join(','))).toEqual(['.admin-section .admin-tabs', '.admin-section .admin-tabs .tab-button'])
+  })
+
+  it('as classes da arvore anterior seguem definidas fora de @media desktop (tablet e mobile continuam renderizando)', () => {
+    for (const selector of ['.list-card', '.card-heading', '.detail-card', '.scope-chip--active', '.dual-grid', '.admin-table', '.support-tabs-row', '.suggestion-banner']) {
+      expect(css, selector).toContain(selector)
+    }
+  })
+})

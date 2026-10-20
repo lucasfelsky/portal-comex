@@ -497,9 +497,13 @@ describe('guardas estruturais', () => {
     expect(body).toContain('var(--on-warn)')
   })
 
-  it('(n2) existe ".admin-section .scope-chip--active {" com var(--on-button-primary)', () => {
-    const { body } = extractBlock(css, '.admin-section .scope-chip--active {')
+  // F6b: a regra desktop ".admin-section .scope-chip--active" saiu junto com o CSS morto dos Ciclos 4a-4d (o
+  // chip ativo de Previsoes ao desktop e agora o .filter-pill--active). O chip ativo do tablet segue na regra
+  // base, que continua usando o texto de botao primario (menta -> navy).
+  it('(n2) ".scope-chip--active {" (arvore anterior, tablet) contem var(--on-button-primary); a regra desktop morta nao existe mais', () => {
+    const { body } = extractBlock(css, '.scope-chip--active {')
     expect(body).toContain('var(--on-button-primary)')
+    expect(css).not.toContain('.admin-section .scope-chip--active')
   })
 
   it('(q) ".field-hint {" contem text-transform: none', () => {
