@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useSwipe } from '../hooks/useSwipe'
 import { useToast } from '../components/Toast'
@@ -507,6 +507,7 @@ function sanitizeDraft(currentDraft, overrides = {}) {
 
 export default function ProcessesPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { profile, toggleFavoriteProcess } = useAuth()
   const toast = useToast()
   const isAdmin = profile?.role === 'admin'
@@ -805,10 +806,12 @@ export default function ProcessesPage() {
   )
 
   // Atualiza o contexto de processo ativo para o SupportButton
+  // Refino F2: `category` e `viewMode` alimentam o breadcrumb da topbar
+  // ("Chegadas › <processo>", com a mascara de nome por categoria/role).
   useEffect(() => {
-    setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination } : null)
+    setActiveProcess(selectedProcess ? { id: selectedProcess.id, name: selectedProcess.name, processNumber: selectedProcess.processNumber, destination: selectedProcess.destination, category: selectedProcess.category, viewMode } : null)
     return () => setActiveProcess(null)
-  }, [selectedProcess?.id, selectedProcess?.name, selectedProcess?.processNumber, selectedProcess?.destination])
+  }, [selectedProcess?.id, selectedProcess?.name, selectedProcess?.processNumber, selectedProcess?.destination, selectedProcess?.category, viewMode])
   const canEditSelectedCollectionStatus =
     canEditCollectionStatus && canUsePostCollectionStatuses(selectedProcess)
   const draftPostReceiptImages = normalizeDraftPostReceiptImages(draft.postReceiptImages)
@@ -902,6 +905,21 @@ export default function ProcessesPage() {
 
   const remainingMessages = Math.max(0, MAX_PROCESS_MESSAGES - processMessages.length)
   const messageLimitReached = !hasUnlimitedMessages && processMessages.length >= MAX_PROCESS_MESSAGES
+
+  // Refino F2 (D7): a paleta de comandos ("Novo processo", so admin) navega
+  // para /processos com state.openCreate e a pagina abre o modo de criacao —
+  // mesmo caminho do botao "Novo processo" da lista (handleCreateMode).
+  useEffect(() => {
+    if (location.state?.openCreate && isAdmin) {
+      handleCreateMode()
+      // Consome o pedido: sem isso, recarregar a pagina reabriria a criacao
+      // (o state fica no history entry).
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // handleCreateMode e' declarada logo abaixo (function declaration);
+    // a chave e' a navegacao (location.key), nao a identidade da funcao.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key, location.state?.openCreate, isAdmin])
 
   useEffect(() => {
     const processIdFromNotification = location.state?.selectedProcessId
