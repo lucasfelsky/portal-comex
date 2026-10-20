@@ -30,6 +30,7 @@ import { getPendingFields } from './pendingFields'
 import { getFreeTimeStatus } from './arrivalCustoms'
 import { DetailHeaderCard, DetailTabs } from './ProcessDetailDesktop'
 import ProcessGeneralDesktop from './ProcessGeneralDesktop'
+import { ProcessItemsDesktop, ProcessRelatedItemDesktop } from './ProcessItemsDesktop'
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
@@ -805,6 +806,25 @@ export default function ProcessDetailView({
               onEditMode={isAdmin ? onEditMode : undefined}
               onOpenItems={() => onDetailTabChange('items')}
               onOpenDocuments={canViewRecords ? () => onDetailTabChange('documents') : undefined}
+            />
+          ) : effectiveTab === 'items' ? (
+            <ProcessItemsDesktop
+              items={visibleProcessItems}
+              totalItemsCount={selectedProcess.items?.length ?? 0}
+              isConsolidated={isConsolidatedProcess}
+              documentIndex={documentIndex}
+              quantityHintByItem={quantityHintByItem}
+              searchTerm={itemSearchTerm}
+              onSearchTermChange={onSetItemSearchTerm}
+              onOpenRelatedItem={onOpenRelatedItemTab}
+              sectionRef={itemsSectionRef}
+            />
+          ) : effectiveTab === 'related-item' && selectedItemName ? (
+            <ProcessRelatedItemDesktop
+              itemName={selectedItemName}
+              relatedProcesses={relatedActiveProcesses}
+              canSeeName={canSeeName}
+              onOpenProcess={onOpenProcessDetail}
             />
           ) : (
             tabPanels

@@ -2654,3 +2654,34 @@ describe('F4c - aba Processo (valores do Processo.dc.html)', () => {
     expect(stripComments(css)).not.toMatch(/\.process-block--transit:has/)
   })
 })
+
+describe('F4c - Itens (valores do Processo.dc.html)', () => {
+  it('cabecalho: flex wrap entre titulo Sora 18 e busca de 340px (label 12/700, campo 44px raio 10)', () => {
+    expectF4c('.process-detail-view .pdv-items', ['gap: 14px'])
+    expectF4c('.process-detail-view .pdv-items__head', ['display: flex', 'flex-wrap: wrap', 'align-items: flex-end', 'justify-content: space-between', 'gap: 12px'])
+    expectF4c('.process-detail-view .pdv-items__title', ['font-size: 18px'])
+    expectF4c('.process-detail-view .pdv-items__search', ['display: flex', 'flex-direction: column', 'gap: 6px', 'width: min(100%, 340px)'])
+    expectF4c('.process-detail-view .pdv-items__search > span', ['font-size: 12px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-items__search .text-input', ['height: 44px', 'padding: 0 12px', 'border-radius: 10px', 'font-size: 14px', 'font-weight: 500'])
+  })
+
+  it('linha: grid minmax(0,1fr) 140px 160px auto, gap 16, padding 14/16, raio 12, fundo --surface-alt; hover so troca o anel (nao levanta)', () => {
+    expectF4c('.process-detail-view .pdv-item', [
+      'display: grid',
+      'grid-template-columns: minmax(0, 1fr) 140px 160px auto',
+      'gap: 16px',
+      'align-items: center',
+      'padding: 14px 16px',
+      'border-radius: 12px',
+      'background: var(--surface-alt)',
+    ])
+    expectF4c('.process-detail-view .pdv-item:hover', ['box-shadow: inset 0 0 0 1px var(--border-strong)'])
+    expect(f4cDecls('.process-detail-view .pdv-item:hover')).not.toContain('transform')
+    expectF4c('.process-detail-view .pdv-item:focus-visible', ['box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring)'])
+    expectF4c('.process-detail-view .pdv-item__name', ['font-size: 14px', 'font-weight: 700'])
+    expectF4c('.process-detail-view .pdv-item__field', ['font-size: 13px', 'color: var(--ink-soft)'])
+    expectF4c('.process-detail-view .pdv-item__field strong', ['font-family: var(--font-mono)', 'color: var(--ink)'])
+    expectF4c('.process-detail-view .pdv-item__tags .inline-badge', ['padding: 4px 10px'])
+    expectF4c('.process-detail-view .pdv-item--related', ['grid-template-columns: minmax(0, 1fr) 180px'])
+  })
+})

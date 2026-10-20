@@ -1005,3 +1005,170 @@ describe('F4c - aba Processo (blocos numerados do Processo.dc.html)', () => {
     expect(chip('Registro da DUIMP no ERP: 20/10/2026')).toBeInTheDocument()
   })
 })
+
+describe('F4c - abas Itens e Item relacionado', () => {
+  const ITEMS = [
+    { id: 'i1', commercialName: 'Resina epóxi líquida EP-128', quantity: 36000, poNumber: '9010', dangerousGoods: true, imoClass: '3', unNumber: '1263' },
+    { id: 'i2', commercialName: 'Endurecedor amínico', quantity: 4000, poNumber: '9011', dangerousGoods: true, imoClass: '8', unNumber: '2735' },
+    { id: 'i3', commercialName: 'Pigmento', quantity: 12.5, poNumber: '9011' },
+  ]
+  const itemsProcess = (overrides = {}) => makeProcess({ items: ITEMS, ...overrides })
+
+  it('cabecalho (h3 "Itens do processo", subtitulo, contagem) e busca "Buscar item" com o mesmo placeholder', async () => {
+    const user = userEvent.setup()
+    const { container, props } = renderDetail({ detailTab: 'items', selectedProcess: itemsProcess(), visibleProcessItems: ITEMS })
+    expect(screen.getByRole('heading', { level: 3, name: 'Itens do processo' })).toBeInTheDocument()
+    expect(screen.getByText('Itens comerciais vinculados diretamente a este processo.')).toBeInTheDocument()
+    expect(container.querySelector('.pdv-items__count')).toHaveTextContent('3 itens')
+    const search = screen.getByLabelText('Buscar item')
+    expect(search).toHaveAttribute('placeholder', 'Digite o nome comercial do item')
+    await user.type(search, 'r')
+    expect(props.onSetItemSearchTerm).toHaveBeenCalledWith('r')
+  })
+
+  it('linhas: nome, quantidade mono formatada, tag FISPQ por item IMO e rotulo IMO; clicar abre o item relacionado', async () => {
+    const user = userEvent.setup()
+    const { container, props } = renderDetail({
+      detailTab: 'items',
+      selectedProcess: itemsProcess({ documentIndex: { fispqItemIds: ['i1'], containerWashIds: [], processSlotKeys: [] } }),
+      visibleProcessItems: ITEMS,
+    })
+    const rows = [...container.querySelectorAll('.pdv-item')]
+    expect(rows).toHaveLength(3)
+    expect(rows[0].querySelector('.pdv-item__name')).toHaveTextContent('Resina epóxi líquida EP-128')
+    expect(rows[0].querySelector('.pdv-item__field--qty strong')).toHaveTextContent((36000).toLocaleString('pt-BR'))
+    expect(rows[0].querySelector('.pdv-item__tags')).toHaveTextContent('FISPQ enviada')
+    expect(rows[0].querySelector('.inline-badge--ok')).not.toBeNull()
+    expect(rows[1].querySelector('.pdv-item__tags')).toHaveTextContent('FISPQ pendente')
+    expect(rows[1].querySelector('.inline-badge--ok')).toBeNull()
+    // item sem IMO: nenhuma tag
+    expect(rows[2].querySelector('.pdv-item__tags').children).toHaveLength(0)
+    await user.click(rows[1])
+    expect(props.onOpenRelatedItemTab).toHaveBeenCalledWith('Endurecedor amínico')
+  })
+
+  it('PO por item so no CONSOLIDADO; sem indice de documentos (usuario sem acesso) nao ha tag de FISPQ', () => {
+    const consolidated = renderDetail({
+      detailTab: 'items',
+      selectedProcess: itemsProcess({ category: 'CONSOLIDADO', processNumber: '' }),
+      visibleProcessItems: ITEMS,
+    })
+    expect([...consolidated.container.querySelectorAll('.pdv-item__field--po')].map((el) => el.textContent)).toEqual([
+      'PO: 9010',
+      'PO: 9011',
+      'PO: 9011',
+    ])
+    consolidated.unmount()
+    const plain = renderDetail({
+      detailTab: 'items',
+      isAdmin: false,
+      canSeeName: false,
+      profile: { name: 'Zé', role: 'user' },
+      selectedProcess: itemsProcess(),
+      visibleProcessItems: ITEMS,
+    })
+    expect(plain.container.querySelectorAll('.pdv-item__field--po')).toHaveLength(0)
+    expect(plain.container.textContent).not.toContain('FISPQ')
+  })
+
+  it('estados vazios: sem itens e busca sem resultado', () => {
+    const none = renderDetail({ detailTab: 'items', selectedProcess: makeProcess({ items: [] }), visibleProcessItems: [] })
+    expect(within(none.container.querySelector('.pdv-items__list')).getByRole('status')).toHaveTextContent('Nenhum item cadastrado')
+    none.unmount()
+    const filtered = renderDetail({ detailTab: 'items', selectedProcess: itemsProcess(), visibleProcessItems: [], itemSearchTerm: 'zzz' })
+    expect(within(filtered.container.querySelector('.pdv-items__list')).getByRole('status')).toHaveTextContent('Nenhum item encontrado')
+    expect(filtered.container.querySelector('.pdv-items__count')).toHaveTextContent('0 itens')
+  })
+
+  it('contagem no singular', () => {
+    const { container } = renderDetail({ detailTab: 'items', selectedProcess: itemsProcess(), visibleProcessItems: [ITEMS[0]] })
+    expect(container.querySelector('.pdv-items__count')).toHaveTextContent(/^1 item$/)
+  })
+
+  it('Item relacionado: chegadas ativas com o item (nome mascarado para quem nao ve), quantidade e abrir a chegada', async () => {
+    const user = userEvent.setup()
+    const related = [
+      { process: makeProcess({ id: 'p-2', name: 'Outra chegada', processNumber: '777' }), quantity: 1500 },
+      { process: makeProcess({ id: 'p-3', name: 'Mais uma', processNumber: '888' }), quantity: 10 },
+    ]
+    const { container, props, unmount } = renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Resina',
+      relatedActiveProcesses: related,
+    })
+    expect(screen.getByRole('heading', { level: 3, name: 'Chegadas ativas com este item' })).toBeInTheDocument()
+    expect(screen.getByText('Item selecionado: Resina')).toBeInTheDocument()
+    expect(container.querySelector('.pdv-items__count')).toHaveTextContent('2 chegadas')
+    const rows = [...container.querySelectorAll('.pdv-item--related')]
+    expect(rows[0]).toHaveTextContent('Chegada: Outra chegada')
+    expect(rows[0].querySelector('strong')).toHaveTextContent((1500).toLocaleString('pt-BR'))
+    await user.click(rows[1])
+    expect(props.onOpenProcessDetail).toHaveBeenCalledWith(related[1].process)
+    unmount()
+    const masked = renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Resina',
+      relatedActiveProcesses: related,
+      isAdmin: false,
+      canSeeName: false,
+      profile: { name: 'Zé', role: 'user' },
+    })
+    expect(masked.container.textContent).toContain('PO: 777')
+    expect(masked.container.textContent).not.toContain('Outra chegada')
+  })
+
+  it('Item relacionado sem chegadas: estado vazio; contagem singular', () => {
+    const empty = renderDetail({ detailTab: 'related-item', selectedItemName: 'Resina', relatedActiveProcesses: [] })
+    expect(within(empty.container.querySelector('.pdv-items__list')).getByRole('status')).toHaveTextContent('Nenhuma chegada ativa encontrada')
+    empty.unmount()
+    const one = renderDetail({
+      detailTab: 'related-item',
+      selectedItemName: 'Resina',
+      relatedActiveProcesses: [{ process: makeProcess({ id: 'p-9' }), quantity: 1 }],
+    })
+    expect(one.container.querySelector('.pdv-items__count')).toHaveTextContent(/^1 chegada$/)
+  })
+
+  it('ERP (CONSOLIDADO): aviso de quantidade do item fica FORA do botao, no wrapper pdv-items__entry', () => {
+    const process = makeProcess({
+      id: 'p-con', name: 'CON CN 929-26', category: 'CONSOLIDADO', processNumber: '', destination: 'NAVEGANTES',
+      purchaseOrders: [
+        { po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' },
+        { po: '9011', reference: 'GAMA SEA 906-26', supplierName: 'OUTRO' },
+      ],
+      items: [
+        { id: 'i-1', commercialName: 'SOLVENTE PI', quantity: 2000, poNumber: '9010' },
+        { id: 'i-2', commercialName: 'SOLVENTE PI', quantity: 100, poNumber: '9011' },
+      ],
+    })
+    const shipment = erpShipment({
+      kind: 'CONSOLIDADO', portalCategory: 'CONSOLIDADO', key: 'CON CN 929-26',
+      transport: { destination: 'NAVEGANTES' },
+      orders: [
+        { pedido: '9010', poRef: 'ALFA SEA 905-26', poBase: '', exporter: 'ALFA CHEM' },
+        { pedido: '9011', poRef: 'GAMA SEA 906-26', poBase: '', exporter: 'GAMA TRADING' },
+        { pedido: '9012', poRef: 'DELTA SEA 907-26', poBase: '', exporter: 'DELTA TRADING' },
+      ],
+      items: [
+        { commercialName: 'SOLVENTE PI', pedido: '9010', quantityKg: 2000 },
+        { commercialName: 'SOLVENTE PI', pedido: '9011', quantityKg: 3000 },
+      ],
+    })
+    const { container } = renderDetail({
+      detailTab: 'items',
+      selectedProcess: process,
+      visibleProcessItems: process.items,
+      erpReference: erpReferenceOf(shipment, 'consolidado:ref'),
+    })
+    const quantityChip = screen.getByRole('button', { name: 'Quantidade de SOLVENTE PI no ERP (soma do item): 3000,000 kg' })
+    const entry = quantityChip.closest('.pdv-items__entry')
+    expect(entry).not.toBeNull()
+    const button = entry.querySelector('.pdv-item')
+    expect(button).not.toBeNull()
+    expect(button.querySelector('.erp-hint')).toBeNull()
+    expect(button.closest('.erp-hint')).toBeNull()
+    expect(container.querySelectorAll('.pdv-items__entry')).toHaveLength(1)
+    // o item sem aviso continua um <button> direto da lista
+    expect(container.querySelectorAll('.pdv-items__list > .pdv-item')).toHaveLength(1)
+  })
+})
