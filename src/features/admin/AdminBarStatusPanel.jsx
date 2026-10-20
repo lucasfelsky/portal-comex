@@ -213,6 +213,8 @@ export default function AdminBarStatusPanel() {
           ? { tone: 'warn', label: 'Atrasado' }
           : { tone: 'ok', label: 'Em dia' }
     const suggestionDisplay = barSuggestion?.status ? getBarDisplay(barSuggestion.status, barSuggestion.label) : null
+    // Data de aplicacao invalida -> '' (formatAppliedAt): sem frase, nunca "Aplicado automaticamente .".
+    const appliedAtText = barSuggestion?.lastAppliedAt ? formatAppliedAt(barSuggestion.lastAppliedAt) : ''
 
     return (
       <div className="admin-panel admin-panel--bar ab-root">
@@ -357,9 +359,7 @@ export default function AdminBarStatusPanel() {
                       </svg>
                       <span className="ab-notice__text">
                         Coincide com o status atual.
-                        {barSuggestion.lastAppliedAt
-                          ? ` Aplicado automaticamente ${formatAppliedAt(barSuggestion.lastAppliedAt)}.`
-                          : ''}
+                        {appliedAtText ? ` Aplicado automaticamente ${appliedAtText}.` : ''}
                       </span>
                     </div>
                   ) : (

@@ -317,6 +317,15 @@ describe('AdminBarra - desktop: cartao do robo da Praticagem ZP21', () => {
     )
   })
 
+  it('coincide com data de aplicacao invalida: so "Coincide com o status atual." (sem "Aplicado automaticamente .")', async () => {
+    mockGetBarSuggestion.mockResolvedValue(suggestion({ lastAppliedAt: 'nao-e-uma-data' }))
+    const { container } = renderPanel()
+    await screen.findByText('Robô da Praticagem ZP21')
+    const notice = container.querySelector('.ab-notice--ok')
+    expect(notice).toHaveTextContent(/^Coincide com o status atual\.$/)
+    expect(notice.textContent).not.toContain('Aplicado automaticamente')
+  })
+
   it('difere do status atual: aviso de atencao (role=alert) com o que o robo leu e botao Aplicar', async () => {
     const user = userEvent.setup()
     mockGetBarSuggestion.mockResolvedValue(suggestion({ status: 'IMPRATICAVEL', label: 'IMPRATICAVEL', tone: 'danger' }))
