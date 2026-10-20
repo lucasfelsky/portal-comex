@@ -3628,6 +3628,44 @@ describe('F5b - Login (valores do Login.dc.html)', () => {
   })
 })
 
+describe('F5b - carta nautica: rosa dos ventos e marcas de onda (review r1)', () => {
+  const art = stripComments(css.slice(css.indexOf('/* LOGIN-ART:START */'), css.indexOf('/* LOGIN-ART:END */')))
+  const specificity = (selector) => {
+    const ids = (selector.match(/#[\w-]+/g) ?? []).length
+    const classes = (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length
+    const types = (selector.replace(/\.[\w-]+|\[[^\]]*\]|::?[\w-]+|#[\w-]+|[>+~]/g, ' ').match(/\b[a-z][a-z0-9]*\b/gi) ?? []).length
+    return [ids, classes, types]
+  }
+  const gte = (a, b) => a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] >= b[2])))
+
+  it('1041-1247px esconde a rosa dos ventos com especificidade >= `.login-chart > svg`', () => {
+    const body = bodyAfter(art, '@media (min-width: 1041px) and (max-width: 1247px) {')
+    expect(body).not.toBeNull()
+    const rule = parseRules(body).find((r) => r.body.includes('display: none;'))
+    expect(rule).toBeTruthy()
+    const selector = rule.selectors[0]
+    expect(selector).toContain('.login-chart__compass')
+    expect(gte(specificity(selector), specificity('.login-chart > svg'))).toBe(true)
+    // o display:block do filho direto existe (e e o que o seletor acima precisa vencer)
+    expect(art).toMatch(/\.login-chart > svg \{[^}]*display: block;/)
+  })
+
+  it('a marca de onda de baixo que ficava sob a assinatura SQ Quimica subiu (y = 120)', () => {
+    const src = read('src/components/LoginArt.jsx').replace(/\r\n/g, '\n')
+    const marks = src.match(/const MARKS_BOTTOM = \[([\s\S]*?)\]\n/)[1]
+    expect(marks).toContain('[1370, 120]')
+    expect(marks).not.toContain('[1370, 200]')
+    // a lane de baixo tem 240px e a assinatura ocupa 32..68px do rodape: marcas a x >= 841 (onde a
+    // assinatura pode cair a partir de 1041px) precisam ficar acima de 68px do rodape
+    const parsed = [...marks.matchAll(/\[(\d+), (\d+)\]/g)].map((m) => [Number(m[1]), Number(m[2])])
+    expect(parsed.length).toBe(3)
+    for (const [x, y] of parsed.filter(([px]) => px >= 841)) {
+      expect(240 - y, 'marca [' + x + ', ' + y + '] na faixa da assinatura').toBeGreaterThan(68)
+    }
+    expect(240 - 120).toBeGreaterThan(68)
+  })
+})
+
 describe('F5b - Verificar e-mail, Acesso pendente e 404 (valores do AcessoEstados.dc.html)', () => {
   const ROOTS = ['.auth-screen--verify', '.auth-screen--pending', '.auth-screen--not-found']
 

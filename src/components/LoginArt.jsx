@@ -254,10 +254,12 @@ const MARKS_MID = [
   [760, 35],
   [1290, 255],
 ]
+// Refino F5b: a marca que ficava em [1370, 200] caia sob a assinatura SQ Quimica (right 40,
+// bottom 32, ~160 x 36) a 1440-1600px; sobe para y = 120 (>= 120px do rodape, fora da faixa).
 const MARKS_BOTTOM = [
   [940, 100],
   [700, 208],
-  [1370, 200],
+  [1370, 120],
 ]
 
 function renderChartRoute(y, opacity) {

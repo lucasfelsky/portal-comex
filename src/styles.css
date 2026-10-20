@@ -13076,8 +13076,10 @@ body {
   }
 }
 
+/* Especificidade >= `.login-chart > svg { display: block }` (0,1,1): sem o filho direto o
+   display:none perdia e a rosa dos ventos aparecia a 1041-1247px. */
 @media (min-width: 1041px) and (max-width: 1247px) {
-  .login-chart__compass {
+  .login-chart > .login-chart__compass {
     display: none;
   }
 }

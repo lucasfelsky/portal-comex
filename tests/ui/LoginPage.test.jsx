@@ -14,7 +14,7 @@
 //   - Submit desabilitado quando submitting=true
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -469,6 +469,51 @@ describe('LoginPage - desktop (>= 1041px)', () => {
     await waitFor(() => {
       expect(screen.getByText(/auth\/invalid-credential/)).toBeInTheDocument()
     })
+  })
+})
+
+describe('LoginPage - troca ao vivo em 1041px (review r1)', () => {
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('o e-mail e a senha digitados sobrevivem a troca legado <-> desktop (estado no pai)', async () => {
+    const user = userEvent.setup()
+    let listener = null
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn((_event, handler) => {
+        listener = handler
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+    const { container } = renderPage()
+    expect(container.querySelector('.auth-password')).toBeNull()
+    await user.type(screen.getByPlaceholderText('nome@sqquimica.com'), 'maria@sqquimica.com')
+    await user.type(screen.getByPlaceholderText('Sua senha'), 'senha123')
+    expect(listener).toBeTypeOf('function')
+
+    act(() => listener({ matches: true }))
+    expect(container.querySelector('.auth-password')).not.toBeNull()
+    expect(screen.getByPlaceholderText('nome@sqquimica.com')).toHaveValue('maria@sqquimica.com')
+    expect(screen.getByPlaceholderText('Sua senha')).toHaveValue('senha123')
+
+    act(() => listener({ matches: false }))
+    expect(container.querySelector('.auth-password')).toBeNull()
+    expect(screen.getByPlaceholderText('nome@sqquimica.com')).toHaveValue('maria@sqquimica.com')
+    expect(screen.getByPlaceholderText('Sua senha')).toHaveValue('senha123')
+  })
+
+  it('o segmentado Entrar/Cadastrar e um grupo com nome acessivel', () => {
+    renderPage()
+    const group = screen.getByRole('group', { name: 'Modo de acesso' })
+    expect(group).toHaveClass('auth-toggle')
+    expect(group.querySelectorAll('button')).toHaveLength(2)
   })
 })
 

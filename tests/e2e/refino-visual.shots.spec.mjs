@@ -1485,6 +1485,18 @@ PHASES.f5b = [
       afterShot: restoreViewport,
     },
   ]),
+  // Larguras maiores: a assinatura SQ Quimica e as marcas de onda nao podem se sobrepor.
+  ...[
+    ['1600x900', 1600, 900],
+    ['1920x1080', 1920, 1080],
+  ].map(([suffix, width, height]) => ({
+    name: 'login-' + suffix,
+    route: '/login',
+    auth: false,
+    ready: loginReady,
+    action: withViewport(width, height),
+    afterShot: restoreViewport,
+  })),
   ...[
     ['tablet-900', 900, 1200],
     ['mobile-390', 390, 844],

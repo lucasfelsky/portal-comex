@@ -146,7 +146,7 @@ export default function LoginPage() {
       <div className="auth-panel">
       <form className="auth-card auth-card--form" onSubmit={handleSubmit}>
         <span className="brand__eyebrow">Portal COMEX</span>
-        <div className="auth-toggle">
+        <div className="auth-toggle" role="group" aria-label="Modo de acesso">
           <button
             type="button"
             className={`auth-toggle__item${mode === 'login' ? ' auth-toggle__item--active' : ''}`}
