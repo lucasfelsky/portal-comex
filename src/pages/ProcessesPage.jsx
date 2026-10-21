@@ -638,7 +638,7 @@ export default function ProcessesPage() {
         const loaded = await listProcesses()
         if (!isMounted) return
         setProcesses(loaded)
-        setSelectedProcessId((currentId) => currentId ?? loaded[0]?.id ?? null)
+        setSelectedProcessId((currentId) => currentId ?? loaded.find((item) => !item.autoArchived)?.id ?? null)
       } catch (loadError) {
         if (isMounted) {
           setError(buildActionErrorMessage('Não foi possível carregar os processos.', loadError))

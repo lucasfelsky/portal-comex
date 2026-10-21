@@ -570,7 +570,9 @@ export default function DashboardPage() {
     async function loadProcessesData() {
       setIsLoadingProcesses(true)
       try {
-        const loaded = await listProcesses()
+        // Recebidos ha 7+ dias (arquivados automaticos) ficam fora do Dashboard,
+        // como antes: so a fila/Arquivados de Chegadas os mostra.
+        const loaded = (await listProcesses()).filter((item) => !item.autoArchived)
         if (isMounted) {
           setLoadedProcesses(loaded)
           setProcessesError(null)

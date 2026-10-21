@@ -78,7 +78,8 @@ function ArrivalRow({
   className = '',
   style,
 }) {
-  const canArchive = isAdmin && typeof onArchiveProcess === 'function'
+  // Arquivado automatico (recebido ha 7+ dias) nao tem "Restaurar": a leitura o arquivaria de novo.
+  const canArchive = isAdmin && typeof onArchiveProcess === 'function' && !item.autoArchived
   // Estrela de favorito: entra com mola (scale 0 -> 1) so ao ativar.
   const favoriteStarPop = useActivationPop(Boolean(isFavorite))
   const hideSchedule = shouldHideProcessCardSchedule(item)

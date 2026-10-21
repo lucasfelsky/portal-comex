@@ -1411,7 +1411,7 @@ export function reconcileErp(processes, shipments, { today = '', fieldAuthority 
       warnings.push(
         makeErpWarning(
           'lista_portal_parcial',
-          `O embarque ${shipment.key} parece já recebido; o Portal oculta recebidos há mais de 7 dias, então a lista pode estar parcial.`,
+          `O embarque ${shipment.key} parece já recebido; o Portal arquiva recebidos há mais de 7 dias; confira a seção Arquivados.`,
           { shipmentKey: shipment.key, pedido: shipment.orders[0]?.pedido ?? '' }
         )
       )

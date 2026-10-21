@@ -308,6 +308,20 @@ describe('F4b - cabecalho e acoes', () => {
     await user.click(toggle)
     expect(container.querySelectorAll('.chg-row')).toHaveLength(4)
   })
+
+  it('arquivado automatico (recebido ha 7+ dias) aparece em Arquivados sem "Restaurar processo"', async () => {
+    const user = userEvent.setup()
+    const auto = { ...ARCHIVED[0], id: 'p-10', name: 'Processo auto-arquivado', autoArchived: true }
+    const { container } = renderView({ archivedProcesses: [ARCHIVED[0], auto] })
+    await user.click(screen.getByRole('button', { name: /Arquivados \(2\)/ }))
+    expect(container.querySelectorAll('.chg-row')).toHaveLength(2)
+    expect(
+      within(rowOf(container, 'Processo arquivado')).getByRole('button', { name: 'Restaurar processo' })
+    ).toBeInTheDocument()
+    expect(
+      within(rowOf(container, 'Processo auto-arquivado')).queryByRole('button', { name: 'Restaurar processo' })
+    ).not.toBeInTheDocument()
+  })
 })
 
 describe('F4b - filtros', () => {

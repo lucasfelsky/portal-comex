@@ -50,9 +50,9 @@ export async function listProcessEvents(processId) {
 }
 
 // F17.6: leitura server-only p/ o painel de lead time (`/admin/lead-time`).
-// NAO usa `listProcesses()` - aquela funcao esconde recebidos ha' >7 dias
-// (`isExpiredReceivedProcess`, `processesRepository.js`), exatamente os
-// processos com lead time completo.
+// NAO usa `listProcesses()` - aquela funcao marca recebidos ha' >7 dias como
+// `autoArchived` (`processesRepository.js`) e esta leitura precisa deles
+// (exatamente os processos com lead time completo).
 export async function listLeadTimeProcesses() {
   if (!isFirebaseConfigured || !firestore) return []
 
