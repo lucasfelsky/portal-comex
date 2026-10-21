@@ -85,7 +85,7 @@ describe('projectProcessForViewer - FCL sob aguas (D-3)', () => {
     expect(pickCustoms(projected)).toEqual(EMPTY_CUSTOMS_CLEARANCE_FIELDS)
     expect(hasCustomsDetails(projected)).toBe(false)
     expect(getProcessStage(projected).currentStage).toBe(1)
-    expect(getProcessDerivedStatus(projected, TODAY).phase).not.toBe(DERIVED_STATUS_PHASES.NO_PORTO)
+    expect(getProcessDerivedStatus(projected, TODAY).phase).toBe(DERIVED_STATUS_PHASES.EMBARCADO)
     // o original nao e mutado
     expect(process.duimpNumber).toBe('DU-123')
   })

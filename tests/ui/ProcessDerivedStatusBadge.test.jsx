@@ -73,7 +73,7 @@ describe('ProcessDerivedStatusBadge', () => {
     expect(c2.querySelector('.process-derived-status-badge')).toBeInTheDocument()
   })
 
-  it('aplica tone class status-tag--warn para fase No porto', () => {
+  it('aplica tone info e rotulo Atracado para Atracação confirmada', () => {
     const { container } = render(
       <ProcessDerivedStatusBadge
         process={{
@@ -82,6 +82,22 @@ describe('ProcessDerivedStatusBadge', () => {
       />
     )
     const badge = container.querySelector('.process-derived-status-badge')
+    expect(badge?.className).toMatch(/status-tag--info/)
+    expect(badge?.textContent).toContain('Atracado')
+  })
+
+  it('aplica tone warn e rotulo Aguardando desembaraço', () => {
+    const { container } = render(
+      <ProcessDerivedStatusBadge
+        process={{
+          category: 'FCL',
+          berthedAt: '2026-07-06T08:00',
+          processStatus: 'Aguardando desembaraço',
+        }}
+      />
+    )
+    const badge = container.querySelector('.process-derived-status-badge')
     expect(badge?.className).toMatch(/status-tag--warn/)
+    expect(badge?.textContent).toContain('Aguardando desembaraço')
   })
 })

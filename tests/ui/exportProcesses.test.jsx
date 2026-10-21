@@ -204,3 +204,27 @@ describe('buildProcessesExportRows — colunas Referências/Fornecedores das POs
     expect(rows[0]).toHaveProperty('Fornecedores das POs', '')
   })
 })
+
+describe('buildProcessesExportRows — status derivado (mapa 2026-10-21)', () => {
+  it('FCL atracado com DUIMP registrada -> "Aguardando desembaraço"', () => {
+    const rows = buildProcessesExportRows(
+      [
+        {
+          id: 'p-desembaraco',
+          category: 'FCL',
+          shippedAt: '2026-06-10',
+          eta: '2026-07-05',
+          berthedAt: '2026-07-06T08:00',
+          cargoPresenceInformedAt: '2026-07-07T10:00',
+          duimpRegisteredAt: '2026-07-08T09:00',
+          duimpStatus: 'Aguardando parametrização da DUIMP',
+          processStatus: 'Aguardando parametrização da DUIMP',
+          collectionStatus: '',
+          collectionWindows: [],
+        },
+      ],
+      NOW
+    )
+    expect(rows[0]['Status derivado']).toBe('Aguardando desembaraço')
+  })
+})

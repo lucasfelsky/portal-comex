@@ -1,8 +1,10 @@
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { hasArrivalSignal, isDuimpUnderWater } from './arrivalCustoms'
 import {
+  canonicalizeProcessStatus,
   isCdEnRouteStatus,
   isCdUnloadingOrReceivedStatus,
+  isProcessInStock,
   isProcessStatusFinalized,
 } from './processStatus'
 import { getCollectionWindows, getNextCollectionWindow } from '../../utils/collectionWindows'
@@ -13,20 +15,36 @@ export const DERIVED_STATUS_PHASES = {
   EM_ROTA: 'em_rota',
   COLETA_AGENDADA: 'coleta_agendada',
   ATRASADO: 'atrasado',
+  AGUARDANDO_EMBARQUE: 'aguardando_embarque',
+  AGUARDANDO_ATRACACAO: 'aguardando_atracacao',
+  ATRACADO: 'atracado',
   NO_PORTO: 'no_porto',
+  AGUARDANDO_DESEMBARACO: 'aguardando_desembaraco',
+  LIBERADO_COLETA: 'liberado_coleta',
   EMBARCADO: 'embarcado',
   EM_TRANSITO: 'em_transito',
 }
 
 const DERIVED_STATUS_LABELS = {
   [DERIVED_STATUS_PHASES.CONCLUIDO]: 'Concluído',
-  [DERIVED_STATUS_PHASES.POS_RECEBIMENTO]: 'No CD / pós-recebimento',
+  [DERIVED_STATUS_PHASES.POS_RECEBIMENTO]: 'Recebida no CD',
   [DERIVED_STATUS_PHASES.EM_ROTA]: 'Carga a caminho do CD',
   [DERIVED_STATUS_PHASES.COLETA_AGENDADA]: 'Coleta agendada',
   [DERIVED_STATUS_PHASES.ATRASADO]: 'Atrasado',
-  [DERIVED_STATUS_PHASES.NO_PORTO]: 'No porto / desembaraço',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE]: 'Aguardando embarque',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO]: 'Aguardando atracação',
+  [DERIVED_STATUS_PHASES.ATRACADO]: 'Atracado',
+  [DERIVED_STATUS_PHASES.NO_PORTO]: 'No porto',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO]: 'Aguardando desembaraço',
+  [DERIVED_STATUS_PHASES.LIBERADO_COLETA]: 'Liberado para coleta',
   [DERIVED_STATUS_PHASES.EMBARCADO]: 'Embarcado',
   [DERIVED_STATUS_PHASES.EM_TRANSITO]: 'Em trânsito',
+}
+
+// Mesmos textos de getDisplayedProcessStatus (processStatus.js) para AEREO.
+const AIR_DERIVED_STATUS_LABELS = {
+  [DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO]: 'Aguardando chegada',
+  [DERIVED_STATUS_PHASES.ATRACADO]: 'Chegada confirmada',
 }
 
 const DERIVED_STATUS_TONES = {
@@ -35,9 +53,26 @@ const DERIVED_STATUS_TONES = {
   [DERIVED_STATUS_PHASES.EM_ROTA]: 'info',
   [DERIVED_STATUS_PHASES.COLETA_AGENDADA]: 'info',
   [DERIVED_STATUS_PHASES.ATRASADO]: 'danger',
-  [DERIVED_STATUS_PHASES.NO_PORTO]: 'warn',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE]: 'neutral',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO]: 'neutral',
+  [DERIVED_STATUS_PHASES.ATRACADO]: 'info',
+  [DERIVED_STATUS_PHASES.NO_PORTO]: 'info',
+  [DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO]: 'warn',
+  [DERIVED_STATUS_PHASES.LIBERADO_COLETA]: 'info',
   [DERIVED_STATUS_PHASES.EMBARCADO]: 'neutral',
   [DERIVED_STATUS_PHASES.EM_TRANSITO]: 'neutral',
+}
+
+function buildDerived(phase, process) {
+  const airLabel = isAirCategory(process?.category)
+    ? AIR_DERIVED_STATUS_LABELS[phase]
+    : undefined
+
+  return {
+    phase,
+    label: airLabel ?? DERIVED_STATUS_LABELS[phase],
+    tone: DERIVED_STATUS_TONES[phase],
+  }
 }
 
 function isOverdue(process, todayIso) {
@@ -55,35 +90,23 @@ function isOverdue(process, todayIso) {
 
 export function getProcessDerivedStatus(process, now = new Date()) {
   if (!process) {
-    return {
-      phase: DERIVED_STATUS_PHASES.EM_TRANSITO,
-      label: 'Em trânsito',
-      tone: 'neutral',
-    }
+    return buildDerived(DERIVED_STATUS_PHASES.EM_TRANSITO, null)
   }
 
-  if (isProcessStatusFinalized(process.processStatus)) {
-    return {
-      phase: DERIVED_STATUS_PHASES.CONCLUIDO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.CONCLUIDO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.CONCLUIDO],
-    }
+  if (isProcessInStock(process)) {
+    return buildDerived(DERIVED_STATUS_PHASES.CONCLUIDO, process)
   }
 
   if (isCdUnloadingOrReceivedStatus(process.collectionStatus)) {
-    return {
-      phase: DERIVED_STATUS_PHASES.POS_RECEBIMENTO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.POS_RECEBIMENTO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.POS_RECEBIMENTO],
-    }
+    return buildDerived(DERIVED_STATUS_PHASES.POS_RECEBIMENTO, process)
+  }
+
+  if (isProcessStatusFinalized(process.processStatus)) {
+    return buildDerived(DERIVED_STATUS_PHASES.CONCLUIDO, process)
   }
 
   if (isCdEnRouteStatus(process.collectionStatus)) {
-    return {
-      phase: DERIVED_STATUS_PHASES.EM_ROTA,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EM_ROTA],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EM_ROTA],
-    }
+    return buildDerived(DERIVED_STATUS_PHASES.EM_ROTA, process)
   }
 
   const collectionWindows = getCollectionWindows(process)
@@ -92,18 +115,10 @@ export function getProcessDerivedStatus(process, now = new Date()) {
   if (collectionWindows.length > 0 && nextWindow) {
     const nextTime = new Date(nextWindow.scheduledAt).getTime()
     if (nextTime >= now.getTime()) {
-      return {
-        phase: DERIVED_STATUS_PHASES.COLETA_AGENDADA,
-        label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.COLETA_AGENDADA],
-        tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.COLETA_AGENDADA],
-      }
+      return buildDerived(DERIVED_STATUS_PHASES.COLETA_AGENDADA, process)
     }
 
-    return {
-      phase: DERIVED_STATUS_PHASES.EM_ROTA,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EM_ROTA],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EM_ROTA],
-    }
+    return buildDerived(DERIVED_STATUS_PHASES.EM_ROTA, process)
   }
 
   // PR #15 (2026-07-09): usa data local (nao' UTC) pra evitar bug
@@ -119,58 +134,52 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     return `${year}-${month}-${day}`
   })()
   if (isOverdue(process, todayIsoLocal)) {
-    return {
-      phase: DERIVED_STATUS_PHASES.ATRASADO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.ATRASADO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.ATRASADO],
-    }
+    return buildDerived(DERIVED_STATUS_PHASES.ATRASADO, process)
   }
 
-  const status = String(process.processStatus ?? '').toLowerCase()
-  if (status === 'aguardando embarque') {
-    return {
-      phase: DERIVED_STATUS_PHASES.EM_TRANSITO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EM_TRANSITO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EM_TRANSITO],
-    }
+  const status = canonicalizeProcessStatus(process.processStatus)
+
+  if (status === 'Aguardando Embarque') {
+    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE, process)
   }
 
-  if (status === 'embarcou') {
-    return {
-      phase: DERIVED_STATUS_PHASES.EMBARCADO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EMBARCADO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EMBARCADO],
-    }
+  if (status === 'Embarcou') {
+    return buildDerived(DERIVED_STATUS_PHASES.EMBARCADO, process)
+  }
+
+  if (status === 'Aguardando atracação') {
+    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO, process)
   }
 
   if (
-    status === 'atracação confirmada' ||
-    status === 'aguardando registro da duimp' ||
-    status === 'aguardando parametrização da duimp' ||
-    status === 'aguardando desembaraço' ||
-    status === 'aguardando agendamento de coleta'
+    status === 'Atracação Confirmada' ||
+    status === 'Aguardando registro da DUIMP' ||
+    status === 'Aguardando parametrização da DUIMP' ||
+    status === 'Aguardando desembaraço' ||
+    status === 'Aguardando agendamento de coleta'
   ) {
-    // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao coloca o
-    // processo "no porto / desembaraco" - segue Embarcado.
+    // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao avanca o
+    // processo para a fase de porto/desembaraco - segue Embarcado.
     if (isDuimpUnderWater(process)) {
-      return {
-        phase: DERIVED_STATUS_PHASES.EMBARCADO,
-        label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EMBARCADO],
-        tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EMBARCADO],
-      }
+      return buildDerived(DERIVED_STATUS_PHASES.EMBARCADO, process)
     }
-    return {
-      phase: DERIVED_STATUS_PHASES.NO_PORTO,
-      label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.NO_PORTO],
-      tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.NO_PORTO],
+
+    if (status === 'Atracação Confirmada') {
+      return buildDerived(DERIVED_STATUS_PHASES.ATRACADO, process)
     }
+
+    if (status === 'Aguardando registro da DUIMP') {
+      return buildDerived(DERIVED_STATUS_PHASES.NO_PORTO, process)
+    }
+
+    if (status === 'Aguardando agendamento de coleta') {
+      return buildDerived(DERIVED_STATUS_PHASES.LIBERADO_COLETA, process)
+    }
+
+    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO, process)
   }
 
-  return {
-    phase: DERIVED_STATUS_PHASES.EM_TRANSITO,
-    label: DERIVED_STATUS_LABELS[DERIVED_STATUS_PHASES.EM_TRANSITO],
-    tone: DERIVED_STATUS_TONES[DERIVED_STATUS_PHASES.EM_TRANSITO],
-  }
+  return buildDerived(DERIVED_STATUS_PHASES.EM_TRANSITO, process)
 }
 
 export function getDerivedStatusToneClass(derived) {
