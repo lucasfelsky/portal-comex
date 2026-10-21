@@ -2,12 +2,17 @@ import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { hasArrivalSignal, isDuimpUnderWater } from './arrivalCustoms'
 import {
   canonicalizeProcessStatus,
+  getDisplayedProcessStatus,
+  getQuickReadProcessStatus,
+  getUnscheduledItemLabel,
   isCdEnRouteStatus,
   isCdUnloadingOrReceivedStatus,
   isProcessInStock,
   isProcessStatusFinalized,
+  normalizeComparableText,
 } from './processStatus'
-import { getCollectionWindows, getNextCollectionWindow } from '../../utils/collectionWindows'
+import { getCollectionWindows } from '../../utils/collectionWindows'
+import { deriveProcessStatus } from './deriveProcessStatus'
 
 export const DERIVED_STATUS_PHASES = {
   CONCLUIDO: 'concluido',
@@ -88,6 +93,39 @@ function isOverdue(process, todayIso) {
   return false
 }
 
+// Mapeia o status canonico para a fase derivada. Devolve `null` quando o
+// status nao tem fase propria (o caller cai em EM_TRANSITO).
+function getPhaseForCanonicalStatus(status, process) {
+  if (status === 'Aguardando Embarque') return DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE
+  if (status === 'Embarcou') return DERIVED_STATUS_PHASES.EMBARCADO
+  if (status === 'Aguardando atracação') return DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO
+
+  // Chega aqui so quem nao tem janela de coleta com data (ver
+  // getProcessDerivedStatus): coleta sem data nao e coleta agendada.
+  if (status === 'Coleta Agendada') return DERIVED_STATUS_PHASES.LIBERADO_COLETA
+  if (status === 'Carga recebida') return DERIVED_STATUS_PHASES.CONCLUIDO
+
+  if (
+    status === 'Atracação Confirmada' ||
+    status === 'Aguardando registro da DUIMP' ||
+    status === 'Aguardando parametrização da DUIMP' ||
+    status === 'Aguardando desembaraço' ||
+    status === 'Aguardando agendamento de coleta'
+  ) {
+    // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao avanca o
+    // processo para a fase de porto/desembaraco - segue Embarcado.
+    if (isDuimpUnderWater(process)) return DERIVED_STATUS_PHASES.EMBARCADO
+
+    if (status === 'Atracação Confirmada') return DERIVED_STATUS_PHASES.ATRACADO
+    if (status === 'Aguardando registro da DUIMP') return DERIVED_STATUS_PHASES.NO_PORTO
+    if (status === 'Aguardando agendamento de coleta') return DERIVED_STATUS_PHASES.LIBERADO_COLETA
+
+    return DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO
+  }
+
+  return null
+}
+
 export function getProcessDerivedStatus(process, now = new Date()) {
   if (!process) {
     return buildDerived(DERIVED_STATUS_PHASES.EM_TRANSITO, null)
@@ -109,12 +147,18 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     return buildDerived(DERIVED_STATUS_PHASES.EM_ROTA, process)
   }
 
-  const collectionWindows = getCollectionWindows(process)
-  const nextWindow = getNextCollectionWindow(process, now)
+  // Apenas janelas com data valida contam: janela sem `scheduledAt` nao e
+  // coleta agendada nem coleta ja realizada. `getCollectionWindows` ja mapeia
+  // o legado `collectionScheduledAt` (dual schema).
+  const datedWindows = getCollectionWindows(process).filter(
+    (window) => window?.scheduledAt && Number.isFinite(new Date(window.scheduledAt).getTime()),
+  )
 
-  if (collectionWindows.length > 0 && nextWindow) {
-    const nextTime = new Date(nextWindow.scheduledAt).getTime()
-    if (nextTime >= now.getTime()) {
+  if (datedWindows.length > 0) {
+    const hasFutureWindow = datedWindows.some(
+      (window) => new Date(window.scheduledAt).getTime() >= now.getTime(),
+    )
+    if (hasFutureWindow) {
       return buildDerived(DERIVED_STATUS_PHASES.COLETA_AGENDADA, process)
     }
 
@@ -137,51 +181,74 @@ export function getProcessDerivedStatus(process, now = new Date()) {
     return buildDerived(DERIVED_STATUS_PHASES.ATRASADO, process)
   }
 
-  const status = canonicalizeProcessStatus(process.processStatus)
+  let status = canonicalizeProcessStatus(process.processStatus)
 
-  if (status === 'Aguardando Embarque') {
-    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE, process)
+  // Status vazio, desconhecido ou legado: recalcula a partir dos campos
+  // operacionais (mesma fonte da camada de compatibilidade F17).
+  if (!status) {
+    status = canonicalizeProcessStatus(deriveProcessStatus(process, now))
   }
 
-  if (status === 'Embarcou') {
-    return buildDerived(DERIVED_STATUS_PHASES.EMBARCADO, process)
-  }
-
-  if (status === 'Aguardando atracação') {
-    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO, process)
-  }
-
-  if (
-    status === 'Atracação Confirmada' ||
-    status === 'Aguardando registro da DUIMP' ||
-    status === 'Aguardando parametrização da DUIMP' ||
-    status === 'Aguardando desembaraço' ||
-    status === 'Aguardando agendamento de coleta'
-  ) {
-    // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao avanca o
-    // processo para a fase de porto/desembaraco - segue Embarcado.
-    if (isDuimpUnderWater(process)) {
-      return buildDerived(DERIVED_STATUS_PHASES.EMBARCADO, process)
-    }
-
-    if (status === 'Atracação Confirmada') {
-      return buildDerived(DERIVED_STATUS_PHASES.ATRACADO, process)
-    }
-
-    if (status === 'Aguardando registro da DUIMP') {
-      return buildDerived(DERIVED_STATUS_PHASES.NO_PORTO, process)
-    }
-
-    if (status === 'Aguardando agendamento de coleta') {
-      return buildDerived(DERIVED_STATUS_PHASES.LIBERADO_COLETA, process)
-    }
-
-    return buildDerived(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO, process)
-  }
-
-  return buildDerived(DERIVED_STATUS_PHASES.EM_TRANSITO, process)
+  return buildDerived(
+    getPhaseForCanonicalStatus(status, process) ?? DERIVED_STATUS_PHASES.EM_TRANSITO,
+    process,
+  )
 }
 
 export function getDerivedStatusToneClass(derived) {
   return `status-tag status-tag--${derived?.tone ?? 'neutral'}`
+}
+
+// Textos crus (normalizados) que apenas repetem a fase derivada. Chave =
+// texto sem acento/lowercase. 'Aguardando registro da DUIMP' e 'Aguardando
+// parametrizacao da DUIMP' ficam de fora de proposito: trazem informacao a
+// mais que o selo e continuam visiveis.
+const DETAIL_EQUIVALENT_PHASE = {
+  'aguardando embarque': DERIVED_STATUS_PHASES.AGUARDANDO_EMBARQUE,
+  embarcou: DERIVED_STATUS_PHASES.EMBARCADO,
+  'aguardando atracacao': DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO,
+  'aguardando chegada': DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO,
+  'atracacao confirmada': DERIVED_STATUS_PHASES.ATRACADO,
+  'chegada confirmada': DERIVED_STATUS_PHASES.ATRACADO,
+  'aguardando desembaraco': DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO,
+  'aguardando agendamento de coleta': DERIVED_STATUS_PHASES.LIBERADO_COLETA,
+  'coleta agendada': DERIVED_STATUS_PHASES.COLETA_AGENDADA,
+  'carga a caminho do cd': DERIVED_STATUS_PHASES.EM_ROTA,
+}
+
+/**
+ * Detalhe textual exibido junto do selo derivado. Devolve `''` quando o texto
+ * apenas repete o selo (mesmo label ou fase equivalente); senao devolve o texto.
+ * `source`: 'quickRead' (collectionStatus tem prioridade) ou 'processStatus'.
+ */
+export function getProcessStatusDetail(process, { now = new Date(), source = 'quickRead' } = {}) {
+  if (!process) return ''
+
+  const rawText =
+    source === 'processStatus'
+      ? getDisplayedProcessStatus(process.processStatus, process.category)
+      : getQuickReadProcessStatus(process)
+  const text = String(rawText ?? '').trim()
+  if (!text) return ''
+
+  const derived = getProcessDerivedStatus(process, now)
+  const normalizedText = normalizeComparableText(text).trim()
+
+  if (normalizedText === normalizeComparableText(derived.label).trim()) return ''
+  if (DETAIL_EQUIVALENT_PHASE[normalizedText] === derived.phase) return ''
+
+  return text
+}
+
+/**
+ * Nota de "item nao agendado" da linha de Chegadas (desktop). Some quando o
+ * selo derivado ja diz que a coleta saiu (EM_ROTA) ou a carga foi recebida.
+ */
+export function getArrivalNoteLabel(process, now = new Date()) {
+  const { phase } = getProcessDerivedStatus(process, now)
+  if (phase === DERIVED_STATUS_PHASES.EM_ROTA || phase === DERIVED_STATUS_PHASES.POS_RECEBIMENTO) {
+    return ''
+  }
+
+  return getUnscheduledItemLabel(process)
 }

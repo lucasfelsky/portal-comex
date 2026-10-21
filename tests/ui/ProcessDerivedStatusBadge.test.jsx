@@ -9,14 +9,14 @@ import React from 'react'
 import ProcessDerivedStatusBadge from '../../src/features/processes/ProcessDerivedStatusBadge'
 
 describe('ProcessDerivedStatusBadge', () => {
-  it('renderiza label "Em transito" para processo sem status finalizado', () => {
+  it('sem processStatus cai em Aguardando embarque (deriveProcessStatus)', () => {
     // Sem processStatus, collectionStatus etc — cai no default Em transito.
     render(
       <ProcessDerivedStatusBadge
         process={{ status: 'Em Andamento', etapas: [] }}
       />
     )
-    expect(screen.getByText('Em tr\u00e2nsito')).toBeInTheDocument()
+    expect(screen.getByText('Aguardando embarque')).toBeInTheDocument()
   })
 
   it('aplica tone class status-tag--ok quando processo esta finalizado (Carga recebida)', () => {
@@ -32,14 +32,14 @@ describe('ProcessDerivedStatusBadge', () => {
     expect(badge?.textContent).toBe('Conclu\u00eddo')
   })
 
-  it('renderiza label "Em transito" para processo minimo (apenas status)', () => {
+  it('processo minimo sem processStatus cai em Aguardando embarque (deriveProcessStatus)', () => {
     const { container } = render(
       <ProcessDerivedStatusBadge
         process={{ status: 'Pendente', etapas: [] }}
       />
     )
     const badge = container.querySelector('.process-derived-status-badge')
-    expect(badge?.textContent).toBe('Em tr\u00e2nsito')
+    expect(badge?.textContent).toBe('Aguardando embarque')
   })
 
   it('aceita className custom e mergea com classes padrao', () => {

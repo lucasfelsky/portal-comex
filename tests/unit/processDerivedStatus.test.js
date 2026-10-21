@@ -298,10 +298,10 @@ describe('getProcessDerivedStatus - mapa aprovado 2026-10-21', () => {
       'Liberado para coleta',
       'info',
     ],
-    ['', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
-    ['xyz', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
-    [null, {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
-    ['Coleta Agendada', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
+    ['', {}, P.AGUARDANDO_EMBARQUE, 'Aguardando embarque', 'neutral'],
+    ['xyz', {}, P.AGUARDANDO_EMBARQUE, 'Aguardando embarque', 'neutral'],
+    [null, {}, P.AGUARDANDO_EMBARQUE, 'Aguardando embarque', 'neutral'],
+    ['Coleta Agendada', {}, P.LIBERADO_COLETA, 'Liberado para coleta', 'info'],
   ])('processStatus %j -> fase %s / %s / %s', (processStatus, extra, phase, label, tone) => {
     const result = getProcessDerivedStatus({ ...base, ...extra, processStatus })
     expect(result).toEqual({ phase, label, tone })
@@ -329,6 +329,101 @@ describe('getProcessDerivedStatus - mapa aprovado 2026-10-21', () => {
       label: 'Em trânsito',
       tone: 'neutral',
     })
+  })
+})
+
+describe('getProcessDerivedStatus - janelas e fallback via deriveProcessStatus', () => {
+  const P = DERIVED_STATUS_PHASES
+  const base = { category: 'FCL', eta: '2026-08-01' }
+  const undatedWindow = { id: 'w', containerNumber: 1, scheduledAt: '' }
+
+  it("'Coleta Agendada' com janela sem data -> Liberado para coleta (nao Em rota)", () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: 'Coleta Agendada',
+      collectionWindows: [undatedWindow],
+    })
+    expect(result.phase).toBe(P.LIBERADO_COLETA)
+  })
+
+  it('processStatus vazio com janela sem data -> Aguardando embarque', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: '',
+      collectionWindows: [undatedWindow],
+    })
+    expect(result.phase).toBe(P.AGUARDANDO_EMBARQUE)
+  })
+
+  it("'Coleta Agendada' com janela futura -> Coleta agendada", () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: 'Coleta Agendada',
+      collectionWindows: [{ id: 'w', containerNumber: 1, scheduledAt: '2026-07-10T09:00:00-03:00' }],
+    })
+    expect(result.phase).toBe(P.COLETA_AGENDADA)
+  })
+
+  it("'Coleta Agendada' com janela passada -> Carga a caminho do CD", () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: 'Coleta Agendada',
+      collectionWindows: [{ id: 'w', containerNumber: 1, scheduledAt: '2026-07-08T09:00:00-03:00' }],
+    })
+    expect(result.phase).toBe(P.EM_ROTA)
+  })
+
+  it('janela datada no passado + janela sem data -> Carga a caminho do CD', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: 'Coleta Agendada',
+      collectionWindows: [
+        { id: 'w1', containerNumber: 1, scheduledAt: '2026-07-08T09:00:00-03:00' },
+        { id: 'w2', containerNumber: 2, scheduledAt: '' },
+      ],
+    })
+    expect(result.phase).toBe(P.EM_ROTA)
+  })
+
+  it('dual schema: collectionScheduledAt legado futuro -> Coleta agendada', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: 'Coleta Agendada',
+      collectionWindows: [],
+      collectionScheduledAt: '2026-07-10T09:00:00-03:00',
+    })
+    expect(result.phase).toBe(P.COLETA_AGENDADA)
+  })
+
+  it('status vazio recalcula via deriveProcessStatus: shippedAt -> Embarcado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: '',
+      shippedAt: '2026-07-01',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(P.EMBARCADO)
+  })
+
+  it('status vazio recalcula via deriveProcessStatus: berthedAt -> Atracado', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: '',
+      berthedAt: '2026-07-06T08:00',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(P.ATRACADO)
+  })
+
+  it('status vazio recalcula via deriveProcessStatus: DUIMP registrada -> Aguardando desembaraço', () => {
+    const result = getProcessDerivedStatus({
+      ...base,
+      processStatus: '',
+      berthedAt: '2026-07-06T08:00',
+      duimpRegisteredAt: '2026-07-08T09:00',
+      collectionWindows: [],
+    })
+    expect(result.phase).toBe(P.AGUARDANDO_DESEMBARACO)
   })
 })
 

@@ -687,7 +687,8 @@ describe('DashboardPage - Favoritos: sinal de chegada (data OU boolean legado)',
     it('user com favorito sob aguas: badge sem o status de DUIMP', async () => {
       const item = await renderFavorite(underWater())
       expect(item.queryByText(DUIMP_STATUS)).not.toBeInTheDocument()
-      expect(item.getByText('Embarcou')).toBeInTheDocument()
+      expect(item.getByText('Embarcado')).toBeInTheDocument()
+      expect(item.queryByText('Embarcou')).not.toBeInTheDocument()
     })
 
     it('admin com favorito sob aguas: badge mostra o status de DUIMP', async () => {
@@ -702,7 +703,9 @@ describe('DashboardPage - Favoritos: sinal de chegada (data OU boolean legado)',
         expect(document.querySelector('.dashboard-favorites-card .process-item')).not.toBeNull()
       })
       const item = within(document.querySelector('.dashboard-favorites-card .process-item'))
-      expect(item.getByText(DUIMP_STATUS)).toBeInTheDocument()
+      expect(item.getByText(DUIMP_STATUS)).toHaveClass('inline-badge')
+      // A tag crua sumiu; `tag-ok` e o retorno do mock de getStatusTagClass.
+      expect(document.querySelector('.dashboard-favorites-card .tag-ok')).toBeNull()
     })
   })
 })
