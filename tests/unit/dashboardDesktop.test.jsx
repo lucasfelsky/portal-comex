@@ -275,7 +275,7 @@ describe('Dashboard desktop - ordem e Chegadas da semana', () => {
     const { container } = await renderLoaded()
     const row = container.querySelector('.dash-arrival')
     await user.click(row)
-    expect(mockNavigate).toHaveBeenCalledWith('/processos', { state: { selectedProcessId: expect.any(String) } })
+    expect(mockNavigate).toHaveBeenCalledWith('/processos', { state: { selectedProcessId: expect.any(String), detailTab: 'general' } })
     mockNavigate.mockClear()
     row.focus()
     await user.keyboard('{Enter}')
@@ -409,7 +409,7 @@ describe('Dashboard desktop - Processos favoritos', () => {
     await user.click(screen.getByRole('button', { name: 'Desfavoritar Pigmento orgânico — Hamburgo' }))
     expect(mockToggleFavorite).toHaveBeenCalledWith('p-a')
     await user.click(screen.getByRole('button', { name: 'Emulsificante — Rotterdam' }))
-    expect(mockNavigate).toHaveBeenCalledWith('/processos', { state: { selectedProcessId: 'p-b' } })
+    expect(mockNavigate).toHaveBeenCalledWith('/processos', { state: { selectedProcessId: 'p-b', detailTab: 'general' } })
   })
 
   it('carga recebida preenche as 5 etapas (nenhuma "atual")', async () => {

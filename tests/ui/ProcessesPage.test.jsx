@@ -19,7 +19,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import React from 'react'
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
@@ -2087,5 +2087,69 @@ describe('ProcessesPage — refino F2 (deep-link "Novo processo" e processo ativ
 
     await user.click(screen.getAllByText(/PO 12345 - Importacao A/)[0])
     await waitFor(() => expect(getActiveProcess()).toMatchObject({ id: 'p-1', category: 'FCL', viewMode: 'detail' }))
+  })
+})
+
+describe('ProcessesPage — deep link do detalhe (paleta Ctrl+K, notificacoes, Dashboard)', () => {
+  function activeDetailTab() {
+    return document.querySelector('.detail-tab-row .tab-button--active')
+  }
+
+  it('state { selectedProcessId, detailTab: general } abre o processo em "Detalhes gerais"', async () => {
+    renderPage({
+      initialEntries: [
+        { pathname: '/processos', state: { selectedProcessId: 'p-2', detailTab: 'general' } },
+      ],
+    })
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    expect(activeDetailTab()).toHaveTextContent('Detalhes gerais')
+    expect(screen.getAllByText(/PO 67890 - Exportacao B/).length).toBeGreaterThan(0)
+  })
+
+  it('notificacao: state sem detailTab continua abrindo "Mensagens"', async () => {
+    renderPage({
+      initialEntries: [{ pathname: '/processos', state: { selectedProcessId: 'p-2' } }],
+    })
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    expect(activeDetailTab()).toHaveTextContent('Mensagens')
+  })
+
+  it('ja em /processos: navigate com state novo (location.key novo) abre o detalhe em "Detalhes gerais"', async () => {
+    const user = userEvent.setup()
+    function GoToProcess() {
+      const navigate = useNavigate()
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            navigate('/processos', { state: { selectedProcessId: 'p-1', detailTab: 'general' } })
+          }
+        >
+          Ir para p-1
+        </button>
+      )
+    }
+    render(
+      <MemoryRouter initialEntries={['/processos']}>
+        <UnsavedChangesProvider>
+          <ToastProvider>
+            <GoToProcess />
+            <Routes>
+              <Route path="/processos" element={<ProcessesPage />} />
+            </Routes>
+          </ToastProvider>
+        </UnsavedChangesProvider>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    expect(activeDetailTab()).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Ir para p-1' }))
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    expect(activeDetailTab()).toHaveTextContent('Detalhes gerais')
   })
 })

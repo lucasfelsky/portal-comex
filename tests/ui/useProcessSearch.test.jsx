@@ -3,15 +3,15 @@
 //   - searcher retornado por useProcessSearch
 //   - resultado tem { id, label, description, to, action }
 //   - to sempre /processos
-//   - action navega com state { selectedProcessId }
+//   - action navega com state { selectedProcessId, detailTab: 'general' }
 //   - resultado vazio = array vazio
 //
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import React from 'react'
 
 const mockSearchProcesses = vi.fn()
@@ -22,6 +22,16 @@ vi.mock('../../src/services/processesRepository', () => ({
 import { useProcessSearch } from '../../src/hooks/useProcessSearch.js'
 
 let lastResult
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <>
+      <span data-testid="pathname">{location.pathname}</span>
+      <span data-testid="state">{JSON.stringify(location.state)}</span>
+    </>
+  )
+}
+
 function CaptureSearcher() {
   const searcher = useProcessSearch()
   return (
@@ -150,6 +160,34 @@ describe('useProcessSearch', () => {
     expect(typeof lastResult[0].action).toBe('function')
     // Nao deve lancar quando invocada (o navigate real acontecera em runtime)
     expect(() => lastResult[0].action()).not.toThrow()
+  })
+
+  it('action navega para /processos com selectedProcessId e detailTab general', async () => {
+    mockSearchProcesses.mockResolvedValue([
+      { id: 'p1', name: 'X', processNumber: 'PO', destination: '' },
+    ])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <CaptureSearcher />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+    await waitFor(() => {
+      expect(lastResult).toBeDefined()
+    })
+
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
+    act(() => {
+      lastResult[0].action()
+    })
+
+    expect(screen.getByTestId('pathname').textContent).toBe('/processos')
+    expect(screen.getByTestId('state').textContent).toBe(
+      JSON.stringify({ selectedProcessId: 'p1', detailTab: 'general' })
+    )
   })
 
   it('retorna array vazio quando searchProcesses nao acha nada', async () => {

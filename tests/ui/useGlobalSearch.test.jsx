@@ -10,9 +10,9 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import React from 'react'
 
 const mockSearchProcesses = vi.fn()
@@ -24,6 +24,16 @@ vi.mock('../../src/services/processesRepository', () => ({
 import { useGlobalSearch } from '../../src/hooks/useGlobalSearch.js'
 
 let lastResult
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <>
+      <span data-testid="pathname">{location.pathname}</span>
+      <span data-testid="state">{JSON.stringify(location.state)}</span>
+    </>
+  )
+}
+
 function Probe({ isAdmin } = {}) {
   const { searcher, recentSearches, clearRecent } = useGlobalSearch(isAdmin)
   return (
@@ -247,6 +257,34 @@ describe('useGlobalSearch', () => {
     expect(typeof item.action).toBe('function')
     // Nao deve lancar ao executar
     expect(() => item.action()).not.toThrow()
+  })
+
+  it('action do processo navega para /processos com selectedProcessId e detailTab general', async () => {
+    mockSearchProcesses.mockResolvedValue([
+      { id: 'p1', name: 'X', processNumber: 'PO', destination: 'Y' },
+    ])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Probe />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+    await waitFor(() => {
+      expect(lastResult).toHaveLength(1)
+    })
+
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
+    act(() => {
+      lastResult[0].action()
+    })
+
+    expect(screen.getByTestId('pathname').textContent).toBe('/processos')
+    expect(screen.getByTestId('state').textContent).toBe(
+      JSON.stringify({ selectedProcessId: 'p1', detailTab: 'general' })
+    )
   })
 
   // Refino F2: subtitulo da paleta = "PO ... · status" (Flutuantes.dc.html).
