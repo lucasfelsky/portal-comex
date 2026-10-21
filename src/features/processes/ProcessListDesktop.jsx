@@ -241,7 +241,7 @@ export default function ProcessListDesktop({
   archivedProcesses = [],
   onArchiveProcess,
   onNewProcess,
-  canManageArchived,
+  canViewArchived,
   isShowingArchived,
   onToggleArchived,
 }) {
@@ -324,7 +324,7 @@ export default function ProcessListDesktop({
           <h2>Fila de chegadas</h2>
         </div>
         <div className="chg-head__actions">
-          {canManageArchived && archivedCount > 0 ? (
+          {canViewArchived && archivedCount > 0 ? (
             <button
               type="button"
               className="ghost-button chg-btn chg-btn--archived process-list__archived-toggle"

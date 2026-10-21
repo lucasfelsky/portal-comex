@@ -252,6 +252,7 @@ export default function ProcessListView({
   isExporting,
   selectedProcessId,
   isAdmin,
+  canViewArchivedProp = false,
   canSeeName,
   searchTerm,
   categoryFilter,
@@ -291,8 +292,11 @@ export default function ProcessListView({
   // `process-list--scroll`, uma seção no fim ficaria escondida atrás de
   // dezenas de linhas).
   const [showArchived, setShowArchived] = useState(false)
+  // Ver a seção Arquivados: admin e logística (somente leitura); restaurar/arquivar
+  // (`canManageArchived`) segue admin-only — sem `onArchiveProcess` as linhas não têm ação.
   const canManageArchived = isAdmin && typeof onArchiveProcess === 'function'
-  const isShowingArchived = canManageArchived && showArchived && archivedProcesses.length > 0
+  const canViewArchived = canManageArchived || canViewArchivedProp
+  const isShowingArchived = canViewArchived && showArchived && archivedProcesses.length > 0
 
   // F16.4: no mobile (≤720px) a tela de Chegadas ganha a linguagem do
   // protótipo — busca em pill, segmented Todos/Marítimo/Aéreo (filtro de
@@ -397,7 +401,7 @@ export default function ProcessListView({
         archivedProcesses={archivedProcesses}
         onArchiveProcess={onArchiveProcess}
         onNewProcess={onNewProcess}
-        canManageArchived={canManageArchived}
+        canViewArchived={canViewArchived}
         isShowingArchived={isShowingArchived}
         onToggleArchived={() => setShowArchived((v) => !v)}
       />
@@ -445,7 +449,7 @@ export default function ProcessListView({
             >
               {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
             </button>
-            {canManageArchived && archivedProcesses.length > 0 ? (
+            {canViewArchived && archivedProcesses.length > 0 ? (
               <button
                 type="button"
                 className="ghost-button process-list__archived-toggle"
@@ -643,7 +647,7 @@ export default function ProcessListView({
             </div>
           </>
         ) : isMobile ? (
-          shownProcesses.length === 0 && !(isAdmin && archivedProcesses.length > 0) ? (
+          shownProcesses.length === 0 && !(canViewArchived && archivedProcesses.length > 0) ? (
             <div className="empty-state" role="status">
               <strong>Nenhum processo encontrado</strong>
               <p>
@@ -667,7 +671,7 @@ export default function ProcessListView({
                   <div className="process-list__group">{doneProcesses.map(renderProcessRow)}</div>
                 </>
               ) : null}
-              {isAdmin && archivedProcesses.length > 0 ? (
+              {canViewArchived && archivedProcesses.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Arquivados</div>
                   <div className="process-list__group">{archivedProcesses.map(renderArchivedRow)}</div>
