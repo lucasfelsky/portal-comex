@@ -270,6 +270,27 @@ describe('Dashboard desktop - ordem e Chegadas da semana', () => {
     ])
   })
 
+  it('carga a caminho do CD: selo diz a fase e a nota "Carga em transito para o CD" nao se repete', async () => {
+    mockListProcesses.mockResolvedValue([
+      // Sem o override manual (ignorado de "coleta agendada" em diante) a
+      // previsao automatica precisa cair na semana: ETA ja' passada.
+      {
+        ...PROCESS_A,
+        id: 'p-rota',
+        eta: '2026-10-14',
+        etaOriginal: '2026-10-14',
+        berthedAt: '2026-10-15T08:00',
+        warehouseDeliveryDateOverride: '',
+        collectionStatus: 'Carga a caminho do CD',
+      },
+    ])
+    const { container } = await renderLoaded()
+    const rows = container.querySelectorAll('.dash-arrivals .dash-arrival')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].querySelector('.process-derived-status-badge').textContent).toBe('Carga a caminho do CD')
+    expect(rows[0].querySelector('.dash-arrival__note')).toBeNull()
+  })
+
   it('clique e Enter/espaco abrem o processo; "Ver todas" vai para /processos', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { container } = await renderLoaded()
@@ -385,7 +406,7 @@ describe('Dashboard desktop - Processos favoritos', () => {
   it('cartao pos-atracacao: fatos de presenca, DUIMP (tom do canal) e janela de coleta; data da coleta no eyebrow', async () => {
     const { container } = await renderLoaded()
     const card = [...container.querySelectorAll('.dash-fav')].find((c) => c.textContent.includes('Emulsificante'))
-    expect(card.querySelector('.dash-fav__eyebrow').textContent).toBe('Coleta Agendada · 22/10')
+    expect(card.querySelector('.dash-fav__eyebrow').textContent).toBe('22/10')
     const byLabel = Object.fromEntries(
       [...card.querySelectorAll('.dash-facts__item')].map((item) => [
         item.querySelector('dt').textContent,

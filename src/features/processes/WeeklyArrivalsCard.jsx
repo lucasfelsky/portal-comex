@@ -12,6 +12,7 @@ import {
   getScheduledCollectionDeliveryShift,
 } from '../../utils/deliveryForecast'
 import ProcessDerivedStatusBadge from './ProcessDerivedStatusBadge'
+import { getArrivalNoteLabel } from './processDerivedStatus'
 import Icon from '../../components/Icon'
 import Skeleton from '../../components/Skeleton'
 import { getCargoHazardBadges } from './operationalOptions'
@@ -377,7 +378,7 @@ function DesktopArrivalItem({ entry, canSeeName, onSelectProcess }) {
           container: '',
           delivery: entry.estimatedDelivery,
           shift: '',
-          note: getUnscheduledItemLabel(process),
+          note: getArrivalNoteLabel(process),
         },
       ]
 

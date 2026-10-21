@@ -8,8 +8,6 @@ import Stagger from '../components/Stagger'
 import {
   getChannelToneClass,
   getDisplayedCollectionStatus,
-  getQuickReadProcessStatus,
-  getStatusTagClass,
   isCollectionScheduleRetainingStatus as keepsCollectionSchedule,
   isDtaTransitCompletedStatus,
   shouldHideProcessCardSchedule,
@@ -25,6 +23,7 @@ import {
   shouldShowContainerQuantity,
 } from '../features/processes/processCategories'
 import ProcessDerivedStatusBadge from '../features/processes/ProcessDerivedStatusBadge'
+import { getProcessStatusDetail } from '../features/processes/processDerivedStatus'
 import { getCargoHazardBadges } from '../features/processes/operationalOptions'
 import WeeklyArrivalsCard, {
   formatPoLine,
@@ -291,8 +290,8 @@ function getFavoriteEyebrowDate(item) {
 function FavoriteCard({ item, canSeeName, onOpen, onUnfavorite }) {
   const title = getProcessTitle(item, canSeeName)
   const subtitle = formatPoLine(getProcessSubtitle(item, canSeeName))
-  // Mesma leitura rapida do card legado: status de coleta quando existe, senao o do processo.
-  const eyebrowStatus = getQuickReadProcessStatus(item)
+  // O selo derivado e o status do card; o eyebrow so detalha quando acrescenta algo.
+  const eyebrowStatus = getProcessStatusDetail(item)
   const eyebrowDate = getFavoriteEyebrowDate(item)
   const { currentStage, isComplete } = getProcessStage(item)
   const activeStage = isComplete ? PROCESS_STAGES.length : currentStage
@@ -842,6 +841,10 @@ export default function DashboardPage() {
               const showAirPostArrival = isAirCategory(item.category) && hasArrivalSignal(item)
               const hideSchedule = shouldHideProcessCardSchedule(item)
               const hideEta = showMaritimePostArrival || showAirPostArrival || hideSchedule
+              // O selo derivado e o status; o texto cru so aparece quando acrescenta algo.
+              const statusDetail = shouldHideProcessStatusBadge(item)
+                ? ''
+                : getProcessStatusDetail(item, { source: 'processStatus' })
 
               return (
                 <div key={item.id} className="process-item dashboard-favorites-item">
@@ -867,12 +870,8 @@ export default function DashboardPage() {
                         .join(' · ')}
                     </div>
                     <div className="process-item__chips">
-                      {shouldHideProcessStatusBadge(item) ? null : (
-                        <span className={getStatusTagClass(item.processStatus)}>
-                          {item.processStatus}
-                        </span>
-                      )}
                       <ProcessDerivedStatusBadge process={item} />
+                      {statusDetail ? <span className="inline-badge">{statusDetail}</span> : null}
                       {shouldShowContainerQuantity(item.category) && item.containerQuantity > 0 ? (
                         <span className="inline-badge">
                           {formatContainerCount(item.containerQuantity)}

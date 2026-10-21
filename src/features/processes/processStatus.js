@@ -356,18 +356,19 @@ export function getProcessStatusTone(status) {
   const canonicalStatus = canonicalizeProcessStatus(status)
 
   if (canonicalStatus === 'Carga recebida') return 'ok'
+  // Tons alinhados aos de DERIVED_STATUS_TONES (processDerivedStatus.js);
+  // contrato coberto em tests/unit/processStatusDetail.test.js.
   if (
     canonicalStatus === 'Atracação Confirmada' ||
     canonicalStatus === 'Coleta Agendada' ||
-    canonicalStatus === 'Embarcou'
+    canonicalStatus === 'Aguardando registro da DUIMP' ||
+    canonicalStatus === 'Aguardando agendamento de coleta'
   ) {
     return 'info'
   }
   if (
-    canonicalStatus === 'Aguardando registro da DUIMP' ||
     canonicalStatus === 'Aguardando parametrização da DUIMP' ||
-    canonicalStatus === 'Aguardando desembaraço' ||
-    canonicalStatus === 'Aguardando agendamento de coleta'
+    canonicalStatus === 'Aguardando desembaraço'
   ) {
     return 'warn'
   }
