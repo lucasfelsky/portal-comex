@@ -934,6 +934,18 @@ describe('F2 shell - CSS do mock', () => {
     expect(nb).not.toMatch(/\.topbar\s*\{[^}]*padding-left/)
     expect(nb).not.toMatch(/\.topbar\s*\{[^}]*(?<![-\w])height:/)
   })
+
+  it('assinatura SQ da sidebar: base discreta e centrada (drawer), 14px no desktop e 12px no notebook, sem hex', () => {
+    const base = bodyAfter(css, '\n.sidebar-signature {')
+    for (const declaration of ['align-self: center', 'opacity: 0.8', 'pointer-events: none', 'user-select: none']) {
+      expect(base, declaration).toContain(`${declaration};`)
+    }
+    expect(/#[0-9a-fA-F]{3,8}\b/.test(base)).toBe(false)
+    expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: flex-start', 'margin: 14px 0 0 14px'])
+    const nb = stripComments(read('src/notebook.css'))
+    expect(nb).toMatch(/\.sidebar \.sidebar__foot \.sidebar-signature\s*\{[^}]*margin: 10px 0 0 12px;/)
+    expect(nb).not.toMatch(/\.sidebar-signature[^{]*\{[^}]*(display: none|visibility: hidden)/)
+  })
 })
 
 describe('F2 shell - JSX/markup', () => {
@@ -972,6 +984,25 @@ describe('F2 shell - JSX/markup', () => {
     // D4: o card "Fazer uma cotacao" (Comercial) nao tem marca.
     const quote = layout.slice(layout.indexOf('sidebar-intelliquote-link--quote'), layout.indexOf('profile?.role === \'admin\' ? ('))
     expect(quote).not.toContain('ProductMark')
+  })
+
+  it('assinatura SQ: SqQuimicaLogo minusc 28px com label, depois de Suporte/Sair e no fim do rodape', () => {
+    expect(layout).toContain("import { ProductMark, SqQuimicaLogo } from './BrandMark'")
+    const logoStart = layout.indexOf('<SqQuimicaLogo')
+    const logoEnd = layout.indexOf('/>', logoStart)
+    const logo = layout.slice(logoStart, logoEnd)
+    for (const attribute of [
+      'variant="minusc"',
+      "tone={isMobileViewport ? 'light' : 'dark'}",
+      'size={28}',
+      'label="SQ Química"',
+      'className="sidebar-signature"',
+    ]) {
+      expect(logo, attribute).toContain(attribute)
+    }
+    expect(layout.indexOf('<span>Suporte</span>')).toBeLessThan(logoStart)
+    expect(layout.indexOf('<span>Sair</span>')).toBeLessThan(logoStart)
+    expect(layout.slice(logoEnd).replace(/\s+/g, '')).toMatch(/^\/><\/div><\/aside>/)
   })
 
   it('topbar: busca Ctrl K, PTAX sem "R$", sino com badge e botao de usuario com menu (D5)', () => {

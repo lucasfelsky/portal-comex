@@ -10001,6 +10001,13 @@ body {
     box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
   }
 
+  /* Assinatura SQ Quimica (28px) abaixo de Suporte: alinhada a 14px, o mesmo
+     recuo do texto dos botoes do rodape. O notebook.css a reduz nas telas baixas. */
+  .sidebar .sidebar__foot .sidebar-signature {
+    align-self: flex-start;
+    margin: 14px 0 0 14px;
+  }
+
   /* ---------------------------------------------------------------------
      Topbar (Topbar.dc.html): item sticky do main-content, min-height 76,
      gap 10/14, titulo + breadcrumb ACIMA, busca Ctrl K, PTAX, sino com
@@ -14149,6 +14156,18 @@ body {
   font-weight: 400;
   letter-spacing: -0.03em;
   color: var(--sq-logo-ink-2);
+}
+
+/* Assinatura SQ Quimica no fim da sidebar (AppLayout, abaixo de Suporte/Sair):
+   decorativa e discreta. Sem link, sem foco e sem alvo de clique. No drawer
+   (<= 1040px) fica centralizada como os demais itens; no desktop, alinhada ao
+   texto dos botoes do rodape (regra no bloco F2). */
+.sidebar-signature {
+  align-self: center;
+  flex-shrink: 0;
+  opacity: 0.8;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ============================================================

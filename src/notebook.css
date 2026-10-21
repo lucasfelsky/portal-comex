@@ -136,6 +136,11 @@
     padding: 0 12px;
   }
 
+  /* Assinatura SQ Quimica: recuo de 12px (o mesmo dos botoes) e respiro menor. */
+  .sidebar .sidebar__foot .sidebar-signature {
+    margin: 10px 0 0 12px;
+  }
+
   /* Suporte redondo, so com icone (aria-label e title continuam). */
   .support-fab {
     right: 16px;
