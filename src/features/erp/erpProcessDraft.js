@@ -66,7 +66,7 @@ const CONFLICT_LABELS = {
 const BADGE_BY_KIND = { FCL: 'FCL', LCL: 'LCL', CONSOLIDADO: 'CON' }
 
 const REVIEW_MESSAGE =
-  'O Portal oculta processos recebidos há mais de 7 dias; confira se este embarque já tem processo antes de criar.'
+  'Processos recebidos há mais de 7 dias ficam em Arquivados; confira se este embarque já tem processo antes de criar.'
 
 const MAX_AUDIT_TARGET_LENGTH = 1500
 
@@ -104,7 +104,7 @@ function joinValues(values) {
   return values.join(', ')
 }
 
-// `needsReview` (D-F3-6): o Portal oculta recebidos ha mais de 7 dias, entao um
+// `needsReview` (D-F3-6): o Portal arquiva recebidos ha mais de 7 dias (secao Arquivados), entao um
 // embarque com sinais de estar parado/ja recebido pede conferencia antes.
 function shouldReview({ stage, etd, eta, today }) {
   if (stage !== null && stage >= 1) return eta === ''

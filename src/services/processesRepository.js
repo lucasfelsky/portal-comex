@@ -738,6 +738,11 @@ function sortProcesses(processes) {
   })
 }
 
+// Recebido ha' 7+ dias: NAO e' apagado nem escondido - entra como arquivado
+// automatico na leitura (`autoArchived`), sem gravar nada no Firestore. Isso
+// vale retroativamente p/ todo o historico e nao depende de deploy de functions.
+// Antes (17/06 a 21/10/2026) `listProcesses` os descartava da lista, inclusive
+// da secao "Arquivados" - os dados nunca foram removidos.
 function isExpiredReceivedProcess(process) {
   const receivedAt =
     normalizeIsoDateTime(process?.cargoReceivedAt) ||
@@ -750,6 +755,11 @@ function isExpiredReceivedProcess(process) {
     new Date(receivedAt).getTime() + RECEIVED_PROCESS_RETENTION_DAYS * 24 * 60 * 60 * 1000
 
   return Date.now() >= expiresAt
+}
+
+function applyAutoArchive(process) {
+  if (!isExpiredReceivedProcess(process)) return { ...process, autoArchived: false }
+  return { ...process, archived: true, autoArchived: true }
 }
 
 function toFirestorePayload(process) {
@@ -875,8 +885,8 @@ function toFirestorePayload(process) {
 
 export async function listProcesses() {
   if (!isFirebaseConfigured || !firestore) {
-    return sortProcesses(readLocalProcesses().map((item) => normalizeProcess(item))).filter(
-      (item) => !isExpiredReceivedProcess(item)
+    return sortProcesses(readLocalProcesses().map((item) => normalizeProcess(item))).map(
+      applyAutoArchive
     )
   }
 
@@ -906,7 +916,7 @@ export async function listProcesses() {
         item.id
       )
     })
-    .filter((item) => !isExpiredReceivedProcess(item))
+    .map(applyAutoArchive)
 }
 
 export async function saveProcess(process, actor = null) {
@@ -1278,7 +1288,8 @@ export async function searchProcesses(rawQuery, { canSeeName = false } = {}) {
   const q = String(rawQuery ?? '').trim().toLowerCase()
   if (q.length < 2) return []
 
-  const all = await listProcesses()
+  // Arquivados automaticos (recebidos ha 7+ dias) seguem fora da busca global, como antes.
+  const all = (await listProcesses()).filter((process) => !process.autoArchived)
   const canSeeDetails = canSeePurchaseOrderDetails(canSeeName)
   const matches = all.filter((process) => {
     const showName = canSeeName || !isRestrictedCategory(process.category)

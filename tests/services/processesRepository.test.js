@@ -1602,3 +1602,69 @@ describe('F17.2d-1 - cubagem FCL/CONSOLIDADO, ETD do transbordo, carga perigosa 
     expect(payload.transshipmentEtd).not.toBeUndefined()
   })
 })
+
+// Recebido ha 7+ dias NAO some mais: entra como arquivado automatico (so leitura).
+describe('listProcesses - arquivo automatico dos recebidos ha 7+ dias', () => {
+  const dayMs = 24 * 60 * 60 * 1000
+  const doc = (id, data) => ({ id, data: () => ({ id, name: id, category: 'FCL', ...data }) })
+
+  it('recebido ha mais de 7 dias volta arquivado + autoArchived; recente e sem recebimento seguem ativos', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        doc('velho', { cargoReceivedAt: new Date(Date.now() - 8 * dayMs).toISOString() }),
+        doc('recente', { cargoReceivedAt: new Date(Date.now() - 2 * dayMs).toISOString() }),
+        doc('aberto', {}),
+      ],
+    })
+
+    const byId = Object.fromEntries((await listProcesses()).map((item) => [item.id, item]))
+
+    expect(Object.keys(byId).sort()).toEqual(['aberto', 'recente', 'velho'])
+    expect(byId.velho.archived).toBe(true)
+    expect(byId.velho.autoArchived).toBe(true)
+    expect(byId.recente.archived).toBe(false)
+    expect(byId.recente.autoArchived).toBe(false)
+    expect(byId.aberto.archived).toBe(false)
+    expect(byId.aberto.autoArchived).toBe(false)
+  })
+
+  it('"Carga recebida" sem cargoReceivedAt usa updatedAt; arquivado manual recente nao e autoArchived', async () => {
+    const old = { toDate: () => new Date(Date.now() - 10 * dayMs) }
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        doc('legado', { processStatus: 'Carga recebida', updatedAt: old }),
+        doc('manual', { archived: true }),
+      ],
+    })
+
+    const byId = Object.fromEntries((await listProcesses()).map((item) => [item.id, item]))
+
+    expect(byId.legado.autoArchived).toBe(true)
+    expect(byId.manual.archived).toBe(true)
+    expect(byId.manual.autoArchived).toBe(false)
+  })
+
+  it('searchProcesses nao devolve arquivados automaticos', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        doc('Zeta velho', { name: 'Zeta velho', cargoReceivedAt: new Date(Date.now() - 9 * dayMs).toISOString() }),
+        doc('Zeta novo', { name: 'Zeta novo' }),
+      ],
+    })
+
+    const found = await searchProcesses('zeta', { canSeeName: true })
+
+    expect(found.map((item) => item.id)).toEqual(['Zeta novo'])
+  })
+
+  it('nunca grava nem apaga ao listar', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [doc('velho', { cargoReceivedAt: new Date(Date.now() - 30 * dayMs).toISOString() })],
+    })
+
+    await listProcesses()
+
+    expect(mockSetDoc).not.toHaveBeenCalled()
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+})
