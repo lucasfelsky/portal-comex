@@ -577,6 +577,13 @@ describe('AppLayout (drawer da sidebar no tablet)', () => {
       expect(container.querySelector('.main-content')).toHaveAttribute('inert')
     })
     expect(container.querySelector('.notifications__panel')).not.toBeNull()
+    // O Escape e' escutado pelo useFocusTrap, registrado num useEffect passivo
+    // (que tambem agenda o auto-foco de 30ms). O inert aparece no commit, ANTES
+    // desse efeito: sem esperar o foco entrar no painel, o Escape pode ser
+    // disparado sem listener e se perder.
+    await waitFor(() => {
+      expect(container.querySelector('.notifications__panel').contains(document.activeElement)).toBe(true)
+    })
 
     act(() => {
       fireKeyDown('Escape')
@@ -756,6 +763,58 @@ describe('AppLayout shell F2 (refino visual)', () => {
       await user.click(foot.getByRole('button', { name: 'Sair' }))
       expect(logout).toHaveBeenCalledTimes(1)
     })
+
+    describe('assinatura SQ Química no fim da sidebar', () => {
+      const isAfter = (reference, node) =>
+        Boolean(reference.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+      it('desktop: logo (tom dark, 28px) logo abaixo de "Suporte", como último item do rodapé', () => {
+        const { container } = renderAt('/')
+        const foot = container.querySelector('.sidebar__foot')
+        const support = within(foot).getByRole('button', { name: 'Abrir suporte' })
+        const logo = within(foot).getByRole('img', { name: 'SQ Química' })
+        expect(logo).toHaveClass('sq-logo', 'sq-logo--minusc', 'sq-logo--dark', 'sidebar-signature')
+        expect(logo.querySelector('svg')).toHaveAttribute('width', '28')
+        expect(isAfter(support, logo)).toBe(true)
+        expect(foot.lastElementChild).toBe(logo)
+        expect(logo).toHaveTextContent(/sqs*química/)
+      })
+
+      it('decorativa: sem link, sem botão e sem tab stop (nada focável dentro nem tabindex)', () => {
+        const { container } = renderAt('/')
+        const logo = within(container.querySelector('.sidebar__foot')).getByRole('img', { name: 'SQ Química' })
+        expect(logo.closest('a, button')).toBeNull()
+        expect(logo.querySelector('a, button, input, select, textarea, [tabindex]')).toBeNull()
+        expect(logo).not.toHaveAttribute('tabindex')
+        expect(logo.querySelector('svg')).toHaveAttribute('focusable', 'false')
+        expect(logo.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+      })
+
+      it('não adiciona tab stop ao rodapé: só IntelliQuote, Tema e Suporte (admin)', () => {
+        const { container } = renderAt('/')
+        const stops = container.querySelectorAll(
+          '.sidebar__foot a[href], .sidebar__foot button, .sidebar__foot [tabindex]'
+        )
+        expect(stops).toHaveLength(3)
+      })
+
+      it('tablet/mobile (<=1040px): logo abaixo de "Sair", tom light (drawer claro), mesmo componente', () => {
+        stubTablet()
+        const { container } = renderAt('/')
+        const foot = container.querySelector('.sidebar__foot')
+        const logout = within(foot).getByRole('button', { name: 'Sair' })
+        const logo = within(foot).getByRole('img', { name: 'SQ Química' })
+        expect(logo).toHaveClass('sq-logo', 'sq-logo--minusc', 'sq-logo--light', 'sidebar-signature')
+        expect(logo).not.toHaveClass('sq-logo--dark')
+        expect(isAfter(logout, logo)).toBe(true)
+        expect(foot.lastElementChild).toBe(logo)
+      })
+
+      it('aparece também para o usuário comum (não depende de papel)', () => {
+        const { container } = renderAt('/', { role: 'user' })
+        expect(within(container.querySelector('.sidebar__foot')).getByRole('img', { name: 'SQ Química' })).toBeInTheDocument()
+      })
+    })
   })
 
   describe('topbar', () => {
@@ -863,11 +922,13 @@ describe('AppLayout shell F2 (refino visual)', () => {
     it('PTAX: USD | EUR com 4 casas e SEM "R$" (D6)', async () => {
       getDailyPtaxRates.mockResolvedValue({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } })
       const { container } = renderAt('/')
-      const ptax = await waitFor(() => {
-        const node = container.querySelector('.topbar__ptax')
-        expect(node).not.toBeNull()
-        return node
+      // O chip e SEMPRE renderizado (com "--" sem dado): esperar so' o elemento
+      // resolveria antes da promise do mock. Espera o VALOR de cada moeda.
+      await waitFor(() => {
+        expect(container.querySelector('.topbar__ptax')).toHaveTextContent('5,4127')
+        expect(container.querySelector('.topbar__ptax')).toHaveTextContent('6,1234')
       })
+      const ptax = container.querySelector('.topbar__ptax')
       expect(ptax).toHaveTextContent('USD')
       expect(ptax).toHaveTextContent('5,4127')
       expect(ptax).toHaveTextContent('EUR')

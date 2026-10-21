@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import useAuth from '../hooks/useAuth'
 import Icon from './Icon'
 import Breadcrumb from './Breadcrumb'
-import { ProductMark } from './BrandMark'
+import { ProductMark, SqQuimicaLogo } from './BrandMark'
 import CommandPalette, { useCommandPalette } from './CommandPalette'
 import PageFade from './PageFade'
 import NotificationsList from './NotificationsList'
@@ -891,6 +891,17 @@ export default function AppLayout() {
                 <span>Suporte</span>
               </button>
             )}
+
+            {/* Assinatura da SQ Quimica no fim da sidebar: decorativa (sem link,
+                sem foco). Desktop (>= 1041px) e navy => tom dark; o drawer
+                (<= 1040px) e' claro/glass => tom light (tokens seguem o tema). */}
+            <SqQuimicaLogo
+              variant="minusc"
+              tone={isMobileViewport ? 'light' : 'dark'}
+              size={28}
+              label="SQ Química"
+              className="sidebar-signature"
+            />
           </div>
         </aside>
 
