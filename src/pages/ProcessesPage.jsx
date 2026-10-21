@@ -1903,6 +1903,7 @@ export default function ProcessesPage() {
           isExporting={isExporting}
           selectedProcessId={selectedProcessId}
           isAdmin={isAdmin}
+          canViewArchivedProp={isAdmin || profile?.role === 'logistica'}
           canSeeName={canSeeName}
           searchTerm={searchTerm}
           categoryFilter={categoryFilter}

@@ -273,6 +273,22 @@ describe('F4b - cabecalho e acoes', () => {
     expect(props.onNewProcess).toHaveBeenCalledTimes(1)
   })
 
+  it('logistica (canViewArchivedProp): ve Arquivados, abre o processo, sem Restaurar/Arquivar', async () => {
+    const user = userEvent.setup()
+    const { container, props } = renderView({
+      isAdmin: false,
+      canViewArchivedProp: true,
+      onArchiveProcess: undefined,
+      onNewProcess: undefined,
+      onReconcileErp: undefined,
+    })
+    await user.click(screen.getByRole('button', { name: 'Arquivados (1)' }))
+    const archivedRow = rowOf(container, 'Processo arquivado')
+    expect(within(archivedRow).queryByRole('button', { name: /Restaurar|Arquivar/ })).not.toBeInTheDocument()
+    await user.click(archivedRow)
+    expect(props.onSelectProcess).toHaveBeenCalledWith('p-9')
+  })
+
   it('Exportar (N) conta o que sai na planilha: filtradas fora de Arquivados, arquivadas dentro', async () => {
     const user = userEvent.setup()
     const { props } = renderView()
