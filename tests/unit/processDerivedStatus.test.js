@@ -9,6 +9,7 @@ import {
   getProcessDerivedStatus,
   DERIVED_STATUS_PHASES,
 } from '../../src/features/processes/processDerivedStatus'
+import { deriveProcessStatus } from '../../src/features/processes/deriveProcessStatus'
 
 beforeAll(() => {
   // Congela o relogio em 2026-07-09 14:00 BRT (quinta) = 17:00 UTC.
@@ -174,11 +175,10 @@ describe('getProcessDerivedStatus - Atrasado usa o sinal de chegada (data OU boo
   })
 })
 
-// F17.1a: novo status 'Aguardando desembaraço' entra no mesmo bloco de
-// 'Atracação Confirmada'/'Aguardando registro/parametrização da DUIMP' - fase
-// NO_PORTO ("no porto / desembaraço").
+// F17.1a: novo status 'Aguardando desembaraço' - fase propria
+// AGUARDANDO_DESEMBARACO (mapa aprovado 2026-10-21).
 describe('getProcessDerivedStatus - novo status Aguardando desembaraço (F17.1a)', () => {
-  it('processStatus "Aguardando desembaraço" cai na fase NO_PORTO', () => {
+  it('processStatus "Aguardando desembaraço" cai na fase AGUARDANDO_DESEMBARACO (warn)', () => {
     const result = getProcessDerivedStatus({
       eta: '2026-07-09',
       category: 'FCL',
@@ -186,14 +186,16 @@ describe('getProcessDerivedStatus - novo status Aguardando desembaraço (F17.1a)
       processStatus: 'Aguardando desembaraço',
       collectionWindows: [],
     })
-    expect(result.phase).toBe(DERIVED_STATUS_PHASES.NO_PORTO)
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO)
+    expect(result.label).toBe('Aguardando desembaraço')
+    expect(result.tone).toBe('warn')
   })
 })
 
 // DUIMP sob aguas (D-5): DUIMP registrada antes da atracacao nao coloca o
-// processo "no porto / desembaraco"; com atracacao segue NO_PORTO.
+// processo em desembaraco; com atracacao vai para AGUARDANDO_DESEMBARACO.
 describe('getProcessDerivedStatus - DUIMP sob aguas (D-5)', () => {
-  it('sem atracacao + DUIMP registrada + ETA futura -> EMBARCADO (nao NO_PORTO)', () => {
+  it('sem atracacao + DUIMP registrada + ETA futura -> EMBARCADO (nao AGUARDANDO_DESEMBARACO)', () => {
     const result = getProcessDerivedStatus({
       eta: '2026-08-01',
       category: 'FCL',
@@ -205,7 +207,7 @@ describe('getProcessDerivedStatus - DUIMP sob aguas (D-5)', () => {
     expect(result.phase).toBe(DERIVED_STATUS_PHASES.EMBARCADO)
   })
 
-  it('com atracacao + DUIMP registrada -> NO_PORTO (inalterado)', () => {
+  it('com atracacao + DUIMP registrada -> AGUARDANDO_DESEMBARACO', () => {
     const result = getProcessDerivedStatus({
       eta: '2026-07-09',
       category: 'FCL',
@@ -214,7 +216,7 @@ describe('getProcessDerivedStatus - DUIMP sob aguas (D-5)', () => {
       processStatus: 'Aguardando parametrização da DUIMP',
       collectionWindows: [],
     })
-    expect(result.phase).toBe(DERIVED_STATUS_PHASES.NO_PORTO)
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO)
   })
 
   it('ATRASADO continua antes: ETA vencida sem atracacao -> ATRASADO', () => {
@@ -242,6 +244,7 @@ describe('getProcessDerivedStatus - collectionStatus fundido (F17.4a)', () => {
       collectionWindows: [],
     })
     expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+    expect(result.label).toBe('Recebida no CD')
   })
 
   it('collectionStatus legado "Carga em Conferência/Etiquetagem" tambem cai na fase POS_RECEBIMENTO', () => {
@@ -253,5 +256,180 @@ describe('getProcessDerivedStatus - collectionStatus fundido (F17.4a)', () => {
       collectionWindows: [],
     })
     expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+    expect(result.label).toBe('Recebida no CD')
+  })
+})
+
+// Mapa aprovado 2026-10-21: decide pelo processStatus gravado canonico.
+describe('getProcessDerivedStatus - mapa aprovado 2026-10-21', () => {
+  const base = { category: 'FCL', eta: '2026-08-01', collectionWindows: [] }
+  const P = DERIVED_STATUS_PHASES
+
+  it.each([
+    ['Aguardando Embarque', {}, P.AGUARDANDO_EMBARQUE, 'Aguardando embarque', 'neutral'],
+    ['Embarcou', {}, P.EMBARCADO, 'Embarcado', 'neutral'],
+    ['Aguardando atracação', {}, P.AGUARDANDO_ATRACACAO, 'Aguardando atracação', 'neutral'],
+    ['Atracação Confirmada', { berthedAt: '2026-07-06T08:00' }, P.ATRACADO, 'Atracado', 'info'],
+    [
+      'Aguardando registro da DUIMP',
+      { berthedAt: '2026-07-06T08:00', cargoPresenceInformedAt: '2026-07-07T10:00' },
+      P.NO_PORTO,
+      'No porto',
+      'info',
+    ],
+    [
+      'Aguardando parametrização da DUIMP',
+      { berthedAt: '2026-07-06T08:00', duimpRegisteredAt: '2026-07-08T09:00' },
+      P.AGUARDANDO_DESEMBARACO,
+      'Aguardando desembaraço',
+      'warn',
+    ],
+    [
+      'Aguardando desembaraço',
+      { berthedAt: '2026-07-06T08:00' },
+      P.AGUARDANDO_DESEMBARACO,
+      'Aguardando desembaraço',
+      'warn',
+    ],
+    [
+      'Aguardando agendamento de coleta',
+      { berthedAt: '2026-07-06T08:00' },
+      P.LIBERADO_COLETA,
+      'Liberado para coleta',
+      'info',
+    ],
+    ['', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
+    ['xyz', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
+    [null, {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
+    ['Coleta Agendada', {}, P.EM_TRANSITO, 'Em trânsito', 'neutral'],
+  ])('processStatus %j -> fase %s / %s / %s', (processStatus, extra, phase, label, tone) => {
+    const result = getProcessDerivedStatus({ ...base, ...extra, processStatus })
+    expect(result).toEqual({ phase, label, tone })
+  })
+
+  it('grafia nao canonica casa via canonicalizacao', () => {
+    const atracado = getProcessDerivedStatus({
+      ...base,
+      berthedAt: '2026-07-06T08:00',
+      processStatus: 'atracação confirmada',
+    })
+    expect(atracado.phase).toBe(P.ATRACADO)
+
+    const desembaraco = getProcessDerivedStatus({
+      ...base,
+      berthedAt: '2026-07-06T08:00',
+      processStatus: 'AGUARDANDO DESEMBARACO',
+    })
+    expect(desembaraco.phase).toBe(P.AGUARDANDO_DESEMBARACO)
+  })
+
+  it('processo nulo -> Em trânsito', () => {
+    expect(getProcessDerivedStatus(null)).toEqual({
+      phase: P.EM_TRANSITO,
+      label: 'Em trânsito',
+      tone: 'neutral',
+    })
+  })
+})
+
+describe('getProcessDerivedStatus - AEREO', () => {
+  const air = { category: 'AEREO', eta: '2026-08-01', collectionWindows: [] }
+
+  it('Aguardando atracação em AEREO -> "Aguardando chegada"', () => {
+    const result = getProcessDerivedStatus({ ...air, processStatus: 'Aguardando atracação' })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.AGUARDANDO_ATRACACAO)
+    expect(result.label).toBe('Aguardando chegada')
+  })
+
+  it('Atracação Confirmada em AEREO -> "Chegada confirmada"', () => {
+    const result = getProcessDerivedStatus({
+      ...air,
+      arrivedAt: '2026-07-06T08:00',
+      processStatus: 'Atracação Confirmada',
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.ATRACADO)
+    expect(result.label).toBe('Chegada confirmada')
+  })
+
+  it('FCL nos mesmos status mantem "Aguardando atracação"/"Atracado"', () => {
+    const fcl = { category: 'FCL', eta: '2026-08-01', collectionWindows: [] }
+    expect(getProcessDerivedStatus({ ...fcl, processStatus: 'Aguardando atracação' }).label).toBe(
+      'Aguardando atracação'
+    )
+    expect(
+      getProcessDerivedStatus({
+        ...fcl,
+        berthedAt: '2026-07-06T08:00',
+        processStatus: 'Atracação Confirmada',
+      }).label
+    ).toBe('Atracado')
+  })
+})
+
+describe('getProcessDerivedStatus - precedencia Concluido x CD', () => {
+  const base = { category: 'FCL', eta: '2026-07-01', berthedAt: '2026-07-02T08:00', collectionWindows: [] }
+  const P = DERIVED_STATUS_PHASES
+
+  it.each([
+    ['Carga recebida', 'Carga recebida, em conferência', P.POS_RECEBIMENTO],
+    ['Carga recebida', 'Carga em processo de Entrada', P.POS_RECEBIMENTO],
+    ['Carga recebida', 'Carga disponível em estoque', P.CONCLUIDO],
+    ['Embarcou', 'Carga disponível em estoque', P.CONCLUIDO],
+    ['', 'Carga disponível em estoque', P.CONCLUIDO],
+    ['Carga recebida', '', P.CONCLUIDO],
+    ['Carga recebida', 'Carga a caminho do CD', P.CONCLUIDO],
+  ])('processStatus %j + collectionStatus %j -> %s', (processStatus, collectionStatus, phase) => {
+    const result = getProcessDerivedStatus({ ...base, processStatus, collectionStatus })
+    expect(result.phase).toBe(phase)
+  })
+})
+
+describe('getProcessDerivedStatus - regressao do relato: DUIMP registrada nao desembaracada', () => {
+  const FCL = {
+    category: 'FCL',
+    shippedAt: '2026-06-10',
+    eta: '2026-07-05',
+    berthedAt: '2026-07-06T08:00',
+    cargoPresenceInformedAt: '2026-07-07T10:00',
+    duimpRegisteredAt: '2026-07-08T09:00',
+    duimpStatus: 'Aguardando parametrização da DUIMP',
+    processStatus: 'Aguardando parametrização da DUIMP',
+    collectionStatus: '',
+    collectionWindows: [],
+  }
+  const CONSOLIDADO = {
+    ...FCL,
+    category: 'CONSOLIDADO',
+    ceHouse: 'CE-123',
+    parameterizedAt: '2026-07-08T15:00',
+    parameterizationChannel: 'Amarelo',
+    duimpStatus: 'Parametrizada',
+    processStatus: 'Aguardando desembaraço',
+  }
+
+  it('FCL com DUIMP aguardando parametrizacao -> Aguardando desembaraço (warn)', () => {
+    expect(deriveProcessStatus(FCL)).toBe(FCL.processStatus)
+    const result = getProcessDerivedStatus(FCL)
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO)
+    expect(result.label).toBe('Aguardando desembaraço')
+    expect(result.tone).toBe('warn')
+  })
+
+  it('CONSOLIDADO parametrizado -> Aguardando desembaraço (warn)', () => {
+    expect(deriveProcessStatus(CONSOLIDADO)).toBe(CONSOLIDADO.processStatus)
+    const result = getProcessDerivedStatus(CONSOLIDADO)
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.AGUARDANDO_DESEMBARACO)
+    expect(result.label).toBe('Aguardando desembaraço')
+    expect(result.tone).toBe('warn')
+  })
+
+  it('controle D-5: o mesmo FCL sem atracacao e com ETA futura -> EMBARCADO', () => {
+    const result = getProcessDerivedStatus({
+      ...FCL,
+      berthedAt: '',
+      berthed: false,
+      eta: '2026-08-01',
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.EMBARCADO)
   })
 })
