@@ -1,10 +1,11 @@
 import React, { createContext, useState, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useDoNotDisturb } from '../hooks/useDoNotDisturb'
 import { useFcm } from '../hooks/useFcm'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
 import { useUnsavedChanges } from './UnsavedChangesContext'
+import { buildProcessLinkState, getReturnToFromLocation } from '../utils/processNavigation'
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   listNotifications,
@@ -16,6 +17,7 @@ export const NotificationsContext = createContext(null)
 
 export function NotificationsProvider({ children }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { requestLeave } = useUnsavedChanges()
   const { profile } = useAuth()
   const [notifications, setNotifications] = useState([])
@@ -183,10 +185,11 @@ export function NotificationsProvider({ children }) {
     }
     requestLeave(() =>
       navigate('/processos', {
-        state: {
-          selectedProcessId: notification.processId,
-          detailTab: notification.targetTab ?? 'messages',
-        },
+        state: buildProcessLinkState(
+          notification.processId,
+          notification.targetTab ?? 'messages',
+          getReturnToFromLocation(location)
+        ),
       })
     )
   }

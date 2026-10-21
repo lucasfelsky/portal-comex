@@ -186,7 +186,7 @@ describe('useProcessSearch', () => {
 
     expect(screen.getByTestId('pathname').textContent).toBe('/processos')
     expect(screen.getByTestId('state').textContent).toBe(
-      JSON.stringify({ selectedProcessId: 'p1', detailTab: 'general' })
+      JSON.stringify({ selectedProcessId: 'p1', detailTab: 'general', returnTo: '/' })
     )
   })
 

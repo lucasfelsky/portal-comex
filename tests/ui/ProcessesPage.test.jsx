@@ -2152,4 +2152,55 @@ describe('ProcessesPage — deep link do detalhe (paleta Ctrl+K, notificacoes, D
     await waitFor(() => expect(activeDetailTab()).not.toBeNull())
     expect(activeDetailTab()).toHaveTextContent('Detalhes gerais')
   })
+
+  // "Voltar" do detalhe: origem do deep link (state.returnTo) ou fila.
+  function renderWithOrigin(state) {
+    return render(
+      <MemoryRouter initialEntries={[{ pathname: '/processos', state }]}>
+        <UnsavedChangesProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/" element={<div data-testid="origem">Dashboard</div>} />
+              <Route path="/processos" element={<ProcessesPage />} />
+            </Routes>
+          </ToastProvider>
+        </UnsavedChangesProvider>
+      </MemoryRouter>
+    )
+  }
+
+  it('aberto do Dashboard (returnTo "/"): Voltar retorna ao Dashboard e o botao mobile diz o destino', async () => {
+    const user = userEvent.setup()
+    renderWithOrigin({ selectedProcessId: 'p-2', detailTab: 'general', returnTo: '/' })
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    expect(screen.getByRole('button', { name: 'Voltar para Dashboard' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '‹ Voltar' }))
+
+    expect(await screen.findByTestId('origem')).toBeInTheDocument()
+  })
+
+  it('aberto sem returnTo (fila): Voltar continua indo para a fila de chegadas', async () => {
+    const user = userEvent.setup()
+    renderWithOrigin({ selectedProcessId: 'p-2', detailTab: 'general' })
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    expect(screen.getByRole('button', { name: 'Voltar para Chegadas' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '‹ Voltar' }))
+
+    await waitFor(() => expect(activeDetailTab()).toBeNull())
+    expect(screen.queryByTestId('origem')).not.toBeInTheDocument()
+  })
+
+  it('returnTo externo/malformado ("//evil.com") e ignorado: Voltar vai para a fila', async () => {
+    const user = userEvent.setup()
+    renderWithOrigin({ selectedProcessId: 'p-2', detailTab: 'general', returnTo: '//evil.com' })
+
+    await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+    await user.click(screen.getByRole('button', { name: '‹ Voltar' }))
+
+    await waitFor(() => expect(activeDetailTab()).toBeNull())
+  })
 })

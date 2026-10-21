@@ -104,6 +104,7 @@ export default function ProcessDetailView({
   onOpenProcessDetail,
   onToggleFavorite,
   onSetViewModeList,
+  backLabel = '',
   onEditMode,
   onPostReceiptEditMode,
   onCollectionStatusEditMode,
@@ -846,10 +847,10 @@ export default function ProcessDetailView({
         <button
           type="button"
           className="process-detail-mobilebar__back"
-          aria-label="Voltar para Chegadas"
+          aria-label={backLabel === 'Voltar' ? 'Voltar' : `Voltar para ${backLabel || 'Chegadas'}`}
           onClick={onSetViewModeList}
         >
-          <Icon name="chevron-left" size={22} aria-hidden="true" /> Chegadas
+          <Icon name="chevron-left" size={22} aria-hidden="true" /> {backLabel || 'Chegadas'}
         </button>
         <strong className="process-detail-mobilebar__title">
           {getProcessTitle(selectedProcess, canSeeName)}

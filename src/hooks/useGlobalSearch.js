@@ -8,11 +8,12 @@
 //   recentSearches: ['foo', 'bar', ...] (max 5, ordem: mais recente primeiro)
 //   clearRecent(): limpa o historico
 
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { searchProcesses } from '../services/processesRepository'
 import { getProcessTitle } from '../features/processes/processLabels'
 import { getQuickReadProcessStatus } from '../features/processes/processStatus'
+import { buildProcessLinkState, getReturnToFromLocation } from '../utils/processNavigation'
 
 const HISTORY_KEY = 'sq-comex:cmd-history'
 const MAX_HISTORY = 5
@@ -40,6 +41,10 @@ function writeHistory(items) {
 
 export function useGlobalSearch(canSeeName) {
   const navigate = useNavigate()
+  // Origem do clique (para o "Voltar" do detalhe); ref mantem o `searcher` estavel.
+  const location = useLocation()
+  const returnToRef = useRef('')
+  returnToRef.current = getReturnToFromLocation(location)
   const [recentSearches, setRecentSearches] = useState(readHistory)
 
   const pushRecent = useCallback((query) => {
@@ -88,7 +93,7 @@ export function useGlobalSearch(canSeeName) {
           action: () => {
             // Paleta abre o processo em Detalhes gerais (notificacoes seguem com targetTab/messages)
             navigate('/processos', {
-              state: { selectedProcessId: process.id, detailTab: 'general' },
+              state: buildProcessLinkState(process.id, 'general', returnToRef.current),
             })
           },
         }

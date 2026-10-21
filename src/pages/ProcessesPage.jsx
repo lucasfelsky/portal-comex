@@ -103,6 +103,7 @@ import {
   resolvePostReceiptImagesForSave,
 } from '../services/postReceiptImagesStorage'
 import { buildActionErrorMessage } from '../utils/errorMessages'
+import { getReturnLabel, readReturnTo } from '../utils/processNavigation'
 import { useUnsavedChanges, useUnsavedChangesGuard } from '../contexts/UnsavedChangesContext'
 import { areProcessDraftsEquivalent } from '../features/processes/processDraftDirty'
 import { applyHouseBlInput } from '../features/processes/houseBl'
@@ -530,6 +531,9 @@ export default function ProcessesPage() {
     [rawProcesses, profile?.role]
   )
   const [selectedProcessId, setSelectedProcessId] = useState(null)
+  // Tela de origem quando o detalhe foi aberto por deep link (Dashboard, paleta,
+  // notificacoes): o "Voltar" retorna a ela. Vazio = abriu pela fila -> volta a fila.
+  const [detailReturnTo, setDetailReturnTo] = useState('')
   const [draft, setDraft] = useState(emptyDraft())
   const [viewMode, setViewMode] = useState('list')
   const [detailTab, setDetailTab] = useState('general')
@@ -564,7 +568,7 @@ export default function ProcessesPage() {
       viewMode === 'detail' ||
       viewMode === 'collection-status-edit' ||
       viewMode === 'post-receipt-edit',
-    onSwipeRight: () => setViewMode(viewMode === 'detail' ? 'list' : 'detail'),
+    onSwipeRight: () => (viewMode === 'detail' ? handleBackFromDetail() : setViewMode('detail')),
   })
 
   // F15.3: transição push/pop — a lista só anima quando o usuário VOLTA de
@@ -941,6 +945,7 @@ export default function ProcessesPage() {
     setSelectedProcessId(processFromNotification.id)
     setDraft(processFromNotification)
     setViewMode('detail')
+    setDetailReturnTo(readReturnTo(location.state))
     setDetailTab(location.state?.detailTab ?? 'messages')
     setMessageDraft('')
     setMessagesError('')
@@ -1072,8 +1077,20 @@ export default function ProcessesPage() {
     })
   }
 
+  // "Voltar" do detalhe: para a tela de origem do deep link, senao para a fila.
+  function handleBackFromDetail() {
+    if (detailReturnTo) {
+      const target = detailReturnTo
+      setDetailReturnTo('')
+      navigate(target)
+      return
+    }
+    setViewMode('list')
+  }
+
   function handleSelectProcess(processId) {
     const process = processes.find((item) => item.id === processId)
+    setDetailReturnTo('')
     setSelectedProcessId(processId)
     setDraft(process ?? emptyDraft())
     setViewMode('detail')
@@ -1721,6 +1738,7 @@ export default function ProcessesPage() {
         return refreshProcesses(null)
       })()
       setDraft(refreshed[0] ?? emptyDraft())
+      setDetailReturnTo('')
       setViewMode('list')
     } catch (saveError) {
       setError(buildActionErrorMessage('Não foi possível excluir o processo.', saveError))
@@ -2062,7 +2080,8 @@ export default function ProcessesPage() {
           onOpenRelatedItemTab={handleOpenRelatedItemTab}
           onOpenProcessDetail={handleOpenProcessDetail}
           onToggleFavorite={toggleFavoriteProcess}
-          onSetViewModeList={() => setViewMode('list')}
+          onSetViewModeList={handleBackFromDetail}
+          backLabel={getReturnLabel(detailReturnTo) || (detailReturnTo ? 'Voltar' : '')}
           onEditMode={handleEditMode}
           onPostReceiptEditMode={handlePostReceiptEditMode}
           onCollectionStatusEditMode={handleCollectionStatusEditMode}
