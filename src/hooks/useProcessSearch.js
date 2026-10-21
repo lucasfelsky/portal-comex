@@ -9,12 +9,16 @@
 //
 // O CommandPalette lida com debounce internamente (200ms).
 
-import { useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { searchProcesses } from '../services/processesRepository'
+import { buildProcessLinkState, getReturnToFromLocation } from '../utils/processNavigation'
 
 export function useProcessSearch() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnToRef = useRef('')
+  returnToRef.current = getReturnToFromLocation(location)
 
   return useCallback(
     async (query) => {
@@ -33,7 +37,7 @@ export function useProcessSearch() {
           to: '/processos',
           action: () => {
             navigate('/processos', {
-              state: { selectedProcessId: process.id, detailTab: 'general' },
+              state: buildProcessLinkState(process.id, 'general', returnToRef.current),
             })
           },
         }

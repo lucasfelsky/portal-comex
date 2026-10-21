@@ -47,6 +47,7 @@ import { formatRelativeTime } from '../utils/dateFormat'
 import { listAnnouncements } from '../services/announcementsRepository'
 import { getBarStatus } from '../services/barStatusRepository'
 import { listProcesses } from '../services/processesRepository'
+import { buildProcessLinkState } from '../utils/processNavigation'
 import { getEstimatedDeliveryDate } from '../utils/deliveryForecast'
 import { formatCargoUnit, formatContainerCount, formatPalletCount } from '../utils/cargoUnits'
 import { getEffectiveLicenses } from '../features/processes/licenses'
@@ -475,7 +476,7 @@ export default function DashboardPage() {
 
   function handleSelectProcess(processId) {
     if (!processId) return
-    navigate('/processos', { state: { selectedProcessId: processId, detailTab: 'general' } })
+    navigate('/processos', { state: buildProcessLinkState(processId, 'general', '/') })
   }
 
   function retryAnnouncements() {
