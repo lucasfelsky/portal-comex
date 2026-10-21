@@ -12,7 +12,8 @@ import zlib from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
-const read = (rel) => fs.readFileSync(path.resolve(ROOT, rel), 'utf8')
+// EOL-agnostico: checkout Windows com core.autocrlf=true entrega CRLF e os regex dependem de "\n".
+const read = (rel) => fs.readFileSync(path.resolve(ROOT, rel), 'utf8').replace(/\r\n/g, '\n')
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '')
 
 const css = read('src/styles.css')
