@@ -86,7 +86,10 @@ export function useGlobalSearch(canSeeName) {
           icon: 'arrivals',
           to: '/processos',
           action: () => {
-            navigate('/processos', { state: { selectedProcessId: process.id } })
+            // Paleta abre o processo em Detalhes gerais (notificacoes seguem com targetTab/messages)
+            navigate('/processos', {
+              state: { selectedProcessId: process.id, detailTab: 'general' },
+            })
           },
         }
       })

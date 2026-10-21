@@ -4,8 +4,8 @@
 //
 // Comportamento:
 //   - searcher(query) -> [{ id, label, description, to, action }]
-//   - to: /processos com state { selectedProcessId } (deep link)
-//   - action: navegar + fechar
+//   - action: navega para /processos com state { selectedProcessId, detailTab: 'general' } (deep link)
+//   - to: /processos e so informativo (action tem precedencia no CommandPalette)
 //
 // O CommandPalette lida com debounce internamente (200ms).
 
@@ -33,7 +33,7 @@ export function useProcessSearch() {
           to: '/processos',
           action: () => {
             navigate('/processos', {
-              state: { selectedProcessId: process.id },
+              state: { selectedProcessId: process.id, detailTab: 'general' },
             })
           },
         }

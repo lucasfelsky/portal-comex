@@ -4,7 +4,7 @@
 //   - Filtragem case-insensitive em label
 //   - Filtragem por keywords
 //   - ↑/↓ navegacao entre resultados
-//   - Enter executa (navigate se 'to', action senao)
+//   - Enter executa (action tem precedencia; to se nao houver action)
 //   - Empty state quando nada bate
 //   - Click no item executa
 //   - Dois grupos fixos (refino F2): "Processos" (async, primeiro) e "Páginas e ações"
@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
-import { MemoryRouter, useNavigate } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import CommandPalette, { useCommandPalette } from '../../src/components/CommandPalette.jsx'
 import {
   UnsavedChangesProvider,
@@ -111,6 +111,93 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // Bug de producao: item de processo tem "to" E "action"; o "to" vencia e o
+  // state do deep link se perdia. Agora "action" tem precedencia.
+  describe('precedencia: action vence to', () => {
+    function LocationProbe() {
+      const location = useLocation()
+      return (
+        <>
+          <span data-testid="pathname">{location.pathname}</span>
+          <span data-testid="state">{JSON.stringify(location.state)}</span>
+        </>
+      )
+    }
+
+    function renderWithProbe(ui) {
+      return render(
+        <MemoryRouter initialEntries={['/']}>
+          <LocationProbe />
+          {ui}
+        </MemoryRouter>
+      )
+    }
+
+    it('Enter em item com to + action chama action 1x e NAO navega para to', () => {
+      const action = vi.fn()
+      const cmds = [{ id: 'both', label: 'Item ambos', to: '/processos', action }]
+      renderWithProbe(<CommandPalette open={true} commands={cmds} />)
+
+      fireEvent.keyDown(screen.getByPlaceholderText(/buscar/i), { key: 'Enter' })
+
+      expect(action).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('pathname').textContent).toBe('/')
+    })
+
+    it('clique em item com to + action chama action 1x e NAO navega para to', () => {
+      const action = vi.fn()
+      const cmds = [{ id: 'both', label: 'Item ambos', to: '/processos', action }]
+      renderWithProbe(<CommandPalette open={true} commands={cmds} />)
+
+      fireEvent.click(screen.getByText('Item ambos'))
+
+      expect(action).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('pathname').textContent).toBe('/')
+    })
+
+    it('item so com to continua navegando', () => {
+      const cmds = [{ id: 'only-to', label: 'Item so to', to: '/news' }]
+      renderWithProbe(<CommandPalette open={true} commands={cmds} />)
+
+      fireEvent.keyDown(screen.getByPlaceholderText(/buscar/i), { key: 'Enter' })
+
+      expect(screen.getByTestId('pathname').textContent).toBe('/news')
+    })
+
+    it('resultado async com to + action: Enter abre /processos com selectedProcessId e detailTab general', async () => {
+      function AsyncSearch() {
+        const navigate = useNavigate()
+        const searcher = async () => [
+          {
+            id: 'process-p1',
+            label: 'Processo Atlas',
+            group: 'Resultados',
+            to: '/processos',
+            action: () =>
+              navigate('/processos', {
+                state: { selectedProcessId: 'p1', detailTab: 'general' },
+              }),
+          },
+        ]
+        return <CommandPalette open={true} commands={COMMANDS} searcher={searcher} />
+      }
+      renderWithProbe(<AsyncSearch />)
+
+      const input = screen.getByPlaceholderText(/buscar/i)
+      fireEvent.change(input, { target: { value: 'Atlas' } })
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      await screen.findByRole('option', { name: /Processo Atlas/ })
+
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(screen.getByTestId('pathname').textContent).toBe('/processos')
+      expect(JSON.parse(screen.getByTestId('state').textContent)).toEqual({
+        selectedProcessId: 'p1',
+        detailTab: 'general',
+      })
+    })
   })
 
   it('ArrowDown / ArrowUp navegam entre resultados', () => {

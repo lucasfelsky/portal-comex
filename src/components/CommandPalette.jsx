@@ -17,7 +17,7 @@
 //   - Esc fecha
 //   - Click no backdrop fecha
 //   - ↑/↓ navegacao entre resultados
-//   - Enter executa o resultado selecionado (to= ou action=)
+//   - Enter executa o resultado selecionado (action= tem precedencia sobre to=)
 //   - Filtragem case-insensitive em label + keywords (commands estaticos)
 //   - Se `searcher` for passado, chama com debounce 200ms e junta resultados
 //
@@ -175,10 +175,10 @@ export default function CommandPalette({
   function runCommand(cmd) {
     if (!cmd) return
     requestLeave(() => {
-      if (cmd.to) {
-        navigate(cmd.to)
-      } else if (cmd.action) {
+      if (cmd.action) {
         cmd.action()
+      } else if (cmd.to) {
+        navigate(cmd.to)
       }
     })
     onClose?.()

@@ -476,7 +476,7 @@ export default function DashboardPage() {
 
   function handleSelectProcess(processId) {
     if (!processId) return
-    navigate('/processos', { state: { selectedProcessId: processId } })
+    navigate('/processos', { state: { selectedProcessId: processId, detailTab: 'general' } })
   }
 
   function retryAnnouncements() {
