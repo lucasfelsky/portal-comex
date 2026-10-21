@@ -577,6 +577,13 @@ describe('AppLayout (drawer da sidebar no tablet)', () => {
       expect(container.querySelector('.main-content')).toHaveAttribute('inert')
     })
     expect(container.querySelector('.notifications__panel')).not.toBeNull()
+    // O Escape e' escutado pelo useFocusTrap, registrado num useEffect passivo
+    // (que tambem agenda o auto-foco de 30ms). O inert aparece no commit, ANTES
+    // desse efeito: sem esperar o foco entrar no painel, o Escape pode ser
+    // disparado sem listener e se perder.
+    await waitFor(() => {
+      expect(container.querySelector('.notifications__panel').contains(document.activeElement)).toBe(true)
+    })
 
     act(() => {
       fireKeyDown('Escape')
@@ -915,11 +922,13 @@ describe('AppLayout shell F2 (refino visual)', () => {
     it('PTAX: USD | EUR com 4 casas e SEM "R$" (D6)', async () => {
       getDailyPtaxRates.mockResolvedValue({ usd: { sell: 5.4127 }, eur: { sell: 6.1234 } })
       const { container } = renderAt('/')
-      const ptax = await waitFor(() => {
-        const node = container.querySelector('.topbar__ptax')
-        expect(node).not.toBeNull()
-        return node
+      // O chip e SEMPRE renderizado (com "--" sem dado): esperar so' o elemento
+      // resolveria antes da promise do mock. Espera o VALOR de cada moeda.
+      await waitFor(() => {
+        expect(container.querySelector('.topbar__ptax')).toHaveTextContent('5,4127')
+        expect(container.querySelector('.topbar__ptax')).toHaveTextContent('6,1234')
       })
+      const ptax = container.querySelector('.topbar__ptax')
       expect(ptax).toHaveTextContent('USD')
       expect(ptax).toHaveTextContent('5,4127')
       expect(ptax).toHaveTextContent('EUR')
