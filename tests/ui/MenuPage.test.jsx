@@ -103,10 +103,10 @@ describe('MenuPage (F16.2)', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('user + Comercial vê "Fazer uma cotação" mas não Administração nem a linha IntelliQuote', () => {
+  it('user + Comercial vê "Solicitar uma cotação" mas não Administração nem a linha IntelliQuote', () => {
     renderWithRole('user', { area: 'Comercial' })
     expect(screen.getByText('Suite SQ')).toBeInTheDocument()
-    const link = screen.getByRole('link', { name: /Fazer uma cotação/ })
+    const link = screen.getByRole('link', { name: /Solicitar uma cotação/ })
     expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -116,23 +116,23 @@ describe('MenuPage (F16.2)', () => {
     expect(screen.queryByRole('link', { name: /^IntelliQuote/ })).not.toBeInTheDocument()
   })
 
-  it('admin vê só a linha IntelliQuote da Suite SQ, sem "Fazer uma cotação"', () => {
+  it('admin vê só a linha IntelliQuote da Suite SQ, sem "Solicitar uma cotação"', () => {
     renderWithRole('admin')
     expect(screen.getByText('Suite SQ')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /^IntelliQuote/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Solicitar uma cotação/ })).not.toBeInTheDocument()
   })
 
   it('admin + Comercial continua só com a linha IntelliQuote', () => {
     renderWithRole('admin', { area: 'Comercial' })
     expect(screen.getByRole('link', { name: /^IntelliQuote/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Solicitar uma cotação/ })).not.toBeInTheDocument()
   })
 
   it('logistica + Comercial NÃO vê a Suite SQ', () => {
     renderWithRole('logistica', { area: 'Comercial' })
     expect(screen.queryByText('Suite SQ')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Fazer uma cotação/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Solicitar uma cotação/ })).not.toBeInTheDocument()
   })
 
   it('user comum NÃO vê IntelliQuote', () => {

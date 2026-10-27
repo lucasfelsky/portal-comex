@@ -1,5 +1,5 @@
 // Integração com o IntelliQuote (suite SQ): URLs e regra de visibilidade do
-// botão "Fazer uma cotação" (só role `user` da área Comercial; o admin/COMEX
+// botão "Solicitar uma cotação" (só role `user` da área Comercial; o admin/COMEX
 // já tem o card IntelliQuote). Mora em src/lib (e não em src/utils) porque o
 // audit:vault trava a contagem de src/utils, src/components e src/pages.
 // Módulo puro: sem React e sem import de PNG (o logo é importado pelos

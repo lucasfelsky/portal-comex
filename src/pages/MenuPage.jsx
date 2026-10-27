@@ -1,5 +1,5 @@
 // F16.2 (redesign iOS): tela Menu do mobile — substitui o drawer lateral
-// na tab bar (perfil, tema, suporte, admin, IntelliQuote, "Fazer uma cotação"
+// na tab bar (perfil, tema, suporte, admin, IntelliQuote, "Solicitar uma cotação"
 // pro Comercial, sair). No
 // desktop a rota existe mas não é linkada (a sidebar cobre tudo).
 
@@ -145,13 +145,13 @@ export default function MenuPage() {
                 href={INTELLIQUOTE_REQUESTS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
+                aria-label="Solicitar uma cotação no IntelliQuote (abre em nova aba)"
               >
                 <span className="ios-row__icon" style={{ background: 'linear-gradient(140deg, #0a5f50, #063f38)' }}>
                   <Icon name="file" size={15} aria-hidden="true" />
                 </span>
                 <span className="ios-row__body">
-                  <span className="ios-row__title">Fazer uma cotação</span>
+                  <span className="ios-row__title">Solicitar uma cotação</span>
                   <span className="ios-row__sub">Pedidos de cotação fora do forecast</span>
                 </span>
                 <Icon name="chevron" size={14} className="ios-row__chevron" aria-hidden="true" />

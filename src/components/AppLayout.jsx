@@ -267,7 +267,7 @@ export default function AppLayout() {
         ? [
             {
               id: 'go-quote-request',
-              label: 'Fazer uma cotação',
+              label: 'Solicitar uma cotação',
               group: 'Externo',
               icon: 'external',
               keywords: ['cotação', 'cotacao', 'solicitação', 'solicitacao', 'pedido', 'intelliquote', 'quote'],
@@ -824,11 +824,11 @@ export default function AppLayout() {
                 href={INTELLIQUOTE_REQUESTS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Fazer uma cotação no IntelliQuote (abre em nova aba)"
+                aria-label="Solicitar uma cotação no IntelliQuote (abre em nova aba)"
               >
                 <span className="sidebar-intelliquote-link__body">
                   <span className="sidebar-intelliquote-link__eyebrow">IntelliQuote</span>
-                  <strong className="sidebar-intelliquote-link__title">Fazer uma cotação</strong>
+                  <strong className="sidebar-intelliquote-link__title">Solicitar uma cotação</strong>
                 </span>
                 <span className="sidebar-intelliquote-link__arrow" aria-hidden="true">
                   <ResponsiveIcon legacy="external" desk="arrow-up-right" size={16} />

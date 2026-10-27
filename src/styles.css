@@ -683,7 +683,7 @@ body {
   transform: translate(2px, -2px);
 }
 
-/* Card "Fazer uma cotação": eyebrow "IntelliQuote" sobre o título, empilhados
+/* Card "Solicitar uma cotação": eyebrow "IntelliQuote" sobre o título, empilhados
    à esquerda (a seta vai à direita via margin-left:auto). */
 .sidebar-intelliquote-link__body {
   display: flex;
@@ -9882,7 +9882,7 @@ body {
 
   /* Rodape: card do IntelliQuote (marca IQ 36 + "IntelliQuote" 14/700 +
      "Abrir cotacoes" 12 + seta 16) e botoes Tema/Sair de 40px. O card
-     "Fazer uma cotacao" (Comercial, D4) tem o mesmo estilo, sem marca. */
+     "Solicitar uma cotacao" (Comercial, D4) tem o mesmo estilo, sem marca. */
   .sidebar .sidebar__foot {
     gap: 6px;
     padding-bottom: 0;

@@ -1,5 +1,5 @@
 // Tests de src/lib/intelliquote.js: regra de visibilidade do botão
-// "Fazer uma cotação" (só role user da área Comercial; admin fica de fora
+// "Solicitar uma cotação" (só role user da área Comercial; admin fica de fora
 // porque já tem o card IntelliQuote) e URLs.
 //
 // @vitest-environment node

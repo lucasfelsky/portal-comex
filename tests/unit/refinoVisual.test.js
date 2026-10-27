@@ -981,7 +981,7 @@ describe('F2 shell - JSX/markup', () => {
     expect(layout).toContain('<ProductMark product="iq" tone="dark" size={36}')
     expect(layout).toContain('Abrir cotações')
     expect(layout).toContain('aria-label="Abrir IntelliQuote em nova aba"')
-    // D4: o card "Fazer uma cotacao" (Comercial) nao tem marca.
+    // D4: o card "Solicitar uma cotacao" (Comercial) nao tem marca.
     const quote = layout.slice(layout.indexOf('sidebar-intelliquote-link--quote'), layout.indexOf('profile?.role === \'admin\' ? ('))
     expect(quote).not.toContain('ProductMark')
   })
