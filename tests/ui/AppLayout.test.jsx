@@ -142,10 +142,10 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
     expect(screen.queryAllByText(/IntelliQuote/i)).toHaveLength(0)
   })
 
-  describe('botao "Fazer uma cotacao" (so user da area Comercial)', () => {
+  describe('botao "Solicitar uma cotacao" (so user da area Comercial)', () => {
     it('user + Comercial: ve o card com href de solicitacoes e nao ve o card admin', () => {
       renderWithRole('user', { area: 'Comercial' })
-      const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      const link = screen.getByLabelText(/Solicitar uma cotação no IntelliQuote/i)
       expect(link.tagName).toBe('A')
       expect(link).toHaveAttribute('href', 'https://intelliquote.portal-comex.com/solicitacoes')
       expect(link).toHaveAttribute('target', '_blank')
@@ -155,49 +155,49 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
 
     it('card sem logo: nome IntelliQuote em cima + titulo, sem <img>', () => {
       renderWithRole('user', { area: 'Comercial' })
-      const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      const link = screen.getByLabelText(/Solicitar uma cotação no IntelliQuote/i)
       expect(link.querySelector('img')).toBeNull()
       expect(within(link).getByText('IntelliQuote')).toBeInTheDocument()
-      expect(within(link).getByText('Fazer uma cotação')).toBeInTheDocument()
+      expect(within(link).getByText('Solicitar uma cotação')).toBeInTheDocument()
     })
 
     it('user + Importacao: NAO ve o card', () => {
       renderWithRole('user', { area: 'Importação' })
-      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+      expect(screen.queryByLabelText(/Solicitar uma cotação no IntelliQuote/i)).toBeNull()
     })
 
     it('logistica + Comercial: NAO ve o card', () => {
       renderWithRole('logistica', { area: 'Comercial' })
-      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+      expect(screen.queryByLabelText(/Solicitar uma cotação no IntelliQuote/i)).toBeNull()
     })
 
-    it('admin: vê só o card IntelliQuote, sem "Fazer uma cotação"', () => {
+    it('admin: vê só o card IntelliQuote, sem "Solicitar uma cotação"', () => {
       renderWithRole('admin')
       expect(screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeInTheDocument()
-      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+      expect(screen.queryByLabelText(/Solicitar uma cotação no IntelliQuote/i)).toBeNull()
     })
 
     it('admin + Comercial: continua só com o card IntelliQuote', () => {
       renderWithRole('admin', { area: 'Comercial' })
       expect(screen.getByLabelText(/Abrir IntelliQuote em nova aba/i)).toBeInTheDocument()
-      expect(screen.queryByLabelText(/Fazer uma cotação no IntelliQuote/i)).toBeNull()
+      expect(screen.queryByLabelText(/Solicitar uma cotação no IntelliQuote/i)).toBeNull()
     })
 
-    it('paleta: admin tem "IntelliQuote" e não tem "Fazer uma cotação"', async () => {
+    it('paleta: admin tem "IntelliQuote" e não tem "Solicitar uma cotação"', async () => {
       renderWithRole('admin')
       act(() => {
         fireKeyDown('k', { ctrlKey: true })
       })
       expect(await screen.findByRole('option', { name: /IntelliQuote/i })).toBeInTheDocument()
-      expect(screen.queryByRole('option', { name: /Fazer uma cotação/i })).toBeNull()
+      expect(screen.queryByRole('option', { name: /Solicitar uma cotação/i })).toBeNull()
     })
 
-    it('paleta: user + Comercial tem "Fazer uma cotação" e não tem "IntelliQuote (suite SQ)"', async () => {
+    it('paleta: user + Comercial tem "Solicitar uma cotação" e não tem "IntelliQuote (suite SQ)"', async () => {
       renderWithRole('user', { area: 'Comercial' })
       act(() => {
         fireKeyDown('k', { ctrlKey: true })
       })
-      expect(await screen.findByRole('option', { name: /Fazer uma cotação/i })).toBeInTheDocument()
+      expect(await screen.findByRole('option', { name: /Solicitar uma cotação/i })).toBeInTheDocument()
       expect(screen.queryByRole('option', { name: /IntelliQuote \(suite SQ\)/i })).toBeNull()
     })
 
@@ -208,7 +208,7 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
         act(() => {
           fireKeyDown('k', { ctrlKey: true })
         })
-        const option = await screen.findByRole('option', { name: /Fazer uma cotação/i })
+        const option = await screen.findByRole('option', { name: /Solicitar uma cotação/i })
         const user = userEvent.setup()
         await user.click(option)
         expect(openSpy).toHaveBeenCalledWith('https://intelliquote.portal-comex.com/solicitacoes', '_blank', 'noopener,noreferrer')
@@ -728,9 +728,9 @@ describe('AppLayout shell F2 (refino visual)', () => {
       expect(within(link).getByText('Abrir cotações')).toBeInTheDocument()
     })
 
-    it('user Comercial: card "Fazer uma cotação" continua sem marca (D4)', () => {
+    it('user Comercial: card "Solicitar uma cotação" continua sem marca (D4)', () => {
       renderAt('/', { role: 'user', area: 'Comercial' })
-      const link = screen.getByLabelText(/Fazer uma cotação no IntelliQuote/i)
+      const link = screen.getByLabelText(/Solicitar uma cotação no IntelliQuote/i)
       expect(link.querySelector('.brand-mark')).toBeNull()
       expect(link.querySelector('img')).toBeNull()
     })

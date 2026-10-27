@@ -269,15 +269,15 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('DashboardPage - sem banner "Fazer uma cotação"', () => {
+describe('DashboardPage - sem banner "Solicitar uma cotação"', () => {
   it.each([
     ['user + Comercial', { uid: 'u-1', role: 'user', area: 'Comercial', favoriteProcessIds: [] }],
     ['admin', { uid: 'u-1', role: 'admin', favoriteProcessIds: [] }],
-  ])('%s: NAO ve link para /solicitacoes nem o texto "Fazer uma cotação"', (_label, profile) => {
+  ])('%s: NAO ve link para /solicitacoes nem o texto "Solicitar uma cotação"', (_label, profile) => {
     mockUseAuth.mockReturnValue({ profile })
     const { container } = renderPage()
     expect(container.querySelector('a[href*="/solicitacoes"]')).toBeNull()
-    expect(screen.queryByText(/Fazer uma cotação/i)).toBeNull()
+    expect(screen.queryByText(/Solicitar uma cotação/i)).toBeNull()
   })
 })
 
