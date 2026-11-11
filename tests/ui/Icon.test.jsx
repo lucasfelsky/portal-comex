@@ -37,6 +37,8 @@ describe('Icon', () => {
       'truck', 'alert-triangle', 'doc', 'image', 'bell-off',
       // Refino F5a: glifos dos mock-ups de Notificacoes/Noticias/Acesso/Admin.
       'bell-slash', 'sliders', 'mail', 'clock', 'eye', 'eye-off', 'more', 'robot',
+      // Sidebar recolhivel: ladrilho do card "Solicitar uma cotacao".
+      'file-plus',
     ]
     for (const name of KNOWN) {
       const { container } = render(<Icon name={name} />)

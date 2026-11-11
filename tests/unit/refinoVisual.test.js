@@ -619,19 +619,19 @@ describe('F2 shell - CSS do mock', () => {
     expect(f2Start).toBeLessThan(css.lastIndexOf('@media (min-width: 1041px) and (prefers-reduced-motion: reduce)'))
   })
 
-  it('sidebar: 256px, padding 24/16/20, gap 28, gradiente navy, anel de foco verde', () => {
+  it('sidebar: 256px, padding 24/12/18, gap 24, gradiente navy, anel de foco verde', () => {
     expectDecls('.sidebar', [
       '--focus-ring: var(--primary)',
       'width: 256px',
-      'gap: 28px',
-      'padding: 24px 16px 20px',
+      'gap: 24px',
+      'padding: 24px 12px 18px',
     ])
     expectDecls('.sidebar', ['background: var(--sidebar-bg)'])
     expectDecls('.main-content', ['margin-left: 256px', 'width: calc(100% - 256px)'])
   })
 
-  it('marca da sidebar: ladrilho 40 + "Portal COMEX" Sora 19/700 -0.01em, gap 12, padding 0 6px', () => {
-    expectDecls('.sidebar .brand', ['gap: 12px', 'padding: 0 6px'])
+  it('marca da sidebar: ladrilho 40 + "Portal COMEX" Sora 19/700 -0.01em, gap 12, padding 0 4px', () => {
+    expectDecls('.sidebar .brand', ['gap: 12px', 'padding: 0 4px'])
     expectDecls('.sidebar .brand h1', [
       'font-family: var(--font-heading)',
       'font-size: 19px',
@@ -646,7 +646,7 @@ describe('F2 shell - CSS do mock', () => {
   it('navegacao: 44px, raio 12, gap 12, 14px/600 repouso, hover 200ms, ativo = pilula + anel', () => {
     expectDecls('.sidebar .nav__link', [
       'height: 44px',
-      'padding: 0 14px',
+      'padding: 0 12px 0 15px',
       'gap: 12px',
       'border-radius: 12px',
       'color: var(--sidebar-ink-soft)',
@@ -669,9 +669,10 @@ describe('F2 shell - CSS do mock', () => {
     )
   })
 
-  it('rodape: card IntelliQuote (raio 16, padding 12, .06/.10) e botoes Tema/Sair de 40px 13/600', () => {
+  it('rodape: card IntelliQuote (raio 16, altura 48, padding 0 12 0 5, .06/.10) e botoes Tema/Sair de 40px 13/600', () => {
     expectDecls('.sidebar .sidebar-intelliquote-link', [
-      'padding: 12px',
+      'height: 48px',
+      'padding: 0 12px 0 5px',
       'gap: 12px',
       'border-radius: 16px',
       'background: rgba(255, 255, 255, 0.06)',
@@ -687,7 +688,7 @@ describe('F2 shell - CSS do mock', () => {
     expectDecls('.sidebar .sidebar__foot', ['gap: 6px'])
     expectDecls('.sidebar .sidebar__foot .sidebar-theme-button', [
       'height: 40px',
-      'padding: 0 14px',
+      'padding: 0 0 0 16px',
       'border-radius: 12px',
       'font-size: 13px',
       'font-weight: 600',

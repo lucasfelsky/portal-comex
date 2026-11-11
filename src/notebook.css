@@ -84,7 +84,8 @@
   /* Marca numa linha, menor. */
   .sidebar .brand {
     gap: 10px;
-    padding: 0 4px;
+    height: 32px;
+    padding: 0 4px 0 8px;
   }
 
   .sidebar .sidebar__mark {
@@ -104,18 +105,25 @@
 
   .sidebar .nav__link {
     height: 38px;
-    padding: 0 12px;
+    padding: 0 12px 0 15px;
     gap: 10px;
   }
 
-  /* Card IntelliQuote (no maximo um). */
+  /* Card IntelliQuote (no maximo um). Altura fixa de 44 e recuo de 8: a marca
+     (30) fica com o centro a 36px da borda, como o trilho recolhido. */
   .sidebar .sidebar-intelliquote-link {
     margin-bottom: 4px;
-    padding: 8px 10px;
+    height: 44px;
+    padding: 0 10px 0 8px;
     gap: 10px;
   }
 
   .sidebar .sidebar-intelliquote-link__mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  .sidebar .sidebar-intelliquote-link__tile {
     width: 30px;
     height: 30px;
   }
@@ -133,12 +141,27 @@
   .sidebar .sidebar__foot .sidebar-logout-button,
   .sidebar .sidebar__foot .sidebar-support-button {
     height: 34px;
-    padding: 0 12px;
+    padding: 0 0 0 16px;
   }
 
-  /* Assinatura SQ Quimica: recuo de 12px (o mesmo dos botoes) e respiro menor. */
+  /* Assinatura SQ Quimica: recuo proprio de 12px (os botoes tem padding-left 16) e respiro menor. */
   .sidebar .sidebar__foot .sidebar-signature {
     margin: 10px 0 0 12px;
+  }
+
+  /* Sidebar recolhivel: o botao acompanha a marca de 32 (expandido na linha
+     dela, recolhido logo abaixo). Mesmas especificidades da secao SIDEBAR
+     RECOLHIVEL do styles.css; este arquivo vem depois e vence. */
+  .sidebar .sidebar__toggle {
+    top: 0;
+  }
+
+  .shell--sidebar-colapsada .sidebar .brand {
+    height: 76px;
+  }
+
+  .shell--sidebar-colapsada .sidebar .sidebar__toggle {
+    top: 38px;
   }
 
   /* Suporte redondo, so com icone (aria-label e title continuam). */
