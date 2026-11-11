@@ -9739,8 +9739,8 @@ body {
   }
 
   /* O par com [data-theme='dark'] iguala a especificidade do bloco dark de
-     chrome (0,2,0); fica so com o que NAO e dimensao (o notebook sobrescreve
-     largura/padding por ordem). */
+     chrome (0,2,0); fica so com o que NAO e dimensao (o notebook nao muda mais a
+     geometria da sidebar). */
   [data-theme='dark'] .sidebar,
   .sidebar {
     background: var(--sidebar-bg);
@@ -9801,7 +9801,11 @@ body {
     font-size: 19px;
     font-weight: 700;
     letter-spacing: -0.01em;
-    line-height: normal;
+    /* como o nome do produto na sidebar do IQ: caixa de 40 com centro em 42 */
+    line-height: 40px;
+    position: relative;
+    top: -2px;
+    white-space: nowrap;
     color: var(--toast-ink);
   }
 
@@ -10010,7 +10014,7 @@ body {
   }
 
   /* Assinatura SQ Quimica (28px) abaixo de Suporte: recuo proprio de 14px (os
-     botoes do rodape tem padding-left 16). O notebook.css a reduz nas telas baixas. */
+     botoes do rodape tem padding-left 16). */
   .sidebar .sidebar__foot .sidebar-signature {
     align-self: flex-start;
     margin: 14px 0 0 14px;
@@ -14181,7 +14185,7 @@ body {
 /* ============================================================
    SIDEBAR RECOLHIVEL — DESKTOP (>= 1041px)
    Paridade com a sidebar do IntelliQuote: botao ao lado da marca recolhe a
-   sidebar de 256 (notebook 232) para um trilho de icones de 72px. Fonte dos
+   sidebar de 256 para um trilho de icones de 72px. Fonte dos
    valores: mockup-sidebar-portal.html (aprovado). O estado vive na classe
    .shell--sidebar-colapsada (AppLayout, so >= 1041px): com especificidade
    (0,2,0) ela vence o notebook.css, que vem depois com (0,1,0).

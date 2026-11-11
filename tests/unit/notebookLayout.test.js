@@ -6,7 +6,8 @@
 //  so animation-name com os 3 keyframes nb-*, sem transition; (f) sem cor
 //  literal nem important; (g) todo var(--x) existe; (h) seletores do login
 //  comecam por .auth-screen--login e nenhum cita erp-; (i) decisoes travadas:
-//  login sem lista de recursos e sidebar compacta na query Q-SB.
+//  login sem lista de recursos e Q-SB sem regra de sidebar; (n) nenhuma query
+//  redefine a geometria da sidebar nem a margem do .main-content (paridade com o IQ).
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -257,7 +258,7 @@ describe('notebook.css - guarda de escopo', () => {
     expect(loginSelectors).toBeGreaterThan(15)
   })
 
-  it('(i) decisoes travadas: login sem lista de recursos (Q-H) e sidebar compacta (Q-SB)', () => {
+  it('(i) decisoes travadas: login sem lista de recursos (Q-H) e Q-SB sem sidebar', () => {
     const qh = mediaBlocks.filter((block) => block.prelude === Q_H)
     const feats = qh
       .flatMap((block) => block.rules)
@@ -267,9 +268,12 @@ describe('notebook.css - guarda de escopo', () => {
 
     const qsb = mediaBlocks.filter((block) => block.prelude === Q_SB)
     expect(qsb.length).toBe(1)
-    const sidebar = qsb[0].rules.find((rule) => rule.selector === '.sidebar')
-    expect(sidebar).toBeTruthy()
-    expect(sidebar.declarations).toContainEqual({ prop: 'width', value: '232px' })
+    expect(qsb[0].rules.map((rule) => rule.selector)).toContain('.support-fab .support-fab__trigger')
+    for (const rule of qsb[0].rules) {
+      expect(rule.selector, `Q-SB nao compacta a sidebar: "${rule.selector}"`).not.toMatch(
+        /\.sidebar\b|sidebar-|\.brand\b|\.nav\b|nav__link|shell--sidebar|\.main-content/,
+      )
+    }
   })
 
   it('(j) Q-D (so min-width: 1041px) tem apenas as abas do detalhe e o padding-bottom do .main-content', () => {
@@ -346,6 +350,22 @@ describe('notebook.css - guarda de escopo', () => {
     for (const rule of rules) {
       for (const decl of rule.declarations) {
         expect(decl.prop, `Q-W nao declara height em "${rule.selector}"`).not.toBe('height')
+      }
+    }
+  })
+
+  it('(n) nenhuma query do notebook.css redefine a geometria da sidebar nem a margem do .main-content (paridade com o IQ)', () => {
+    for (const rule of allRules) {
+      for (const selector of splitTopLevel(rule.selector, ',')) {
+        expect(selector, `seletor de sidebar em "${rule.media}"`).not.toMatch(/\.sidebar|shell--sidebar-colapsada/)
+      }
+      for (const decl of rule.declarations) {
+        expect(decl.value, `232px em "${rule.selector}" (${decl.prop})`).not.toContain('232px')
+      }
+      if (splitTopLevel(rule.selector, ',').includes('.main-content')) {
+        for (const decl of rule.declarations) {
+          expect(['margin-left', 'width'], `.main-content nao declara ${decl.prop}`).not.toContain(decl.prop)
+        }
       }
     }
   })
