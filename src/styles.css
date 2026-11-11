@@ -9722,15 +9722,18 @@ body {
 
 @media (min-width: 1041px) {
   /* ---------------------------------------------------------------------
-     Sidebar (Sidebar.dc.html): 256px, padding 24/16/20, gap 28, gradiente
-     navy; marca "Rota e chegada" + "Portal COMEX".
+     Sidebar (Sidebar.dc.html): 256px, padding 24/12/18, gap 24, gradiente
+     navy; marca "Rota e chegada" + "Portal COMEX". O padding lateral de 12
+     (como a sidebar do IntelliQuote) mantem os icones a 36px do centro da
+     borda tanto expandida quanto recolhida (trilho de 72px, secao
+     "SIDEBAR RECOLHIVEL").
      --------------------------------------------------------------------- */
   .sidebar {
     /* Sobre o navy o anel de foco e o verde SQ (guarda (h) do contraste). */
     --focus-ring: var(--primary);
     width: 256px;
-    gap: 28px;
-    padding: 24px 16px 20px;
+    gap: 24px;
+    padding: 24px 12px 18px;
     border: 0;
     box-shadow: none;
   }
@@ -9770,7 +9773,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0 6px;
+    padding: 0 4px;
   }
 
   .sidebar .sidebar__mark {
@@ -9804,7 +9807,8 @@ body {
 
   /* Navegacao: 44px, raio 12, gap 12, 14px. Repouso #b8ccd3/600; hover
      branco + rgba(255,255,255,.08) em 200ms; ativo = pilula menta
-     translucida + anel de 1px + texto branco 700 + icone #14dda7. */
+     translucida + anel de 1px + texto branco 700 + icone #14dda7. O recuo
+     esquerdo de 15 poe o centro do icone (18) a 36px da borda (12 + 15 + 9). */
   .sidebar .nav {
     display: flex;
     flex-direction: column;
@@ -9814,7 +9818,7 @@ body {
   .sidebar .nav__link {
     box-sizing: border-box;
     height: 44px;
-    padding: 0 14px;
+    padding: 0 12px 0 15px;
     gap: 12px;
     border: 0;
     border-radius: 12px;
@@ -9882,7 +9886,9 @@ body {
 
   /* Rodape: card do IntelliQuote (marca IQ 36 + "IntelliQuote" 14/700 +
      "Abrir cotacoes" 12 + seta 16) e botoes Tema/Sair de 40px. O card
-     "Solicitar uma cotacao" (Comercial, D4) tem o mesmo estilo, sem marca. */
+     "Solicitar uma cotacao" (Comercial, D4) tem o mesmo estilo, com um
+     ladrilho de 36 em vez da marca IQ. Card de 48 de altura com recuo de 5:
+     a marca/ladrilho fica a 36px da borda (12 + 1 + 5 + 18). */
   .sidebar .sidebar__foot {
     gap: 6px;
     padding-bottom: 0;
@@ -9892,7 +9898,9 @@ body {
   .sidebar .sidebar-intelliquote-link {
     margin-top: 0;
     margin-bottom: 8px;
-    padding: 12px;
+    box-sizing: border-box;
+    height: 48px;
+    padding: 0 12px 0 5px;
     gap: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
@@ -9970,7 +9978,7 @@ body {
     gap: 12px;
     box-sizing: border-box;
     height: 40px;
-    padding: 0 14px;
+    padding: 0 0 0 16px;
     border: 0;
     border-radius: 12px;
     background: transparent;
@@ -10001,8 +10009,8 @@ body {
     box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
   }
 
-  /* Assinatura SQ Quimica (28px) abaixo de Suporte: alinhada a 14px, o mesmo
-     recuo do texto dos botoes do rodape. O notebook.css a reduz nas telas baixas. */
+  /* Assinatura SQ Quimica (28px) abaixo de Suporte: recuo proprio de 14px (os
+     botoes do rodape tem padding-left 16). O notebook.css a reduz nas telas baixas. */
   .sidebar .sidebar__foot .sidebar-signature {
     align-self: flex-start;
     margin: 14px 0 0 14px;
@@ -14168,6 +14176,219 @@ body {
   opacity: 0.8;
   pointer-events: none;
   user-select: none;
+}
+
+/* ============================================================
+   SIDEBAR RECOLHIVEL — DESKTOP (>= 1041px)
+   Paridade com a sidebar do IntelliQuote: botao ao lado da marca recolhe a
+   sidebar de 256 (notebook 232) para um trilho de icones de 72px. Fonte dos
+   valores: mockup-sidebar-portal.html (aprovado). O estado vive na classe
+   .shell--sidebar-colapsada (AppLayout, so >= 1041px): com especificidade
+   (0,2,0) ela vence o notebook.css, que vem depois com (0,1,0).
+   Invariante: o centro de todo icone fica a 36px da borda esquerda nos dois
+   estados (a geometria expandida esta no bloco F2); o estado recolhido muda
+   so largura, texto, altura da marca e posicao do botao.
+   Movimento: 300ms (--sb-dur); o texto some em 140ms deslizando 8px; ao
+   expandir volta apos 30% da duracao, em cascata de 16ms por item (--k).
+   Movimento reduzido: as variaveis --sb-* sao sobrescritas no bloco final de
+   reduce (Roadmap 11, movimento reduzido no desktop); nao ha bloco reduce novo aqui.
+   Tablet/mobile: botao, ladrilho e dica ficam escondidos (regra base).
+   ============================================================ */
+
+@keyframes sidebar-tip-in {
+  from { opacity: 0; transform: translate(-6px, -50%); }
+  to { opacity: 1; transform: translate(0, -50%); }
+}
+
+.sidebar .sidebar-intelliquote-link__tile,
+.sidebar .sidebar__toggle,
+.sidebar-tip {
+  display: none;
+}
+
+@media (min-width: 1041px) {
+  .shell {
+    --sb-dur: 300ms;
+    --sb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --sb-fade: 140ms;
+    --sb-in: calc(var(--sb-dur) * 0.3);
+    --sb-step: 16ms;
+  }
+
+  .sidebar {
+    transition: width var(--sb-dur) var(--sb-ease);
+  }
+
+  .main-content {
+    transition:
+      margin-left var(--sb-dur) var(--sb-ease),
+      width var(--sb-dur) var(--sb-ease);
+  }
+
+  .shell--sidebar-colapsada .sidebar {
+    width: 72px;
+    scrollbar-width: none;
+  }
+
+  .shell--sidebar-colapsada .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shell--sidebar-colapsada .main-content {
+    margin-left: 72px;
+    width: calc(100% - 72px);
+  }
+
+  /* Marca: recolhida, a altura sobe para 84 e o botao desce para baixo dela. */
+  .sidebar .brand {
+    position: relative;
+    flex: none;
+    height: 40px;
+    transition: height var(--sb-dur) var(--sb-ease);
+  }
+
+  .sidebar .brand h1 {
+    white-space: nowrap;
+  }
+
+  .shell--sidebar-colapsada .sidebar .brand {
+    height: 84px;
+    align-items: flex-start;
+  }
+
+  /* Botao recolher/expandir: expandido fica na ponta direita da marca; recolhido
+     desce para baixo dela. O chevron gira 180 graus. */
+  .sidebar .sidebar__toggle {
+    position: absolute;
+    left: calc(100% - 32px);
+    top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--sidebar-ink-soft);
+    cursor: pointer;
+    transition:
+      left var(--sb-dur) var(--sb-ease),
+      top var(--sb-dur) var(--sb-ease),
+      background-color var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+
+  .sidebar .sidebar__toggle svg {
+    transform: rotate(180deg);
+    transition: transform var(--sb-dur) var(--sb-ease);
+  }
+
+  .shell--sidebar-colapsada .sidebar .sidebar__toggle {
+    left: 8px;
+    top: 46px;
+  }
+
+  .shell--sidebar-colapsada .sidebar .sidebar__toggle svg {
+    transform: none;
+  }
+
+  .sidebar .sidebar__toggle:hover {
+    background: var(--sidebar-pill-hover);
+    color: var(--sidebar-ink);
+  }
+
+  .sidebar .sidebar__toggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
+  }
+
+  /* Corte: o texto continua no DOM e e cortado pela largura do trilho. */
+  .sidebar .nav__link,
+  .sidebar .sidebar-intelliquote-link,
+  .sidebar .sidebar__foot .sidebar-theme-button,
+  .sidebar .sidebar__foot .sidebar-support-button {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* Ladrilho do card "Solicitar uma cotacao" (no lugar da marca IQ). */
+  .sidebar .sidebar-intelliquote-link__tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--brand-mark-tile-on-dark);
+    color: var(--primary);
+  }
+
+  .sidebar .sidebar__foot .sidebar-theme-button > span,
+  .sidebar .sidebar__foot .sidebar-support-button > span {
+    display: block;
+    max-width: 160px;
+    overflow: hidden;
+  }
+
+  /* Texto (expandido / entrando): volta apos 30% da duracao, em cascata. */
+  .sidebar .brand__text,
+  .sidebar .nav__link-text,
+  .sidebar .sidebar-intelliquote-link__body,
+  .sidebar .sidebar-intelliquote-link__arrow,
+  .sidebar .sidebar__foot .sidebar-theme-button > span,
+  .sidebar .sidebar__foot .sidebar-support-button > span {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--sb-fade) ease calc(var(--sb-in) + var(--k, 0) * var(--sb-step)),
+      transform var(--sb-dur) var(--sb-ease) calc(var(--k, 0) * var(--sb-step)),
+      max-width var(--sb-dur) var(--sb-ease);
+  }
+
+  /* Texto (recolhendo): some em 140ms deslizando 8px, sem atraso. */
+  .shell--sidebar-colapsada .sidebar .brand__text,
+  .shell--sidebar-colapsada .sidebar .nav__link-text,
+  .shell--sidebar-colapsada .sidebar .sidebar-intelliquote-link__body,
+  .shell--sidebar-colapsada .sidebar .sidebar-intelliquote-link__arrow,
+  .shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-theme-button > span,
+  .shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-support-button > span {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition-delay: 0ms;
+    transition-duration: var(--sb-fade);
+  }
+
+  .shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-theme-button > span,
+  .shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-support-button > span {
+    max-width: 0;
+  }
+
+  .shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-signature {
+    display: none;
+  }
+
+  /* Dica ao lado do icone (hover/foco), na raiz do .shell: fixa, para a
+     rolagem da sidebar nao cortar. Abaixo do backdrop (68) e do painel (72) das
+     notificacoes, do modal (200) e do toast. */
+  .sidebar-tip {
+    position: fixed;
+    z-index: 60;
+    display: block;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: var(--navy);
+    color: var(--sidebar-ink);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: normal;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(0, -50%);
+    animation: sidebar-tip-in 180ms var(--sb-ease) backwards;
+  }
 }
 
 /* ============================================================
@@ -22871,5 +23092,28 @@ body {
   .danger-button .spinner,
   .secondary-button .spinner {
     animation-duration: 2s;
+  }
+
+  /* Sidebar recolhivel: as variaveis de movimento caem para 1ms (paridade com
+     `.pc *` do mockup); a dica entra sem animacao. Mesma especificidade das
+     regras da F2 e da secao SIDEBAR RECOLHIVEL, e vem depois. */
+  .shell {
+    --sb-dur: 1ms;
+    --sb-fade: 1ms;
+    --sb-in: 0ms;
+    --sb-step: 0ms;
+  }
+
+  .sidebar-tip {
+    animation: none;
+  }
+
+  [data-theme='dark'] .sidebar .sidebar-intelliquote-link,
+  .sidebar .sidebar-intelliquote-link,
+  .sidebar .nav__link,
+  .sidebar .sidebar__foot .sidebar-theme-button,
+  .sidebar .sidebar__foot .sidebar-support-button,
+  .sidebar .sidebar__toggle {
+    transition-duration: 1ms;
   }
 }

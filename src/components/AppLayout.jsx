@@ -16,6 +16,7 @@ import { canSeeProcessName, getProcessTitle } from '../features/processes/proces
 import { getActiveProcess, subscribeActiveProcess } from '../utils/activeProcessContext'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed'
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext'
 import { getDailyPtaxRates } from '../services/exchangeRatesRepository'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
@@ -203,6 +204,43 @@ export default function AppLayout() {
   useEffect(() => {
     if (!isMobileViewport) setIsMobileMenuOpen(false)
   }, [isMobileViewport])
+
+  // Sidebar recolhivel (so desktop, >= 1041px): trilho de icones de 72px.
+  // A preferencia persiste (hook); no tablet/mobile a classe nunca e aplicada.
+  const { collapsed: sidebarCollapsedPref, toggle: toggleSidebar } = useSidebarCollapsed()
+  const isSidebarCollapsed = sidebarCollapsedPref && !isMobileViewport
+  const sidebarToggleLabel = isSidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'
+
+  // Dica ao lado do icone (hover/foco) so com a sidebar recolhida. Fica na raiz
+  // do .shell, com position: fixed, para a rolagem da sidebar nao cortar.
+  const [sidebarTip, setSidebarTip] = useState(null)
+  const hideSidebarTip = () => setSidebarTip(null)
+  const showSidebarTip = (text, element) => {
+    if (!isSidebarCollapsed) return
+    const rect = element.getBoundingClientRect()
+    setSidebarTip({ text, top: rect.top + rect.height / 2, left: rect.right + 12 })
+  }
+  const sidebarTipProps = (text) => ({
+    onMouseEnter: (event) => showSidebarTip(text, event.currentTarget),
+    onMouseLeave: hideSidebarTip,
+    onFocus: (event) => showSidebarTip(text, event.currentTarget),
+    onBlur: hideSidebarTip,
+    onKeyDown: (event) => {
+      if (event.key === 'Escape') hideSidebarTip()
+    },
+  })
+
+  useEffect(() => {
+    if (!isSidebarCollapsed) setSidebarTip(null)
+  }, [isSidebarCollapsed])
+
+  const hasSidebarTip = sidebarTip !== null
+  useEffect(() => {
+    if (!hasSidebarTip) return undefined
+    const handler = () => setSidebarTip(null)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [hasSidebarTip])
 
   // F16.2: o drawer aposentou no mobile (a tela /menu assumiu na tab bar) —
   // o swipe lateral que o abria (C15) saiu junto. O swipe-back de conteúdo
@@ -764,7 +802,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${isSidebarCollapsed ? ' shell--sidebar-colapsada' : ''}`}>
       {shouldRenderMobileMenu ? (
         <button
           type="button"
@@ -780,8 +818,25 @@ export default function AppLayout() {
           a sidebar — fecha a central (comportamento de overlay). */}
       {!isMobileLayout && isNotificationPanelMounted ? renderNotificationsPanel() : null}
 
+      {sidebarTip ? (
+        <div
+          key={`${sidebarTip.text}-${sidebarTip.top}`}
+          className="sidebar-tip"
+          role="presentation"
+          aria-hidden="true"
+          style={{ top: sidebarTip.top, left: sidebarTip.left }}
+        >
+          {sidebarTip.text}
+        </div>
+      ) : null}
+
       <div className="shell__frame">
-        <aside ref={sidebarRef} className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`} tabIndex={-1}>
+        <aside
+          ref={sidebarRef}
+          className={`sidebar${isMobileMenuOpen ? ' sidebar--mobile-open' : ''}`}
+          tabIndex={-1}
+          onScroll={() => setSidebarTip(null)}
+        >
           {/* Refino F2: no desktop a marca de produto "Rota e chegada" + "Portal
               COMEX" substitui o PNG da SQ + eyebrow. O chip do PNG e o eyebrow
               ficam no DOM so para o drawer do tablet (<=1040px, D3). */}
@@ -794,15 +849,33 @@ export default function AppLayout() {
               <span className="brand__eyebrow">SQ Química</span>
               <h1>Portal COMEX</h1>
             </div>
+            {!isMobileViewport ? (
+              <button
+                type="button"
+                className="sidebar__toggle"
+                aria-controls="primary-navigation"
+                aria-expanded={!isSidebarCollapsed}
+                aria-label={sidebarToggleLabel}
+                title={sidebarToggleLabel}
+                onClick={() => {
+                  setSidebarTip(null)
+                  toggleSidebar()
+                }}
+              >
+                <Icon name="chevron-right" size={16} strokeWidth={1.9} />
+              </button>
+            ) : null}
           </div>
 
           <nav id="primary-navigation" className="nav" aria-label="Principal">
-            {visibleNavigation.map((item) => (
+            {visibleNavigation.map((item, index) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) => `nav__link${isActive ? ' nav__link--active' : ''}`}
+                style={{ '--k': index }}
+                {...sidebarTipProps(item.label)}
               >
                 {item.icon ? (
                   <span className="nav__link-icon" aria-hidden="true">
@@ -817,7 +890,7 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          <div className="sidebar__foot">
+          <div className="sidebar__foot" style={{ '--k': visibleNavigation.length }}>
             {canRequestQuote(profile) ? (
               <a
                 className="sidebar-intelliquote-link sidebar-intelliquote-link--quote"
@@ -825,7 +898,11 @@ export default function AppLayout() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Solicitar uma cotação no IntelliQuote (abre em nova aba)"
+                {...sidebarTipProps('Solicitar uma cotação · IntelliQuote')}
               >
+                <span className="sidebar-intelliquote-link__tile" aria-hidden="true">
+                  <Icon name="file-plus" size={18} strokeWidth={1.9} />
+                </span>
                 <span className="sidebar-intelliquote-link__body">
                   <span className="sidebar-intelliquote-link__eyebrow">IntelliQuote</span>
                   <strong className="sidebar-intelliquote-link__title">Solicitar uma cotação</strong>
@@ -843,6 +920,7 @@ export default function AppLayout() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Abrir IntelliQuote em nova aba"
+                {...sidebarTipProps('IntelliQuote · Abrir cotações')}
               >
                 <ProductMark product="iq" tone="dark" size={36} className="sidebar-intelliquote-link__mark" />
                 <span className="sidebar-intelliquote-link__body">
@@ -861,7 +939,8 @@ export default function AppLayout() {
               className="ghost-button sidebar-theme-button"
               onClick={theme.cyclePreference}
               aria-label={`${themeLabel} — alternar tema`}
-              title="Alternar tema (automático / escuro / claro)"
+              title={isSidebarCollapsed ? undefined : 'Alternar tema (automático / escuro / claro)'}
+              {...sidebarTipProps(themeLabel)}
             >
               <Icon name={sidebarThemeIcon} size={16} strokeWidth={1.9} aria-hidden="true" />
               <span>{themeLabel}</span>
@@ -882,7 +961,8 @@ export default function AppLayout() {
                 className="ghost-button sidebar-support-button"
                 aria-label="Abrir suporte"
                 aria-haspopup="dialog"
-                title="Relatar um problema"
+                title={isSidebarCollapsed ? undefined : 'Relatar um problema'}
+                {...sidebarTipProps('Suporte')}
                 onClick={() =>
                   window.dispatchEvent(new CustomEvent(OPEN_SUPPORT_MODAL_EVENT, { detail: { view: 'form' } }))
                 }
