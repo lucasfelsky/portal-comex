@@ -630,13 +630,17 @@ describe('F2 shell - CSS do mock', () => {
     expectDecls('.main-content', ['margin-left: 256px', 'width: calc(100% - 256px)'])
   })
 
-  it('marca da sidebar: ladrilho 40 + "Portal COMEX" Sora 19/700 -0.01em, gap 12, padding 0 4px', () => {
+  it('marca da sidebar: ladrilho 40 + "Portal COMEX" Sora 19/700 -0.01em, line-height 40 e top -2 como o IQ, gap 12, padding 0 4px', () => {
     expectDecls('.sidebar .brand', ['gap: 12px', 'padding: 0 4px'])
     expectDecls('.sidebar .brand h1', [
       'font-family: var(--font-heading)',
       'font-size: 19px',
       'font-weight: 700',
       'letter-spacing: -0.01em',
+      'line-height: 40px',
+      'position: relative',
+      'top: -2px',
+      'white-space: nowrap',
     ])
     // PNG da SQ e eyebrow so no drawer do tablet.
     expectDecls('.sidebar .sidebar__logo', ['display: none'])
@@ -919,24 +923,24 @@ describe('F2 shell - CSS do mock', () => {
     expect(reduce).toContain('.notifications__panel.notifications__panel--drawer.notifications__panel--closing')
   })
 
-  it('notebook: sidebar compacta mantem 232px e o novo markup (marca, nav, rodape)', () => {
+  it('notebook: sidebar sem compactacao (paridade com o IQ); suporte compacto continua', () => {
     const nb = stripComments(read('src/notebook.css'))
-    expect(nb).toContain('width: 232px')
+    expect(nb).not.toContain('232px')
     for (const selector of [
       '.sidebar .sidebar__mark',
       '.sidebar .nav__link',
       '.sidebar .sidebar-intelliquote-link__mark',
       '.sidebar .sidebar__foot',
-      '.support-fab .support-fab__trigger',
     ]) {
-      expect(nb, selector).toContain(selector)
+      expect(nb, selector).not.toContain(selector)
     }
+    expect(nb).toContain('.support-fab .support-fab__trigger')
     // o topbar sticky nao precisa mais de padding-left nem de altura fixa
     expect(nb).not.toMatch(/\.topbar\s*\{[^}]*padding-left/)
     expect(nb).not.toMatch(/\.topbar\s*\{[^}]*(?<![-\w])height:/)
   })
 
-  it('assinatura SQ da sidebar: base discreta e centrada (drawer), 14px no desktop e 12px no notebook, sem hex', () => {
+  it('assinatura SQ da sidebar: base discreta e centrada (drawer), 14px no desktop (notebook igual), sem hex', () => {
     const base = bodyAfter(css, '\n.sidebar-signature {')
     for (const declaration of ['align-self: center', 'opacity: 0.8', 'pointer-events: none', 'user-select: none']) {
       expect(base, declaration).toContain(`${declaration};`)
@@ -944,8 +948,7 @@ describe('F2 shell - CSS do mock', () => {
     expect(/#[0-9a-fA-F]{3,8}\b/.test(base)).toBe(false)
     expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: flex-start', 'margin: 14px 0 0 14px'])
     const nb = stripComments(read('src/notebook.css'))
-    expect(nb).toMatch(/\.sidebar \.sidebar__foot \.sidebar-signature\s*\{[^}]*margin: 10px 0 0 12px;/)
-    expect(nb).not.toMatch(/\.sidebar-signature[^{]*\{[^}]*(display: none|visibility: hidden)/)
+    expect(nb).not.toMatch(/\.sidebar-signature/)
   })
 })
 

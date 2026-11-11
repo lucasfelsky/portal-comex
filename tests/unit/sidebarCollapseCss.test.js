@@ -299,26 +299,40 @@ describe('movimento reduzido no bloco final do desktop', () => {
   })
 })
 
-describe('notebook Q-SB: geometria compacta coerente com o trilho', () => {
+describe('notebook Q-SB: nao compacta a sidebar (paridade com o IQ)', () => {
   it('bloco Q-SB existe', () => {
     expect(qsbBlocks).toHaveLength(1)
   })
 
-  it('marca 32 (12 + 8 + 16 = 36), nav padding-left 15, rodape padding-left 16, card 44 com recuo 8', () => {
-    expectDecls(qsbRules, '.sidebar .brand', ['height: 32px', 'padding: 0 4px 0 8px'])
-    expectDecls(qsbRules, '.sidebar .nav__link', ['padding: 0 12px 0 15px'])
-    expectDecls(qsbRules, '.sidebar .sidebar-intelliquote-link', ['height: 44px', 'padding: 0 10px 0 8px'])
-    expectDecls(qsbRules, '.sidebar .sidebar-intelliquote-link__tile', ['width: 30px', 'height: 30px'])
-    expectDecls(qsbRules, '.sidebar .sidebar__foot .sidebar-theme-button', ['height: 34px', 'padding: 0 0 0 16px'])
-    expect(12 + 8 + 32 / 2).toBe(36)
-    expect(12 + 1 + 8 + 30 / 2).toBe(36)
+  it('nenhuma regra do Q-SB mexe na sidebar nem no estado recolhido', () => {
+    const SIDEBAR_PARTS = [
+      '.sidebar',
+      '.brand',
+      '.nav__link',
+      'sidebar-intelliquote-link',
+      'sidebar__foot',
+      'sidebar__toggle',
+      'sidebar-signature',
+      'shell--sidebar-colapsada',
+    ]
+    for (const rule of qsbRules) {
+      for (const selector of rule.selectors) {
+        for (const part of SIDEBAR_PARTS) {
+          expect(selector, `Q-SB nao compacta a sidebar: "${selector}" cita "${part}"`).not.toContain(part)
+        }
+      }
+    }
   })
 
-  it('estado recolhido: marca 76 e botao a 38px; largura 232 do expandido continua', () => {
-    expectDecls(qsbRules, '.sidebar .sidebar__toggle', ['top: 0'])
-    expectDecls(qsbRules, '.shell--sidebar-colapsada .sidebar .brand', ['height: 76px'])
-    expectDecls(qsbRules, '.shell--sidebar-colapsada .sidebar .sidebar__toggle', ['top: 38px'])
-    expectDecls(qsbRules, '.sidebar', ['width: 232px'])
+  it('nenhuma regra do Q-SB mexe na margem/largura do .main-content', () => {
+    for (const rule of qsbRules) {
+      expect(rule.selectors, 'Q-SB nao tem regra de .main-content').not.toContain('.main-content')
+    }
+  })
+
+  it('a geometria do recolhido continua vindo da secao SIDEBAR RECOLHIVEL (84px e top 46px)', () => {
+    expectDecls(sectionRules, '.shell--sidebar-colapsada .sidebar .brand', ['height: 84px'])
+    expectDecls(sectionRules, '.shell--sidebar-colapsada .sidebar .sidebar__toggle', ['top: 46px'])
   })
 })
 
