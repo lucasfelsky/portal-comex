@@ -209,11 +209,17 @@ describe('secao SIDEBAR RECOLHIVEL — DESKTOP: declaracoes', () => {
     }
   })
 
-  it('textos do rodape colapsam para max-width: 0 e a assinatura some', () => {
+  it('textos do rodape colapsam para max-width: 0; assinatura centralizada no F2 e oculta no trilho', () => {
     expectDecls(sectionRules, '.sidebar .sidebar__foot .sidebar-theme-button > span', ['max-width: 160px'])
     expectDecls(sectionRules, '.shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-theme-button > span', ['max-width: 0'])
     expectDecls(sectionRules, '.shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-support-button > span', ['max-width: 0'])
     expectDecls(sectionRules, '.shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-signature', ['display: none'])
+    // a regra recolhida da assinatura tem SO display: none
+    expect(declsFor(sectionRules, '.shell--sidebar-colapsada .sidebar .sidebar__foot .sidebar-signature')).toBe('display: none;')
+    // o centro expandido vem so do bloco F2: nenhuma regra desta secao que cite a assinatura mexe em align-self/margin
+    for (const rule of sectionRules.filter((r) => r.selectors.some((s) => s.includes('sidebar-signature')))) {
+      expect(rule.decls, rule.selectors.join(', ')).not.toMatch(/align-self|margin/)
+    }
   })
 
   it('corte do texto: overflow hidden + nowrap nos itens', () => {

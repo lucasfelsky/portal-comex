@@ -88,12 +88,18 @@ async function summaryMetrics() {
   }
 }
 
+// Relogio fixo (so' `Date`): o modal le "hoje" com `new Date()` e os cenarios sao datados relativos a
+// SCENARIO_TODAY (2026-10-02). Meio-dia local = 2026-10-02 em qualquer fuso. Sem isso, ETD/ETA dos
+// cenarios envelhecem e o resultado (avisos, categorias de "So no ERP") muda com a data real.
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 2, 12, 0, 0))
   vi.mocked(exportErpReconciliationToXlsx).mockClear()
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
