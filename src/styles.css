@@ -10013,11 +10013,12 @@ body {
     box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
   }
 
-  /* Assinatura SQ Quimica (28px) abaixo de Suporte, centralizada na sidebar;
+  /* Assinatura SQ Quimica (32px, mesmo tamanho do IntelliQuote; sem opacidade, igual ao IQ) abaixo de Suporte, centralizada na sidebar;
      14px + gap 6 = 20px abaixo do botao. */
   .sidebar .sidebar__foot .sidebar-signature {
     align-self: center;
     margin: 14px 0 0;
+    opacity: 1;
   }
 
   /* ---------------------------------------------------------------------

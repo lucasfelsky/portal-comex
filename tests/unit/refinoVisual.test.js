@@ -946,7 +946,7 @@ describe('F2 shell - CSS do mock', () => {
       expect(base, declaration).toContain(`${declaration};`)
     }
     expect(/#[0-9a-fA-F]{3,8}\b/.test(base)).toBe(false)
-    expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: center', 'margin: 14px 0 0'])
+    expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: center', 'margin: 14px 0 0', 'opacity: 1'])
     const desktopSignature = declsOf('.sidebar .sidebar__foot .sidebar-signature')
     expect(desktopSignature).not.toContain('align-self: flex-start')
     expect(desktopSignature).not.toContain('margin: 14px 0 0 14px')
@@ -993,7 +993,7 @@ describe('F2 shell - JSX/markup', () => {
     expect(quote).not.toContain('ProductMark')
   })
 
-  it('assinatura SQ: SqQuimicaLogo minusc 28px com label, depois de Suporte/Sair e no fim do rodape', () => {
+  it('assinatura SQ: SqQuimicaLogo minusc 32px com label, depois de Suporte/Sair e no fim do rodape', () => {
     expect(layout).toContain("import { ProductMark, SqQuimicaLogo } from './BrandMark'")
     const logoStart = layout.indexOf('<SqQuimicaLogo')
     const logoEnd = layout.indexOf('/>', logoStart)
@@ -1001,7 +1001,7 @@ describe('F2 shell - JSX/markup', () => {
     for (const attribute of [
       'variant="minusc"',
       "tone={isMobileViewport ? 'light' : 'dark'}",
-      'size={28}',
+      'size={32}',
       'label="SQ Química"',
       'className="sidebar-signature"',
     ]) {

@@ -978,7 +978,7 @@ export default function AppLayout() {
             <SqQuimicaLogo
               variant="minusc"
               tone={isMobileViewport ? 'light' : 'dark'}
-              size={28}
+              size={32}
               label="SQ Química"
               className="sidebar-signature"
             />
