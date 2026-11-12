@@ -940,13 +940,16 @@ describe('F2 shell - CSS do mock', () => {
     expect(nb).not.toMatch(/\.topbar\s*\{[^}]*(?<![-\w])height:/)
   })
 
-  it('assinatura SQ da sidebar: base discreta e centrada (drawer), 14px no desktop (notebook igual), sem hex', () => {
+  it('assinatura SQ da sidebar: base discreta e centrada (drawer), centralizada tambem no desktop (notebook igual), sem hex', () => {
     const base = bodyAfter(css, '\n.sidebar-signature {')
     for (const declaration of ['align-self: center', 'opacity: 0.8', 'pointer-events: none', 'user-select: none']) {
       expect(base, declaration).toContain(`${declaration};`)
     }
     expect(/#[0-9a-fA-F]{3,8}\b/.test(base)).toBe(false)
-    expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: flex-start', 'margin: 14px 0 0 14px'])
+    expectDecls('.sidebar .sidebar__foot .sidebar-signature', ['align-self: center', 'margin: 14px 0 0'])
+    const desktopSignature = declsOf('.sidebar .sidebar__foot .sidebar-signature')
+    expect(desktopSignature).not.toContain('align-self: flex-start')
+    expect(desktopSignature).not.toContain('margin: 14px 0 0 14px')
     const nb = stripComments(read('src/notebook.css'))
     expect(nb).not.toMatch(/\.sidebar-signature/)
   })

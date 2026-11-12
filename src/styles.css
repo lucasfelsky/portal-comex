@@ -10013,11 +10013,11 @@ body {
     box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--focus-ring);
   }
 
-  /* Assinatura SQ Quimica (28px) abaixo de Suporte: recuo proprio de 14px (os
-     botoes do rodape tem padding-left 16). */
+  /* Assinatura SQ Quimica (28px) abaixo de Suporte, centralizada na sidebar;
+     14px + gap 6 = 20px abaixo do botao. */
   .sidebar .sidebar__foot .sidebar-signature {
-    align-self: flex-start;
-    margin: 14px 0 0 14px;
+    align-self: center;
+    margin: 14px 0 0;
   }
 
   /* ---------------------------------------------------------------------
@@ -14172,8 +14172,8 @@ body {
 
 /* Assinatura SQ Quimica no fim da sidebar (AppLayout, abaixo de Suporte/Sair):
    decorativa e discreta. Sem link, sem foco e sem alvo de clique. No drawer
-   (<= 1040px) fica centralizada como os demais itens; no desktop, alinhada ao
-   texto dos botoes do rodape (regra no bloco F2). */
+   (<= 1040px) e no desktop fica centralizada (regra no bloco F2); oculta no
+   trilho recolhido. */
 .sidebar-signature {
   align-self: center;
   flex-shrink: 0;
