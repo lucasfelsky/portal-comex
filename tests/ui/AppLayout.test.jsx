@@ -768,13 +768,16 @@ describe('AppLayout shell F2 (refino visual)', () => {
       const isAfter = (reference, node) =>
         Boolean(reference.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
 
-      it('desktop: logo (tom dark, 28px) logo abaixo de "Suporte", como último item do rodapé', () => {
+      it('desktop: logo (tom dark, 32px) logo abaixo de "Suporte", como último item do rodapé', () => {
         const { container } = renderAt('/')
         const foot = container.querySelector('.sidebar__foot')
         const support = within(foot).getByRole('button', { name: 'Abrir suporte' })
         const logo = within(foot).getByRole('img', { name: 'SQ Química' })
         expect(logo).toHaveClass('sq-logo', 'sq-logo--minusc', 'sq-logo--dark', 'sidebar-signature')
-        expect(logo.querySelector('svg')).toHaveAttribute('width', '28')
+        expect(logo.querySelector('svg')).toHaveAttribute('width', '32')
+        expect(logo.style.getPropertyValue('--sq-logo-font')).toBe('13px')
+        expect(logo.style.getPropertyValue('--sq-logo-gap')).toBe('6px')
+        expect(logo.style.getPropertyValue('--sq-logo-word-gap')).toBe('4px')
         expect(isAfter(support, logo)).toBe(true)
         expect(foot.lastElementChild).toBe(logo)
         expect(logo).toHaveTextContent(/sqs*química/)
