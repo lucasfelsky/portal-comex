@@ -15,7 +15,7 @@
     ]
   },
   "srcComponents": {
-    "topLevel": 25,
+    "topLevel": 26,
     "_topLevel_list": [
       "ActionSheet.jsx",
       "AppLayout.jsx",
@@ -27,6 +27,7 @@
       "FilterChip.jsx",
       "Icon.jsx",
       "LoginArt.jsx",
+      "MobileHeroSlot.jsx",
       "Modal.jsx",
       "NotificationPreferencesModal.jsx",
       "NotificationsList.jsx",

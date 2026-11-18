@@ -546,9 +546,9 @@ describe('F1 marca (BrandMark.jsx)', () => {
     }
   })
 
-  it('audit de componentes conhece BrandMark.jsx (25 componentes)', () => {
+  it('audit de componentes conhece BrandMark.jsx (26 componentes, com o MobileHeroSlot do remake mobile)', () => {
     const fixture = JSON.parse(read('tests/fixtures/expected-counts.json'))
-    expect(fixture.srcComponents.topLevel).toBe(25)
+    expect(fixture.srcComponents.topLevel).toBe(26)
     expect(fixture.srcComponents._topLevel_list).toContain('BrandMark.jsx')
   })
 

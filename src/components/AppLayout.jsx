@@ -369,12 +369,28 @@ export default function AppLayout() {
     return text.charAt(0).toUpperCase() + text.slice(1)
   }, [location.pathname])
   const [isPageScrolled, setIsPageScrolled] = useState(false)
+  const mobileHeroRef = useRef(null)
   useEffect(() => {
-    const onScroll = () => setIsPageScrolled(window.scrollY > 48)
+    // Barra compacta aparece depois de 70px; o hero recebe `--m-sy` (0..160)
+    // para o parallax do CSS (so a camada mobile le essa variavel).
+    let frame = 0
+    const syncHero = () => {
+      frame = 0
+      const scrollY = Math.min(Math.max(window.scrollY, 0), 160)
+      mobileHeroRef.current?.style.setProperty('--m-sy', String(scrollY))
+    }
+    const onScroll = () => {
+      setIsPageScrolled(window.scrollY > 70)
+      if (!frame) frame = window.requestAnimationFrame(syncHero)
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
   }, [])
+  const mobileInitials = getInitials(profile?.name ?? profile?.email ?? '?')
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
   )
@@ -993,11 +1009,45 @@ export default function AppLayout() {
           >
             {mobileTitle}
           </div>
-          <div className="mobile-page-header">
-            {mobileEyebrow ? (
-              <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
-            ) : null}
-            <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+          {/* Hero navy do remake mobile. Marca/avatar so no Inicio; arte e navio
+              sao decorativos (aria-hidden) e o CSS os esconde acima de 720px.
+              #mobile-hero-extra recebe o que as telas portam (MobileHeroSlot). */}
+          <div className="mobile-page-header" ref={mobileHeroRef}>
+            <div className="mobile-page-header__inner">
+              {location.pathname === '/' ? (
+                <div className="mobile-page-header__brand" aria-hidden="true">
+                  <span className="mobile-page-header__mark">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" focusable="false">
+                      <path d="M4 18c4 0 4-6 8-6s4-6 8-6" />
+                      <circle className="mobile-page-header__mark-dot" cx="20" cy="6" r="2" />
+                    </svg>
+                  </span>
+                  <span className="mobile-page-header__wordmark">
+                    <small>SQ QUÍMICA</small>
+                    Portal COMEX
+                  </span>
+                  <span className="mobile-page-header__avatar">{mobileInitials}</span>
+                </div>
+              ) : null}
+              {mobileEyebrow ? (
+                <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
+              ) : null}
+              <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+              <div className="mobile-page-header__extra" id="mobile-hero-extra" />
+            </div>
+            <svg
+              className="mobile-page-header__art"
+              viewBox="0 0 390 230"
+              preserveAspectRatio="xMaxYMax slice"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M-10 196 C 120 188, 250 146, 410 58" />
+              <path d="M-10 214 C 140 208, 270 170, 410 96" />
+            </svg>
+            <span className="mobile-page-header__ship" aria-hidden="true">
+              <Icon name="ship" size={22} />
+            </span>
           </div>
 
           <header className="topbar">

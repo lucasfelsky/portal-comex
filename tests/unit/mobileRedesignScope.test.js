@@ -396,6 +396,22 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     }
   })
 
+  it('hero do remake (F1): regras de m-hero / mobile-page-header__(art|ship|brand) / m-sheet so na camada S (ou no reduce de 720px)', () => {
+    const HERO_ONLY = /m-hero|mobile-page-header__(art|ship|brand)|m-sheet/
+    const S_BLOCKS = ['@media (max-width: 720px)', REDUCE_720]
+    for (const block of mediaBlocks) {
+      if (S_BLOCKS.includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(HERO_ONLY)
+      }
+    }
+    // Evita falso verde: as pecas do hero existem mesmo na camada S.
+    const sSelectors = allRules.filter((rule) => rule.media === '@media (max-width: 720px)').map((rule) => rule.selector)
+    for (const piece of ['.mobile-page-header__art', '.mobile-page-header__ship', '.mobile-page-header__brand']) {
+      expect(sSelectors, piece).toContain(piece)
+    }
+  })
+
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {
     const L = '@media (max-width: 1040px)'
     const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)
