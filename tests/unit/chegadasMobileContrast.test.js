@@ -121,9 +121,21 @@ const PAIRS = [
   ['tag de status info', '--info-700', '--info-50', 4.5],
   ['tag de status danger/alerta vermelho', '--danger-700', '--danger-50', 4.5],
   ['estrela favoritada (cartao de Chegadas e favorito do Inicio)', '--warning-700', '--surface', 3],
+  // F6 (Avisos, Noticias, Menu). Os pares ja medidos acima cobrem: titulo/valor (--ink/--surface),
+  // texto e hora (--ink-soft/--surface), processo mono e tag (--primary-700/--surface e /--primary-50),
+  // chip ativo (--on-primary/--primary), "Marcar todas" (--primary-700/--primary-50), eyebrow do Menu
+  // (--ink-soft/--bg), alerta (--warning-700/--warning-50) e icone de perigo (--danger/--danger-50, 3).
+  ['"Sair" e icone do ladrilho de perigo sobre o grupo', '--danger', '--surface', 4.5],
+  ['ponto de nao lida (elemento grafico)', '--primary-700', '--surface', 3],
+  ['segmented de tema inativo dentro do grupo (fundo translucido sobre o cartao)', '--ink-soft', ['--m-fill', '--surface'], 4.5],
+  ['segmented de tema ativo e botao de acao do swipe', '--ink', '--surface', 4.5],
+  ['acao "Marcar lida" do swipe', '--on-button-primary', '--button-primary-bg', 4.5],
+  ['modo nao perturbe ativo (botao do Avisos)', '--on-primary', '--primary', 4.5],
+  ['chevron e texto de apoio das linhas do Menu', '--ink-soft', '--surface', 4.5],
+  ['tag do cartao do usuario e da noticia', '--primary-700', '--primary-50', 4.5],
 ]
 
-describe('Chegadas mobile (F4) - contraste dos pares de cor (claro e escuro)', () => {
+describe('Chegadas, Avisos, Noticias e Menu mobile (F4, F6) - contraste dos pares de cor (claro e escuro)', () => {
   it('os tokens de cada tema resolvem (sem drift entre CSS e teste)', () => {
     for (const theme of Object.values(THEMES)) {
       for (const token of ['--surface', '--bg', '--ink', '--ink-soft', '--primary', '--primary-50', '--primary-700', '--on-primary', '--m-fill']) {

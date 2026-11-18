@@ -3,12 +3,14 @@
 // pro Comercial, sair). No
 // desktop a rota existe mas não é linkada (a sidebar cobre tudo).
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import useMediaQuery from '../hooks/useMediaQuery'
 import Icon from '../components/Icon'
 import Modal from '../components/Modal'
+import { SqQuimicaLogo } from '../components/BrandMark'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
 import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
 
@@ -45,10 +47,34 @@ function getInitials(value) {
 
 const THEME_LABEL = { auto: 'Automático', dark: 'Escuro', light: 'Claro' }
 
+// Remake mobile F6: segmented de tema com as 3 preferencias que o app ja tem.
+const THEME_OPTIONS = ['auto', 'light', 'dark']
+
+// Papel legivel na tag do cartao do usuario (mesmos rotulos da topbar).
+const ROLE_LABELS = {
+  admin: 'Admin',
+  logistica: 'Logística',
+  compras: 'Compras',
+  viewer: 'Viewer',
+  user: 'User',
+}
+
+// Secoes do painel administrativo (rotas e rotulos de AdminLayout.jsx). So o admin as ve.
+const ADMIN_SHORTCUTS = [
+  { to: '/admin/usuarios', label: 'Usuários', icon: 'person' },
+  { to: '/admin/comunicados', label: 'Comunicados', icon: 'news' },
+  { to: '/admin/barra', label: 'Barra do porto', icon: 'anchor' },
+  { to: '/admin/previsoes', label: 'Previsões', icon: 'trend' },
+  { to: '/admin/lead-time', label: 'Lead time', icon: 'clock' },
+  { to: '/admin/suporte', label: 'Suporte', icon: 'help', sub: 'Chamados abertos pelos usuários' },
+]
+
 export default function MenuPage() {
   const { profile, logout } = useAuth()
   const theme = useTheme()
   const navigate = useNavigate()
+  const isMobile = useMediaQuery('(max-width: 720px)')
+  const themeLabelId = useId()
   const isAdmin = profile?.role === 'admin'
   const canQuote = canRequestQuote(profile)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
@@ -56,7 +82,142 @@ export default function MenuPage() {
   const alreadyInstalled = isStandalone()
 
   return (
-    <section className="menu-page" aria-label="Menu">
+    <section className={`menu-page${isMobile ? ' m-menu' : ''}`} aria-label="Menu">
+      {isMobile ? (
+        <>
+          <div className="m-card m-ucard m-rise">
+            <span className="m-ucard__avatar" aria-hidden="true">
+              {getInitials(profile?.name || profile?.email)}
+            </span>
+            <div className="m-ucard__body">
+              <strong>{profile?.name || 'Usuário'}</strong>
+              <small>{profile?.email}</small>
+            </div>
+            {profile?.role ? <span className="m-tag">{ROLE_LABELS[profile.role] ?? profile.role}</span> : null}
+          </div>
+
+          {isAdmin ? (
+            <>
+              <h2 className="m-gh">Administração</h2>
+              <div className="m-group m-rise" style={{ '--d': '80ms' }}>
+                {ADMIN_SHORTCUTS.map((item) => (
+                  <button key={item.to} type="button" className="m-rowi" onClick={() => navigate(item.to)}>
+                    <span className="m-rowi__lead" aria-hidden="true">
+                      <Icon name={item.icon} size={18} />
+                    </span>
+                    <span className="m-rowi__body">
+                      <span className="m-rowi__label">{item.label}</span>
+                      {item.sub ? <small className="m-rowi__sub">{item.sub}</small> : null}
+                    </span>
+                    <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          <div className="m-group m-rise" style={{ '--d': '140ms' }}>
+            <button
+              type="button"
+              className="m-rowi"
+              onClick={() => window.dispatchEvent(new Event(OPEN_SUPPORT_MODAL_EVENT))}
+            >
+              <span className="m-rowi__lead" aria-hidden="true">
+                <Icon name="help" size={18} />
+              </span>
+              <span className="m-rowi__body">
+                <span className="m-rowi__label">Suporte</span>
+                <small className="m-rowi__sub">Abrir um chamado ou dúvida</small>
+              </span>
+              <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+            </button>
+            {canQuote ? (
+              <a
+                className="m-rowi"
+                href={INTELLIQUOTE_REQUESTS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Solicitar uma cotação no IntelliQuote (abre em nova aba)"
+              >
+                <span className="m-rowi__lead" aria-hidden="true">
+                  <Icon name="file" size={18} />
+                </span>
+                <span className="m-rowi__body">
+                  <span className="m-rowi__label">Solicitar uma cotação</span>
+                  <small className="m-rowi__sub">IntelliQuote</small>
+                </span>
+                <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+              </a>
+            ) : null}
+            {isAdmin ? (
+              <a className="m-rowi" href={INTELLIQUOTE_WEB_URL} target="_blank" rel="noopener noreferrer">
+                <span className="m-rowi__lead" aria-hidden="true">
+                  <Icon name="external" size={18} />
+                </span>
+                <span className="m-rowi__body">
+                  <span className="m-rowi__label">IntelliQuote</span>
+                  <small className="m-rowi__sub">Cotações de fornecedores</small>
+                </span>
+                <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+              </a>
+            ) : null}
+          </div>
+
+          {!alreadyInstalled ? (
+            <div className="m-group m-rise" style={{ '--d': '170ms' }}>
+              <button type="button" className="m-rowi" onClick={() => setInstallGuideOpen(true)}>
+                <span className="m-rowi__lead" aria-hidden="true">
+                  <Icon name="download" size={18} />
+                </span>
+                <span className="m-rowi__body">
+                  <span className="m-rowi__label">Instalar como app</span>
+                  <small className="m-rowi__sub">Adicionar à tela inicial (e receber notificações)</small>
+                </span>
+                <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
+          <div className="m-group m-rise" style={{ '--d': '200ms' }}>
+            <div className="m-menu__label" id={themeLabelId}>
+              Tema
+            </div>
+            <div className="m-seg" role="group" aria-labelledby={themeLabelId}>
+              {THEME_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className="m-seg__btn"
+                  aria-pressed={theme.preference === option}
+                  onClick={() => theme.setPreference(option)}
+                >
+                  {THEME_LABEL[option]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="m-group m-group--danger m-rise" style={{ '--d': '240ms' }}>
+            <button type="button" className="m-rowi" onClick={logout}>
+              <span className="m-rowi__lead" aria-hidden="true">
+                <Icon name="logout" size={18} />
+              </span>
+              <span className="m-rowi__body">
+                <span className="m-rowi__label">Sair</span>
+              </span>
+            </button>
+          </div>
+
+          <SqQuimicaLogo
+            variant="minusc"
+            tone="light"
+            size={30}
+            label="SQ Química"
+            className="m-menu__signature"
+          />
+        </>
+      ) : (
+      <>
       <div className="ios-group">
         <div className="menu-profile">
           <span className="menu-profile__avatar" aria-hidden="true">
@@ -183,6 +344,8 @@ export default function MenuPage() {
           <span className="ios-row__title ios-row__title--danger">Sair</span>
         </button>
       </div>
+      </>
+      )}
 
       <Modal
         open={installGuideOpen}

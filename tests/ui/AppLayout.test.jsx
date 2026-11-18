@@ -443,9 +443,15 @@ describe('AppLayout (large title mobile no Admin)', () => {
     expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Admin')
   })
 
-  it('/notifications: large title "Notificações"', () => {
-    const { container } = renderAt('/notifications')
-    expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Notificações')
+  // Remake mobile F6: o hero de Avisos/Noticias/Menu segue o mock (eyebrow + titulo).
+  it.each([
+    ['/notifications', 'Avisos', 'Central de notificações'],
+    ['/news', 'Notícias', 'Comunicados da operação'],
+    ['/menu', 'Menu', 'Conta e ajustes'],
+  ])('%s: h1 "%s" com eyebrow "%s"', (route, title, eyebrow) => {
+    const { container } = renderAt(route)
+    expect(container.querySelector('h1.mobile-page-header__title').textContent).toBe(title)
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe(eyebrow)
   })
 })
 
@@ -1022,7 +1028,10 @@ describe('AppLayout shell F2 (refino visual)', () => {
       await waitFor(() => {
         expect(container.querySelector('.notifications__count')).toHaveTextContent('2')
       })
-      expect(screen.getByLabelText('Notificações, 2 não lidas')).toHaveClass('notifications__trigger')
+      // O sino da topbar e o link da tab bar mobile (F6) usam o mesmo padrao de nome.
+      expect(
+        within(container.querySelector('.topbar')).getByLabelText('Notificações, 2 não lidas')
+      ).toHaveClass('notifications__trigger')
     })
 
     it('usuário: nome + papel legível (Logística) e SEM e-mail nem "Sair" na topbar', () => {
@@ -1445,10 +1454,10 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       })
       const badge = container.querySelector('.mobile-bottom-nav__badge')
       expect(badge).not.toHaveClass('mobile-bottom-nav__badge--gone')
-      expect(badge).not.toHaveAttribute('aria-hidden')
-      // O nome acessivel do link continua "Notificações" (aria-label inalterado).
+      // O numero do badge e so visual: a contagem vai no nome do link (sem anuncio duplicado).
+      expect(badge).toHaveAttribute('aria-hidden', 'true')
       expect(
-        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações' })
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações, 2 não lidas' })
       ).toHaveAttribute('href', '/notifications')
 
       listNotifications.mockResolvedValue([])
@@ -1463,6 +1472,10 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       expect(gone).toHaveAttribute('aria-hidden', 'true')
       // Mantem o ultimo numero durante a animacao de saida (nunca "0").
       expect(gone).toHaveTextContent('2')
+      // Com 0 nao lidas o nome acessivel volta a ser so "Notificações".
+      expect(
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações' })
+      ).toHaveAttribute('href', '/notifications')
 
       // Chegou outra nao lida: o mesmo span volta a ficar visivel.
       listNotifications.mockResolvedValue([unread('c')])
@@ -1473,7 +1486,11 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
         const again = container.querySelector('.mobile-bottom-nav__badge')
         expect(again).not.toHaveClass('mobile-bottom-nav__badge--gone')
         expect(again).toHaveTextContent('1')
-        expect(again).not.toHaveAttribute('aria-hidden')
+        // Singular: "1 não lida" (o badge segue aria-hidden).
+        expect(again).toHaveAttribute('aria-hidden', 'true')
+        expect(
+          within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações, 1 não lida' })
+        ).toHaveAttribute('href', '/notifications')
       })
     })
   })

@@ -7,6 +7,7 @@ import NotificationsList from '../components/NotificationsList'
 import TabButton from '../components/TabButton'
 import Icon from '../components/Icon'
 import { FilterPill } from '../components/FilterChip'
+import MobileHeroSlot from '../components/MobileHeroSlot'
 import useMediaQuery from '../hooks/useMediaQuery'
 
 // Refino F5a (Notificacoes.dc.html): >= 1041px a pagina usa a arvore `nt-*` (cabecalho
@@ -14,6 +15,13 @@ import useMediaQuery from '../hooks/useMediaQuery'
 // na arvore anterior. Tema escuro: as classes `nt-*` sao novas — nao herdam os
 // overrides `[data-theme='dark'] .notifications__group/__item` do legado.
 const DESKTOP_QUERY = '(min-width: 1041px)'
+// Remake mobile F6: <= 720px a pagina usa a arvore `m-*` (hero navy, chips, lista em grupo).
+const MOBILE_QUERY = '(max-width: 720px)'
+
+// "Marcar todas como lidas" apaga os pontos em sequencia (160ms entre linhas). O
+// atraso e' limitado a 12 linhas para uma lista longa nao arrastar a animacao.
+const CLEAR_STEP_MS = 160
+const CLEAR_MAX_ROWS = 12
 
 // As mesmas 10 categorias do legado (D18), com o tipo de notificacao de cada uma.
 const NOTIFICATION_FILTERS = [
@@ -31,15 +39,18 @@ const NOTIFICATION_FILTERS = [
 
 export default function NotificationsPage() {
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const isMobile = useMediaQuery(MOBILE_QUERY)
   const { profile } = useAuth()
   const canSeeName = canSeeProcessName(profile?.role)
   // Refino F5a: o titulo do cartao de cada grupo e' o nome do processo (Notificacoes.dc.html).
   // Os processos sao carregados UMA vez (so no desktop, que e' quem mostra o nome), com a mesma
   // mascara do resto do app (getProcessTitle: so admin/logistica veem o nome nas categorias
   // restritas). Falha de carga nao quebra a lista: o titulo cai no da ultima notificacao.
+  // Mobile (F6): a linha do aviso mostra o processo em mono, com a mesma mascara.
+  const showsProcessTitles = isDesktop || isMobile
   const [processes, setProcesses] = useState([])
   useEffect(() => {
-    if (!isDesktop) return undefined
+    if (!showsProcessTitles) return undefined
     let isMounted = true
 
     async function loadProcesses() {
@@ -56,7 +67,7 @@ export default function NotificationsPage() {
     return () => {
       isMounted = false
     }
-  }, [isDesktop])
+  }, [showsProcessTitles])
   const processTitles = useMemo(() => {
     const titles = {}
     processes.forEach((process) => {
@@ -83,6 +94,31 @@ export default function NotificationsPage() {
     notificationsLoadError,
     reloadNotifications,
   } = useContext(NotificationsContext)
+
+  // Mobile: ordem (indice entre as nao lidas, mais recentes primeiro) congelada no
+  // clique de "Marcar todas". Vira o `--m-i` de cada linha: o atraso do ponto e'
+  // `--m-i` x 160ms. A leitura em si continua sendo o `markAllAsRead` do contexto.
+  const [clearingOrder, setClearingOrder] = useState(null)
+  useEffect(() => {
+    if (!clearingOrder) return undefined
+    const rows = Math.min(Object.keys(clearingOrder).length, CLEAR_MAX_ROWS + 1)
+    const timer = setTimeout(() => setClearingOrder(null), rows * CLEAR_STEP_MS + 1200)
+    return () => clearTimeout(timer)
+  }, [clearingOrder])
+
+  function handleMobileMarkAll() {
+    if (unreadNotifications.length === 0) return
+    const order = {}
+    groupedNotifications
+      .flatMap((group) => group.items)
+      .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
+      .filter((item) => !item.isRead)
+      .forEach((item, index) => {
+        order[item.id] = Math.min(index, CLEAR_MAX_ROWS)
+      })
+    setClearingOrder(order)
+    markAllAsRead()
+  }
 
   function formatRemaining(ms) {
     if (ms <= 0) return '0min'
@@ -186,6 +222,93 @@ export default function NotificationsPage() {
             onRetry={reloadNotifications}
           />
         </div>
+      </section>
+    )
+  }
+
+  if (isMobile) {
+    const unreadCount = unreadNotifications.length
+    const noUnread = unreadCount === 0
+    const heroSub = `${noUnread ? 'Tudo em dia' : `${unreadCount} ${unreadCount === 1 ? 'não lida' : 'não lidas'}`}${
+      dnd.isActive ? ` · Silenciado (${formatRemaining(dnd.remainingMs)})` : ''
+    }`
+
+    return (
+      <section className="surface notifications-page notifications-page--mobile">
+        <MobileHeroSlot>
+          <p className="m-hero-sub" role="status">
+            {heroSub}
+          </p>
+        </MobileHeroSlot>
+
+        <div className="m-chips" role="group" aria-label="Filtrar notificações">
+          {NOTIFICATION_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              className="m-chip"
+              aria-pressed={notificationFilter === filter.value}
+              onClick={() => setNotificationFilter(filter.value)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="m-nbar">
+          <button
+            type="button"
+            className="m-ghost m-nbar__all"
+            aria-disabled={noUnread ? 'true' : undefined}
+            onClick={handleMobileMarkAll}
+          >
+            <Icon name="check" size={18} strokeWidth={2.2} />
+            Marcar todas como lidas
+          </button>
+          <button
+            type="button"
+            className="m-ghost m-nbar__icon"
+            onClick={() => setIsPrefsModalOpen(true)}
+            aria-label="Preferências de notificação"
+            title="Preferências de notificação"
+          >
+            <Icon name="sliders" size={18} strokeWidth={1.9} />
+          </button>
+          <button
+            type="button"
+            className="m-ghost m-nbar__icon"
+            onClick={() => {
+              if (dnd.isActive) {
+                dnd.disable()
+              } else {
+                dnd.enableFor(60 * 60 * 1000)
+              }
+            }}
+            aria-pressed={dnd.isActive}
+            aria-label={
+              dnd.isActive
+                ? `Desativar modo não perturbe (restam ${formatRemaining(dnd.remainingMs)})`
+                : 'Ativar modo não perturbe por 1 hora'
+            }
+            title={dnd.isActive ? `Silenciado por mais ${formatRemaining(dnd.remainingMs)}` : 'Silenciar por 1 hora'}
+          >
+            <Icon name="bell-slash" size={18} strokeWidth={1.9} />
+          </button>
+        </div>
+
+        <NotificationsList
+          variant="mobile"
+          processTitles={processTitles}
+          clearingOrder={clearingOrder}
+          grouped={groupedNotifications}
+          onOpenNotification={handleOpenNotification}
+          onMarkAsRead={markOneAsRead}
+          formatRelative={formatRelativeNotificationTime}
+          formatDate={formatNotificationDate}
+          isLoading={isLoadingNotifications}
+          loadError={notificationsLoadError}
+          onRetry={reloadNotifications}
+        />
       </section>
     )
   }

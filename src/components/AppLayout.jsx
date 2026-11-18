@@ -353,13 +353,16 @@ export default function AppLayout() {
       '/': 'Visão geral',
       '/news': 'Notícias',
       '/processos': 'Chegadas',
-      '/notifications': 'Notificações',
+      '/notifications': 'Avisos',
       '/menu': 'Menu',
     }[location.pathname] ??
     adminSectionTitles[location.pathname] ??
     (location.pathname.startsWith('/admin') ? 'Admin' : meta.title)
   const mobileEyebrow = useMemo(() => {
-    if (location.pathname === '/menu') return null
+    // Remake F6: Avisos, Noticias e Menu levam o eyebrow da central (mock).
+    if (location.pathname === '/menu') return 'Conta e ajustes'
+    if (location.pathname === '/news') return 'Comunicados da operação'
+    if (location.pathname === '/notifications') return 'Central de notificações'
     if (adminSectionTitles[location.pathname]) return 'Admin'
     // Chegadas (remake F4): o eyebrow do hero e' o nome da central, nao a data.
     // Com o detalhe aberto o hero e' o do detalhe (sem o eyebrow da central).
@@ -1261,18 +1264,24 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
               }
-              aria-label="Notificações"
+              aria-label={
+                unreadNotifications.length > 0
+                  ? `Notificações, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
+                  : 'Notificações'
+              }
             >
               <Icon name="bell" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Avisos</span>
               {/* Fica montado depois da 1a nao lida: com 0 o CSS anima a saida
-                  (escala 0) e o span guarda o ultimo numero ate la. */}
+                  (escala 0) e o span guarda o ultimo numero ate la. A contagem
+                  vai no nome acessivel do link (igual ao sino do topbar); o
+                  badge e sempre aria-hidden para nao anunciar duas vezes. */}
               {mobileBadgeCount > 0 ? (
                 <span
                   className={`mobile-bottom-nav__badge${
                     unreadNotifications.length === 0 ? ' mobile-bottom-nav__badge--gone' : ''
                   }`}
-                  aria-hidden={unreadNotifications.length === 0 ? 'true' : undefined}
+                  aria-hidden="true"
                 >
                   {mobileBadgeCount}
                 </span>

@@ -504,6 +504,58 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     ).toBe(true)
   })
 
+  it('Avisos / Noticias / Menu do remake (F6): pecas m-nrow / m-nbar / m-nlist / m-news / m-tag / m-gh / m-ucard / m-seg / m-menu so na camada S (ou no reduce de 720px), com alvos de 44px e par `none`', () => {
+    const F6_ONLY = /\.m-(nrow|nbar|nlist|news|tag|gh|ucard|seg|menu|rowi__(body|sub|chev))|notifications-page--mobile|menu-page\.m-menu/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if ([S, REDUCE_720].includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(F6_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const has = (selector, prop, value) =>
+      sRules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && (value === undefined || declaration.value === value))
+      )
+
+    // Evita falso verde: as pecas existem na camada S.
+    for (const piece of ['.m-nrow__open', '.m-nrow__dot', '.m-nrow__lead', '.m-news', '.m-news__open', '.m-tag', '.m-gh', '.m-ucard', '.m-seg', '.m-seg__btn']) {
+      expect(
+        sRules.some((rule) => splitTopLevel(rule.selector, ',').includes(piece)),
+        piece
+      ).toBe(true)
+    }
+
+    // Alvos de toque >= 44px: icones da barra (44x44), "Marcar todas" (min 44), segmented de tema (min 44),
+    // "Editar" da noticia e "Ver mais" (m-ghost, height 44px na F4), linha do aviso (padding 14 + 36px de ladrilho).
+    expect(has('.m-nbar__icon', 'width', '44px')).toBe(true)
+    expect(has('.m-nbar__all', 'min-height', '44px')).toBe(true)
+    expect(has('.m-seg__btn', 'min-height', '44px')).toBe(true)
+    expect(has('.m-nrow__open', 'padding', '14px 16px')).toBe(true)
+    // O botao do titulo da noticia estica por cima do cartao inteiro (area de toque unica).
+    expect(has('.m-news__open::after', 'position', 'absolute')).toBe(true)
+    expect(has('.m-news__open::after', 'inset', '0')).toBe(true)
+    // O ponto de nao lida e' apagado so por `--read` (escala 0), com atraso por linha.
+    expect(has('.m-nrow--read .m-nrow__dot', 'transform', 'scale(0)')).toBe(true)
+    expect(has('.m-nrow--read .m-nrow__dot', 'transition-delay', 'calc(var(--m-i, 0) * 160ms)')).toBe(true)
+
+    // Par `none` do movimento reduzido para toda transicao nova (o teste (h) ja exige; aqui nomeia as pecas).
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    for (const selector of ['.m-nrow__dot', '.m-nrow__open', '.m-nrow__actions', '.m-menu .m-group > .m-rowi', '.m-seg__btn']) {
+      expect(
+        reduce.rules.some(
+          (rule) =>
+            splitTopLevel(rule.selector, ',').includes(selector) &&
+            rule.declarations.some((declaration) => declaration.prop === 'transition' && declaration.value === 'none')
+        ),
+        `${selector} transition: none`
+      ).toBe(true)
+    }
+  })
+
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {
     const L = '@media (max-width: 1040px)'
     const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)

@@ -4903,6 +4903,495 @@
     color: var(--ink);
     box-shadow: inset 0 0 0 1px var(--border);
   }
+
+  /* ---- F6: Avisos, Noticias e Menu (remake) ------------------------------
+     Pecas m-nrow / m-nbar / m-nlist / m-news / m-tag / m-gh / m-ucard / m-seg /
+     m-menu so existem na arvore mobile (JSX atras de useMediaQuery 720). */
+
+  /* Avisos: chips (m-chips da F4), barra de acoes e lista em grupo. */
+  .notifications-page--mobile {
+    gap: 14px;
+  }
+
+  .m-nbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .m-nbar__all {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: auto;
+    min-height: 44px;
+    padding: 8px 12px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .m-nbar__icon {
+    flex: none;
+    width: 44px;
+    padding: 0;
+  }
+
+  .m-nbar__icon[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  /* Sem nao lidas: continua focavel (o foco nao some ao clicar), so apagado. */
+  .m-nbar .m-ghost[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .m-nlist {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-nlist__more {
+    width: 100%;
+  }
+
+  .m-nrow {
+    position: relative;
+    overflow: hidden;
+    list-style: none;
+  }
+
+  .m-nrow + .m-nrow::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 64px;
+    right: 0;
+    z-index: 2;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .m-nrow__open {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-ios);
+  }
+
+  .m-nrow__open:active {
+    background: var(--surface-alt);
+  }
+
+  .m-nrow__open:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  /* Ponto de nao lida: sempre montado. Ao ler, `--read` o apaga; o atraso
+     (`--m-i` x 160ms) so existe quando a leitura vem do "Marcar todas". */
+  .m-nrow__dot {
+    position: absolute;
+    top: 26px;
+    left: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-700);
+    transition:
+      transform 0.4s var(--m-ease),
+      opacity 0.4s;
+  }
+
+  .m-nrow--read .m-nrow__dot {
+    transform: scale(0);
+    opacity: 0;
+    transition-delay: calc(var(--m-i, 0) * 160ms);
+  }
+
+  .m-nrow__lead {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .m-nrow__lead--danger {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-nrow__lead--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .m-nrow__body {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .m-nrow__t {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .m-nrow__t b {
+    min-width: 0;
+    font-size: 0.90625rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .m-nrow--read .m-nrow__t b {
+    font-weight: 600;
+  }
+
+  .m-nrow__t small {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+
+  .m-nrow__proc {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    color: var(--primary-700);
+  }
+
+  .m-nrow__text {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    color: var(--ink-soft);
+  }
+
+  /* Swipe "Marcar lida" (mesma mecanica de antes): so visivel com a linha aberta. */
+  .m-nrow__actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    visibility: hidden;
+    transition: visibility 0s linear 240ms;
+  }
+
+  .m-nrow--revealing > .m-nrow__actions {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .m-nrow__action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 76px;
+    border: 0;
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Noticias: cartao do mock (tag + data mono, titulo Sora, resumo). */
+  .m-news-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .m-news {
+    position: relative;
+    gap: 8px;
+  }
+
+  .m-news__cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    object-fit: cover;
+    background: var(--m-fill);
+  }
+
+  .m-news__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .m-news__meta small {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+  }
+
+  .m-news__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  /* O botao do titulo estica (::after) por cima do cartao: area de toque unica. */
+  .m-news__open {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-news__open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 22px;
+  }
+
+  .m-news__open:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  .m-news__summary {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.84375rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .m-news__edit {
+    position: relative;
+    z-index: 1;
+    justify-self: start;
+  }
+
+  /* Tag (fonte da noticia, papel do usuario). */
+  .m-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-size: 0.71875rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  /* Menu: cartao do usuario, grupos em linhas, tema em segmented, Sair e logo. */
+  .menu-page.m-menu {
+    display: grid;
+    gap: 14px;
+  }
+
+  .m-ucard {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .m-ucard__avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+  }
+
+  .m-ucard__body {
+    display: grid;
+    min-width: 0;
+  }
+
+  .m-ucard__body strong {
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .m-ucard__body small {
+    margin-top: 2px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    color: var(--ink-soft);
+  }
+
+  .m-ucard .m-tag {
+    flex: none;
+    margin-left: auto;
+  }
+
+  .m-gh {
+    margin: 0;
+    padding: 4px 6px 0;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-menu .m-group > .m-rowi {
+    position: relative;
+    font: inherit;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .m-menu .m-group > .m-rowi:active {
+    background: var(--m-fill);
+  }
+
+  .m-menu .m-group > .m-rowi:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .m-menu .m-group > .m-rowi + .m-rowi::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .m-rowi__body {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .m-rowi__sub {
+    font-size: 0.78125rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .m-rowi__chev {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-left: auto;
+    color: var(--ink-soft);
+  }
+
+  .m-menu__label {
+    padding: 14px 16px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    margin: 12px 16px 14px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--m-fill);
+  }
+
+  .m-seg__btn {
+    min-height: 44px;
+    padding: 10px 4px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  .m-seg__btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .m-seg__btn[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--m-shadow-segment);
+  }
+
+  .m-group--danger .m-rowi__label {
+    color: var(--danger);
+  }
+
+  .m-group--danger .m-rowi__lead {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-menu__signature {
+    justify-self: center;
+    padding-top: 8px;
+  }
 }
 
 /* ===== T: ajustes so de tablet (721px - 1040px) ===== */
@@ -5439,6 +5928,29 @@
   .m-hero__in {
     transform: none;
     opacity: 1;
+  }
+
+  /* Avisos, Noticias e Menu (F6): o ponto de nao lida apaga na hora (sem a
+     sequencia de 160ms), a linha nao desliza com atraso, o tema troca sem
+     transicao. A entrada escalonada (`.m-rise`) ja esta coberta acima. */
+  .m-nrow__open {
+    transition: none;
+  }
+
+  .m-nrow__dot {
+    transition: none;
+  }
+
+  .m-nrow__actions {
+    transition: none;
+  }
+
+  .m-menu .m-group > .m-rowi {
+    transition: none;
+  }
+
+  .m-seg__btn {
+    transition: none;
   }
 }
 
