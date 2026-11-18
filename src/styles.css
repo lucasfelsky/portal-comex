@@ -23164,3 +23164,12 @@ body {
     transform: translateY(18px) scale(0.98);
   }
 }
+
+@keyframes m-bump {
+  0% {
+    transform: scale(0.7);
+  }
+  100% {
+    transform: translateY(-1px) scale(1.12);
+  }
+}

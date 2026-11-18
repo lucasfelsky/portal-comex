@@ -390,6 +390,12 @@ export default function AppLayout() {
       if (frame) window.cancelAnimationFrame(frame)
     }
   }, [])
+  // Badge da tab bar: guarda o ultimo numero > 0 para a animacao de saida nao
+  // mostrar "0" (ajuste de estado durante o render, sem efeito extra).
+  const [mobileBadgeCount, setMobileBadgeCount] = useState(0)
+  if (unreadNotifications.length > 0 && unreadNotifications.length !== mobileBadgeCount) {
+    setMobileBadgeCount(unreadNotifications.length)
+  }
   const mobileInitials = getInitials(profile?.name ?? profile?.email ?? '?')
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
@@ -1255,8 +1261,17 @@ export default function AppLayout() {
             >
               <Icon name="bell" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Avisos</span>
-              {unreadNotifications.length > 0 ? (
-                <span className="mobile-bottom-nav__badge">{unreadNotifications.length}</span>
+              {/* Fica montado depois da 1a nao lida: com 0 o CSS anima a saida
+                  (escala 0) e o span guarda o ultimo numero ate la. */}
+              {mobileBadgeCount > 0 ? (
+                <span
+                  className={`mobile-bottom-nav__badge${
+                    unreadNotifications.length === 0 ? ' mobile-bottom-nav__badge--gone' : ''
+                  }`}
+                  aria-hidden={unreadNotifications.length === 0 ? 'true' : undefined}
+                >
+                  {mobileBadgeCount}
+                </span>
               ) : null}
             </NavLink>
 

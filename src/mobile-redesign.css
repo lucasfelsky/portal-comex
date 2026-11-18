@@ -2498,18 +2498,91 @@
     transform: none;
   }
 
+  /* Tab bar flutuante em pilula (remake, F2): 14px das bordas, 68px de altura,
+     5 colunas iguais e o indicador (::before) deslizando por baixo dos itens. */
   :root .mobile-bottom-nav {
-    background: var(--m-bar-bg);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border-top: 1px solid var(--m-separator);
-    box-shadow: none;
+    left: 14px;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    height: 68px;
+    padding: 6px;
+    border: 0;
+    border-radius: 28px;
+    background: var(--m-tabbar-bg);
+    -webkit-backdrop-filter: saturate(1.8) blur(22px);
+    backdrop-filter: saturate(1.8) blur(22px);
+    box-shadow: var(--m-shadow-tab);
+    transition: transform 0.5s var(--m-ios);
+  }
+
+  /* Detalhe aberto: a pilula desce para fora da tela (so `.process-detail-view`,
+     nao os modos de edicao). Soma a folga e a safe-area para sumir por inteiro. */
+  .main-content:has(.process-detail-view) > .mobile-bottom-nav {
+    transform: translateY(calc(150% + 14px + env(safe-area-inset-bottom, 0px)));
+    pointer-events: none;
+  }
+
+  /* Indicador sem JS: `--m-tab-i` (0..4) vem das regras :has abaixo. Sem aba
+     ativa (ex.: /admin) fica transparente. */
+  .mobile-bottom-nav::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 6px;
+    width: calc((100% - 12px) / 5);
+    border-radius: 22px;
+    background: var(--primary-50);
+    box-shadow: inset 0 0 0 1px var(--m-tab-ring);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(calc(var(--m-tab-i, 0) * 100%));
+    transition:
+      transform 0.55s var(--m-spring),
+      opacity 0.25s ease;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active)::before {
+    opacity: 1;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(1)) {
+    --m-tab-i: 0;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(2)) {
+    --m-tab-i: 1;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(3)) {
+    --m-tab-i: 2;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(4)) {
+    --m-tab-i: 3;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(5)) {
+    --m-tab-i: 4;
   }
 
   .mobile-bottom-nav .mobile-bottom-nav__item {
-    font-size: var(--m-fs-caption2);
-    font-weight: 600;
     gap: 3px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 22px;
+    font-size: 0.65625rem; /* 10.5px */
+    font-weight: 700;
+    transition: color 0.25s ease;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item > svg {
+    width: 23px;
+    height: 23px;
+    transition: transform 0.45s var(--m-spring);
   }
 
   .mobile-bottom-nav .mobile-bottom-nav__item--active,
@@ -2517,9 +2590,40 @@
     color: var(--primary-700);
   }
 
+  /* Icone da aba ativa sobe 1px e cresce; ao ativar, "pula" (m-bump). */
+  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg {
+    transform: translateY(-1px) scale(1.12);
+    animation: m-bump 0.5s var(--m-spring);
+  }
+
+  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). */
   .mobile-bottom-nav .mobile-bottom-nav__badge {
+    top: 6px;
+    right: auto;
+    left: calc(50% + 6px);
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 9px;
     background: var(--danger);
     color: var(--on-danger);
+    font-size: 0.625rem;
+    font-weight: 800;
+    line-height: 17px;
+    transform: none;
+    transition:
+      transform 0.35s var(--m-spring),
+      opacity 0.3s ease;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__badge--gone {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  /* A pilula (14 + 68px) nao pode cobrir o fim do conteudo. */
+  .main-content {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
   }
 
   /* 4. Chegadas -------------------------------------------------------- */
@@ -3462,6 +3566,31 @@
   .mobile-nav-compact {
     transition: none;
     transform: none;
+  }
+
+  /* Tab bar: indicador, icones, badge e a descida do detalhe sem movimento. */
+  :root .mobile-bottom-nav {
+    transition: none;
+  }
+
+  .mobile-bottom-nav::before {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item > svg {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg {
+    animation: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__badge {
+    transition: none;
   }
 }
 
