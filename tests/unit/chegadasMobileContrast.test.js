@@ -106,7 +106,7 @@ function ratio(theme, foregroundToken, backgroundSpec) {
 // flipa no tema escuro.
 const PAIRS = [
   ['linha "PO · modal", meta, chip inativo e contagem sobre o cartao', '--ink-soft', '--surface', 4.5],
-  ['eyebrows (Em andamento/Concluidos), rotulos da folha e estado vazio sobre a tela', '--ink-soft', '--bg', 4.5],
+  ['eyebrows (Em andamento/Concluidos), rotulos da folha, aviso visivel do Exportar (F7) e estado vazio sobre a tela', '--ink-soft', '--bg', 4.5],
   ['placeholder da busca e segmented inativo sobre o fundo translucido', '--ink-soft', ['--m-fill', '--bg'], 4.5],
   ['busca focada (fundo surface) e ETA', '--ink-soft', '--surface', 4.5],
   ['segmented ativo e ETA do cartao', '--ink', '--surface', 4.5],

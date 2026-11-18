@@ -198,6 +198,23 @@ export default function AppLayout() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Tab bar (mobile): o "pulo" do icone ativo (m-bump) so toca quando o usuario TROCA
+  // de aba, nunca no primeiro paint. A classe --bump entra depois da 1a mudanca de
+  // rota; antes disso o item ativo ja nasce parado.
+  const [hasNavigated, setHasNavigated] = useState(false)
+  const lastPathRef = useRef(location.pathname)
+  useEffect(() => {
+    // Compara com a rota anterior (e nao com um "primeiro render"): o StrictMode
+    // roda o efeito duas vezes no mount.
+    if (lastPathRef.current === location.pathname) return
+    lastPathRef.current = location.pathname
+    setHasNavigated(true)
+  }, [location.pathname])
+  const navItemClass = ({ isActive }) =>
+    `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}${
+      isActive && hasNavigated ? ' mobile-bottom-nav__item--bump' : ''
+    }`
+
   // Drawer da sidebar (<=1040px): se a janela cresce alem disso com o menu
   // aberto, fecha. Senao o `.main-content` ficaria `inert` sem sidebar
   // off-canvas nem backdrop. Roda so' quando o breakpoint muda.
@@ -1024,7 +1041,13 @@ export default function AppLayout() {
           {/* Hero navy do remake mobile. Marca/avatar so no Inicio; arte e navio
               sao decorativos (aria-hidden) e o CSS os esconde acima de 720px.
               #mobile-hero-extra recebe o que as telas portam (MobileHeroSlot). */}
-          <div className="mobile-page-header" ref={mobileHeroRef}>
+          {/* F7: com o detalhe aberto a camada cobre o hero; `inert` tira "Novo
+              processo" e o resto do alcance do Tab e do leitor de tela. */}
+          <div
+            className="mobile-page-header"
+            ref={mobileHeroRef}
+            inert={isProcessDetailOpen && activeProcess.viewMode === 'detail' ? '' : undefined}
+          >
             <div className="mobile-page-header__inner">
               {location.pathname === '/' ? (
                 <div className="mobile-page-header__brand" aria-hidden="true">
@@ -1228,9 +1251,7 @@ export default function AppLayout() {
             <NavLink
               to="/"
               end
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Início"
             >
               <Icon name="house" size={22} aria-hidden="true" />
@@ -1239,9 +1260,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/processos"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Chegadas"
             >
               <Icon name="ship" size={22} aria-hidden="true" />
@@ -1250,9 +1269,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/news"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Notícias"
             >
               <Icon name="news" size={22} aria-hidden="true" />
@@ -1261,9 +1278,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/notifications"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label={
                 unreadNotifications.length > 0
                   ? `Avisos, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
@@ -1290,9 +1305,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/menu"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Menu"
             >
               <Icon name="person" size={22} aria-hidden="true" />

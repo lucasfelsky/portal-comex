@@ -447,7 +447,7 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       ['.m-chip::before', '-5px 0'],
       ['.m-btn-mint::before', '-4px'],
       ['.process-list-card .chegadas-segmented__item::before', '-3px 0'],
-      ['.m-bsheet__grab::before', '-20px -60px'],
+      ['.m-bsheet__grab::before', '-9px -60px -30px'], // F7: a folha recorta o que sai; 9 + 5 + 30 = 44px
     ]
     for (const [selector, inset] of HIT_AREAS) {
       expect(has(selector, 'content', "''"), selector).toBe(true)
@@ -554,6 +554,68 @@ describe('mobile-redesign.css - guarda de escopo', () => {
         `${selector} transition: none`
       ).toBe(true)
     }
+  })
+
+  it('QA mobile (F7): ajustes medidos no navegador so na camada S (ou no reduce de 720px), com os valores que a QA exigiu', () => {
+    const F7_ONLY =
+      /\.toast-container|\.confirm-dialog__actions|\.m-bsheet__export-note|__item--bump|data-wide-value|\.sidebar:not\(\.sidebar--mobile-open\)|\.process-detail-view\.list-card > \*/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if ([S, REDUCE_720].includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`, 'ajuste F7 fora da camada S').not.toMatch(F7_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const find = (selector) =>
+      sRules.filter((rule) => splitTopLevel(rule.selector, ',').map((item) => item.replace(/\s+/g, ' ')).includes(selector))
+    const decl = (selector, prop) => {
+      const rule = find(selector).find((candidate) => candidate.declarations.some((declaration) => declaration.prop === prop))
+      return rule?.declarations.find((declaration) => declaration.prop === prop)?.value
+    }
+
+    // Camada do detalhe: nenhum filho encolhe (hero com overflow hidden e trilho de abas ficavam com 108px/12px).
+    expect(decl('.process-detail-view.list-card > *', 'flex-shrink')).toBe('0')
+    // Gaveta da sidebar fechada sai da arvore de acessibilidade/Tab (h1 "Portal COMEX" duplicava o da tela).
+    expect(decl(':root .sidebar:not(.sidebar--mobile-open)', 'visibility')).toBe('hidden')
+    // Rotulos das etapas: 10px (10,5px transbordava a coluna de ~51px a 320px).
+    expect(decl('.m-route__step span', 'font-size')).toBe('0.625rem')
+    // Toast acima da pilula (14 + 68 + 12) e acima da barra de acao do detalhe, com safe-area.
+    expect(decl('.toast-container', 'bottom')).toBe('calc(94px + env(safe-area-inset-bottom, 0px))')
+    const toastRules = sRules.filter((rule) => rule.selector.includes('.toast-container'))
+    expect(toastRules.length).toBeGreaterThanOrEqual(3)
+    for (const rule of toastRules) {
+      expect(rule.declarations.some((declaration) => declaration.prop === 'bottom' && /env\(safe-area-inset-bottom/.test(declaration.value))).toBe(true)
+    }
+    // Sparkline do KPI com valor de 3+ digitos: caixa menor, mesma proporcao do viewBox (100x28).
+    expect(decl('.m-kpi[data-wide-value] .stat-card__sparkline', 'width')).toBe('40px')
+    expect(decl('.m-kpi[data-wide-value] .stat-card__sparkline', 'height')).toBe('11px')
+    // Dialogo de confirmacao: botoes de 44px.
+    expect(
+      sRules.some(
+        (rule) =>
+          rule.selector.includes('.confirm-dialog__actions >') &&
+          rule.declarations.some((declaration) => declaration.prop === 'min-height' && declaration.value === '44px')
+      )
+    ).toBe(true)
+    // Aviso visivel do Exportar (toque nao tem hover).
+    expect(find('.m-bsheet__export-note').length).toBeGreaterThan(0)
+    // Area de toque: grab com extensao so' nos 10px de padding (a folha recorta o que sai), acoes do topo com -4px (borda de 1px).
+    expect(decl('.m-bsheet__grab::before', 'inset')).toBe('-9px -60px -30px')
+    expect(decl('.process-detail-view .process-detail-mobilebar__actions .process-detail-fav::before', 'inset')).toBe('-4px')
+
+    // m-bump so no item com --bump; no reduce o par `none` cobre o mesmo seletor.
+    const bumpSelector = '.mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg'
+    expect(decl(bumpSelector, 'animation')).toMatch(/^m-bump /)
+    expect(decl('.mobile-bottom-nav .mobile-bottom-nav__item--active > svg', 'animation')).toBeUndefined()
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    expect(
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').map((item) => item.replace(/\s+/g, ' ')).includes(bumpSelector) &&
+          rule.declarations.some((declaration) => declaration.prop === 'animation' && declaration.value === 'none')
+      )
+    ).toBe(true)
   })
 
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {

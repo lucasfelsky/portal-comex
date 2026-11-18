@@ -247,7 +247,7 @@ describe('detalhe empilhado (F5) - pilula, respiro do fim da rolagem e movimento
     expect(valueOf(overlay, 'padding')).toBe('0 16px calc(24px + var(--m-cta-h) + env(safe-area-inset-bottom, 0px))')
     expect(valueOf(overlay, '--m-cta-h')).toBe('0px')
     const one = sRules.find((rule) => /^\.process-detail-view\.list-card:has\(\.process-detail-toolbar > :is\(/.test(rule.selector))
-    const two = sRules.find((rule) => /\.primary-button ~ \.ghost-button/.test(rule.selector))
+    const two = sRules.find((rule) => /^\.process-detail-view\.list-card:has\(.*\.primary-button ~ \.ghost-button/.test(rule.selector))
     // 12 + 50 + 14 = 76 (1 linha); 12 + 50 + 8 + 50 + 14 = 134 (primario + secundarios)
     expect(valueOf([one], '--m-cta-h')).toBe('76px')
     expect(valueOf([two], '--m-cta-h')).toBe('134px')
@@ -329,7 +329,9 @@ describe('detalhe empilhado (F5) - apresentacao', () => {
       expect(valueOf(actions, 'height'), button).toBe('38px')
     }
     const actionsHit = sRules.find((rule) => /process-detail-fav::before/.test(rule.selector))
-    expect(valueOf([actionsHit], 'inset')).toBe('-3px')
+    // F7: -4px (e nao -3px): o ::before parte da borda de padding e estes dois botoes tem 1px de borda
+    // transparente, entao -3px dava so' 42px de area (medido no navegador). O "voltar" nao tem borda (-3px).
+    expect(valueOf([actionsHit], 'inset')).toBe('-4px')
     const focus = sRules.find((rule) => /process-detail-mobilebar__back:focus-visible/.test(rule.selector))
     expect(valueOf([focus], 'outline')).toBe('2px solid var(--m-hero-ink)')
   })

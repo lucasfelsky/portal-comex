@@ -90,7 +90,10 @@ export default function StatCard({
   const stroke = direction ? TREND_COLORS[direction] : TREND_COLORS.neutral
 
   return (
-    <article className={`stat-card stat-card--rich ${className}`}>
+    <article
+      className={`stat-card stat-card--rich ${className}`}
+      data-wide-value={String(value ?? '').length >= 3 ? 'true' : undefined}
+    >
       <div className="stat-card__head">
         {icon ? (
           <span className="stat-card__icon" aria-hidden="true">

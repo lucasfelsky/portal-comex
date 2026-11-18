@@ -346,6 +346,11 @@ export default function ChegadasFilterSheet({
               {exportLabel}
             </button>
           ) : null}
+          {/* Em toque nao ha hover: o aviso do title/aria-label precisa de texto
+              visivel quando o rascunho difere do que esta aplicado. */}
+          {onExport && isDraftDirty ? (
+            <p className="m-bsheet__export-note">Exporta a lista atual; filtros ainda não aplicados não entram.</p>
+          ) : null}
         </div>
       </div>
     </>,

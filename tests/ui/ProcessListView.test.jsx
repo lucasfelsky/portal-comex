@@ -1405,6 +1405,19 @@ describe('ProcessListView — "Exportar" no rodapé da folha de filtros (mobile,
     )
   })
 
+  it('F7: o aviso de rascunho não aplicado é texto visível (toque não tem hover), só com rascunho diferente do aplicado', async () => {
+    const user = userEvent.setup()
+    renderView({ filteredProcesses: STAGED })
+    const dialog = await openFilterSheet(user)
+    const note = /Exporta a lista atual; filtros ainda não aplicados não entram./
+    expect(within(dialog).queryByText(note)).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    expect(within(dialog).getByText(note)).toBeVisible()
+    // Voltar ao que está aplicado apaga o aviso.
+    await user.click(within(dialog).getByRole('button', { name: 'Todos' }))
+    expect(within(dialog).queryByText(note)).not.toBeInTheDocument()
+  })
+
   it('o clique exporta exatamente as linhas visíveis (e não o evento nem a lista crua da página)', async () => {
     const user = userEvent.setup()
     const onExport = vi.fn()

@@ -2255,6 +2255,14 @@
     --font-mono: var(--m-font-brand-mono);
   }
 
+  /* F7: a gaveta da sidebar nao abre em <=720px (a topbar com o botao "Abrir
+     menu" e' escondida), mas ficava na arvore de acessibilidade e no Tab (so'
+     opacity 0): o h1 "Portal COMEX" dela duplicava o h1 da tela. Fechada, sai
+     de ambos, como no tablet. */
+  :root .sidebar:not(.sidebar--mobile-open) {
+    visibility: hidden;
+  }
+
   /* PR 3: aviso "ERP" com alvo de toque de 44px. O chip tem 20x28: o `::before`
      o amplia para 44x44 sem mexer no layout (mesmo padrao de `.chip-remove`). */
   .process-detail-view .erp-hint__chip,
@@ -2589,9 +2597,14 @@
     color: var(--primary-700);
   }
 
-  /* Icone da aba ativa sobe 1px e cresce; ao ativar, "pula" (m-bump). */
+  /* Icone da aba ativa sobe 1px e cresce; ao TROCAR de aba, "pula" (m-bump).
+     O `--bump` so entra depois da 1a mudanca de rota (AppLayout): no primeiro
+     paint o icone ja nasce parado. */
   .mobile-bottom-nav .mobile-bottom-nav__item--active > svg {
     transform: translateY(-1px) scale(1.12);
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg {
     animation: m-bump 0.5s var(--m-spring);
   }
 
@@ -2623,6 +2636,30 @@
   /* A pilula (14 + 68px) nao pode cobrir o fim do conteudo. */
   .main-content {
     padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* F7: o toast (canto inferior direito, 16px) cobria a ponta direita da pilula.
+     Sobe para 12px acima dela (14 + 68 + 12) e acompanha a safe-area. Com o
+     detalhe aberto a pilula sai e quem fica embaixo e' a barra de acao (76px
+     de 1 linha, 134px de 2); sem `:has()` vale o valor da pilula. */
+  .toast-container {
+    bottom: calc(94px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.process-detail-view .process-detail-toolbar > :is(.primary-button, .ghost-button:not(.process-detail-fav)))
+    .toast-container {
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.process-detail-view .process-detail-toolbar > .primary-button ~ .ghost-button:not(.process-detail-fav))
+    .toast-container {
+    bottom: calc(146px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* F7: "Excluir"/"Confirmar" (danger/primary) do dialogo de confirmacao tinham
+     38px (padding 9px + linha 1,3); os botoes passam a 44px. */
+  .confirm-dialog__actions > :is(.primary-button, .danger-button, .ghost-button, .secondary-button) {
+    min-height: 44px;
   }
 
   /* 4. Chegadas -------------------------------------------------------- */
@@ -3368,10 +3405,12 @@
     touch-action: none;
   }
 
+  /* Area de toque de 44px: a camada rola (overflow-y: auto) e corta o que sai
+     da folha, entao a extensao para cima fica nos 10px de padding (F7). */
   .m-bsheet__grab::before {
     content: '';
     position: absolute;
-    inset: -20px -60px;
+    inset: -9px -60px -30px;
   }
 
   .m-bsheet__grab:focus-visible {
@@ -3492,6 +3531,16 @@
   .m-bsheet__export:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  /* Aviso visivel (toque nao tem hover): so aparece com rascunho != aplicado. */
+  .m-bsheet__export-note {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: var(--m-fs-footnote);
+    line-height: 1.35;
+    text-align: center;
+    color: var(--ink-soft);
   }
 
   /* Detalhe empilhado (F5): a barra do topo e' a linha de cima do hero navy
@@ -3619,11 +3668,13 @@
     line-height: 1;
   }
 
+  /* inset -4px: o pseudo-elemento parte da borda de padding e estes botoes tem
+     1px de borda (transparente), entao -3px dava so' 42px (F7). */
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav::before,
   .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger::before {
     content: '';
     position: absolute;
-    inset: -3px;
+    inset: -4px;
   }
 
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav--on {
@@ -3918,6 +3969,14 @@
     overflow: visible;
   }
 
+  /* F7: com valor de 3+ digitos (Sora 34px, ~63px) a linha de 64px nao cabe ao
+     lado dele nos cards de ~138px (320px de tela) e encostava nos digitos. A
+     caixa encolhe mantendo a proporcao 100x28 do viewBox. */
+  .m-kpi[data-wide-value] .stat-card__sparkline {
+    width: 40px;
+    height: 11px;
+  }
+
   .m-kpi .stat-card__sparkline-area {
     display: none;
   }
@@ -4184,8 +4243,10 @@
     animation: m-ring 2.4s ease-out infinite;
   }
 
+  /* 10px (era 10,5): a 320px cada coluna tem ~51px e "Embarque"/"Liberacao"
+     passavam da coluna (F7, medido no navegador). */
   .m-route__step span {
-    font-size: 0.65625rem;
+    font-size: 0.625rem;
     font-weight: 600;
     color: var(--m-route-text);
     text-align: center;
@@ -4582,6 +4643,14 @@
 
   .process-detail-view.list-card::-webkit-scrollbar {
     display: none;
+  }
+
+  /* F7: a camada tem altura fixa (inset: 0) e e' uma coluna flex; os filhos com
+     overflow != visible (hero `overflow: hidden`, trilho de abas `overflow: auto`)
+     tem min-height 0 e ENCOLHIAM para caber na viewport (hero cortado em 108px,
+     abas com 12px). Nada aqui encolhe: quem rola e' a camada. */
+  .process-detail-view.list-card > * {
+    flex-shrink: 0;
   }
 
   .process-detail-view.list-card[data-m-leaving='true'] {
@@ -5782,7 +5851,8 @@
     transition: none;
   }
 
-  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg {
+  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg,
+  .mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg {
     animation: none;
   }
 

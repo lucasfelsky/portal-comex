@@ -506,6 +506,23 @@ describe('AppLayout (header oculto com o detalhe do processo aberto)', () => {
     expect(container.querySelector('h1.mobile-page-header__title')).not.toBeNull()
   })
 
+  it('F7: com o detalhe aberto o hero (e o "Novo processo" portado nele) fica inert; volta ao normal com a lista', () => {
+    const { container } = renderProcessos()
+    const header = container.querySelector('.mobile-page-header')
+    expect(header).not.toHaveAttribute('inert')
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'detail' })
+    )
+    expect(header).toHaveAttribute('inert')
+    act(() => setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'list' }))
+    expect(header).not.toHaveAttribute('inert')
+    // Edicao nao cobre o hero com camada: continua acessivel.
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'edit' })
+    )
+    expect(header).not.toHaveAttribute('inert')
+  })
+
   it('edicao (formulario): sem eyebrow, mas o titulo continua h1 (so o detalhe cede o h1 ao hero)', () => {
     const { container } = renderProcessos()
     act(() =>
@@ -1435,6 +1452,27 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       expect(mobileCss).toMatch(
         /\.mobile-bottom-nav:has\(> \.mobile-bottom-nav__item--active\)::before\s*\{\s*opacity:\s*1;/
       )
+    })
+
+    it('F7: o "pulo" do icone (--bump) nao roda no primeiro paint e so entra ao trocar de aba', async () => {
+      stubViewport(720)
+      const user = userEvent.setup()
+      const { container } = renderAt('/')
+      const nav = container.querySelector('nav.mobile-bottom-nav')
+      expect(nav.querySelector('.mobile-bottom-nav__item--active')).not.toBeNull()
+      expect(nav.querySelector('.mobile-bottom-nav__item--bump')).toBeNull()
+
+      await user.click(within(nav).getByRole('link', { name: 'Notícias' }))
+      const active = nav.querySelector('.mobile-bottom-nav__item--active')
+      expect(active).toHaveAttribute('aria-label', 'Notícias')
+      expect(active).toHaveClass('mobile-bottom-nav__item--bump')
+      // So o item ativo recebe: o anterior perde as duas classes.
+      expect(nav.querySelectorAll('.mobile-bottom-nav__item--bump')).toHaveLength(1)
+      // O CSS so anima com --bump (o item ativo parado nao tem animation).
+      expect(mobileCss).toMatch(
+        /\.mobile-bottom-nav \.mobile-bottom-nav__item--active\.mobile-bottom-nav__item--bump > svg\s*\{\s*animation:\s*m-bump/
+      )
+      expect(mobileCss).not.toMatch(/__item--active > svg\s*\{[^}]*animation:\s*m-bump/)
     })
 
     it('badge: sem nao lidas na sessao nao existe nenhum badge', async () => {
