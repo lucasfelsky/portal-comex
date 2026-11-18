@@ -11,6 +11,7 @@
 //     icon="dashboard"     // opcional
 //     note="+4 vs. semana passada"   // opcional (Dashboard desktop, F4a)
 //     noteTone="success"             // success | warning | danger | neutral
+//     announceFinalValue             // opcional (mobile): leitor de tela le o valor final
 //   />
 //
 // Trend positive (up + cor primary-700), trend negative (down + danger).
@@ -75,6 +76,7 @@ export default function StatCard({
   note,
   noteTone = 'neutral',
   className = '',
+  announceFinalValue = false,
 }) {
   // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
   // o navegador pinta a area do sparkline de PRETO (default do fill).
@@ -111,7 +113,16 @@ export default function StatCard({
         ) : null}
       </div>
 
-      <strong className="stat-card__value">{displayedValue}</strong>
+      {/* Opt-in (mobile): enquanto o contador anima, o numero parcial sai da arvore
+          de acessibilidade e o valor final fica disponivel em texto estavel. */}
+      {announceFinalValue && displayedValue !== value ? (
+        <strong className="stat-card__value">
+          <span aria-hidden="true">{displayedValue}</span>
+          <span className="m-sr">{value}</span>
+        </strong>
+      ) : (
+        <strong className="stat-card__value">{displayedValue}</strong>
+      )}
 
       {sparklineData ? (
         <svg
@@ -126,8 +137,14 @@ export default function StatCard({
               <stop offset="100%" stopColor={stroke} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <path d={sparklineData.areaPath} fill={`url(#${gradientId})`} />
           <path
+            className="stat-card__sparkline-area"
+            d={sparklineData.areaPath}
+            fill={`url(#${gradientId})`}
+          />
+          <path
+            className="stat-card__sparkline-line"
+            pathLength="1"
             d={sparklineData.linePath}
             fill="none"
             stroke={stroke}

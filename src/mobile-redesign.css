@@ -95,6 +95,7 @@
     --m-shadow-card: 0 1px 2px rgba(0, 65, 83, 0.06), 0 8px 20px rgba(0, 65, 83, 0.07);
     --m-shadow-tab: 0 12px 32px rgba(0, 50, 65, 0.22), 0 2px 6px rgba(0, 50, 65, 0.1);
     --m-tab-ring: rgba(20, 221, 167, 0.35);
+    --m-mint-glow: rgba(20, 221, 167, 0.55);
     --m-sheet-radius: 28px;
     --m-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --m-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -2998,6 +2999,591 @@
     margin: 0;
   }
 
+  /* 10b. Inicio do remake (F3). O titulo e a barra moram no hero; o heading
+     vazio so serve de irmao para os seletores acima. -------------------- */
+  .surface > .dashboard-heading:empty {
+    display: none;
+  }
+
+  .surface:has(> .m-kpis) {
+    gap: 14px;
+  }
+
+  /* Chip da Barra do Rio (portado para o hero): o ponto pulsa so com a barra
+     aberta (tom ok). */
+  .m-barra {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 12px 0 0;
+    padding: 8px 12px 8px 10px;
+    border-radius: var(--radius-full);
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
+    font-size: 0.78125rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .m-barra b {
+    font-weight: 800;
+    color: var(--m-hero-ink);
+  }
+
+  .m-barra--ok b {
+    color: var(--primary);
+  }
+
+  .m-barra--warn b {
+    color: var(--m-hero-haz);
+  }
+
+  .m-barra--danger b {
+    color: var(--m-hero-fire);
+  }
+
+  .m-dot {
+    position: relative;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-route-ink);
+  }
+
+  .m-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: inherit;
+  }
+
+  .m-barra--ok .m-dot {
+    background: var(--primary);
+  }
+
+  .m-barra--warn .m-dot {
+    background: var(--m-hero-haz);
+  }
+
+  .m-barra--danger .m-dot {
+    background: var(--m-hero-fire);
+  }
+
+  .m-barra--ok .m-dot::after {
+    animation: m-ping 2.2s ease-out infinite;
+  }
+
+  /* Entrada escalonada (`--d` por bloco; os KPIs por posicao). O seletor
+     composto vence o fade do `<Stagger>` (0,1,0). */
+  .m-rise,
+  .stagger__item.m-rise {
+    animation: m-rise 0.6s var(--m-ease) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .m-kpis > .m-rise:nth-child(1) {
+    --d: 80ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(2) {
+    --d: 150ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(3) {
+    --d: 220ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(4) {
+    --d: 290ms;
+  }
+
+  /* KPIs 2x2: rotulo mono, valor Sora 34, alerta em vermelho com ponto. O
+     seletor (0,3,0) empata com o legado de L e vem depois. */
+  .dashboard-stat-row .stat-card.m-kpi {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    padding: 14px 14px 12px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  .dashboard-stat-row .stat-card.m-kpi:hover {
+    transform: none;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .dashboard-stat-row .stat-card.m-kpi {
+    border: 1px solid var(--border);
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__head {
+    position: relative;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__label {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__value {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-large-title);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dashboard-stat-row .m-kpi.m-kpi--alert .stat-card__value {
+    color: var(--danger);
+  }
+
+  .m-kpi--alert .stat-card__head::before {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+
+  .m-kpi--alert .stat-card__head::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: m-ping 2.2s ease-out infinite;
+  }
+
+  /* Sparkline real (so em "Chegadas na semana"): so a linha, que se desenha. A
+     caixa de 64x18 mantem a proporcao do viewBox (100x28), entao o traco de
+     2px nao deforma. */
+  .m-kpi .stat-card__sparkline {
+    position: absolute;
+    right: 12px;
+    bottom: 15px;
+    width: 64px;
+    height: 18px;
+    margin: 0;
+    overflow: visible;
+  }
+
+  .m-kpi .stat-card__sparkline-area {
+    display: none;
+  }
+
+  .m-kpi .stat-card__sparkline-line {
+    stroke: var(--primary-700);
+    stroke-width: 3.1;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: m-draw 1.2s var(--m-ease) 0.35s forwards;
+  }
+
+  /* Cartoes do Inicio. */
+  .m-card {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .m-card {
+    border: 1px solid var(--border);
+  }
+
+  .m-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-card__head h3 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+  }
+
+  .m-card__count {
+    padding: 4px 8px;
+    border-radius: var(--radius-full);
+    background: var(--m-fill);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  /* Favoritos: o primeiro com trajeto e fatos; os demais compactos. */
+  .m-fav-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .m-fav {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .m-fav--compact {
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-fav__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-fav__id {
+    min-width: 0;
+  }
+
+  .m-fav__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 0.96875rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  /* Alvo de toque de 44px sem mudar o layout (mesmo padrao de .chip-remove). */
+  .m-fav__open {
+    position: relative;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-fav__open::before {
+    content: '';
+    position: absolute;
+    inset: -13px -4px;
+  }
+
+  .m-fav__po {
+    margin: 5px 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.71875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-soft);
+  }
+
+  .m-fav--compact .m-fav__po {
+    margin-top: 0;
+  }
+
+  .m-fav__star {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: -6px -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--warning);
+    cursor: pointer;
+  }
+
+  .m-fav__star::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+
+  .m-fav__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .m-fav__tags:empty {
+    display: none;
+  }
+
+  /* Trajeto: trilho, navio e 5 etapas. `--m-route-p` (0..1) e animada por
+     transition quando `.m-route--go` entra. */
+  .m-route {
+    --m-route-p: 0;
+    --m-route-off: var(--m-fill-strong);
+    --m-route-text: var(--ink-soft);
+    --m-route-now: var(--ink);
+    position: relative;
+    margin-top: 30px;
+    transition: --m-route-p 1.5s var(--m-ease) 0.3s;
+  }
+
+  .m-route--go {
+    --m-route-p: var(--m-route-to);
+  }
+
+  .m-route__track {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 5px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--m-route-off);
+  }
+
+  .m-route__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--m-route-p) * 100%);
+    border-radius: 2px;
+    background: var(--primary);
+  }
+
+  .m-route__ship {
+    position: absolute;
+    top: -24px;
+    left: calc(10% + var(--m-route-p) * 80%);
+    width: 26px;
+    height: 26px;
+    margin-left: -13px;
+    color: var(--primary-700);
+  }
+
+  .m-route__ship svg {
+    width: 26px;
+    height: 26px;
+    animation: m-bob 3.4s ease-in-out infinite;
+  }
+
+  .m-route__ship::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: -2px;
+    height: 3px;
+    border-radius: 3px;
+    background: radial-gradient(closest-side, var(--m-mint-glow), transparent);
+    animation: m-foam 3.4s ease-in-out infinite;
+  }
+
+  .m-route__steps {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-route__step {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .m-route__step i {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--m-route-off);
+    border-radius: 50%;
+    background: var(--surface);
+  }
+
+  .m-route__step--done i,
+  .m-route__step--now i {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+
+  .m-route__step--now i {
+    animation: m-ring 2.4s ease-out infinite;
+  }
+
+  .m-route__step span {
+    font-size: 0.65625rem;
+    font-weight: 600;
+    color: var(--m-route-text);
+    text-align: center;
+  }
+
+  .m-route__step--now span {
+    font-weight: 800;
+    color: var(--m-route-now);
+  }
+
+  /* Fatos ETD / ETA / Porto em mono. */
+  .m-fav__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-fav__facts > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .m-fav__facts dt {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-fav__facts dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .m-fav__facts dd.m-fav__fact--warn {
+    color: var(--warning-700);
+  }
+
+  /* Marcas de carga (flame / hazard / box). */
+  .m-marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    vertical-align: 0.12em;
+    white-space: nowrap;
+  }
+
+  .m-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: var(--neutral-50);
+    color: var(--neutral-700);
+  }
+
+  .m-mark b {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-mark--fire {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-mark--haz {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .m-marks--hero .m-mark {
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
+  }
+
+  .m-marks--hero .m-mark--fire {
+    color: var(--m-hero-fire);
+  }
+
+  .m-marks--hero .m-mark--haz {
+    color: var(--m-hero-haz);
+  }
+
+  /* Comunicados recentes. */
+  .m-ann {
+    display: grid;
+    gap: 4px;
+  }
+
+  .m-ann + .m-ann {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-ann__when {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-ann__title {
+    font-family: var(--font-heading);
+    font-size: 0.90625rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+  }
+
+  .m-ann p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
   /* 13. Admin (item 11) --------------------------------------------------- */
   /* T2: 0,3,0 vence `.admin-user-row--button div > span`. */
   .admin-user-list .admin-user-row--button .admin-user-row__uid {
@@ -3591,6 +4177,44 @@
 
   .mobile-bottom-nav .mobile-bottom-nav__badge {
     transition: none;
+  }
+
+  /* Inicio: entrada, ponto da barra, ponto do alerta, linha da sparkline e
+     trajeto sem movimento. A linha ja nasce desenhada e o navio ja nasce na
+     etapa atual. */
+  .m-rise,
+  .stagger__item.m-rise {
+    animation: none;
+  }
+
+  .m-barra--ok .m-dot::after {
+    animation: none;
+  }
+
+  .m-kpi--alert .stat-card__head::after {
+    animation: none;
+  }
+
+  .m-kpi .stat-card__sparkline-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .m-route {
+    transition: none;
+    --m-route-p: var(--m-route-to);
+  }
+
+  .m-route__ship svg {
+    animation: none;
+  }
+
+  .m-route__ship::after {
+    animation: none;
+  }
+
+  .m-route__step--now i {
+    animation: none;
   }
 }
 

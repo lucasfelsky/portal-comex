@@ -23173,3 +23173,69 @@ body {
     transform: translateY(-1px) scale(1.12);
   }
 }
+
+/* ============================================================
+   Remake mobile F3 (Inicio): marcas de carga, texto so para leitor de tela,
+   @property do trajeto e @keyframes m-*. APPEND-ONLY. Os @keyframes e a
+   @property moram aqui (mobile-redesign.css nao aceita at-rule); so a camada S
+   os usa. `.m-marks` nasce escondido e a camada S o revela. O par `none` do
+   movimento reduzido fica no bloco reduce de 720px de mobile-redesign.css.
+   ============================================================ */
+.m-marks {
+  display: none;
+}
+
+.m-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@property --m-route-p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes m-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes m-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-2.5px) rotate(2deg);
+  }
+}
+
+@keyframes m-foam {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scaleX(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(1.1);
+  }
+}
+
+@keyframes m-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--m-mint-glow);
+  }
+  100% {
+    box-shadow: 0 0 0 11px transparent;
+  }
+}

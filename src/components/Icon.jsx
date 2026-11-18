@@ -163,6 +163,20 @@ const ICONS = {
       <path d="M22 2 11 13" />
     </>
   ),
+  // Marcas de carga do remake mobile (glifos do mock-up): inflamavel, perigosa, volume.
+  flame: <path d="M12 3c1 3.2 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.5 1.6 1.5 2.2 2 2.2 0-3-1-5 1-8z" />,
+  hazard: (
+    <>
+      <path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z" />
+      <path d="M12 8v5M12 16v.1" />
+    </>
+  ),
+  box: (
+    <>
+      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
+      <path d="M3 7l9 4 9-4M12 11v10" />
+    </>
+  ),
   chevron: <path d="m9 6 6 6-6 6" />,
   'chevron-left': <path d="m15 6-6 6 6 6" />,
   'chevron-right': <path d="m9 6 6 6-6 6" />,
