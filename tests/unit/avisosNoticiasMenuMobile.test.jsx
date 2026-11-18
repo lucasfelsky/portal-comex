@@ -586,7 +586,7 @@ describe('F6 Menu (mobile)', () => {
       'Barra do porto': '/admin/barra',
       Previsões: '/admin/previsoes',
       'Lead time': '/admin/lead-time',
-      'Suporte Chamados abertos pelos usuários': '/admin/suporte',
+      'Chamados de suporte Chamados abertos pelos usuários': '/admin/suporte',
     }
     const groupEl = container.querySelector('.m-group')
     expect(within(groupEl).getAllByRole('button')).toHaveLength(6)
@@ -595,6 +595,8 @@ describe('F6 Menu (mobile)', () => {
       fireEvent.click(within(groupEl).getByRole('button', { name: label }))
       expect(mockNavigate).toHaveBeenCalledWith(route)
     }
+    // Admin: so UMA linha "Suporte" (abrir chamado); a da Administracao se chama "Chamados de suporte".
+    expect(screen.getAllByRole('button', { name: /^Suporte/ })).toHaveLength(1)
   })
 
   it('usuário comum NÃO vê Administração nem IntelliQuote; vê Suporte, Tema e Sair', () => {

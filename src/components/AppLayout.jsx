@@ -1266,8 +1266,8 @@ export default function AppLayout() {
               }
               aria-label={
                 unreadNotifications.length > 0
-                  ? `Notificações, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
-                  : 'Notificações'
+                  ? `Avisos, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
+                  : 'Avisos'
               }
             >
               <Icon name="bell" size={22} aria-hidden="true" />

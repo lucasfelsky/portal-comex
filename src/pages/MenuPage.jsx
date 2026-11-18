@@ -66,7 +66,7 @@ const ADMIN_SHORTCUTS = [
   { to: '/admin/barra', label: 'Barra do porto', icon: 'anchor' },
   { to: '/admin/previsoes', label: 'Previsões', icon: 'trend' },
   { to: '/admin/lead-time', label: 'Lead time', icon: 'clock' },
-  { to: '/admin/suporte', label: 'Suporte', icon: 'help', sub: 'Chamados abertos pelos usuários' },
+  { to: '/admin/suporte', label: 'Chamados de suporte', icon: 'help', sub: 'Chamados abertos pelos usuários' },
 ]
 
 export default function MenuPage() {

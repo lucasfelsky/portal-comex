@@ -232,7 +232,7 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
       expect(nav.getByRole('link', { name: 'Chegadas' })).toHaveAttribute('href', '/processos')
       expect(nav.getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
-      expect(nav.getByRole('link', { name: 'Notificações' })).toHaveAttribute('href', '/notifications')
+      expect(nav.getByRole('link', { name: 'Avisos' })).toHaveAttribute('href', '/notifications')
       expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
     })
 
@@ -1397,7 +1397,7 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       ['/', 'Início', 0],
       ['/processos', 'Chegadas', 1],
       ['/news', 'Notícias', 2],
-      ['/notifications', 'Notificações', 3],
+      ['/notifications', 'Avisos', 3],
       ['/menu', 'Menu', 4],
     ]
 
@@ -1457,7 +1457,7 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       // O numero do badge e so visual: a contagem vai no nome do link (sem anuncio duplicado).
       expect(badge).toHaveAttribute('aria-hidden', 'true')
       expect(
-        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações, 2 não lidas' })
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos, 2 não lidas' })
       ).toHaveAttribute('href', '/notifications')
 
       listNotifications.mockResolvedValue([])
@@ -1472,9 +1472,9 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       expect(gone).toHaveAttribute('aria-hidden', 'true')
       // Mantem o ultimo numero durante a animacao de saida (nunca "0").
       expect(gone).toHaveTextContent('2')
-      // Com 0 nao lidas o nome acessivel volta a ser so "Notificações".
+      // Com 0 nao lidas o nome acessivel volta a ser so "Avisos".
       expect(
-        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações' })
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos' })
       ).toHaveAttribute('href', '/notifications')
 
       // Chegou outra nao lida: o mesmo span volta a ficar visivel.
@@ -1489,7 +1489,7 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
         // Singular: "1 não lida" (o badge segue aria-hidden).
         expect(again).toHaveAttribute('aria-hidden', 'true')
         expect(
-          within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Notificações, 1 não lida' })
+          within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos, 1 não lida' })
         ).toHaveAttribute('href', '/notifications')
       })
     })
