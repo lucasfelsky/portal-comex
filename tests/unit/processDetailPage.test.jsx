@@ -61,10 +61,17 @@ vi.mock('../../src/services/postReceiptImagesStorage', () => ({
 
 import ProcessesPage from '../../src/pages/ProcessesPage'
 
-function installMatchMedia({ desktop = true, mobile = false } = {}) {
-  const state = { desktop, mobile }
-  const listeners = { desktop: new Set(), mobile: new Set() }
-  const keyOf = (query) => (query.includes('1041') ? 'desktop' : query.includes('720') ? 'mobile' : null)
+function installMatchMedia({ desktop = true, mobile = false, reduced = false } = {}) {
+  const state = { desktop, mobile, reduced }
+  const listeners = { desktop: new Set(), mobile: new Set(), reduced: new Set() }
+  const keyOf = (query) =>
+    query.includes('1041')
+      ? 'desktop'
+      : query.includes('720')
+        ? 'mobile'
+        : query.includes('prefers-reduced-motion')
+          ? 'reduced'
+          : null
   window.matchMedia = vi.fn((query) => {
     const key = keyOf(query)
     return {
@@ -213,5 +220,205 @@ describe('F4c - detalhe desktop dentro da ProcessesPage', () => {
     // F4d: no desktop o formulario e um modal (portal no body), nao um filho da pagina
     await waitFor(() => expect(document.querySelector('.process-form--dialog')).not.toBeNull())
     expect(document.getElementById('process-field-etd')?.matches(':focus') ?? false).toBe(false)
+  })
+})
+
+// Remake mobile F5: o detalhe empilhado dentro da ProcessesPage (<= 720px). A lista
+// continua montada atras (`.m-stack`, `inert`), o foco/rolagem voltam ao fechar, o
+// gesto da borda acompanha o dedo e tablet/desktop nao ganham nada disso.
+describe('F5 - detalhe empilhado (mobile) dentro da ProcessesPage', () => {
+  const finger = (x, y) => ({ identifier: 1, clientX: x, clientY: y })
+
+  function touch(type, target, touches) {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : touches })
+    Object.defineProperty(event, 'changedTouches', { value: touches })
+    act(() => {
+      target.dispatchEvent(event)
+    })
+    return event
+  }
+
+  async function openMobileDetail(container, user) {
+    await waitFor(() => expect(container.querySelector('.m-pc')).not.toBeNull())
+    const card = container.querySelector('.m-pc')
+    await user.click(card)
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).not.toBeNull())
+    return card
+  }
+
+  beforeEach(() => {
+    installMatchMedia({ desktop: false, mobile: true })
+  })
+
+  it('com o detalhe aberto a lista fica montada num `.m-stack-under` inert + aria-hidden; o detalhe e uma camada irma', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelector('.process-list-card')).not.toBeNull())
+    const listNode = container.querySelector('.process-list-card')
+    // lista em repouso: o wrapper existe mas nao recua nem fica inerte
+    const stack = container.querySelector('.m-stack')
+    expect(stack).not.toBeNull()
+    expect(stack).not.toHaveClass('m-stack-under')
+    expect(stack).not.toHaveAttribute('inert')
+
+    await openMobileDetail(container, user)
+    const under = container.querySelector('.m-stack-under')
+    expect(under).toBe(stack)
+    expect(under).toHaveAttribute('inert')
+    expect(under).toHaveAttribute('aria-hidden', 'true')
+    expect(under.contains(listNode)).toBe(true)
+    expect(container.querySelector('.process-list-card')).toBe(listNode)
+    const layer = container.querySelector('article.process-detail-view')
+    expect(under.contains(layer)).toBe(false)
+    expect(layer.parentElement).toBe(under.parentElement)
+    // a lista por tras nao e alcancavel (leitor de tela/foco)
+    expect(screen.queryByRole('button', { name: /Exportar/ })).toBeNull()
+  })
+
+  it('estado de repouso da camada: sem transform/filter/will-change/contain na camada nem nos ancestrais', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    const layer = container.querySelector('article.process-detail-view')
+    for (let node = layer; node && node !== document.documentElement; node = node.parentElement) {
+      for (const prop of ['transform', 'filter', 'willChange', 'contain', 'perspective', 'backdropFilter']) {
+        expect(node.style[prop] ?? '', `${node.tagName}.${node.className} ${prop}`).toBe('')
+      }
+    }
+  })
+
+  it('so a camada de baixo recua: o detalhe nao herda o transform da lista', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    const layer = container.querySelector('article.process-detail-view')
+    expect(layer.closest('.m-stack')).toBeNull()
+  })
+
+  it('o foco vai para o titulo do detalhe ao abrir e volta ao cartao que abriu ao fechar; a lista nao remonta', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelector('.process-list-card')).not.toBeNull())
+    const listNode = container.querySelector('.process-list-card')
+    const card = await openMobileDetail(container, user)
+    expect(screen.getByRole('heading', { level: 1, name: 'Resina epóxi líquida' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Voltar para Chegadas' }))
+    // saida animada: a camada marca `data-m-leaving` e a lista ja deixa de recuar (continua inert)
+    const layer = container.querySelector('article.process-detail-view')
+    expect(layer).toHaveAttribute('data-m-leaving', 'true')
+    expect(container.querySelector('.m-stack')).not.toHaveClass('m-stack-under')
+    expect(container.querySelector('.m-stack')).toHaveAttribute('inert')
+
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).toBeNull(), { timeout: 2000 })
+    const stack = container.querySelector('.m-stack')
+    expect(stack).not.toHaveAttribute('inert')
+    expect(stack).not.toHaveAttribute('aria-hidden')
+    expect(container.querySelector('.process-list-card')).toBe(listNode)
+    await waitFor(() => expect(card).toHaveFocus())
+  })
+
+  it('restaura a rolagem da lista ao voltar (a lista continua montada atras)', async () => {
+    const user = userEvent.setup()
+    const scrollTo = vi.fn()
+    window.scrollTo = scrollTo
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelector('.m-pc')).not.toBeNull())
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 320 })
+    await user.click(container.querySelector('.m-pc'))
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).not.toBeNull())
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+    await user.click(screen.getByRole('button', { name: 'Voltar para Chegadas' }))
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).toBeNull(), { timeout: 2000 })
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 320))
+    delete window.scrollY
+  })
+
+  it('movimento reduzido: voltar e imediato, sem estado de saida', async () => {
+    installMatchMedia({ desktop: false, mobile: true, reduced: true })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    await user.click(screen.getByRole('button', { name: 'Voltar para Chegadas' }))
+    expect(container.querySelector('article.process-detail-view')).toBeNull()
+    expect(container.querySelector('.m-stack')).not.toHaveAttribute('inert')
+  })
+
+  it('o gesto da borda acompanha o dedo (lista recua junto) e, passando de 110px, volta; o useSwipe nao age junto', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    const layer = container.querySelector('article.process-detail-view')
+    const stack = container.querySelector('.m-stack')
+
+    touch('touchstart', layer, [finger(12, 300)])
+    touch('touchmove', layer, [finger(90, 304)])
+    expect(layer.style.transform).toBe('translateX(78px)')
+    expect(stack.style.transform).toMatch(/^translateX\(-/)
+    touch('touchend', layer, [finger(90, 304)])
+    // soltou antes do limiar: volta, o detalhe segue aberto
+    expect(container.querySelector('article.process-detail-view')).not.toBeNull()
+    expect(layer).not.toHaveAttribute('data-m-leaving')
+
+    touch('touchstart', layer, [finger(12, 300)])
+    touch('touchmove', layer, [finger(200, 304)])
+    touch('touchend', layer, [finger(200, 304)])
+    // com o useSwipe ativo o detalhe sumiria no mesmo instante: aqui ha a saida animada
+    expect(container.querySelector('article.process-detail-view')).toHaveAttribute('data-m-leaving', 'true')
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).toBeNull(), { timeout: 2000 })
+    // nenhum inline sobra na lista depois de voltar
+    await waitFor(() => expect(container.querySelector('.m-stack').style.transform).toBe(''))
+    expect(container.querySelector('.m-stack').style.filter).toBe('')
+  })
+
+  it('rolagem vertical comecando na borda nao fecha o detalhe', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    const layer = container.querySelector('article.process-detail-view')
+    touch('touchstart', layer, [finger(10, 300)])
+    touch('touchmove', layer, [finger(14, 360)])
+    touch('touchmove', layer, [finger(240, 362)])
+    touch('touchend', layer, [finger(240, 362)])
+    expect(container.querySelector('article.process-detail-view')).not.toBeNull()
+    expect(layer.style.transform).toBe('')
+  })
+
+  it('o h1 do processo e unico e o botao Voltar da camada e unico (o "Fila de chegadas" fica oculto por CSS `:has(> .m-stack)`)', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openMobileDetail(container, user)
+    expect(container.querySelector('section.surface > .m-stack')).not.toBeNull()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /Voltar/ })).toHaveLength(1)
+  })
+
+  it('tablet (721-1040px): sem camada empilhada, sem hero; o useSwipe antigo volta na hora', async () => {
+    installMatchMedia({ desktop: false, mobile: false })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(container.querySelector('.process-list-card')).not.toBeNull())
+    expect(container.querySelector('.m-stack')).toBeNull()
+    const row = container.querySelector('.process-item--button')
+    await user.click(row)
+    await waitFor(() => expect(container.querySelector('article.process-detail-view')).not.toBeNull())
+    expect(container.querySelector('.m-stack')).toBeNull()
+    expect(container.querySelector('.m-hero')).toBeNull()
+    expect(container.querySelector('.process-list-card')).toBeNull()
+    expect(container.querySelector('article.process-detail-view')).not.toHaveAttribute('data-m-leaving')
+    touch('touchstart', document.body, [finger(10, 300)])
+    touch('touchend', document.body, [finger(200, 304)])
+    expect(container.querySelector('article.process-detail-view')).toBeNull()
+    await waitFor(() => expect(container.querySelector('.process-list-card')).not.toBeNull())
+  })
+
+  it('desktop: nem `.m-stack` nem camada empilhada', async () => {
+    installMatchMedia({ desktop: true, mobile: false })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openDetail(container, user)
+    expect(container.querySelector('.m-stack')).toBeNull()
+    expect(container.querySelector('.m-hero')).toBeNull()
   })
 })

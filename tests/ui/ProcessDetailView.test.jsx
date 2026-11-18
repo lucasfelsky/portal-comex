@@ -6,6 +6,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
+import { getProcessStage } from '../../src/features/processes/processStage'
 
 const identRow = (pattern) => (_content, element) =>
   Boolean(element?.classList?.contains('detail-ident__row')) &&
@@ -1999,5 +2000,205 @@ describe('ProcessDetailView — avisos ERP (PR 3, so admin)', () => {
     renderDetail(adminProps(onlyShipped, shipment, { detailTab: 'process' }))
     expect(getDefinition('Data de embarque').querySelector('.erp-hint')).not.toBeNull()
     expect(chip('ETD no ERP: 06/10/2026')).toBeInTheDocument()
+  })
+})
+
+// Remake mobile F5: hero navy do detalhe empilhado (so' <= 720px). Um DOM por vez:
+// tablet/desktop seguem com a timeline e o cabecalho de sempre.
+describe('ProcessDetailView — hero do detalhe empilhado (mobile)', () => {
+  const originalMatchMedia = window.matchMedia
+
+  function stubViewport({ mobile }) {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: mobile && query.includes('720'),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  const flammableProcess = () =>
+    makeProcess({
+      name: 'Resina epóxi líquida',
+      processNumber: '4500128734',
+      category: 'FCL',
+      containerQuantity: 2,
+      processStatus: 'Embarcou',
+      destination: 'Itajaí',
+      items: [{ id: 'i-1', commercialName: 'Resina', quantity: 1, dangerousGoods: true, imoClass: '3' }],
+    })
+
+  it('mobile: hero com eyebrow "PO · modal · porto", h1 unico do processo e marcas de carga FORA do h1', () => {
+    stubViewport({ mobile: true })
+    const { container } = renderDetail({ selectedProcess: flammableProcess(), canSeeName: true, detailTab: 'general' })
+    const hero = container.querySelector('.m-hero.m-hero--detail')
+    expect(hero).not.toBeNull()
+    expect(hero.querySelector('.m-hero__eyebrow').textContent).toBe('PO: 4500128734 · Marítimo · Itajaí')
+    const h1 = screen.getByRole('heading', { level: 1, name: 'Resina epóxi líquida' })
+    expect(h1).toHaveClass('m-hero__title')
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    // marcas: ao lado do titulo, nao dentro dele (o nome do heading nao carrega os rotulos)
+    expect(h1.querySelector('[role="img"]')).toBeNull()
+    const head = hero.querySelector('.m-hero__head')
+    expect(within(head).getByRole('img', { name: 'Carga inflamável' })).toBeInTheDocument()
+    expect(within(head).getByRole('img', { name: 'Carga perigosa' })).toBeInTheDocument()
+    expect(within(head).getByRole('img', { name: '2 contêineres' })).toBeInTheDocument()
+    expect(hero.querySelector('.m-marks--hero')).not.toBeNull()
+    // o cabecalho antigo (h2 + timeline) nao renderiza no mobile
+    expect(container.querySelector('.process-detail-heading__name')).toBeNull()
+    expect(container.querySelector('.process-timeline')).toBeNull()
+  })
+
+  it('mobile: respeita a mascara de nome (categoria restrita sem permissao mostra o PO no h1 e nao repete no eyebrow)', () => {
+    stubViewport({ mobile: true })
+    renderDetail({
+      selectedProcess: makeProcess({ name: 'Nome secreto', processNumber: '777', category: 'FCL' }),
+      canSeeName: false,
+    })
+    expect(screen.getByRole('heading', { level: 1, name: 'PO: 777' })).toBeInTheDocument()
+    expect(screen.queryByText(/Nome secreto/)).toBeNull()
+    expect(document.querySelector('.m-hero__eyebrow').textContent).toBe('Marítimo · Itajaí')
+  })
+
+  it('mobile: o trajeto do hero tem 5 etapas e aria-current na etapa atual (getProcessStage)', () => {
+    stubViewport({ mobile: true })
+    const process = makeProcess({ processStatus: 'Atracação Confirmada' })
+    const { container } = renderDetail({ selectedProcess: process })
+    const route = container.querySelector('.m-hero--detail .m-route.m-route--hero')
+    expect(route).not.toBeNull()
+    const steps = route.querySelectorAll('li')
+    expect(steps).toHaveLength(5)
+    const { currentStage } = getProcessStage(process)
+    expect(currentStage).toBe(2)
+    const current = route.querySelectorAll('li[aria-current="step"]')
+    expect(current).toHaveLength(1)
+    expect(steps[currentStage]).toBe(current[0])
+    expect(current[0]).toHaveTextContent('Chegada')
+    expect(steps[0]).toHaveClass('m-route__step--done')
+    expect(steps[4]).toHaveClass('m-route__step--todo')
+  })
+
+  it('mobile: carga recebida deixa as 5 etapas concluidas e nenhuma como atual', () => {
+    stubViewport({ mobile: true })
+    const { container } = renderDetail({ selectedProcess: makeProcess({ processStatus: 'Carga recebida' }) })
+    const route = container.querySelector('.m-route--hero')
+    expect(route.querySelectorAll('.m-route__step--done')).toHaveLength(5)
+    expect(route.querySelectorAll('li[aria-current="step"]')).toHaveLength(0)
+  })
+
+  it('mobile: voltar/favorito/"..." na barra do topo (mesmos botoes de sempre) e o titulo da barra e aria-hidden', async () => {
+    stubViewport({ mobile: true })
+    const user = userEvent.setup()
+    const onSetViewModeList = vi.fn()
+    const onToggleFavorite = vi.fn()
+    const { container } = renderDetail({
+      isAdmin: true,
+      onSetViewModeList,
+      onToggleFavorite,
+      favoriteProcessIds: ['p-1'],
+    })
+    const bar = container.querySelector('.process-detail-mobilebar')
+    await user.click(within(bar).getByRole('button', { name: 'Voltar para Chegadas' }))
+    expect(onSetViewModeList).toHaveBeenCalledTimes(1)
+    const fav = within(bar).getByRole('button', { name: 'Desfavoritar' })
+    expect(fav).toHaveClass('process-detail-fav--on')
+    await user.click(fav)
+    expect(onToggleFavorite).toHaveBeenCalledWith('p-1')
+    expect(within(bar).getByRole('button', { name: 'Mais ações' })).toBeInTheDocument()
+    expect(bar.querySelector('.process-detail-mobilebar__title')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('mobile: o foco vai para o titulo do hero ao abrir a camada', () => {
+    stubViewport({ mobile: true })
+    renderDetail()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
+  })
+
+  it('mobile: a barra do topo vira compacta (data-m-scrolled) acima de 70px de rolagem da camada', async () => {
+    stubViewport({ mobile: true })
+    const { container } = renderDetail()
+    const article = container.querySelector('article.process-detail-view')
+    expect(article).not.toHaveAttribute('data-m-scrolled')
+    article.scrollTop = 120
+    article.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(article).toHaveAttribute('data-m-scrolled', 'true'))
+    expect(article.style.getPropertyValue('--m-sy')).toBe('120')
+    article.scrollTop = 10
+    article.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(article).not.toHaveAttribute('data-m-scrolled'))
+  })
+
+  it('mobile: abas em chips (aria-pressed), contador de Documentos e tag de STATUS em texto', () => {
+    stubViewport({ mobile: true })
+    const { container } = renderDetail({
+      detailTab: 'items',
+      profile: { name: 'Admin', role: 'admin' },
+      selectedProcess: makeProcess({
+        processStatus: 'Embarcou',
+        shippedAt: '2026-09-12',
+        berthed: true,
+        berthedAt: '2026-10-20T08:00',
+      }),
+    })
+    const row = container.querySelector('.tab-row.detail-tab-row')
+    const names = [...row.querySelectorAll('.tab-button')].map((button) => button.firstChild.textContent.trim())
+    expect(names).toEqual(['Detalhes gerais', 'Processo', 'Itens', 'Mensagens', 'Histórico', 'Documentos'])
+    expect(within(row).getByRole('button', { name: 'Itens' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(row).getByRole('button', { name: 'Processo' })).toHaveAttribute('aria-pressed', 'false')
+    expect(row.querySelector('.documents-tab-count')).toHaveTextContent(/^\d+ pendentes?$/)
+    expect(container.querySelector('.m-detail-tags')).toHaveTextContent('Embarcou')
+  })
+
+  it('mobile: sem permissao de registros nao ha Histórico/Documentos nos chips (papeis respeitados)', () => {
+    stubViewport({ mobile: true })
+    const { container } = renderDetail({ profile: { name: 'Comum', role: 'user' } })
+    const row = container.querySelector('.tab-row.detail-tab-row')
+    expect(within(row).queryByRole('button', { name: /Histórico/ })).toBeNull()
+    expect(within(row).queryByRole('button', { name: /Documentos/ })).toBeNull()
+  })
+
+  it('mobile: isLeaving marca a camada com data-m-leaving (saida animada pela CSS)', () => {
+    stubViewport({ mobile: true })
+    const { container, rerender } = renderDetail({ isLeaving: false })
+    const article = container.querySelector('article.process-detail-view')
+    expect(article).not.toHaveAttribute('data-m-leaving')
+    rerender(<ProcessDetailView {...buildDetailProps({ isLeaving: true })} />)
+    expect(article).toHaveAttribute('data-m-leaving', 'true')
+  })
+
+  it('mobile: a barra de acao (toolbar) mantem Editar processo e os secundarios', async () => {
+    stubViewport({ mobile: true })
+    const user = userEvent.setup()
+    const onEditMode = vi.fn()
+    const { container } = renderDetail({ isAdmin: true, canEditSelectedCollectionStatus: true, onEditMode })
+    const toolbar = container.querySelector('.process-detail-toolbar')
+    await user.click(within(toolbar).getByRole('button', { name: 'Editar processo' }))
+    expect(onEditMode).toHaveBeenCalled()
+    expect(within(toolbar).getByRole('button', { name: 'Status de coleta' })).toBeInTheDocument()
+  })
+
+  it('tablet/desktop: nada do hero mobile renderiza e a timeline/cabecalho antigos continuam', () => {
+    stubViewport({ mobile: false })
+    const { container } = renderDetail({ selectedProcess: flammableProcess(), canSeeName: true })
+    expect(container.querySelector('.m-hero')).toBeNull()
+    expect(container.querySelector('.m-hero--detail')).toBeNull()
+    expect(container.querySelector('.m-detail-tags')).toBeNull()
+    expect(container.querySelector('.m-route')).toBeNull()
+    expect(container.querySelector('.m-marks')).toBeNull()
+    expect(container.querySelector('.process-timeline')).not.toBeNull()
+    expect(screen.getByRole('heading', { level: 2, name: 'Resina epóxi líquida' })).toBeInTheDocument()
+    expect(screen.queryAllByRole('heading', { level: 1 })).toHaveLength(0)
+    expect(screen.getByRole('button', { name: '‹ Voltar' })).toBeInTheDocument()
+    expect(container.querySelector('.process-detail-mobilebar__title')).not.toHaveAttribute('aria-hidden')
+    // as abas do tablet seguem sem aria-pressed
+    expect(container.querySelector('.detail-tab-row .tab-button')).not.toHaveAttribute('aria-pressed')
+    expect(container.querySelector('article.process-detail-view')).not.toHaveAttribute('data-m-leaving')
   })
 })

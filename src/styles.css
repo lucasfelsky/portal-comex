@@ -23286,3 +23286,29 @@ body {
     opacity: 0.45;
   }
 }
+
+/* ============================================================
+   Remake mobile F5 (detalhe empilhado): @keyframes m-push-* e base
+   display: none do hero do detalhe. APPEND-ONLY. Quem os revela e usa e' so'
+   a camada S de mobile-redesign.css (<= 720px); o par none do movimento
+   reduzido mora no bloco reduce de 720px daquele arquivo. A entrada NAO deixa
+   fill (backwards): transform/box-shadow so' existem durante a animacao, para
+   a camada nao virar o bloco de contencao dos position: fixed em repouso.
+   ============================================================ */
+.m-hero--detail {
+  display: none;
+}
+
+@keyframes m-push-in {
+  from {
+    transform: translateX(104%);
+    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@keyframes m-push-out {
+  to {
+    transform: translateX(104%);
+    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.2);
+  }
+}

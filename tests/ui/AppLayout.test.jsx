@@ -449,6 +449,65 @@ describe('AppLayout (large title mobile no Admin)', () => {
   })
 })
 
+// Remake mobile F5: com o detalhe de um processo aberto o hero e' o do detalhe.
+// O eyebrow "Central de chegadas" (que valia para todo /processos) some e o
+// titulo oculto da pagina deixa de ser h1 (o h1 do processo e' o do hero).
+describe('AppLayout (header oculto com o detalhe do processo aberto)', () => {
+  function renderProcessos() {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'admin-1', name: 'admin User', email: 'admin@sq.com', role: 'admin' },
+      logout: vi.fn(),
+      isEmailVerified: true,
+    })
+    return render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={['/processos']}>
+          <NotificationsProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<div data-testid="page">Pagina</div>} />
+              </Route>
+            </Routes>
+          </NotificationsProvider>
+        </MemoryRouter>
+      </ToastProvider>
+    )
+  }
+
+  afterEach(() => {
+    act(() => setActiveProcess(null))
+  })
+
+  it('lista: eyebrow "Central de chegadas" e h1 "Chegadas"', () => {
+    const { container } = renderProcessos()
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Central de chegadas')
+    expect(container.querySelector('h1.mobile-page-header__title').textContent).toBe('Chegadas')
+  })
+
+  it('detalhe aberto: sem eyebrow e o titulo da pagina vira texto simples (h1 so no hero do detalhe); volta com a lista', () => {
+    const { container } = renderProcessos()
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'detail' })
+    )
+    expect(container.querySelector('.mobile-page-header__eyebrow')).toBeNull()
+    expect(container.querySelector('h1.mobile-page-header__title')).toBeNull()
+    expect(container.querySelector('p.mobile-page-header__title').textContent).toBe('Chegadas')
+
+    act(() => setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'list' }))
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Central de chegadas')
+    expect(container.querySelector('h1.mobile-page-header__title')).not.toBeNull()
+  })
+
+  it('edicao (formulario): sem eyebrow, mas o titulo continua h1 (so o detalhe cede o h1 ao hero)', () => {
+    const { container } = renderProcessos()
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'edit' })
+    )
+    expect(container.querySelector('.mobile-page-header__eyebrow')).toBeNull()
+    expect(container.querySelector('h1.mobile-page-header__title')).not.toBeNull()
+  })
+})
+
 // Tablet (721-1040px): a sidebar e' um drawer (off-canvas via CSS em
 // mobile-redesign.css). O JS do AppLayout ja' serve toda a faixa: botao do
 // topbar, backdrop, Esc (focus trap) e fechar ao crescer acima de 1040px.

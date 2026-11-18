@@ -362,14 +362,15 @@ export default function AppLayout() {
     if (location.pathname === '/menu') return null
     if (adminSectionTitles[location.pathname]) return 'Admin'
     // Chegadas (remake F4): o eyebrow do hero e' o nome da central, nao a data.
-    if (location.pathname === '/processos') return 'Central de chegadas'
+    // Com o detalhe aberto o hero e' o do detalhe (sem o eyebrow da central).
+    if (location.pathname === '/processos') return isProcessDetailOpen ? null : 'Central de chegadas'
     const text = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     })
     return text.charAt(0).toUpperCase() + text.slice(1)
-  }, [location.pathname])
+  }, [location.pathname, isProcessDetailOpen])
   const [isPageScrolled, setIsPageScrolled] = useState(false)
   const mobileHeroRef = useRef(null)
   useEffect(() => {
@@ -1035,7 +1036,13 @@ export default function AppLayout() {
               {mobileEyebrow ? (
                 <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
               ) : null}
-              <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+              {/* Com o detalhe do processo aberto o h1 e' o do hero do detalhe
+                  (unico por pagina): o titulo da pagina vira texto simples. */}
+              {isProcessDetailOpen && activeProcess.viewMode === 'detail' ? (
+                <p className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</p>
+              ) : (
+                <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+              )}
               <div className="mobile-page-header__extra" id="mobile-hero-extra" />
             </div>
             <svg

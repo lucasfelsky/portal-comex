@@ -44,6 +44,7 @@ import Icon from '../components/Icon'
 import StatCard from '../components/StatCard'
 import MobileHeroSlot from '../components/MobileHeroSlot'
 import ProcessCargoMarks from '../features/processes/ProcessCargoMarks'
+import ProcessRoute from '../features/processes/ProcessRoute'
 import { buildWeeklyEtaSeries } from '../utils/dashboardStats'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import { formatRelativeTime } from '../utils/dateFormat'
@@ -471,11 +472,6 @@ const MOBILE_KPI_CARDS = [
   { key: 'canalVermelho', label: 'Canal vermelho' },
 ]
 
-function prefersReducedMotion() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
-}
-
 // Mesmo texto/tom do chip do desktop: estados Carregando / Indisponivel e o
 // rotulo de `formatBarStatusLabel`; o titulo leva as notas e a praticagem.
 function getBarChipModel(barStatus, isLoading) {
@@ -502,56 +498,6 @@ function MobileBarChip({ barStatus, isLoading }) {
         Barra do Rio <b>{text}</b>
       </span>
     </p>
-  )
-}
-
-// Trajeto de 5 etapas (as de `PROCESS_STAGES`, a atual por `getProcessStage`):
-// o navio percorre ate a etapa atual. O avanco e' a var `--m-route-p`
-// (registrada com @property), animada por transition quando `m-route--go`
-// entra no rAF duplo apos o mount; com movimento reduzido ja nasce na posicao
-// final.
-function MobileRoute({ item }) {
-  const { currentStage, isComplete } = getProcessStage(item)
-  const activeStage = isComplete ? PROCESS_STAGES.length : currentStage
-  const target = Math.min(activeStage, PROCESS_STAGES.length - 1) / (PROCESS_STAGES.length - 1)
-  const [go, setGo] = useState(prefersReducedMotion)
-
-  useEffect(() => {
-    if (go) return undefined
-    let inner = 0
-    const outer = window.requestAnimationFrame(() => {
-      inner = window.requestAnimationFrame(() => setGo(true))
-    })
-    return () => {
-      window.cancelAnimationFrame(outer)
-      window.cancelAnimationFrame(inner)
-    }
-  }, [go])
-
-  return (
-    <div className={`m-route${go ? ' m-route--go' : ''}`} style={{ '--m-route-to': target }}>
-      <div className="m-route__track" aria-hidden="true">
-        <i className="m-route__fill" />
-      </div>
-      <span className="m-route__ship" aria-hidden="true">
-        <Icon name={isAirCategory(item.category) ? 'plane' : 'ship'} size={26} />
-      </span>
-      <ol className="m-route__steps" aria-label="Etapas do processo">
-        {PROCESS_STAGES.map((label, index) => {
-          const state = index < activeStage ? 'done' : index === activeStage ? 'now' : 'todo'
-          return (
-            <li
-              key={label}
-              className={`m-route__step m-route__step--${state}`}
-              aria-current={state === 'now' ? 'step' : undefined}
-            >
-              <i aria-hidden="true" />
-              <span>{label}</span>
-            </li>
-          )
-        })}
-      </ol>
-    </div>
   )
 }
 
@@ -592,7 +538,7 @@ function MobileFavorite({ item, canSeeName, featured, onOpen, onUnfavorite }) {
 
       {featured ? (
         <>
-          <MobileRoute item={item} />
+          <ProcessRoute item={item} />
           <dl className="m-fav__facts">
             <div>
               <dt>ETD</dt>

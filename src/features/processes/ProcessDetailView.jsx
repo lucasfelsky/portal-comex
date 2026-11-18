@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
+import ProcessCargoMarks from './ProcessCargoMarks'
+import ProcessRoute from './ProcessRoute'
 import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { formatPostReceiptImageSize } from '../../utils/postReceiptImages'
@@ -71,6 +73,9 @@ import {
 // Free time > Aduana + Anuências > Coleta).
 // Refino F4c: arvore desktop (Processo.dc.html) a partir de 1041px.
 const DESKTOP_QUERY = '(min-width: 1041px)'
+// Detalhe empilhado (mobile): rolagem da camada a partir da qual a barra do
+// topo ganha o fundo navy e o titulo.
+const MOBILE_BAR_SCROLL_THRESHOLD = 70
 
 export default function ProcessDetailView({
   selectedProcess,
@@ -105,6 +110,7 @@ export default function ProcessDetailView({
   onToggleFavorite,
   onSetViewModeList,
   backLabel = '',
+  isLeaving = false,
   onEditMode,
   onPostReceiptEditMode,
   onCollectionStatusEditMode,
@@ -122,6 +128,12 @@ export default function ProcessDetailView({
   // quando um teste forca matchMedia = true para todas as consultas.
   const isDesktopQuery = useMediaQuery(DESKTOP_QUERY)
   const isDesktop = isDesktopQuery && !isMobileLayout
+  // Detalhe empilhado (remake mobile, F5): a camada do detalhe e' o proprio
+  // scroller (position: fixed so' em <= 720px), entao o scroll e' lido no
+  // `article`. Acima de 70px a barra do topo vira a barra compacta navy.
+  const articleRef = useRef(null)
+  const heroTitleRef = useRef(null)
+  const [isScrolled, setIsScrolled] = useState(false)
   const moreContainerRef = useRef(null)
   const moreTriggerRef = useRef(null)
   const firstMenuItemRef = useRef(null)
@@ -159,6 +171,36 @@ export default function ProcessDetailView({
   // F18b-2 (E9): indicadores read-only de FISPQ/lavacao (aba Itens/bloco
   // Carga), lidos do `documentIndex` do processo - so canViewRecords.
   const documentIndex = canViewRecords ? normalizeDocumentIndex(selectedProcess.documentIndex) : null
+
+  useEffect(() => {
+    if (!isMobileLayout) return undefined
+    const node = articleRef.current
+    if (!node) return undefined
+    let frame = 0
+    const syncScroll = () => {
+      frame = 0
+      const top = node.scrollTop
+      // `--m-sy` (0..160) alimenta o parallax do conteudo do hero (so' CSS S).
+      node.style.setProperty('--m-sy', String(Math.min(Math.max(top, 0), 160)))
+      setIsScrolled(top > MOBILE_BAR_SCROLL_THRESHOLD)
+    }
+    const handleScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(syncScroll)
+    }
+    node.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      node.removeEventListener('scroll', handleScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+      node.style.removeProperty('--m-sy')
+    }
+  }, [isMobileLayout])
+
+  // Ao abrir (camada empilhada), o foco vai para o titulo do hero: a lista
+  // atras fica `inert` e o leitor de tela anuncia o processo aberto.
+  useEffect(() => {
+    if (!isMobileLayout) return
+    heroTitleRef.current?.focus({ preventScroll: true })
+  }, [isMobileLayout])
 
   // D4: menu "Mais ações" — foco no 1o menuitem ao abrir; Esc/clique fora
   // fecham (e devolvem o foco ao trigger no Esc).
@@ -276,6 +318,15 @@ export default function ProcessDetailView({
     }
   })()
   const isFavorite = favoriteProcessIds.includes(selectedProcess.id)
+  // Eyebrow do hero mobile: "PO · modal · porto" (mesma mascara do titulo: onde o
+  // nome nao aparece, o subtitulo vem vazio e o PO ja esta no titulo).
+  const heroEyebrow = [
+    getProcessSubtitle(selectedProcess, canSeeName),
+    isAirCategory(selectedProcess.category) ? 'Aéreo' : 'Marítimo',
+    String(selectedProcess.destination ?? '').trim(),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   // Estrela de favorito: entra com mola (scale 0 -> 1) so ao ativar.
   const favoriteStarPop = useActivationPop(isFavorite)
   const linkedItemsCount = selectedProcess.items?.length ?? 0
@@ -311,7 +362,7 @@ export default function ProcessDetailView({
   const favoriteButton = (
     <button
       type="button"
-      className="ghost-button ghost-button--outline process-detail-fav"
+      className={`ghost-button ghost-button--outline process-detail-fav${isFavorite ? ' process-detail-fav--on' : ''}`}
       aria-label={isFavorite ? 'Desfavoritar' : 'Favoritar'}
       onClick={() => onToggleFavorite(selectedProcess.id)}
     >
@@ -839,10 +890,17 @@ export default function ProcessDetailView({
   }
 
   return (
-    <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}>
+    <article className="list-card view-push process-detail-view" style={{ marginTop: '16px' }}
+      ref={articleRef}
+      data-m-leaving={isMobileLayout && isLeaving ? 'true' : undefined}
+      data-m-scrolled={isMobileLayout && isScrolled ? 'true' : undefined}
+    >
       {/* F15.3: mini-header sticky no mobile (voltar + título do processo
           sempre visíveis durante o scroll do detalhe). Escondido no desktop
-          via CSS — lá o "Voltar para lista" do card-heading basta. */}
+          via CSS — lá o "Voltar para lista" do card-heading basta.
+          F5 (remake): no mobile a barra e' a linha de topo do hero navy
+          (voltar, favorito, "..."), transparente ate o scroll passar de 70px,
+          quando ganha o fundo navy e mostra o titulo. */}
       <div className="process-detail-mobilebar">
         <button
           type="button"
@@ -850,9 +908,13 @@ export default function ProcessDetailView({
           aria-label={backLabel === 'Voltar' ? 'Voltar' : `Voltar para ${backLabel || 'Chegadas'}`}
           onClick={onSetViewModeList}
         >
-          <Icon name="chevron-left" size={22} aria-hidden="true" /> {backLabel || 'Chegadas'}
+          <Icon name="chevron-left" size={22} aria-hidden="true" />{' '}
+          <span className="process-detail-mobilebar__back-text">{backLabel || 'Chegadas'}</span>
         </button>
-        <strong className="process-detail-mobilebar__title">
+        <strong
+          className="process-detail-mobilebar__title"
+          aria-hidden={isMobileLayout ? 'true' : undefined}
+        >
           {getProcessTitle(selectedProcess, canSeeName)}
         </strong>
         {isMobileLayout ? (
@@ -863,10 +925,42 @@ export default function ProcessDetailView({
         ) : null}
       </div>
 
+      {/* Hero navy do detalhe (so' mobile, <=720px): eyebrow "PO · modal ·
+          porto", titulo com as marcas de carga (fora do h1, para o nome do
+          heading nao carregar os rotulos) e o trajeto de 5 etapas. O h1 do
+          processo e' unico: o titulo da pagina vira texto simples no detalhe
+          (AppLayout). */}
+      {isMobileLayout ? (
+        <div className="m-hero m-hero--detail">
+          <div className="m-hero__in">
+            {heroEyebrow ? <span className="m-hero__eyebrow">{heroEyebrow}</span> : null}
+            <div className="m-hero__head">
+              <h1 className="m-hero__title" tabIndex={-1} ref={heroTitleRef}>
+                {getProcessTitle(selectedProcess, canSeeName)}
+              </h1>
+              <ProcessCargoMarks process={selectedProcess} onHero />
+            </div>
+            <ProcessRoute item={selectedProcess} variant="hero" />
+          </div>
+          <svg
+            className="m-hero__art"
+            viewBox="0 0 390 230"
+            preserveAspectRatio="xMaxYMax slice"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M-10 196 C 120 188, 250 146, 410 58" />
+            <path d="M-10 214 C 140 208, 270 170, 410 96" />
+          </svg>
+        </div>
+      ) : null}
+
       {/* F16.5/UX-6b-3 (D5/E3/F2): timeline de 5 estágios — concluidos
           preenchidos, atual em anel com halo verde, futuros vazios; visivel
-          em todas as larguras (mobile + tablet <=1040px + desktop). */}
+          em todas as larguras (mobile + tablet <=1040px + desktop). No mobile
+          (F5) o trajeto vive no hero e esta timeline nao renderiza. */}
       {(() => {
+        if (isMobileLayout) return null
         const { currentStage, isComplete } = getProcessStage(selectedProcess)
         // Preenchimento do trilho (desktop): os segmentos concluidos preenchem em
         // sequencia dentro de 600 ms (--seg-index / --seg-count).
@@ -907,24 +1001,29 @@ export default function ProcessDetailView({
       })()}
 
       <div className="card-heading process-detail-card-heading">
-        <button
-          type="button"
-          className="ghost-button process-detail-card-heading__back"
-          onClick={onSetViewModeList}
-        >
-          ‹ Voltar
-        </button>
-        <div className="process-detail-heading">
-          <h2 className="process-detail-heading__name">{getProcessTitle(selectedProcess, canSeeName)}</h2>
-          <span className={getStatusTagClass(selectedProcess.processStatus)}>
-            {getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}
-          </span>
-          <p className="process-detail-heading__meta">
-            {[selectedProcess.category, getProcessSubtitle(selectedProcess, canSeeName), selectedProcess.destination]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
+        {isMobileLayout ? null : (
+          <>
+            <button
+              type="button"
+              className="ghost-button process-detail-card-heading__back"
+              onClick={onSetViewModeList}
+            >
+              ‹ Voltar
+            </button>
+            <div className="process-detail-heading">
+              <h2 className="process-detail-heading__name">{getProcessTitle(selectedProcess, canSeeName)}</h2>
+              <span className={getStatusTagClass(selectedProcess.processStatus)}>
+                {getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}
+              </span>
+              <p className="process-detail-heading__meta">
+                {[selectedProcess.category, getProcessSubtitle(selectedProcess, canSeeName), selectedProcess.destination]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </>
+        )}
+        {/* Mobile (F5): esta toolbar vira a barra de acao fixa no rodape. */}
         <div className="admin-toolbar process-detail-toolbar">
           {isAdmin ? (
             <button type="button" className="primary-button" onClick={onEditMode}>Editar processo</button>
@@ -966,15 +1065,15 @@ export default function ProcessDetailView({
       </div>
 
       <div className="tab-row detail-tab-row">
-        <button type="button" className={`tab-button${effectiveTab === 'general' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('general')}>Detalhes gerais</button>
-        <button type="button" className={`tab-button${effectiveTab === 'process' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('process')}>Processo</button>
-        <button type="button" className={`tab-button${effectiveTab === 'items' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('items')}>Itens</button>
-        <button type="button" className={`tab-button${effectiveTab === 'messages' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
+        <button type="button" className={`tab-button${effectiveTab === 'general' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'general' : undefined} onClick={() => onDetailTabChange('general')}>Detalhes gerais</button>
+        <button type="button" className={`tab-button${effectiveTab === 'process' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'process' : undefined} onClick={() => onDetailTabChange('process')}>Processo</button>
+        <button type="button" className={`tab-button${effectiveTab === 'items' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'items' : undefined} onClick={() => onDetailTabChange('items')}>Itens</button>
+        <button type="button" className={`tab-button${effectiveTab === 'messages' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'messages' : undefined} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
         {canViewRecords ? (
-          <button type="button" className={`tab-button${effectiveTab === 'history' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('history')}>Histórico</button>
+          <button type="button" className={`tab-button${effectiveTab === 'history' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'history' : undefined} onClick={() => onDetailTabChange('history')}>Histórico</button>
         ) : null}
         {canViewRecords ? (
-          <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} onClick={() => onDetailTabChange('documents')}>
+          <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'documents' : undefined} onClick={() => onDetailTabChange('documents')}>
             Documentos
             {documentsPendingCount > 0 ? (
               <span className="documents-tab-count">
@@ -983,8 +1082,17 @@ export default function ProcessDetailView({
             ) : null}
           </button>
         ) : null}
-        {effectiveTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
+        {effectiveTab === 'related-item' && selectedItemName ? <button type="button" className="tab-button tab-button--active" aria-pressed={isMobileLayout ? true : undefined} onClick={() => onDetailTabChange('related-item')}>Item relacionado</button> : null}
       </div>
+
+      {/* Mobile (F5): tag de STATUS do processo, em texto, abaixo das abas. */}
+      {isMobileLayout ? (
+        <div className="m-detail-tags">
+          <span className={getStatusTagClass(selectedProcess.processStatus)}>
+            {getDisplayedProcessStatus(selectedProcess.processStatus, selectedProcess.category)}
+          </span>
+        </div>
+      ) : null}
 
       <div className="detail-stack tab-panel-spacing">
         {tabPanels}

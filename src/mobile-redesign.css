@@ -189,7 +189,7 @@
   }
 
   /* Tela "empurrada" (lista/detalhe/form) nao repete o titulo da pai. */
-  .surface:has(> .process-list-card, > .process-detail-view, > .process-form) > .section-heading {
+  .surface:has(> .process-list-card, > .m-stack, > .process-detail-view, > .process-form) > .section-heading {
     display: none;
   }
 
@@ -2375,6 +2375,11 @@
     margin-bottom: 16px;
   }
 
+  /* A marca oficial (ProductMark) nao encolhe em 320px. */
+  .mobile-page-header__brand > svg {
+    flex: none;
+  }
+
   .mobile-page-header__wordmark {
     min-width: 0;
     font-family: var(--font-heading);
@@ -2506,10 +2511,17 @@
   }
 
   /* Detalhe aberto: a pilula desce para fora da tela (so `.process-detail-view`,
-     nao os modos de edicao). Soma a folga e a safe-area para sumir por inteiro. */
-  .main-content:has(.process-detail-view) > .mobile-bottom-nav {
+     nao os modos de edicao). Soma a folga e a safe-area para sumir por inteiro.
+     F5: `visibility: hidden` (com atraso = fim da descida) tira os 5 links do
+     foco por teclado e do leitor de tela enquanto o detalhe cobre; ao sair
+     (`data-m-leaving`) ela sobe junto com a camada que desliza para fora. */
+  .main-content:has(.process-detail-view:not([data-m-leaving='true'])) > .mobile-bottom-nav {
     transform: translateY(calc(150% + 14px + env(safe-area-inset-bottom, 0px)));
+    visibility: hidden;
     pointer-events: none;
+    transition:
+      transform 0.5s var(--m-ios),
+      visibility 0s linear 0.5s;
   }
 
   /* Indicador sem JS: `--m-tab-i` (0..4) vem das regras :has abaixo. Sem aba
@@ -3482,32 +3494,93 @@
     cursor: not-allowed;
   }
 
+  /* Detalhe empilhado (F5): a barra do topo e' a linha de cima do hero navy
+     (voltar, favorito, "..."): sticky na camada do detalhe, transparente sobre o
+     hero e navy com blur depois de 70px de rolagem (`data-m-scrolled`). A margem
+     negativa de baixo faz o hero subir por baixo dela. */
   .process-detail-view > .process-detail-mobilebar {
-    order: -2;
-    margin: 0 calc(-1 * var(--m-inset)) 8px;
-    padding: 0 8px;
-    min-height: 44px;
+    order: -3;
+    top: 0;
+    box-sizing: border-box;
+    align-items: flex-start;
+    margin: 0 -16px calc(-1 * (env(safe-area-inset-top, 0px) + 58px) - 14px);
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 6px;
+    min-height: calc(env(safe-area-inset-top, 0px) + 58px);
     border-radius: 0;
-    background: var(--m-bar-bg);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border-bottom: 1px solid var(--m-separator);
+    background: transparent;
+    border-bottom: 0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition: background-color 0.3s ease;
   }
 
+  .process-detail-view[data-m-scrolled='true'] > .process-detail-mobilebar {
+    background: var(--m-cbar-bg);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+    backdrop-filter: saturate(1.6) blur(18px);
+  }
+
+  /* Voltar: botao redondo de 38px sobre o chip do hero; o `::before` leva o alvo
+     de toque a 44px sem mudar o visual (mesmo padrao de `.chip-remove`). */
   .process-detail-view .process-detail-mobilebar__back {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0 8px 0 0;
-    min-height: 44px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
     font-size: var(--m-fs-body);
     font-weight: 400;
-    color: var(--primary-700);
   }
 
-  /* O nome fica so no h2 (o elemento segue no DOM para os testes). */
-  .process-detail-view .process-detail-mobilebar__title {
+  .process-detail-view .process-detail-mobilebar__back::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back-text {
     display: none;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back:focus-visible,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav:focus-visible,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger:focus-visible {
+    outline: 2px solid var(--m-hero-ink);
+    outline-offset: 2px;
+  }
+
+  /* Titulo da barra compacta: aparece centrado ao rolar (o h1 do hero segue
+     sendo o titulo acessivel; este e' `aria-hidden` no mobile). */
+  .process-detail-view .process-detail-mobilebar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-heading);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    line-height: 38px;
+    color: var(--m-hero-ink);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .process-detail-view[data-m-scrolled='true'] .process-detail-mobilebar__title {
+    opacity: 1;
   }
 
   /* Rede de seguranca: se o hook de layout ainda nao trocou o DOM (1o frame),
@@ -3517,35 +3590,49 @@
     display: none;
   }
 
-  /* Barra do topo (nav bar iOS): "<" Chegadas a esquerda, acoes a direita. */
+  /* Barra do topo: voltar a esquerda, favorito e "..." a direita, como botoes
+     redondos de 38px sobre o chip do hero (alvo de toque de 44px pelo `::before`). */
   .process-detail-view .process-detail-mobilebar__actions {
     display: flex;
+    flex: none;
     align-items: center;
+    gap: 8px;
     margin-left: auto;
-  }
-
-  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav {
-    position: relative;
   }
 
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav,
   .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger {
-    width: 44px;
-    min-height: 44px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    min-height: 0;
     padding: 0;
     border-color: transparent;
-    border-radius: var(--radius-full);
-    background: none;
-    color: var(--primary-700);
+    border-radius: 50%;
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
     box-shadow: none;
-    font-size: 1.5rem;
+    font-size: 1.375rem;
     font-weight: 600;
     line-height: 1;
   }
 
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav::before,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav--on {
+    color: var(--m-hero-haz);
+  }
+
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav:active,
   .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger:active {
-    background: var(--m-fill);
+    background: var(--m-hero-line);
   }
 
   .process-detail-view .process-detail-fav__label {
@@ -3560,7 +3647,9 @@
     border: 0;
   }
 
+  /* F5: as abas viram chips roláveis (`.detail-tab-row`); o select nativo some. */
   .process-detail-view .detail-tab-select {
+    display: none;
     margin: 0 0 12px;
   }
 
@@ -4436,6 +4525,380 @@
     position: absolute;
     inset: -13px -11px;
   }
+
+  /* ===== Detalhe empilhado (remake, F5) =====================================
+     O detalhe e' uma CAMADA por cima da lista, que continua montada atras em
+     `.m-stack` (`inert` + aria-hidden, pelo JS). Em REPOUSO nem a camada nem os
+     ancestrais dela tem `transform`, `will-change`, `filter` ou `contain`: eles
+     virariam o bloco de contencao dos `position: fixed` (barra de acao, galeria
+     e demais camadas). So' a ENTRADA/SAIDA animam (`m-push-in`/`m-push-out` em
+     styles.css, sem fill apos a entrada), o gesto de borda escreve transform
+     inline so' durante o arrasto e a lista recua so' enquanto o detalhe cobre. */
+  .m-stack {
+    transition:
+      transform 0.5s var(--m-ios),
+      filter 0.5s ease;
+  }
+
+  .m-stack-under {
+    transform: translateX(-26%);
+    filter: brightness(0.78);
+    pointer-events: none;
+  }
+
+  /* O `.page-fade` (ancestral da camada) fica com `will-change: transform` e,
+     pelo `both`, com o transform final da entrada: ambos fariam dele o bloco de
+     contencao do `position: fixed`. Com o detalhe aberto o fade so' vale
+     durante a entrada (fill `backwards`) e o `will-change` sai. */
+  .main-content > .page-fade:has(.process-detail-view) {
+    will-change: auto;
+  }
+
+  .main-content > .page-fade--visible:has(.process-detail-view) {
+    opacity: 1;
+    animation-fill-mode: backwards;
+  }
+
+  .process-detail-view.list-card {
+    --m-cta-h: 0px;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    box-sizing: border-box;
+    gap: 14px;
+    padding: 0 16px calc(24px + var(--m-cta-h) + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    background: var(--bg);
+    animation: m-push-in 0.5s var(--m-ios) backwards;
+  }
+
+  .process-detail-view.list-card::-webkit-scrollbar {
+    display: none;
+  }
+
+  .process-detail-view.list-card[data-m-leaving='true'] {
+    animation: m-push-out 0.42s var(--m-ios) forwards;
+    pointer-events: none;
+  }
+
+  /* Altura da barra de acao (12 + 50 [+ 8 + 50] + 14): o respiro do fim da
+     rolagem cede lugar a ela. 2 linhas so' com o primario + outro botao. */
+  .process-detail-view.list-card:has(.process-detail-toolbar > :is(.primary-button, .ghost-button:not(.process-detail-fav))) {
+    --m-cta-h: 76px;
+  }
+
+  .process-detail-view.list-card:has(.process-detail-toolbar > .primary-button ~ .ghost-button:not(.process-detail-fav)) {
+    --m-cta-h: 134px;
+  }
+
+  /* Hero navy do detalhe: a barra do topo (sticky) fica por cima; o hero sobe
+     por baixo dela (margem negativa da barra, ja descontado o gap de 14px) e
+     termina na folha arredondada. */
+  .m-hero--detail {
+    order: -2;
+    position: relative;
+    display: block;
+    margin: 0 -16px -8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 62px) 20px 46px;
+    overflow: hidden;
+    background: var(--m-hero-bg);
+    color: var(--m-hero-ink);
+  }
+
+  .m-hero--detail::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 26px;
+    border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
+    background: var(--bg);
+  }
+
+  .m-hero__art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .m-hero__art path {
+    fill: none;
+    stroke: var(--m-hero-line);
+    stroke-width: 1;
+  }
+
+  .m-hero__in {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    transform: translateY(calc(var(--m-sy, 0) * 0.28px));
+    opacity: calc(1 - var(--m-sy, 0) / 150);
+  }
+
+  .m-hero__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    color: var(--m-hero-sub);
+  }
+
+  /* Titulo e marcas de carga lado a lado; as marcas ficam fora do h1 para o
+     nome do heading nao carregar os rotulos. */
+  .m-hero__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-hero__head .m-marks {
+    margin-left: 0;
+  }
+
+  .m-hero__title {
+    min-width: 0;
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.12;
+    color: var(--m-hero-ink);
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  /* Trajeto dentro do hero: trilho, rotulos e nos sobre o navy. */
+  .m-route--hero {
+    --m-route-off: var(--m-route-off-hero);
+    --m-route-text: var(--m-route-ink);
+    --m-route-now: var(--m-hero-ink);
+  }
+
+  .m-route--hero .m-route__ship {
+    color: var(--primary);
+  }
+
+  .m-route--hero .m-route__step i {
+    background: var(--m-navy-900);
+  }
+
+  .m-route--hero .m-route__step--done i,
+  .m-route--hero .m-route__step--now i {
+    background: var(--primary);
+  }
+
+  /* Abas em chips roláveis, com fade nas bordas (a mascara usa so' keywords). */
+  .process-detail-view .tab-row.detail-tab-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: -6px -16px;
+    padding: 6px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+  }
+
+  .process-detail-view .tab-row.detail-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    position: relative;
+    flex: none;
+    width: auto;
+    min-height: 0;
+    padding: 8px 13px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--ink-soft);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    transform: none;
+    transition:
+      background-color 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  /* O `::before` leva o alvo de toque a 44px sem mudar o visual do chip. */
+  .process-detail-view .detail-tab-row .tab-button::before {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button--active {
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: none;
+  }
+
+  /* Contador de Documentos: selo `--warning` com texto `--on-warn`. */
+  .process-detail-view .detail-tab-row .documents-tab-count {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--warning);
+    color: var(--on-warn);
+    font-weight: 800;
+  }
+
+  .m-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Grupos do mock (raio 20 + sombra do cartao) sobre os paineis existentes. */
+  .process-detail-view .tab-panel-spacing:has(> .process-general-card) {
+    border-radius: 20px;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child {
+    border-radius: 20px 20px 0 0;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:last-child {
+    border-radius: 0 0 20px 20px;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child:last-child {
+    border-radius: 20px;
+  }
+
+  .process-detail-view .detail-block,
+  .process-detail-view .tab-panel-spacing > .detail-card:not(.process-general-card):not(.detail-block) {
+    border-radius: 20px;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  /* Janela ETD -> ETA: duas pontas em mono com a seta no meio (a barra de
+     progresso do mock nao entra: nao ha dado que a alimente). */
+  .process-detail-view .tab-panel-spacing > .process-general-card--etd-eta {
+    padding-block: 14px;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div {
+    display: block;
+    padding: 0;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div + div {
+    border-top: 0;
+    text-align: right;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split::before {
+    content: '→';
+    content: '→' / '';
+    order: 1;
+    color: var(--ink-soft);
+    font-size: var(--m-fs-body);
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div:first-child {
+    order: 0;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div + div {
+    order: 2;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split .detail-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split p {
+    margin-top: 4px;
+    text-align: inherit;
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  /* Barra de acao fixa: Editar processo (menta) + secundarios. O cabecalho
+     antigo (nome, status, trajeto em timeline, "Voltar") nao renderiza no mobile;
+     o wrapper vira so' o hospedeiro da barra. */
+  .process-detail-view > .process-detail-card-heading {
+    display: contents;
+  }
+
+  .process-detail-view .process-detail-heading,
+  .process-detail-view .process-detail-card-heading__back,
+  .process-detail-view .process-timeline {
+    display: none;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-toolbar:has(> .primary-button, > .ghost-button:not(.process-detail-fav)) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: auto;
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, transparent, var(--bg) 38%);
+  }
+
+  .process-detail-view .process-detail-toolbar > .primary-button,
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    flex: 1 1 0;
+    justify-content: center;
+    height: 50px;
+    min-height: 50px;
+    border-radius: 16px;
+    font-size: 0.9375rem;
+  }
+
+  .process-detail-view .process-detail-toolbar > .primary-button {
+    flex-basis: 100%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: 800;
+  }
+
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
 }
 
 /* ===== T: ajustes so de tablet (721px - 1040px) ===== */
@@ -4935,6 +5398,43 @@
   .m-switch,
   .m-switch::after {
     transition: none;
+  }
+
+  /* Detalhe empilhado (F5): sem deslize de entrada/saida, sem o recuo e o
+     escurecimento da lista, sem a descida da pilula com atraso, sem o fade da
+     barra do topo/chips e sem o parallax do hero. O gesto de borda continua
+     acompanhando o dedo (o hook nao anima o retorno com movimento reduzido). */
+  .m-stack {
+    transition: none;
+  }
+
+  .process-detail-view.list-card {
+    animation: none;
+  }
+
+  .process-detail-view.list-card[data-m-leaving='true'] {
+    animation: none;
+  }
+
+  .main-content:has(.process-detail-view:not([data-m-leaving='true'])) > .mobile-bottom-nav {
+    transition: none;
+  }
+
+  .process-detail-view > .process-detail-mobilebar {
+    transition: none;
+  }
+
+  .process-detail-view .process-detail-mobilebar__title {
+    transition: none;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    transition: none;
+  }
+
+  .m-hero__in {
+    transform: none;
+    opacity: 1;
   }
 }
 
