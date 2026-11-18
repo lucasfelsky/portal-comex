@@ -448,14 +448,23 @@ export default function ProcessListView({
   const mobileActive = mobileShown.filter((process) => !isProcessStatusFinalized(process.processStatus))
   const mobileDone = mobileShown.filter((process) => isProcessStatusFinalized(process.processStatus))
   // "N processos ativos" do hero: em andamento, sem arquivados e sem filtro nenhum.
+  // `filteredProcesses` (muda a cada tecla da busca) so' entra nas deps quando nao
+  // ha `applyListFilters`; com ele o total nao depende da busca e o filtro+sort
+  // de todos os processos nao roda de novo por tecla.
+  const heroFallbackPool = applyListFilters ? null : filteredProcesses
   const heroActiveCount = useMemo(() => {
     if (!isMobile) return 0
-    const pool = applyListFilters ? applyListFilters(EMPTY_LIST_FILTERS) : filteredProcesses
+    const pool = applyListFilters ? applyListFilters(EMPTY_LIST_FILTERS) : heroFallbackPool
     return pool.filter((process) => !isProcessStatusFinalized(process.processStatus)).length
-  }, [isMobile, applyListFilters, filteredProcesses])
+  }, [isMobile, applyListFilters, heroFallbackPool])
+  // Em Arquivadas so' contam os filtros que valem la: Modal e "Só favoritos"
+  // (categoria, ETA, etapa operacional e busca so' afetam as ativas).
   const mobileFilterCount =
-    activeFilterCount + (mobileCategory !== 'all' ? 1 : 0) + (favoritesOnly ? 1 : 0)
-  const hasMobileFilters = hasActiveFilters || mobileCategory !== 'all' || favoritesOnly || stageChip !== 'all'
+    (viewingArchived ? 0 : activeFilterCount) +
+    (mobileCategory !== 'all' ? 1 : 0) +
+    (favoritesOnly ? 1 : 0)
+  const hasMobileFilters =
+    (!viewingArchived && hasActiveFilters) || mobileCategory !== 'all' || favoritesOnly || stageChip !== 'all'
   // A troca de chip/aba/filtro remonta os cartoes e a entrada escalonada roda de novo.
   const mobileListKey = [
     viewingArchived ? 'arq' : 'ativas',
@@ -496,6 +505,14 @@ export default function ProcessListView({
     setFavoritesOnly(draft.favoritesOnly)
   }
   const clearMobileFilters = () => {
+    if (viewingArchived) {
+      // Em Arquivadas limpa so' o que vale la e continua na aba (os filtros das
+      // ativas, ocultos aqui, ficam como estao).
+      setMobileCategory('all')
+      setFavoritesOnly(false)
+      setStageChip('all')
+      return
+    }
     onClearAllFilters()
     setMobileCategory('all')
     setFavoritesOnly(false)
@@ -553,7 +570,9 @@ export default function ProcessListView({
       <strong>Nada por aqui</strong>
       <p>
         {hasMobileFilters
-          ? 'Nenhum processo corresponde à busca e aos filtros atuais.'
+          ? viewingArchived
+            ? 'Nenhum processo arquivado corresponde aos filtros atuais.'
+            : 'Nenhum processo corresponde à busca e aos filtros atuais.'
           : viewingArchived
             ? 'Nenhum processo arquivado.'
             : isAdmin
@@ -636,7 +655,9 @@ export default function ProcessListView({
           </div>
         </MobileHeroSlot>
       ) : null}
-      <div className="card-heading">
+      <div
+        className={`card-heading${isMobile && !(isAdmin && onReconcileErp) ? ' card-heading--m-empty' : ''}`}
+      >
         <div>
           <h3>Chegadas</h3>
         </div>
@@ -663,15 +684,18 @@ export default function ProcessListView({
                 Importar do DBCorp
               </button>
             ) : null}
-            <button
-              type="button"
-              className="ghost-button ghost-button--secondary"
-              disabled={filteredProcesses.length === 0 || isExporting}
-              title="Baixar as linhas visíveis (filtros aplicados) em Excel"
-              onClick={onExport}
-            >
-              {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
-            </button>
+            {/* Mobile: "Exportar N processos" mora no rodape da folha de filtros. */}
+            {isMobile ? null : (
+              <button
+                type="button"
+                className="ghost-button ghost-button--secondary"
+                disabled={filteredProcesses.length === 0 || isExporting}
+                title="Baixar as linhas visíveis (filtros aplicados) em Excel"
+                onClick={onExport}
+              >
+                {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
+              </button>
+            )}
             {canViewArchived && archivedProcesses.length > 0 ? (
               <button
                 type="button"
@@ -696,11 +720,12 @@ export default function ProcessListView({
                 <Icon name="search" size={18} aria-hidden="true" />
                 <input
                   type="search"
-                  value={searchTerm}
+                  value={viewingArchived ? '' : searchTerm}
                   onChange={(event) => onSearchTermChange(event.target.value)}
-                  placeholder="Processo, PO, produto ou contêiner"
+                  placeholder={viewingArchived ? 'Buscar nas ativas' : 'Processo, PO, produto ou contêiner'}
                   aria-label="Buscar processo"
                   autoComplete="off"
+                  disabled={viewingArchived}
                 />
               </label>
               <button
@@ -1011,6 +1036,10 @@ export default function ProcessListView({
             isAdmin ? [...OPERATION_FILTER_OPTIONS, 'Dados pendentes'] : OPERATION_FILTER_OPTIONS
           }
           countFor={countForDraft}
+          archived={viewingArchived}
+          exportCount={mobileShown.length}
+          isExporting={isExporting}
+          onExport={onExport ? () => onExport(mobileShown) : undefined}
           onApply={applySheetFilters}
           onClose={closeSheet}
         />

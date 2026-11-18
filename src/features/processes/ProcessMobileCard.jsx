@@ -99,7 +99,7 @@ export default function ProcessMobileCard({
             <button
               type="button"
               className={`m-pc__star${isFavorite ? ' m-pc__star--on' : ''}${favoriteStarPop ? ' m-pc__star--pop' : ''}`}
-              aria-label={isFavorite ? 'Desfavoritar processo' : 'Favoritar processo'}
+              aria-label={`${isFavorite ? 'Desfavoritar' : 'Favoritar'} ${getProcessTitle(item, canSeeName)}`}
               onClick={(event) => {
                 event.stopPropagation()
                 onToggleFavorite(item.id)

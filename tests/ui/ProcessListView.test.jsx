@@ -973,7 +973,7 @@ describe('ProcessListView — cartões do remake mobile (F4)', () => {
       expect(consolidated.container.querySelector('.m-pc__supplier')).toBeNull()
     })
 
-    it('a estrela favorita sem abrir o processo (clique e Enter) e usa o nome de sempre', async () => {
+    it('a estrela favorita sem abrir o processo (clique e Enter) e o nome acessível leva o título do cartão', async () => {
       const user = userEvent.setup()
       const onSelectProcess = vi.fn()
       const onToggleFavorite = vi.fn()
@@ -983,7 +983,8 @@ describe('ProcessListView — cartões do remake mobile (F4)', () => {
         onSelectProcess,
         onToggleFavorite,
       })
-      const star = screen.getByRole('button', { name: 'Favoritar processo' })
+      // Nome acessivel com o titulo do cartao (cada estrela e' distinguivel).
+      const star = screen.getByRole('button', { name: 'Favoritar PO: PO 10' })
       await user.click(star)
       expect(onToggleFavorite).toHaveBeenCalledWith('s-transit')
       star.focus()
@@ -1222,12 +1223,13 @@ describe('ProcessListView — topo e filtros do remake mobile (F4)', () => {
       const grab = within(dialog).getByRole('button', { name: 'Fechar filtros' })
       // O foco inicial vai para o primeiro elemento da folha (depois de ~30ms).
       await waitFor(() => expect(grab).toHaveFocus())
-      const apply = within(dialog).getByRole('button', { name: /^Ver \d+ processos?$/ })
-      apply.focus()
+      // O ultimo elemento da folha e' o "Exportar N processos" do rodape.
+      const last = within(dialog).getByRole('button', { name: /^Exportar \d+ processos?/ })
+      last.focus()
       await user.tab()
       expect(grab).toHaveFocus()
       await user.tab({ shift: true })
-      expect(apply).toHaveFocus()
+      expect(last).toHaveFocus()
     })
 
     it('Limpar volta o rascunho ao padrão e o botão "Ver N" acompanha', async () => {
@@ -1320,5 +1322,309 @@ describe('ProcessListView — topo e filtros do remake mobile (F4)', () => {
     await user.keyboard('{Escape}')
     // stubMatchMedia(true) tambem liga prefers-reduced-motion: sem os 500ms de saida.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F4 ajustes aprovados: Exportar na folha, Arquivadas sem filtros inaplicaveis,
+// nome acessivel da estrela e custo do total do hero.
+// ---------------------------------------------------------------------------
+const titlesOf = (container) => cardsOf(container).map((card) => card.querySelector('.m-pc__title').textContent)
+const closeSheetWithEsc = async (user) => {
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+}
+
+describe('ProcessListView — "Exportar" no rodapé da folha de filtros (mobile, F4)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('sai da página (nada de "Exportar" depois da lista) e vive só dentro da folha', async () => {
+    const user = userEvent.setup()
+    renderView({ filteredProcesses: STAGED })
+    expect(screen.queryByRole('button', { name: /Exportar/ })).not.toBeInTheDocument()
+    const dialog = await openFilterSheet(user)
+    expect(within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })).toHaveTextContent('Exportar 4 processos')
+  })
+
+  it('o N muda com chip de etapa, Modal e Só favoritos e sempre bate com a lista renderizada', async () => {
+    const user = userEvent.setup()
+    const { container } = renderView({ filteredProcesses: STAGED, favoriteProcessIds: ['s-transit', 's-release'] })
+    const exportN = async () => {
+      const dialog = await openFilterSheet(user)
+      const button = within(dialog).getByRole('button', { name: /^Exportar \d+ processos?/ })
+      return { dialog, n: Number(/Exportar (\d+)/.exec(button.textContent)[1]) }
+    }
+
+    let state = await exportN()
+    expect(state.n).toBe(4)
+    expect(state.n).toBe(cardsOf(container).length)
+    await closeSheetWithEsc(user)
+
+    // chip de etapa (fora da folha)
+    await user.click(screen.getByRole('button', { name: 'Em trânsito (1)' }))
+    state = await exportN()
+    expect(state.n).toBe(1)
+    expect(state.n).toBe(cardsOf(container).length)
+    await closeSheetWithEsc(user)
+
+    // Modal aplicado pela folha
+    await user.click(screen.getByRole('button', { name: 'Todas (4)' }))
+    let dialog = await openFilterSheet(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    await user.click(within(dialog).getByRole('button', { name: /^Ver \d+ processos?$/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    state = await exportN()
+    expect(state.n).toBe(1)
+    expect(state.n).toBe(cardsOf(container).length)
+
+    // Só favoritos (2 favoritos: um marítimo e um aéreo) sem Modal
+    await user.click(within(state.dialog).getByRole('button', { name: 'Todos' }))
+    await user.click(within(state.dialog).getByRole('switch', { name: 'Só favoritos' }))
+    await user.click(within(state.dialog).getByRole('button', { name: /^Ver \d+ processos?$/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    state = await exportN()
+    expect(state.n).toBe(2)
+    expect(state.n).toBe(cardsOf(container).length)
+    dialog = state.dialog
+    expect(within(dialog).getByRole('button', { name: /^Exportar 2 processos/ })).toBeInTheDocument()
+  })
+
+  it('título e nome acessível dizem que é a lista visível (busca e filtros aplicados) e avisam do rascunho', async () => {
+    const user = userEvent.setup()
+    renderView({ filteredProcesses: STAGED })
+    const dialog = await openFilterSheet(user)
+    const button = within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })
+    const expected = 'Exportar 4 processos: baixar em Excel a lista visível (busca e filtros aplicados)'
+    expect(button).toHaveAttribute('aria-label', expected)
+    expect(button).toHaveAttribute('title', expected)
+    // Rascunho diferente do aplicado: o export segue na lista visivel e diz isso.
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    expect(within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })).toHaveAttribute(
+      'title',
+      `${expected}. Filtros ainda não aplicados não entram`
+    )
+  })
+
+  it('o clique exporta exatamente as linhas visíveis (e não o evento nem a lista crua da página)', async () => {
+    const user = userEvent.setup()
+    const onExport = vi.fn()
+    const { container } = renderView({ filteredProcesses: STAGED, onExport })
+    await user.click(screen.getByRole('button', { name: 'Atracação (1)' }))
+    const dialog = await openFilterSheet(user)
+    await user.click(within(dialog).getByRole('button', { name: /^Exportar 1 processo/ }))
+    expect(onExport).toHaveBeenCalledTimes(1)
+    const [rows] = onExport.mock.calls[0]
+    expect(Array.isArray(rows)).toBe(true)
+    expect(rows.map((row) => row.id)).toEqual(['s-berth'])
+    expect(titlesOf(container)).toEqual(['PO: PO 11'])
+  })
+
+  it('desabilitado sem linhas e durante a exportação; sem onExport o botão não existe', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderView({ filteredProcesses: [] })
+    let dialog = await openFilterSheet(user)
+    expect(within(dialog).getByRole('button', { name: /^Exportar 0 processos/ })).toBeDisabled()
+    unmount()
+
+    const { unmount: unmountBusy } = renderView({ filteredProcesses: STAGED, isExporting: true })
+    dialog = await openFilterSheet(user)
+    expect(within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })).toBeDisabled()
+    unmountBusy()
+
+    renderView({ filteredProcesses: STAGED, onExport: undefined })
+    dialog = await openFilterSheet(user)
+    expect(within(dialog).queryByRole('button', { name: /Exportar/ })).not.toBeInTheDocument()
+  })
+
+  it('"Importar do DBCorp" (admin) continua na página no mobile', () => {
+    renderView({ filteredProcesses: STAGED, isAdmin: true, onReconcileErp: vi.fn() })
+    expect(screen.getByRole('button', { name: 'Importar do DBCorp' })).toBeInTheDocument()
+  })
+
+  it('tablet: "Exportar (N)" segue na barra da página com o texto e o title de sempre', () => {
+    stubMatchMedia(false)
+    renderView({ filteredProcesses: STAGED })
+    const button = screen.getByRole('button', { name: /Exportar \(4\)/ })
+    expect(button).toHaveAttribute('title', 'Baixar as linhas visíveis (filtros aplicados) em Excel')
+  })
+})
+
+describe('ProcessListView — aba Arquivadas sem filtros inaplicáveis (mobile, F4)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  const adminProps = (extra = {}) => ({
+    isAdmin: true,
+    onArchiveProcess: vi.fn(),
+    filteredProcesses: STAGED.slice(0, 3),
+    archivedProcesses: [STAGED[3], { ...STAGED[0], id: 'arch-air', category: 'AEREO', processNumber: 'AWB 99' }],
+    ...extra,
+  })
+
+  it('a folha mostra só Modal e "Só favoritos"; em Ativas continua com todos os grupos', async () => {
+    const user = userEvent.setup()
+    renderView(adminProps())
+    let dialog = await openFilterSheet(user)
+    for (const name of ['Categoria', 'Modal', 'Faixa de ETA', 'Etapa operacional']) {
+      expect(within(dialog).getByRole('group', { name })).toBeInTheDocument()
+    }
+    await closeSheetWithEsc(user)
+
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    dialog = await openFilterSheet(user)
+    expect(within(dialog).getByRole('group', { name: 'Modal' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('switch', { name: 'Só favoritos' })).toBeInTheDocument()
+    for (const name of ['Categoria', 'Faixa de ETA', 'Etapa operacional']) {
+      expect(within(dialog).queryByRole('group', { name })).not.toBeInTheDocument()
+    }
+    expect(within(dialog).queryByLabelText('ETA de')).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('ETA até')).not.toBeInTheDocument()
+  })
+
+  it('o contador do botão ignora categoria/ETA/etapa em Arquivadas e volta a contar em Ativas', async () => {
+    const user = userEvent.setup()
+    renderView(
+      adminProps({ categoryFilter: 'FCL', operationFilter: 'DUIMP pendente', etaStartDate: '2026-08-01', hasActiveFilters: true })
+    )
+    expect(screen.getByRole('button', { name: 'Filtros (3)' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    expect(screen.getByRole('button', { name: 'Filtros' })).toBeInTheDocument()
+    expect(document.querySelector('.m-fbtn__n')).toBeNull()
+
+    const dialog = await openFilterSheet(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    await user.click(within(dialog).getByRole('button', { name: /^Ver \d+ processos?$/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Filtros (1)' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ativas' }))
+    expect(screen.getByRole('button', { name: 'Filtros (4)' })).toBeInTheDocument()
+  })
+
+  it('a busca fica desabilitada com "Buscar nas ativas" e não mostra o termo das ativas; volta em Ativas', async () => {
+    const user = userEvent.setup()
+    renderView(adminProps({ searchTerm: 'soda', hasActiveFilters: true }))
+    const active = screen.getByRole('searchbox', { name: 'Buscar processo' })
+    expect(active).toBeEnabled()
+    expect(active).toHaveValue('soda')
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    const archived = screen.getByRole('searchbox', { name: 'Buscar processo' })
+    expect(archived).toBeDisabled()
+    expect(archived).toHaveAttribute('placeholder', 'Buscar nas ativas')
+    expect(archived).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: 'Ativas' }))
+    const back = screen.getByRole('searchbox', { name: 'Buscar processo' })
+    expect(back).toBeEnabled()
+    expect(back).toHaveValue('soda')
+    expect(back).toHaveAttribute('placeholder', 'Processo, PO, produto ou contêiner')
+  })
+
+  it('o segmented continua visível com 0 arquivadas e o estado vazio diz "Nenhum processo arquivado."', async () => {
+    const user = userEvent.setup()
+    renderView(adminProps({ archivedProcesses: [], categoryFilter: 'FCL', hasActiveFilters: true }))
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    expect(screen.getByRole('button', { name: 'Arquivadas' })).toHaveAttribute('aria-pressed', 'true')
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Nenhum processo arquivado.')
+    // Filtros das ativas (categoria) nao contam aqui: nada de "Limpar filtros".
+    expect(within(status).queryByRole('button', { name: 'Limpar filtros' })).not.toBeInTheDocument()
+  })
+
+  it('o N de "Ver" e o do "Exportar" seguem a lista arquivada (Modal) e exportam essas linhas', async () => {
+    const user = userEvent.setup()
+    const onExport = vi.fn()
+    const { container } = renderView(adminProps({ onExport }))
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    const dialog = await openFilterSheet(user)
+    expect(within(dialog).getByRole('button', { name: 'Ver 2 processos' })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Ver 1 processo' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(cardsOf(container)).toHaveLength(1)
+    const reopened = await openFilterSheet(user)
+    await user.click(within(reopened).getByRole('button', { name: /^Exportar 1 processo/ }))
+    expect(onExport.mock.calls[0][0].map((row) => row.id)).toEqual(['arch-air'])
+  })
+
+  it('"Limpar" na folha de Arquivadas não zera (ao aplicar) os filtros das ativas', async () => {
+    const user = userEvent.setup()
+    const handlers = {
+      onCategoryFilterChange: vi.fn(),
+      onEtaStartDateChange: vi.fn(),
+      onEtaEndDateChange: vi.fn(),
+      onOperationFilterChange: vi.fn(),
+    }
+    renderView(
+      adminProps({ categoryFilter: 'FCL', operationFilter: 'Coleta pendente', etaStartDate: '2026-08-01', ...handlers })
+    )
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    const dialog = await openFilterSheet(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Limpar' }))
+    expect(within(dialog).getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(within(dialog).getByRole('button', { name: /^Ver \d+ processos?$/ }))
+    for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('"Limpar filtros" do estado vazio em Arquivadas limpa só chip/Modal/favoritos e fica na aba', async () => {
+    const user = userEvent.setup()
+    const onClearAllFilters = vi.fn()
+    renderView(adminProps({ onClearAllFilters, archivedProcesses: [STAGED[3]] }))
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    await user.click(screen.getByRole('button', { name: 'Liberação (0)' }))
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Nenhum processo arquivado corresponde aos filtros atuais.')
+    await user.click(within(status).getByRole('button', { name: 'Limpar filtros' }))
+    expect(onClearAllFilters).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Arquivadas' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Todas (1)' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProcessListView — estrela do cartão e total do hero (mobile, F4)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('o nome acessível da estrela leva o título do cartão e alterna Favoritar/Desfavoritar', () => {
+    const { container } = renderView({
+      filteredProcesses: [STAGED[0], STAGED[1]],
+      canSeeName: true,
+      onToggleFavorite: vi.fn(),
+      favoriteProcessIds: ['s-berth'],
+    })
+    expect(titlesOf(container)).toEqual(['Resina A', 'Solvente B'])
+    expect(screen.getByRole('button', { name: 'Favoritar Resina A' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desfavoritar Solvente B' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^(Des)?favoritar processo$/i })).not.toBeInTheDocument()
+  })
+
+  it('digitar na busca (novo filteredProcesses) não refaz o filtro+sort do total do hero', () => {
+    const applyListFilters = vi.fn(() => STAGED)
+    const base = {
+      isLoading: false,
+      selectedProcessId: null,
+      isAdmin: false,
+      searchTerm: '',
+      categoryFilter: 'Todos',
+      etaStartDate: '',
+      etaEndDate: '',
+      operationFilter: 'Todos',
+      hasActiveFilters: false,
+      processCategoryOptions: ['FCL'],
+      onSearchTermChange: vi.fn(),
+      onCategoryFilterChange: vi.fn(),
+      onEtaStartDateChange: vi.fn(),
+      onEtaEndDateChange: vi.fn(),
+      onOperationFilterChange: vi.fn(),
+      onClearAllFilters: vi.fn(),
+      onSelectProcess: vi.fn(),
+      onExport: vi.fn(),
+      applyListFilters,
+    }
+    const { rerender } = render(<ProcessListView {...base} filteredProcesses={STAGED} />)
+    const callsAfterMount = applyListFilters.mock.calls.length
+    expect(callsAfterMount).toBeGreaterThan(0)
+    rerender(<ProcessListView {...base} searchTerm="a" filteredProcesses={[...STAGED.slice(0, 2)]} />)
+    rerender(<ProcessListView {...base} searchTerm="ab" filteredProcesses={[...STAGED.slice(0, 1)]} />)
+    expect(applyListFilters.mock.calls.length).toBe(callsAfterMount)
   })
 })

@@ -2625,10 +2625,15 @@
     border-radius: 0;
   }
 
-  /* Exportar/Importar (admin) nao existem no mock-up: descem para depois da lista. */
+  /* Importar (admin) nao existe no mock-up: desce para depois da lista. O Exportar
+     mora no rodape da folha de filtros; sem Importar o bloco some (sem vao). */
   .process-list-card > .card-heading {
     order: 3;
     margin-bottom: 0;
+  }
+
+  .process-list-card > .card-heading.card-heading--m-empty {
+    display: none;
   }
 
   /* T7: mesmos seletores de styles.css:9083/9095/9489. */
@@ -2700,6 +2705,15 @@
 
   .process-list-card .chegadas-search input::placeholder {
     color: var(--ink-soft);
+  }
+
+  /* Em Arquivadas a busca fica desabilitada (so' filtra as ativas). */
+  .process-list-card .chegadas-search:has(input:disabled) {
+    opacity: 0.6;
+  }
+
+  .process-list-card .chegadas-search input:disabled {
+    cursor: not-allowed;
   }
 
   /* Ativas / Arquivadas. O ::before leva o alvo de toque a 44px sem mudar o
@@ -3128,8 +3142,10 @@
     outline-offset: 2px;
   }
 
+  /* --warning-700 (>= 6:1 no claro) e nao --warning (2,95:1 sobre o cartao,
+     reprova 1.4.11); no escuro o token flipa para o dourado claro. */
   .m-pc__star--on {
-    color: var(--warning);
+    color: var(--warning-700);
   }
 
   .m-pc__star--pop {
@@ -3454,6 +3470,16 @@
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 8px;
+  }
+
+  /* Acao secundaria do rodape da folha: "Exportar N processos" em linha propria. */
+  .m-bsheet__export {
+    grid-column: 1 / -1;
+  }
+
+  .m-bsheet__export:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .process-detail-view > .process-detail-mobilebar {
@@ -3951,7 +3977,7 @@
     border: 0;
     border-radius: 50%;
     background: none;
-    color: var(--warning);
+    color: var(--warning-700);
     cursor: pointer;
   }
 

@@ -100,9 +100,10 @@ function ratio(theme, foregroundToken, backgroundSpec) {
 }
 
 // [descricao, token da cor, fundo, minimo]
-// Fora da lista de proposito: a estrela favoritada (`--warning` #c98a12 sobre
-// o cartao branco = 2,95:1, igual a do favorito do Inicio, aprovada na F3). O
-// estado tambem e' dado pela FORMA (estrela cheia x vazada) e pelo aria-label.
+// A estrela favoritada (cartao de Chegadas e favorito do Inicio) usa
+// `--warning-700`, nao `--warning` (#c98a12 = 2,95:1 sobre o cartao branco,
+// reprova 1.4.11); o par entra com minimo 3:1 (componente de UI) e o token
+// flipa no tema escuro.
 const PAIRS = [
   ['linha "PO · modal", meta, chip inativo e contagem sobre o cartao', '--ink-soft', '--surface', 4.5],
   ['eyebrows (Em andamento/Concluidos), rotulos da folha e estado vazio sobre a tela', '--ink-soft', '--bg', 4.5],
@@ -119,6 +120,7 @@ const PAIRS = [
   ['tag de status ok', '--success-700', '--success-50', 4.5],
   ['tag de status info', '--info-700', '--info-50', 4.5],
   ['tag de status danger/alerta vermelho', '--danger-700', '--danger-50', 4.5],
+  ['estrela favoritada (cartao de Chegadas e favorito do Inicio)', '--warning-700', '--surface', 3],
 ]
 
 describe('Chegadas mobile (F4) - contraste dos pares de cor (claro e escuro)', () => {
@@ -130,6 +132,15 @@ describe('Chegadas mobile (F4) - contraste dos pares de cor (claro e escuro)', (
     }
     expect(THEMES.escuro['--m-fill']).not.toBe(THEMES.claro['--m-fill'])
     expect(THEMES.escuro['--surface']).not.toBe(THEMES.claro['--surface'])
+  })
+
+  it('o CSS pinta a estrela favoritada com --warning-700 (nao com --warning)', () => {
+    for (const selector of ['.m-pc__star--on', '.m-fav__star']) {
+      const start = redesignCss.indexOf(`${selector} {`)
+      expect(start, selector).toBeGreaterThan(-1)
+      const body = redesignCss.slice(redesignCss.indexOf('{', start) + 1, redesignCss.indexOf('}', start))
+      expect(body, selector).toMatch(/(^|[\s;])color:\s*var\(--warning-700\)/)
+    }
   })
 
   for (const [themeName, theme] of Object.entries(THEMES)) {

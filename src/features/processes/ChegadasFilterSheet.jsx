@@ -1,5 +1,8 @@
 // Folha de filtros de Chegadas no mobile (remake, F4): bottom sheet com
 // Categoria, Modal, Faixa de ETA, Etapa operacional e o switch "Só favoritos".
+// Na aba Arquivadas (`archived`) so' Modal e "Só favoritos" aparecem: os demais
+// nao afetam aquela lista. No rodape, a acao secundaria "Exportar N processos"
+// baixa a lista VISIVEL (a aplicada, nao o rascunho).
 // Os filtros ficam num RASCUNHO local: o botao "Ver N processos" aplica tudo de
 // uma vez (N e' calculado pelo pai com o rascunho); Esc, scrim e arrastar o
 // grab fecham sem aplicar. Renderizada por Portal em document.body (evita o
@@ -13,6 +16,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '../../components/Icon'
+import Spinner from '../../components/Spinner'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 
 // Mesma duracao da transicao de `.m-bsheet` (mobile-redesign.css).
@@ -66,6 +70,10 @@ export default function ChegadasFilterSheet({
   categoryOptions,
   operationOptions,
   countFor,
+  archived = false,
+  exportCount = 0,
+  isExporting = false,
+  onExport,
   onApply,
   onClose,
 }) {
@@ -130,6 +138,9 @@ export default function ChegadasFilterSheet({
   useFocusTrap(!isLeaving, requestClose, sheetRef)
 
   const count = useMemo(() => countFor(draft), [countFor, draft])
+  // Rascunho diferente do que esta aplicado na lista: o export so' enxerga o aplicado.
+  const appliedFilters = { ...DEFAULT_SHEET_FILTERS, ...initialFilters }
+  const isDraftDirty = Object.keys(DEFAULT_SHEET_FILTERS).some((key) => draft[key] !== appliedFilters[key])
 
   const patch = (changes) => setDraft((current) => ({ ...current, ...changes }))
 
@@ -176,6 +187,24 @@ export default function ChegadasFilterSheet({
   }
 
   const countLabel = `Ver ${count} ${count === 1 ? 'processo' : 'processos'}`
+  const exportLabel = `Exportar ${exportCount} ${exportCount === 1 ? 'processo' : 'processos'}`
+  const exportHint = `${exportLabel}: baixar em Excel a lista visível (busca e filtros aplicados)${
+    isDraftDirty ? '. Filtros ainda não aplicados não entram' : ''
+  }`
+
+  // "Limpar": em Arquivadas so' zera os dois filtros que a aba mostra; os outros
+  // (da lista de ativas) ficam como estao em vez de serem zerados as cegas.
+  function handleReset() {
+    setDraft((current) =>
+      archived
+        ? {
+            ...current,
+            modal: DEFAULT_SHEET_FILTERS.modal,
+            favoritesOnly: DEFAULT_SHEET_FILTERS.favoritesOnly,
+          }
+        : { ...DEFAULT_SHEET_FILTERS }
+    )
+  }
 
   return createPortal(
     <>
@@ -209,20 +238,22 @@ export default function ChegadasFilterSheet({
           Filtros
         </h3>
 
-        <div>
-          <div className="m-lbl" id={categoryLabelId}>
-            Categoria
+        {archived ? null : (
+          <div>
+            <div className="m-lbl" id={categoryLabelId}>
+              Categoria
+            </div>
+            <ChipGroup
+              labelId={categoryLabelId}
+              options={[
+                { value: 'Todos', label: 'Todas' },
+                ...categoryOptions.map((item) => ({ value: item, label: item })),
+              ]}
+              value={draft.category}
+              onChange={(category) => patch({ category })}
+            />
           </div>
-          <ChipGroup
-            labelId={categoryLabelId}
-            options={[
-              { value: 'Todos', label: 'Todas' },
-              ...categoryOptions.map((item) => ({ value: item, label: item })),
-            ]}
-            value={draft.category}
-            onChange={(category) => patch({ category })}
-          />
-        </div>
+        )}
 
         <div>
           <div className="m-lbl" id={modalLabelId}>
@@ -236,40 +267,44 @@ export default function ChegadasFilterSheet({
           />
         </div>
 
-        <div>
-          <div className="m-lbl" id={etaLabelId}>
-            Faixa de ETA
-          </div>
-          <div className="m-bsheet__dates" role="group" aria-labelledby={etaLabelId}>
-            <input
-              className="text-input"
-              type="date"
-              value={draft.etaStart}
-              onChange={(event) => patch({ etaStart: event.target.value })}
-              aria-label="ETA de"
-            />
-            <input
-              className="text-input"
-              type="date"
-              value={draft.etaEnd}
-              min={draft.etaStart || undefined}
-              onChange={(event) => patch({ etaEnd: event.target.value })}
-              aria-label="ETA até"
-            />
-          </div>
-        </div>
+        {archived ? null : (
+          <>
+            <div>
+              <div className="m-lbl" id={etaLabelId}>
+                Faixa de ETA
+              </div>
+              <div className="m-bsheet__dates" role="group" aria-labelledby={etaLabelId}>
+                <input
+                  className="text-input"
+                  type="date"
+                  value={draft.etaStart}
+                  onChange={(event) => patch({ etaStart: event.target.value })}
+                  aria-label="ETA de"
+                />
+                <input
+                  className="text-input"
+                  type="date"
+                  value={draft.etaEnd}
+                  min={draft.etaStart || undefined}
+                  onChange={(event) => patch({ etaEnd: event.target.value })}
+                  aria-label="ETA até"
+                />
+              </div>
+            </div>
 
-        <div>
-          <div className="m-lbl" id={operationLabelId}>
-            Etapa operacional
-          </div>
-          <ChipGroup
-            labelId={operationLabelId}
-            options={[{ value: 'Todos', label: 'Todas' }, ...operationOptions.map((item) => ({ value: item, label: item }))]}
-            value={draft.operation}
-            onChange={(operation) => patch({ operation })}
-          />
-        </div>
+            <div>
+              <div className="m-lbl" id={operationLabelId}>
+                Etapa operacional
+              </div>
+              <ChipGroup
+                labelId={operationLabelId}
+                options={[{ value: 'Todos', label: 'Todas' }, ...operationOptions.map((item) => ({ value: item, label: item }))]}
+                value={draft.operation}
+                onChange={(operation) => patch({ operation })}
+              />
+            </div>
+          </>
+        )}
 
         <div className="m-group">
           <button
@@ -291,13 +326,26 @@ export default function ChegadasFilterSheet({
           <button
             type="button"
             className="m-ghost m-ghost--block"
-            onClick={() => setDraft({ ...DEFAULT_SHEET_FILTERS })}
+            onClick={handleReset}
           >
             Limpar
           </button>
           <button type="button" className="m-btn-mint m-btn-mint--block" onClick={handleApply}>
             {countLabel}
           </button>
+          {onExport ? (
+            <button
+              type="button"
+              className="m-ghost m-ghost--block m-bsheet__export"
+              aria-label={exportHint}
+              title={exportHint}
+              disabled={exportCount === 0 || isExporting}
+              onClick={() => onExport()}
+            >
+              {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />}
+              {exportLabel}
+            </button>
+          ) : null}
         </div>
       </div>
     </>,
