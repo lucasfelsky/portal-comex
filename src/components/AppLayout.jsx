@@ -361,6 +361,8 @@ export default function AppLayout() {
   const mobileEyebrow = useMemo(() => {
     if (location.pathname === '/menu') return null
     if (adminSectionTitles[location.pathname]) return 'Admin'
+    // Chegadas (remake F4): o eyebrow do hero e' o nome da central, nao a data.
+    if (location.pathname === '/processos') return 'Central de chegadas'
     const text = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',

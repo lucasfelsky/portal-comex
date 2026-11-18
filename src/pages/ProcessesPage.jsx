@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useSwipe } from '../hooks/useSwipe'
@@ -701,7 +701,11 @@ export default function ProcessesPage() {
     }
   }, [])
 
-  const filteredProcesses = useMemo(() => {
+  // Filtro da lista de Chegadas. Recebe os valores como parametro (em vez de ler
+  // o estado) para a folha de filtros do mobile contar o resultado com valores
+  // de rascunho (`applyListFilters` -> ProcessListView); `filteredProcesses`
+  // abaixo usa os filtros aplicados de sempre.
+  const applyListFilters = useCallback(({ searchTerm, categoryFilter, etaStartDate, etaEndDate, operationFilter }) => {
     return processes
       .filter((item) => {
         const query = searchTerm.trim().toLowerCase()
@@ -779,7 +783,12 @@ export default function ProcessesPage() {
         if (!right.eta) return -1
         return left.eta.localeCompare(right.eta)
       })
-  }, [categoryFilter, canSeeName, etaEndDate, etaStartDate, operationFilter, processes, searchTerm])
+  }, [canSeeName, processes])
+
+  const filteredProcesses = useMemo(
+    () => applyListFilters({ searchTerm, categoryFilter, etaStartDate, etaEndDate, operationFilter }),
+    [applyListFilters, categoryFilter, etaEndDate, etaStartDate, operationFilter, searchTerm]
+  )
 
   // F16.8 (swipe-to-arquivar, admin-only): fonte da seção "Arquivados" —
   // sem os filtros de busca/categoria/ETA (é uma tela de gestão à parte,
@@ -1928,6 +1937,7 @@ export default function ProcessesPage() {
           etaStartDate={etaStartDate}
           etaEndDate={etaEndDate}
           operationFilter={operationFilter}
+          applyListFilters={applyListFilters}
           hasActiveFilters={hasActiveFilters}
           processCategoryOptions={processCategoryOptions}
           onSearchTermChange={setSearchTerm}

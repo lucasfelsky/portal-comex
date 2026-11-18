@@ -97,6 +97,7 @@
     --m-shadow-tab: 0 12px 32px rgba(0, 50, 65, 0.22), 0 2px 6px rgba(0, 50, 65, 0.1);
     --m-tab-ring: rgba(20, 221, 167, 0.35);
     --m-mint-glow: rgba(20, 221, 167, 0.55);
+    --m-switch-knob: #ffffff;
     --m-sheet-radius: 28px;
     --m-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --m-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -2630,6 +2631,9 @@
 
   /* 4. Chegadas -------------------------------------------------------- */
   .process-list-card.list-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     padding: 0;
     background: none;
     border: 0;
@@ -2637,8 +2641,10 @@
     border-radius: 0;
   }
 
+  /* Exportar/Importar (admin) nao existem no mock-up: descem para depois da lista. */
   .process-list-card > .card-heading {
-    margin-bottom: 12px;
+    order: 3;
+    margin-bottom: 0;
   }
 
   /* T7: mesmos seletores de styles.css:9083/9095/9489. */
@@ -2676,60 +2682,275 @@
     font-weight: 600;
   }
 
+  /* Topo de Chegadas (remake F4): busca + filtros, Ativas/Arquivadas (so
+     admin/logistica) e chips de etapa com contagem. */
   .process-list-card .chegadas-mobilebar {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 0;
+  }
+
+  .m-fbar__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
-    margin-bottom: 4px;
   }
 
   .process-list-card .chegadas-search {
     min-height: 44px;
-    padding: 0 10px;
-    gap: 6px;
-    border-radius: var(--m-radius-field);
+    padding: 0 12px;
+    gap: 8px;
+    border-radius: 14px;
     background: var(--m-fill);
-    color: var(--text-subtle);
+    color: var(--ink-soft);
+    transition: background 0.25s;
+  }
+
+  .process-list-card .chegadas-search:focus-within {
+    background: var(--surface);
   }
 
   .process-list-card .chegadas-search input {
-    font-size: var(--m-fs-body);
+    font-size: 0.9375rem;
   }
 
+  .process-list-card .chegadas-search input::placeholder {
+    color: var(--ink-soft);
+  }
+
+  /* Ativas / Arquivadas. O ::before leva o alvo de toque a 44px sem mudar o
+     visual do mock-up. */
   .process-list-card .chegadas-segmented {
-    padding: 2px;
-    border-radius: var(--m-radius-field);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
     background: var(--m-fill);
   }
 
   .process-list-card .chegadas-segmented__item {
-    min-height: 44px;
-    border-radius: 8px;
-    font-size: var(--m-fs-subhead);
-    font-weight: 600;
+    position: relative;
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 9px;
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  .process-list-card .chegadas-segmented__item::before {
+    content: '';
+    position: absolute;
+    inset: -3px 0;
   }
 
   .process-list-card .chegadas-segmented__item--on {
-    background: var(--m-segment-on);
+    background: var(--surface);
+    color: var(--ink);
     box-shadow: var(--m-shadow-segment);
   }
 
-  /* T5: especificidade >= 0,3,0 para vencer o :hover do iOS. */
-  .process-list-card .chegadas-mobilebar .chegadas-filters-toggle {
-    min-height: 44px;
+  /* Botao de filtros (icone + contador). */
+  .m-fbtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 46px;
+    height: 44px;
     padding: 0 14px;
-    border-color: transparent;
-    border-radius: var(--m-radius-control);
-    background: var(--m-tint-bg);
-    color: var(--m-tint-fg);
+    border: 0;
+    border-radius: 14px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-fbtn:active {
+    transform: scale(0.94);
+  }
+
+  .m-fbtn__n {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.65625rem;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    animation: m-pop 0.45s var(--m-spring);
+  }
+
+  /* Chips (etapa e, na folha, categoria/modal/etapa operacional). O ::before
+     leva o alvo de toque a 44px; o respiro vertical do trilho evita que o
+     overflow recorte o pseudo-elemento e o anel de foco. */
+  .m-chips {
+    display: flex;
+    gap: 8px;
+    margin: -6px -16px;
+    padding: 6px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+  }
+
+  .m-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .m-chips--wrap {
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .m-chip {
+    position: relative;
+    flex: none;
+    padding: 8px 13px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--ink-soft);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    cursor: pointer;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s,
+      transform 0.2s var(--m-spring);
+  }
+
+  .m-chip::before {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+
+  .m-chip:active {
+    transform: scale(0.94);
+  }
+
+  .m-chip:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .m-chip[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--on-primary);
     box-shadow: none;
-    font-size: var(--m-fs-subhead);
+  }
+
+  .m-chip__c {
+    margin-left: 5px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
     font-weight: 600;
   }
 
-  .process-list-card .process-filters--panel--open {
+  /* Hero de Chegadas: "N processos ativos" a esquerda e "Novo" a direita. */
+  .m-hero-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .m-hero-sub {
+    min-width: 0;
+    margin: 0;
+    font-size: 0.84375rem;
+    font-weight: 600;
+    color: var(--m-hero-sub);
+  }
+
+  .m-btn-mint {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
     border: 0;
-    box-shadow: none;
-    border-radius: var(--m-radius-group);
-    background: var(--surface);
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.8125rem;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-btn-mint::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .m-btn-mint:active {
+    transform: scale(0.95);
+  }
+
+  .m-btn-mint--block {
+    justify-content: center;
+    height: 50px;
+    padding: 0 18px;
+    border-radius: 16px;
+    font-size: 0.9375rem;
+  }
+
+  .m-btn-mint--block::before {
+    content: none;
+  }
+
+  .m-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 44px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-size: 0.875rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-ghost:active {
+    transform: scale(0.94);
+  }
+
+  .m-ghost--block {
+    height: 50px;
+    border-radius: 16px;
   }
 
   .process-list-card .process-list {
@@ -2737,24 +2958,54 @@
     padding: 0;
   }
 
+  /* Eyebrows Em andamento / Concluidos / Arquivados (mono) acima dos cartoes. */
   .process-list-card .process-list > .process-list__section-label {
     margin: 0;
-    padding: 22px var(--m-inset) 6px;
-    font-size: var(--m-fs-footnote);
+    padding: 18px 2px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-subtle);
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
   }
 
   .process-list-card .process-list > .process-list__section-label:first-child {
-    padding-top: 8px;
+    padding-top: 2px;
   }
 
-  .process-list-card .process-list > .empty-state {
-    background: none;
-    border: 0;
-    border-radius: 0;
+  /* Estado vazio: "Nada por aqui" + "Limpar filtros". */
+  .m-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 36px 20px;
+    text-align: center;
+    color: var(--ink-soft);
+    animation: m-rise 0.6s var(--m-ease) both;
+  }
+
+  .m-empty__big {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--m-fill);
+  }
+
+  .m-empty strong {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .m-empty p {
+    max-width: 26ch;
+    margin: 0;
+    font-size: 0.84375rem;
+    line-height: 1.5;
   }
 
   /* Item 4: acoes do swipe so aparecem com a linha aberta/arrastando. */
@@ -2768,78 +3019,457 @@
     transition-delay: 0s;
   }
 
-  /* Grupo inset (o overflow recorta as acoes no canto arredondado). */
+  /* Cartoes de processo (remake F4): o grupo vira uma pilha de cartoes soltos
+     (22px, sombra do token). O wrapper de swipe e quem carrega raio, sombra e a
+     entrada escalonada (`--d` vem do JSX); o overflow dele recorta as acoes. */
   .process-list__group {
-    background: var(--surface);
-    border-radius: var(--m-radius-group);
-    overflow: hidden;
+    display: grid;
+    gap: 12px;
+    background: none;
+    border-radius: 0;
+    overflow: visible;
   }
 
   .process-list__group > .process-swipe-row {
     border-bottom: 0;
-  }
-
-  /* A5 / T12: linha de lista navegavel. */
-  .process-list__group .process-item.process-swipe-row__content {
-    padding: 10px var(--m-inset);
-    min-height: 60px;
-    gap: 12px;
+    border-radius: 22px;
     background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+    animation: m-rise 0.6s var(--m-ease) both;
+    animation-delay: var(--d, 0ms);
+    transition: transform 0.25s var(--m-spring);
   }
 
-  .process-list__group .process-item.process-swipe-row__content:active {
-    background: var(--surface-alt);
+  :root[data-theme='dark'] .process-list__group > .process-swipe-row {
+    border: 1px solid var(--border);
   }
 
-  /* O separador anda junto com o swipe (vive dentro do conteudo). */
-  .process-list__group > .process-swipe-row + .process-swipe-row > .process-swipe-row__content::before {
+  .process-list__group > .process-swipe-row:active:not(.process-swipe-row--revealing) {
+    transform: scale(0.975);
+  }
+
+  .process-list__group .process-item.process-swipe-row__content.m-pc,
+  .process-list__group .process-item.process-swipe-row__content.m-pc:hover,
+  .process-list__group .process-item.process-swipe-row__content.m-pc:active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    min-height: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+    text-align: left;
+  }
+
+  .m-pc__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-pc__id {
+    min-width: 0;
+  }
+
+  .m-pc__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-pc__head .m-marks {
+    margin-left: 0;
+  }
+
+  .process-list__group .m-pc__title {
+    min-width: 0;
+    font-family: var(--font-heading);
+    font-size: 0.96875rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .process-list__group .m-pc__po {
+    margin: 5px 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.71875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__po span {
+    line-height: inherit;
+    color: inherit;
+  }
+
+  /* Estrela: 34px visuais, alvo de 44px pelo ::before; o ::after e o anel do
+     burst ao favoritar. */
+  .m-pc__star {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: -6px -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition:
+      transform 0.25s var(--m-spring),
+      color 0.2s;
+  }
+
+  .m-pc__star::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: calc(var(--m-inset) + var(--m-leading) + 12px);
-    right: 0;
-    height: 1px;
-    background: var(--m-separator);
+    inset: -5px;
   }
 
-  .process-list__group .process-item__leading {
-    width: var(--m-leading);
-    height: var(--m-leading);
-    border-radius: 8px;
+  .m-pc__star:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .m-pc__star--on {
+    color: var(--warning);
+  }
+
+  .m-pc__star--pop {
+    animation: m-pop 0.5s var(--m-spring);
+  }
+
+  .m-pc__star--pop::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 2px solid var(--warning);
+    border-radius: 50%;
+    animation: m-burst 0.55s ease-out forwards;
+  }
+
+  /* 5 segmentos de etapa: crescem da esquerda e o atual pulsa. */
+  .m-seg5 {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .m-seg5__i {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--m-fill-strong);
+    transform-origin: left;
+  }
+
+  .m-seg5__i--done,
+  .m-seg5__i--now {
+    background: var(--primary);
+    animation: m-grow 0.6s var(--m-ease) both;
+    animation-delay: calc(var(--d, 0ms) + var(--k, 0) * 80ms + 200ms);
+  }
+
+  .m-seg5__i--now {
+    animation:
+      m-grow 0.6s var(--m-ease) both,
+      m-glow 2s ease-in-out 1s infinite;
+    animation-delay: calc(var(--d, 0ms) + var(--k, 0) * 80ms + 200ms), 1s;
+  }
+
+  /* Linhas de metadados (o `span` do legado pinta tudo de --ink-soft). */
+  .process-list__group .m-pc__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.78125rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__meta svg {
+    flex: none;
+  }
+
+  .process-list__group .m-pc__meta .m-pc__stage {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--primary-700);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__eta {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__eta--updated {
+    color: var(--warning-700);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__supplier {
+    justify-content: flex-end;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  /* Tags de STATUS em texto (as de carga viraram icones). Sem `display`: T10. */
+  .process-list__group .m-pc__tags {
+    gap: 6px;
+    margin: 0;
+  }
+
+  .process-list__group .m-pc__tags .status-tag,
+  .process-list__group .m-pc__tags .inline-badge {
+    padding: 4px 9px;
+    font-size: 0.71875rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* O `span` do legado (.process-item span, 0,1,1) pintaria o texto das tags de
+     --ink-soft: os tons voltam aqui (mesmos pares soft + ink das tags). */
+  .process-list__group .m-pc__tags .status-tag--ok,
+  .process-list__group .m-pc__tags .inline-badge--ok {
+    color: var(--success-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--warn,
+  .process-list__group .m-pc__tags .inline-badge--warn {
+    color: var(--warning-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--info {
+    color: var(--info-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--neutral {
+    color: var(--neutral-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--danger,
+  .process-list__group .m-pc__tags .inline-badge--danger {
+    color: var(--danger-700);
+  }
+
+  /* Marcas de carga dentro do cartao: o mesmo `span` do legado apagaria a cor. */
+  .process-list__group .m-mark {
+    line-height: 1;
+    color: var(--neutral-700);
+  }
+
+  .process-list__group .m-mark--fire {
+    color: var(--danger);
+  }
+
+  .process-list__group .m-mark--haz {
+    color: var(--warning-700);
+  }
+
+  /* Folha de filtros (bottom sheet), portada para o body. */
+  .m-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    background: var(--m-scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s;
+  }
+
+  .m-scrim--on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .m-bsheet {
+    display: grid;
+    gap: 14px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 140;
+    max-height: 86vh;
+    max-height: 86dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
+    background: var(--bg);
+    color: var(--ink);
+    transform: translateY(104%);
+    visibility: hidden;
+    transition:
+      transform 0.5s var(--m-ios),
+      visibility 0s 0.5s;
+    scrollbar-width: none;
+  }
+
+  .m-bsheet--on {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .m-bsheet::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* O grab e um botao ("Fechar filtros") e o unico ponto que captura o arrasto. */
+  .m-bsheet__grab {
+    position: relative;
+    display: block;
+    width: 38px;
+    height: 5px;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: var(--m-fill-strong);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .m-bsheet__grab::before {
+    content: '';
+    position: absolute;
+    inset: -20px -60px;
+  }
+
+  .m-bsheet__grab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 6px;
+  }
+
+  .m-bsheet__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.1875rem;
+    font-weight: 700;
+  }
+
+  .m-lbl {
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-bsheet__dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .m-group {
+    overflow: hidden;
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .m-group {
+    border: 1px solid var(--border);
+  }
+
+  .m-rowi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-rowi__lead {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     background: var(--primary-50);
     color: var(--primary-700);
   }
 
-  .process-list__group .process-item__leading--air {
-    background: var(--info-50);
-    color: var(--info-700);
+  .m-rowi__label {
+    min-width: 0;
+    font-size: 0.90625rem;
+    font-weight: 700;
   }
 
-  .process-list__group .process-item__main {
-    gap: 2px;
+  .m-switch {
+    position: relative;
+    flex: none;
+    width: 50px;
+    height: 30px;
+    margin-left: auto;
+    border-radius: 15px;
+    background: var(--m-fill-strong);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    transition: background 0.3s;
   }
 
-  .process-list__group .process-item__main strong {
-    font-size: var(--m-fs-headline);
-    font-weight: 600;
-    line-height: 1.25;
-    color: var(--ink);
+  .m-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--m-switch-knob);
+    box-shadow: var(--m-shadow-segment);
+    transition: transform 0.35s var(--m-spring);
   }
 
-  .process-list__group .process-item__summary {
-    font-size: var(--m-fs-subhead);
-    color: var(--text-subtle);
+  .m-rowi[aria-checked='true'] .m-switch {
+    background: var(--primary);
+    box-shadow: none;
   }
 
-  /* T3: a variante "ETA atualizada" volta depois do recolorido. */
-  .process-list__group .process-item__summary--eta-updated {
-    color: var(--warning-700);
-    font-weight: 600;
+  .m-rowi[aria-checked='true'] .m-switch::after {
+    transform: translateX(20px);
   }
 
-  .process-list__group .process-item__chips {
-    gap: 4px;
-    margin-top: 4px;
+  .m-bsheet__btns {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
   }
 
   .process-detail-view > .process-detail-mobilebar {
@@ -4230,6 +4860,71 @@
 
   .m-route__step--now i {
     animation: none;
+  }
+
+  /* Chegadas (F4): busca, segmented, chips, botoes, cartoes (entrada, segmentos
+     de etapa, estrela com burst), estado vazio e a folha de filtros sem
+     movimento. O anel do burst some em vez de ficar parado. */
+  .process-list-card .chegadas-search {
+    transition: none;
+  }
+
+  .process-list-card .chegadas-segmented__item {
+    transition: none;
+  }
+
+  .m-fbtn,
+  .m-btn-mint,
+  .m-ghost {
+    transition: none;
+  }
+
+  .m-fbtn__n {
+    animation: none;
+  }
+
+  .m-chip {
+    transition: none;
+  }
+
+  .m-empty {
+    animation: none;
+  }
+
+  .process-list__group > .process-swipe-row {
+    animation: none;
+    transition: none;
+  }
+
+  .m-pc__star {
+    transition: none;
+  }
+
+  .m-pc__star--pop {
+    animation: none;
+  }
+
+  .m-pc__star--pop::after {
+    animation: none;
+    display: none;
+  }
+
+  .m-seg5__i--done,
+  .m-seg5__i--now {
+    animation: none;
+  }
+
+  .m-scrim {
+    transition: none;
+  }
+
+  .m-bsheet {
+    transition: none;
+  }
+
+  .m-switch,
+  .m-switch::after {
+    transition: none;
   }
 }
 

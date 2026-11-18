@@ -412,6 +412,98 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     }
   })
 
+  it('Chegadas do remake (F4): pecas m-pc / m-chip / m-fbtn / m-bsheet... so na camada S (ou no reduce de 720px), com hit-area de 44px', () => {
+    const CHEGADAS_ONLY =
+      /\.m-(pc|chip|chips|fbtn|fbar|bsheet|scrim|seg5|empty|ghost|btn-mint|switch|group|rowi|lbl|hero-row|hero-sub)/
+    const S = '@media (max-width: 720px)'
+    const S_BLOCKS = [S, REDUCE_720]
+    for (const block of mediaBlocks) {
+      if (S_BLOCKS.includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(CHEGADAS_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const has = (selector, prop, value) =>
+      sRules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === value)
+      )
+
+    // Evita falso verde: as pecas existem na camada S.
+    for (const piece of ['.m-fbtn', '.m-chip', '.m-bsheet', '.m-scrim', '.m-seg5', '.m-empty', '.m-pc__star']) {
+      expect(
+        sRules.some((rule) => splitTopLevel(rule.selector, ',').includes(piece)),
+        piece
+      ).toBe(true)
+    }
+
+    // Alvos de toque >= 44px sem mudar o visual do mock-up (mesmo padrao de .chip-remove::before):
+    // estrela 34px + 5px de cada lado; chip ~34px + 5px acima e abaixo; botao "Novo" ~38px + 4px;
+    // segmented 38px + 3px; grab 5px + 20px.
+    const HIT_AREAS = [
+      ['.m-pc__star::before', '-5px'],
+      ['.m-chip::before', '-5px 0'],
+      ['.m-btn-mint::before', '-4px'],
+      ['.process-list-card .chegadas-segmented__item::before', '-3px 0'],
+      ['.m-bsheet__grab::before', '-20px -60px'],
+    ]
+    for (const [selector, inset] of HIT_AREAS) {
+      expect(has(selector, 'content', "''"), selector).toBe(true)
+      expect(has(selector, 'position', 'absolute'), selector).toBe(true)
+      expect(has(selector, 'inset', inset), selector).toBe(true)
+    }
+    expect(has('.m-fbtn', 'height', '44px')).toBe(true)
+    expect(has('.m-ghost', 'height', '44px')).toBe(true)
+    expect(has('.process-list-card .chegadas-search', 'min-height', '44px')).toBe(true)
+  })
+
+  it('Chegadas do remake (F4): o par `none` do movimento reduzido cobre cartao, segmentos, estrela, folha e switch', () => {
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    const covers = (selector, prop) =>
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === 'none')
+      )
+    for (const selector of [
+      '.process-list__group > .process-swipe-row',
+      '.m-seg5__i--done',
+      '.m-seg5__i--now',
+      '.m-pc__star--pop',
+      '.m-pc__star--pop::after',
+      '.m-fbtn__n',
+      '.m-empty',
+    ]) {
+      expect(covers(selector, 'animation'), `${selector} animation`).toBe(true)
+    }
+    for (const selector of [
+      '.process-list__group > .process-swipe-row',
+      '.m-pc__star',
+      '.m-chip',
+      '.m-fbtn',
+      '.m-btn-mint',
+      '.m-ghost',
+      '.m-scrim',
+      '.m-bsheet',
+      '.m-switch',
+      '.m-switch::after',
+      '.process-list-card .chegadas-search',
+      '.process-list-card .chegadas-segmented__item',
+    ]) {
+      expect(covers(selector, 'transition'), `${selector} transition`).toBe(true)
+    }
+    // O anel do burst some (em vez de ficar parado) sem movimento.
+    expect(
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes('.m-pc__star--pop::after') &&
+          rule.declarations.some((declaration) => declaration.prop === 'display' && declaration.value === 'none')
+      )
+    ).toBe(true)
+  })
+
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {
     const L = '@media (max-width: 1040px)'
     const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)

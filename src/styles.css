@@ -23239,3 +23239,50 @@ body {
     box-shadow: 0 0 0 11px transparent;
   }
 }
+
+/* ============================================================
+   Remake mobile F4 (Chegadas): @keyframes m-* do cartao (estrela, segmentos de
+   etapa, contador do filtro) e base `display: none` da folha de filtros
+   (`.m-bsheet`/`.m-scrim`, portada para o body). APPEND-ONLY. Quem os revela e
+   usa e' so' a camada S de mobile-redesign.css; o par `none` do movimento
+   reduzido mora no bloco reduce de 720px daquele arquivo.
+   ============================================================ */
+.m-bsheet,
+.m-scrim {
+  display: none;
+}
+
+@keyframes m-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.4) rotate(-12deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes m-burst {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes m-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes m-glow {
+  50% {
+    opacity: 0.45;
+  }
+}

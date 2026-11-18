@@ -177,6 +177,13 @@ const ICONS = {
       <path d="M3 7l9 4 9-4M12 11v10" />
     </>
   ),
+  // Porto do card de Chegadas no mobile (glifo do mock-up).
+  anchor: (
+    <>
+      <circle cx="12" cy="5" r="2" />
+      <path d="M12 7v14M5 12H3a9 9 0 0 0 18 0h-2M8 11h8" />
+    </>
+  ),
   chevron: <path d="m9 6 6 6-6 6" />,
   'chevron-left': <path d="m15 6-6 6 6 6" />,
   'chevron-right': <path d="m9 6 6 6-6 6" />,

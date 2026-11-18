@@ -1,0 +1,306 @@
+// Folha de filtros de Chegadas no mobile (remake, F4): bottom sheet com
+// Categoria, Modal, Faixa de ETA, Etapa operacional e o switch "Só favoritos".
+// Os filtros ficam num RASCUNHO local: o botao "Ver N processos" aplica tudo de
+// uma vez (N e' calculado pelo pai com o rascunho); Esc, scrim e arrastar o
+// grab fecham sem aplicar. Renderizada por Portal em document.body (evita o
+// stacking context do PageFade). `.m-bsheet`/`.m-scrim` so' aparecem em <=720px
+// (base `display: none` em styles.css).
+//
+// Acessibilidade: role="dialog" + aria-modal + aria-labelledby; foco preso e
+// devolvido ao botao que abriu pelo useFocusTrap (Esc fecha); o grab e' um
+// botao "Fechar filtros" (teclado e leitor de tela). O arrasto so' vale no grab
+// (touch-action: none), entao a rolagem interna da folha nunca e' capturada.
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import Icon from '../../components/Icon'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
+
+// Mesma duracao da transicao de `.m-bsheet` (mobile-redesign.css).
+const EXIT_MS = 500
+const DRAG_CLOSE_PX = 90
+const DRAG_TAP_PX = 4
+
+const DEFAULT_SHEET_FILTERS = {
+  category: 'Todos',
+  modal: 'all',
+  etaStart: '',
+  etaEnd: '',
+  operation: 'Todos',
+  favoritesOnly: false,
+}
+
+const MODAL_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'sea', label: 'Marítimo' },
+  { value: 'air', label: 'Aéreo' },
+]
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
+  )
+}
+
+function ChipGroup({ labelId, options, value, onChange }) {
+  return (
+    <div className="m-chips m-chips--wrap" role="group" aria-labelledby={labelId}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className="m-chip"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function ChegadasFilterSheet({
+  initialFilters,
+  categoryOptions,
+  operationOptions,
+  countFor,
+  onApply,
+  onClose,
+}) {
+  const sheetRef = useRef(null)
+  const dragRef = useRef(null)
+  const suppressClickRef = useRef(false)
+  const closeTimerRef = useRef(0)
+  const leavingRef = useRef(false)
+  const onCloseRef = useRef(onClose)
+  const [draft, setDraft] = useState(() => ({ ...DEFAULT_SHEET_FILTERS, ...initialFilters }))
+  const [isOn, setIsOn] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
+  const titleId = useId()
+  const categoryLabelId = useId()
+  const modalLabelId = useId()
+  const etaLabelId = useId()
+  const operationLabelId = useId()
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // Entrada: monta fora da tela e so' no 2o frame ganha `--on` (a transicao
+  // precisa de um estado inicial pintado).
+  useEffect(() => {
+    let inner = 0
+    const outer = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => setIsOn(true))
+    })
+    return () => {
+      window.cancelAnimationFrame(outer)
+      window.cancelAnimationFrame(inner)
+    }
+  }, [])
+
+  // O fundo nao rola enquanto a folha esta aberta.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), [])
+
+  const requestClose = useCallback(() => {
+    if (leavingRef.current) return
+    leavingRef.current = true
+    setIsLeaving(true)
+    setIsOn(false)
+    if (prefersReducedMotion()) {
+      onCloseRef.current?.()
+      return
+    }
+    closeTimerRef.current = window.setTimeout(() => onCloseRef.current?.(), EXIT_MS)
+  }, [])
+
+  // Foco preso na folha enquanto aberta; Esc fecha; ao sair o foco volta para
+  // quem abriu. `isLeaving` desliga a armadilha ja' na saida (a folha ainda
+  // desliza por 500ms), entao o foco volta na hora.
+  useFocusTrap(!isLeaving, requestClose, sheetRef)
+
+  const count = useMemo(() => countFor(draft), [countFor, draft])
+
+  const patch = (changes) => setDraft((current) => ({ ...current, ...changes }))
+
+  function handleApply() {
+    onApply(draft)
+    requestClose()
+  }
+
+  // Arrastar o grab: a folha acompanha o dedo sem transicao; > 90px fecha, senao
+  // volta. Posicao via ref (sem re-render por pixel).
+  function handleGrabPointerDown(event) {
+    dragRef.current = { y: event.clientY, moved: false }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    if (sheetRef.current) sheetRef.current.style.transition = 'none'
+  }
+
+  function handleGrabPointerMove(event) {
+    const drag = dragRef.current
+    if (!drag || !sheetRef.current) return
+    const delta = Math.max(0, event.clientY - drag.y)
+    if (delta > DRAG_TAP_PX) drag.moved = true
+    sheetRef.current.style.transform = `translateY(${delta}px)`
+  }
+
+  function handleGrabPointerEnd(event) {
+    const drag = dragRef.current
+    if (!drag) return
+    dragRef.current = null
+    const delta = event.clientY - drag.y
+    if (drag.moved) suppressClickRef.current = true
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = ''
+      sheetRef.current.style.transform = ''
+    }
+    if (delta > DRAG_CLOSE_PX) requestClose()
+  }
+
+  function handleGrabClick() {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    requestClose()
+  }
+
+  const countLabel = `Ver ${count} ${count === 1 ? 'processo' : 'processos'}`
+
+  return createPortal(
+    <>
+      <div
+        className={`m-scrim${isOn ? ' m-scrim--on' : ''}`}
+        onClick={requestClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={sheetRef}
+        className={`m-bsheet${isOn ? ' m-bsheet--on' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-hidden={isLeaving ? 'true' : undefined}
+        tabIndex={-1}
+      >
+        <button
+          type="button"
+          className="m-bsheet__grab"
+          aria-label="Fechar filtros"
+          onPointerDown={handleGrabPointerDown}
+          onPointerMove={handleGrabPointerMove}
+          onPointerUp={handleGrabPointerEnd}
+          onPointerCancel={handleGrabPointerEnd}
+          onClick={handleGrabClick}
+        >
+          <span aria-hidden="true" />
+        </button>
+        <h3 id={titleId} className="m-bsheet__title">
+          Filtros
+        </h3>
+
+        <div>
+          <div className="m-lbl" id={categoryLabelId}>
+            Categoria
+          </div>
+          <ChipGroup
+            labelId={categoryLabelId}
+            options={[
+              { value: 'Todos', label: 'Todas' },
+              ...categoryOptions.map((item) => ({ value: item, label: item })),
+            ]}
+            value={draft.category}
+            onChange={(category) => patch({ category })}
+          />
+        </div>
+
+        <div>
+          <div className="m-lbl" id={modalLabelId}>
+            Modal
+          </div>
+          <ChipGroup
+            labelId={modalLabelId}
+            options={MODAL_OPTIONS}
+            value={draft.modal}
+            onChange={(modal) => patch({ modal })}
+          />
+        </div>
+
+        <div>
+          <div className="m-lbl" id={etaLabelId}>
+            Faixa de ETA
+          </div>
+          <div className="m-bsheet__dates" role="group" aria-labelledby={etaLabelId}>
+            <input
+              className="text-input"
+              type="date"
+              value={draft.etaStart}
+              onChange={(event) => patch({ etaStart: event.target.value })}
+              aria-label="ETA de"
+            />
+            <input
+              className="text-input"
+              type="date"
+              value={draft.etaEnd}
+              min={draft.etaStart || undefined}
+              onChange={(event) => patch({ etaEnd: event.target.value })}
+              aria-label="ETA até"
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="m-lbl" id={operationLabelId}>
+            Etapa operacional
+          </div>
+          <ChipGroup
+            labelId={operationLabelId}
+            options={[{ value: 'Todos', label: 'Todas' }, ...operationOptions.map((item) => ({ value: item, label: item }))]}
+            value={draft.operation}
+            onChange={(operation) => patch({ operation })}
+          />
+        </div>
+
+        <div className="m-group">
+          <button
+            type="button"
+            className="m-rowi"
+            role="switch"
+            aria-checked={draft.favoritesOnly}
+            onClick={() => patch({ favoritesOnly: !draft.favoritesOnly })}
+          >
+            <span className="m-rowi__lead" aria-hidden="true">
+              <Icon name="star" size={18} />
+            </span>
+            <span className="m-rowi__label">Só favoritos</span>
+            <span className="m-switch" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="m-bsheet__btns">
+          <button
+            type="button"
+            className="m-ghost m-ghost--block"
+            onClick={() => setDraft({ ...DEFAULT_SHEET_FILTERS })}
+          >
+            Limpar
+          </button>
+          <button type="button" className="m-btn-mint m-btn-mint--block" onClick={handleApply}>
+            {countLabel}
+          </button>
+        </div>
+      </div>
+    </>,
+    document.body
+  )
+}

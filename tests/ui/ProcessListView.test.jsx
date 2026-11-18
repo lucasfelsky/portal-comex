@@ -1,11 +1,11 @@
-// Tests do ProcessListView focados na linguagem mobile do F16.4:
-// segmented Todos/Marítimo/Aéreo (filtro de exibição) e seções
+// Tests do ProcessListView focados na linguagem mobile do F16.4 e do remake F4:
+// filtro de modal (Todos/Marítimo/Aéreo) na folha de filtros e eyebrows
 // Em andamento / Concluídos. matchMedia é stubado pra forçar mobile.
 //
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
@@ -90,6 +90,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// Remake mobile (F4): abre a folha de filtros pelo botao (nome "Filtros" ou "Filtros (n)").
+async function openFilterSheet(user) {
+  await user.click(screen.getByRole('button', { name: /^Filtros/ }))
+  return screen.getByRole('dialog', { name: 'Filtros' })
+}
+
 describe('ProcessListView — linguagem mobile (F16.4)', () => {
   describe('mobile (≤720px)', () => {
     beforeEach(() => stubMatchMedia(true))
@@ -102,10 +108,12 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
       expect(labels).toEqual(['Em andamento', 'Concluídos'])
     })
 
-    it('segmented Aéreo filtra só processos aéreos', async () => {
+    it('Modal Aéreo (na folha de filtros) filtra só processos aéreos', async () => {
       const user = userEvent.setup()
       const { container } = renderView()
-      await user.click(screen.getByRole('button', { name: 'Aéreo' }))
+      const dialog = await openFilterSheet(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Ver 1 processo' }))
 
       const rows = container.querySelectorAll('.process-item--button')
       expect(rows).toHaveLength(1)
@@ -113,10 +121,12 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
       expect(within(rows[0]).getByText(/AWB 2/)).toBeInTheDocument()
     })
 
-    it('segmented Marítimo esconde o aéreo e mantém as duas seções', async () => {
+    it('Modal Marítimo esconde o aéreo e mantém as duas seções', async () => {
       const user = userEvent.setup()
       const { container } = renderView()
-      await user.click(screen.getByRole('button', { name: 'Marítimo' }))
+      const dialog = await openFilterSheet(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Marítimo' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Ver 2 processos' }))
 
       expect(container.querySelectorAll('.process-item--button')).toHaveLength(2)
       const labels = [...container.querySelectorAll('.process-list__section-label')].map(
@@ -206,10 +216,13 @@ describe('ProcessListView — linguagem mobile (F16.4)', () => {
         filteredProcesses: PROCESSES.slice(0, 2),
         archivedProcesses: [PROCESSES[2]],
       })
+      // Remake F4: Ativas/Arquivadas e um segmented (so admin/logistica).
+      expect(container.querySelector('.process-list__section-label').textContent).toBe('Em andamento')
+      await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
       const labels = [...container.querySelectorAll('.process-list__section-label')].map(
         (el) => el.textContent
       )
-      expect(labels).toEqual(['Em andamento', 'Arquivados'])
+      expect(labels).toEqual(['Arquivados'])
 
       const restoreAction = container.querySelector('.process-swipe-row__action--restore')
       expect(restoreAction).not.toBeNull()
@@ -326,12 +339,13 @@ describe('ProcessListView — painel de filtros inline no mobile (UX-4)', () => 
   describe('mobile (≤720px)', () => {
     beforeEach(() => stubMatchMedia(true))
 
-    it('sem filtros, o botão tem nome "Filtros" e aria-expanded="false", painel fechado', () => {
-      const { container } = renderView()
+    it('sem filtros, o botão tem nome "Filtros", aria-expanded="false" e não há folha aberta', () => {
+      renderView()
       const toggle = screen.getByRole('button', { name: 'Filtros' })
       expect(toggle).toHaveAttribute('aria-expanded', 'false')
-      const panel = container.querySelector('#chegadas-filters-panel')
-      expect(panel).not.toHaveClass('process-filters--panel--open')
+      expect(toggle).toHaveAttribute('aria-haspopup', 'dialog')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(document.querySelector('#chegadas-filters-panel')).toBeNull()
     })
 
     it('com filtros ativos (busca não conta), o botão mostra "Filtros (3)"', () => {
@@ -344,18 +358,24 @@ describe('ProcessListView — painel de filtros inline no mobile (UX-4)', () => 
       expect(screen.getByRole('button', { name: 'Filtros (3)' })).toBeInTheDocument()
     })
 
-    it('clicar em Filtros abre o painel e o SelectField de etapa fica acessível', async () => {
+    it('clicar em Filtros abre a folha e a etapa operacional vira chips dentro dela', async () => {
       const user = userEvent.setup()
-      const { container } = renderView()
+      renderView()
       const toggle = screen.getByRole('button', { name: 'Filtros' })
       await user.click(toggle)
       expect(toggle).toHaveAttribute('aria-expanded', 'true')
-      const panel = container.querySelector('#chegadas-filters-panel')
-      expect(panel).toHaveClass('process-filters--panel--open')
-      expect(screen.getByRole('button', { name: 'Etapa operacional: Todas' })).toBeInTheDocument()
+      const dialog = screen.getByRole('dialog', { name: 'Filtros' })
+      expect(dialog).toHaveAttribute('aria-modal', 'true')
+      const operation = within(dialog).getByRole('group', { name: 'Etapa operacional' })
+      expect(within(operation).getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'true')
+      expect(within(operation).getByRole('button', { name: 'Coleta pendente' })).toHaveAttribute('aria-pressed', 'false')
     })
+  })
 
-    it('com filtros ativos, clicar em "Limpar todos" chama onClearAllFilters', async () => {
+  describe('tablet (721-1040px)', () => {
+    beforeEach(() => stubMatchMedia(false))
+
+    it('com filtros ativos, "Limpar todos" (linha de filtros ativos) chama onClearAllFilters', async () => {
       const user = userEvent.setup()
       const onClearAllFilters = vi.fn()
       renderView({
@@ -365,6 +385,13 @@ describe('ProcessListView — painel de filtros inline no mobile (UX-4)', () => 
       })
       await user.click(screen.getByRole('button', { name: 'Limpar todos' }))
       expect(onClearAllFilters).toHaveBeenCalled()
+    })
+
+    it('o painel de filtros inline e o SelectField de etapa seguem no tablet', () => {
+      const { container } = renderView()
+      expect(container.querySelector('#chegadas-filters-panel')).not.toBeNull()
+      expect(screen.getByRole('combobox', { name: /Etapa operacional/ })).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 })
@@ -479,7 +506,8 @@ describe('ProcessListView — badge "Anuência indeferida" (F17.2b)', () => {
 // F17.2d-1 (D-4, Q4): badge "Carga perigosa" - flag do processo OU algum
 // item classificado.
 describe('ProcessListView — badge "Carga perigosa" (F17.2d-1)', () => {
-  beforeEach(() => stubMatchMedia(true))
+  // Remake F4: no mobile (<=720px) a carga vira icone; as pilulas de texto seguem no tablet.
+  beforeEach(() => stubMatchMedia(false))
 
   it('processo com item dangerousGoods gera o badge "Carga perigosa"', () => {
     renderView({
@@ -503,7 +531,7 @@ describe('ProcessListView — badge "Carga perigosa" (F17.2d-1)', () => {
 // Quando o processo e' inflamavel, "Carga inflamável" tem prioridade sobre
 // "Carga perigosa" (que fica redundante e vai depois de "Dados pendentes").
 describe('ProcessListView — badge "Carga inflamável"', () => {
-  beforeEach(() => stubMatchMedia(true))
+  beforeEach(() => stubMatchMedia(false))
 
   const alertLabels = (container) =>
     [...container.querySelectorAll('.process-item__chips .inline-badge')]
@@ -625,7 +653,7 @@ describe('ProcessListView — card CONSOLIDADO nao vaza referencia/fornecedor da
 // no CSS mobile (o jsdom testa a classificacao, o desktop continua com
 // todos via CSS).
 describe('UX-6a: alertas no card', () => {
-  beforeEach(() => stubMatchMedia(true))
+  beforeEach(() => stubMatchMedia(false))
 
   const PROCESS_4_ALERTS = {
     ...PROCESSES[0],
@@ -707,12 +735,16 @@ describe('ProcessListView — redesign mobile (grupos e swipe em repouso)', () =
       expect(container.querySelectorAll('.process-swipe-row--revealing')).toHaveLength(0)
     })
 
-    it('linha aerea ganha .process-item__leading--air e a maritima nao', () => {
+    it('cartao: a linha "PO · modal" diz Aéreo no aéreo e Marítimo nos demais (sem nome, o PO fica no título) (sem o ícone de categoria da linha)', () => {
       const { container } = renderView()
-      const airLeadings = container.querySelectorAll('.process-item__leading--air')
-      expect(airLeadings).toHaveLength(1)
-      expect(airLeadings[0].closest('.process-item').textContent).toContain('AWB 2')
-      expect(container.querySelectorAll('.process-item__leading')).toHaveLength(3)
+      const cards = [...container.querySelectorAll('.process-item--button')]
+      expect(cards).toHaveLength(3)
+      expect(cards.map((card) => card.querySelector('.m-pc__po').textContent)).toEqual([
+        'Marítimo',
+        'Aéreo',
+        'Marítimo',
+      ])
+      expect(container.querySelectorAll('.process-item__leading')).toHaveLength(0)
     })
   })
 
@@ -789,5 +821,504 @@ describe('ProcessListView — botão "Importar do DBCorp" (F1 + PR 3, somente ad
     expect(button).toBeDisabled()
     await user.click(button)
     expect(onReconcileErp).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Remake mobile F4 (Chegadas): cartoes, icones de carga, chips de etapa,
+// segmented Ativas/Arquivadas, estado vazio e folha de filtros.
+// ---------------------------------------------------------------------------
+const STAGED = [
+  {
+    id: 's-transit',
+    name: 'Resina A',
+    processNumber: 'PO 10',
+    category: 'FCL',
+    processStatus: 'Embarcou',
+    destination: 'Santos',
+    eta: '2026-08-10',
+    containerQuantity: 2,
+    palletQuantity: 0,
+    supplierName: 'ACME Química',
+  },
+  {
+    id: 's-berth',
+    name: 'Solvente B',
+    processNumber: 'PO 11',
+    category: 'FCL',
+    processStatus: 'Atracação Confirmada',
+    destination: 'Itajaí',
+    eta: '2026-08-12',
+    containerQuantity: 1,
+    palletQuantity: 0,
+  },
+  {
+    id: 's-release',
+    name: 'Pigmento C',
+    processNumber: 'AWB 12',
+    category: 'AEREO',
+    processStatus: 'Aguardando desembaraço',
+    destination: 'GRU',
+    eta: '2026-08-14',
+    containerQuantity: 0,
+    palletQuantity: 3,
+  },
+  {
+    id: 's-done',
+    name: 'Aditivo D',
+    processNumber: 'PO 13',
+    category: 'FCL',
+    processStatus: 'Carga recebida',
+    destination: 'Navegantes',
+    eta: '2026-08-01',
+    containerQuantity: 1,
+    palletQuantity: 0,
+  },
+]
+
+const FLAMMABLE_ITEM = {
+  ...STAGED[0],
+  items: [{ id: 'i1', commercialName: 'Solvente', quantity: 1, dangerousGoods: true, imoClass: '3' }],
+}
+
+const cardsOf = (container) => [...container.querySelectorAll('.process-item--button')]
+
+describe('ProcessListView — cartões do remake mobile (F4)', () => {
+  describe('mobile (≤720px)', () => {
+    beforeEach(() => stubMatchMedia(true))
+
+    it('carga inflamável, perigosa e volume viram ícones ao lado do nome, sem as pílulas de texto', () => {
+      const { container } = renderView({ filteredProcesses: [FLAMMABLE_ITEM] })
+      const marks = container.querySelector('.m-pc__head .m-marks')
+      expect(marks).not.toBeNull()
+      expect(within(marks).getByRole('img', { name: 'Carga inflamável' })).toHaveAttribute('title', 'Carga inflamável')
+      expect(within(marks).getByRole('img', { name: 'Carga perigosa' })).toBeInTheDocument()
+      expect(within(marks).getByRole('img', { name: '2 contêineres' })).toBeInTheDocument()
+      // Nenhuma pilula de texto equivalente (o aria-label nao e' texto visivel).
+      expect(screen.queryByText('Carga inflamável')).not.toBeInTheDocument()
+      expect(screen.queryByText('Carga perigosa')).not.toBeInTheDocument()
+      expect(screen.queryByText('2 contêineres')).not.toBeInTheDocument()
+      expect(container.querySelectorAll('.process-item__chips .inline-badge')).toHaveLength(0)
+      // As marcas ficam fora do <strong> do nome (o nome continua so' o nome).
+      expect(container.querySelector('.m-pc__title').textContent).toBe('PO: PO 10')
+    })
+
+    it('as tags de STATUS continuam em texto (status do processo e alertas que não são de carga)', () => {
+      const { container } = renderView({
+        isAdmin: true,
+        filteredProcesses: [{ ...FLAMMABLE_ITEM, licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }] }],
+      })
+      const tags = container.querySelector('.m-pc__tags')
+      expect(within(tags).getByText('Embarcou')).toBeInTheDocument()
+      expect(within(tags).getByText('Anuência indeferida')).toBeInTheDocument()
+      expect(within(tags).getByText(/^Dados pendentes/)).toBeInTheDocument()
+    })
+
+    it('o "+N" é calculado sobre a lista já sem as marcas de carga', () => {
+      const { container } = renderView({
+        isAdmin: true,
+        filteredProcesses: [
+          {
+            ...FLAMMABLE_ITEM,
+            licenses: [{ id: 'LIC-1', agency: 'MAPA', status: 'Indeferida' }],
+            containers: [{ id: 'CNT-1', number: '', seal: '', type: '40RF' }],
+          },
+        ],
+      })
+      const tags = container.querySelector('.m-pc__tags')
+      // Anuencia + Dados pendentes + Reefer = 3 alertas: 2 visiveis, Reefer no overflow e "+1".
+      expect(within(tags).getByText('Reefer')).toHaveClass('inline-badge--overflow')
+      expect(tags.querySelector('.inline-badge--more').textContent).toBe('+1')
+    })
+
+    it('volume de carga solta: aéreo com pallets usa o mesmo ícone de caixa com "N pallets"', () => {
+      renderView({ filteredProcesses: [STAGED[2]] })
+      expect(screen.getByRole('img', { name: '3 pallets' })).toBeInTheDocument()
+      expect(screen.queryByText('3 pallets')).not.toBeInTheDocument()
+    })
+
+    it('mostra os 5 segmentos de etapa (anteriores concluídos, atual pulsando) e o rótulo da etapa', () => {
+      const { container } = renderView({ filteredProcesses: [STAGED[1]] })
+      const seg = container.querySelector('.m-seg5')
+      expect(seg).toHaveAttribute('role', 'img')
+      expect(seg).toHaveAttribute('aria-label', 'Etapa 3 de 5: Chegada')
+      expect(seg.querySelectorAll('.m-seg5__i')).toHaveLength(5)
+      expect(seg.querySelectorAll('.m-seg5__i--done')).toHaveLength(2)
+      expect(seg.querySelectorAll('.m-seg5__i--now')).toHaveLength(1)
+      expect(container.querySelector('.m-pc__stage').textContent).toBe('Chegada')
+      expect(container.querySelector('.m-pc__eta').textContent).toBe('ETA 12/08')
+    })
+
+    it('carga recebida: todos os segmentos concluídos e nenhum pulsando', () => {
+      const { container } = renderView({ filteredProcesses: [STAGED[3]] })
+      expect(container.querySelectorAll('.m-seg5__i--done')).toHaveLength(5)
+      expect(container.querySelectorAll('.m-seg5__i--now')).toHaveLength(0)
+    })
+
+    it('porto com ícone e fornecedor só onde o detalhe também mostra (nome visível e nunca no CONSOLIDADO)', () => {
+      const { container, unmount } = renderView({ canSeeName: true, filteredProcesses: [STAGED[0]] })
+      expect(container.querySelector('.m-pc__port').textContent).toBe('Santos')
+      expect(container.querySelector('.m-pc__supplier').textContent).toBe('ACME Química')
+      unmount()
+
+      const restricted = renderView({ canSeeName: false, filteredProcesses: [STAGED[0]] })
+      expect(restricted.container.querySelector('.m-pc__port').textContent).toBe('Santos')
+      expect(restricted.container.querySelector('.m-pc__supplier')).toBeNull()
+      restricted.unmount()
+
+      const consolidated = renderView({
+        canSeeName: true,
+        filteredProcesses: [{ ...STAGED[0], category: 'CONSOLIDADO', processNumber: '', purchaseOrders: [{ po: 'PO-A' }] }],
+      })
+      expect(consolidated.container.querySelector('.m-pc__supplier')).toBeNull()
+    })
+
+    it('a estrela favorita sem abrir o processo (clique e Enter) e usa o nome de sempre', async () => {
+      const user = userEvent.setup()
+      const onSelectProcess = vi.fn()
+      const onToggleFavorite = vi.fn()
+      renderView({
+        filteredProcesses: [STAGED[0]],
+        favoriteProcessIds: [],
+        onSelectProcess,
+        onToggleFavorite,
+      })
+      const star = screen.getByRole('button', { name: 'Favoritar processo' })
+      await user.click(star)
+      expect(onToggleFavorite).toHaveBeenCalledWith('s-transit')
+      star.focus()
+      await user.keyboard('{Enter}')
+      expect(onToggleFavorite).toHaveBeenCalledTimes(2)
+      expect(onSelectProcess).not.toHaveBeenCalled()
+    })
+
+    it('entrada escalonada: 55ms por cartão, limitada a 10', () => {
+      const many = Array.from({ length: 12 }, (_, index) => ({ ...STAGED[0], id: `many-${index}` }))
+      const { container } = renderView({ filteredProcesses: many })
+      const delays = [...container.querySelectorAll('.process-swipe-row')].map((row) => row.style.getPropertyValue('--d'))
+      expect(delays[0]).toBe('0ms')
+      expect(delays[1]).toBe('55ms')
+      expect(delays[10]).toBe('550ms')
+      expect(delays[11]).toBe('550ms')
+    })
+  })
+
+  describe('tablet (721-1040px)', () => {
+    beforeEach(() => stubMatchMedia(false))
+
+    it('continuam as pílulas de texto de carga e a linha cinza; não há ícones de carga nem cartão', () => {
+      const { container } = renderView({ filteredProcesses: [FLAMMABLE_ITEM] })
+      expect(screen.getByText('Carga inflamável')).toBeInTheDocument()
+      expect(screen.getByText('Carga perigosa')).toBeInTheDocument()
+      expect(screen.getByText('2 contêineres', { selector: '.process-item__chips .inline-badge' })).toBeInTheDocument()
+      expect(container.querySelector('.m-marks')).toBeNull()
+      expect(container.querySelector('.m-pc')).toBeNull()
+      expect(container.querySelector('.m-fbtn')).toBeNull()
+      expect(container.querySelector('.m-chips')).toBeNull()
+    })
+  })
+})
+
+describe('ProcessListView — topo e filtros do remake mobile (F4)', () => {
+  beforeEach(() => stubMatchMedia(true))
+
+  it('chips de etapa com contagem, aria-pressed e filtro (Entrega só aparece em Todas)', async () => {
+    const user = userEvent.setup()
+    const { container } = renderView({ filteredProcesses: STAGED })
+    const chips = within(screen.getByRole('group', { name: 'Etapa do processo' }))
+    expect(chips.getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual([
+      'Todas (4)',
+      'Em trânsito (1)',
+      'Atracação (1)',
+      'Liberação (1)',
+    ])
+    expect(chips.getByRole('button', { name: 'Todas (4)' })).toHaveAttribute('aria-pressed', 'true')
+    expect(chips.getByRole('button', { name: 'Em trânsito (1)' })).toHaveAttribute('aria-pressed', 'false')
+    expect(cardsOf(container)).toHaveLength(4)
+
+    await user.click(chips.getByRole('button', { name: 'Liberação (1)' }))
+    expect(chips.getByRole('button', { name: 'Liberação (1)' })).toHaveAttribute('aria-pressed', 'true')
+    expect(chips.getByRole('button', { name: 'Todas (4)' })).toHaveAttribute('aria-pressed', 'false')
+    expect(cardsOf(container)).toHaveLength(1)
+    expect(cardsOf(container)[0]).toHaveTextContent('AWB 12')
+
+    await user.click(chips.getByRole('button', { name: 'Em trânsito (1)' }))
+    expect(cardsOf(container)).toHaveLength(1)
+    expect(cardsOf(container)[0]).toHaveTextContent('PO: PO 10')
+
+    await user.click(chips.getByRole('button', { name: 'Todas (4)' }))
+    expect(cardsOf(container)).toHaveLength(4)
+  })
+
+  it('"Em trânsito" agrupa Embarque e Trânsito (etapa <= 1)', () => {
+    const awaiting = { ...STAGED[0], id: 's-awaiting', processStatus: 'Aguardando Embarque' }
+    renderView({ filteredProcesses: [awaiting, STAGED[0]] })
+    expect(screen.getByRole('button', { name: 'Em trânsito (2)' })).toBeInTheDocument()
+  })
+
+  it('o segmented Ativas/Arquivadas só existe para admin e logística (canViewArchivedProp)', () => {
+    const { unmount } = renderView()
+    expect(screen.queryByRole('button', { name: 'Arquivadas' })).not.toBeInTheDocument()
+    unmount()
+
+    const { unmount: unmountLogistics } = renderView({ canViewArchivedProp: true })
+    expect(screen.getByRole('button', { name: 'Ativas' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Arquivadas' })).toHaveAttribute('aria-pressed', 'false')
+    unmountLogistics()
+
+    renderView({ isAdmin: true, onArchiveProcess: vi.fn() })
+    expect(screen.getByRole('button', { name: 'Arquivadas' })).toBeInTheDocument()
+  })
+
+  it('logística (somente leitura) vê as arquivadas sem ação de restaurar', async () => {
+    const user = userEvent.setup()
+    const { container } = renderView({
+      canViewArchivedProp: true,
+      filteredProcesses: STAGED.slice(0, 2),
+      archivedProcesses: [STAGED[3]],
+    })
+    expect(cardsOf(container)).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Arquivadas' }))
+    expect(screen.getByRole('button', { name: 'Arquivadas' })).toHaveAttribute('aria-pressed', 'true')
+    expect(cardsOf(container)).toHaveLength(1)
+    expect(container.querySelector('.process-swipe-row__action--restore')).toBeNull()
+    expect(container.querySelector('.process-list__section-label').textContent).toBe('Arquivados')
+  })
+
+  it('busca em type=search chama onSearchTermChange', async () => {
+    const user = userEvent.setup()
+    const onSearchTermChange = vi.fn()
+    renderView({ onSearchTermChange })
+    const search = screen.getByRole('searchbox', { name: 'Buscar processo' })
+    await user.type(search, 'a')
+    expect(onSearchTermChange).toHaveBeenCalledWith('a')
+  })
+
+  describe('estado vazio', () => {
+    it('"Nada por aqui" com "Limpar filtros" que zera tudo (chip de etapa, filtros e busca da página)', async () => {
+      const user = userEvent.setup()
+      const onClearAllFilters = vi.fn()
+      renderView({ filteredProcesses: STAGED.slice(0, 1), onClearAllFilters })
+      await user.click(screen.getByRole('button', { name: 'Liberação (0)' }))
+      const status = screen.getByRole('status')
+      expect(status).toHaveTextContent('Nada por aqui')
+      expect(status).toHaveTextContent('Nenhum processo corresponde à busca e aos filtros atuais.')
+      await user.click(within(status).getByRole('button', { name: 'Limpar filtros' }))
+      expect(onClearAllFilters).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: 'Todas (1)' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('sem nenhum filtro não oferece "Limpar filtros"', () => {
+      renderView({ filteredProcesses: [] })
+      expect(screen.getByRole('status')).toHaveTextContent('Nada por aqui')
+      expect(screen.queryByRole('button', { name: 'Limpar filtros' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('hero', () => {
+    let hero
+    beforeEach(() => {
+      hero = document.createElement('div')
+      hero.id = 'mobile-hero-extra'
+      document.body.appendChild(hero)
+    })
+    afterEach(() => hero.remove())
+
+    it('mostra "N processos ativos" (em andamento, sem concluídos) e o botão Novo para admin', async () => {
+      const user = userEvent.setup()
+      const onNewProcess = vi.fn()
+      renderView({ isAdmin: true, onNewProcess, filteredProcesses: STAGED })
+      expect(await within(hero).findByText('3 processos ativos')).toBeInTheDocument()
+      await user.click(within(hero).getByRole('button', { name: 'Novo processo' }))
+      expect(onNewProcess).toHaveBeenCalledTimes(1)
+      // O "Novo processo" da toolbar do tablet nao existe mais no mobile.
+      expect(screen.getAllByRole('button', { name: 'Novo processo' })).toHaveLength(1)
+    })
+
+    it('usa o singular e não mostra Novo para quem não é admin', async () => {
+      renderView({ filteredProcesses: [STAGED[0]], onNewProcess: vi.fn() })
+      expect(await within(hero).findByText('1 processo ativo')).toBeInTheDocument()
+      expect(within(hero).queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('o total do hero ignora os filtros (usa applyListFilters sem filtro nenhum)', async () => {
+      const applyListFilters = vi.fn(() => STAGED)
+      renderView({ filteredProcesses: STAGED.slice(0, 1), applyListFilters })
+      expect(await within(hero).findByText('3 processos ativos')).toBeInTheDocument()
+    })
+  })
+
+  describe('folha de filtros', () => {
+    it('Esc fecha sem aplicar e devolve o foco ao botão que abriu', async () => {
+      const user = userEvent.setup()
+      const { container } = renderView()
+      const toggle = screen.getByRole('button', { name: 'Filtros' })
+      const dialog = await openFilterSheet(user)
+      expect(dialog).toHaveAttribute('aria-labelledby')
+      expect(document.getElementById(dialog.getAttribute('aria-labelledby'))).toHaveTextContent('Filtros')
+      await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(toggle).toHaveFocus()
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      // O rascunho (Aéreo) foi descartado.
+      expect(cardsOf(container)).toHaveLength(3)
+      expect(screen.getByRole('button', { name: 'Filtros' })).toBeInTheDocument()
+    })
+
+    it('tocar no scrim fecha sem aplicar', async () => {
+      const user = userEvent.setup()
+      const { container } = renderView()
+      await openFilterSheet(user)
+      await user.click(document.querySelector('.m-scrim'))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(cardsOf(container)).toHaveLength(3)
+    })
+
+    it('o grab é o botão "Fechar filtros"', async () => {
+      const user = userEvent.setup()
+      renderView()
+      const dialog = await openFilterSheet(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Fechar filtros' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('arrastar o grab para baixo (> 90px) fecha; um arrasto curto volta e não fecha', async () => {
+      // jsdom nao traz PointerEvent (sem clientY): um MouseEvent com pointerId basta.
+      class TestPointerEvent extends MouseEvent {
+        constructor(type, init = {}) {
+          super(type, init)
+          this.pointerId = init.pointerId ?? 0
+        }
+      }
+      const originalPointerEvent = window.PointerEvent
+      window.PointerEvent = TestPointerEvent
+      const user = userEvent.setup()
+      renderView()
+      const dialog = await openFilterSheet(user)
+      const grab = within(dialog).getByRole('button', { name: 'Fechar filtros' })
+      fireEvent.pointerDown(grab, { pointerId: 1, clientY: 100 })
+      fireEvent.pointerMove(grab, { pointerId: 1, clientY: 130 })
+      expect(dialog.style.transform).toBe('translateY(30px)')
+      expect(dialog.style.transition).toBe('none')
+      fireEvent.pointerUp(grab, { pointerId: 1, clientY: 130 })
+      expect(dialog.style.transform).toBe('')
+      // O clique sintetico logo apos o arrasto nao fecha a folha.
+      fireEvent.click(grab)
+      expect(screen.getByRole('dialog', { name: 'Filtros' })).toBeInTheDocument()
+
+      fireEvent.pointerDown(grab, { pointerId: 1, clientY: 100 })
+      fireEvent.pointerMove(grab, { pointerId: 1, clientY: 220 })
+      fireEvent.pointerUp(grab, { pointerId: 1, clientY: 220 })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      window.PointerEvent = originalPointerEvent
+    })
+
+    it('segura o foco: Tab no último elemento volta para o primeiro', async () => {
+      const user = userEvent.setup()
+      renderView()
+      const dialog = await openFilterSheet(user)
+      const grab = within(dialog).getByRole('button', { name: 'Fechar filtros' })
+      // O foco inicial vai para o primeiro elemento da folha (depois de ~30ms).
+      await waitFor(() => expect(grab).toHaveFocus())
+      const apply = within(dialog).getByRole('button', { name: /^Ver \d+ processos?$/ })
+      apply.focus()
+      await user.tab()
+      expect(grab).toHaveFocus()
+      await user.tab({ shift: true })
+      expect(apply).toHaveFocus()
+    })
+
+    it('Limpar volta o rascunho ao padrão e o botão "Ver N" acompanha', async () => {
+      const user = userEvent.setup()
+      renderView()
+      const dialog = await openFilterSheet(user)
+      const sheet = within(dialog)
+      await user.click(sheet.getByRole('button', { name: 'Aéreo' }))
+      expect(sheet.getByRole('button', { name: 'Aéreo' })).toHaveAttribute('aria-pressed', 'true')
+      expect(sheet.getByRole('button', { name: 'Ver 1 processo' })).toBeInTheDocument()
+      await user.click(sheet.getByRole('button', { name: 'Limpar' }))
+      expect(sheet.getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
+      expect(sheet.getByRole('button', { name: 'Ver 3 processos' })).toBeInTheDocument()
+    })
+
+    it('"Ver N processos" bate com o filtro aplicado e o botão ganha o contador', async () => {
+      const user = userEvent.setup()
+      const { container } = renderView({ filteredProcesses: STAGED })
+      const dialog = await openFilterSheet(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Aéreo' }))
+      const apply = within(dialog).getByRole('button', { name: 'Ver 1 processo' })
+      await user.click(apply)
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(cardsOf(container)).toHaveLength(1)
+      expect(screen.getByRole('button', { name: 'Filtros (1)' })).toBeInTheDocument()
+      expect(document.querySelector('.m-fbtn__n').textContent).toBe('1')
+    })
+
+    it('"Só favoritos" é um switch: filtra client-side e conta no botão', async () => {
+      const user = userEvent.setup()
+      const { container } = renderView({ filteredProcesses: STAGED, favoriteProcessIds: ['s-release'] })
+      const dialog = await openFilterSheet(user)
+      const toggle = within(dialog).getByRole('switch', { name: 'Só favoritos' })
+      expect(toggle).toHaveAttribute('aria-checked', 'false')
+      await user.click(toggle)
+      expect(toggle).toHaveAttribute('aria-checked', 'true')
+      await user.click(within(dialog).getByRole('button', { name: 'Ver 1 processo' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(cardsOf(container)).toHaveLength(1)
+      expect(cardsOf(container)[0]).toHaveTextContent('AWB 12')
+      expect(screen.getByRole('button', { name: 'Filtros (1)' })).toBeInTheDocument()
+      // Reabrir mostra o switch ligado (o estado e' o aplicado).
+      const reopened = await openFilterSheet(user)
+      expect(within(reopened).getByRole('switch', { name: 'Só favoritos' })).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('aplicar repassa categoria, ETA e etapa operacional pelos handlers da página (só o que mudou)', async () => {
+      const user = userEvent.setup()
+      const handlers = {
+        onCategoryFilterChange: vi.fn(),
+        onEtaStartDateChange: vi.fn(),
+        onEtaEndDateChange: vi.fn(),
+        onOperationFilterChange: vi.fn(),
+      }
+      const applyListFilters = vi.fn(({ categoryFilter }) =>
+        categoryFilter === 'FCL' ? STAGED.filter((item) => item.category === 'FCL' && item.id !== 's-done') : STAGED
+      )
+      renderView({ filteredProcesses: STAGED, applyListFilters, isAdmin: true, ...handlers })
+      const dialog = await openFilterSheet(user)
+      const sheet = within(dialog)
+      await user.click(within(sheet.getByRole('group', { name: 'Categoria' })).getByRole('button', { name: 'FCL' }))
+      // A contagem usa o rascunho (categoria FCL) via applyListFilters da pagina.
+      expect(applyListFilters).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryFilter: 'FCL', operationFilter: 'Todos', etaStartDate: '', etaEndDate: '' })
+      )
+      expect(sheet.getByRole('button', { name: 'Ver 2 processos' })).toBeInTheDocument()
+      await user.click(
+        within(sheet.getByRole('group', { name: 'Etapa operacional' })).getByRole('button', { name: 'Dados pendentes' })
+      )
+      fireEvent.change(sheet.getByLabelText('ETA de'), { target: { value: '2026-08-01' } })
+      await user.click(sheet.getByRole('button', { name: /^Ver \d+ processos?$/ }))
+      expect(handlers.onCategoryFilterChange).toHaveBeenCalledWith('FCL')
+      expect(handlers.onOperationFilterChange).toHaveBeenCalledWith('Dados pendentes')
+      expect(handlers.onEtaStartDateChange).toHaveBeenCalledWith('2026-08-01')
+      expect(handlers.onEtaEndDateChange).not.toHaveBeenCalled()
+    })
+
+    it('"Dados pendentes" só aparece na etapa operacional para admin', async () => {
+      const user = userEvent.setup()
+      renderView({ isAdmin: false })
+      const dialog = await openFilterSheet(user)
+      expect(within(dialog).queryByRole('button', { name: 'Dados pendentes' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('com movimento reduzido a folha entra sem esperar o timer de saída (desmonta na hora)', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await openFilterSheet(user)
+    await user.keyboard('{Escape}')
+    // stubMatchMedia(true) tambem liga prefers-reduced-motion: sem os 500ms de saida.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
