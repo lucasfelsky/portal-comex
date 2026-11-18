@@ -1282,11 +1282,20 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       expect(brand).toHaveAttribute('aria-hidden', 'true')
       expect(brand).toHaveTextContent('Portal COMEX')
       expect(brand.querySelector('.mobile-page-header__avatar')).toHaveTextContent('AS')
+      // Marca oficial do Portal COMEX (ProductMark), decorativa; nao o glifo improvisado do mock.
+      const mark = brand.querySelector('svg.brand-mark.brand-mark--comex')
+      expect(mark).not.toBeNull()
+      expect(mark).toHaveClass('brand-mark--dark')
+      expect(mark).toHaveAttribute('aria-hidden', 'true')
+      expect(mark.querySelector('.brand-mark__dot')).not.toBeNull()
+      expect(brand.querySelector('.mobile-page-header__mark, .mobile-page-header__mark-dot')).toBeNull()
+      expect(brand.querySelector('.mobile-page-header__wordmark small')).toHaveTextContent('SQ QUÍMICA')
       home.unmount()
 
       const news = renderAt('/news')
       expect(news.container.querySelector('.mobile-page-header__brand')).toBeNull()
       expect(news.container.querySelector('.mobile-page-header__avatar')).toBeNull()
+      expect(news.container.querySelector('.mobile-page-header svg.brand-mark')).toBeNull()
       // O h1 continua presente com o titulo da rota.
       expect(news.container.querySelector('.mobile-page-header__title')).toBeInTheDocument()
     })

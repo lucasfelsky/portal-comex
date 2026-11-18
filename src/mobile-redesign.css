@@ -2375,22 +2375,6 @@
     margin-bottom: 16px;
   }
 
-  .mobile-page-header__mark {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    background: var(--m-hero-chip);
-    color: var(--m-hero-ink);
-  }
-
-  .mobile-page-header__mark-dot {
-    fill: var(--primary);
-    stroke: none;
-  }
-
   .mobile-page-header__wordmark {
     min-width: 0;
     font-family: var(--font-heading);

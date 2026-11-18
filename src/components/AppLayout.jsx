@@ -1024,12 +1024,7 @@ export default function AppLayout() {
             <div className="mobile-page-header__inner">
               {location.pathname === '/' ? (
                 <div className="mobile-page-header__brand" aria-hidden="true">
-                  <span className="mobile-page-header__mark">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" focusable="false">
-                      <path d="M4 18c4 0 4-6 8-6s4-6 8-6" />
-                      <circle className="mobile-page-header__mark-dot" cx="20" cy="6" r="2" />
-                    </svg>
-                  </span>
+                  <ProductMark product="comex" tone="dark" size={30} />
                   <span className="mobile-page-header__wordmark">
                     <small>SQ QUÍMICA</small>
                     Portal COMEX
