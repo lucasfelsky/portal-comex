@@ -84,12 +84,13 @@
     --m-hero-bg: linear-gradient(165deg, #003241 0%, #004153 62%, #0a5468 130%);
     --m-hero-ink: #ffffff;
     --m-hero-sub: #8fe6d0;
+    --m-hero-ok: #a3f0dc;
     --m-hero-chip: rgba(255, 255, 255, 0.12);
     --m-hero-line: rgba(255, 255, 255, 0.16);
     --m-route-off-hero: rgba(255, 255, 255, 0.22);
     --m-route-ink: #9fc4cc;
-    --m-hero-fire: #ffb4ab;
-    --m-hero-haz: #f2c46b;
+    --m-hero-fire: #ffd9d4;
+    --m-hero-haz: #fbdea3;
     --m-cbar-bg: rgba(0, 50, 65, 0.86);
     --m-tabbar-bg: rgba(255, 255, 255, 0.84);
     --m-shadow-card: 0 1px 2px rgba(0, 65, 83, 0.06), 0 8px 20px rgba(0, 65, 83, 0.07);
@@ -3033,7 +3034,7 @@
   }
 
   .m-barra--ok b {
-    color: var(--primary);
+    color: var(--m-hero-ok);
   }
 
   .m-barra--warn b {
@@ -3270,7 +3271,21 @@
     min-width: 0;
   }
 
+  /* Titulo e marcas lado a lado; as marcas ficam fora do h4 para o nome do
+     heading nao carregar os rotulos de carga. */
+  .m-fav__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-fav__head .m-marks {
+    margin-left: 0;
+  }
+
   .m-fav__title {
+    min-width: 0;
     margin: 0;
     font-family: var(--font-heading);
     font-size: 0.96875rem;

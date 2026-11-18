@@ -569,12 +569,14 @@ function MobileFavorite({ item, canSeeName, featured, onOpen, onUnfavorite }) {
     <article className={`m-fav${featured ? '' : ' m-fav--compact'}`}>
       <div className="m-fav__top">
         <div className="m-fav__id">
-          <h4 className="m-fav__title">
-            <button type="button" className="m-fav__open" onClick={() => onOpen?.(item.id)}>
-              {title}
-            </button>
+          <div className="m-fav__head">
+            <h4 className="m-fav__title">
+              <button type="button" className="m-fav__open" onClick={() => onOpen?.(item.id)}>
+                {title}
+              </button>
+            </h4>
             <ProcessCargoMarks process={item} />
-          </h4>
+          </div>
           {poLine ? <p className="m-fav__po">{poLine}</p> : null}
         </div>
         <button

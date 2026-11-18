@@ -36,7 +36,10 @@ function extractVars(body) {
 const rootVars = extractVars(extractBlock(css, ':root {'))
 const darkVars = { ...rootVars, ...extractVars(extractBlock(css, ":root[data-theme='dark'] {")) }
 
-const TEXT_TOKENS = ['--m-hero-ink', '--m-hero-sub', '--m-route-ink', '--m-hero-fire', '--m-hero-haz']
+const TEXT_TOKENS = ['--m-hero-ink', '--m-hero-sub', '--m-route-ink', '--m-hero-fire', '--m-hero-haz', '--m-hero-ok']
+// Tokens de texto que moram DENTRO do chip da Barra do Rio (F3) e das marcas de
+// carga do hero: ali o fundo e' o --m-hero-chip (branco translucido) sobre o gradiente.
+const CHIP_TEXT_TOKENS = ['--m-hero-ink', '--m-hero-ok', '--m-hero-haz', '--m-hero-fire']
 const THEMES = {
   claro: { vars: rootVars, backgrounds: ['#003241', '#004153', '#0a5468'] },
   escuro: { vars: darkVars, backgrounds: ['#031820', '#062833', '#0a3a48'] },
@@ -55,6 +58,16 @@ function luminance([r, g, b]) {
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
   })
   return 0.2126 * R + 0.7152 * G + 0.0722 * B
+}
+
+// Compoe o --m-hero-chip (rgba branco com alfa) sobre uma parada do gradiente.
+function chipOver(chip, background) {
+  const match = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(chip)
+  if (!match) throw new Error(`rgba() esperado em --m-hero-chip, veio: ${chip}`)
+  const [r, g, b, alpha] = [match[1], match[2], match[3], match[4]].map(Number)
+  const base = parseHex(background)
+  const mixed = [r, g, b].map((channel, index) => Math.round(base[index] * (1 - alpha) + channel * alpha))
+  return '#' + mixed.map((channel) => channel.toString(16).padStart(2, '0')).join('')
 }
 
 function contrast(foreground, background) {
@@ -81,6 +94,19 @@ describe('hero navy do mobile - contraste dos tokens de texto (WCAG AA 4.5:1)', 
           expect(contrast(vars[token], background)).toBeGreaterThanOrEqual(4.5)
         })
       }
+    }
+  }
+  // F3: o texto do chip da Barra do Rio (12,5px, nao e texto grande) e as marcas
+  // de carga do hero ficam sobre o chip; a pior parada e' a mais clara do gradiente.
+  for (const [themeName, { vars, backgrounds }] of Object.entries(THEMES)) {
+    for (const token of CHIP_TEXT_TOKENS) {
+      it(`${themeName}: ${token} sobre o --m-hero-chip na PIOR parada do gradiente >= 4.5:1`, () => {
+        expect(vars[token], `${token} ausente`).toBeDefined()
+        const worst = Math.min(
+          ...backgrounds.map((background) => contrast(vars[token], chipOver(vars['--m-hero-chip'], background)))
+        )
+        expect(worst).toBeGreaterThanOrEqual(4.5)
+      })
     }
   }
 })

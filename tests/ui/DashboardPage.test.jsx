@@ -1121,6 +1121,10 @@ describe('DashboardPage - Inicio mobile (remake F3)', () => {
       expect(within(marks).getByRole('img', { name: 'Carga perigosa' })).toBeInTheDocument()
       const volume = within(marks).getByRole('img', { name: '3 pallets' })
       expect(volume.querySelector('b').textContent).toBe('3')
+      // as marcas sao irmas do heading: o nome acessivel do h4 e so o titulo
+      const heading = screen.getByRole('heading', { name: 'PO FAV 1' })
+      expect(heading).not.toContainElement(marks)
+      expect(heading.parentElement).toContainElement(marks)
       // a pilula de texto saiu (continua so no tablet/desktop)
       expect(screen.queryByText('Carga inflamável')).toBeNull()
       expect(screen.queryByText('Carga perigosa')).toBeNull()
