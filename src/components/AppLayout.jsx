@@ -1039,7 +1039,7 @@ export default function AppLayout() {
               {/* Com o detalhe do processo aberto o h1 e' o do hero do detalhe
                   (unico por pagina): o titulo da pagina vira texto simples. */}
               {isProcessDetailOpen && activeProcess.viewMode === 'detail' ? (
-                <p className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</p>
+                <p className="mobile-page-header__title" title={mobileTitle} aria-hidden="true">{mobileTitle}</p>
               ) : (
                 <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
               )}

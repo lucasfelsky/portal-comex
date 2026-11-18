@@ -8114,6 +8114,26 @@ body {
   }
 }
 
+/* F5: sem `:has()` (iOS < 15.4) a regra de mobile-redesign.css que neutraliza o
+   `.page-fade` com o detalhe aberto nao casa, e o `will-change: transform` (e o
+   `page-fade-in`) do `.page-fade` viram o bloco de contencao do `position: fixed`
+   da camada do detalhe. Fallback so' em <= 720px: o fade das paginas mobile some
+   (sem animacao, sem will-change) nesses navegadores. Mora aqui (junto do `.page-fade`)
+   porque a guarda de escopo de mobile-redesign.css nao aceita @supports aninhado e
+   o fim do arquivo nao pode ter @media depois do bloco reduce desktop. */
+@media (max-width: 720px) {
+  @supports not selector(:has(*)) {
+    .main-content > .page-fade {
+      will-change: auto;
+    }
+
+    .main-content > .page-fade--visible {
+      opacity: 1;
+      animation: none;
+    }
+  }
+}
+
 /* F15.3: transição push/pop estilo iOS entre lista↔detalhe (viewMode do
    ProcessesPage — não é troca de rota, então o PageFade não dispara).
    Push: a view "de dentro" (detalhe/form) entra deslizando da direita.

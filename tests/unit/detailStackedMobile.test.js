@@ -177,8 +177,30 @@ describe('detalhe empilhado (F5) - estado de repouso sem bloco de contencao', ()
     const resting = find(sRules, '.main-content > .page-fade:has(.process-detail-view)')
     expect(valueOf(resting, 'will-change')).toBe('auto')
     const fade = find(sRules, '.main-content > .page-fade--visible:has(.process-detail-view)')
-    expect(valueOf(fade, 'animation-fill-mode')).toBe('backwards')
+    // sem animacao nenhuma: o `page-fade-in` anima translateY por 180ms e, nesse
+    // intervalo, o `.page-fade` seria bloco de contencao do `position: fixed`
+    expect(valueOf(fade, 'animation')).toBe('none')
+    expect(decl(fade, 'animation-fill-mode')).toHaveLength(0)
     expect(valueOf(fade, 'opacity')).toBe('1')
+  })
+
+  it('fallback sem `:has()` (iOS < 15.4): @supports not selector(:has(*)) zera will-change e a animacao do `.page-fade` so em <= 720px', () => {
+    const fallback = allRules.filter(
+      (rule) =>
+        rule.file === 'styles.css' &&
+        rule.conds.length === 2 &&
+        rule.conds[0] === '@media (max-width: 720px)' &&
+        rule.conds[1] === '@supports not selector(:has(*))'
+    )
+    expect(fallback.length).toBe(2)
+    expect(valueOf(find(fallback, '.main-content > .page-fade'), 'will-change')).toBe('auto')
+    const visible = find(fallback, '.main-content > .page-fade--visible')
+    expect(valueOf(visible, 'animation')).toBe('none')
+    expect(valueOf(visible, 'opacity')).toBe('1')
+    // nunca vale acima de 720px: nenhuma regra desse fallback fora do @media de 720px
+    expect(
+      allRules.filter((rule) => rule.conds.some((cond) => cond.includes('selector(:has')) && rule.conds[0] !== '@media (max-width: 720px)')
+    ).toHaveLength(0)
   })
 
   it('nao ha will-change/contain/filter na lista de ancestrais da barra de acao fixa (toolbar)', () => {

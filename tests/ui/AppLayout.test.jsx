@@ -492,6 +492,8 @@ describe('AppLayout (header oculto com o detalhe do processo aberto)', () => {
     expect(container.querySelector('.mobile-page-header__eyebrow')).toBeNull()
     expect(container.querySelector('h1.mobile-page-header__title')).toBeNull()
     expect(container.querySelector('p.mobile-page-header__title').textContent).toBe('Chegadas')
+    // oculto por clip mas ainda lido por leitor de tela: aria-hidden evita repetir o h1 do hero
+    expect(container.querySelector('p.mobile-page-header__title')).toHaveAttribute('aria-hidden', 'true')
 
     act(() => setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'list' }))
     expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Central de chegadas')

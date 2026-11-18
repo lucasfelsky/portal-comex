@@ -276,7 +276,10 @@ describe('F5 - detalhe empilhado (mobile) dentro da ProcessesPage', () => {
     expect(screen.queryByRole('button', { name: /Exportar/ })).toBeNull()
   })
 
-  it('estado de repouso da camada: sem transform/filter/will-change/contain na camada nem nos ancestrais', async () => {
+  // Cobre SO' o estilo INLINE (jsdom nao carrega folhas de estilo): garante que o
+  // gesto/JS nao deixa transform inline na camada nem nos ancestrais. A prova do
+  // CSS (cascata, fill, will-change do `.page-fade`) e' de detailStackedMobile.test.js.
+  it('estado de repouso da camada (inline): sem transform/filter/will-change/contain na camada nem nos ancestrais', async () => {
     const user = userEvent.setup()
     const { container } = renderPage()
     await openMobileDetail(container, user)

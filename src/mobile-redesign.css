@@ -4548,15 +4548,19 @@
 
   /* O `.page-fade` (ancestral da camada) fica com `will-change: transform` e,
      pelo `both`, com o transform final da entrada: ambos fariam dele o bloco de
-     contencao do `position: fixed`. Com o detalhe aberto o fade so' vale
-     durante a entrada (fill `backwards`) e o `will-change` sai. */
+     contencao do `position: fixed`. Com o detalhe aberto o fade some por
+     completo (`animation: none`: o `page-fade-in` anima translateY por 180ms e,
+     nesse intervalo, tambem seria bloco de contencao; o detalhe tem a propria
+     entrada `m-push-in`) e o `will-change` sai. Sem `:has()` (iOS < 15.4) o
+     fallback `@supports not selector(:has(*))` vive em styles.css (a guarda de
+     escopo deste arquivo nao aceita at-rule aninhada). */
   .main-content > .page-fade:has(.process-detail-view) {
     will-change: auto;
   }
 
   .main-content > .page-fade--visible:has(.process-detail-view) {
     opacity: 1;
-    animation-fill-mode: backwards;
+    animation: none;
   }
 
   .process-detail-view.list-card {
