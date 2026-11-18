@@ -587,9 +587,12 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     for (const rule of toastRules) {
       expect(rule.declarations.some((declaration) => declaration.prop === 'bottom' && /env\(safe-area-inset-bottom/.test(declaration.value))).toBe(true)
     }
-    // Sparkline do KPI com valor de 3+ digitos: caixa menor, mesma proporcao do viewBox (100x28).
-    expect(decl('.m-kpi[data-wide-value] .stat-card__sparkline', 'width')).toBe('40px')
-    expect(decl('.m-kpi[data-wide-value] .stat-card__sparkline', 'height')).toBe('11px')
+    // Sparkline do KPI com valor de 3 digitos (wide): caixa menor, mesma proporcao do viewBox (100x28),
+    // traco mais grosso (4,5 no viewBox = ~1,8px); com 4+ digitos (xwide) a linha some.
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline", 'width')).toBe('40px')
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline", 'height')).toBe('11px')
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline-line", 'stroke-width')).toBe('4.5')
+    expect(decl(".m-kpi[data-wide-value='xwide'] .stat-card__sparkline", 'display')).toBe('none')
     // Dialogo de confirmacao: botoes de 44px.
     expect(
       sRules.some(
@@ -616,6 +619,44 @@ describe('mobile-redesign.css - guarda de escopo', () => {
           rule.declarations.some((declaration) => declaration.prop === 'animation' && declaration.value === 'none')
       )
     ).toBe(true)
+  })
+
+  it('Folha de filtros (F7, rodape fixo): corpo rola, rodape fica dentro da folha, so na camada S, com safe-area e alvos de 50px', () => {
+    const F7_SHEET_ONLY = /\.m-bsheet__(body|foot)/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if (block.prelude === S) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`, 'rodape/corpo da folha fora da camada S').not.toMatch(F7_SHEET_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const decl = (selector, prop) => {
+      const rule = sRules
+        .filter((candidate) => splitTopLevel(candidate.selector, ',').includes(selector))
+        .find((candidate) => candidate.declarations.some((declaration) => declaration.prop === prop))
+      return rule?.declarations.find((declaration) => declaration.prop === prop)?.value
+    }
+
+    // A folha vira coluna que nao rola; so o corpo rola.
+    expect(decl('.m-bsheet', 'display')).toBe('flex')
+    expect(decl('.m-bsheet', 'flex-direction')).toBe('column')
+    expect(decl('.m-bsheet', 'overflow')).toBe('hidden')
+    expect(decl('.m-bsheet', 'overflow-y')).toBeUndefined()
+    expect(decl('.m-bsheet__body', 'overflow-y')).toBe('auto')
+    expect(decl('.m-bsheet__body', 'min-height')).toBe('0')
+    expect(decl('.m-bsheet__body', 'overscroll-behavior')).toBe('contain')
+    // Rodape: nao encolhe, fundo da folha, borda e sombra sutis (tokens), safe-area embaixo.
+    expect(decl('.m-bsheet__foot', 'flex')).toBe('none')
+    expect(decl('.m-bsheet__foot', 'background')).toBe('var(--bg)')
+    expect(decl('.m-bsheet__foot', 'border-top')).toBe('1px solid var(--border)')
+    expect(decl('.m-bsheet__foot', 'box-shadow')).toBe('var(--m-shadow-foot)')
+    expect(decl('.m-bsheet__foot', 'padding')).toBe('12px 16px calc(12px + env(safe-area-inset-bottom, 0px))')
+    // Alvos de toque: botoes "block" de 50px (>= 44px).
+    expect(decl('.m-btn-mint--block', 'height')).toBe('50px')
+    expect(decl('.m-ghost--block', 'height')).toBe('50px')
+    // A classe antiga do rodape nao existe mais.
+    expect(css).not.toMatch(/\.m-bsheet__btns/)
   })
 
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {

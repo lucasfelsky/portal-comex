@@ -77,6 +77,7 @@
     --m-shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
     --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.18);
     --m-scrim: rgba(20, 24, 22, 0.32);
+    --m-shadow-foot: 0 -10px 24px -14px rgba(0, 50, 65, 0.28);
 
     /* Identidade do remake (inertes no tablet: so a camada S usa). */
     --m-navy-900: #003241;
@@ -120,6 +121,7 @@
     --m-shadow-segment: none;
     --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.6);
     --m-scrim: rgba(0, 0, 0, 0.5);
+    --m-shadow-foot: 0 -10px 24px -14px rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -3356,9 +3358,12 @@
     pointer-events: auto;
   }
 
+  /* F7: coluna flex de altura maxima 86dvh. Grab e titulo (fixos em cima), corpo
+     que rola (`__body`) e rodape fixo (`__foot`) com as acoes: o CTA nunca fica
+     abaixo da dobra, mesmo em 320x640. */
   .m-bsheet {
-    display: grid;
-    gap: 14px;
+    display: flex;
+    flex-direction: column;
     position: fixed;
     left: 0;
     right: 0;
@@ -3366,9 +3371,8 @@
     z-index: 140;
     max-height: 86vh;
     max-height: 86dvh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 10px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+    overflow: hidden;
+    padding: 10px 0 0;
     border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
     background: var(--bg);
     color: var(--ink);
@@ -3386,7 +3390,19 @@
     transition-delay: 0s;
   }
 
-  .m-bsheet::-webkit-scrollbar {
+  .m-bsheet__body {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 14px;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 16px 16px;
+    scrollbar-width: none;
+  }
+
+  .m-bsheet__body::-webkit-scrollbar {
     display: none;
   }
 
@@ -3394,6 +3410,7 @@
   .m-bsheet__grab {
     position: relative;
     display: block;
+    flex: none;
     width: 38px;
     height: 5px;
     margin: 0 auto;
@@ -3405,7 +3422,7 @@
     touch-action: none;
   }
 
-  /* Area de toque de 44px: a camada rola (overflow-y: auto) e corta o que sai
+  /* Area de toque de 44px: a folha (overflow: hidden) corta o que sai
      da folha, entao a extensao para cima fica nos 10px de padding (F7). */
   .m-bsheet__grab::before {
     content: '';
@@ -3419,7 +3436,9 @@
   }
 
   .m-bsheet__title {
+    flex: none;
     margin: 0;
+    padding: 14px 16px 12px;
     font-family: var(--font-heading);
     font-size: 1.1875rem;
     font-weight: 700;
@@ -3517,10 +3536,17 @@
     transform: translateX(20px);
   }
 
-  .m-bsheet__btns {
+  /* Rodape fixo da folha (F7): fundo da folha, borda e sombra sutis em cima e
+     safe-area embaixo. Botoes "block" de 50px (>= 44px). */
+  .m-bsheet__foot {
     display: grid;
+    flex: none;
     grid-template-columns: auto 1fr;
     gap: 8px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    box-shadow: var(--m-shadow-foot);
   }
 
   /* Acao secundaria do rodape da folha: "Exportar N processos" em linha propria. */
@@ -3969,12 +3995,23 @@
     overflow: visible;
   }
 
-  /* F7: com valor de 3+ digitos (Sora 34px, ~63px) a linha de 64px nao cabe ao
-     lado dele nos cards de ~138px (320px de tela) e encostava nos digitos. A
-     caixa encolhe mantendo a proporcao 100x28 do viewBox. */
-  .m-kpi[data-wide-value] .stat-card__sparkline {
+  /* F7: com valor de 3 digitos (`wide`, Sora 34px, ~63px) a linha de 64px nao cabe
+     ao lado dele nos cards de ~138px (320px de tela) e encostava nos digitos. A
+     caixa encolhe mantendo a proporcao 100x28 do viewBox e o traco engrossa
+     (4,5 no viewBox = ~1,8px renderizado) para nao ficar mais fino que o dos
+     outros cards. Com 4+ digitos (`xwide`) nao ha folga nem encolhendo: a
+     sparkline some (e' decorativa, aria-hidden). */
+  .m-kpi[data-wide-value='wide'] .stat-card__sparkline {
     width: 40px;
     height: 11px;
+  }
+
+  .m-kpi[data-wide-value='wide'] .stat-card__sparkline-line {
+    stroke-width: 4.5;
+  }
+
+  .m-kpi[data-wide-value='xwide'] .stat-card__sparkline {
+    display: none;
   }
 
   .m-kpi .stat-card__sparkline-area {

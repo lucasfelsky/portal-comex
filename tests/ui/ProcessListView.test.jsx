@@ -1425,11 +1425,95 @@ describe('ProcessListView — "Exportar" no rodapé da folha de filtros (mobile,
     await user.click(screen.getByRole('button', { name: 'Atracação (1)' }))
     const dialog = await openFilterSheet(user)
     await user.click(within(dialog).getByRole('button', { name: /^Exportar 1 processo/ }))
-    expect(onExport).toHaveBeenCalledTimes(1)
+    // F7: a folha fecha primeiro e so' entao a exportacao dispara.
+    await waitFor(() => expect(onExport).toHaveBeenCalledTimes(1))
     const [rows] = onExport.mock.calls[0]
     expect(Array.isArray(rows)).toBe(true)
     expect(rows.map((row) => row.id)).toEqual(['s-berth'])
     expect(titlesOf(container)).toEqual(['PO: PO 11'])
+  })
+
+  // F7: a folha fecha ANTES de a exportacao disparar (o toast de resultado nao cobre Limpar/Ver N).
+  // Com movimento normal a folha sai em 500ms (aria-hidden na saida); com movimento reduzido
+  // sai na hora. Nos dois casos a exportacao so' roda com a folha ja' desmontada.
+  describe.each([
+    ['movimento normal', false],
+    ['movimento reduzido', true],
+  ])('F7: Exportar com a folha aberta (%s)', (_label, reduced) => {
+    beforeEach(() => {
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: /prefers-reduced-motion/.test(query) ? reduced : true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    })
+
+    it('fecha a folha e so entao dispara a exportacao, uma unica vez', async () => {
+      const user = userEvent.setup()
+      let dialogOpenAtExport = null
+      const onExport = vi.fn(() => {
+        dialogOpenAtExport = screen.queryByRole('dialog') !== null
+      })
+      renderView({ filteredProcesses: STAGED, onExport })
+      const dialog = await openFilterSheet(user)
+      const exportButton = within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })
+      await user.click(exportButton)
+      if (!reduced) {
+        // A folha ja' esta saindo, mas a exportacao ainda nao rodou.
+        expect(dialog).toHaveAttribute('aria-hidden', 'true')
+        expect(onExport).not.toHaveBeenCalled()
+        // Segundo clique durante a saida nao exporta de novo.
+        await user.click(exportButton)
+      }
+      await waitFor(() => expect(onExport).toHaveBeenCalledTimes(1))
+      expect(dialogOpenAtExport).toBe(false)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(onExport).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('F7: rodapé fixo: Limpar, Ver N e Exportar (com o aviso) ficam no rodapé; os filtros ficam no corpo que rola', async () => {
+    const user = userEvent.setup()
+    renderView({ filteredProcesses: STAGED })
+    const dialog = await openFilterSheet(user)
+    const body = dialog.querySelector('.m-bsheet__body')
+    const foot = dialog.querySelector('.m-bsheet__foot')
+    expect(body).not.toBeNull()
+    expect(foot).not.toBeNull()
+    expect(dialog.lastElementChild).toBe(foot)
+    expect(body.nextElementSibling).toBe(foot)
+
+    const inFoot = within(foot)
+    expect(inFoot.getByRole('button', { name: 'Limpar' })).toBeInTheDocument()
+    expect(inFoot.getByRole('button', { name: /^Ver \d+ processos?$/ })).toBeInTheDocument()
+    expect(inFoot.getByRole('button', { name: /^Exportar 4 processos/ })).toBeInTheDocument()
+    // Ordem dos botoes do rodape: Limpar, Ver N, Exportar.
+    const labels = [...foot.querySelectorAll('button')].map((button) => button.textContent.trim())
+    expect(labels).toEqual(['Limpar', 'Ver 4 processos', 'Exportar 4 processos'])
+
+    // Corpo: os controles de filtro (mesma ordem e rotulos de antes), sem as acoes.
+    const inBody = within(body)
+    const groupNames = inBody.getAllByRole('group').map((group) => group.getAttribute('aria-labelledby'))
+    expect(groupNames.map((id) => document.getElementById(id).textContent)).toEqual([
+      'Categoria',
+      'Modal',
+      'Faixa de ETA',
+      'Etapa operacional',
+    ])
+    expect(inBody.getByRole('switch', { name: 'Só favoritos' })).toBeInTheDocument()
+    expect(inBody.queryByRole('button', { name: 'Limpar' })).not.toBeInTheDocument()
+    expect(inBody.queryByRole('button', { name: /^Exportar/ })).not.toBeInTheDocument()
+    expect(inBody.queryByRole('button', { name: /^Ver \d+/ })).not.toBeInTheDocument()
+
+    // O aviso do rascunho mora no rodape (junto do Exportar).
+    await user.click(inBody.getByRole('button', { name: 'Aéreo' }))
+    expect(inFoot.getByText(/Exporta a lista atual; filtros ainda não aplicados não entram./)).toBeVisible()
+    expect(inBody.queryByText(/Exporta a lista atual/)).not.toBeInTheDocument()
   })
 
   it('desabilitado sem linhas e durante a exportação; sem onExport o botão não existe', async () => {

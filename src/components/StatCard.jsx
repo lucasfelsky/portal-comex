@@ -67,6 +67,15 @@ function buildSparklinePath(points, width, height) {
   return { linePath, areaPath }
 }
 
+// Nivel de largura do valor (so' a sparkline mobile le, em <=720px): 3 caracteres
+// = 'wide' (a linha encolhe), 4+ = 'xwide' (a linha some); menos que isso, sem atributo.
+function wideValueLevel(value) {
+  const length = String(value ?? '').length
+  if (length >= 4) return 'xwide'
+  if (length === 3) return 'wide'
+  return undefined
+}
+
 export default function StatCard({
   label,
   value,
@@ -92,7 +101,7 @@ export default function StatCard({
   return (
     <article
       className={`stat-card stat-card--rich ${className}`}
-      data-wide-value={String(value ?? '').length >= 3 ? 'true' : undefined}
+      data-wide-value={wideValueLevel(value)}
     >
       <div className="stat-card__head">
         {icon ? (

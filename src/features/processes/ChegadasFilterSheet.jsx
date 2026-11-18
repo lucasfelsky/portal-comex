@@ -1,8 +1,11 @@
 // Folha de filtros de Chegadas no mobile (remake, F4): bottom sheet com
 // Categoria, Modal, Faixa de ETA, Etapa operacional e o switch "Só favoritos".
 // Na aba Arquivadas (`archived`) so' Modal e "Só favoritos" aparecem: os demais
-// nao afetam aquela lista. No rodape, a acao secundaria "Exportar N processos"
-// baixa a lista VISIVEL (a aplicada, nao o rascunho).
+// nao afetam aquela lista. O RODAPE e' fixo dentro da folha (F7): "Limpar",
+// "Ver N processos" e a acao secundaria "Exportar N processos" ficam sempre a
+// vista e o conteudo (categoria, modal, ETA, etapa, favoritos) rola acima dele.
+// O Exportar baixa a lista VISIVEL (a aplicada, nao o rascunho) e FECHA a folha
+// antes de disparar (o toast de resultado nao cobre "Limpar"/"Ver N").
 // Os filtros ficam num RASCUNHO local: o botao "Ver N processos" aplica tudo de
 // uma vez (N e' calculado pelo pai com o rascunho); Esc, scrim e arrastar o
 // grab fecham sem aplicar. Renderizada por Portal em document.body (evita o
@@ -120,17 +123,26 @@ export default function ChegadasFilterSheet({
 
   useEffect(() => () => window.clearTimeout(closeTimerRef.current), [])
 
-  const requestClose = useCallback(() => {
+  // `afterClose` roda DEPOIS de `onClose` (a folha ja saiu): usado pelo Exportar
+  // para o toast so' aparecer com a folha fechada.
+  const closeWith = useCallback((afterClose) => {
     if (leavingRef.current) return
     leavingRef.current = true
     setIsLeaving(true)
     setIsOn(false)
-    if (prefersReducedMotion()) {
+    const finish = () => {
       onCloseRef.current?.()
+      // Um tick depois: a folha ja' foi desmontada quando o callback roda.
+      if (afterClose) window.setTimeout(afterClose, 0)
+    }
+    if (prefersReducedMotion()) {
+      finish()
       return
     }
-    closeTimerRef.current = window.setTimeout(() => onCloseRef.current?.(), EXIT_MS)
+    closeTimerRef.current = window.setTimeout(finish, EXIT_MS)
   }, [])
+
+  const requestClose = useCallback(() => closeWith(), [closeWith])
 
   // Foco preso na folha enquanto aberta; Esc fecha; ao sair o foco volta para
   // quem abriu. `isLeaving` desliga a armadilha ja' na saida (a folha ainda
@@ -147,6 +159,13 @@ export default function ChegadasFilterSheet({
   function handleApply() {
     onApply(draft)
     requestClose()
+  }
+
+  // Exportar: fecha a folha e so' entao dispara (a lista exportada e' a que estava
+  // visivel no clique: `onExport` ja' a capturou nesta renderizacao).
+  function handleExport() {
+    if (!onExport) return
+    closeWith(() => onExport())
   }
 
   // Arrastar o grab: a folha acompanha o dedo sem transicao; > 90px fecha, senao
@@ -238,91 +257,93 @@ export default function ChegadasFilterSheet({
           Filtros
         </h3>
 
-        {archived ? null : (
-          <div>
-            <div className="m-lbl" id={categoryLabelId}>
-              Categoria
-            </div>
-            <ChipGroup
-              labelId={categoryLabelId}
-              options={[
-                { value: 'Todos', label: 'Todas' },
-                ...categoryOptions.map((item) => ({ value: item, label: item })),
-              ]}
-              value={draft.category}
-              onChange={(category) => patch({ category })}
-            />
-          </div>
-        )}
-
-        <div>
-          <div className="m-lbl" id={modalLabelId}>
-            Modal
-          </div>
-          <ChipGroup
-            labelId={modalLabelId}
-            options={MODAL_OPTIONS}
-            value={draft.modal}
-            onChange={(modal) => patch({ modal })}
-          />
-        </div>
-
-        {archived ? null : (
-          <>
+        <div className="m-bsheet__body">
+          {archived ? null : (
             <div>
-              <div className="m-lbl" id={etaLabelId}>
-                Faixa de ETA
-              </div>
-              <div className="m-bsheet__dates" role="group" aria-labelledby={etaLabelId}>
-                <input
-                  className="text-input"
-                  type="date"
-                  value={draft.etaStart}
-                  onChange={(event) => patch({ etaStart: event.target.value })}
-                  aria-label="ETA de"
-                />
-                <input
-                  className="text-input"
-                  type="date"
-                  value={draft.etaEnd}
-                  min={draft.etaStart || undefined}
-                  onChange={(event) => patch({ etaEnd: event.target.value })}
-                  aria-label="ETA até"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="m-lbl" id={operationLabelId}>
-                Etapa operacional
+              <div className="m-lbl" id={categoryLabelId}>
+                Categoria
               </div>
               <ChipGroup
-                labelId={operationLabelId}
-                options={[{ value: 'Todos', label: 'Todas' }, ...operationOptions.map((item) => ({ value: item, label: item }))]}
-                value={draft.operation}
-                onChange={(operation) => patch({ operation })}
+                labelId={categoryLabelId}
+                options={[
+                  { value: 'Todos', label: 'Todas' },
+                  ...categoryOptions.map((item) => ({ value: item, label: item })),
+                ]}
+                value={draft.category}
+                onChange={(category) => patch({ category })}
               />
             </div>
-          </>
-        )}
+          )}
 
-        <div className="m-group">
-          <button
-            type="button"
-            className="m-rowi"
-            role="switch"
-            aria-checked={draft.favoritesOnly}
-            onClick={() => patch({ favoritesOnly: !draft.favoritesOnly })}
-          >
-            <span className="m-rowi__lead" aria-hidden="true">
-              <Icon name="star" size={18} />
-            </span>
-            <span className="m-rowi__label">Só favoritos</span>
-            <span className="m-switch" aria-hidden="true" />
-          </button>
+          <div>
+            <div className="m-lbl" id={modalLabelId}>
+              Modal
+            </div>
+            <ChipGroup
+              labelId={modalLabelId}
+              options={MODAL_OPTIONS}
+              value={draft.modal}
+              onChange={(modal) => patch({ modal })}
+            />
+          </div>
+
+          {archived ? null : (
+            <>
+              <div>
+                <div className="m-lbl" id={etaLabelId}>
+                  Faixa de ETA
+                </div>
+                <div className="m-bsheet__dates" role="group" aria-labelledby={etaLabelId}>
+                  <input
+                    className="text-input"
+                    type="date"
+                    value={draft.etaStart}
+                    onChange={(event) => patch({ etaStart: event.target.value })}
+                    aria-label="ETA de"
+                  />
+                  <input
+                    className="text-input"
+                    type="date"
+                    value={draft.etaEnd}
+                    min={draft.etaStart || undefined}
+                    onChange={(event) => patch({ etaEnd: event.target.value })}
+                    aria-label="ETA até"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="m-lbl" id={operationLabelId}>
+                  Etapa operacional
+                </div>
+                <ChipGroup
+                  labelId={operationLabelId}
+                  options={[{ value: 'Todos', label: 'Todas' }, ...operationOptions.map((item) => ({ value: item, label: item }))]}
+                  value={draft.operation}
+                  onChange={(operation) => patch({ operation })}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="m-group">
+            <button
+              type="button"
+              className="m-rowi"
+              role="switch"
+              aria-checked={draft.favoritesOnly}
+              onClick={() => patch({ favoritesOnly: !draft.favoritesOnly })}
+            >
+              <span className="m-rowi__lead" aria-hidden="true">
+                <Icon name="star" size={18} />
+              </span>
+              <span className="m-rowi__label">Só favoritos</span>
+              <span className="m-switch" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
-        <div className="m-bsheet__btns">
+        <div className="m-bsheet__foot">
           <button
             type="button"
             className="m-ghost m-ghost--block"
@@ -340,7 +361,7 @@ export default function ChegadasFilterSheet({
               aria-label={exportHint}
               title={exportHint}
               disabled={exportCount === 0 || isExporting}
-              onClick={() => onExport()}
+              onClick={handleExport}
             >
               {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />}
               {exportLabel}

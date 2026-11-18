@@ -63,12 +63,10 @@ const MOBILE_ONLY_SELECTORS = [
 ]
 
 // Achados que pedem decisao de produto (nao sao bug): entram fixos no INDEX.
-const PRODUCT_DECISIONS = [
-  'Folha de filtros: em 320x640, 360x740 e 390x844 o conteudo passa de 86dvh e a folha rola; "Ver N processos" e "Exportar" ficam abaixo da dobra ate o usuario rolar. Rodape fixo (sticky) na folha resolve, mas muda o layout do mock-up.',
-  'Toast com a folha de filtros aberta (ex.: "Exportados N processos"): fica acima da pilula (z-index 10000), logo cobre "Limpar"/"Ver N processos" por 5s. Opcoes: fechar a folha ao exportar, ou ancorar o toast no topo enquanto a folha estiver aberta.',
-  'KPI com valor de 4+ digitos (>= 1000): a sparkline de 40px (regra de 3 digitos) nao garante folga a 320px. Opcoes: abreviar (1,2 mil) ou ocultar a linha.',
-  'Rotulos de etapa a 10px (o mock tem 10,5px): medido no navegador, 10,5px transbordava a coluna de ~51px a 320px. Confirmar a perda de 0,5px de tipografia.',
-]
+// Vazio desde a decisao do Lucas (18/11/2026): rodape fixo na folha de filtros, folha fecha ao
+// exportar, KPI de 4+ digitos sem sparkline (3 digitos: traco mais grosso) e rotulos de etapa
+// mantidos em 10px.
+const PRODUCT_DECISIONS = []
 
 // --- seed minimo via REST do emulador ------------------------------------------
 
@@ -544,7 +542,11 @@ function measure(page) {
       const c = card.getBoundingClientRect()
       const horizontal = Math.min(v.right, s.right) - Math.max(v.left, s.left)
       const vertical = Math.min(v.bottom, s.bottom) - Math.max(v.top, s.top)
+      const line = spark.querySelector('.stat-card__sparkline-line')
+      const strokeUnits = line ? Number.parseFloat(getComputedStyle(line).strokeWidth) : 0
       out.kpiOverlap.push({
+        wide: card.getAttribute('data-wide-value'),
+        strokePx: Math.round(strokeUnits * (s.width / 100) * 100) / 100,
         value: value.textContent.trim().slice(0, 6),
         overlapX: Math.round(horizontal * 10) / 10,
         overlapY: Math.round(vertical * 10) / 10,
@@ -560,12 +562,20 @@ function measure(page) {
     // Folha de filtros.
     const sheet = document.querySelector('.m-bsheet')
     if (sheet && isVis(sheet)) {
-      const apply = sheet.querySelector('.m-btn-mint')
-      const exp = sheet.querySelector('.m-bsheet__export')
+      const apply = sheet.querySelector('.m-bsheet__foot .m-btn-mint')
+      const exp = sheet.querySelector('.m-bsheet__foot .m-bsheet__export')
+      const clear = sheet.querySelector('.m-bsheet__foot .m-ghost')
+      const body = sheet.querySelector('.m-bsheet__body')
+      const foot = sheet.querySelector('.m-bsheet__foot')
       const sheetBox = box(sheet)
       out.sheet = {
         box: sheetBox,
-        scrollable: sheet.scrollHeight > sheet.clientHeight + 1,
+        scrollable: Boolean(body && body.scrollHeight > body.clientHeight + 1),
+        sheetScrollable: sheet.scrollHeight > sheet.clientHeight + 1,
+        bodyBox: body ? box(body) : null,
+        footBox: foot ? box(foot) : null,
+        footPaddingBottom: foot ? Number.parseFloat(getComputedStyle(foot).paddingBottom) : null,
+        clearBox: clear ? box(clear) : null,
         applyBox: apply ? box(apply) : null,
         exportBox: exp ? box(exp) : null,
         exportText: exp ? exp.innerText.trim() : null,
@@ -676,6 +686,7 @@ function writeIndex() {
     for (const [detail, combos] of group.items) lines.push(`- ${detail}  <- ${[...combos].slice(0, 4).join('; ')}${combos.size > 4 ? ` (+${combos.size - 4})` : ''}`)
   }
   lines.push('', '## Decisoes de produto pendentes (nao decididas pela QA)')
+  if (PRODUCT_DECISIONS.length === 0) lines.push('- Nenhuma.')
   for (const item of PRODUCT_DECISIONS) lines.push(`- ${item}`)
   lines.push('')
   fs.writeFileSync(path.join(OUT_ROOT, 'INDEX.md'), lines.join('\n'))
@@ -720,8 +731,10 @@ async function checkScreen(page, combo, screen, { tabbar, motion, width, skipTar
     if (probs.length) fail('rotulo de etapa cortado/transbordando', `${screen}: "${label.text}" ${label.fontPx}px ${probs.join('; ')}`)
   }
 
-  // Sparkline x valor do KPI.
+  // Sparkline x valor do KPI. 3 digitos (wide): traco renderizado >= 1,6px; 4+ (xwide): sem sparkline (nem entra na lista).
   for (const kpi of m.kpiOverlap) {
+    if (kpi.wide === 'xwide') fail('sparkline deveria estar oculta com 4+ digitos', `valor "${kpi.value}"`)
+    if (kpi.wide === 'wide' && kpi.strokePx < 1.6) fail('traco da sparkline fino demais com 3 digitos', `valor "${kpi.value}": ${kpi.strokePx}px`)
     if (kpi.overlapX > 0 && kpi.overlapY > 0) {
       fail('sparkline encosta/sobrepoe o valor do KPI', `valor "${kpi.value}": sobreposicao ${kpi.overlapX}px (folga ${kpi.gap}px)`)
     } else if (kpi.gap < 4) {
@@ -744,15 +757,22 @@ async function checkScreen(page, combo, screen, { tabbar, motion, width, skipTar
 
   // Folha de filtros dentro da viewport; botoes alcancaveis.
   if (m.sheet) {
-    const { box: b, applyBox, exportBox, scrollable } = m.sheet
+    const { box: b, applyBox, exportBox, clearBox, footBox, bodyBox, scrollable, sheetScrollable } = m.sheet
     if (b.bottom > m.vh + 1 || b.left < -1 || b.right > m.vw + 1) {
       fail('folha de filtros fora da viewport', `${JSON.stringify(b)}`)
     }
-    if (applyBox && (applyBox.bottom > m.vh + 1 || applyBox.top < 0) && !scrollable) {
-      fail('botao "Ver N processos" fora da viewport (folha sem rolagem)', JSON.stringify(applyBox))
+    // Rodape fixo (decisao do Lucas): CTA, Limpar e Exportar SEMPRE a vista, rolando ou nao o corpo.
+    if (!footBox) fail('folha sem rodape fixo (.m-bsheet__foot)', screen)
+    if (sheetScrollable) fail('a folha inteira rola (so o corpo deveria rolar)', screen)
+    for (const [name, target] of [['Ver N processos', applyBox], ['Exportar', exportBox], ['Limpar', clearBox]]) {
+      if (!target) continue
+      if (target.bottom > m.vh + 1 || target.top < 0) fail(`botao "${name}" fora da viewport`, JSON.stringify(target))
+      if (target.height < 44 || target.width < 44) fail(`botao "${name}" abaixo de 44px`, JSON.stringify(target))
     }
-    if (exportBox && (exportBox.bottom > m.vh + 1) && !scrollable) fail('Exportar fora da viewport (folha sem rolagem)', JSON.stringify(exportBox))
-    if (scrollable) info('folha de filtros rola (conteudo > altura)', `${screen} a ${m.vw}x${m.vh}`)
+    if (footBox && bodyBox && bodyBox.bottom > footBox.top + 1) fail('corpo da folha invade o rodape', JSON.stringify({ bodyBox, footBox }))
+    if (footBox && Math.abs(footBox.bottom - b.bottom) > 1) fail('rodape nao encosta no fim da folha', JSON.stringify({ footBox, sheet: b }))
+    if (bodyBox && bodyBox.height < 140) fail('corpo da folha pequeno demais para filtrar', `${Math.round(bodyBox.height)}px em ${m.vw}x${m.vh}`)
+    if (scrollable) info('corpo da folha de filtros rola (rodape segue a vista)', `${screen} a ${m.vw}x${m.vh}`)
   }
 
   // Toast acima da pilula (nao pode cobrir a tab bar).
@@ -907,6 +927,8 @@ for (const [width, height] of MOBILE_VIEWPORTS) {
           const exportButton = page.locator('.m-bsheet__export')
           if (await exportButton.isEnabled()) {
             await exportButton.click()
+            // A folha fecha ao exportar: o toast nao cobre mais Limpar/Ver N.
+            await expect(page.locator('.m-bsheet')).toHaveCount(0, { timeout: 5_000 })
             const toast = page.locator('.toast-container .toast').first()
             if (await toast.isVisible({ timeout: 6_000 }).catch(() => false)) {
               await settle(page)
