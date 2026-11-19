@@ -73,7 +73,12 @@ const ORIGINAL_MATCH_MEDIA = window.matchMedia
 const ADMIN = { uid: 'admin-1', name: 'Admin', email: 'admin@sqquimica.com', role: 'admin' }
 const USER = { uid: 'user-1', name: 'User', email: 'user@sqquimica.com', role: 'user' }
 
-const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString()
+// Relogio fixo (meio-dia LOCAL de um dia qualquer): "Hoje"/"Ontem" dependem do dia do
+// calendario, entao fixtures relativas a "agora" quebravam entre 00:00 e ~01:30 (UTC no CI).
+// So o Date e falso (timers reais), para o waitFor/findBy do Testing Library seguir normal.
+const FIXED_NOW = new Date(2026, 9, 20, 12, 0, 0).getTime()
+
+const minutesAgo = (minutes) => new Date(FIXED_NOW - minutes * 60_000).toISOString()
 
 function manual(id, title, minutes, overrides = {}) {
   return {
@@ -124,6 +129,8 @@ function setup({ profile = ADMIN, manualNews = [FEATURED, manual('n-2', 'Free ti
 let media
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXED_NOW)
   media = installMatchMedia(true)
   mockUseAuth.mockReset()
   mockListNews.mockReset()
@@ -136,6 +143,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   window.matchMedia = ORIGINAL_MATCH_MEDIA
   vi.clearAllMocks()
 })
