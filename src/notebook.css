@@ -11,6 +11,7 @@
      Q-D          (min-width: 1041px)                       todo desktop
      Q-SB         1041-1365 de largura OU altura <= 800     suporte, abas e filtros compactos (sidebar NAO compacta: paridade com o IQ)
      Q-W          1041-1365 de largura                      topbar e abas do Admin numa linha
+     Q-W-1279     1041-1279 de largura                      abas do Admin mais justas
      Q-H          altura <= 800                             modo compacto
      Q-H-1248     1248-1439 de largura + altura <= 800      rosa dos ventos
      Q-H-MOTION   altura <= 800 + no-preference             navios da carta
@@ -153,6 +154,17 @@
 
   .admin-tab__desc {
     display: none;
+  }
+}
+
+/* ---- Q-W-1279: 1041-1279 de largura - abas do Admin mais justas ---------- */
+@media (min-width: 1041px) and (max-width: 1279px) {
+  .admin-section .admin-tabs.admin-tabs--desktop {
+    gap: 6px;
+  }
+
+  .admin-section .admin-tabs .tab-button.admin-tab {
+    padding: 10px 10px;
   }
 }
 

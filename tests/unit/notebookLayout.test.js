@@ -369,4 +369,22 @@ describe('notebook.css - guarda de escopo', () => {
       }
     }
   })
+
+  it('(o) Q-W-1279: abas do Admin mais justas so em 1041-1279, depois do Q-W', () => {
+    const prelude = '@media (min-width: 1041px) and (max-width: 1279px)'
+    const blocks = mediaBlocks.filter((block) => block.prelude === prelude)
+    expect(blocks.length).toBe(1)
+    const rules = blocks[0].rules
+    expect(rules.map((rule) => rule.selector)).toEqual([
+      '.admin-section .admin-tabs.admin-tabs--desktop',
+      '.admin-section .admin-tabs .tab-button.admin-tab',
+    ])
+    expect(rules[0].declarations).toContainEqual({ prop: 'gap', value: '6px' })
+    expect(rules[1].declarations).toContainEqual({ prop: 'padding', value: '10px 10px' })
+    // Cascata: o bloco precisa vir depois do Q-W, senao o padding de 14px dele vence.
+    // (O Q-SB tambem contem o trecho "1041-1365", entao ancora no "{" do Q-W.)
+    const qwStart = cleaned.indexOf('@media (min-width: 1041px) and (max-width: 1365px) {')
+    expect(qwStart).toBeGreaterThan(-1)
+    expect(cleaned.indexOf(prelude)).toBeGreaterThan(qwStart)
+  })
 })
