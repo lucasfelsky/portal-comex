@@ -369,6 +369,11 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(has('.process-form .erp-hint__chip::before', 'position', 'absolute')).toBe(true)
     expect(has('.process-form .erp-hint__chip::before', 'inset', '-12px -8px')).toBe(true)
     expect(has('.process-form .erp-form-field', 'gap', '12px')).toBe(true)
+    // "x" do toast: circulo de 24px (styles.css) + alvo de 44x44 via ::before.
+    expect(has('.toast__close', 'position', 'relative')).toBe(true)
+    expect(has('.toast__close::before', 'content', "''")).toBe(true)
+    expect(has('.toast__close::before', 'position', 'absolute')).toBe(true)
+    expect(has('.toast__close::before', 'inset', '-10px')).toBe(true)
 
     // O hit-area nao vaza para L/T/desktop.
     const TARGETS = [
@@ -382,6 +387,8 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       '.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)',
       '.process-form .erp-hint__chip',
       '.process-form .erp-hint__chip::before',
+      '.toast__close',
+      '.toast__close::before',
     ]
     const outside = allRules.filter((rule) => rule.media !== S)
     for (const selector of TARGETS) {
@@ -394,6 +401,21 @@ describe('mobile-redesign.css - guarda de escopo', () => {
         expect(leaked, `${selector} declara ${prop} fora da camada S`).toBe(false)
       }
     }
+
+    // Nenhuma regra fora da camada S cita o "x" do toast (nem L, nem T, nem reduce).
+    expect(
+      outside.some((rule) => rule.selector.includes('.toast__close')),
+      '.toast__close citado fora da camada S'
+    ).toBe(false)
+
+    // styles.css: o circulo visivel continua 24px e nao ha ::before no desktop/tablet.
+    const baseCss = stripComments(fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8'))
+    const closeBase = readBlocks(baseCss).blocks.find((block) => normalizePrelude(block.prelude) === '.toast__close')
+    expect(closeBase, 'bloco .toast__close em styles.css').toBeTruthy()
+    expect(closeBase.body).toMatch(/width\s*:\s*24px/)
+    expect(closeBase.body).toMatch(/height\s*:\s*24px/)
+    expect(closeBase.body).toMatch(/border-radius\s*:\s*var\(--radius-full\)/)
+    expect(baseCss).not.toMatch(/\.toast__close::(before|after)/)
   })
 
   it('hero do remake (F1): regras de m-hero / mobile-page-header__(art|ship|brand) / m-sheet so na camada S (ou no reduce de 720px)', () => {
