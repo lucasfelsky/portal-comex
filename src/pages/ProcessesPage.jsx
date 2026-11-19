@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import { useSwipe } from '../hooks/useSwipe'
+import { useEdgeSwipeBack } from '../hooks/useEdgeSwipeBack'
 import useMediaQuery from '../hooks/useMediaQuery'
 import { useToast } from '../components/Toast'
 import { exportProcessesToXlsx } from '../utils/exportProcesses'
@@ -120,6 +121,34 @@ let erpCreateInFlight = false
 // Observacao do processo que existe no servidor mas cujo `saveProcess` rejeitou
 // (o documento foi gravado; so' o que veio depois falhou, como o registro de auditoria).
 const ERP_AUDIT_FAILURE_NOTE = 'falha só no registro de auditoria'
+
+// Detalhe empilhado (remake mobile, F5): duracao da saida da camada (igual ao
+// `m-push-out` de styles.css) e a camada de baixo (lista) que fica montada.
+const DETAIL_LEAVE_MS = 420
+
+function prefersReducedMotion() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
+}
+
+// Quando `enabled` (mobile), envolve a lista num div que o detalhe recua e
+// escurece (`m-stack-under`) e torna inerte (`inert` + aria-hidden: foco e leitor
+// de tela nao alcancam a lista). O div e' SEMPRE o mesmo no mobile, entao a lista
+// nao remonta ao abrir/fechar o detalhe. Fora do mobile devolve os filhos.
+function ListStack({ enabled, isUnder, isInert, innerRef, onClickCapture, children }) {
+  if (!enabled) return children
+  return (
+    <div
+      className={`m-stack${isUnder ? ' m-stack-under' : ''}`}
+      ref={innerRef}
+      inert={isInert ? '' : undefined}
+      aria-hidden={isInert ? 'true' : undefined}
+      onClickCapture={onClickCapture}
+    >
+      {children}
+    </div>
+  )
+}
 
 const emptyDraft = () => ({
   id: '',
@@ -517,6 +546,10 @@ export default function ProcessesPage() {
   // Refino F4b: na lista, o desktop (>= 1041px) tem cabecalho proprio
   // (eyebrow + "Fila de chegadas" + acoes) dentro do ProcessListView.
   const isDesktopLayout = useMediaQuery('(min-width: 1041px)')
+  // Remake mobile (F5): <= 720px o detalhe e' uma camada empilhada sobre a lista,
+  // que continua montada atras (`inert`). Leitura LAZY: sem piscar a arvore errada.
+  const isMobileStackQuery = useMediaQuery('(max-width: 720px)')
+  const isMobileStack = isMobileStackQuery && !isDesktopLayout
   const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
@@ -563,13 +596,64 @@ export default function ProcessesPage() {
   // F15.3: swipe-back (borda esquerda) volta detalhe→lista e sub-edições→
   // detalhe, imitando o gesto do iOS. Touch-only (desktop não é afetado).
   // O wizard (create/edit) trata o próprio swipe por passo no ProcessForm.
+  // F5: no mobile o detalhe empilhado volta pelo `useEdgeSwipeBack` (acompanha o
+  // dedo); o `useSwipe` segue no tablet e nos sub-modos de edicao, e os dois
+  // nunca ficam ativos juntos.
   useSwipe({
     enabled:
-      viewMode === 'detail' ||
+      (viewMode === 'detail' && !isMobileStack) ||
       viewMode === 'collection-status-edit' ||
       viewMode === 'post-receipt-edit',
     onSwipeRight: () => (viewMode === 'detail' ? handleBackFromDetail() : setViewMode('detail')),
   })
+
+  // Detalhe empilhado (F5): estado da saida animada, refs da camada de baixo
+  // (lista) e do que abriu o detalhe (foco e rolagem voltam ao fechar).
+  const [isDetailLeaving, setIsDetailLeaving] = useState(false)
+  const surfaceRef = useRef(null)
+  const listStackRef = useRef(null)
+  const detailLeaveTimerRef = useRef(0)
+  const lastListTargetRef = useRef(null)
+  const detailOpenerRef = useRef(null)
+  const listScrollYRef = useRef(0)
+  const wasDetailRef = useRef(false)
+  const backFromDetailRef = useRef(null)
+  useEdgeSwipeBack({
+    enabled: isMobileStack && viewMode === 'detail',
+    getTarget: () => {
+      const root = surfaceRef.current
+      if (!root) return null
+      return Array.from(root.children).find((node) => node.classList.contains('process-detail-view')) ?? null
+    },
+    getUnder: () => listStackRef.current,
+    onBack: () => requestCloseDetail(),
+  })
+
+  useEffect(() => {
+    if (viewMode === 'detail') return
+    window.clearTimeout(detailLeaveTimerRef.current)
+    detailLeaveTimerRef.current = 0
+    setIsDetailLeaving(false)
+  }, [viewMode])
+
+  useEffect(() => () => window.clearTimeout(detailLeaveTimerRef.current), [])
+
+  // Ao voltar da camada de detalhe para a lista (mobile): rolagem da lista e foco
+  // no cartao/botao que abriu o detalhe. A lista nao remonta (continua atras).
+  useEffect(() => {
+    const isDetail = viewMode === 'detail'
+    const wasDetail = wasDetailRef.current
+    wasDetailRef.current = isDetail
+    if (!isMobileStack || !wasDetail || viewMode !== 'list') return undefined
+    const opener = detailOpenerRef.current
+    detailOpenerRef.current = null
+    const savedScrollY = listScrollYRef.current
+    const frame = window.requestAnimationFrame(() => {
+      if (Math.abs(window.scrollY - savedScrollY) > 1) window.scrollTo(0, savedScrollY)
+      if (opener?.isConnected) opener.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [viewMode, isMobileStack])
 
   // F15.3: transição push/pop — a lista só anima quando o usuário VOLTA de
   // outra view (pop); no primeiro mount fica parada. Flag one-shot: liga na
@@ -701,7 +785,11 @@ export default function ProcessesPage() {
     }
   }, [])
 
-  const filteredProcesses = useMemo(() => {
+  // Filtro da lista de Chegadas. Recebe os valores como parametro (em vez de ler
+  // o estado) para a folha de filtros do mobile contar o resultado com valores
+  // de rascunho (`applyListFilters` -> ProcessListView); `filteredProcesses`
+  // abaixo usa os filtros aplicados de sempre.
+  const applyListFilters = useCallback(({ searchTerm, categoryFilter, etaStartDate, etaEndDate, operationFilter }) => {
     return processes
       .filter((item) => {
         const query = searchTerm.trim().toLowerCase()
@@ -779,7 +867,12 @@ export default function ProcessesPage() {
         if (!right.eta) return -1
         return left.eta.localeCompare(right.eta)
       })
-  }, [categoryFilter, canSeeName, etaEndDate, etaStartDate, operationFilter, processes, searchTerm])
+  }, [canSeeName, processes])
+
+  const filteredProcesses = useMemo(
+    () => applyListFilters({ searchTerm, categoryFilter, etaStartDate, etaEndDate, operationFilter }),
+    [applyListFilters, categoryFilter, etaEndDate, etaStartDate, operationFilter, searchTerm]
+  )
 
   // F16.8 (swipe-to-arquivar, admin-only): fonte da seção "Arquivados" —
   // sem os filtros de busca/categoria/ETA (é uma tela de gestão à parte,
@@ -1087,8 +1180,37 @@ export default function ProcessesPage() {
     }
     setViewMode('list')
   }
+  backFromDetailRef.current = handleBackFromDetail
+
+  // F5: no mobile o "Voltar" (botao ou gesto da borda) primeiro anima a saida da
+  // camada (a lista volta do recuo) e so' depois troca o viewMode; movimento
+  // reduzido e tablet/desktop voltam na hora, como sempre.
+  function requestCloseDetail() {
+    if (!isMobileStack || prefersReducedMotion()) {
+      handleBackFromDetail()
+      return
+    }
+    if (detailLeaveTimerRef.current) return
+    setIsDetailLeaving(true)
+    detailLeaveTimerRef.current = window.setTimeout(() => {
+      detailLeaveTimerRef.current = 0
+      backFromDetailRef.current?.()
+    }, DETAIL_LEAVE_MS)
+  }
+
+  function rememberListTarget(event) {
+    const node = event.target instanceof Element ? event.target.closest('[role="button"], button, a[href]') : null
+    lastListTargetRef.current = node
+  }
 
   function handleSelectProcess(processId) {
+    if (isMobileStack) {
+      const stack = listStackRef.current
+      const active = document.activeElement
+      detailOpenerRef.current =
+        stack && active && active !== stack && stack.contains(active) ? active : lastListTargetRef.current
+      listScrollYRef.current = window.scrollY
+    }
     const process = processes.find((item) => item.id === processId)
     setDetailReturnTo('')
     setSelectedProcessId(processId)
@@ -1896,9 +2018,12 @@ export default function ProcessesPage() {
   // Refino F4c: no detalhe desktop o cabecalho e' o card do proprio processo
   // (Processo.dc.html); a pagina nao repete o titulo "Fila de chegadas".
   const isDesktopDetail = isDesktopLayout && showDetail
+  // F5: no mobile a lista continua montada atras do detalhe.
+  const showListBehind = isMobileStack && showDetail
 
   return (
     <section
+      ref={surfaceRef}
       className={`surface${isDesktopList ? ' surface--arrivals' : ''}${isDesktopDetail ? ' surface--process-detail' : ''}`}
     >
       {isDesktopList || isDesktopDetail ? null : (
@@ -1912,9 +2037,16 @@ export default function ProcessesPage() {
       {error ? <div className="error-banner">{error}</div> : null}
       {messagesError ? <div className="error-banner">{messagesError}</div> : null}
 
-      {showList ? (
+      {showList || showListBehind ? (
+        <ListStack
+          enabled={isMobileStack}
+          isUnder={showListBehind && !isDetailLeaving}
+          isInert={showListBehind}
+          innerRef={listStackRef}
+          onClickCapture={rememberListTarget}
+        >
         <ProcessListView
-          rootClassName={listReturnClass}
+          rootClassName={isMobileStack ? '' : listReturnClass}
           filteredProcesses={filteredProcesses}
           totalCount={processes.length - archivedProcesses.length}
           isLoading={isLoading}
@@ -1928,6 +2060,7 @@ export default function ProcessesPage() {
           etaStartDate={etaStartDate}
           etaEndDate={etaEndDate}
           operationFilter={operationFilter}
+          applyListFilters={applyListFilters}
           hasActiveFilters={hasActiveFilters}
           processCategoryOptions={processCategoryOptions}
           onSearchTermChange={setSearchTerm}
@@ -1966,6 +2099,7 @@ export default function ProcessesPage() {
             }
           }}
         />
+        </ListStack>
       ) : null}
 
       {isAdmin ? (
@@ -2081,7 +2215,8 @@ export default function ProcessesPage() {
           onOpenRelatedItemTab={handleOpenRelatedItemTab}
           onOpenProcessDetail={handleOpenProcessDetail}
           onToggleFavorite={toggleFavoriteProcess}
-          onSetViewModeList={handleBackFromDetail}
+          onSetViewModeList={requestCloseDetail}
+          isLeaving={isDetailLeaving}
           backLabel={getReturnLabel(detailReturnTo) || (detailReturnTo ? 'Voltar' : '')}
           onEditMode={handleEditMode}
           onPostReceiptEditMode={handlePostReceiptEditMode}

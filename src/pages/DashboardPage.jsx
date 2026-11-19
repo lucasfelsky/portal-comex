@@ -42,6 +42,10 @@ import { getProcessStage, PROCESS_STAGES } from '../features/processes/processSt
 import { projectProcessesForViewer } from '../features/processes/customsVisibility'
 import Icon from '../components/Icon'
 import StatCard from '../components/StatCard'
+import MobileHeroSlot from '../components/MobileHeroSlot'
+import ProcessCargoMarks from '../features/processes/ProcessCargoMarks'
+import ProcessRoute from '../features/processes/ProcessRoute'
+import { buildWeeklyEtaSeries } from '../utils/dashboardStats'
 import { getCollectionWindows } from '../utils/collectionWindows'
 import { formatRelativeTime } from '../utils/dateFormat'
 import { listAnnouncements } from '../services/announcementsRepository'
@@ -434,9 +438,144 @@ function AnnouncementsPanel({ announcements, isLoading, error, onRetry, renderLo
   )
 }
 
+// ---------------------------------------------------------------------------
+// Remake mobile (<= 720px, F3): Inicio com a identidade do mock-up. So' a
+// apresentacao muda; dados e regras sao os mesmos (barra, KPIs, favoritos,
+// etapas por `getProcessStage`, comunicados). O tablet (721-1040px) segue na
+// arvore legada. O chip da Barra do Rio vai para o hero via MobileHeroSlot.
+// ---------------------------------------------------------------------------
+
+const MOBILE_QUERY = '(max-width: 720px)'
+
+// `(max-width: 720px)` so' fora do desktop (`enabled`): no desktop nao registra
+// nenhum listener a mais (a troca de arvore la depende de um unico `change`).
+function useMobileViewport(enabled) {
+  const canMatch = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  const [matches, setMatches] = useState(() => enabled && canMatch && Boolean(window.matchMedia(MOBILE_QUERY)?.matches))
+
+  useEffect(() => {
+    if (!enabled || !canMatch) return undefined
+    const mq = window.matchMedia(MOBILE_QUERY)
+    setMatches(Boolean(mq.matches))
+    const handler = (event) => setMatches(event.matches)
+    mq.addEventListener?.('change', handler)
+    return () => mq.removeEventListener?.('change', handler)
+  }, [enabled, canMatch])
+
+  return enabled && matches
+}
+
+const MOBILE_KPI_CARDS = [
+  { key: 'chegadasNaSemana', label: 'Chegadas na semana' },
+  { key: 'emTransito', label: 'Em trânsito' },
+  { key: 'aguardandoAtracacao', label: 'Aguardando atracação' },
+  { key: 'canalVermelho', label: 'Canal vermelho' },
+]
+
+// Mesmo texto/tom do chip do desktop: estados Carregando / Indisponivel e o
+// rotulo de `formatBarStatusLabel`; o titulo leva as notas e a praticagem.
+function getBarChipModel(barStatus, isLoading) {
+  return {
+    tone: isLoading || !barStatus ? 'neutral' : barStatus.tone || 'neutral',
+    text: isLoading ? 'Carregando' : barStatus ? formatBarStatusLabel(barStatus) : 'Indisponível',
+    title: barStatus
+      ? [
+          barStatus.notes,
+          barStatus.updatedAt ? `Praticagem ZP-21 · atualizado ${formatRelativeTime(barStatus.updatedAt)}` : '',
+        ]
+          .filter(Boolean)
+          .join(' — ')
+      : undefined,
+  }
+}
+
+function MobileBarChip({ barStatus, isLoading }) {
+  const { tone, text, title } = getBarChipModel(barStatus, isLoading)
+  return (
+    <p className={`m-barra m-barra--${tone}`} title={title}>
+      <i className="m-dot" aria-hidden="true" />
+      <span>
+        Barra do Rio <b>{text}</b>
+      </span>
+    </p>
+  )
+}
+
+// Favorito do Inicio mobile. `featured` (o primeiro) leva trajeto e fatos
+// ETD/ETA/Porto; os demais seguem no cartao compacto (linha ETA · destino).
+// As marcas de carga substituem os selos de texto de carga; o status derivado
+// continua em texto.
+function MobileFavorite({ item, canSeeName, featured, onOpen, onUnfavorite }) {
+  const title = getProcessTitle(item, canSeeName)
+  const poLine = [formatPoLine(getProcessSubtitle(item, canSeeName)), item.category].filter(Boolean).join(' · ')
+  const etaUpdated = hasUpdatedEta(item)
+  const destinationLabel = item.category === 'AEREO' ? 'Aeroporto' : 'Porto'
+
+  return (
+    <article className={`m-fav${featured ? '' : ' m-fav--compact'}`}>
+      <div className="m-fav__top">
+        <div className="m-fav__id">
+          <div className="m-fav__head">
+            <h4 className="m-fav__title">
+              <button type="button" className="m-fav__open" onClick={() => onOpen?.(item.id)}>
+                {title}
+              </button>
+            </h4>
+            <ProcessCargoMarks process={item} />
+          </div>
+          {poLine ? <p className="m-fav__po">{poLine}</p> : null}
+        </div>
+        <button
+          type="button"
+          className="m-fav__star"
+          aria-label={`Desfavoritar ${title}`}
+          title="Desfavoritar"
+          onClick={() => onUnfavorite?.(item.id)}
+        >
+          <Icon name="star-filled" size={20} />
+        </button>
+      </div>
+
+      {featured ? (
+        <>
+          <ProcessRoute item={item} />
+          <dl className="m-fav__facts">
+            <div>
+              <dt>ETD</dt>
+              <dd>{formatShortDate(item.etd)}</dd>
+            </div>
+            <div>
+              <dt>ETA</dt>
+              <dd className={etaUpdated ? 'm-fav__fact--warn' : undefined}>
+                {formatShortDate(item.eta)}
+                {etaUpdated ? <span className="m-sr"> (atualizada)</span> : null}
+              </dd>
+            </div>
+            <div>
+              <dt>{destinationLabel}</dt>
+              <dd>{item.destination || '-'}</dd>
+            </div>
+          </dl>
+        </>
+      ) : (
+        <p className="m-fav__po">
+          {[item.eta ? `ETA ${formatShortDate(item.eta)}` : null, item.destination || null]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+
+      <span className="m-fav__tags">
+        <ProcessDerivedStatusBadge process={item} />
+      </span>
+    </article>
+  )
+}
+
 export default function DashboardPage() {
   const { profile, toggleFavoriteProcess } = useAuth()
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const isMobile = useMobileViewport(!isDesktop)
   const navigate = useNavigate()
   const canSeeName = profile?.role === 'admin' || profile?.role === 'logistica'
   const favoriteKey = (profile?.favoriteProcessIds ?? []).join('|')
@@ -467,6 +606,13 @@ export default function DashboardPage() {
   const kpiNotes = useMemo(
     () => getDashboardKpiNotes(dashboardKpis, previousWeekArrivals, barStatus?.tone),
     [dashboardKpis, previousWeekArrivals, barStatus?.tone]
+  )
+
+  // Remake mobile: unica serie historica real do Inicio (chegadas por semana
+  // de calendario, 8 semanas). Os outros KPIs nao tem historico: ficam sem linha.
+  const weeklyArrivalsSeries = useMemo(
+    () => (isMobile ? buildWeeklyEtaSeries(loadedProcesses).counts : []),
+    [isMobile, loadedProcesses]
   )
 
   const favoriteProcesses = useMemo(() => {
@@ -717,6 +863,139 @@ export default function DashboardPage() {
             />
           )}
         </section>
+      </section>
+    )
+  }
+
+  // Remake mobile (<= 720px): arvore propria do Inicio (classes `m-*`). O
+  // `.dashboard-heading` vazio so' existe para os seletores irmaos do legado
+  // (`.dashboard-heading ~ ...`) continuarem valendo para os KPIs e para o card
+  // de chegadas da semana; o CSS o esconde.
+  if (isMobile) {
+    const kpiReady = !isLoadingProcesses && !processesError
+    const [featuredFavorite, ...otherFavorites] = favoriteProcesses
+
+    return (
+      <section className="surface surface--dashboard">
+        <MobileHeroSlot>
+          <MobileBarChip barStatus={barStatus} isLoading={isLoadingBarStatus} />
+        </MobileHeroSlot>
+        <div className="section-heading dashboard-heading" />
+
+        <section className="dashboard-stat-row m-kpis" aria-label="Indicadores">
+          {MOBILE_KPI_CARDS.map((card) => {
+            const isAlert = card.key === 'canalVermelho' && kpiReady && dashboardKpis.canalVermelho > 0
+            const hasSeries =
+              card.key === 'chegadasNaSemana' && kpiReady && weeklyArrivalsSeries.some((count) => count > 0)
+            return (
+              <StatCard
+                key={card.key}
+                className={`m-kpi m-rise${isAlert ? ' m-kpi--alert' : ''}`}
+                label={card.label}
+                value={kpiValue(dashboardKpis[card.key])}
+                sparkline={hasSeries ? weeklyArrivalsSeries : undefined}
+                announceFinalValue
+              />
+            )
+          })}
+        </section>
+
+        <Stagger>
+          <section className="m-card m-rise" style={{ '--d': '380ms' }} aria-labelledby="m-favorites-title">
+            <div className="m-card__head">
+              <h3 id="m-favorites-title">Favoritos</h3>
+              {kpiReady && favoriteProcesses.length > 0 ? (
+                <span className="m-card__count">
+                  {favoriteProcesses.length}
+                  <span className="m-sr"> {favoriteProcesses.length === 1 ? 'processo' : 'processos'}</span>
+                </span>
+              ) : null}
+            </div>
+
+            {isLoadingProcesses ? (
+              <div role="status" aria-label="Carregando favoritos">
+                <Skeleton.Group count={3} gap={12}>
+                  <Skeleton variant="title" />
+                  <Skeleton variant="subtitle" />
+                </Skeleton.Group>
+              </div>
+            ) : processesError ? (
+              renderLoadError(processesError, retryProcesses)
+            ) : featuredFavorite ? (
+              <div className="m-fav-list">
+                <MobileFavorite
+                  item={featuredFavorite}
+                  canSeeName={canSeeName}
+                  featured
+                  onOpen={handleSelectProcess}
+                  onUnfavorite={toggleFavoriteProcess}
+                />
+                {otherFavorites.map((item) => (
+                  <MobileFavorite
+                    key={item.id}
+                    item={item}
+                    canSeeName={canSeeName}
+                    onOpen={handleSelectProcess}
+                    onUnfavorite={toggleFavoriteProcess}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                illustration="inbox"
+                icon="inbox"
+                title="Nenhum processo favoritado"
+                message="Marque processos na aba Chegadas para acompanhá-los aqui no dashboard."
+              />
+            )}
+          </section>
+
+          <section className="m-card m-rise" style={{ '--d': '460ms' }} aria-labelledby="m-announcements-title">
+            <div className="m-card__head">
+              <h3 id="m-announcements-title">Comunicados recentes</h3>
+            </div>
+
+            {isLoadingAnnouncements ? (
+              <Skeleton.Group count={3} gap={12}>
+                <Skeleton variant="title" />
+                <Skeleton variant="subtitle" />
+              </Skeleton.Group>
+            ) : announcementsError ? (
+              renderLoadError(announcementsError, retryAnnouncements)
+            ) : announcements.length > 0 ? (
+              announcements.map((announcement) => (
+                <div key={announcement.id} className="m-ann">
+                  <span
+                    className="m-ann__when"
+                    title={formatTimestamp(announcement.updatedAt ?? announcement.createdAt)}
+                  >
+                    {[String(announcement.channel ?? '').trim(), getAnnouncementDayLabel(announcement)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <strong className="m-ann__title">{announcement.title}</strong>
+                  <p>{announcement.content}</p>
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                illustration="news"
+                icon="news"
+                title="Nenhum comunicado publicado"
+                message="Os avisos internos criados no admin serão exibidos aqui."
+              />
+            )}
+          </section>
+
+          <WeeklyArrivalsCard
+            processes={loadedProcesses}
+            canSeeName={canSeeName}
+            isLoading={isLoadingProcesses}
+            loadError={processesError}
+            onRetry={retryProcesses}
+            onSelectProcess={handleSelectProcess}
+          />
+        </Stagger>
       </section>
     )
   }

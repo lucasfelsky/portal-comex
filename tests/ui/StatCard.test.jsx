@@ -156,4 +156,24 @@ describe('StatCard - nota (F4a)', () => {
     const { container } = render(<StatCard label="X" value="0" />)
     expect(container.querySelector('.stat-card__note')).toBeNull()
   })
+
+  it('F7: o valor marca o card (data-wide-value) por nivel de largura: 3 caracteres = wide, 4+ = xwide', () => {
+    const { container, rerender } = render(<StatCard label="X" value="9" />)
+    expect(container.querySelector('article')).not.toHaveAttribute('data-wide-value')
+    rerender(<StatCard label="X" value="99" />)
+    expect(container.querySelector('article')).not.toHaveAttribute('data-wide-value')
+    rerender(<StatCard label="X" value="110" />)
+    expect(container.querySelector('article')).toHaveAttribute('data-wide-value', 'wide')
+    rerender(<StatCard label="X" value={999} />)
+    expect(container.querySelector('article')).toHaveAttribute('data-wide-value', 'wide')
+    rerender(<StatCard label="X" value={1000} />)
+    expect(container.querySelector('article')).toHaveAttribute('data-wide-value', 'xwide')
+    rerender(<StatCard label="X" value="12345" />)
+    expect(container.querySelector('article')).toHaveAttribute('data-wide-value', 'xwide')
+  })
+
+  it('F7: sem valor (null/undefined) o card nao ganha data-wide-value', () => {
+    const { container } = render(<StatCard label="X" value={null} />)
+    expect(container.querySelector('article')).not.toHaveAttribute('data-wide-value')
+  })
 })

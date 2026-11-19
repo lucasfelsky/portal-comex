@@ -8,6 +8,8 @@
 //
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -230,7 +232,7 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
       expect(nav.getByRole('link', { name: 'Chegadas' })).toHaveAttribute('href', '/processos')
       expect(nav.getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
-      expect(nav.getByRole('link', { name: 'Notificações' })).toHaveAttribute('href', '/notifications')
+      expect(nav.getByRole('link', { name: 'Avisos' })).toHaveAttribute('href', '/notifications')
       expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
     })
 
@@ -441,9 +443,93 @@ describe('AppLayout (large title mobile no Admin)', () => {
     expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Admin')
   })
 
-  it('/notifications: large title "Notificações"', () => {
-    const { container } = renderAt('/notifications')
-    expect(container.querySelector('.mobile-page-header__title').textContent).toBe('Notificações')
+  // Remake mobile F6: o hero de Avisos/Noticias/Menu segue o mock (eyebrow + titulo).
+  it.each([
+    ['/notifications', 'Avisos', 'Central de notificações'],
+    ['/news', 'Notícias', 'Comunicados da operação'],
+    ['/menu', 'Menu', 'Conta e ajustes'],
+  ])('%s: h1 "%s" com eyebrow "%s"', (route, title, eyebrow) => {
+    const { container } = renderAt(route)
+    expect(container.querySelector('h1.mobile-page-header__title').textContent).toBe(title)
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe(eyebrow)
+  })
+})
+
+// Remake mobile F5: com o detalhe de um processo aberto o hero e' o do detalhe.
+// O eyebrow "Central de chegadas" (que valia para todo /processos) some e o
+// titulo oculto da pagina deixa de ser h1 (o h1 do processo e' o do hero).
+describe('AppLayout (header oculto com o detalhe do processo aberto)', () => {
+  function renderProcessos() {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'admin-1', name: 'admin User', email: 'admin@sq.com', role: 'admin' },
+      logout: vi.fn(),
+      isEmailVerified: true,
+    })
+    return render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={['/processos']}>
+          <NotificationsProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<div data-testid="page">Pagina</div>} />
+              </Route>
+            </Routes>
+          </NotificationsProvider>
+        </MemoryRouter>
+      </ToastProvider>
+    )
+  }
+
+  afterEach(() => {
+    act(() => setActiveProcess(null))
+  })
+
+  it('lista: eyebrow "Central de chegadas" e h1 "Chegadas"', () => {
+    const { container } = renderProcessos()
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Central de chegadas')
+    expect(container.querySelector('h1.mobile-page-header__title').textContent).toBe('Chegadas')
+  })
+
+  it('detalhe aberto: sem eyebrow e o titulo da pagina vira texto simples (h1 so no hero do detalhe); volta com a lista', () => {
+    const { container } = renderProcessos()
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'detail' })
+    )
+    expect(container.querySelector('.mobile-page-header__eyebrow')).toBeNull()
+    expect(container.querySelector('h1.mobile-page-header__title')).toBeNull()
+    expect(container.querySelector('p.mobile-page-header__title').textContent).toBe('Chegadas')
+    // oculto por clip mas ainda lido por leitor de tela: aria-hidden evita repetir o h1 do hero
+    expect(container.querySelector('p.mobile-page-header__title')).toHaveAttribute('aria-hidden', 'true')
+
+    act(() => setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'list' }))
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Central de chegadas')
+    expect(container.querySelector('h1.mobile-page-header__title')).not.toBeNull()
+  })
+
+  it('F7: com o detalhe aberto o hero (e o "Novo processo" portado nele) fica inert; volta ao normal com a lista', () => {
+    const { container } = renderProcessos()
+    const header = container.querySelector('.mobile-page-header')
+    expect(header).not.toHaveAttribute('inert')
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'detail' })
+    )
+    expect(header).toHaveAttribute('inert')
+    act(() => setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'list' }))
+    expect(header).not.toHaveAttribute('inert')
+    // Edicao nao cobre o hero com camada: continua acessivel.
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'edit' })
+    )
+    expect(header).not.toHaveAttribute('inert')
+  })
+
+  it('edicao (formulario): sem eyebrow, mas o titulo continua h1 (so o detalhe cede o h1 ao hero)', () => {
+    const { container } = renderProcessos()
+    act(() =>
+      setActiveProcess({ id: 'p-1', name: 'Resina', category: 'FCL', processNumber: '1', viewMode: 'edit' })
+    )
+    expect(container.querySelector('.mobile-page-header__eyebrow')).toBeNull()
+    expect(container.querySelector('h1.mobile-page-header__title')).not.toBeNull()
   })
 })
 
@@ -959,7 +1045,10 @@ describe('AppLayout shell F2 (refino visual)', () => {
       await waitFor(() => {
         expect(container.querySelector('.notifications__count')).toHaveTextContent('2')
       })
-      expect(screen.getByLabelText('Notificações, 2 não lidas')).toHaveClass('notifications__trigger')
+      // O sino da topbar e o link da tab bar mobile (F6) usam o mesmo padrao de nome.
+      expect(
+        within(container.querySelector('.topbar')).getByLabelText('Notificações, 2 não lidas')
+      ).toHaveClass('notifications__trigger')
     })
 
     it('usuário: nome + papel legível (Logística) e SEM e-mail nem "Sair" na topbar', () => {
@@ -1203,6 +1292,244 @@ describe('AppLayout shell F2 (refino visual)', () => {
       })
       expect(await screen.findByText('Páginas e ações')).toBeInTheDocument()
       expect(screen.getByRole('option', { name: /Ir para Notícias/ })).toBeInTheDocument()
+    })
+  })
+})
+
+// Remake mobile F2: hero (marca + avatar so no Inicio) e tab bar flutuante.
+// jsdom nao avalia CSS: o que depende de :has()/@media e' conferido no TEXTO
+// dos arquivos de estilo (mesma estrategia de tests/unit/mobileRedesignScope).
+describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
+  const originalMatchMedia = window.matchMedia
+  const mobileCss = readFileSync(resolve(process.cwd(), 'src/mobile-redesign.css'), 'utf8')
+  const baseCss = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+
+  function stubViewport(viewportWidthPx) {
+    // matches = true para toda media query "(max-width: Npx)" com N >= largura.
+    window.matchMedia = (query) => {
+      const match = /max-width:\s*(\d+)px/.exec(query)
+      return {
+        matches: match ? Number(match[1]) >= viewportWidthPx : false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }
+    }
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  function renderAt(route) {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'user-1', name: 'Ana Souza', email: 'ana@sq.com', role: 'user' },
+      logout: vi.fn(),
+      isEmailVerified: true,
+    })
+    return render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <NotificationsProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<div data-testid="page">Pagina</div>} />
+              </Route>
+            </Routes>
+          </NotificationsProvider>
+        </MemoryRouter>
+      </ToastProvider>
+    )
+  }
+
+  const unread = (id) => ({
+    id,
+    type: 'process_question_created',
+    title: 'Nova dúvida',
+    body: 'Alguém perguntou sobre o ETA.',
+    processId: `p-${id}`,
+    isRead: false,
+    createdAt: new Date(Date.now() - 60000).toISOString(),
+  })
+
+  describe('hero (marca + avatar)', () => {
+    it('mobile: em "/" mostra marca e avatar com as iniciais; em "/news" nao mostra', () => {
+      stubViewport(720)
+      const home = renderAt('/')
+      const brand = home.container.querySelector('.mobile-page-header__brand')
+      expect(brand).not.toBeNull()
+      expect(brand).toHaveAttribute('aria-hidden', 'true')
+      expect(brand).toHaveTextContent('Portal COMEX')
+      expect(brand.querySelector('.mobile-page-header__avatar')).toHaveTextContent('AS')
+      // Marca oficial do Portal COMEX (ProductMark), decorativa; nao o glifo improvisado do mock.
+      const mark = brand.querySelector('svg.brand-mark.brand-mark--comex')
+      expect(mark).not.toBeNull()
+      expect(mark).toHaveClass('brand-mark--dark')
+      expect(mark).toHaveAttribute('aria-hidden', 'true')
+      expect(mark.querySelector('.brand-mark__dot')).not.toBeNull()
+      expect(brand.querySelector('.mobile-page-header__mark, .mobile-page-header__mark-dot')).toBeNull()
+      expect(brand.querySelector('.mobile-page-header__wordmark small')).toHaveTextContent('SQ QUÍMICA')
+      home.unmount()
+
+      const news = renderAt('/news')
+      expect(news.container.querySelector('.mobile-page-header__brand')).toBeNull()
+      expect(news.container.querySelector('.mobile-page-header__avatar')).toBeNull()
+      expect(news.container.querySelector('.mobile-page-header svg.brand-mark')).toBeNull()
+      // O h1 continua presente com o titulo da rota.
+      expect(news.container.querySelector('.mobile-page-header__title')).toBeInTheDocument()
+    })
+
+    it('desktop: o hero (marca, avatar, arte e navio) e so DOM inerte, escondido pelo CSS base', () => {
+      stubViewport(2000)
+      const { container } = renderAt('/')
+      // Elementos decorativos fora da arvore de acessibilidade.
+      for (const selector of ['.mobile-page-header__brand', '.mobile-page-header__art', '.mobile-page-header__ship']) {
+        expect(container.querySelector(selector), selector).toHaveAttribute('aria-hidden', 'true')
+      }
+      // O hero nao tem controle focavel.
+      expect(
+        container.querySelector('.mobile-page-header button, .mobile-page-header a, .mobile-page-header [tabindex]')
+      ).toBeNull()
+      // CSS base: hero e tab bar sao display:none fora do mobile.
+      expect(baseCss).toMatch(/\.mobile-bottom-nav\s*\{\s*display:\s*none;?\s*\}/)
+      expect(baseCss).toMatch(
+        /\.mobile-brand-header,\s*\.mobile-page-header,\s*\.mobile-nav-compact\s*\{\s*display:\s*none;?\s*\}/
+      )
+      expect(baseCss).toMatch(
+        /\.mobile-page-header__art,\s*\.mobile-page-header__ship,\s*\.mobile-page-header__brand\s*\{\s*display:\s*none;?\s*\}/
+      )
+    })
+  })
+
+  describe('tab bar flutuante', () => {
+    const TABS = [
+      ['/', 'Início', 0],
+      ['/processos', 'Chegadas', 1],
+      ['/news', 'Notícias', 2],
+      ['/notifications', 'Avisos', 3],
+      ['/menu', 'Menu', 4],
+    ]
+
+    it.each(TABS)('%s: aria-current na aba "%s" e o indice %i alimenta o indicador (--m-tab-i)', (route, name, index) => {
+      stubViewport(720)
+      const { container } = renderAt(route)
+      const nav = container.querySelector('nav.mobile-bottom-nav')
+      expect(nav).toHaveAttribute('aria-label', 'Navegação móvel')
+      const items = [...nav.children]
+      expect(items).toHaveLength(5)
+
+      const active = items.filter((item) => item.classList.contains('mobile-bottom-nav__item--active'))
+      expect(active).toHaveLength(1)
+      expect(items.indexOf(active[0])).toBe(index)
+      expect(active[0]).toHaveAttribute('aria-current', 'page')
+      expect(active[0]).toHaveAttribute('aria-label', name)
+      items
+        .filter((item) => item !== active[0])
+        .forEach((item) => expect(item).not.toHaveAttribute('aria-current'))
+
+      // O CSS traduz a posicao do item ativo em --m-tab-i = posicao - 1.
+      const rule = new RegExp(
+        `\\.mobile-bottom-nav:has\\(> \\.mobile-bottom-nav__item--active:nth-child\\(${index + 1}\\)\\)\\s*\\{\\s*--m-tab-i:\\s*${index};`
+      )
+      expect(mobileCss).toMatch(rule)
+    })
+
+    it('rota sem aba (/admin): nenhum item ativo e o indicador fica transparente', () => {
+      stubViewport(720)
+      const { container } = renderAt('/admin')
+      expect(container.querySelector('.mobile-bottom-nav__item--active')).toBeNull()
+      expect(container.querySelector('.mobile-bottom-nav [aria-current]')).toBeNull()
+      // opacity 0 por padrao; so com item ativo (:has) o indicador aparece.
+      expect(mobileCss).toMatch(/\.mobile-bottom-nav::before\s*\{[^}]*opacity:\s*0;/)
+      expect(mobileCss).toMatch(
+        /\.mobile-bottom-nav:has\(> \.mobile-bottom-nav__item--active\)::before\s*\{\s*opacity:\s*1;/
+      )
+    })
+
+    it('F7: o "pulo" do icone (--bump) nao roda no primeiro paint e so entra ao trocar de aba', async () => {
+      stubViewport(720)
+      const user = userEvent.setup()
+      const { container } = renderAt('/')
+      const nav = container.querySelector('nav.mobile-bottom-nav')
+      expect(nav.querySelector('.mobile-bottom-nav__item--active')).not.toBeNull()
+      expect(nav.querySelector('.mobile-bottom-nav__item--bump')).toBeNull()
+
+      await user.click(within(nav).getByRole('link', { name: 'Notícias' }))
+      const active = nav.querySelector('.mobile-bottom-nav__item--active')
+      expect(active).toHaveAttribute('aria-label', 'Notícias')
+      expect(active).toHaveClass('mobile-bottom-nav__item--bump')
+      // So o item ativo recebe: o anterior perde as duas classes.
+      expect(nav.querySelectorAll('.mobile-bottom-nav__item--bump')).toHaveLength(1)
+      // O CSS so anima com --bump (o item ativo parado nao tem animation).
+      expect(mobileCss).toMatch(
+        /\.mobile-bottom-nav \.mobile-bottom-nav__item--active\.mobile-bottom-nav__item--bump > svg\s*\{\s*animation:\s*m-bump/
+      )
+      expect(mobileCss).not.toMatch(/__item--active > svg\s*\{[^}]*animation:\s*m-bump/)
+    })
+
+    it('badge: sem nao lidas na sessao nao existe nenhum badge', async () => {
+      stubViewport(720)
+      const { container } = renderAt('/')
+      await waitFor(() => expect(listNotifications).toHaveBeenCalled())
+      expect(container.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+    })
+
+    it('badge: mostra a contagem e some (--gone + aria-hidden, com o ultimo numero) ao zerar', async () => {
+      stubViewport(720)
+      listNotifications.mockResolvedValue([unread('a'), unread('b')])
+      const { container } = renderAt('/')
+
+      await waitFor(() => {
+        expect(container.querySelector('.mobile-bottom-nav__badge')).toHaveTextContent('2')
+      })
+      const badge = container.querySelector('.mobile-bottom-nav__badge')
+      expect(badge).not.toHaveClass('mobile-bottom-nav__badge--gone')
+      // O numero do badge e so visual: a contagem vai no nome do link (sem anuncio duplicado).
+      expect(badge).toHaveAttribute('aria-hidden', 'true')
+      expect(
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos, 2 não lidas' })
+      ).toHaveAttribute('href', '/notifications')
+
+      listNotifications.mockResolvedValue([])
+      act(() => {
+        window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT, { detail: { recipientUserIds: [] } }))
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector('.mobile-bottom-nav__badge')).toHaveClass('mobile-bottom-nav__badge--gone')
+      })
+      const gone = container.querySelector('.mobile-bottom-nav__badge')
+      expect(gone).toHaveAttribute('aria-hidden', 'true')
+      // Mantem o ultimo numero durante a animacao de saida (nunca "0").
+      expect(gone).toHaveTextContent('2')
+      // Com 0 nao lidas o nome acessivel volta a ser so "Avisos".
+      expect(
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos' })
+      ).toHaveAttribute('href', '/notifications')
+
+      // Chegou outra nao lida: o mesmo span volta a ficar visivel.
+      listNotifications.mockResolvedValue([unread('c')])
+      act(() => {
+        window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT, { detail: { recipientUserIds: [] } }))
+      })
+      await waitFor(() => {
+        const again = container.querySelector('.mobile-bottom-nav__badge')
+        expect(again).not.toHaveClass('mobile-bottom-nav__badge--gone')
+        expect(again).toHaveTextContent('1')
+        // Singular: "1 não lida" (o badge segue aria-hidden).
+        expect(again).toHaveAttribute('aria-hidden', 'true')
+        expect(
+          within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos, 1 não lida' })
+        ).toHaveAttribute('href', '/notifications')
+      })
     })
   })
 })

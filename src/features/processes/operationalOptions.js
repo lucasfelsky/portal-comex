@@ -1,6 +1,8 @@
 // F17.2a (D-2): listas fechadas + normalizadores de identificacao/carga
 // perigosa. Funcao pura, sem React/firebase - mesma regra de import de
 // `containers.js` (D-11).
+import { shouldShowContainerQuantity } from './processCategories.js'
+import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits.js'
 
 export const INCOTERM_OPTIONS = [
   'EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP',
@@ -109,6 +111,25 @@ export function getCargoHazardBadges(process) {
     isFlammable && { label: 'Carga inflamável', tone: 'danger' },
     isDangerous && { label: 'Carga perigosa', tone: 'warn' },
   ].filter(Boolean)
+}
+
+// Marcas de carga (remake mobile): os mesmos sinais dos selos de texto, em forma
+// de dado para os icones compactos. `flammable`/`dangerous` reaproveitam as
+// regras acima; `volume` segue a precedencia do resumo da lista de Chegadas
+// (conteineres quando a categoria os mostra e ha algum; senao pallets; senao
+// nada). Funcao pura, nada gravado.
+export function getCargoMarks(process) {
+  let volume = null
+  if (shouldShowContainerQuantity(process?.category) && process?.containerQuantity > 0) {
+    volume = { count: process.containerQuantity, label: formatContainerCount(process.containerQuantity) }
+  } else if (process?.palletQuantity > 0) {
+    volume = { count: process.palletQuantity, label: formatPalletCount(process.palletQuantity) }
+  }
+  return {
+    flammable: hasFlammableGoods(process),
+    dangerous: hasDangerousGoods(process),
+    volume,
+  }
 }
 
 // D-5: deriva a flag/trio de processo a partir dos itens (na escrita).

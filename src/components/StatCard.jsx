@@ -11,6 +11,7 @@
 //     icon="dashboard"     // opcional
 //     note="+4 vs. semana passada"   // opcional (Dashboard desktop, F4a)
 //     noteTone="success"             // success | warning | danger | neutral
+//     announceFinalValue             // opcional (mobile): leitor de tela le o valor final
 //   />
 //
 // Trend positive (up + cor primary-700), trend negative (down + danger).
@@ -66,6 +67,15 @@ function buildSparklinePath(points, width, height) {
   return { linePath, areaPath }
 }
 
+// Nivel de largura do valor (so' a sparkline mobile le, em <=720px): 3 caracteres
+// = 'wide' (a linha encolhe), 4+ = 'xwide' (a linha some); menos que isso, sem atributo.
+function wideValueLevel(value) {
+  const length = String(value ?? '').length
+  if (length >= 4) return 'xwide'
+  if (length === 3) return 'wide'
+  return undefined
+}
+
 export default function StatCard({
   label,
   value,
@@ -75,6 +85,7 @@ export default function StatCard({
   note,
   noteTone = 'neutral',
   className = '',
+  announceFinalValue = false,
 }) {
   // id do gradiente SEM espacos/acentos: `url(#id com espacos)` e' invalido e
   // o navegador pinta a area do sparkline de PRETO (default do fill).
@@ -88,7 +99,10 @@ export default function StatCard({
   const stroke = direction ? TREND_COLORS[direction] : TREND_COLORS.neutral
 
   return (
-    <article className={`stat-card stat-card--rich ${className}`}>
+    <article
+      className={`stat-card stat-card--rich ${className}`}
+      data-wide-value={wideValueLevel(value)}
+    >
       <div className="stat-card__head">
         {icon ? (
           <span className="stat-card__icon" aria-hidden="true">
@@ -111,7 +125,16 @@ export default function StatCard({
         ) : null}
       </div>
 
-      <strong className="stat-card__value">{displayedValue}</strong>
+      {/* Opt-in (mobile): enquanto o contador anima, o numero parcial sai da arvore
+          de acessibilidade e o valor final fica disponivel em texto estavel. */}
+      {announceFinalValue && displayedValue !== value ? (
+        <strong className="stat-card__value">
+          <span aria-hidden="true">{displayedValue}</span>
+          <span className="m-sr">{value}</span>
+        </strong>
+      ) : (
+        <strong className="stat-card__value">{displayedValue}</strong>
+      )}
 
       {sparklineData ? (
         <svg
@@ -126,8 +149,14 @@ export default function StatCard({
               <stop offset="100%" stopColor={stroke} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <path d={sparklineData.areaPath} fill={`url(#${gradientId})`} />
           <path
+            className="stat-card__sparkline-area"
+            d={sparklineData.areaPath}
+            fill={`url(#${gradientId})`}
+          />
+          <path
+            className="stat-card__sparkline-line"
+            pathLength="1"
             d={sparklineData.linePath}
             fill="none"
             stroke={stroke}

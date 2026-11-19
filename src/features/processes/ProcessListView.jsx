@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Skeleton from '../../components/Skeleton'
 import SelectField from '../../components/SelectField'
 import FilterChip from '../../components/FilterChip'
 import Icon from '../../components/Icon'
 import Spinner from '../../components/Spinner'
+import MobileHeroSlot from '../../components/MobileHeroSlot'
 import { useSwipeReveal } from '../../hooks/useSwipeReveal'
 import useActivationPop from '../../hooks/useActivationPop'
 import { getProcessTitle, getProcessSubtitle } from './processLabels'
@@ -17,6 +18,9 @@ import { isAirCategory, isMaritimeCategory, shouldShowContainerQuantity } from '
 import { formatContainerCount, formatPalletCount } from '../../utils/cargoUnits'
 import useMediaQuery from '../../hooks/useMediaQuery'
 import ProcessListDesktop from './ProcessListDesktop'
+import ProcessMobileCard from './ProcessMobileCard'
+import ChegadasFilterSheet from './ChegadasFilterSheet'
+import { getProcessStage, PROCESS_STAGES } from './processStage'
 import {
   buildProcessAlerts,
   formatDate,
@@ -29,6 +33,45 @@ import {
 // (ProcessListDesktop); tablet e mobile seguem nesta arvore legada.
 const DESKTOP_QUERY = '(min-width: 1041px)'
 
+// Remake mobile (F4): chips de etapa (derivam de getProcessStage: <= 1 = Em
+// transito, 2 = Atracacao, 3 = Liberacao; "Entrega" so' aparece em Todas) e as
+// opcoes de "Etapa operacional" da folha de filtros (as mesmas do SelectField).
+const STAGE_CHIPS = [
+  { key: 'all', label: 'Todas' },
+  { key: 'transit', label: 'Em trânsito' },
+  { key: 'berth', label: 'Atracação' },
+  { key: 'release', label: 'Liberação' },
+]
+const OPERATION_FILTER_OPTIONS = [
+  'Pós-chegada pendente',
+  'Aguardando presença de carga',
+  'DTA em andamento',
+  'DUIMP pendente',
+  'Coleta pendente',
+  'Coleta agendada',
+]
+const EMPTY_LIST_FILTERS = {
+  searchTerm: '',
+  categoryFilter: 'Todos',
+  etaStartDate: '',
+  etaEndDate: '',
+  operationFilter: 'Todos',
+}
+
+function getStageGroup(process) {
+  const { currentStage, isComplete } = getProcessStage(process)
+  const stage = isComplete ? PROCESS_STAGES.length - 1 : currentStage
+  if (stage <= 1) return 'transit'
+  if (stage === 2) return 'berth'
+  if (stage === 3) return 'release'
+  return 'delivery'
+}
+
+function matchesModal(process, modal) {
+  if (modal === 'all') return true
+  return modal === 'air' ? isAirCategory(process.category) : isMaritimeCategory(process.category)
+}
+
 // F16.8: linha de processo com swipe-to-favoritar (mobile). Componente
 // próprio (não uma função helper chamada em .map()) porque precisa de
 // hook por linha (useSwipeReveal) — hooks só valem dentro de um
@@ -36,6 +79,7 @@ const DESKTOP_QUERY = '(min-width: 1041px)'
 // pai (ProcessListView guarda qual item.id está com o swipe revelado).
 function ProcessRow({
   item,
+  index = 0,
   isAdmin,
   canSeeName,
   isSelected,
@@ -70,38 +114,67 @@ function ProcessRow({
   // (evita 1px da cor da acao vazando na borda em repouso).
   const isRevealing = isSwipeOpen || swipe.isDragging || swipe.translateX !== 0
 
+  // Acoes reveladas pelo swipe: as mesmas na linha (tablet/desktop) e no cartao
+  // mobile do remake (ProcessMobileCard).
+  const swipeActions = (
+    <div className="process-swipe-row__actions" aria-hidden={!isSwipeOpen}>
+      {onToggleFavorite ? (
+        <button
+          type="button"
+          className="process-swipe-row__action process-swipe-row__action--favorite"
+          tabIndex={isSwipeOpen ? 0 : -1}
+          onClick={() => {
+            onToggleFavorite(item.id)
+            onSwipeOpenChange(false)
+          }}
+        >
+          <Icon name={isFavorite ? 'star-filled' : 'star'} size={18} aria-hidden="true" />
+          <span>{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
+        </button>
+      ) : null}
+      {canArchive ? (
+        <button
+          type="button"
+          className={`process-swipe-row__action${isArchivedRow ? ' process-swipe-row__action--restore' : ' process-swipe-row__action--archive'}`}
+          tabIndex={isSwipeOpen ? 0 : -1}
+          onClick={() => {
+            onArchiveProcess(item.id, !isArchivedRow)
+            onSwipeOpenChange(false)
+          }}
+        >
+          <Icon name={isArchivedRow ? 'restore' : 'archive'} size={18} aria-hidden="true" />
+          <span>{isArchivedRow ? 'Restaurar' : 'Arquivar'}</span>
+        </button>
+      ) : null}
+    </div>
+  )
+
+  // Remake mobile (<=720px): cartao em vez da linha cinza. Tablet e desktop
+  // seguem com a linha abaixo, sem alteracao.
+  if (isMobile) {
+    return (
+      <ProcessMobileCard
+        item={item}
+        index={index}
+        canSeeName={canSeeName}
+        isSelected={isSelected}
+        isFavorite={isFavorite}
+        isRevealing={isRevealing}
+        isArchivedRow={isArchivedRow}
+        hideSchedule={hideSchedule}
+        alerts={alerts}
+        swipe={swipe}
+        swipeActions={swipeActions}
+        favoriteStarPop={favoriteStarPop}
+        onSelectProcess={onSelectProcess}
+        onToggleFavorite={onToggleFavorite}
+      />
+    )
+  }
+
   return (
     <div className={`process-swipe-row${isRevealing ? ' process-swipe-row--revealing' : ''}`}>
-      <div className="process-swipe-row__actions" aria-hidden={!isSwipeOpen}>
-        {onToggleFavorite ? (
-          <button
-            type="button"
-            className="process-swipe-row__action process-swipe-row__action--favorite"
-            tabIndex={isSwipeOpen ? 0 : -1}
-            onClick={() => {
-              onToggleFavorite(item.id)
-              onSwipeOpenChange(false)
-            }}
-          >
-            <Icon name={isFavorite ? 'star-filled' : 'star'} size={18} aria-hidden="true" />
-            <span>{isFavorite ? 'Desfavoritar' : 'Favoritar'}</span>
-          </button>
-        ) : null}
-        {canArchive ? (
-          <button
-            type="button"
-            className={`process-swipe-row__action${isArchivedRow ? ' process-swipe-row__action--restore' : ' process-swipe-row__action--archive'}`}
-            tabIndex={isSwipeOpen ? 0 : -1}
-            onClick={() => {
-              onArchiveProcess(item.id, !isArchivedRow)
-              onSwipeOpenChange(false)
-            }}
-          >
-            <Icon name={isArchivedRow ? 'restore' : 'archive'} size={18} aria-hidden="true" />
-            <span>{isArchivedRow ? 'Restaurar' : 'Arquivar'}</span>
-          </button>
-        ) : null}
-      </div>
+      {swipeActions}
       <div
         role="button"
         tabIndex={0}
@@ -275,6 +348,11 @@ export default function ProcessListView({
   archivedProcesses = [],
   onArchiveProcess,
   onNewProcess,
+  // Remake mobile (F4): reaplica os filtros da pagina (categoria, ETA, etapa
+  // operacional, busca) sobre os processos ativos com valores de RASCUNHO; so'
+  // alimenta a contagem "Ver N processos" da folha. Sem ele a contagem usa a
+  // lista ja filtrada.
+  applyListFilters,
 }) {
   // F16.8: swipe-to-favoritar — só uma linha revelada por vez.
   const [openSwipeId, setOpenSwipeId] = useState(null)
@@ -334,10 +412,123 @@ export default function ProcessListView({
     isProcessStatusFinalized(process.processStatus)
   )
 
-  const renderProcessRow = (item) => (
+  // Remake mobile (F4). Tudo client-side sobre o que a pagina ja entrega:
+  // Ativas/Arquivadas (so' admin/logistica), chips de etapa, "Modal" e "Só
+  // favoritos" (estes dois moram na folha de filtros). Os filtros de categoria,
+  // ETA e etapa operacional continuam sendo os da pagina (props).
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [stageChip, setStageChip] = useState('all')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const filterButtonRef = useRef(null)
+  const viewingArchived = isMobile && canViewArchived && showArchived
+  const favoriteIdSet = useMemo(() => new Set(favoriteProcessIds ?? []), [favoriteProcessIds])
+  const passesClientFilters = (process, modal, onlyFavorites) =>
+    matchesModal(process, modal) && (!onlyFavorites || favoriteIdSet.has(process.id))
+
+  // Base dos chips: processos da aba atual depois de TODOS os filtros menos o chip.
+  const mobileBase = useMemo(() => {
+    if (!isMobile) return []
+    return (viewingArchived ? archivedProcesses : filteredProcesses).filter((process) =>
+      passesClientFilters(process, mobileCategory, favoritesOnly)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- passesClientFilters depende so' do que esta na lista
+  }, [isMobile, viewingArchived, archivedProcesses, filteredProcesses, mobileCategory, favoritesOnly, favoriteIdSet])
+  const stageCounts = useMemo(() => {
+    const counts = { all: mobileBase.length, transit: 0, berth: 0, release: 0 }
+    mobileBase.forEach((process) => {
+      const group = getStageGroup(process)
+      if (group in counts) counts[group] += 1
+    })
+    return counts
+  }, [mobileBase])
+  const mobileShown = useMemo(
+    () => (stageChip === 'all' ? mobileBase : mobileBase.filter((process) => getStageGroup(process) === stageChip)),
+    [mobileBase, stageChip]
+  )
+  const mobileActive = mobileShown.filter((process) => !isProcessStatusFinalized(process.processStatus))
+  const mobileDone = mobileShown.filter((process) => isProcessStatusFinalized(process.processStatus))
+  // "N processos ativos" do hero: em andamento, sem arquivados e sem filtro nenhum.
+  // `filteredProcesses` (muda a cada tecla da busca) so' entra nas deps quando nao
+  // ha `applyListFilters`; com ele o total nao depende da busca e o filtro+sort
+  // de todos os processos nao roda de novo por tecla.
+  const heroFallbackPool = applyListFilters ? null : filteredProcesses
+  const heroActiveCount = useMemo(() => {
+    if (!isMobile) return 0
+    const pool = applyListFilters ? applyListFilters(EMPTY_LIST_FILTERS) : heroFallbackPool
+    return pool.filter((process) => !isProcessStatusFinalized(process.processStatus)).length
+  }, [isMobile, applyListFilters, heroFallbackPool])
+  // Em Arquivadas so' contam os filtros que valem la: Modal e "Só favoritos"
+  // (categoria, ETA, etapa operacional e busca so' afetam as ativas).
+  const mobileFilterCount =
+    (viewingArchived ? 0 : activeFilterCount) +
+    (mobileCategory !== 'all' ? 1 : 0) +
+    (favoritesOnly ? 1 : 0)
+  const hasMobileFilters =
+    (!viewingArchived && hasActiveFilters) || mobileCategory !== 'all' || favoritesOnly || stageChip !== 'all'
+  // A troca de chip/aba/filtro remonta os cartoes e a entrada escalonada roda de novo.
+  const mobileListKey = [
+    viewingArchived ? 'arq' : 'ativas',
+    stageChip,
+    mobileCategory,
+    favoritesOnly,
+    categoryFilter,
+    operationFilter,
+    etaStartDate,
+    etaEndDate,
+  ].join('|')
+
+  // "Ver N": quantos cartoes a lista mostraria com os filtros em rascunho.
+  const countForDraft = (draft) => {
+    const pool = viewingArchived
+      ? archivedProcesses
+      : applyListFilters
+        ? applyListFilters({
+            searchTerm,
+            categoryFilter: draft.category,
+            etaStartDate: draft.etaStart,
+            etaEndDate: draft.etaEnd,
+            operationFilter: draft.operation,
+          })
+        : filteredProcesses
+    return pool.filter(
+      (process) =>
+        passesClientFilters(process, draft.modal, draft.favoritesOnly) &&
+        (stageChip === 'all' || getStageGroup(process) === stageChip)
+    ).length
+  }
+  const applySheetFilters = (draft) => {
+    if (draft.category !== categoryFilter) onCategoryFilterChange(draft.category)
+    if (draft.etaStart !== etaStartDate) onEtaStartDateChange(draft.etaStart)
+    if (draft.etaEnd !== etaEndDate) onEtaEndDateChange(draft.etaEnd)
+    if (draft.operation !== operationFilter) onOperationFilterChange(draft.operation)
+    setMobileCategory(draft.modal)
+    setFavoritesOnly(draft.favoritesOnly)
+  }
+  const clearMobileFilters = () => {
+    if (viewingArchived) {
+      // Em Arquivadas limpa so' o que vale la e continua na aba (os filtros das
+      // ativas, ocultos aqui, ficam como estao).
+      setMobileCategory('all')
+      setFavoritesOnly(false)
+      setStageChip('all')
+      return
+    }
+    onClearAllFilters()
+    setMobileCategory('all')
+    setFavoritesOnly(false)
+    setStageChip('all')
+    setShowArchived(false)
+  }
+  const closeSheet = () => {
+    setIsSheetOpen(false)
+    filterButtonRef.current?.focus()
+  }
+
+  const renderProcessRow = (item, index) => (
     <ProcessRow
       key={item.id}
       item={item}
+      index={index}
       isAdmin={isAdmin}
       canSeeName={canSeeName}
       isSelected={selectedProcessId === item.id}
@@ -353,10 +544,11 @@ export default function ProcessListView({
 
   // F16.8: linhas da seção "Arquivados" (admin) — sem ação de favoritar,
   // só "Restaurar" (isArchivedRow inverte o alvo do onArchiveProcess).
-  const renderArchivedRow = (item) => (
+  const renderArchivedRow = (item, index) => (
     <ProcessRow
       key={item.id}
       item={item}
+      index={index}
       isAdmin={isAdmin}
       canSeeName={canSeeName}
       isSelected={selectedProcessId === item.id}
@@ -367,6 +559,32 @@ export default function ProcessListView({
       onArchiveProcess={onArchiveProcess}
       isArchivedRow
     />
+  )
+
+  // Estado vazio do mobile (mock: "Nada por aqui" + "Limpar filtros").
+  const renderMobileEmpty = () => (
+    <div className="m-empty" role="status">
+      <span className="m-empty__big" aria-hidden="true">
+        <Icon name="search" size={26} />
+      </span>
+      <strong>Nada por aqui</strong>
+      <p>
+        {hasMobileFilters
+          ? viewingArchived
+            ? 'Nenhum processo arquivado corresponde aos filtros atuais.'
+            : 'Nenhum processo corresponde à busca e aos filtros atuais.'
+          : viewingArchived
+            ? 'Nenhum processo arquivado.'
+            : isAdmin
+              ? 'Cadastre um novo processo para ver as chegadas aqui.'
+              : 'Ainda não há processos para exibir.'}
+      </p>
+      {hasMobileFilters ? (
+        <button type="button" className="m-ghost" onClick={clearMobileFilters}>
+          Limpar filtros
+        </button>
+      ) : null}
+    </div>
   )
 
   if (isDesktop && !isMobile) {
@@ -413,12 +631,38 @@ export default function ProcessListView({
       className={`list-card process-list-card${rootClassName ? ` ${rootClassName}` : ''}`}
       style={{ marginTop: '8px' }}
     >
-      <div className="card-heading">
+      {/* Remake mobile: "N processos ativos" + "Novo" moram no hero navy. */}
+      {isMobile ? (
+        <MobileHeroSlot>
+          <div className="m-hero-row">
+            <p className="m-hero-sub">
+              {isLoading
+                ? 'Carregando processos…'
+                : `${heroActiveCount} ${heroActiveCount === 1 ? 'processo ativo' : 'processos ativos'}`}
+            </p>
+            {isAdmin && onNewProcess ? (
+              <button
+                type="button"
+                className="m-btn-mint"
+                title="Cadastrar um novo processo"
+                aria-label="Novo processo"
+                onClick={onNewProcess}
+              >
+                <Icon name="plus" size={16} strokeWidth={2.4} />
+                Novo
+              </button>
+            ) : null}
+          </div>
+        </MobileHeroSlot>
+      ) : null}
+      <div
+        className={`card-heading${isMobile && !(isAdmin && onReconcileErp) ? ' card-heading--m-empty' : ''}`}
+      >
         <div>
           <h3>Chegadas</h3>
         </div>
         <div className="admin-toolbar">
-          {isAdmin && onNewProcess ? (
+          {isAdmin && onNewProcess && !isMobile ? (
             <button
               type="button"
               className="primary-button primary-button--compact"
@@ -440,15 +684,18 @@ export default function ProcessListView({
                 Importar do DBCorp
               </button>
             ) : null}
-            <button
-              type="button"
-              className="ghost-button ghost-button--secondary"
-              disabled={filteredProcesses.length === 0 || isExporting}
-              title="Baixar as linhas visíveis (filtros aplicados) em Excel"
-              onClick={onExport}
-            >
-              {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
-            </button>
+            {/* Mobile: "Exportar N processos" mora no rodape da folha de filtros. */}
+            {isMobile ? null : (
+              <button
+                type="button"
+                className="ghost-button ghost-button--secondary"
+                disabled={filteredProcesses.length === 0 || isExporting}
+                title="Baixar as linhas visíveis (filtros aplicados) em Excel"
+                onClick={onExport}
+              >
+                {isExporting ? <Spinner size={14} /> : <Icon name="download" size={16} />} Exportar ({filteredProcesses.length})
+              </button>
+            )}
             {canViewArchived && archivedProcesses.length > 0 ? (
               <button
                 type="button"
@@ -466,155 +713,231 @@ export default function ProcessListView({
       {/* F16.4: busca pill + segmented — mobile-only (CSS). No desktop segue
           o painel de filtros completo abaixo. */}
       <div className="chegadas-mobilebar">
-        <label className="chegadas-search">
-          <Icon name="search" size={16} aria-hidden="true" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(event) => onSearchTermChange(event.target.value)}
-            placeholder="Buscar processo, PO, produto, contêiner…"
-            aria-label="Buscar processo"
-          />
-        </label>
-        <div className="chegadas-mobilebar__row">
-          <div className="chegadas-segmented" aria-label="Filtrar por modal">
-            {[
-              { key: 'all', label: 'Todos' },
-              { key: 'sea', label: 'Marítimo' },
-              { key: 'air', label: 'Aéreo' },
-            ].map((option) => (
+        {isMobile ? (
+          <>
+            <div className="m-fbar__row">
+              <label className="chegadas-search">
+                <Icon name="search" size={18} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={viewingArchived ? '' : searchTerm}
+                  onChange={(event) => onSearchTermChange(event.target.value)}
+                  placeholder={viewingArchived ? 'Buscar nas ativas' : 'Processo, PO, produto ou contêiner'}
+                  aria-label="Buscar processo"
+                  autoComplete="off"
+                  disabled={viewingArchived}
+                />
+              </label>
               <button
-                key={option.key}
+                ref={filterButtonRef}
                 type="button"
-                aria-pressed={mobileCategory === option.key}
-                className={`chegadas-segmented__item${mobileCategory === option.key ? ' chegadas-segmented__item--on' : ''}`}
-                onClick={() => setMobileCategory(option.key)}
+                className="m-fbtn"
+                aria-label={mobileFilterCount > 0 ? `Filtros (${mobileFilterCount})` : 'Filtros'}
+                aria-haspopup="dialog"
+                aria-expanded={isSheetOpen}
+                onClick={() => setIsSheetOpen(true)}
               >
-                {option.label}
+                <Icon name="sliders" size={18} />
+                {mobileFilterCount > 0 ? (
+                  <span key={mobileFilterCount} className="m-fbtn__n" aria-hidden="true">
+                    {mobileFilterCount}
+                  </span>
+                ) : null}
               </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="ghost-button chegadas-filters-toggle"
-            aria-expanded={isFilterPanelOpen}
-            aria-controls="chegadas-filters-panel"
-            onClick={() => setIsFilterPanelOpen((v) => !v)}
-          >
-            {activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : 'Filtros'}
-          </button>
-        </div>
+            </div>
+            {canViewArchived ? (
+              <div className="chegadas-segmented" role="group" aria-label="Exibir processos">
+                {[
+                  { archived: false, label: 'Ativas' },
+                  { archived: true, label: 'Arquivadas' },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    aria-pressed={showArchived === option.archived}
+                    className={`chegadas-segmented__item${showArchived === option.archived ? ' chegadas-segmented__item--on' : ''}`}
+                    onClick={() => setShowArchived(option.archived)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="m-chips" role="group" aria-label="Etapa do processo">
+              {STAGE_CHIPS.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  className="m-chip"
+                  aria-pressed={stageChip === chip.key}
+                  aria-label={`${chip.label} (${stageCounts[chip.key]})`}
+                  onClick={() => setStageChip(chip.key)}
+                >
+                  {chip.label}
+                  <span className="m-chip__c" aria-hidden="true">
+                    {stageCounts[chip.key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="chegadas-search">
+              <Icon name="search" size={16} aria-hidden="true" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => onSearchTermChange(event.target.value)}
+                placeholder="Buscar processo, PO, produto, contêiner…"
+                aria-label="Buscar processo"
+              />
+            </label>
+            <div className="chegadas-mobilebar__row">
+              <div className="chegadas-segmented" aria-label="Filtrar por modal">
+                {[
+                  { key: 'all', label: 'Todos' },
+                  { key: 'sea', label: 'Marítimo' },
+                  { key: 'air', label: 'Aéreo' },
+                ].map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    aria-pressed={mobileCategory === option.key}
+                    className={`chegadas-segmented__item${mobileCategory === option.key ? ' chegadas-segmented__item--on' : ''}`}
+                    onClick={() => setMobileCategory(option.key)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="ghost-button chegadas-filters-toggle"
+                aria-expanded={isFilterPanelOpen}
+                aria-controls="chegadas-filters-panel"
+                onClick={() => setIsFilterPanelOpen((v) => !v)}
+              >
+                {activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : 'Filtros'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      <div
-        id="chegadas-filters-panel"
-        className={`process-filters process-filters--panel${isFilterPanelOpen ? ' process-filters--panel--open' : ''}`}
-      >
-        <label className="field">
-          <span>Buscar processo</span>
-          <input
-            className="text-input process-filters__search"
-            type="text"
-            value={searchTerm}
-            onChange={(event) => onSearchTermChange(event.target.value)}
-            placeholder="Nome, item, contêiner, destino, categoria, PO, ETA, ETD, status ou ID"
-          />
-        </label>
-        <label className="field field--compact">
-          <span>Categoria</span>
-          <SelectField
-            className="text-input"
-            value={categoryFilter}
-            onChange={(event) => onCategoryFilterChange(event.target.value)}
+      {!isMobile ? (
+        <>
+          <div
+            id="chegadas-filters-panel"
+            className={`process-filters process-filters--panel${isFilterPanelOpen ? ' process-filters--panel--open' : ''}`}
           >
-            <option value="Todos">Todas</option>
-            {processCategoryOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </SelectField>
-        </label>
-        <div className="field">
-          <span>Período de ETA</span>
-          <div className="process-date-range">
-            <input
-              className="text-input"
-              type="date"
-              value={etaStartDate}
-              onChange={(event) => onEtaStartDateChange(event.target.value)}
-              aria-label="ETA de"
-            />
-            <input
-              className="text-input"
-              type="date"
-              value={etaEndDate}
-              min={etaStartDate || undefined}
-              onChange={(event) => onEtaEndDateChange(event.target.value)}
-              aria-label="ETA até"
-            />
+            <label className="field">
+              <span>Buscar processo</span>
+              <input
+                className="text-input process-filters__search"
+                type="text"
+                value={searchTerm}
+                onChange={(event) => onSearchTermChange(event.target.value)}
+                placeholder="Nome, item, contêiner, destino, categoria, PO, ETA, ETD, status ou ID"
+              />
+            </label>
+            <label className="field field--compact">
+              <span>Categoria</span>
+              <SelectField
+                className="text-input"
+                value={categoryFilter}
+                onChange={(event) => onCategoryFilterChange(event.target.value)}
+              >
+                <option value="Todos">Todas</option>
+                {processCategoryOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </SelectField>
+            </label>
+            <div className="field">
+              <span>Período de ETA</span>
+              <div className="process-date-range">
+                <input
+                  className="text-input"
+                  type="date"
+                  value={etaStartDate}
+                  onChange={(event) => onEtaStartDateChange(event.target.value)}
+                  aria-label="ETA de"
+                />
+                <input
+                  className="text-input"
+                  type="date"
+                  value={etaEndDate}
+                  min={etaStartDate || undefined}
+                  onChange={(event) => onEtaEndDateChange(event.target.value)}
+                  aria-label="ETA até"
+                />
+              </div>
+            </div>
+            <label className="field">
+              <span>Etapa operacional</span>
+              <SelectField
+                className="text-input"
+                value={operationFilter}
+                onChange={(event) => onOperationFilterChange(event.target.value)}
+              >
+                <option value="Todos">Todas</option>
+                <option value="Pós-chegada pendente">Pós-chegada pendente</option>
+                <option value="Aguardando presença de carga">Aguardando presença de carga</option>
+                <option value="DTA em andamento">DTA em andamento</option>
+                <option value="DUIMP pendente">DUIMP pendente</option>
+                <option value="Coleta pendente">Coleta pendente</option>
+                <option value="Coleta agendada">Coleta agendada</option>
+                {isAdmin ? <option value="Dados pendentes">Dados pendentes</option> : null}
+              </SelectField>
+            </label>
           </div>
-        </div>
-        <label className="field">
-          <span>Etapa operacional</span>
-          <SelectField
-            className="text-input"
-            value={operationFilter}
-            onChange={(event) => onOperationFilterChange(event.target.value)}
-          >
-            <option value="Todos">Todas</option>
-            <option value="Pós-chegada pendente">Pós-chegada pendente</option>
-            <option value="Aguardando presença de carga">Aguardando presença de carga</option>
-            <option value="DTA em andamento">DTA em andamento</option>
-            <option value="DUIMP pendente">DUIMP pendente</option>
-            <option value="Coleta pendente">Coleta pendente</option>
-            <option value="Coleta agendada">Coleta agendada</option>
-            {isAdmin ? <option value="Dados pendentes">Dados pendentes</option> : null}
-          </SelectField>
-        </label>
-      </div>
 
-      {hasActiveFilters ? (
-        <div className="filter-chips-row" role="list" aria-label="Filtros ativos">
-          <span className="filter-chips-row__label">Filtros:</span>
-          {searchTerm ? (
-            <FilterChip
-              label={`Busca: "${searchTerm}"`}
-              onRemove={() => onSearchTermChange('')}
-              variant="primary"
-            />
+          {hasActiveFilters ? (
+            <div className="filter-chips-row" role="list" aria-label="Filtros ativos">
+              <span className="filter-chips-row__label">Filtros:</span>
+              {searchTerm ? (
+                <FilterChip
+                  label={`Busca: "${searchTerm}"`}
+                  onRemove={() => onSearchTermChange('')}
+                  variant="primary"
+                />
+              ) : null}
+              {categoryFilter !== 'Todos' ? (
+                <FilterChip
+                  label={`Categoria: ${categoryFilter}`}
+                  onRemove={() => onCategoryFilterChange('Todos')}
+                />
+              ) : null}
+              {etaStartDate || etaEndDate ? (
+                <FilterChip
+                  label={`ETA: ${etaStartDate || 'inicio'} ate ${etaEndDate || 'fim'}`}
+                  onRemove={() => {
+                    onEtaStartDateChange('')
+                    onEtaEndDateChange('')
+                  }}
+                  variant="info"
+                />
+              ) : null}
+              {operationFilter !== 'Todos' ? (
+                <FilterChip
+                  label={`Etapa: ${operationFilter}`}
+                  onRemove={() => onOperationFilterChange('Todos')}
+                  variant="info"
+                />
+              ) : null}
+              <button
+                type="button"
+                className="filter-chips-row__clear"
+                onClick={onClearAllFilters}
+              >
+                Limpar todos
+              </button>
+            </div>
           ) : null}
-          {categoryFilter !== 'Todos' ? (
-            <FilterChip
-              label={`Categoria: ${categoryFilter}`}
-              onRemove={() => onCategoryFilterChange('Todos')}
-            />
-          ) : null}
-          {etaStartDate || etaEndDate ? (
-            <FilterChip
-              label={`ETA: ${etaStartDate || 'inicio'} ate ${etaEndDate || 'fim'}`}
-              onRemove={() => {
-                onEtaStartDateChange('')
-                onEtaEndDateChange('')
-              }}
-              variant="info"
-            />
-          ) : null}
-          {operationFilter !== 'Todos' ? (
-            <FilterChip
-              label={`Etapa: ${operationFilter}`}
-              onRemove={() => onOperationFilterChange('Todos')}
-              variant="info"
-            />
-          ) : null}
-          <button
-            type="button"
-            className="filter-chips-row__clear"
-            onClick={onClearAllFilters}
-          >
-            Limpar todos
-          </button>
-        </div>
+        </>
       ) : null}
 
       {/* Quando o carregamento termina o conteudo entra por fade de 200 ms
@@ -647,34 +970,32 @@ export default function ProcessListView({
             </div>
           </>
         ) : isMobile ? (
-          shownProcesses.length === 0 && !(canViewArchived && archivedProcesses.length > 0) ? (
-            <div className="empty-state" role="status">
-              <strong>Nenhum processo encontrado</strong>
-              <p>
-                {isAdmin
-                  ? 'Ajuste a busca ou cadastre um novo processo.'
-                  : 'Ajuste a busca ou os filtros aplicados.'}
-              </p>
-            </div>
-          ) : (
-            // Mobile: seções Em andamento / Concluídos / Arquivados (admin).
+          mobileShown.length === 0 ? (
+            renderMobileEmpty()
+          ) : viewingArchived ? (
             <>
-              {activeProcesses.length > 0 ? (
+              <div className="process-list__section-label">Arquivados</div>
+              <div className="process-list__group" key={mobileListKey}>
+                {mobileShown.map(renderArchivedRow)}
+              </div>
+            </>
+          ) : (
+            // Mobile: eyebrows Em andamento / Concluídos acima dos cartoes.
+            <>
+              {mobileActive.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Em andamento</div>
-                  <div className="process-list__group">{activeProcesses.map(renderProcessRow)}</div>
+                  <div className="process-list__group" key={`${mobileListKey}|a`}>
+                    {mobileActive.map(renderProcessRow)}
+                  </div>
                 </>
               ) : null}
-              {doneProcesses.length > 0 ? (
+              {mobileDone.length > 0 ? (
                 <>
                   <div className="process-list__section-label">Concluídos</div>
-                  <div className="process-list__group">{doneProcesses.map(renderProcessRow)}</div>
-                </>
-              ) : null}
-              {canViewArchived && archivedProcesses.length > 0 ? (
-                <>
-                  <div className="process-list__section-label">Arquivados</div>
-                  <div className="process-list__group">{archivedProcesses.map(renderArchivedRow)}</div>
+                  <div className="process-list__group" key={`${mobileListKey}|d`}>
+                    {mobileDone.map(renderProcessRow)}
+                  </div>
                 </>
               ) : null}
             </>
@@ -699,6 +1020,30 @@ export default function ProcessListView({
           shownProcesses.map(renderProcessRow)
         )}
       </div>
+
+      {isMobile && isSheetOpen ? (
+        <ChegadasFilterSheet
+          initialFilters={{
+            category: categoryFilter,
+            modal: mobileCategory,
+            etaStart: etaStartDate,
+            etaEnd: etaEndDate,
+            operation: operationFilter,
+            favoritesOnly,
+          }}
+          categoryOptions={processCategoryOptions}
+          operationOptions={
+            isAdmin ? [...OPERATION_FILTER_OPTIONS, 'Dados pendentes'] : OPERATION_FILTER_OPTIONS
+          }
+          countFor={countForDraft}
+          archived={viewingArchived}
+          exportCount={mobileShown.length}
+          isExporting={isExporting}
+          onExport={onExport ? () => onExport(mobileShown) : undefined}
+          onApply={applySheetFilters}
+          onClose={closeSheet}
+        />
+      ) : null}
     </article>
   )
 }

@@ -198,6 +198,23 @@ export default function AppLayout() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Tab bar (mobile): o "pulo" do icone ativo (m-bump) so toca quando o usuario TROCA
+  // de aba, nunca no primeiro paint. A classe --bump entra depois da 1a mudanca de
+  // rota; antes disso o item ativo ja nasce parado.
+  const [hasNavigated, setHasNavigated] = useState(false)
+  const lastPathRef = useRef(location.pathname)
+  useEffect(() => {
+    // Compara com a rota anterior (e nao com um "primeiro render"): o StrictMode
+    // roda o efeito duas vezes no mount.
+    if (lastPathRef.current === location.pathname) return
+    lastPathRef.current = location.pathname
+    setHasNavigated(true)
+  }, [location.pathname])
+  const navItemClass = ({ isActive }) =>
+    `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}${
+      isActive && hasNavigated ? ' mobile-bottom-nav__item--bump' : ''
+    }`
+
   // Drawer da sidebar (<=1040px): se a janela cresce alem disso com o menu
   // aberto, fecha. Senao o `.main-content` ficaria `inert` sem sidebar
   // off-canvas nem backdrop. Roda so' quando o breakpoint muda.
@@ -353,28 +370,56 @@ export default function AppLayout() {
       '/': 'Visão geral',
       '/news': 'Notícias',
       '/processos': 'Chegadas',
-      '/notifications': 'Notificações',
+      '/notifications': 'Avisos',
       '/menu': 'Menu',
     }[location.pathname] ??
     adminSectionTitles[location.pathname] ??
     (location.pathname.startsWith('/admin') ? 'Admin' : meta.title)
   const mobileEyebrow = useMemo(() => {
-    if (location.pathname === '/menu') return null
+    // Remake F6: Avisos, Noticias e Menu levam o eyebrow da central (mock).
+    if (location.pathname === '/menu') return 'Conta e ajustes'
+    if (location.pathname === '/news') return 'Comunicados da operação'
+    if (location.pathname === '/notifications') return 'Central de notificações'
     if (adminSectionTitles[location.pathname]) return 'Admin'
+    // Chegadas (remake F4): o eyebrow do hero e' o nome da central, nao a data.
+    // Com o detalhe aberto o hero e' o do detalhe (sem o eyebrow da central).
+    if (location.pathname === '/processos') return isProcessDetailOpen ? null : 'Central de chegadas'
     const text = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     })
     return text.charAt(0).toUpperCase() + text.slice(1)
-  }, [location.pathname])
+  }, [location.pathname, isProcessDetailOpen])
   const [isPageScrolled, setIsPageScrolled] = useState(false)
+  const mobileHeroRef = useRef(null)
   useEffect(() => {
-    const onScroll = () => setIsPageScrolled(window.scrollY > 48)
+    // Barra compacta aparece depois de 70px; o hero recebe `--m-sy` (0..160)
+    // para o parallax do CSS (so a camada mobile le essa variavel).
+    let frame = 0
+    const syncHero = () => {
+      frame = 0
+      const scrollY = Math.min(Math.max(window.scrollY, 0), 160)
+      mobileHeroRef.current?.style.setProperty('--m-sy', String(scrollY))
+    }
+    const onScroll = () => {
+      setIsPageScrolled(window.scrollY > 70)
+      if (!frame) frame = window.requestAnimationFrame(syncHero)
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
   }, [])
+  // Badge da tab bar: guarda o ultimo numero > 0 para a animacao de saida nao
+  // mostrar "0" (ajuste de estado durante o render, sem efeito extra).
+  const [mobileBadgeCount, setMobileBadgeCount] = useState(0)
+  if (unreadNotifications.length > 0 && unreadNotifications.length !== mobileBadgeCount) {
+    setMobileBadgeCount(unreadNotifications.length)
+  }
+  const mobileInitials = getInitials(profile?.name ?? profile?.email ?? '?')
   const visibleNavigation = navigation.filter(
     (item) => !item.roles || item.roles.includes(profile?.role)
   )
@@ -993,11 +1038,52 @@ export default function AppLayout() {
           >
             {mobileTitle}
           </div>
-          <div className="mobile-page-header">
-            {mobileEyebrow ? (
-              <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
-            ) : null}
-            <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+          {/* Hero navy do remake mobile. Marca/avatar so no Inicio; arte e navio
+              sao decorativos (aria-hidden) e o CSS os esconde acima de 720px.
+              #mobile-hero-extra recebe o que as telas portam (MobileHeroSlot). */}
+          {/* F7: com o detalhe aberto a camada cobre o hero; `inert` tira "Novo
+              processo" e o resto do alcance do Tab e do leitor de tela. */}
+          <div
+            className="mobile-page-header"
+            ref={mobileHeroRef}
+            inert={isProcessDetailOpen && activeProcess.viewMode === 'detail' ? '' : undefined}
+          >
+            <div className="mobile-page-header__inner">
+              {location.pathname === '/' ? (
+                <div className="mobile-page-header__brand" aria-hidden="true">
+                  <ProductMark product="comex" tone="dark" size={30} />
+                  <span className="mobile-page-header__wordmark">
+                    <small>SQ QUÍMICA</small>
+                    Portal COMEX
+                  </span>
+                  <span className="mobile-page-header__avatar">{mobileInitials}</span>
+                </div>
+              ) : null}
+              {mobileEyebrow ? (
+                <span className="mobile-page-header__eyebrow">{mobileEyebrow}</span>
+              ) : null}
+              {/* Com o detalhe do processo aberto o h1 e' o do hero do detalhe
+                  (unico por pagina): o titulo da pagina vira texto simples. */}
+              {isProcessDetailOpen && activeProcess.viewMode === 'detail' ? (
+                <p className="mobile-page-header__title" title={mobileTitle} aria-hidden="true">{mobileTitle}</p>
+              ) : (
+                <h1 className="mobile-page-header__title" title={mobileTitle}>{mobileTitle}</h1>
+              )}
+              <div className="mobile-page-header__extra" id="mobile-hero-extra" />
+            </div>
+            <svg
+              className="mobile-page-header__art"
+              viewBox="0 0 390 230"
+              preserveAspectRatio="xMaxYMax slice"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M-10 196 C 120 188, 250 146, 410 58" />
+              <path d="M-10 214 C 140 208, 270 170, 410 96" />
+            </svg>
+            <span className="mobile-page-header__ship" aria-hidden="true">
+              <Icon name="ship" size={22} />
+            </span>
           </div>
 
           <header className="topbar">
@@ -1165,9 +1251,7 @@ export default function AppLayout() {
             <NavLink
               to="/"
               end
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Início"
             >
               <Icon name="house" size={22} aria-hidden="true" />
@@ -1176,9 +1260,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/processos"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Chegadas"
             >
               <Icon name="ship" size={22} aria-hidden="true" />
@@ -1187,9 +1269,7 @@ export default function AppLayout() {
 
             <NavLink
               to="/news"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Notícias"
             >
               <Icon name="news" size={22} aria-hidden="true" />
@@ -1198,23 +1278,34 @@ export default function AppLayout() {
 
             <NavLink
               to="/notifications"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
+              className={navItemClass}
+              aria-label={
+                unreadNotifications.length > 0
+                  ? `Avisos, ${unreadNotifications.length} ${unreadNotifications.length === 1 ? 'não lida' : 'não lidas'}`
+                  : 'Avisos'
               }
-              aria-label="Notificações"
             >
               <Icon name="bell" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Avisos</span>
-              {unreadNotifications.length > 0 ? (
-                <span className="mobile-bottom-nav__badge">{unreadNotifications.length}</span>
+              {/* Fica montado depois da 1a nao lida: com 0 o CSS anima a saida
+                  (escala 0) e o span guarda o ultimo numero ate la. A contagem
+                  vai no nome acessivel do link (igual ao sino do topbar); o
+                  badge e sempre aria-hidden para nao anunciar duas vezes. */}
+              {mobileBadgeCount > 0 ? (
+                <span
+                  className={`mobile-bottom-nav__badge${
+                    unreadNotifications.length === 0 ? ' mobile-bottom-nav__badge--gone' : ''
+                  }`}
+                  aria-hidden="true"
+                >
+                  {mobileBadgeCount}
+                </span>
               ) : null}
             </NavLink>
 
             <NavLink
               to="/menu"
-              className={({ isActive }) =>
-                `mobile-bottom-nav__item${isActive ? ' mobile-bottom-nav__item--active' : ''}`
-              }
+              className={navItemClass}
               aria-label="Menu"
             >
               <Icon name="person" size={22} aria-hidden="true" />

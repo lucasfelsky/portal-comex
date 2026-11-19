@@ -19,7 +19,7 @@
 // de ProcessesPage.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
@@ -149,6 +149,7 @@ vi.mock('../../src/utils/deliveryForecast', () => ({
 }))
 
 import DashboardPage from '../../src/pages/DashboardPage'
+import { getProcessStage, PROCESS_STAGES } from '../../src/features/processes/processStage'
 
 const BAR_STATUS = { id: 'current', status: 'PRATICAVEL', label: 'PRATICAVEL', tone: 'ok', notes: '', updatedAt: '2026-06-30T10:00:00Z' }
 
@@ -808,5 +809,365 @@ describe('DashboardPage - selos de carga (Favoritos e Chegadas)', () => {
     const plain = findItemByTitle(unscheduled, 'PO TRANSIT')
     expect(hazardTexts(plain)).toEqual([])
     expect(plain.querySelector('.process-item__chips')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Remake mobile (F3): Inicio <= 720px. O chip da Barra do Rio vai para o hero
+// (#mobile-hero-extra, via MobileHeroSlot); KPIs 2x2 com contagem e sparkline
+// real so em "Chegadas na semana"; favorito com trajeto de 5 etapas. Acima de
+// 720px nada de `m-*` renderiza.
+// ---------------------------------------------------------------------------
+describe('DashboardPage - Inicio mobile (remake F3)', () => {
+  const originalMatchMedia = window.matchMedia
+  const toggleFavoriteProcess = vi.fn()
+  let heroSlot
+
+  function mockViewport({ mobile = false, desktop = false, reduce = false } = {}) {
+    window.matchMedia = (query) => ({
+      matches:
+        (mobile && query.includes('max-width: 720px')) ||
+        (desktop && query.includes('min-width: 1041px')) ||
+        (reduce && query.includes('prefers-reduced-motion')),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })
+  }
+
+  // Tokens de classe `m-*` presentes na arvore.
+  const mClasses = (root) => {
+    const found = new Set()
+    root.querySelectorAll('[class]').forEach((el) => {
+      el.classList.forEach((token) => {
+        if (/^m-/.test(token)) found.add(token)
+      })
+    })
+    return [...found]
+  }
+
+  const FAV = {
+    id: 'p-fav',
+    name: 'PO FAV 1',
+    processNumber: 'PO: 4500',
+    category: 'FCL',
+    processStatus: 'Atracação Confirmada',
+    collectionStatus: 'Aguardando',
+    destination: 'Itajaí',
+    etd: '2026-06-20',
+    eta: '2026-07-10',
+    etaOriginal: '2026-07-08',
+    palletQuantity: 3,
+    items: [{ id: 'i1', commercialName: 'X', dangerousGoods: true, imoClass: '3' }],
+  }
+  const FAV2 = {
+    id: 'p-fav2',
+    name: 'PO FAV 2',
+    processNumber: 'PO: 4600',
+    category: 'LCL',
+    processStatus: 'Embarcou',
+    collectionStatus: 'Aguardando',
+    destination: 'Navegantes',
+    eta: '2026-07-20',
+  }
+  const RED = {
+    id: 'p-red',
+    name: 'PO RED',
+    processNumber: 'PO: 1',
+    category: 'FCL',
+    processStatus: 'Embarcou',
+    parameterizationChannel: 'Vermelho',
+    destination: 'Itajaí',
+    eta: '2026-07-09',
+  }
+
+  const kpiCards = (container) => [...container.querySelectorAll('.m-kpis .m-kpi')]
+  const kpiByLabel = (container, label) =>
+    kpiCards(container).find((card) => card.querySelector('.stat-card__label')?.textContent === label)
+
+  async function renderMobile({ favorites = [], processes = PROCESSES, reduce = false } = {}) {
+    mockViewport({ mobile: true, reduce })
+    mockUseAuth.mockReturnValue({
+      // admin = projecao identidade (DUIMP sob aguas): os status das fixtures valem como estao.
+      profile: { uid: 'u-1', role: 'admin', favoriteProcessIds: favorites },
+      toggleFavoriteProcess,
+    })
+    mockListProcesses.mockResolvedValue(processes)
+    const view = renderPage()
+    await waitFor(() => expect(view.container.querySelector('.m-kpis .stat-card__value .skeleton')).toBeNull())
+    return view
+  }
+
+  beforeEach(() => {
+    window.sessionStorage.clear()
+    toggleFavoriteProcess.mockReset()
+    heroSlot = document.createElement('div')
+    heroSlot.id = 'mobile-hero-extra'
+    document.body.appendChild(heroSlot)
+    // rAF/performance falsos: a contagem e o trajeto andam so quando o teste manda.
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'Date'] })
+    vi.setSystemTime(new Date('2026-07-08T12:00:00'))
+  })
+
+  afterEach(() => {
+    heroSlot.remove()
+    if (originalMatchMedia) window.matchMedia = originalMatchMedia
+    else delete window.matchMedia
+  })
+
+  describe('Barra do Rio no hero', () => {
+    it('mobile (matchMedia max-width:720px true): o chip entra em #mobile-hero-extra via MobileHeroSlot, nao na pagina', async () => {
+      const { container } = await renderMobile()
+      await waitFor(() => expect(within(heroSlot).getByText('Praticável')).toBeInTheDocument())
+
+      const chip = heroSlot.querySelector('.m-barra')
+      expect(chip).toHaveClass('m-barra--ok')
+      expect(chip.textContent).toMatch(/Barra do Rio\s*Praticável/)
+      expect(chip.title).toMatch(/Praticagem ZP-21 · atualizado/)
+      // ponto decorativo, que pulsa so com a barra aberta (CSS m-ping)
+      expect(chip.querySelector('.m-dot')).toHaveAttribute('aria-hidden', 'true')
+
+      expect(container.querySelector('.m-barra')).toBeNull()
+      expect(container.querySelector('.dashboard-bar-inline')).toBeNull()
+    })
+
+    it('tom danger para impraticavel, com o rotulo de formatBarStatusLabel', async () => {
+      mockGetBarStatus.mockResolvedValue({ ...BAR_STATUS, status: 'IMPRATICAVEL', tone: 'danger' })
+      await renderMobile()
+      await waitFor(() => expect(within(heroSlot).getByText('Impraticável')).toBeInTheDocument())
+      expect(heroSlot.querySelector('.m-barra')).toHaveClass('m-barra--danger')
+    })
+
+    it('estados Carregando e Indisponivel (neutros, sem pulso)', async () => {
+      let resolveBar
+      mockGetBarStatus.mockReturnValue(new Promise((resolve) => { resolveBar = resolve }))
+      await renderMobile()
+      await waitFor(() => expect(within(heroSlot).getByText('Carregando')).toBeInTheDocument())
+      expect(heroSlot.querySelector('.m-barra')).toHaveClass('m-barra--neutral')
+
+      await act(async () => {
+        resolveBar(null)
+      })
+      await waitFor(() => expect(within(heroSlot).getByText('Indisponível')).toBeInTheDocument())
+      expect(heroSlot.querySelector('.m-barra')).toHaveClass('m-barra--neutral')
+    })
+
+    it('tablet (max-width:720px false): nada entra no slot e a barra segue inline na pagina', async () => {
+      mockViewport({})
+      const { container } = renderPage()
+      await waitFor(() => expect(document.querySelector('.dashboard-bar-card__text--ok')).toBeInTheDocument())
+      expect(heroSlot.childElementCount).toBe(0)
+      expect(heroSlot.textContent).toBe('')
+      expect(container.querySelector('.dashboard-bar-inline')).toBeInTheDocument()
+      expect(mClasses(container)).toEqual([])
+    })
+
+    it('desktop (min-width:1041px true): nada entra no slot e nenhuma classe m-* renderiza', async () => {
+      mockViewport({ desktop: true })
+      const { container } = renderPage()
+      await waitFor(() => expect(container.querySelector('.dash-bar')).toBeInTheDocument())
+      expect(heroSlot.childElementCount).toBe(0)
+      expect(mClasses(container)).toEqual([])
+    })
+  })
+
+  describe('KPIs 2x2', () => {
+    it('4 cartoes; o heading legado fica vazio (so irmao dos seletores) e o canal vermelho > 0 vira alerta', async () => {
+      const { container } = await renderMobile({ processes: [...PROCESSES, RED] })
+
+      expect(container.querySelector('.surface > .dashboard-heading:empty')).toBeInTheDocument()
+      expect(container.querySelector('section.m-kpis')).toHaveAttribute('aria-label', 'Indicadores')
+      const cards = kpiCards(container)
+      expect(cards.map((card) => card.querySelector('.stat-card__label').textContent)).toEqual([
+        'Chegadas na semana',
+        'Em trânsito',
+        'Aguardando atracação',
+        'Canal vermelho',
+      ])
+      expect(cards.map((card) => card.classList.contains('m-kpi--alert'))).toEqual([false, false, false, true])
+      // os cartoes mobile nao levam icone (o mock so tem rotulo + valor)
+      expect(container.querySelectorAll('.m-kpis .stat-card__icon')).toHaveLength(0)
+    })
+
+    it('sem canal vermelho nao ha alerta', async () => {
+      const { container } = await renderMobile()
+      expect(container.querySelector('.m-kpi--alert')).toBeNull()
+    })
+
+    it('sparkline so no KPI com serie real ("Chegadas na semana"), com a linha pronta para desenhar', async () => {
+      const { container } = await renderMobile({ processes: [...PROCESSES, RED] })
+      const sparks = container.querySelectorAll('.m-kpis .stat-card__sparkline')
+      expect(sparks).toHaveLength(1)
+      expect(kpiByLabel(container, 'Chegadas na semana')).toContainElement(sparks[0])
+      expect(sparks[0]).toHaveAttribute('aria-hidden', 'true')
+      const line = sparks[0].querySelector('.stat-card__sparkline-line')
+      expect(line).toHaveAttribute('pathLength', '1')
+      // 8 semanas de calendario, nada sintetico: a serie vem de buildWeeklyEtaSeries
+      expect(line.getAttribute('d').match(/[ML]/g)).toHaveLength(8)
+    })
+
+    it('sem nenhuma chegada nas ultimas 8 semanas nao desenha sparkline (nem linha plana inventada)', async () => {
+      const { container } = await renderMobile({ processes: [] })
+      expect(container.querySelectorAll('.m-kpis .stat-card__sparkline')).toHaveLength(0)
+    })
+
+    it('contagem animada: valor final estavel para leitor de tela desde o inicio e termina no valor certo', async () => {
+      const { container } = await renderMobile()
+      const card = kpiByLabel(container, 'Em trânsito')
+      await waitFor(() => expect(card.querySelector('.stat-card__value .m-sr')).not.toBeNull())
+
+      // durante a contagem: numero parcial fora da arvore de acessibilidade, final em texto
+      const during = card.querySelector('.stat-card__value')
+      expect(during.querySelector('.m-sr').textContent).toBe('3')
+      expect(during.querySelector('[aria-hidden="true"]').textContent).toBe('0')
+
+      act(() => {
+        vi.advanceTimersByTime(700)
+      })
+      const after = kpiByLabel(container, 'Em trânsito').querySelector('.stat-card__value')
+      expect(after.textContent).toBe('3')
+      expect(after.querySelector('.m-sr')).toBeNull()
+      expect(after.querySelector('[aria-hidden="true"]')).toBeNull()
+    })
+
+    it('movimento reduzido: mostra o valor final direto, sem contar', async () => {
+      const { container } = await renderMobile({ reduce: true })
+      const value = kpiByLabel(container, 'Em trânsito').querySelector('.stat-card__value')
+      expect(value.textContent).toBe('3')
+      expect(value.querySelector('.m-sr')).toBeNull()
+    })
+
+    it('carregando ou com erro: sem sparkline, sem alerta e sem zero falso', async () => {
+      mockViewport({ mobile: true })
+      mockListProcesses.mockRejectedValue(new Error('x'))
+      const { container } = renderPage()
+      await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
+      kpiCards(container).forEach((card) => expect(card.querySelector('.stat-card__value').textContent).toBe('—'))
+      expect(container.querySelector('.m-kpi--alert')).toBeNull()
+      expect(container.querySelector('.stat-card__sparkline')).toBeNull()
+    })
+  })
+
+  describe('Favoritos com trajeto', () => {
+    it('o primeiro favorito tem o trajeto de 5 etapas e a atual e getProcessStage(fav).currentStage', async () => {
+      const { container } = await renderMobile({ favorites: ['p-fav', 'p-fav2'], processes: [FAV, FAV2] })
+      await screen.findByRole('heading', { name: 'Favoritos' })
+
+      // so o primeiro (destaque) tem trajeto; o segundo e o cartao compacto
+      const routes = container.querySelectorAll('.m-route')
+      expect(routes).toHaveLength(1)
+      expect(container.querySelectorAll('.m-fav--compact')).toHaveLength(1)
+      expect(container.querySelector('.m-fav--compact .m-route')).toBeNull()
+
+      const route = routes[0]
+      const list = within(route).getByRole('list', { name: 'Etapas do processo' })
+      const steps = within(list).getAllByRole('listitem')
+      expect(steps).toHaveLength(5)
+      expect(steps.map((li) => li.textContent)).toEqual(PROCESS_STAGES)
+
+      const { currentStage } = getProcessStage(FAV)
+      expect(currentStage).toBe(2)
+      expect(route.querySelectorAll('[aria-current]')).toHaveLength(1)
+      expect(steps[currentStage]).toHaveAttribute('aria-current', 'step')
+      steps.forEach((li, index) => {
+        const state = index < currentStage ? 'done' : index === currentStage ? 'now' : 'todo'
+        expect(li).toHaveClass(`m-route__step--${state}`)
+      })
+      // o navio vai ate a etapa atual: 2 de 4 intervalos
+      expect(route.getAttribute('style')).toMatch(/--m-route-to:\s*0\.5/)
+      // navio e trilho sao decorativos
+      expect(route.querySelector('.m-route__ship')).toHaveAttribute('aria-hidden', 'true')
+      expect(route.querySelector('.m-route__track')).toHaveAttribute('aria-hidden', 'true')
+    })
+
+    it('o navio so parte depois do mount (rAF duplo)', async () => {
+      const { container } = await renderMobile({ favorites: ['p-fav'], processes: [FAV] })
+      const route = container.querySelector('.m-route')
+      expect(route).not.toHaveClass('m-route--go')
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      expect(container.querySelector('.m-route')).toHaveClass('m-route--go')
+    })
+
+    it('movimento reduzido: o navio ja esta na etapa atual no primeiro frame', async () => {
+      const { container } = await renderMobile({ favorites: ['p-fav'], processes: [FAV], reduce: true })
+      expect(container.querySelector('.m-route')).toHaveClass('m-route--go')
+    })
+
+    it('fatos ETD / ETA / Porto em dl; ETA atualizada fica sinalizada tambem para leitor de tela', async () => {
+      const { container } = await renderMobile({ favorites: ['p-fav'], processes: [FAV] })
+      const facts = [...container.querySelectorAll('.m-fav__facts > div')].map((row) => [
+        row.querySelector('dt').textContent,
+        row.querySelector('dd'),
+      ])
+      expect(facts.map(([label]) => label)).toEqual(['ETD', 'ETA', 'Porto'])
+      expect(facts[0][1].textContent).toMatch(/^20\/06/)
+      expect(facts[1][1].textContent).toMatch(/^10\/07/)
+      expect(facts[1][1]).toHaveClass('m-fav__fact--warn')
+      expect(facts[1][1].querySelector('.m-sr').textContent).toMatch(/atualizada/)
+      expect(facts[2][1].textContent).toBe('Itajaí')
+    })
+
+    it('marcas de carga no lugar dos selos de texto: inflamavel, perigosa e volume com nome acessivel', async () => {
+      const { container } = await renderMobile({ favorites: ['p-fav'], processes: [FAV] })
+      const marks = container.querySelector('.m-fav .m-marks')
+      expect(within(marks).getByRole('img', { name: 'Carga inflamável' })).toBeInTheDocument()
+      expect(within(marks).getByRole('img', { name: 'Carga perigosa' })).toBeInTheDocument()
+      const volume = within(marks).getByRole('img', { name: '3 pallets' })
+      expect(volume.querySelector('b').textContent).toBe('3')
+      // as marcas sao irmas do heading: o nome acessivel do h4 e so o titulo
+      const heading = screen.getByRole('heading', { name: 'PO FAV 1' })
+      expect(heading).not.toContainElement(marks)
+      expect(heading.parentElement).toContainElement(marks)
+      // a pilula de texto saiu (continua so no tablet/desktop)
+      expect(screen.queryByText('Carga inflamável')).toBeNull()
+      expect(screen.queryByText('Carga perigosa')).toBeNull()
+      // os icones sao decorativos; o nome vem do aria-label da marca
+      marks.querySelectorAll('svg').forEach((svg) => expect(svg).toHaveAttribute('aria-hidden', 'true'))
+    })
+
+    it('abrir pelo titulo navega ao processo e a estrela desfavorita (com nome acessivel)', async () => {
+      await renderMobile({ favorites: ['p-fav'], processes: [FAV] })
+      fireEvent.click(await screen.findByRole('button', { name: 'PO FAV 1' }))
+      expect(mockNavigate).toHaveBeenCalledWith('/processos', expect.objectContaining({ state: expect.anything() }))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Desfavoritar PO FAV 1' }))
+      expect(toggleFavoriteProcess).toHaveBeenCalledWith('p-fav')
+    })
+
+    it('contador mono no cabecalho e estado vazio sem favoritos', async () => {
+      const full = await renderMobile({ favorites: ['p-fav', 'p-fav2'], processes: [FAV, FAV2] })
+      await screen.findByRole('heading', { name: 'Favoritos' })
+      expect(full.container.querySelector('.m-card__count').textContent).toMatch(/^2\s*processos$/)
+      full.unmount()
+
+      const empty = await renderMobile({ favorites: [] })
+      expect(await screen.findByText('Nenhum processo favoritado')).toBeInTheDocument()
+      expect(empty.container.querySelector('.m-card__count')).toBeNull()
+      expect(empty.container.querySelector('.m-route')).toBeNull()
+    })
+  })
+
+  describe('Comunicados e entrada escalonada', () => {
+    it('comunicados: quando em mono (canal · dia) e titulo; cards com --d por bloco', async () => {
+      const { container } = await renderMobile()
+      await screen.findByText('Comunicado 1')
+      const items = container.querySelectorAll('.m-ann')
+      expect(items).toHaveLength(2)
+      expect(items[0].querySelector('.m-ann__title').textContent).toBe('Comunicado 1')
+      expect(items[0].querySelector('.m-ann__when').textContent).toMatch(/^Banner interno · /)
+
+      const cards = container.querySelectorAll('section.m-card.m-rise')
+      expect(cards).toHaveLength(2)
+      expect([...cards].map((card) => card.style.getPropertyValue('--d'))).toEqual(['380ms', '460ms'])
+      // o card de chegadas da semana continua no fim, com o mesmo componente
+      expect(container.querySelector('.weekly-arrivals-card')).toBeInTheDocument()
+    })
   })
 })

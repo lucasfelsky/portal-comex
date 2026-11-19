@@ -31,8 +31,16 @@
    TOKENS: so aqui entram literais de cor (blocos :root). Cor de TEXTO usa
    apenas tokens ja cobertos por tests/unit/colorContrast.test.js.
 
-   D-FONTE: fonte do sistema (SF Pro no iPhone), inclusive nos titulos.
-   Para trocar por Manrope, mude --m-font-text e --m-font-display.
+   D-FONTE: so no mobile (<= 720px, camada S) a identidade do remake vale:
+   Manrope no texto, Sora nos titulos e JetBrains Mono em PO/ETA/rotulos
+   (tokens --m-font-brand-*, aplicados no `body` da camada S). No tablet
+   (721-1040px) continua a fonte do sistema (SF Pro no iPhone) pelos tokens
+   --m-font-text / --m-font-display, que NAO mudam.
+
+   IDENTIDADE (PLAN.md do remake mobile, F1): hero navy por tela com a folha
+   sobreposta, barra compacta com blur e os tokens --m-hero-... e
+   --m-cbar-... Os @keyframes (m-...) e a @property moram no fim de
+   styles.css, nunca aqui.
    ============================================================ */
 
 /* 1. Tokens ---------------------------------------------------------- */
@@ -69,9 +77,43 @@
     --m-shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
     --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.18);
     --m-scrim: rgba(20, 24, 22, 0.32);
+    --m-shadow-foot: 0 -10px 24px -14px rgba(0, 50, 65, 0.28);
+
+    /* Identidade do remake (inertes no tablet: so a camada S usa). */
+    --m-navy-900: #003241;
+    --m-navy: #004153;
+    --m-hero-bg: linear-gradient(165deg, #003241 0%, #004153 62%, #0a5468 130%);
+    --m-hero-ink: #ffffff;
+    --m-hero-sub: #8fe6d0;
+    --m-hero-ok: #a3f0dc;
+    --m-hero-chip: rgba(255, 255, 255, 0.12);
+    --m-hero-line: rgba(255, 255, 255, 0.16);
+    --m-route-off-hero: rgba(255, 255, 255, 0.22);
+    --m-route-ink: #9fc4cc;
+    --m-hero-fire: #ffd9d4;
+    --m-hero-haz: #fbdea3;
+    --m-cbar-bg: rgba(0, 50, 65, 0.86);
+    --m-tabbar-bg: rgba(255, 255, 255, 0.84);
+    --m-shadow-card: 0 1px 2px rgba(0, 65, 83, 0.06), 0 8px 20px rgba(0, 65, 83, 0.07);
+    --m-shadow-tab: 0 12px 32px rgba(0, 50, 65, 0.22), 0 2px 6px rgba(0, 50, 65, 0.1);
+    --m-tab-ring: rgba(20, 221, 167, 0.35);
+    --m-mint-glow: rgba(20, 221, 167, 0.55);
+    --m-switch-knob: #ffffff;
+    --m-sheet-radius: 28px;
+    --m-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --m-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --m-ios: cubic-bezier(0.32, 0.72, 0, 1);
+    --m-font-brand-text: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --m-font-brand-display: 'Sora', 'Manrope', system-ui, sans-serif;
+    --m-font-brand-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   }
 
   :root[data-theme='dark'] {
+    --m-hero-bg: linear-gradient(165deg, #031820 0%, #062833 70%, #0a3a48 130%);
+    --m-cbar-bg: rgba(3, 24, 32, 0.86);
+    --m-tabbar-bg: rgba(15, 43, 53, 0.86);
+    --m-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --m-shadow-tab: 0 14px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(74, 222, 200, 0.12);
     --m-fill: rgba(118, 128, 124, 0.24);
     --m-fill-strong: rgba(118, 128, 124, 0.34);
     --m-bar-bg: rgba(20, 22, 21, 0.82);
@@ -79,6 +121,7 @@
     --m-shadow-segment: none;
     --m-shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.6);
     --m-scrim: rgba(0, 0, 0, 0.5);
+    --m-shadow-foot: 0 -10px 24px -14px rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -148,7 +191,7 @@
   }
 
   /* Tela "empurrada" (lista/detalhe/form) nao repete o titulo da pai. */
-  .surface:has(> .process-list-card, > .process-detail-view, > .process-form) > .section-heading {
+  .surface:has(> .process-list-card, > .m-stack, > .process-detail-view, > .process-form) > .section-heading {
     display: none;
   }
 
@@ -2206,6 +2249,21 @@
 
 /* ===== S: so mobile (<= 720px): chrome e estrutura que so existem la ===== */
 @media (max-width: 720px) {
+  /* D-FONTE: identidade do remake so no mobile. `body` (nunca `:root`) para
+     vencer o `--font-heading` do bloco L sem tocar o tablet. */
+  body {
+    font-family: var(--m-font-brand-text);
+    --font-heading: var(--m-font-brand-display);
+    --font-mono: var(--m-font-brand-mono);
+  }
+
+  /* F7: a gaveta da sidebar nao abre em <=720px (a topbar com o botao "Abrir
+     menu" e' escondida), mas ficava na arvore de acessibilidade e no Tab (so'
+     opacity 0): o h1 "Portal COMEX" dela duplicava o h1 da tela. Fechada, sai
+     de ambos, como no tablet. */
+  :root .sidebar:not(.sidebar--mobile-open) {
+    visibility: hidden;
+  }
 
   /* PR 3: aviso "ERP" com alvo de toque de 44px. O chip tem 20x28: o `::before`
      o amplia para 44x44 sem mexer no layout (mesmo padrao de `.chip-remove`). */
@@ -2267,50 +2325,273 @@
     display: none;
   }
 
+  /* Hero navy por tela (identidade do remake). Sangra ate as bordas do
+     `.main-content` (padding 8px 16px) e e coberto pela folha em 26px. */
   .mobile-page-header {
-    gap: 2px;
-    padding: 2px 0 0;
+    position: relative;
+    display: block;
+    margin: -8px -16px 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 20px 46px;
+    overflow: hidden;
+    background: var(--m-hero-bg);
+    color: var(--m-hero-ink);
+  }
+
+  /* Conteudo do hero: acompanha o scroll (parallax, `--m-sy` gravado pelo
+     AppLayout) e esmaece ate sumir em 150px. */
+  .mobile-page-header__inner {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    transform: translateY(calc(var(--m-sy, 0) * 0.28px));
+    opacity: calc(1 - var(--m-sy, 0) / 150);
+  }
+
+  .mobile-page-header__art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .mobile-page-header__art path {
+    fill: none;
+    stroke: var(--m-hero-line);
+    stroke-width: 1;
+  }
+
+  /* Navio decorativo: segue a rota do mock e some com movimento reduzido. */
+  .mobile-page-header__ship {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    color: var(--m-hero-ink);
+    opacity: 0.8;
+    pointer-events: none;
+    offset-path: path('M-10 190 C 120 182, 250 140, 410 52');
+    offset-rotate: 0deg;
+    animation: m-sail 34s linear infinite;
+  }
+
+  .mobile-page-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  /* A marca oficial (ProductMark) nao encolhe em 320px. */
+  .mobile-page-header__brand > svg {
+    flex: none;
+  }
+
+  .mobile-page-header__wordmark {
+    min-width: 0;
+    font-family: var(--font-heading);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+  }
+
+  .mobile-page-header__wordmark small {
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--m-hero-sub);
+  }
+
+  .mobile-page-header__avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  /* Encaixe para o que as telas portam para o hero (MobileHeroSlot). */
+  .mobile-page-header__extra:empty {
+    display: none;
   }
 
   .mobile-page-header__eyebrow {
-    font-size: var(--m-fs-footnote);
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
-    color: var(--text-subtle);
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    color: var(--m-hero-sub);
   }
 
   .mobile-page-header__title {
+    margin: 0;
     font-family: var(--font-heading);
-    font-size: var(--m-fs-large-title);
+    font-size: 2rem;
     font-weight: 700;
-    letter-spacing: 0.01em;
-    line-height: 1.1;
+    letter-spacing: -0.012em;
+    line-height: 1.08;
+    color: var(--m-hero-ink);
+    text-wrap: balance;
   }
 
-  /* A10: barras translucidas (T13: --glass-strong nao existe no claro). */
+  /* Folha: a area de conteudo sobe 26px por cima do hero, com cantos de 28px
+     (nao vale no detalhe/formulario, onde o hero fica oculto). Cobre as telas
+     com `.surface` e o Menu. */
+  .main-content {
+    gap: 0;
+  }
+
+  .main-content:not(:has(.process-detail-view, .process-form)) > .page-fade > :is(.surface, .menu-page) {
+    position: relative;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    margin: -26px -16px 0;
+    padding: 32px 16px 24px;
+    border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
+    background: var(--bg);
+  }
+
+  /* Aviso de e-mail pendente (div sem classe, entre o hero e a folha): reserva
+     a sobreposicao da folha para ela nao cobrir o cartao. */
+  .main-content > .mobile-page-header ~ div:not([class]) {
+    margin-bottom: 26px;
+  }
+
+  /* A10: barras translucidas (T13: --glass-strong nao existe no claro). A
+     barra compacta e navy com blur e desce do topo quando o hero rola. */
   .mobile-nav-compact {
-    background: var(--m-bar-bg);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border-bottom: 1px solid var(--m-separator);
+    align-items: center;
+    height: calc(50px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 16px 0;
+    background: var(--m-cbar-bg);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+    backdrop-filter: saturate(1.6) blur(18px);
+    border-bottom: 0;
     box-shadow: none;
-    font-size: var(--m-fs-headline);
-    font-weight: 600;
+    font-family: var(--font-heading);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--m-hero-ink);
+    text-align: center;
+    transform: translateY(-10px);
+    transition:
+      opacity 0.3s ease,
+      transform 0.4s var(--m-ease);
   }
 
+  .mobile-nav-compact--visible {
+    transform: none;
+  }
+
+  /* Tab bar flutuante em pilula (remake, F2): 14px das bordas, 68px de altura,
+     5 colunas iguais e o indicador (::before) deslizando por baixo dos itens. */
   :root .mobile-bottom-nav {
-    background: var(--m-bar-bg);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border-top: 1px solid var(--m-separator);
-    box-shadow: none;
+    left: 14px;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    height: 68px;
+    padding: 6px;
+    border: 0;
+    border-radius: 28px;
+    background: var(--m-tabbar-bg);
+    -webkit-backdrop-filter: saturate(1.8) blur(22px);
+    backdrop-filter: saturate(1.8) blur(22px);
+    box-shadow: var(--m-shadow-tab);
+    transition: transform 0.5s var(--m-ios);
+  }
+
+  /* Detalhe aberto: a pilula desce para fora da tela (so `.process-detail-view`,
+     nao os modos de edicao). Soma a folga e a safe-area para sumir por inteiro.
+     F5: `visibility: hidden` (com atraso = fim da descida) tira os 5 links do
+     foco por teclado e do leitor de tela enquanto o detalhe cobre; ao sair
+     (`data-m-leaving`) ela sobe junto com a camada que desliza para fora. */
+  .main-content:has(.process-detail-view:not([data-m-leaving='true'])) > .mobile-bottom-nav {
+    transform: translateY(calc(150% + 14px + env(safe-area-inset-bottom, 0px)));
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      transform 0.5s var(--m-ios),
+      visibility 0s linear 0.5s;
+  }
+
+  /* Indicador sem JS: `--m-tab-i` (0..4) vem das regras :has abaixo. Sem aba
+     ativa (ex.: /admin) fica transparente. */
+  .mobile-bottom-nav::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 6px;
+    width: calc((100% - 12px) / 5);
+    border-radius: 22px;
+    background: var(--primary-50);
+    box-shadow: inset 0 0 0 1px var(--m-tab-ring);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(calc(var(--m-tab-i, 0) * 100%));
+    transition:
+      transform 0.55s var(--m-spring),
+      opacity 0.25s ease;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active)::before {
+    opacity: 1;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(1)) {
+    --m-tab-i: 0;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(2)) {
+    --m-tab-i: 1;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(3)) {
+    --m-tab-i: 2;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(4)) {
+    --m-tab-i: 3;
+  }
+
+  .mobile-bottom-nav:has(> .mobile-bottom-nav__item--active:nth-child(5)) {
+    --m-tab-i: 4;
   }
 
   .mobile-bottom-nav .mobile-bottom-nav__item {
-    font-size: var(--m-fs-caption2);
-    font-weight: 600;
     gap: 3px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 22px;
+    font-size: 0.65625rem; /* 10.5px */
+    font-weight: 700;
+    transition: color 0.25s ease;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item > svg {
+    width: 23px;
+    height: 23px;
+    transition: transform 0.45s var(--m-spring);
   }
 
   .mobile-bottom-nav .mobile-bottom-nav__item--active,
@@ -2318,13 +2599,76 @@
     color: var(--primary-700);
   }
 
+  /* Icone da aba ativa sobe 1px e cresce; ao TROCAR de aba, "pula" (m-bump).
+     O `--bump` so entra depois da 1a mudanca de rota (AppLayout): no primeiro
+     paint o icone ja nasce parado. */
+  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg {
+    transform: translateY(-1px) scale(1.12);
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg {
+    animation: m-bump 0.5s var(--m-spring);
+  }
+
+  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). */
   .mobile-bottom-nav .mobile-bottom-nav__badge {
+    top: 6px;
+    right: auto;
+    left: calc(50% + 6px);
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 9px;
     background: var(--danger);
     color: var(--on-danger);
+    font-size: 0.625rem;
+    font-weight: 800;
+    line-height: 17px;
+    transform: none;
+    transition:
+      transform 0.35s var(--m-spring),
+      opacity 0.3s ease;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__badge--gone {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  /* A pilula (14 + 68px) nao pode cobrir o fim do conteudo. */
+  .main-content {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* F7: o toast (canto inferior direito, 16px) cobria a ponta direita da pilula.
+     Sobe para 12px acima dela (14 + 68 + 12) e acompanha a safe-area. Com o
+     detalhe aberto a pilula sai e quem fica embaixo e' a barra de acao (76px
+     de 1 linha, 134px de 2); sem `:has()` vale o valor da pilula. */
+  .toast-container {
+    bottom: calc(94px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.process-detail-view .process-detail-toolbar > :is(.primary-button, .ghost-button:not(.process-detail-fav)))
+    .toast-container {
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.process-detail-view .process-detail-toolbar > .primary-button ~ .ghost-button:not(.process-detail-fav))
+    .toast-container {
+    bottom: calc(146px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* F7: "Excluir"/"Confirmar" (danger/primary) do dialogo de confirmacao tinham
+     38px (padding 9px + linha 1,3); os botoes passam a 44px. */
+  .confirm-dialog__actions > :is(.primary-button, .danger-button, .ghost-button, .secondary-button) {
+    min-height: 44px;
   }
 
   /* 4. Chegadas -------------------------------------------------------- */
   .process-list-card.list-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     padding: 0;
     background: none;
     border: 0;
@@ -2332,8 +2676,15 @@
     border-radius: 0;
   }
 
+  /* Importar (admin) nao existe no mock-up: desce para depois da lista. O Exportar
+     mora no rodape da folha de filtros; sem Importar o bloco some (sem vao). */
   .process-list-card > .card-heading {
-    margin-bottom: 12px;
+    order: 3;
+    margin-bottom: 0;
+  }
+
+  .process-list-card > .card-heading.card-heading--m-empty {
+    display: none;
   }
 
   /* T7: mesmos seletores de styles.css:9083/9095/9489. */
@@ -2371,60 +2722,284 @@
     font-weight: 600;
   }
 
+  /* Topo de Chegadas (remake F4): busca + filtros, Ativas/Arquivadas (so
+     admin/logistica) e chips de etapa com contagem. */
   .process-list-card .chegadas-mobilebar {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 0;
+  }
+
+  .m-fbar__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
-    margin-bottom: 4px;
   }
 
   .process-list-card .chegadas-search {
     min-height: 44px;
-    padding: 0 10px;
-    gap: 6px;
-    border-radius: var(--m-radius-field);
+    padding: 0 12px;
+    gap: 8px;
+    border-radius: 14px;
     background: var(--m-fill);
-    color: var(--text-subtle);
+    color: var(--ink-soft);
+    transition: background 0.25s;
+  }
+
+  .process-list-card .chegadas-search:focus-within {
+    background: var(--surface);
   }
 
   .process-list-card .chegadas-search input {
-    font-size: var(--m-fs-body);
+    font-size: 0.9375rem;
   }
 
+  .process-list-card .chegadas-search input::placeholder {
+    color: var(--ink-soft);
+  }
+
+  /* Em Arquivadas a busca fica desabilitada (so' filtra as ativas). */
+  .process-list-card .chegadas-search:has(input:disabled) {
+    opacity: 0.6;
+  }
+
+  .process-list-card .chegadas-search input:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Ativas / Arquivadas. O ::before leva o alvo de toque a 44px sem mudar o
+     visual do mock-up. */
   .process-list-card .chegadas-segmented {
-    padding: 2px;
-    border-radius: var(--m-radius-field);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
     background: var(--m-fill);
   }
 
   .process-list-card .chegadas-segmented__item {
-    min-height: 44px;
-    border-radius: 8px;
-    font-size: var(--m-fs-subhead);
-    font-weight: 600;
+    position: relative;
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 9px;
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  .process-list-card .chegadas-segmented__item::before {
+    content: '';
+    position: absolute;
+    inset: -3px 0;
   }
 
   .process-list-card .chegadas-segmented__item--on {
-    background: var(--m-segment-on);
+    background: var(--surface);
+    color: var(--ink);
     box-shadow: var(--m-shadow-segment);
   }
 
-  /* T5: especificidade >= 0,3,0 para vencer o :hover do iOS. */
-  .process-list-card .chegadas-mobilebar .chegadas-filters-toggle {
-    min-height: 44px;
+  /* Botao de filtros (icone + contador). */
+  .m-fbtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 46px;
+    height: 44px;
     padding: 0 14px;
-    border-color: transparent;
-    border-radius: var(--m-radius-control);
-    background: var(--m-tint-bg);
-    color: var(--m-tint-fg);
+    border: 0;
+    border-radius: 14px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-fbtn:active {
+    transform: scale(0.94);
+  }
+
+  .m-fbtn__n {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.65625rem;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    animation: m-pop 0.45s var(--m-spring);
+  }
+
+  /* Chips (etapa e, na folha, categoria/modal/etapa operacional). O ::before
+     leva o alvo de toque a 44px; o respiro vertical do trilho evita que o
+     overflow recorte o pseudo-elemento e o anel de foco. */
+  .m-chips {
+    display: flex;
+    gap: 8px;
+    margin: -6px -16px;
+    padding: 6px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+  }
+
+  .m-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .m-chips--wrap {
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .m-chip {
+    position: relative;
+    flex: none;
+    padding: 8px 13px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--ink-soft);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    cursor: pointer;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s,
+      transform 0.2s var(--m-spring);
+  }
+
+  .m-chip::before {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+
+  .m-chip:active {
+    transform: scale(0.94);
+  }
+
+  .m-chip:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .m-chip[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--on-primary);
     box-shadow: none;
-    font-size: var(--m-fs-subhead);
+  }
+
+  .m-chip__c {
+    margin-left: 5px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
     font-weight: 600;
   }
 
-  .process-list-card .process-filters--panel--open {
+  /* Hero de Chegadas: "N processos ativos" a esquerda e "Novo" a direita. */
+  .m-hero-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .m-hero-sub {
+    min-width: 0;
+    margin: 0;
+    font-size: 0.84375rem;
+    font-weight: 600;
+    color: var(--m-hero-sub);
+  }
+
+  .m-btn-mint {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
     border: 0;
-    box-shadow: none;
-    border-radius: var(--m-radius-group);
-    background: var(--surface);
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.8125rem;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-btn-mint::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .m-btn-mint:active {
+    transform: scale(0.95);
+  }
+
+  .m-btn-mint--block {
+    justify-content: center;
+    height: 50px;
+    padding: 0 18px;
+    border-radius: 16px;
+    font-size: 0.9375rem;
+  }
+
+  .m-btn-mint--block::before {
+    content: none;
+  }
+
+  .m-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 44px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-size: 0.875rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-spring);
+  }
+
+  .m-ghost:active {
+    transform: scale(0.94);
+  }
+
+  .m-ghost--block {
+    height: 50px;
+    border-radius: 16px;
   }
 
   .process-list-card .process-list {
@@ -2432,24 +3007,54 @@
     padding: 0;
   }
 
+  /* Eyebrows Em andamento / Concluidos / Arquivados (mono) acima dos cartoes. */
   .process-list-card .process-list > .process-list__section-label {
     margin: 0;
-    padding: 22px var(--m-inset) 6px;
-    font-size: var(--m-fs-footnote);
+    padding: 18px 2px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-subtle);
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
   }
 
   .process-list-card .process-list > .process-list__section-label:first-child {
-    padding-top: 8px;
+    padding-top: 2px;
   }
 
-  .process-list-card .process-list > .empty-state {
-    background: none;
-    border: 0;
-    border-radius: 0;
+  /* Estado vazio: "Nada por aqui" + "Limpar filtros". */
+  .m-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 36px 20px;
+    text-align: center;
+    color: var(--ink-soft);
+    animation: m-rise 0.6s var(--m-ease) both;
+  }
+
+  .m-empty__big {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--m-fill);
+  }
+
+  .m-empty strong {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .m-empty p {
+    max-width: 26ch;
+    margin: 0;
+    font-size: 0.84375rem;
+    line-height: 1.5;
   }
 
   /* Item 4: acoes do swipe so aparecem com a linha aberta/arrastando. */
@@ -2463,106 +3068,594 @@
     transition-delay: 0s;
   }
 
-  /* Grupo inset (o overflow recorta as acoes no canto arredondado). */
+  /* Cartoes de processo (remake F4): o grupo vira uma pilha de cartoes soltos
+     (22px, sombra do token). O wrapper de swipe e quem carrega raio, sombra e a
+     entrada escalonada (`--d` vem do JSX); o overflow dele recorta as acoes. */
   .process-list__group {
-    background: var(--surface);
-    border-radius: var(--m-radius-group);
-    overflow: hidden;
+    display: grid;
+    gap: 12px;
+    background: none;
+    border-radius: 0;
+    overflow: visible;
   }
 
   .process-list__group > .process-swipe-row {
     border-bottom: 0;
-  }
-
-  /* A5 / T12: linha de lista navegavel. */
-  .process-list__group .process-item.process-swipe-row__content {
-    padding: 10px var(--m-inset);
-    min-height: 60px;
-    gap: 12px;
+    border-radius: 22px;
     background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+    animation: m-rise 0.6s var(--m-ease) both;
+    animation-delay: var(--d, 0ms);
+    transition: transform 0.25s var(--m-spring);
   }
 
-  .process-list__group .process-item.process-swipe-row__content:active {
-    background: var(--surface-alt);
+  :root[data-theme='dark'] .process-list__group > .process-swipe-row {
+    border: 1px solid var(--border);
   }
 
-  /* O separador anda junto com o swipe (vive dentro do conteudo). */
-  .process-list__group > .process-swipe-row + .process-swipe-row > .process-swipe-row__content::before {
+  .process-list__group > .process-swipe-row:active:not(.process-swipe-row--revealing) {
+    transform: scale(0.975);
+  }
+
+  .process-list__group .process-item.process-swipe-row__content.m-pc,
+  .process-list__group .process-item.process-swipe-row__content.m-pc:hover,
+  .process-list__group .process-item.process-swipe-row__content.m-pc:active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    min-height: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+    text-align: left;
+  }
+
+  .m-pc__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-pc__id {
+    min-width: 0;
+  }
+
+  .m-pc__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-pc__head .m-marks {
+    margin-left: 0;
+  }
+
+  .process-list__group .m-pc__title {
+    min-width: 0;
+    font-family: var(--font-heading);
+    font-size: 0.96875rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .process-list__group .m-pc__po {
+    margin: 5px 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.71875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__po span {
+    line-height: inherit;
+    color: inherit;
+  }
+
+  /* Estrela: 34px visuais, alvo de 44px pelo ::before; o ::after e o anel do
+     burst ao favoritar. */
+  .m-pc__star {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: -6px -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition:
+      transform 0.25s var(--m-spring),
+      color 0.2s;
+  }
+
+  .m-pc__star::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: calc(var(--m-inset) + var(--m-leading) + 12px);
-    right: 0;
-    height: 1px;
-    background: var(--m-separator);
+    inset: -5px;
   }
 
-  .process-list__group .process-item__leading {
-    width: var(--m-leading);
-    height: var(--m-leading);
-    border-radius: 8px;
+  .m-pc__star:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* --warning-700 (>= 6:1 no claro) e nao --warning (2,95:1 sobre o cartao,
+     reprova 1.4.11); no escuro o token flipa para o dourado claro. */
+  .m-pc__star--on {
+    color: var(--warning-700);
+  }
+
+  .m-pc__star--pop {
+    animation: m-pop 0.5s var(--m-spring);
+  }
+
+  .m-pc__star--pop::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 2px solid var(--warning);
+    border-radius: 50%;
+    animation: m-burst 0.55s ease-out forwards;
+  }
+
+  /* 5 segmentos de etapa: crescem da esquerda e o atual pulsa. */
+  .m-seg5 {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .m-seg5__i {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--m-fill-strong);
+    transform-origin: left;
+  }
+
+  .m-seg5__i--done,
+  .m-seg5__i--now {
+    background: var(--primary);
+    animation: m-grow 0.6s var(--m-ease) both;
+    animation-delay: calc(var(--d, 0ms) + var(--k, 0) * 80ms + 200ms);
+  }
+
+  .m-seg5__i--now {
+    animation:
+      m-grow 0.6s var(--m-ease) both,
+      m-glow 2s ease-in-out 1s infinite;
+    animation-delay: calc(var(--d, 0ms) + var(--k, 0) * 80ms + 200ms), 1s;
+  }
+
+  /* Linhas de metadados (o `span` do legado pinta tudo de --ink-soft). */
+  .process-list__group .m-pc__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.78125rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+
+  .process-list__group .m-pc__meta svg {
+    flex: none;
+  }
+
+  .process-list__group .m-pc__meta .m-pc__stage {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--primary-700);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__eta {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__eta--updated {
+    color: var(--warning-700);
+  }
+
+  .process-list__group .m-pc__meta .m-pc__supplier {
+    justify-content: flex-end;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  /* Tags de STATUS em texto (as de carga viraram icones). Sem `display`: T10. */
+  .process-list__group .m-pc__tags {
+    gap: 6px;
+    margin: 0;
+  }
+
+  .process-list__group .m-pc__tags .status-tag,
+  .process-list__group .m-pc__tags .inline-badge {
+    padding: 4px 9px;
+    font-size: 0.71875rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* O `span` do legado (.process-item span, 0,1,1) pintaria o texto das tags de
+     --ink-soft: os tons voltam aqui (mesmos pares soft + ink das tags). */
+  .process-list__group .m-pc__tags .status-tag--ok,
+  .process-list__group .m-pc__tags .inline-badge--ok {
+    color: var(--success-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--warn,
+  .process-list__group .m-pc__tags .inline-badge--warn {
+    color: var(--warning-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--info {
+    color: var(--info-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--neutral {
+    color: var(--neutral-700);
+  }
+
+  .process-list__group .m-pc__tags .status-tag--danger,
+  .process-list__group .m-pc__tags .inline-badge--danger {
+    color: var(--danger-700);
+  }
+
+  /* Marcas de carga dentro do cartao: o mesmo `span` do legado apagaria a cor. */
+  .process-list__group .m-mark {
+    line-height: 1;
+    color: var(--neutral-700);
+  }
+
+  .process-list__group .m-mark--fire {
+    color: var(--danger);
+  }
+
+  .process-list__group .m-mark--haz {
+    color: var(--warning-700);
+  }
+
+  /* Folha de filtros (bottom sheet), portada para o body. */
+  .m-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    background: var(--m-scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s;
+  }
+
+  .m-scrim--on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* F7: coluna flex de altura maxima 86dvh. Grab e titulo (fixos em cima), corpo
+     que rola (`__body`) e rodape fixo (`__foot`) com as acoes: o CTA nunca fica
+     abaixo da dobra, mesmo em 320x640. */
+  .m-bsheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 140;
+    max-height: 86vh;
+    max-height: 86dvh;
+    overflow: hidden;
+    padding: 10px 0 0;
+    border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
+    background: var(--bg);
+    color: var(--ink);
+    transform: translateY(104%);
+    visibility: hidden;
+    transition:
+      transform 0.5s var(--m-ios),
+      visibility 0s 0.5s;
+    scrollbar-width: none;
+  }
+
+  .m-bsheet--on {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .m-bsheet__body {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 14px;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 16px 16px;
+    scrollbar-width: none;
+  }
+
+  .m-bsheet__body::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* O grab e um botao ("Fechar filtros") e o unico ponto que captura o arrasto. */
+  .m-bsheet__grab {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 38px;
+    height: 5px;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: var(--m-fill-strong);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  /* Area de toque de 44px: a folha (overflow: hidden) corta o que sai
+     da folha, entao a extensao para cima fica nos 10px de padding (F7). */
+  .m-bsheet__grab::before {
+    content: '';
+    position: absolute;
+    inset: -9px -60px -30px;
+  }
+
+  .m-bsheet__grab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 6px;
+  }
+
+  .m-bsheet__title {
+    flex: none;
+    margin: 0;
+    padding: 14px 16px 12px;
+    font-family: var(--font-heading);
+    font-size: 1.1875rem;
+    font-weight: 700;
+  }
+
+  .m-lbl {
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-bsheet__dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .m-group {
+    overflow: hidden;
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .m-group {
+    border: 1px solid var(--border);
+  }
+
+  .m-rowi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-rowi__lead {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     background: var(--primary-50);
     color: var(--primary-700);
   }
 
-  .process-list__group .process-item__leading--air {
-    background: var(--info-50);
-    color: var(--info-700);
+  .m-rowi__label {
+    min-width: 0;
+    font-size: 0.90625rem;
+    font-weight: 700;
   }
 
-  .process-list__group .process-item__main {
-    gap: 2px;
+  .m-switch {
+    position: relative;
+    flex: none;
+    width: 50px;
+    height: 30px;
+    margin-left: auto;
+    border-radius: 15px;
+    background: var(--m-fill-strong);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    transition: background 0.3s;
   }
 
-  .process-list__group .process-item__main strong {
-    font-size: var(--m-fs-headline);
-    font-weight: 600;
-    line-height: 1.25;
-    color: var(--ink);
+  .m-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--m-switch-knob);
+    box-shadow: var(--m-shadow-segment);
+    transition: transform 0.35s var(--m-spring);
   }
 
-  .process-list__group .process-item__summary {
-    font-size: var(--m-fs-subhead);
-    color: var(--text-subtle);
+  .m-rowi[aria-checked='true'] .m-switch {
+    background: var(--primary);
+    box-shadow: none;
   }
 
-  /* T3: a variante "ETA atualizada" volta depois do recolorido. */
-  .process-list__group .process-item__summary--eta-updated {
-    color: var(--warning-700);
-    font-weight: 600;
+  .m-rowi[aria-checked='true'] .m-switch::after {
+    transform: translateX(20px);
   }
 
-  .process-list__group .process-item__chips {
-    gap: 4px;
-    margin-top: 4px;
+  /* Rodape fixo da folha (F7): fundo da folha, borda e sombra sutis em cima e
+     safe-area embaixo. Botoes "block" de 50px (>= 44px). */
+  .m-bsheet__foot {
+    display: grid;
+    flex: none;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    box-shadow: var(--m-shadow-foot);
   }
 
+  /* Acao secundaria do rodape da folha: "Exportar N processos" em linha propria. */
+  .m-bsheet__export {
+    grid-column: 1 / -1;
+  }
+
+  .m-bsheet__export:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Aviso visivel (toque nao tem hover): so aparece com rascunho != aplicado. */
+  .m-bsheet__export-note {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: var(--m-fs-footnote);
+    line-height: 1.35;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+
+  /* Detalhe empilhado (F5): a barra do topo e' a linha de cima do hero navy
+     (voltar, favorito, "..."): sticky na camada do detalhe, transparente sobre o
+     hero e navy com blur depois de 70px de rolagem (`data-m-scrolled`). A margem
+     negativa de baixo faz o hero subir por baixo dela. */
   .process-detail-view > .process-detail-mobilebar {
-    order: -2;
-    margin: 0 calc(-1 * var(--m-inset)) 8px;
-    padding: 0 8px;
-    min-height: 44px;
+    order: -3;
+    top: 0;
+    box-sizing: border-box;
+    align-items: flex-start;
+    margin: 0 -16px calc(-1 * (env(safe-area-inset-top, 0px) + 58px) - 14px);
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 6px;
+    min-height: calc(env(safe-area-inset-top, 0px) + 58px);
     border-radius: 0;
-    background: var(--m-bar-bg);
-    -webkit-backdrop-filter: saturate(1.8) blur(20px);
-    backdrop-filter: saturate(1.8) blur(20px);
-    border-bottom: 1px solid var(--m-separator);
+    background: transparent;
+    border-bottom: 0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition: background-color 0.3s ease;
   }
 
+  .process-detail-view[data-m-scrolled='true'] > .process-detail-mobilebar {
+    background: var(--m-cbar-bg);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+    backdrop-filter: saturate(1.6) blur(18px);
+  }
+
+  /* Voltar: botao redondo de 38px sobre o chip do hero; o `::before` leva o alvo
+     de toque a 44px sem mudar o visual (mesmo padrao de `.chip-remove`). */
   .process-detail-view .process-detail-mobilebar__back {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0 8px 0 0;
-    min-height: 44px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
     font-size: var(--m-fs-body);
     font-weight: 400;
-    color: var(--primary-700);
   }
 
-  /* O nome fica so no h2 (o elemento segue no DOM para os testes). */
-  .process-detail-view .process-detail-mobilebar__title {
+  .process-detail-view .process-detail-mobilebar__back::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back-text {
     display: none;
+  }
+
+  .process-detail-view .process-detail-mobilebar__back:focus-visible,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav:focus-visible,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger:focus-visible {
+    outline: 2px solid var(--m-hero-ink);
+    outline-offset: 2px;
+  }
+
+  /* Titulo da barra compacta: aparece centrado ao rolar (o h1 do hero segue
+     sendo o titulo acessivel; este e' `aria-hidden` no mobile). */
+  .process-detail-view .process-detail-mobilebar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-heading);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    line-height: 38px;
+    color: var(--m-hero-ink);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .process-detail-view[data-m-scrolled='true'] .process-detail-mobilebar__title {
+    opacity: 1;
   }
 
   /* Rede de seguranca: se o hook de layout ainda nao trocou o DOM (1o frame),
@@ -2572,35 +3665,51 @@
     display: none;
   }
 
-  /* Barra do topo (nav bar iOS): "<" Chegadas a esquerda, acoes a direita. */
+  /* Barra do topo: voltar a esquerda, favorito e "..." a direita, como botoes
+     redondos de 38px sobre o chip do hero (alvo de toque de 44px pelo `::before`). */
   .process-detail-view .process-detail-mobilebar__actions {
     display: flex;
+    flex: none;
     align-items: center;
+    gap: 8px;
     margin-left: auto;
-  }
-
-  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav {
-    position: relative;
   }
 
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav,
   .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger {
-    width: 44px;
-    min-height: 44px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    min-height: 0;
     padding: 0;
     border-color: transparent;
-    border-radius: var(--radius-full);
-    background: none;
-    color: var(--primary-700);
+    border-radius: 50%;
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
     box-shadow: none;
-    font-size: 1.5rem;
+    font-size: 1.375rem;
     font-weight: 600;
     line-height: 1;
   }
 
+  /* inset -4px: o pseudo-elemento parte da borda de padding e estes botoes tem
+     1px de borda (transparente), entao -3px dava so' 42px (F7). */
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav::before,
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .process-detail-view .process-detail-mobilebar__actions .process-detail-fav--on {
+    color: var(--m-hero-haz);
+  }
+
   .process-detail-view .process-detail-mobilebar__actions .process-detail-fav:active,
   .process-detail-view .process-detail-mobilebar__actions .process-detail-more__trigger:active {
-    background: var(--m-fill);
+    background: var(--m-hero-line);
   }
 
   .process-detail-view .process-detail-fav__label {
@@ -2615,7 +3724,9 @@
     border: 0;
   }
 
+  /* F5: as abas viram chips roláveis (`.detail-tab-row`); o select nativo some. */
   .process-detail-view .detail-tab-select {
+    display: none;
     margin: 0 0 12px;
   }
 
@@ -2693,6 +3804,626 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
     margin: 0;
+  }
+
+  /* 10b. Inicio do remake (F3). O titulo e a barra moram no hero; o heading
+     vazio so serve de irmao para os seletores acima. -------------------- */
+  .surface > .dashboard-heading:empty {
+    display: none;
+  }
+
+  .surface:has(> .m-kpis) {
+    gap: 14px;
+  }
+
+  /* Chip da Barra do Rio (portado para o hero): o ponto pulsa so com a barra
+     aberta (tom ok). */
+  .m-barra {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 12px 0 0;
+    padding: 8px 12px 8px 10px;
+    border-radius: var(--radius-full);
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
+    font-size: 0.78125rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .m-barra b {
+    font-weight: 800;
+    color: var(--m-hero-ink);
+  }
+
+  .m-barra--ok b {
+    color: var(--m-hero-ok);
+  }
+
+  .m-barra--warn b {
+    color: var(--m-hero-haz);
+  }
+
+  .m-barra--danger b {
+    color: var(--m-hero-fire);
+  }
+
+  .m-dot {
+    position: relative;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-route-ink);
+  }
+
+  .m-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: inherit;
+  }
+
+  .m-barra--ok .m-dot {
+    background: var(--primary);
+  }
+
+  .m-barra--warn .m-dot {
+    background: var(--m-hero-haz);
+  }
+
+  .m-barra--danger .m-dot {
+    background: var(--m-hero-fire);
+  }
+
+  .m-barra--ok .m-dot::after {
+    animation: m-ping 2.2s ease-out infinite;
+  }
+
+  /* Entrada escalonada (`--d` por bloco; os KPIs por posicao). O seletor
+     composto vence o fade do `<Stagger>` (0,1,0). */
+  .m-rise,
+  .stagger__item.m-rise {
+    animation: m-rise 0.6s var(--m-ease) both;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .m-kpis > .m-rise:nth-child(1) {
+    --d: 80ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(2) {
+    --d: 150ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(3) {
+    --d: 220ms;
+  }
+
+  .m-kpis > .m-rise:nth-child(4) {
+    --d: 290ms;
+  }
+
+  /* KPIs 2x2: rotulo mono, valor Sora 34, alerta em vermelho com ponto. O
+     seletor (0,3,0) empata com o legado de L e vem depois. */
+  .dashboard-stat-row .stat-card.m-kpi {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    padding: 14px 14px 12px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  .dashboard-stat-row .stat-card.m-kpi:hover {
+    transform: none;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .dashboard-stat-row .stat-card.m-kpi {
+    border: 1px solid var(--border);
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__head {
+    position: relative;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__label {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .dashboard-stat-row .m-kpi .stat-card__value {
+    font-family: var(--font-heading);
+    font-size: var(--m-fs-large-title);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dashboard-stat-row .m-kpi.m-kpi--alert .stat-card__value {
+    color: var(--danger);
+  }
+
+  .m-kpi--alert .stat-card__head::before {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+
+  .m-kpi--alert .stat-card__head::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: m-ping 2.2s ease-out infinite;
+  }
+
+  /* Sparkline real (so em "Chegadas na semana"): so a linha, que se desenha. A
+     caixa de 64x18 mantem a proporcao do viewBox (100x28), entao o traco de
+     2px nao deforma. */
+  .m-kpi .stat-card__sparkline {
+    position: absolute;
+    right: 12px;
+    bottom: 15px;
+    width: 64px;
+    height: 18px;
+    margin: 0;
+    overflow: visible;
+  }
+
+  /* F7: com valor de 3 digitos (`wide`, Sora 34px, ~63px) a linha de 64px nao cabe
+     ao lado dele nos cards de ~138px (320px de tela) e encostava nos digitos. A
+     caixa encolhe mantendo a proporcao 100x28 do viewBox e o traco engrossa
+     (4,5 no viewBox = ~1,8px renderizado) para nao ficar mais fino que o dos
+     outros cards. Com 4+ digitos (`xwide`) nao ha folga nem encolhendo: a
+     sparkline some (e' decorativa, aria-hidden). */
+  .m-kpi[data-wide-value='wide'] .stat-card__sparkline {
+    width: 40px;
+    height: 11px;
+  }
+
+  .m-kpi[data-wide-value='wide'] .stat-card__sparkline-line {
+    stroke-width: 4.5;
+  }
+
+  .m-kpi[data-wide-value='xwide'] .stat-card__sparkline {
+    display: none;
+  }
+
+  .m-kpi .stat-card__sparkline-area {
+    display: none;
+  }
+
+  .m-kpi .stat-card__sparkline-line {
+    stroke: var(--primary-700);
+    stroke-width: 3.1;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: m-draw 1.2s var(--m-ease) 0.35s forwards;
+  }
+
+  /* Cartoes do Inicio. */
+  .m-card {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    padding: 16px;
+    border-radius: 22px;
+    background: var(--surface);
+    box-shadow: var(--m-shadow-card);
+  }
+
+  :root[data-theme='dark'] .m-card {
+    border: 1px solid var(--border);
+  }
+
+  .m-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-card__head h3 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+  }
+
+  .m-card__count {
+    padding: 4px 8px;
+    border-radius: var(--radius-full);
+    background: var(--m-fill);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  /* Favoritos: o primeiro com trajeto e fatos; os demais compactos. */
+  .m-fav-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .m-fav {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .m-fav--compact {
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-fav__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .m-fav__id {
+    min-width: 0;
+  }
+
+  /* Titulo e marcas lado a lado; as marcas ficam fora do h4 para o nome do
+     heading nao carregar os rotulos de carga. */
+  .m-fav__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-fav__head .m-marks {
+    margin-left: 0;
+  }
+
+  .m-fav__title {
+    min-width: 0;
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 0.96875rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  /* Alvo de toque de 44px sem mudar o layout (mesmo padrao de .chip-remove). */
+  .m-fav__open {
+    position: relative;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-fav__open::before {
+    content: '';
+    position: absolute;
+    inset: -13px -4px;
+  }
+
+  .m-fav__po {
+    margin: 5px 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.71875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-soft);
+  }
+
+  .m-fav--compact .m-fav__po {
+    margin-top: 0;
+  }
+
+  .m-fav__star {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: -6px -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--warning-700);
+    cursor: pointer;
+  }
+
+  .m-fav__star::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+
+  .m-fav__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .m-fav__tags:empty {
+    display: none;
+  }
+
+  /* Trajeto: trilho, navio e 5 etapas. `--m-route-p` (0..1) e animada por
+     transition quando `.m-route--go` entra. */
+  .m-route {
+    --m-route-p: 0;
+    --m-route-off: var(--m-fill-strong);
+    --m-route-text: var(--ink-soft);
+    --m-route-now: var(--ink);
+    position: relative;
+    margin-top: 30px;
+    transition: --m-route-p 1.5s var(--m-ease) 0.3s;
+  }
+
+  .m-route--go {
+    --m-route-p: var(--m-route-to);
+  }
+
+  .m-route__track {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 5px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--m-route-off);
+  }
+
+  .m-route__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--m-route-p) * 100%);
+    border-radius: 2px;
+    background: var(--primary);
+  }
+
+  .m-route__ship {
+    position: absolute;
+    top: -24px;
+    left: calc(10% + var(--m-route-p) * 80%);
+    width: 26px;
+    height: 26px;
+    margin-left: -13px;
+    color: var(--primary-700);
+  }
+
+  .m-route__ship svg {
+    width: 26px;
+    height: 26px;
+    animation: m-bob 3.4s ease-in-out infinite;
+  }
+
+  .m-route__ship::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: -2px;
+    height: 3px;
+    border-radius: 3px;
+    background: radial-gradient(closest-side, var(--m-mint-glow), transparent);
+    animation: m-foam 3.4s ease-in-out infinite;
+  }
+
+  .m-route__steps {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-route__step {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .m-route__step i {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--m-route-off);
+    border-radius: 50%;
+    background: var(--surface);
+  }
+
+  .m-route__step--done i,
+  .m-route__step--now i {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+
+  .m-route__step--now i {
+    animation: m-ring 2.4s ease-out infinite;
+  }
+
+  /* 10px (era 10,5): a 320px cada coluna tem ~51px e "Embarque"/"Liberacao"
+     passavam da coluna (F7, medido no navegador). */
+  .m-route__step span {
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--m-route-text);
+    text-align: center;
+  }
+
+  .m-route__step--now span {
+    font-weight: 800;
+    color: var(--m-route-now);
+  }
+
+  /* Fatos ETD / ETA / Porto em mono. */
+  .m-fav__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-fav__facts > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .m-fav__facts dt {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-fav__facts dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .m-fav__facts dd.m-fav__fact--warn {
+    color: var(--warning-700);
+  }
+
+  /* Marcas de carga (flame / hazard / box). */
+  .m-marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    vertical-align: 0.12em;
+    white-space: nowrap;
+  }
+
+  .m-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: var(--neutral-50);
+    color: var(--neutral-700);
+  }
+
+  .m-mark b {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .m-mark--fire {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-mark--haz {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .m-marks--hero .m-mark {
+    background: var(--m-hero-chip);
+    color: var(--m-hero-ink);
+  }
+
+  .m-marks--hero .m-mark--fire {
+    color: var(--m-hero-fire);
+  }
+
+  .m-marks--hero .m-mark--haz {
+    color: var(--m-hero-haz);
+  }
+
+  /* Comunicados recentes. */
+  .m-ann {
+    display: grid;
+    gap: 4px;
+  }
+
+  .m-ann + .m-ann {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .m-ann__when {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-ann__title {
+    font-family: var(--font-heading);
+    font-size: 0.90625rem;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.3;
+  }
+
+  .m-ann p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
   }
 
   /* 13. Admin (item 11) --------------------------------------------------- */
@@ -2891,6 +4622,881 @@
     content: '';
     position: absolute;
     inset: -13px -11px;
+  }
+
+  /* ===== Detalhe empilhado (remake, F5) =====================================
+     O detalhe e' uma CAMADA por cima da lista, que continua montada atras em
+     `.m-stack` (`inert` + aria-hidden, pelo JS). Em REPOUSO nem a camada nem os
+     ancestrais dela tem `transform`, `will-change`, `filter` ou `contain`: eles
+     virariam o bloco de contencao dos `position: fixed` (barra de acao, galeria
+     e demais camadas). So' a ENTRADA/SAIDA animam (`m-push-in`/`m-push-out` em
+     styles.css, sem fill apos a entrada), o gesto de borda escreve transform
+     inline so' durante o arrasto e a lista recua so' enquanto o detalhe cobre. */
+  .m-stack {
+    transition:
+      transform 0.5s var(--m-ios),
+      filter 0.5s ease;
+  }
+
+  .m-stack-under {
+    transform: translateX(-26%);
+    filter: brightness(0.78);
+    pointer-events: none;
+  }
+
+  /* O `.page-fade` (ancestral da camada) fica com `will-change: transform` e,
+     pelo `both`, com o transform final da entrada: ambos fariam dele o bloco de
+     contencao do `position: fixed`. Com o detalhe aberto o fade some por
+     completo (`animation: none`: o `page-fade-in` anima translateY por 180ms e,
+     nesse intervalo, tambem seria bloco de contencao; o detalhe tem a propria
+     entrada `m-push-in`) e o `will-change` sai. Sem `:has()` (iOS < 15.4) o
+     fallback `@supports not selector(:has(*))` vive em styles.css (a guarda de
+     escopo deste arquivo nao aceita at-rule aninhada). */
+  .main-content > .page-fade:has(.process-detail-view) {
+    will-change: auto;
+  }
+
+  .main-content > .page-fade--visible:has(.process-detail-view) {
+    opacity: 1;
+    animation: none;
+  }
+
+  .process-detail-view.list-card {
+    --m-cta-h: 0px;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    box-sizing: border-box;
+    gap: 14px;
+    padding: 0 16px calc(24px + var(--m-cta-h) + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    background: var(--bg);
+    animation: m-push-in 0.5s var(--m-ios) backwards;
+  }
+
+  .process-detail-view.list-card::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* F7: a camada tem altura fixa (inset: 0) e e' uma coluna flex; os filhos com
+     overflow != visible (hero `overflow: hidden`, trilho de abas `overflow: auto`)
+     tem min-height 0 e ENCOLHIAM para caber na viewport (hero cortado em 108px,
+     abas com 12px). Nada aqui encolhe: quem rola e' a camada. */
+  .process-detail-view.list-card > * {
+    flex-shrink: 0;
+  }
+
+  .process-detail-view.list-card[data-m-leaving='true'] {
+    animation: m-push-out 0.42s var(--m-ios) forwards;
+    pointer-events: none;
+  }
+
+  /* Altura da barra de acao (12 + 50 [+ 8 + 50] + 14): o respiro do fim da
+     rolagem cede lugar a ela. 2 linhas so' com o primario + outro botao. */
+  .process-detail-view.list-card:has(.process-detail-toolbar > :is(.primary-button, .ghost-button:not(.process-detail-fav))) {
+    --m-cta-h: 76px;
+  }
+
+  .process-detail-view.list-card:has(.process-detail-toolbar > .primary-button ~ .ghost-button:not(.process-detail-fav)) {
+    --m-cta-h: 134px;
+  }
+
+  /* Hero navy do detalhe: a barra do topo (sticky) fica por cima; o hero sobe
+     por baixo dela (margem negativa da barra, ja descontado o gap de 14px) e
+     termina na folha arredondada. */
+  .m-hero--detail {
+    order: -2;
+    position: relative;
+    display: block;
+    margin: 0 -16px -8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 62px) 20px 46px;
+    overflow: hidden;
+    background: var(--m-hero-bg);
+    color: var(--m-hero-ink);
+  }
+
+  .m-hero--detail::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 26px;
+    border-radius: var(--m-sheet-radius) var(--m-sheet-radius) 0 0;
+    background: var(--bg);
+  }
+
+  .m-hero__art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .m-hero__art path {
+    fill: none;
+    stroke: var(--m-hero-line);
+    stroke-width: 1;
+  }
+
+  .m-hero__in {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    transform: translateY(calc(var(--m-sy, 0) * 0.28px));
+    opacity: calc(1 - var(--m-sy, 0) / 150);
+  }
+
+  .m-hero__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    color: var(--m-hero-sub);
+  }
+
+  /* Titulo e marcas de carga lado a lado; as marcas ficam fora do h1 para o
+     nome do heading nao carregar os rotulos. */
+  .m-hero__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .m-hero__head .m-marks {
+    margin-left: 0;
+  }
+
+  .m-hero__title {
+    min-width: 0;
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.12;
+    color: var(--m-hero-ink);
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  /* Trajeto dentro do hero: trilho, rotulos e nos sobre o navy. */
+  .m-route--hero {
+    --m-route-off: var(--m-route-off-hero);
+    --m-route-text: var(--m-route-ink);
+    --m-route-now: var(--m-hero-ink);
+  }
+
+  .m-route--hero .m-route__ship {
+    color: var(--primary);
+  }
+
+  .m-route--hero .m-route__step i {
+    background: var(--m-navy-900);
+  }
+
+  .m-route--hero .m-route__step--done i,
+  .m-route--hero .m-route__step--now i {
+    background: var(--primary);
+  }
+
+  /* Abas em chips roláveis, com fade nas bordas (a mascara usa so' keywords). */
+  .process-detail-view .tab-row.detail-tab-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: -6px -16px;
+    padding: 6px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, black 14px, black calc(100% - 28px), transparent 100%);
+  }
+
+  .process-detail-view .tab-row.detail-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    position: relative;
+    flex: none;
+    width: auto;
+    min-height: 0;
+    padding: 8px 13px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--ink-soft);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    transform: none;
+    transition:
+      background-color 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  /* O `::before` leva o alvo de toque a 44px sem mudar o visual do chip. */
+  .process-detail-view .detail-tab-row .tab-button::before {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button--active {
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: none;
+  }
+
+  /* Contador de Documentos: selo `--warning` com texto `--on-warn`. */
+  .process-detail-view .detail-tab-row .documents-tab-count {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--warning);
+    color: var(--on-warn);
+    font-weight: 800;
+  }
+
+  .m-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Grupos do mock (raio 20 + sombra do cartao) sobre os paineis existentes. */
+  .process-detail-view .tab-panel-spacing:has(> .process-general-card) {
+    border-radius: 20px;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child {
+    border-radius: 20px 20px 0 0;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:last-child {
+    border-radius: 0 0 20px 20px;
+  }
+
+  .process-detail-view .tab-panel-spacing > .process-general-card:first-child:last-child {
+    border-radius: 20px;
+  }
+
+  .process-detail-view .detail-block,
+  .process-detail-view .tab-panel-spacing > .detail-card:not(.process-general-card):not(.detail-block) {
+    border-radius: 20px;
+    box-shadow: var(--m-shadow-card);
+  }
+
+  /* Janela ETD -> ETA: duas pontas em mono com a seta no meio (a barra de
+     progresso do mock nao entra: nao ha dado que a alimente). */
+  .process-detail-view .tab-panel-spacing > .process-general-card--etd-eta {
+    padding-block: 14px;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div {
+    display: block;
+    padding: 0;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div + div {
+    border-top: 0;
+    text-align: right;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split::before {
+    content: '→';
+    content: '→' / '';
+    order: 1;
+    color: var(--ink-soft);
+    font-size: var(--m-fs-body);
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div:first-child {
+    order: 0;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split > div + div {
+    order: 2;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split .detail-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .process-detail-view .process-general-card--etd-eta > .detail-card--split p {
+    margin-top: 4px;
+    text-align: inherit;
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  /* Barra de acao fixa: Editar processo (menta) + secundarios. O cabecalho
+     antigo (nome, status, trajeto em timeline, "Voltar") nao renderiza no mobile;
+     o wrapper vira so' o hospedeiro da barra. */
+  .process-detail-view > .process-detail-card-heading {
+    display: contents;
+  }
+
+  .process-detail-view .process-detail-heading,
+  .process-detail-view .process-detail-card-heading__back,
+  .process-detail-view .process-timeline {
+    display: none;
+  }
+
+  .process-detail-view > .process-detail-card-heading .process-detail-toolbar:has(> .primary-button, > .ghost-button:not(.process-detail-fav)) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: auto;
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, transparent, var(--bg) 38%);
+  }
+
+  .process-detail-view .process-detail-toolbar > .primary-button,
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    flex: 1 1 0;
+    justify-content: center;
+    height: 50px;
+    min-height: 50px;
+    border-radius: 16px;
+    font-size: 0.9375rem;
+  }
+
+  .process-detail-view .process-detail-toolbar > .primary-button {
+    flex-basis: 100%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: 800;
+  }
+
+  .process-detail-view .process-detail-toolbar > .ghost-button {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  /* ---- F6: Avisos, Noticias e Menu (remake) ------------------------------
+     Pecas m-nrow / m-nbar / m-nlist / m-news / m-tag / m-gh / m-ucard / m-seg /
+     m-menu so existem na arvore mobile (JSX atras de useMediaQuery 720). */
+
+  /* Avisos: chips (m-chips da F4), barra de acoes e lista em grupo. */
+  .notifications-page--mobile {
+    gap: 14px;
+  }
+
+  .m-nbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .m-nbar__all {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: auto;
+    min-height: 44px;
+    padding: 8px 12px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .m-nbar__icon {
+    flex: none;
+    width: 44px;
+    padding: 0;
+  }
+
+  .m-nbar__icon[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  /* Sem nao lidas: continua focavel (o foco nao some ao clicar), so apagado. */
+  .m-nbar .m-ghost[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .m-nlist {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .m-nlist__more {
+    width: 100%;
+  }
+
+  .m-nrow {
+    position: relative;
+    overflow: hidden;
+    list-style: none;
+  }
+
+  .m-nrow + .m-nrow::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 64px;
+    right: 0;
+    z-index: 2;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .m-nrow__open {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.22s var(--m-ios);
+  }
+
+  .m-nrow__open:active {
+    background: var(--surface-alt);
+  }
+
+  .m-nrow__open:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  /* Ponto de nao lida: sempre montado. Ao ler, `--read` o apaga; o atraso
+     (`--m-i` x 160ms) so existe quando a leitura vem do "Marcar todas". */
+  .m-nrow__dot {
+    position: absolute;
+    top: 26px;
+    left: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-700);
+    transition:
+      transform 0.4s var(--m-ease),
+      opacity 0.4s;
+  }
+
+  .m-nrow--read .m-nrow__dot {
+    transform: scale(0);
+    opacity: 0;
+    transition-delay: calc(var(--m-i, 0) * 160ms);
+  }
+
+  .m-nrow__lead {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: var(--primary-50);
+    color: var(--primary-700);
+  }
+
+  .m-nrow__lead--danger {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-nrow__lead--warn {
+    background: var(--warning-50);
+    color: var(--warning-700);
+  }
+
+  .m-nrow__body {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .m-nrow__t {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .m-nrow__t b {
+    min-width: 0;
+    font-size: 0.90625rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .m-nrow--read .m-nrow__t b {
+    font-weight: 600;
+  }
+
+  .m-nrow__t small {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+
+  .m-nrow__proc {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    color: var(--primary-700);
+  }
+
+  .m-nrow__text {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    color: var(--ink-soft);
+  }
+
+  /* Swipe "Marcar lida" (mesma mecanica de antes): so visivel com a linha aberta. */
+  .m-nrow__actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    visibility: hidden;
+    transition: visibility 0s linear 240ms;
+  }
+
+  .m-nrow--revealing > .m-nrow__actions {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .m-nrow__action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 76px;
+    border: 0;
+    background: var(--button-primary-bg);
+    color: var(--on-button-primary);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Noticias: cartao do mock (tag + data mono, titulo Sora, resumo). */
+  .m-news-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .m-news {
+    position: relative;
+    gap: 8px;
+  }
+
+  .m-news__cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    object-fit: cover;
+    background: var(--m-fill);
+  }
+
+  .m-news__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .m-news__meta small {
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+  }
+
+  .m-news__title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  /* O botao do titulo estica (::after) por cima do cartao: area de toque unica. */
+  .m-news__open {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .m-news__open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 22px;
+  }
+
+  .m-news__open:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  .m-news__summary {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.84375rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .m-news__edit {
+    position: relative;
+    z-index: 1;
+    justify-self: start;
+  }
+
+  /* Tag (fonte da noticia, papel do usuario). */
+  .m-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: var(--radius-full);
+    background: var(--primary-50);
+    color: var(--primary-700);
+    font-size: 0.71875rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  /* Menu: cartao do usuario, grupos em linhas, tema em segmented, Sair e logo. */
+  .menu-page.m-menu {
+    display: grid;
+    gap: 14px;
+  }
+
+  .m-ucard {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .m-ucard__avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+  }
+
+  .m-ucard__body {
+    display: grid;
+    min-width: 0;
+  }
+
+  .m-ucard__body strong {
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .m-ucard__body small {
+    margin-top: 2px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    color: var(--ink-soft);
+  }
+
+  .m-ucard .m-tag {
+    flex: none;
+    margin-left: auto;
+  }
+
+  .m-gh {
+    margin: 0;
+    padding: 4px 6px 0;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-menu .m-group > .m-rowi {
+    position: relative;
+    font: inherit;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .m-menu .m-group > .m-rowi:active {
+    background: var(--m-fill);
+  }
+
+  .m-menu .m-group > .m-rowi:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .m-menu .m-group > .m-rowi + .m-rowi::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .m-rowi__body {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .m-rowi__sub {
+    font-size: 0.78125rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .m-rowi__chev {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-left: auto;
+    color: var(--ink-soft);
+  }
+
+  .m-menu__label {
+    padding: 14px 16px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .m-seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    margin: 12px 16px 14px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--m-fill);
+  }
+
+  .m-seg__btn {
+    min-height: 44px;
+    padding: 10px 4px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      background 0.25s,
+      color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  .m-seg__btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .m-seg__btn[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--m-shadow-segment);
+  }
+
+  .m-group--danger .m-rowi__label {
+    color: var(--danger);
+  }
+
+  .m-group--danger .m-rowi__lead {
+    background: var(--danger-50);
+    color: var(--danger);
+  }
+
+  .m-menu__signature {
+    justify-self: center;
+    padding-top: 8px;
   }
 }
 
@@ -3245,6 +5851,212 @@
 
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
   .process-swipe-row__actions {
+    transition: none;
+  }
+
+  /* Hero: navio decorativo some, o conteudo nao acompanha o scroll e a barra
+     compacta aparece sem deslizar. */
+  .mobile-page-header__ship {
+    animation: none;
+    display: none;
+  }
+
+  .mobile-page-header__inner {
+    transform: none;
+    opacity: 1;
+  }
+
+  .mobile-nav-compact {
+    transition: none;
+    transform: none;
+  }
+
+  /* Tab bar: indicador, icones, badge e a descida do detalhe sem movimento. */
+  :root .mobile-bottom-nav {
+    transition: none;
+  }
+
+  .mobile-bottom-nav::before {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item > svg {
+    transition: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__item--active > svg,
+  .mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg {
+    animation: none;
+  }
+
+  .mobile-bottom-nav .mobile-bottom-nav__badge {
+    transition: none;
+  }
+
+  /* Inicio: entrada, ponto da barra, ponto do alerta, linha da sparkline e
+     trajeto sem movimento. A linha ja nasce desenhada e o navio ja nasce na
+     etapa atual. */
+  .m-rise,
+  .stagger__item.m-rise {
+    animation: none;
+  }
+
+  .m-barra--ok .m-dot::after {
+    animation: none;
+  }
+
+  .m-kpi--alert .stat-card__head::after {
+    animation: none;
+  }
+
+  .m-kpi .stat-card__sparkline-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .m-route {
+    transition: none;
+    --m-route-p: var(--m-route-to);
+  }
+
+  .m-route__ship svg {
+    animation: none;
+  }
+
+  .m-route__ship::after {
+    animation: none;
+  }
+
+  .m-route__step--now i {
+    animation: none;
+  }
+
+  /* Chegadas (F4): busca, segmented, chips, botoes, cartoes (entrada, segmentos
+     de etapa, estrela com burst), estado vazio e a folha de filtros sem
+     movimento. O anel do burst some em vez de ficar parado. */
+  .process-list-card .chegadas-search {
+    transition: none;
+  }
+
+  .process-list-card .chegadas-segmented__item {
+    transition: none;
+  }
+
+  .m-fbtn,
+  .m-btn-mint,
+  .m-ghost {
+    transition: none;
+  }
+
+  .m-fbtn__n {
+    animation: none;
+  }
+
+  .m-chip {
+    transition: none;
+  }
+
+  .m-empty {
+    animation: none;
+  }
+
+  .process-list__group > .process-swipe-row {
+    animation: none;
+    transition: none;
+  }
+
+  .m-pc__star {
+    transition: none;
+  }
+
+  .m-pc__star--pop {
+    animation: none;
+  }
+
+  .m-pc__star--pop::after {
+    animation: none;
+    display: none;
+  }
+
+  .m-seg5__i--done,
+  .m-seg5__i--now {
+    animation: none;
+  }
+
+  .m-scrim {
+    transition: none;
+  }
+
+  .m-bsheet {
+    transition: none;
+  }
+
+  .m-switch,
+  .m-switch::after {
+    transition: none;
+  }
+
+  /* Detalhe empilhado (F5): sem deslize de entrada/saida, sem o recuo e o
+     escurecimento da lista, sem a descida da pilula com atraso, sem o fade da
+     barra do topo/chips e sem o parallax do hero. O gesto de borda continua
+     acompanhando o dedo (o hook nao anima o retorno com movimento reduzido). */
+  .m-stack {
+    transition: none;
+  }
+
+  .process-detail-view.list-card {
+    animation: none;
+  }
+
+  .process-detail-view.list-card[data-m-leaving='true'] {
+    animation: none;
+  }
+
+  .main-content:has(.process-detail-view:not([data-m-leaving='true'])) > .mobile-bottom-nav {
+    transition: none;
+  }
+
+  .process-detail-view > .process-detail-mobilebar {
+    transition: none;
+  }
+
+  .process-detail-view .process-detail-mobilebar__title {
+    transition: none;
+  }
+
+  .process-detail-view .detail-tab-row .tab-button {
+    transition: none;
+  }
+
+  .m-hero__in {
+    transform: none;
+    opacity: 1;
+  }
+
+  /* Avisos, Noticias e Menu (F6): o ponto de nao lida apaga na hora (sem a
+     sequencia de 160ms), a linha nao desliza com atraso, o tema troca sem
+     transicao. A entrada escalonada (`.m-rise`) ja esta coberta acima. */
+  .m-nrow__open {
+    transition: none;
+  }
+
+  .m-nrow__dot {
+    transition: none;
+  }
+
+  .m-nrow__actions {
+    transition: none;
+  }
+
+  .m-menu .m-group > .m-rowi {
+    transition: none;
+  }
+
+  .m-seg__btn {
     transition: none;
   }
 }

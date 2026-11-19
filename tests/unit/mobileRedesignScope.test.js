@@ -396,6 +396,269 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     }
   })
 
+  it('hero do remake (F1): regras de m-hero / mobile-page-header__(art|ship|brand) / m-sheet so na camada S (ou no reduce de 720px)', () => {
+    const HERO_ONLY = /m-hero|mobile-page-header__(art|ship|brand)|m-sheet/
+    const S_BLOCKS = ['@media (max-width: 720px)', REDUCE_720]
+    for (const block of mediaBlocks) {
+      if (S_BLOCKS.includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(HERO_ONLY)
+      }
+    }
+    // Evita falso verde: as pecas do hero existem mesmo na camada S.
+    const sSelectors = allRules.filter((rule) => rule.media === '@media (max-width: 720px)').map((rule) => rule.selector)
+    for (const piece of ['.mobile-page-header__art', '.mobile-page-header__ship', '.mobile-page-header__brand']) {
+      expect(sSelectors, piece).toContain(piece)
+    }
+  })
+
+  it('Chegadas do remake (F4): pecas m-pc / m-chip / m-fbtn / m-bsheet... so na camada S (ou no reduce de 720px), com hit-area de 44px', () => {
+    const CHEGADAS_ONLY =
+      /\.m-(pc|chip|chips|fbtn|fbar|bsheet|scrim|seg5|empty|ghost|btn-mint|switch|group|rowi|lbl|hero-row|hero-sub)/
+    const S = '@media (max-width: 720px)'
+    const S_BLOCKS = [S, REDUCE_720]
+    for (const block of mediaBlocks) {
+      if (S_BLOCKS.includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(CHEGADAS_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const has = (selector, prop, value) =>
+      sRules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === value)
+      )
+
+    // Evita falso verde: as pecas existem na camada S.
+    for (const piece of ['.m-fbtn', '.m-chip', '.m-bsheet', '.m-scrim', '.m-seg5', '.m-empty', '.m-pc__star']) {
+      expect(
+        sRules.some((rule) => splitTopLevel(rule.selector, ',').includes(piece)),
+        piece
+      ).toBe(true)
+    }
+
+    // Alvos de toque >= 44px sem mudar o visual do mock-up (mesmo padrao de .chip-remove::before):
+    // estrela 34px + 5px de cada lado; chip ~34px + 5px acima e abaixo; botao "Novo" ~38px + 4px;
+    // segmented 38px + 3px; grab 5px + 20px.
+    const HIT_AREAS = [
+      ['.m-pc__star::before', '-5px'],
+      ['.m-chip::before', '-5px 0'],
+      ['.m-btn-mint::before', '-4px'],
+      ['.process-list-card .chegadas-segmented__item::before', '-3px 0'],
+      ['.m-bsheet__grab::before', '-9px -60px -30px'], // F7: a folha recorta o que sai; 9 + 5 + 30 = 44px
+    ]
+    for (const [selector, inset] of HIT_AREAS) {
+      expect(has(selector, 'content', "''"), selector).toBe(true)
+      expect(has(selector, 'position', 'absolute'), selector).toBe(true)
+      expect(has(selector, 'inset', inset), selector).toBe(true)
+    }
+    expect(has('.m-fbtn', 'height', '44px')).toBe(true)
+    expect(has('.m-ghost', 'height', '44px')).toBe(true)
+    expect(has('.process-list-card .chegadas-search', 'min-height', '44px')).toBe(true)
+  })
+
+  it('Chegadas do remake (F4): o par `none` do movimento reduzido cobre cartao, segmentos, estrela, folha e switch', () => {
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    const covers = (selector, prop) =>
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && declaration.value === 'none')
+      )
+    for (const selector of [
+      '.process-list__group > .process-swipe-row',
+      '.m-seg5__i--done',
+      '.m-seg5__i--now',
+      '.m-pc__star--pop',
+      '.m-pc__star--pop::after',
+      '.m-fbtn__n',
+      '.m-empty',
+    ]) {
+      expect(covers(selector, 'animation'), `${selector} animation`).toBe(true)
+    }
+    for (const selector of [
+      '.process-list__group > .process-swipe-row',
+      '.m-pc__star',
+      '.m-chip',
+      '.m-fbtn',
+      '.m-btn-mint',
+      '.m-ghost',
+      '.m-scrim',
+      '.m-bsheet',
+      '.m-switch',
+      '.m-switch::after',
+      '.process-list-card .chegadas-search',
+      '.process-list-card .chegadas-segmented__item',
+    ]) {
+      expect(covers(selector, 'transition'), `${selector} transition`).toBe(true)
+    }
+    // O anel do burst some (em vez de ficar parado) sem movimento.
+    expect(
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes('.m-pc__star--pop::after') &&
+          rule.declarations.some((declaration) => declaration.prop === 'display' && declaration.value === 'none')
+      )
+    ).toBe(true)
+  })
+
+  it('Avisos / Noticias / Menu do remake (F6): pecas m-nrow / m-nbar / m-nlist / m-news / m-tag / m-gh / m-ucard / m-seg / m-menu so na camada S (ou no reduce de 720px), com alvos de 44px e par `none`', () => {
+    const F6_ONLY = /\.m-(nrow|nbar|nlist|news|tag|gh|ucard|seg|menu|rowi__(body|sub|chev))|notifications-page--mobile|menu-page\.m-menu/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if ([S, REDUCE_720].includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`).not.toMatch(F6_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const has = (selector, prop, value) =>
+      sRules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').includes(selector) &&
+          rule.declarations.some((declaration) => declaration.prop === prop && (value === undefined || declaration.value === value))
+      )
+
+    // Evita falso verde: as pecas existem na camada S.
+    for (const piece of ['.m-nrow__open', '.m-nrow__dot', '.m-nrow__lead', '.m-news', '.m-news__open', '.m-tag', '.m-gh', '.m-ucard', '.m-seg', '.m-seg__btn']) {
+      expect(
+        sRules.some((rule) => splitTopLevel(rule.selector, ',').includes(piece)),
+        piece
+      ).toBe(true)
+    }
+
+    // Alvos de toque >= 44px: icones da barra (44x44), "Marcar todas" (min 44), segmented de tema (min 44),
+    // "Editar" da noticia e "Ver mais" (m-ghost, height 44px na F4), linha do aviso (padding 14 + 36px de ladrilho).
+    expect(has('.m-nbar__icon', 'width', '44px')).toBe(true)
+    expect(has('.m-nbar__all', 'min-height', '44px')).toBe(true)
+    expect(has('.m-seg__btn', 'min-height', '44px')).toBe(true)
+    expect(has('.m-nrow__open', 'padding', '14px 16px')).toBe(true)
+    // O botao do titulo da noticia estica por cima do cartao inteiro (area de toque unica).
+    expect(has('.m-news__open::after', 'position', 'absolute')).toBe(true)
+    expect(has('.m-news__open::after', 'inset', '0')).toBe(true)
+    // O ponto de nao lida e' apagado so por `--read` (escala 0), com atraso por linha.
+    expect(has('.m-nrow--read .m-nrow__dot', 'transform', 'scale(0)')).toBe(true)
+    expect(has('.m-nrow--read .m-nrow__dot', 'transition-delay', 'calc(var(--m-i, 0) * 160ms)')).toBe(true)
+
+    // Par `none` do movimento reduzido para toda transicao nova (o teste (h) ja exige; aqui nomeia as pecas).
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    for (const selector of ['.m-nrow__dot', '.m-nrow__open', '.m-nrow__actions', '.m-menu .m-group > .m-rowi', '.m-seg__btn']) {
+      expect(
+        reduce.rules.some(
+          (rule) =>
+            splitTopLevel(rule.selector, ',').includes(selector) &&
+            rule.declarations.some((declaration) => declaration.prop === 'transition' && declaration.value === 'none')
+        ),
+        `${selector} transition: none`
+      ).toBe(true)
+    }
+  })
+
+  it('QA mobile (F7): ajustes medidos no navegador so na camada S (ou no reduce de 720px), com os valores que a QA exigiu', () => {
+    const F7_ONLY =
+      /\.toast-container|\.confirm-dialog__actions|\.m-bsheet__export-note|__item--bump|data-wide-value|\.sidebar:not\(\.sidebar--mobile-open\)|\.process-detail-view\.list-card > \*/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if ([S, REDUCE_720].includes(block.prelude)) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`, 'ajuste F7 fora da camada S').not.toMatch(F7_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const find = (selector) =>
+      sRules.filter((rule) => splitTopLevel(rule.selector, ',').map((item) => item.replace(/\s+/g, ' ')).includes(selector))
+    const decl = (selector, prop) => {
+      const rule = find(selector).find((candidate) => candidate.declarations.some((declaration) => declaration.prop === prop))
+      return rule?.declarations.find((declaration) => declaration.prop === prop)?.value
+    }
+
+    // Camada do detalhe: nenhum filho encolhe (hero com overflow hidden e trilho de abas ficavam com 108px/12px).
+    expect(decl('.process-detail-view.list-card > *', 'flex-shrink')).toBe('0')
+    // Gaveta da sidebar fechada sai da arvore de acessibilidade/Tab (h1 "Portal COMEX" duplicava o da tela).
+    expect(decl(':root .sidebar:not(.sidebar--mobile-open)', 'visibility')).toBe('hidden')
+    // Rotulos das etapas: 10px (10,5px transbordava a coluna de ~51px a 320px).
+    expect(decl('.m-route__step span', 'font-size')).toBe('0.625rem')
+    // Toast acima da pilula (14 + 68 + 12) e acima da barra de acao do detalhe, com safe-area.
+    expect(decl('.toast-container', 'bottom')).toBe('calc(94px + env(safe-area-inset-bottom, 0px))')
+    const toastRules = sRules.filter((rule) => rule.selector.includes('.toast-container'))
+    expect(toastRules.length).toBeGreaterThanOrEqual(3)
+    for (const rule of toastRules) {
+      expect(rule.declarations.some((declaration) => declaration.prop === 'bottom' && /env\(safe-area-inset-bottom/.test(declaration.value))).toBe(true)
+    }
+    // Sparkline do KPI com valor de 3 digitos (wide): caixa menor, mesma proporcao do viewBox (100x28),
+    // traco mais grosso (4,5 no viewBox = ~1,8px); com 4+ digitos (xwide) a linha some.
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline", 'width')).toBe('40px')
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline", 'height')).toBe('11px')
+    expect(decl(".m-kpi[data-wide-value='wide'] .stat-card__sparkline-line", 'stroke-width')).toBe('4.5')
+    expect(decl(".m-kpi[data-wide-value='xwide'] .stat-card__sparkline", 'display')).toBe('none')
+    // Dialogo de confirmacao: botoes de 44px.
+    expect(
+      sRules.some(
+        (rule) =>
+          rule.selector.includes('.confirm-dialog__actions >') &&
+          rule.declarations.some((declaration) => declaration.prop === 'min-height' && declaration.value === '44px')
+      )
+    ).toBe(true)
+    // Aviso visivel do Exportar (toque nao tem hover).
+    expect(find('.m-bsheet__export-note').length).toBeGreaterThan(0)
+    // Area de toque: grab com extensao so' nos 10px de padding (a folha recorta o que sai), acoes do topo com -4px (borda de 1px).
+    expect(decl('.m-bsheet__grab::before', 'inset')).toBe('-9px -60px -30px')
+    expect(decl('.process-detail-view .process-detail-mobilebar__actions .process-detail-fav::before', 'inset')).toBe('-4px')
+
+    // m-bump so no item com --bump; no reduce o par `none` cobre o mesmo seletor.
+    const bumpSelector = '.mobile-bottom-nav .mobile-bottom-nav__item--active.mobile-bottom-nav__item--bump > svg'
+    expect(decl(bumpSelector, 'animation')).toMatch(/^m-bump /)
+    expect(decl('.mobile-bottom-nav .mobile-bottom-nav__item--active > svg', 'animation')).toBeUndefined()
+    const reduce = mediaBlocks.find((block) => block.prelude === REDUCE_720)
+    expect(
+      reduce.rules.some(
+        (rule) =>
+          splitTopLevel(rule.selector, ',').map((item) => item.replace(/\s+/g, ' ')).includes(bumpSelector) &&
+          rule.declarations.some((declaration) => declaration.prop === 'animation' && declaration.value === 'none')
+      )
+    ).toBe(true)
+  })
+
+  it('Folha de filtros (F7, rodape fixo): corpo rola, rodape fica dentro da folha, so na camada S, com safe-area e alvos de 50px', () => {
+    const F7_SHEET_ONLY = /\.m-bsheet__(body|foot)/
+    const S = '@media (max-width: 720px)'
+    for (const block of mediaBlocks) {
+      if (block.prelude === S) continue
+      for (const rule of block.rules) {
+        expect(`${block.prelude} :: ${rule.selector}`, 'rodape/corpo da folha fora da camada S').not.toMatch(F7_SHEET_ONLY)
+      }
+    }
+    const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
+    const decl = (selector, prop) => {
+      const rule = sRules
+        .filter((candidate) => splitTopLevel(candidate.selector, ',').includes(selector))
+        .find((candidate) => candidate.declarations.some((declaration) => declaration.prop === prop))
+      return rule?.declarations.find((declaration) => declaration.prop === prop)?.value
+    }
+
+    // A folha vira coluna que nao rola; so o corpo rola.
+    expect(decl('.m-bsheet', 'display')).toBe('flex')
+    expect(decl('.m-bsheet', 'flex-direction')).toBe('column')
+    expect(decl('.m-bsheet', 'overflow')).toBe('hidden')
+    expect(decl('.m-bsheet', 'overflow-y')).toBeUndefined()
+    expect(decl('.m-bsheet__body', 'overflow-y')).toBe('auto')
+    expect(decl('.m-bsheet__body', 'min-height')).toBe('0')
+    expect(decl('.m-bsheet__body', 'overscroll-behavior')).toBe('contain')
+    // Rodape: nao encolhe, fundo da folha, borda e sombra sutis (tokens), safe-area embaixo.
+    expect(decl('.m-bsheet__foot', 'flex')).toBe('none')
+    expect(decl('.m-bsheet__foot', 'background')).toBe('var(--bg)')
+    expect(decl('.m-bsheet__foot', 'border-top')).toBe('1px solid var(--border)')
+    expect(decl('.m-bsheet__foot', 'box-shadow')).toBe('var(--m-shadow-foot)')
+    expect(decl('.m-bsheet__foot', 'padding')).toBe('12px 16px calc(12px + env(safe-area-inset-bottom, 0px))')
+    // Alvos de toque: botoes "block" de 50px (>= 44px).
+    expect(decl('.m-btn-mint--block', 'height')).toBe('50px')
+    expect(decl('.m-ghost--block', 'height')).toBe('50px')
+    // A classe antiga do rodape nao existe mais.
+    expect(css).not.toMatch(/\.m-bsheet__btns/)
+  })
+
   it('PR 3 (aviso ERP): na camada L o balao entra no fluxo, o wrapper dos itens some do layout e nenhuma regra declara display no balao', () => {
     const L = '@media (max-width: 1040px)'
     const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)

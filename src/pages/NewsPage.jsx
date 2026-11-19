@@ -212,6 +212,8 @@ function logNewsStorageCleanupError(error) {
 export default function NewsPage() {
   const { profile } = useAuth()
   const isDesktop = useMediaQuery('(min-width: 1041px)')
+  // Remake mobile F6: <= 720px a lista usa os cartoes `m-news` (identidade do remake).
+  const isMobile = useMediaQuery('(max-width: 720px)')
   const isAdmin = profile?.role === 'admin'
   const [olderVisibleCount, setOlderVisibleCount] = useState(OLDER_PAGE_SIZE)
   const [newsItems, setNewsItems] = useState([])
@@ -340,6 +342,51 @@ export default function NewsPage() {
               Editar
             </button>
           </div>
+        ) : null}
+      </article>
+    )
+  }
+
+  // Remake mobile F6 (mock): cartao com chip da fonte + data em mono, titulo Sora e
+  // resumo. O titulo e' um h2 com o botao que abre a noticia; o `::after` do botao
+  // cobre o cartao inteiro (area de toque unica) e "Editar" (so admin, so noticia
+  // manual) e' irmao dele, acima na pilha. A capa so aparece quando a noticia tem
+  // uma (o logo padrao de fallback nao e' imagem da noticia).
+  function renderMobileNewsCard(item, index) {
+    const title = getNewsTitle(item)
+    const canEdit = isAdmin && item.sourceType !== 'automatic'
+    return (
+      <article key={item.id} className="m-card m-news m-rise" style={{ '--d': `${Math.min(index, 8) * 80}ms` }}>
+        {item.coverImage ? (
+          <img
+            src={item.coverImage}
+            alt=""
+            className="m-news__cover"
+            loading="lazy"
+            onError={(event) => {
+              event.currentTarget.hidden = true
+            }}
+          />
+        ) : null}
+        <div className="m-news__meta">
+          <span className="m-tag">{item.sourceName ?? 'Portal COMEX'}</span>
+          <small>{formatTimestamp(item.updatedAt)}</small>
+        </div>
+        <h2 className="m-news__title">
+          <button type="button" className="m-news__open" onClick={() => handleOpenNews(item.id)}>
+            {title}
+          </button>
+        </h2>
+        <p className="m-news__summary">{getNewsSummary(item)}</p>
+        {canEdit ? (
+          <button
+            type="button"
+            className="m-ghost m-news__edit"
+            aria-label={`Editar notícia: ${title}`}
+            onClick={() => handleEditNews(item)}
+          >
+            Editar
+          </button>
         ) : null}
       </article>
     )
@@ -936,6 +983,30 @@ export default function NewsPage() {
 
           {error ? <div className="error-banner">{error}</div> : null}
 
+          {isMobile ? (
+            <div className="m-news-list">
+              {isLoading ? (
+                <Skeleton.Group count={3}>
+                  <div className="m-card">
+                    <Skeleton variant="text" width={120} />
+                    <Skeleton variant="title" width="80%" />
+                    <Skeleton variant="text" />
+                    <Skeleton variant="text" />
+                  </div>
+                </Skeleton.Group>
+              ) : newsItems.length > 0 ? (
+                newsItems.map((item, index) => renderMobileNewsCard(item, index))
+              ) : (
+                <div className="m-empty">
+                  <span className="m-empty__big">
+                    <Icon name="news" size={26} />
+                  </span>
+                  <strong>Nenhuma notícia publicada</strong>
+                  <p>As postagens dos admins aparecerão aqui para leitura.</p>
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="news-grid">
             {isLoading ? (
               <Skeleton.Group count={3}>
@@ -975,6 +1046,7 @@ export default function NewsPage() {
               </div>
             )}
           </div>
+          )}
         </article>
       ) : null}
 

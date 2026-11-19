@@ -12,6 +12,8 @@
 //     onRetry={() => void}          // UX-2: recarrega (some se ausente)
 //     variant="drawer"              // refino F2: lista plana da gaveta desktop
 //     variant="page"                // refino F5a: pagina /notifications no desktop
+//     variant="mobile"              // remake F6: lista plana em grupo (<= 720px)
+//     clearingOrder={{ [id]: i }}   // so mobile: ordem do "Marcar todas" (atraso do ponto)
 //   />
 //
 // Comportamento:
@@ -423,6 +425,97 @@ function OlderGroup({
   )
 }
 
+// Remake mobile F6 (Avisos): lista plana em UM grupo, mais recentes primeiro,
+// sem agrupar por processo. Uma linha = ladrilho colorido com o icone do tipo
+// (alerta/favorito/mensagem: o tipo tambem vai pelo icone, nao so pela cor),
+// titulo, processo em mono, texto e "ha N h". O ponto de nao lida fica SEMPRE
+// montado: ao ler, o `--read` o apaga (escala 0), com atraso `--m-i` x 160ms
+// quando a leitura vem de "Marcar todas como lidas" (apaga em sequencia).
+const MOBILE_PAGE_SIZE = 20
+
+function getMobileTone(type) {
+  const { icon, tone } = getDrawerVisual(type)
+  return { icon, tone: tone === 'danger' || tone === 'warn' ? tone : 'base' }
+}
+
+// Estado lido/nao lido tambem em TEXTO para leitor de tela (o ponto e o peso da
+// fonte sao so visuais).
+function buildMobileAriaLabel(notification, formatRelative, processTitle) {
+  const parts = [notification.title, processTitle, notification.body, formatRelative(notification.createdAt)].filter(
+    (part) => part !== undefined && part !== null && String(part).trim() !== ''
+  )
+  return `${notification.isRead ? 'Lida' : 'Não lida'}: ${parts.join('. ')}`
+}
+
+function MobileNotificationRow({
+  notification,
+  order,
+  processTitle,
+  isSwipeOpen,
+  onSwipeOpenChange,
+  onOpenNotification,
+  onMarkAsRead,
+  formatRelative,
+}) {
+  const { icon, tone } = getMobileTone(notification.type)
+  const canMark = Boolean(onMarkAsRead) && !notification.isRead
+  const swipe = useSwipeReveal({
+    actionCount: canMark ? 1 : 0,
+    isOpen: isSwipeOpen,
+    onOpenChange: onSwipeOpenChange,
+    disabled: !canMark,
+  })
+  const isRevealing = isSwipeOpen || swipe.isDragging || swipe.translateX !== 0
+
+  return (
+    <li
+      className={`m-nrow${notification.isRead ? ' m-nrow--read' : ''}${isRevealing ? ' m-nrow--revealing' : ''}`}
+      style={order === undefined ? undefined : { '--m-i': order }}
+    >
+      {canMark ? (
+        <div className="m-nrow__actions" aria-hidden={!isSwipeOpen}>
+          <button
+            type="button"
+            className="m-nrow__action"
+            tabIndex={isSwipeOpen ? 0 : -1}
+            onClick={() => {
+              onMarkAsRead(notification)
+              onSwipeOpenChange(false)
+            }}
+          >
+            <Icon name="check" size={18} aria-hidden="true" />
+            <span>Marcar lida</span>
+          </button>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="m-nrow__open"
+        style={{
+          transform: `translateX(${swipe.translateX}px)`,
+          transition: swipe.isDragging ? 'none' : undefined,
+        }}
+        onClick={swipe.guardClick(() => onOpenNotification(notification))}
+        aria-label={buildMobileAriaLabel(notification, formatRelative, processTitle)}
+        {...swipe.handlers}
+      >
+        <i className="m-nrow__dot" aria-hidden="true" />
+        <span className={`m-nrow__lead m-nrow__lead--${tone}`} aria-hidden="true">
+          <Icon name={icon} size={18} strokeWidth={1.9} />
+        </span>
+        <span className="m-nrow__body">
+          <span className="m-nrow__t">
+            <b>{notification.title}</b>
+            <small>{formatRelative(notification.createdAt)}</small>
+          </span>
+          {processTitle ? <span className="m-nrow__proc">{processTitle}</span> : null}
+          <span className="m-nrow__text">{notification.body}</span>
+        </span>
+      </button>
+    </li>
+  )
+}
+
 export default function NotificationsList({
   grouped,
   onOpenNotification,
@@ -434,11 +527,13 @@ export default function NotificationsList({
   onRetry,
   variant = 'default',
   processTitles,
+  clearingOrder,
 }) {
   const [olderLimit, setOlderLimit] = useState(OLDER_INITIAL)
   const isMobile = useMobileLayout()
   const [openSwipeId, setOpenSwipeId] = useState(null)
   const [expandedOlderKeys, setExpandedOlderKeys] = useState(() => new Set())
+  const [mobileLimit, setMobileLimit] = useState(MOBILE_PAGE_SIZE)
 
   const errorBanner = loadError ? (
     <div className="error-banner error-banner--retry" role="alert">
@@ -464,6 +559,17 @@ export default function NotificationsList({
         </div>
       )
     }
+    if (variant === 'mobile') {
+      return (
+        <div className="m-empty">
+          <span className="m-empty__big">
+            <Icon name="bell" size={26} />
+          </span>
+          <strong>Nenhuma notificação</strong>
+          <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
+        </div>
+      )
+    }
     if (variant === 'page') {
       return (
         <EmptyState
@@ -478,6 +584,44 @@ export default function NotificationsList({
         <strong>Nenhuma notificação</strong>
         <p>As novas dúvidas e respostas dos processos aparecerão aqui.</p>
       </div>
+    )
+  }
+
+  if (variant === 'mobile') {
+    const flat = grouped
+      .flatMap((group) => group.items)
+      .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
+    const visible = flat.slice(0, mobileLimit)
+    const hidden = flat.length - visible.length
+
+    return (
+      <>
+        {errorBanner}
+        <ul className="m-group m-nlist m-rise" role="list" aria-label="Avisos">
+          {visible.map((notification) => (
+            <MobileNotificationRow
+              key={notification.id}
+              notification={notification}
+              order={clearingOrder?.[notification.id]}
+              processTitle={notification.processId ? processTitles?.[notification.processId] : undefined}
+              isSwipeOpen={openSwipeId === notification.id}
+              onSwipeOpenChange={(open) => setOpenSwipeId(open ? notification.id : null)}
+              onOpenNotification={onOpenNotification}
+              onMarkAsRead={onMarkAsRead}
+              formatRelative={formatRelative}
+            />
+          ))}
+        </ul>
+        {hidden > 0 ? (
+          <button
+            type="button"
+            className="m-ghost m-nlist__more"
+            onClick={() => setMobileLimit((value) => value + MOBILE_PAGE_SIZE)}
+          >
+            Ver mais {Math.min(MOBILE_PAGE_SIZE, hidden)} anteriores
+          </button>
+        ) : null}
+      </>
     )
   }
 
