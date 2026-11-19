@@ -2245,6 +2245,19 @@
   .admin-section .admin-filters .field--compact {
     max-width: none;
   }
+
+  /* "x" do toast: o circulo continua 24x24 (styles.css); o `::before` amplia
+     o alvo para 44x44 no mobile E no tablet (<= 1040px) sem mexer no layout
+     (mesmo padrao de .chip-remove). Desktop (>= 1041px) fica com 24px. */
+  .toast__close {
+    position: relative;
+  }
+
+  .toast__close::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+  }
 }
 
 /* ===== S: so mobile (<= 720px): chrome e estrutura que so existem la ===== */
@@ -2656,18 +2669,6 @@
   body:has(.process-detail-view .process-detail-toolbar > .primary-button ~ .ghost-button:not(.process-detail-fav))
     .toast-container {
     bottom: calc(146px + env(safe-area-inset-bottom, 0px));
-  }
-
-  /* "x" do toast: o circulo continua 24x24 (styles.css); o `::before` amplia
-     o alvo para 44x44 sem mexer no layout (mesmo padrao de .chip-remove). */
-  .toast__close {
-    position: relative;
-  }
-
-  .toast__close::before {
-    content: '';
-    position: absolute;
-    inset: -10px;
   }
 
   /* F7: "Excluir"/"Confirmar" (danger/primary) do dialogo de confirmacao tinham
