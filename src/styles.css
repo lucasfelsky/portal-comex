@@ -2144,6 +2144,15 @@ body {
   background: rgba(255, 255, 255, 0.28);
 }
 
+/* Foco por teclado: anel no padrao do repo (outline 2px --focus-ring), com o token
+   reapontado para --toast-ink porque o navy/menta some sobre os fundos do toast
+   (mesmo recurso da .sidebar). Guarda: colorContrast "anel do x do toast". */
+.toast__close:focus-visible {
+  --focus-ring: var(--toast-ink);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 /* Modal padronizado (Sprint 8). Inspirado no IntelliQuote `.modal`
    (max-width 520px, padding 24, radius --radius, shadow --shadow).
    Variante `.modal--wide` aumenta o max-width. */

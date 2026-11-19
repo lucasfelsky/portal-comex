@@ -394,6 +394,36 @@ describe.each(Object.entries(themes))('refino F1 - pares de texto (%s)', (themeN
 })
 
 // ---------------------------------------------------------------------------
+// Anel de foco do "x" do toast (.toast__close:focus-visible): --focus-ring e
+// reapontado para --toast-ink; o anel (3:1, WCAG 1.4.11) precisa aparecer
+// sobre o fundo real de cada tom do toast. No claro cada tom tem fundo proprio
+// (success usa o literal #007a64 de .toast--success). No dark todo tom vira
+// --toast-bg (styles.css ~9548), entao so ele e medido.
+// ---------------------------------------------------------------------------
+describe.each(Object.entries(themes).filter(([name]) => !name.includes('dark')))(
+  'anel do x do toast (%s)',
+  (themeName, theme) => {
+    it.each(['#007a64', '--danger', '--warning-700', '--info', '--toast-bg'])(
+      '--toast-ink sobre %s >= 3.0:1',
+      (bg) => {
+        const ratio = ratioTokenOverBg('--toast-ink', theme, bg)
+        expect(ratio, `--toast-ink/${bg} (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(3.0)
+      }
+    )
+  }
+)
+
+describe.each(Object.entries(themes).filter(([name]) => name.includes('dark')))(
+  'anel do x do toast (%s)',
+  (themeName, theme) => {
+    it('--toast-ink sobre --toast-bg >= 3.0:1', () => {
+      const ratio = ratioTokenOverBg('--toast-ink', theme, '--toast-bg')
+      expect(ratio, `--toast-ink/--toast-bg (${themeName}) = ${fmt(ratio)}`).toBeGreaterThanOrEqual(3.0)
+    })
+  }
+)
+
+// ---------------------------------------------------------------------------
 // Guardas estruturais (g, h, i).
 // ---------------------------------------------------------------------------
 describe('guardas estruturais', () => {
@@ -536,5 +566,23 @@ describe('guardas estruturais', () => {
     expect(desktop.body).toContain('background: var(--primary)')
     expect(desktop.body).toContain('var(--navy)')
     expect(desktop.body).not.toContain('background: var(--primary-700)')
+  })
+
+  it('(t) .toast__close:focus-visible usa o anel padrao com --focus-ring = --toast-ink; normal/hover intactos', () => {
+    const focus = extractBlock(css, '.toast__close:focus-visible {')
+    expect(focus.body).toContain('--focus-ring: var(--toast-ink)')
+    expect(focus.body).toContain('outline: 2px solid var(--focus-ring)')
+    expect(focus.body).toContain('outline-offset: 2px')
+
+    // O par medido acima (#007a64) e o fundo real do toast de sucesso.
+    expect(extractBlock(css, '.toast--success {').body).toContain('#007a64')
+
+    const hover = extractBlock(css, '.toast__close:hover {')
+    expect(hover.body).toContain('rgba(255, 255, 255, 0.28)')
+    expect(hover.body).not.toContain('outline')
+
+    const base = extractBlock(css, '.toast__close {')
+    expect(base.body).not.toContain('outline')
+    expect(base.body).not.toContain('--focus-ring')
   })
 })
