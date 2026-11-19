@@ -336,8 +336,9 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(cleaned).not.toMatch(/--primary-(100|200|300|400)\b/)
   })
 
-  it('T-TOQUE: alvos de toque >= 44px so na camada S (<= 720px)', () => {
+  it('T-TOQUE: alvos de toque >= 44px na camada S (<= 720px); o "x" do toast na camada L (<= 1040px)', () => {
     const S = '@media (max-width: 720px)'
+    const L = '@media (max-width: 1040px)'
     const sRules = mediaBlocks.filter((block) => block.prelude === S).flatMap((block) => block.rules)
     const hasIn = (rules, selector, prop, value) =>
       rules.some(
@@ -369,11 +370,13 @@ describe('mobile-redesign.css - guarda de escopo', () => {
     expect(has('.process-form .erp-hint__chip::before', 'position', 'absolute')).toBe(true)
     expect(has('.process-form .erp-hint__chip::before', 'inset', '-12px -8px')).toBe(true)
     expect(has('.process-form .erp-form-field', 'gap', '12px')).toBe(true)
-    // "x" do toast: circulo de 24px (styles.css) + alvo de 44x44 via ::before.
-    expect(has('.toast__close', 'position', 'relative')).toBe(true)
-    expect(has('.toast__close::before', 'content', "''")).toBe(true)
-    expect(has('.toast__close::before', 'position', 'absolute')).toBe(true)
-    expect(has('.toast__close::before', 'inset', '-10px')).toBe(true)
+    // "x" do toast: circulo de 24px (styles.css) + alvo de 44x44 via ::before, na camada L
+    // (mobile + tablet <= 1040px).
+    const lRules = mediaBlocks.filter((block) => block.prelude === L).flatMap((block) => block.rules)
+    expect(hasIn(lRules, '.toast__close', 'position', 'relative')).toBe(true)
+    expect(hasIn(lRules, '.toast__close::before', 'content', "''")).toBe(true)
+    expect(hasIn(lRules, '.toast__close::before', 'position', 'absolute')).toBe(true)
+    expect(hasIn(lRules, '.toast__close::before', 'inset', '-10px')).toBe(true)
 
     // O hit-area nao vaza para L/T/desktop.
     const TARGETS = [
@@ -387,8 +390,6 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       '.process-detail-view .process-general-card--consolidated-pos li:has(.erp-hint)',
       '.process-form .erp-hint__chip',
       '.process-form .erp-hint__chip::before',
-      '.toast__close',
-      '.toast__close::before',
     ]
     const outside = allRules.filter((rule) => rule.media !== S)
     for (const selector of TARGETS) {
@@ -402,11 +403,19 @@ describe('mobile-redesign.css - guarda de escopo', () => {
       }
     }
 
-    // Nenhuma regra fora da camada S cita o "x" do toast (nem L, nem T, nem reduce).
+    // Nenhuma regra fora da camada L cita o "x" do toast (nem S, nem T, nem reduce, nem min-width: 721px).
     expect(
-      outside.some((rule) => rule.selector.includes('.toast__close')),
-      '.toast__close citado fora da camada S'
+      allRules.some((rule) => rule.media !== L && rule.selector.includes('.toast__close')),
+      '.toast__close citado fora da camada L'
     ).toBe(false)
+
+    // Todo bloco que cita o "x" do toast tem so max-width: 1040px (sem min-width): >= 1041px nao recebe o ::before.
+    const toastBlocks = mediaBlocks.filter((block) => block.rules.some((rule) => rule.selector.includes('.toast__close')))
+    expect(toastBlocks.length).toBeGreaterThan(0)
+    for (const block of toastBlocks) {
+      expect(block.prelude).toMatch(/max-width:\s*1040px/)
+      expect(block.prelude).not.toMatch(/min-width/)
+    }
 
     // styles.css: o circulo visivel continua 24px e nao ha ::before no desktop/tablet.
     const baseCss = stripComments(fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8'))
