@@ -1,11 +1,13 @@
 // F3 (backlog 2026-07-12): export de processos para Excel. Testa a parte
 // pura (linhas + nome de arquivo) — o I/O do xlsx fica fora (import
 // dinâmico só acontece no exportProcessesToXlsx).
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 import {
+  PROGRESS_TOAST_DELAY_MS,
   buildExportFileName,
   buildProcessesExportRows,
+  runProcessesExport,
 } from '../../src/utils/exportProcesses'
 
 const NOW = new Date('2026-07-08T12:00:00')
@@ -226,5 +228,172 @@ describe('buildProcessesExportRows — status derivado (mapa 2026-10-21)', () =>
       NOW
     )
     expect(rows[0]['Status derivado']).toBe('Aguardando desembaraço')
+  })
+})
+
+describe('runProcessesExport - atraso do toast de progresso', () => {
+  let toast
+  let errorSpy
+
+  const makeToast = () => ({
+    info: vi.fn(() => 'prog-1'),
+    success: vi.fn(),
+    error: vi.fn(),
+  })
+  const resolveAfter = (ms, value = 3) => () =>
+    new Promise((resolve) => setTimeout(() => resolve(value), ms))
+  const rejectAfter = (ms) => () =>
+    new Promise((_, reject) => setTimeout(() => reject(new Error('falhou')), ms))
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    toast = makeToast()
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errorSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('expoe o atraso padrao de 400 ms', () => {
+    expect(PROGRESS_TOAST_DELAY_MS).toBe(400)
+  })
+
+  it('exportacao rapida: nao mostra "Gerando" e o sucesso vem sem replaces', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      exportFn: resolveAfter(100),
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    await run
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(toast.success).toHaveBeenCalledWith('Exportados 3 processos para Excel.', undefined)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('exportacao lenta: "Gerando" aparece aos 400 ms e o sucesso o troca', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      exportFn: resolveAfter(900),
+    })
+    await vi.advanceTimersByTimeAsync(399)
+    expect(toast.info).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(toast.info).toHaveBeenCalledTimes(1)
+    expect(toast.info).toHaveBeenCalledWith('Gerando planilha…', { persist: true })
+    expect(toast.success).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(500)
+    await run
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(toast.success).toHaveBeenCalledWith('Exportados 3 processos para Excel.', {
+      replaces: 'prog-1',
+    })
+  })
+
+  it('erro rapido: nao mostra "Gerando" e o erro vem sem replaces', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      exportFn: rejectAfter(50),
+    })
+    await vi.advanceTimersByTimeAsync(50)
+    await run
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith('Não foi possível exportar os processos.', undefined)
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('erro lento: "Gerando" aparece e o erro o troca', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      exportFn: rejectAfter(800),
+    })
+    await vi.advanceTimersByTimeAsync(800)
+    await run
+
+    expect(toast.info).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith('Não foi possível exportar os processos.', {
+      replaces: 'prog-1',
+    })
+  })
+
+  it('sem showProgress: nunca mostra "Gerando" e o resultado vem sem replaces', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: false,
+      exportFn: resolveAfter(900),
+    })
+    await vi.advanceTimersByTimeAsync(900)
+    await run
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.success).toHaveBeenCalledWith('Exportados 3 processos para Excel.', undefined)
+  })
+
+  it('ordem: o resultado nunca vem antes de um "Gerando" emitido depois dele e nao sobra timer', async () => {
+    // Lenta: "Gerando" antes do resultado.
+    const slow = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      exportFn: resolveAfter(900),
+    })
+    await vi.advanceTimersByTimeAsync(900)
+    await slow
+    expect(toast.info.mock.invocationCallOrder[0]).toBeLessThan(
+      toast.success.mock.invocationCallOrder[0]
+    )
+    expect(vi.getTimerCount()).toBe(0)
+
+    // Rapida: o timer e cancelado, entao nao ha "Gerando" depois do resultado.
+    const fastToast = makeToast()
+    const fast = runProcessesExport({
+      rows: [],
+      toast: fastToast,
+      showProgress: true,
+      exportFn: resolveAfter(100),
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    await fast
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(fastToast.info).not.toHaveBeenCalled()
+    expect(fastToast.success).toHaveBeenCalledTimes(1)
+  })
+
+  it('aceita progressDelayMs customizado', async () => {
+    const run = runProcessesExport({
+      rows: [],
+      toast,
+      showProgress: true,
+      progressDelayMs: 50,
+      exportFn: resolveAfter(200),
+    })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(toast.info).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(150)
+    await run
+    expect(toast.success).toHaveBeenCalledWith('Exportados 3 processos para Excel.', {
+      replaces: 'prog-1',
+    })
   })
 })
