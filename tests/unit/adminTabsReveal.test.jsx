@@ -176,3 +176,165 @@ describe('AdminLayout - aba ativa sempre visivel no nav rolavel', () => {
     expect(scrollLeftWrites).toEqual([108])
   })
 })
+
+describe('AdminLayout - ResizeObserver', () => {
+  const instances = []
+  let rafQueue
+  let rafSeq
+  let cancelRaf
+  const orig = {}
+
+  class FakeResizeObserver {
+    constructor(cb) {
+      this.cb = cb
+      this.observe = vi.fn()
+      this.disconnect = vi.fn()
+      instances.push(this)
+    }
+  }
+
+  function flushRaf() {
+    const pending = rafQueue
+    rafQueue = []
+    pending.forEach(({ cb }) => cb(0))
+  }
+
+  const sizeOf = (width, height = 40) => ({ width, height })
+  const fire = (observer, entries) =>
+    observer.cb(entries.map(({ target, ...size }) => ({ target, contentRect: size })), observer)
+
+  function setup() {
+    const view = renderAt()
+    const observer = instances[instances.length - 1]
+    const nav = view.container.querySelector('.admin-tabs--desktop')
+    return { ...view, observer, nav }
+  }
+
+  beforeEach(() => {
+    instances.length = 0
+    rafQueue = []
+    rafSeq = 0
+    cancelRaf = vi.fn((id) => {
+      rafQueue = rafQueue.filter((item) => item.id !== id)
+    })
+    orig.ro = globalThis.ResizeObserver
+    orig.raf = window.requestAnimationFrame
+    orig.caf = window.cancelAnimationFrame
+    globalThis.ResizeObserver = FakeResizeObserver
+    window.ResizeObserver = FakeResizeObserver
+    window.requestAnimationFrame = vi.fn((cb) => {
+      rafSeq += 1
+      rafQueue.push({ id: rafSeq, cb })
+      return rafSeq
+    })
+    window.cancelAnimationFrame = cancelRaf
+  })
+
+  afterEach(() => {
+    globalThis.ResizeObserver = orig.ro
+    window.ResizeObserver = orig.ro
+    window.requestAnimationFrame = orig.raf
+    window.cancelAnimationFrame = orig.caf
+  })
+
+  it('observa o nav e as 6 abas', () => {
+    const { observer, nav } = setup()
+    expect(instances).toHaveLength(1)
+    const targets = observer.observe.mock.calls.map(([el]) => el)
+    expect(targets).toHaveLength(7)
+    expect(targets[0]).toBe(nav)
+    expect(targets.slice(1).every((el) => el.classList.contains('admin-tab'))).toBe(true)
+    expect(nav.querySelectorAll('.admin-tab')).toHaveLength(6)
+  })
+
+  it('a primeira notificacao so registra o tamanho base: sem rAF e sem escrita', () => {
+    tabRect = rect(550, 700)
+    scrollLeftValue = 50
+    const { observer, nav } = setup()
+    scrollLeftWrites.length = 0
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
+    expect(rafQueue).toHaveLength(0)
+    expect(scrollLeftWrites).toEqual([])
+  })
+
+  it('mudanca de tamanho do nav revela a aba ativa no proximo frame, sem animar', () => {
+    const { observer, nav } = setup()
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    tabRect = rect(550, 700)
+    scrollLeftValue = 50
+    scrollLeftWrites.length = 0
+    fire(observer, [{ target: nav, ...sizeOf(400) }])
+    expect(scrollLeftWrites).toEqual([])
+    expect(rafQueue).toHaveLength(1)
+    flushRaf()
+    // 50 + (700 - 600) + folga de 8
+    expect(scrollLeftValue).toBe(158)
+    expect(scrollToMock).not.toHaveBeenCalled()
+  })
+
+  it('debounce: varias notificacoes antes do frame geram 1 rAF e 1 escrita', () => {
+    const { observer, nav } = setup()
+    const tab = nav.querySelector('.admin-tab')
+    fire(observer, [{ target: nav, ...sizeOf(500) }, { target: tab, ...sizeOf(150) }])
+    tabRect = rect(550, 700)
+    scrollLeftValue = 50
+    scrollLeftWrites.length = 0
+    fire(observer, [{ target: nav, ...sizeOf(480) }])
+    fire(observer, [{ target: tab, ...sizeOf(160) }])
+    fire(observer, [{ target: nav, ...sizeOf(450) }])
+    expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1)
+    flushRaf()
+    expect(scrollLeftWrites).toEqual([158])
+  })
+
+  it('tamanho igual ao ultimo registrado nao agenda rAF (protege a rolagem manual)', () => {
+    const { observer, nav } = setup()
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    tabRect = rect(550, 700)
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
+    expect(scrollLeftWrites).toEqual([])
+  })
+
+  it('unmount desconecta, cancela o rAF pendente e nada escreve depois', () => {
+    const { observer, nav, unmount } = setup()
+    fire(observer, [{ target: nav, ...sizeOf(500) }])
+    tabRect = rect(550, 700)
+    scrollLeftWrites.length = 0
+    fire(observer, [{ target: nav, ...sizeOf(400) }])
+    expect(rafQueue).toHaveLength(1)
+    const pendingId = rafQueue[0].id
+    unmount()
+    expect(observer.disconnect).toHaveBeenCalledTimes(1)
+    expect(cancelRaf).toHaveBeenCalledWith(pendingId)
+    flushRaf()
+    expect(scrollLeftWrites).toEqual([])
+  })
+
+  it('sem ResizeObserver renderiza normalmente, revela no mount e nao agenda rAF', () => {
+    globalThis.ResizeObserver = undefined
+    window.ResizeObserver = undefined
+    tabRect = rect(550, 700)
+    expect(() => renderAt()).not.toThrow()
+    expect(instances).toHaveLength(0)
+    expect(scrollLeftWrites).toEqual([108])
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
+  })
+
+  it('notificacao sem mudanca de tamanho em varias abas nao dispara revelacao', () => {
+    const { observer, nav } = setup()
+    const tabs = nav.querySelectorAll('.admin-tab')
+    fire(observer, [
+      { target: nav, ...sizeOf(500) },
+      { target: tabs[0], ...sizeOf(100) },
+      { target: tabs[1], ...sizeOf(100) },
+    ])
+    fire(observer, [
+      { target: tabs[0], ...sizeOf(100) },
+      { target: tabs[1], ...sizeOf(100) },
+    ])
+    expect(window.requestAnimationFrame).not.toHaveBeenCalled()
+  })
+})
