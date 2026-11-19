@@ -128,24 +128,50 @@ export async function exportProcessesToXlsx(processes, now = new Date(), options
   return rows.length
 }
 
+// O toast de progresso so aparece se a exportacao passar desse tempo:
+// exportacoes rapidas mostram apenas o resultado, sem piscar "Gerando planilha…".
+export const PROGRESS_TOAST_DELAY_MS = 400
+
 // Fluxo de toasts da exportacao. Com `showProgress` (folha de filtros do
 // mobile, que fecha ANTES de exportar e por isso nao mostra o spinner do botao)
-// aparece "Gerando planilha…" ate o resultado; o sucesso ou o erro TROCA esse
-// aviso (sem empilhar). Sem `showProgress` (desktop/tablet) so o resultado.
+// e depois de PROGRESS_TOAST_DELAY_MS aparece "Gerando planilha…" e o resultado
+// o TROCA (`replaces`, sem empilhar). Se o resultado chegar antes disso, o timer
+// e cancelado e o resultado aparece sozinho, sem `replaces`. Sem `showProgress`
+// (desktop/tablet) so aparece o resultado.
 export async function runProcessesExport({
   rows,
   toast,
   canSeeName = false,
   showProgress = false,
   exportFn = exportProcessesToXlsx,
+  progressDelayMs = PROGRESS_TOAST_DELAY_MS,
 }) {
-  const progressId = showProgress ? toast.info('Gerando planilha…', { persist: true }) : null
-  const options = progressId ? { replaces: progressId } : undefined
+  let progressId = null
+  let settled = false
+  let timerId = null
+  if (showProgress) {
+    timerId = setTimeout(() => {
+      timerId = null
+      // Nunca mostra "Gerando" depois do resultado.
+      if (settled) return
+      progressId = toast.info('Gerando planilha…', { persist: true })
+    }, progressDelayMs)
+  }
+  const finish = () => {
+    settled = true
+    if (timerId !== null) {
+      clearTimeout(timerId)
+      timerId = null
+    }
+  }
+  const resultOptions = () => (progressId ? { replaces: progressId } : undefined)
   try {
     const exportedCount = await exportFn(rows, new Date(), { canSeeName })
-    toast.success(`Exportados ${exportedCount} processos para Excel.`, options)
+    finish()
+    toast.success(`Exportados ${exportedCount} processos para Excel.`, resultOptions())
   } catch (error) {
     console.error('Falha ao exportar processos.', error)
-    toast.error('Não foi possível exportar os processos.', options)
+    finish()
+    toast.error('Não foi possível exportar os processos.', resultOptions())
   }
 }
