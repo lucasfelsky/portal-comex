@@ -10,6 +10,8 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import ProcessListView from '../../src/features/processes/ProcessListView.jsx'
+import { ToastProvider, useToast } from '../../src/components/Toast.jsx'
+import { runProcessesExport } from '../../src/utils/exportProcesses.js'
 
 function stubMatchMedia(matches) {
   window.matchMedia = vi.fn().mockImplementation((query) => ({
@@ -1723,5 +1725,174 @@ describe('ProcessListView — estrela do cartão e total do hero (mobile, F4)', 
     rerender(<ProcessListView {...base} searchTerm="a" filteredProcesses={[...STAGED.slice(0, 2)]} />)
     rerender(<ProcessListView {...base} searchTerm="ab" filteredProcesses={[...STAGED.slice(0, 1)]} />)
     expect(applyListFilters.mock.calls.length).toBe(callsAfterMount)
+  })
+})
+
+// Toast "Gerando planilha…" no Exportar do mobile: a folha fecha ANTES de exportar
+// (o spinner do botao nunca aparece), entao o aviso e' o unico sinal ate o resultado.
+// A ligacao real e' ProcessListView -> onExport(rows, { showProgress }) -> runProcessesExport.
+describe('ProcessListView — toast "Gerando planilha…" ao exportar', () => {
+  function ExportHarness({ exportFn, onExportSpy, ...props }) {
+    const toast = useToast()
+    const onExport = (rows, exportOptions) => {
+      onExportSpy?.(rows, exportOptions)
+      return runProcessesExport({
+        rows: Array.isArray(rows) ? rows : [],
+        toast,
+        showProgress: exportOptions?.showProgress === true,
+        exportFn,
+      })
+    }
+    return (
+      <ProcessListView
+        filteredProcesses={STAGED}
+        isLoading={false}
+        selectedProcessId={null}
+        isAdmin={false}
+        searchTerm=""
+        categoryFilter="Todos"
+        etaStartDate=""
+        etaEndDate=""
+        operationFilter="Todos"
+        hasActiveFilters={false}
+        processCategoryOptions={['FCL', 'LCL', 'AEREO', 'CONSOLIDADO']}
+        onSearchTermChange={vi.fn()}
+        onCategoryFilterChange={vi.fn()}
+        onEtaStartDateChange={vi.fn()}
+        onEtaEndDateChange={vi.fn()}
+        onOperationFilterChange={vi.fn()}
+        onClearAllFilters={vi.fn()}
+        onSelectProcess={vi.fn()}
+        onExport={onExport}
+        {...props}
+      />
+    )
+  }
+
+  function renderWithToast(props) {
+    return render(
+      <ToastProvider>
+        <ExportHarness {...props} />
+      </ToastProvider>
+    )
+  }
+
+  function deferred() {
+    let resolve
+    let reject
+    const promise = new Promise((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  describe('mobile', () => {
+    beforeEach(() => {
+      // Mobile e movimento reduzido: a folha fecha na hora.
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    })
+
+    async function tapExport(user) {
+      const dialog = await openFilterSheet(user)
+      await user.click(within(dialog).getByRole('button', { name: /^Exportar 4 processos/ }))
+    }
+
+    it('mostra o aviso com a folha fechada e o sucesso o substitui (um toast so)', async () => {
+      const user = userEvent.setup()
+      const pending = deferred()
+      const exportFn = vi.fn(() => pending.promise)
+      const onExportSpy = vi.fn()
+      renderWithToast({ exportFn, onExportSpy })
+      await tapExport(user)
+
+      const progress = await screen.findByText('Gerando planilha…')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(progress.closest('.toast')).toHaveClass('toast--info')
+      expect(progress.closest('.toast')).toHaveAttribute('role', 'status')
+      expect(progress.closest('.toast')).toHaveAttribute('aria-live', 'polite')
+      expect(onExportSpy.mock.calls[0][1]).toEqual({ showProgress: true })
+      expect(exportFn).toHaveBeenCalledTimes(1)
+      // Nao some sozinho enquanto a planilha nao fica pronta.
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      expect(screen.getByText('Gerando planilha…')).toBeInTheDocument()
+
+      pending.resolve(4)
+      await screen.findByText('Exportados 4 processos para Excel.')
+      expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+      expect(document.querySelectorAll('.toast')).toHaveLength(1)
+      expect(screen.getAllByRole('status')).toHaveLength(1)
+    })
+
+    it('em erro so o toast de erro aparece (o aviso some)', async () => {
+      const user = userEvent.setup()
+      const pending = deferred()
+      renderWithToast({ exportFn: vi.fn(() => pending.promise) })
+      await tapExport(user)
+      await screen.findByText('Gerando planilha…')
+
+      pending.reject(new Error('chunk falhou'))
+      await screen.findByText('Não foi possível exportar os processos.')
+      expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+      expect(document.querySelectorAll('.toast')).toHaveLength(1)
+      expect(screen.getByRole('alert')).toHaveClass('toast--error')
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('duplo toque exporta uma vez e gera um unico aviso', async () => {
+      const user = userEvent.setup()
+      const pending = deferred()
+      const exportFn = vi.fn(() => pending.promise)
+      renderWithToast({ exportFn })
+      const dialog = await openFilterSheet(user)
+      const button = within(dialog).getByRole('button', { name: /^Exportar 4 processos/ })
+      await user.click(button)
+      await user.click(button)
+      await screen.findByText('Gerando planilha…')
+      expect(exportFn).toHaveBeenCalledTimes(1)
+      expect(screen.getAllByText('Gerando planilha…')).toHaveLength(1)
+    })
+
+    it('sem linhas o botao fica desabilitado e nenhum aviso aparece', async () => {
+      const user = userEvent.setup()
+      const exportFn = vi.fn()
+      renderWithToast({ exportFn, filteredProcesses: [] })
+      const dialog = await openFilterSheet(user)
+      const button = within(dialog).getByRole('button', { name: /^Exportar 0 processos/ })
+      expect(button).toBeDisabled()
+      await user.click(button)
+      expect(exportFn).not.toHaveBeenCalled()
+      expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+    })
+  })
+
+  it('tablet/desktop: o aviso NAO aparece (so o resultado) e showProgress nao e enviado', async () => {
+    stubMatchMedia(false)
+    const user = userEvent.setup()
+    const pending = deferred()
+    const onExportSpy = vi.fn()
+    renderWithToast({ exportFn: vi.fn(() => pending.promise), onExportSpy })
+    await user.click(screen.getByRole('button', { name: /Exportar \(4\)/ }))
+    expect(onExportSpy).toHaveBeenCalledTimes(1)
+    expect(onExportSpy.mock.calls[0][1]).toBeUndefined()
+    expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('.toast')).toHaveLength(0)
+
+    pending.resolve(0)
+    await screen.findByText('Exportados 0 processos para Excel.')
+    expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('.toast')).toHaveLength(1)
   })
 })

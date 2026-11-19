@@ -7,6 +7,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 //   toast.error('Falha ao salvar')
 //   toast.info('Verifique o email')
 //   toast.warning('Sessao expirando')
+//   // Aviso "em andamento": nao fecha sozinho e e trocado pelo resultado.
+//   const id = toast.info('Gerando planilha…', { persist: true })
+//   toast.success('Pronto', { replaces: id })   // ou toast.dismiss(id)
 //
 // Auto-dismiss padrao em 5s (Movimento.dc.html), pausado enquanto o mouse (ou o
 // foco) esta sobre o toast; erro nao fecha sozinho. Empilha ate 5 toasts
@@ -95,30 +98,57 @@ export function ToastProvider({ children }) {
     [dismiss, schedule]
   )
 
+  // Remove na hora (sem animacao de saida) um toast que o novo substitui, para
+  // o resultado de uma tarefa nao ficar empilhado sobre o aviso "em andamento".
+  const discard = useCallback((id) => {
+    const entry = autoDismissRef.current.get(id)
+    if (entry) {
+      if (entry.timerId !== null) {
+        clearTimeout(entry.timerId)
+        timersRef.current.delete(entry.timerId)
+      }
+      autoDismissRef.current.delete(id)
+    }
+  }, [])
+
+  // options (opcional, retrocompativel):
+  //   persist: true  -> nao fecha sozinho (aviso "em andamento"); quem o criou
+  //                     o remove com dismiss(id) ou o substitui via `replaces`.
+  //   replaces: id   -> troca esse toast por este, na mesma posicao.
+  // Devolve o id do toast criado.
   const push = useCallback(
-    (tone, message) => {
+    (tone, message, options) => {
       const id = `toast-${++toastIdCounter}`
+      const persist = options?.persist === true
+      const replaces = options?.replaces
+      if (replaces) discard(replaces)
       setToasts((current) => {
-        const next = [...current, { id, tone, message }]
+        const entry = { id, tone, message }
+        // Se o substituido ja saiu (o usuario fechou), o resultado entra no fim.
+        const next =
+          replaces && current.some((toast) => toast.id === replaces)
+            ? current.map((toast) => (toast.id === replaces ? entry : toast))
+            : [...current, entry]
         // FIFO: descarta os mais antigos se passar do limite
         return next.length > TOAST_MAX_VISIBLE
           ? next.slice(next.length - TOAST_MAX_VISIBLE)
           : next
       })
 
-      if (TOAST_TIMEOUT_MS > 0 && tone !== 'error') {
+      if (TOAST_TIMEOUT_MS > 0 && tone !== 'error' && !persist) {
         startAutoDismiss(id, TOAST_TIMEOUT_MS)
       }
+      return id
     },
-    [startAutoDismiss]
+    [discard, startAutoDismiss]
   )
 
   const api = useMemo(
     () => ({
-      success: (msg) => push('success', msg),
-      error: (msg) => push('error', msg),
-      info: (msg) => push('info', msg),
-      warning: (msg) => push('warning', msg),
+      success: (msg, options) => push('success', msg, options),
+      error: (msg, options) => push('error', msg, options),
+      info: (msg, options) => push('info', msg, options),
+      warning: (msg, options) => push('warning', msg, options),
       dismiss,
     }),
     [push, dismiss]

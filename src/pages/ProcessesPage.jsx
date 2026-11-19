@@ -5,7 +5,7 @@ import { useSwipe } from '../hooks/useSwipe'
 import { useEdgeSwipeBack } from '../hooks/useEdgeSwipeBack'
 import useMediaQuery from '../hooks/useMediaQuery'
 import { useToast } from '../components/Toast'
-import { exportProcessesToXlsx } from '../utils/exportProcesses'
+import { runProcessesExport } from '../utils/exportProcesses'
 import { MAX_PROCESS_MESSAGES } from '../features/processes/ProcessMessagesPanel'
 import PostReceiptGallery from '../features/processes/PostReceiptGallery'
 import CollectionStatusEditView from '../features/processes/CollectionStatusEditView'
@@ -2082,18 +2082,18 @@ export default function ProcessesPage() {
           onArchiveProcess={isAdmin ? handleArchiveProcess : undefined}
           onNewProcess={isAdmin ? handleCreateMode : undefined}
           onReconcileErp={isAdmin ? () => setIsErpReconcileOpen(true) : undefined}
-          onExport={async (rows) => {
+          onExport={async (rows, exportOptions) => {
             setIsExporting(true)
             try {
               // A arvore desktop manda as linhas que o botao conta (filtradas ou
               // arquivadas); a legada chama sem argumento (so as filtradas).
-              const exportedCount = await exportProcessesToXlsx(Array.isArray(rows) ? rows : filteredProcesses, new Date(), {
+              // A folha do mobile pede o aviso "Gerando planilha…" (showProgress).
+              await runProcessesExport({
+                rows: Array.isArray(rows) ? rows : filteredProcesses,
+                toast,
                 canSeeName,
+                showProgress: exportOptions?.showProgress === true,
               })
-              toast.success(`Exportados ${exportedCount} processos para Excel.`)
-            } catch (error) {
-              console.error('Falha ao exportar processos.', error)
-              toast.error('Não foi possível exportar os processos.')
             } finally {
               setIsExporting(false)
             }
