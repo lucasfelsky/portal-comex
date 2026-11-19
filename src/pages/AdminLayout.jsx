@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 
@@ -24,6 +24,8 @@ function prefersReducedMotion() {
 // Entre 1041 e 1279px as 6 abas podem passar da largura do nav (overflow-x: auto): rola o
 // PROPRIO nav (scrollLeft, nunca scrollIntoView, que poderia rolar a pagina na vertical)
 // ate a aba ativa. No-op quando a aba ja esta inteira visivel ou sem geometria real (jsdom).
+// Tambem e chamada pelo ResizeObserver (ver AdminLayout) quando o tamanho do nav ou das abas
+// muda depois da montagem, sempre sem animacao.
 function revealActiveTab(nav, { animate }) {
   const active = nav.querySelector('.tab-button--active')
   if (!active) return
@@ -66,6 +68,58 @@ export default function AdminLayout() {
     hasRevealedRef.current = true
     revealActiveTab(nav, { animate })
   }, [activeSection.to])
+
+  // Resize da janela, zoom e carga da webfont mudam a largura do nav/abas depois da montagem
+  // e podem cortar a aba ativa. Observa o nav e cada aba e revela de novo, sem animar. So reage
+  // a mudanca de tamanho real: a 1a notificacao de cada elemento (o observe() sempre dispara
+  // uma vez) so registra o tamanho base, ja que a montagem e tratada pelo useLayoutEffect
+  // acima. Rolagem manual nao dispara ResizeObserver, entao nao ha briga com o usuario. O
+  // rAF agrupa varias notificacoes do mesmo frame em uma unica revelacao. No-op sem
+  // ResizeObserver (navegadores antigos, jsdom).
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.ResizeObserver !== 'function') return undefined
+    const nav = navRef.current
+    if (!nav) return undefined
+
+    const sizes = new Map()
+    let rafId = 0
+    const hasRaf = typeof window.requestAnimationFrame === 'function'
+
+    const run = () => {
+      rafId = 0
+      revealActiveTab(nav, { animate: false })
+    }
+
+    const observer = new window.ResizeObserver((entries) => {
+      let changed = false
+      for (const entry of entries) {
+        const box = entry.contentRect
+        if (!box) continue
+        const previous = sizes.get(entry.target)
+        sizes.set(entry.target, { width: box.width, height: box.height })
+        if (previous && (previous.width !== box.width || previous.height !== box.height)) {
+          changed = true
+        }
+      }
+      if (!changed || rafId) return
+      if (hasRaf) {
+        rafId = window.requestAnimationFrame(run)
+      } else {
+        run()
+      }
+    })
+
+    observer.observe(nav)
+    nav.querySelectorAll('.admin-tab').forEach((tab) => observer.observe(tab))
+
+    return () => {
+      observer.disconnect()
+      if (rafId && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(rafId)
+      }
+      rafId = 0
+    }
+  }, [])
 
   return (
     <section className="surface admin-section">
