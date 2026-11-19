@@ -25,7 +25,9 @@ const OUT_ROOT = path.resolve(process.cwd(), '.agent-tmp', 'qa-resp', 'after')
 const LIGHT_VIEWPORTS = [
   [1041, 800],
   [1093, 533],
+  [1100, 800],
   [1200, 800],
+  [1279, 800],
   [1280, 552],
   [1280, 720],
   [1366, 768],

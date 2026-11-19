@@ -224,7 +224,7 @@ describe('F5a Noticias - cabecalho e lista', () => {
     expect(featured.querySelector('.nw-card__summary')).toHaveTextContent('Resumo de Novo visual do Portal COMEX.')
     expect(featured.querySelector('.nw-card__cta')).toHaveTextContent('Ler notícia')
     expect(featured.querySelector('.nw-source')).toHaveTextContent('Portal COMEX')
-    expect(featured.querySelector('.nw-card__time').textContent).toMatch(/^(Hoje|Ontem), \d{2}:\d{2}$/)
+    expect(featured.querySelector('.nw-card__time').textContent).toBe('Hoje, 11:30')
     expect(featured.querySelector('.nw-cover__image')).toHaveAttribute('src', 'https://example.com/n-1.jpg')
 
     const aside = screen.getByRole('complementary', { name: 'Anteriores' })

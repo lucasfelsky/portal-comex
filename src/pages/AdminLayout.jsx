@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 
@@ -11,18 +11,68 @@ const sections = [
   { to: '/admin/suporte', label: 'Suporte', description: 'Chamados abertos pelos usuários' },
 ]
 
+// Folga (px) deixada entre a aba ativa e a borda do nav ao rolar ate ela.
+const TAB_REVEAL_MARGIN = 8
+// Tolerancia (px) de subpixel para considerar a aba "inteira visivel".
+const TAB_VISIBLE_TOLERANCE = 1
+
+function prefersReducedMotion() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
+}
+
+// Entre 1041 e 1279px as 6 abas podem passar da largura do nav (overflow-x: auto): rola o
+// PROPRIO nav (scrollLeft, nunca scrollIntoView, que poderia rolar a pagina na vertical)
+// ate a aba ativa. No-op quando a aba ja esta inteira visivel ou sem geometria real (jsdom).
+function revealActiveTab(nav, { animate }) {
+  const active = nav.querySelector('.tab-button--active')
+  if (!active) return
+  const navRect = nav.getBoundingClientRect()
+  const tabRect = active.getBoundingClientRect()
+  const edges = [navRect.left, navRect.right, tabRect.left, tabRect.right]
+  if (!edges.every(Number.isFinite)) return
+  if (!(navRect.width > 0) || !(tabRect.width > 0)) return
+
+  let delta = 0
+  if (tabRect.left < navRect.left - TAB_VISIBLE_TOLERANCE) {
+    delta = tabRect.left - navRect.left - TAB_REVEAL_MARGIN
+  } else if (tabRect.right > navRect.right + TAB_VISIBLE_TOLERANCE) {
+    delta = tabRect.right - navRect.right + TAB_REVEAL_MARGIN
+  }
+  if (delta === 0) return
+
+  const target = Math.max(0, (Number(nav.scrollLeft) || 0) + delta)
+  if (animate && typeof nav.scrollTo === 'function') {
+    nav.scrollTo({ left: target, behavior: 'smooth' })
+  } else {
+    nav.scrollLeft = target
+  }
+}
+
 export default function AdminLayout() {
   const location = useLocation()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const navRef = useRef(null)
+  const hasRevealedRef = useRef(false)
 
   const activeSection = sections.find((s) => location.pathname === s.to) || sections[0]
+
+  // Mount: instantaneo (sem "salto" animado ao abrir a tela). Trocas de aba: suave, exceto
+  // com prefers-reduced-motion (instantaneo).
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const animate = hasRevealedRef.current && !prefersReducedMotion()
+    hasRevealedRef.current = true
+    revealActiveTab(nav, { animate })
+  }, [activeSection.to])
 
   return (
     <section className="surface admin-section">
       {/* Desktop: tabs normais. Refino F2 (AdminTabs.dc.html): cada aba tem
           rotulo + ponto de ativo + descricao; ponto e descricao so aparecem no
           desktop (>=1041px) — no tablet continua a pilula so com o rotulo. */}
-      <nav className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
+      <nav ref={navRef} className="tab-row admin-tabs admin-tabs--desktop" aria-label="Seções administrativas">
         {sections.map((section) => (
           <NavLink
             key={section.to}
