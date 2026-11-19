@@ -127,3 +127,25 @@ export async function exportProcessesToXlsx(processes, now = new Date(), options
   writeFile(workbook, buildExportFileName(now))
   return rows.length
 }
+
+// Fluxo de toasts da exportacao. Com `showProgress` (folha de filtros do
+// mobile, que fecha ANTES de exportar e por isso nao mostra o spinner do botao)
+// aparece "Gerando planilha…" ate o resultado; o sucesso ou o erro TROCA esse
+// aviso (sem empilhar). Sem `showProgress` (desktop/tablet) so o resultado.
+export async function runProcessesExport({
+  rows,
+  toast,
+  canSeeName = false,
+  showProgress = false,
+  exportFn = exportProcessesToXlsx,
+}) {
+  const progressId = showProgress ? toast.info('Gerando planilha…', { persist: true }) : null
+  const options = progressId ? { replaces: progressId } : undefined
+  try {
+    const exportedCount = await exportFn(rows, new Date(), { canSeeName })
+    toast.success(`Exportados ${exportedCount} processos para Excel.`, options)
+  } catch (error) {
+    console.error('Falha ao exportar processos.', error)
+    toast.error('Não foi possível exportar os processos.', options)
+  }
+}

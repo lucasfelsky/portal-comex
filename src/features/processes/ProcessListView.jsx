@@ -1039,7 +1039,7 @@ export default function ProcessListView({
           archived={viewingArchived}
           exportCount={mobileShown.length}
           isExporting={isExporting}
-          onExport={onExport ? () => onExport(mobileShown) : undefined}
+          onExport={onExport ? () => onExport(mobileShown, { showProgress: true }) : undefined}
           onApply={applySheetFilters}
           onClose={closeSheet}
         />

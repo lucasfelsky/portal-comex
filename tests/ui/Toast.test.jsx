@@ -280,3 +280,117 @@ describe('Toast', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+describe('Toast — aviso em andamento (persist) e substituicao (replaces)', () => {
+  function mount() {
+    let api
+    render(
+      <ToastProvider>
+        <ToastHarness onReady={(t) => (api = t)} />
+      </ToastProvider>
+    )
+    return () => api
+  }
+
+  it('success/error/info/warning devolvem o id do toast criado', () => {
+    const getApi = mount()
+    let ids
+    act(() => {
+      ids = [getApi().success('a'), getApi().error('b'), getApi().info('c'), getApi().warning('d')]
+    })
+    expect(ids.every((id) => typeof id === 'string' && id.startsWith('toast-'))).toBe(true)
+    expect(new Set(ids).size).toBe(4)
+  })
+
+  it('persist: o info nao fecha sozinho (nem depois de muito tempo) e o dismiss(id) o remove', () => {
+    const getApi = mount()
+    let id
+    act(() => {
+      id = getApi().info('Gerando planilha…', { persist: true })
+    })
+    act(() => {
+      vi.advanceTimersByTime(60000)
+    })
+    expect(screen.getByText('Gerando planilha…')).toBeInTheDocument()
+    act(() => {
+      getApi().dismiss(id)
+      vi.advanceTimersByTime(300)
+    })
+    expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+  })
+
+  it('sem options o comportamento antigo continua: info some em 5 s', () => {
+    const getApi = mount()
+    act(() => {
+      getApi().info('Aviso comum')
+    })
+    act(() => {
+      vi.advanceTimersByTime(5300)
+    })
+    expect(screen.queryByText('Aviso comum')).not.toBeInTheDocument()
+  })
+
+  it('replaces: o resultado troca o aviso na hora, sem empilhar, e o novo fecha sozinho em 5 s', () => {
+    const getApi = mount()
+    let id
+    act(() => {
+      id = getApi().info('Gerando planilha…', { persist: true })
+    })
+    act(() => {
+      getApi().success('Exportados 3 processos para Excel.', { replaces: id })
+    })
+    expect(screen.queryByText('Gerando planilha…')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(screen.getByText('Exportados 3 processos para Excel.')).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(5300)
+    })
+    expect(screen.queryByText('Exportados 3 processos para Excel.')).not.toBeInTheDocument()
+  })
+
+  it('replaces com erro: so o alerta fica (o erro continua sem auto-dismiss)', () => {
+    const getApi = mount()
+    let id
+    act(() => {
+      id = getApi().info('Gerando planilha…', { persist: true })
+    })
+    act(() => {
+      getApi().error('Não foi possível exportar os processos.', { replaces: id })
+      vi.advanceTimersByTime(60000)
+    })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível exportar os processos.')
+  })
+
+  it('replaces de um toast que o usuario ja fechou: o resultado ainda aparece', () => {
+    const getApi = mount()
+    let id
+    act(() => {
+      id = getApi().info('Gerando planilha…', { persist: true })
+    })
+    act(() => {
+      getApi().dismiss(id)
+      vi.advanceTimersByTime(300)
+    })
+    act(() => {
+      getApi().success('Pronto', { replaces: id })
+    })
+    expect(screen.getByText('Pronto')).toBeInTheDocument()
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+  })
+
+  it('unmount do provider com aviso persistente nao deixa timer vivo', () => {
+    let api
+    const { unmount } = render(
+      <ToastProvider>
+        <ToastHarness onReady={(t) => (api = t)} />
+      </ToastProvider>
+    )
+    act(() => {
+      api.info('Gerando planilha…', { persist: true })
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
