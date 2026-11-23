@@ -243,7 +243,8 @@ function buildRecipientProcessLabel(process, role) {
   }
 
   const processNumber = normalizeString(process?.processNumber)
-  return processNumber ? `PO ${processNumber}` : buildProcessLabel(process)
+  // restrito sem processNumber nunca cai no name (paridade com getProcessTitle em src/features/processes/processLabels.js)
+  return processNumber ? `PO ${processNumber}` : 'processo'
 }
 
 function buildFavoriteNotificationBody(processLabel, actorName) {
