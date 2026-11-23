@@ -172,21 +172,30 @@ describe('planCargoReportRecipients', () => {
       logistics: [logi1],
       configEmails: ['logi@sqquimica.com'],
       usersByEmail,
-      actorUserId: '',
     })
     expect(userRecipients.map((user) => user.id)).toEqual(['admin-1', 'admin-2', 'logi-1'])
     expect(directEmails).toEqual([])
   })
 
-  it('exclui o ator', () => {
+  it('autor admin tambem recebe (pedido do Comex)', () => {
     const { userRecipients } = planCargoReportRecipients({
       admins: [admin1, admin2],
       logistics: [logi1],
       configEmails: [],
       usersByEmail,
-      actorUserId: 'admin-1',
     })
-    expect(userRecipients.map((user) => user.id)).toEqual(['admin-2', 'logi-1'])
+    expect(userRecipients.map((user) => user.id)).toEqual(['admin-1', 'admin-2', 'logi-1'])
+  })
+
+  it('autor admin tambem na config: 1 entrada e nenhum e-mail direto', () => {
+    const { userRecipients, directEmails } = planCargoReportRecipients({
+      admins: [admin1],
+      logistics: [],
+      configEmails: ['admin1@sqquimica.com'],
+      usersByEmail: new Map([[admin1.email, admin1]]),
+    })
+    expect(userRecipients.map((user) => user.id)).toEqual(['admin-1'])
+    expect(directEmails).toEqual([])
   })
 
   it('usuario ATIVO da config entra em userRecipients', () => {
@@ -195,7 +204,6 @@ describe('planCargoReportRecipients', () => {
       logistics: [],
       configEmails: ['tecnico@sqquimica.com'],
       usersByEmail,
-      actorUserId: 'admin-1',
     })
     expect(userRecipients.map((user) => user.id)).toEqual(['admin-2', 'tec-1'])
     expect(directEmails).toEqual([])
@@ -207,7 +215,6 @@ describe('planCargoReportRecipients', () => {
       logistics: [],
       configEmails: ['fiscal@sqquimica.com'],
       usersByEmail,
-      actorUserId: '',
     })
     expect(userRecipients).toEqual([])
     expect(directEmails).toEqual([])
@@ -219,7 +226,6 @@ describe('planCargoReportRecipients', () => {
       logistics: [],
       configEmails: ['zeta@sqquimica.com', 'alfa@sqquimica.com', 'zeta@sqquimica.com'],
       usersByEmail,
-      actorUserId: '',
     })
     expect(userRecipients).toEqual([])
     expect(directEmails).toEqual(['alfa@sqquimica.com', 'zeta@sqquimica.com'])
@@ -231,7 +237,6 @@ describe('planCargoReportRecipients', () => {
       logistics: [logi1],
       configEmails: ['tecnico@sqquimica.com'],
       usersByEmail,
-      actorUserId: '',
     })
     expect(userRecipients.map((user) => user.id)).toEqual(['admin-1', 'admin-2', 'logi-1', 'tec-1'])
   })

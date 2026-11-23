@@ -21,7 +21,8 @@
 // - `notifyCargoReportUploaded`: quando um documento `cargoReport` e' CRIADO,
 //   avisa Comex (admins), Logistica e as listas Tecnico/Faturamento de
 //   `config/cargoReportRecipients` (in-app + e-mail; e-mail da lista SEM
-//   usuario recebe e-mail direto). Trigger SEPARADO: declara os secrets SMTP
+//   usuario recebe e-mail direto; o autor do upload tambem recebe quando
+//   elegivel). Trigger SEPARADO: declara os secrets SMTP
 //   e sua falha nao derruba os demais. Logica pura em
 //   `./cargoReportNotification.js`.
 //
@@ -292,6 +293,9 @@ export const recordProcessDocumentEvents = onDocumentCreated(
 // `sendProcessNotificationEmail`, respeitando `notificationPreferences`);
 // e-mail SEM usuario recebe e-mail direto. Usuario da lista encontrado mas
 // nao ativo nao recebe nada. Re-upload (nova versao do slot) notifica de novo.
+// Quem anexou (`uploadedById`) tambem recebe se for elegivel; nao ha exclusao
+// do ator neste aviso (pedido do Comex). `actorUserId`/`actorName` seguem
+// gravados na notificacao.
 // Bloco A (in-app) e bloco B (e-mail direto) tem try/catch proprio.
 const CONFIG_USERS_IN_CHUNK = 30 // limite do operador `in` do Firestore
 
@@ -361,7 +365,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
       const configEmails = [...new Set([...config.tecnico, ...config.faturamento])]
       const usersByEmail = await loadUsersByEmail(firestore, configEmails)
 
-      plan = planCargoReportRecipients({ admins, logistics, configEmails, usersByEmail, actorUserId })
+      plan = planCargoReportRecipients({ admins, logistics, configEmails, usersByEmail })
     } catch (error) {
       logger.warn('Falha ao montar destinatarios do Relatorio de Carga.', {
         processId,
