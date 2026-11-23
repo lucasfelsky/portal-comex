@@ -1769,6 +1769,22 @@ describe('rotulo do processo por destinatario (categorias restritas)', () => {
     status: 'Ativo',
     favoriteProcessIds: [PROCESS_ID],
   }
+  const LOGI_FAV = {
+    id: 'logi-fav',
+    name: 'Logistica Favorita',
+    role: 'logistica',
+    status: 'Ativo',
+    email: 'logi-fav@sqquimica.com',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+  const LOGI_CASE_FAV = {
+    id: 'logi-case-fav',
+    name: 'Logistica Grafia Diferente',
+    role: 'Logistica',
+    status: 'Ativo',
+    email: 'logi-case-fav@sqquimica.com',
+    favoriteProcessIds: [PROCESS_ID],
+  }
   const ACTOR = { updatedById: 'admin-1', updatedByName: 'Admin Root' }
 
   function setupUsers() {
@@ -1777,6 +1793,8 @@ describe('rotulo do processo por destinatario (categorias restritas)', () => {
         { id: 'admin-1', data: ADMIN_USER },
         { id: USER_FAV.id, data: USER_FAV },
         { id: ADMIN_FAV.id, data: ADMIN_FAV },
+        { id: LOGI_FAV.id, data: LOGI_FAV },
+        { id: LOGI_CASE_FAV.id, data: LOGI_CASE_FAV },
       ],
     })
   }
@@ -1826,6 +1844,32 @@ describe('rotulo do processo por destinatario (categorias restritas)', () => {
     await runEtaChange({ category: 'FCL', processNumber: '9036' })
 
     const payload = payloadFor('user-fav')
+    expect(payload).toBeDefined()
+    expect(payload.title).toBe('Processo atualizado: PO 9036')
+    expect(payload.body).not.toContain('Cliente Sigiloso')
+  })
+
+  it.each(['FCL', 'LCL', 'AEREO'])(
+    '%s restrito com processNumber -> favorito logistica ve o name; user segue com "PO n"',
+    async (category) => {
+      await runEtaChange({ category, processNumber: '9036' })
+
+      expect(payloadFor('logi-fav')?.title).toBe('Processo atualizado: Cliente Sigiloso')
+      expect(payloadFor('user-fav')?.title).toBe('Processo atualizado: PO 9036')
+    }
+  )
+
+  it('FCL sem processNumber -> favorito logistica ve o name; user segue neutro', async () => {
+    await runEtaChange({ category: 'FCL', processNumber: '' })
+
+    expect(payloadFor('logi-fav')?.title).toBe('Processo atualizado: Cliente Sigiloso')
+    expect(payloadFor('user-fav')?.title).toBe('Processo atualizado: processo')
+  })
+
+  it('role com grafia diferente ("Logistica") em FCL -> fail-closed, recebe "PO n" (paridade com o front)', async () => {
+    await runEtaChange({ category: 'FCL', processNumber: '9036' })
+
+    const payload = payloadFor('logi-case-fav')
     expect(payload).toBeDefined()
     expect(payload.title).toBe('Processo atualizado: PO 9036')
     expect(payload.body).not.toContain('Cliente Sigiloso')
