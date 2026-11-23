@@ -15,6 +15,8 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import Skeleton from '../../components/Skeleton'
 import Icon from '../../components/Icon'
 import RenameDocumentDialog from './RenameDocumentDialog'
+import DocumentPreviewDialog from './DocumentPreviewDialog'
+import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
   CONTAINER_WASH_CATEGORIES,
   DROP_MULTIPLE_FILES_MESSAGE,
@@ -140,6 +142,10 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [renameTarget, setRenameTarget] = useState(null)
+  // S1: pre-visualizacao do Relatorio de carga. `previewDocument` fica ate o fim da
+  // animacao de saida do <Modal> (so `isPreviewOpen` volta a false ao fechar).
+  const [previewDocument, setPreviewDocument] = useState(null)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameError, setRenameError] = useState(null)
   const [dragOverKey, setDragOverKey] = useState('')
@@ -626,6 +632,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     emptyBadgeTone = 'neutral',
     onUpload,
     onRename = null,
+    onPreview = null,
     extraContent = null,
     includedInInvoice = null,
   }) {
@@ -715,6 +722,19 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   </button>
                 ) : null}
               </>
+            ) : null}
+            {primary && onPreview && getDocumentPreviewKind(primary.mimeType, primary.name) ? (
+              <button
+                type="button"
+                className="documents-icon-button ghost-button ghost-button--outline"
+                aria-label={`Visualizar ${primary.name}`}
+                title={`Visualizar ${primary.name}`}
+                disabled={isRowUploading}
+                onClick={() => onPreview(primary)}
+              >
+                <Icon name="eye" />
+                <span className="documents-row__action-label">Visualizar</span>
+              </button>
             ) : null}
             {primary ? (
               <button
@@ -1162,6 +1182,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   canUpload: canUploadDocumentType(role, type),
                   canDelete: primary ? canDeleteDocument(profile, primary) : false,
                   onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                  onPreview:
+                    type === 'cargoReport'
+                      ? (document_) => {
+                          setPreviewDocument(document_)
+                          setIsPreviewOpen(true)
+                        }
+                      : null,
                   ...(shipmentConfirmed ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' } : {}),
                 })
               })}
@@ -1487,6 +1514,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         error={renameError}
         onSubmit={handleRename}
         onCancel={closeRename}
+      />
+
+      <DocumentPreviewDialog
+        open={isPreviewOpen}
+        document={previewDocument}
+        processId={processId}
+        title={getDocumentTypeLabel('cargoReport')}
+        onClose={() => setIsPreviewOpen(false)}
       />
     </div>
   )

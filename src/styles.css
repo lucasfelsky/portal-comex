@@ -13937,6 +13937,256 @@ body {
   padding: 4px 0 0 42px;
 }
 
+/* ==========================================================================
+   S1 - Pre-visualizacao do Relatorio de carga (DocumentPreviewDialog).
+   Prefixo `docpv`. Fiel ao mock aprovado; so tokens do Portal.
+   ========================================================================== */
+.modal.docpv {
+  max-width: min(1040px, 100%);
+}
+
+.docpv__subtitle {
+  margin: -12px 0 0;
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.docpv__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.docpv__meta-card {
+  min-width: 0;
+  padding: 8px 12px;
+  background: var(--surface-alt);
+  border: 1px solid var(--row-divider);
+  border-radius: var(--radius-field);
+}
+
+.docpv__meta-card dt {
+  font-size: var(--fs-caption-2);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.docpv__meta-card dd {
+  margin: 2px 0 0;
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.docpv__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docpv__tab {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.docpv__tab:disabled {
+  cursor: progress;
+}
+
+.docpv__tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.docpv__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-tint-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.docpv__note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--primary-700);
+}
+
+.docpv__scroll {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.docpv__scroll:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.docpv__table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-footnote);
+}
+
+.docpv__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 9px 10px;
+  background: var(--navy);
+  color: var(--sidebar-ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.docpv__table tbody th,
+.docpv__table tbody td {
+  padding: 8px 10px;
+  border-top: 1px solid var(--row-divider);
+  color: var(--ink);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.docpv__table tbody td {
+  font-weight: 400;
+}
+
+.docpv__table tbody tr:nth-child(even) td {
+  background: var(--surface-alt);
+}
+
+/* Primeira coluna fixa (rolagem lateral). */
+.docpv__table thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+
+.docpv__table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-right: 1px solid var(--row-divider);
+  font-weight: 600;
+}
+
+.docpv__table tbody tr:nth-child(even) th {
+  background: var(--bg-tint-1);
+}
+
+.docpv__state {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: var(--fs-subhead);
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.docpv__state--error {
+  border-color: var(--danger);
+  background: var(--danger-50);
+  color: var(--danger-700);
+  font-weight: 600;
+}
+
+.docpv__loading {
+  display: grid;
+  gap: 10px;
+}
+
+.docpv__frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.docpv__image {
+  display: flex;
+  justify-content: center;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.docpv__image img {
+  max-width: 100%;
+  height: auto;
+}
+
+.docpv__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.docpv__hint {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-soft);
+}
+
+.docpv__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .docpv__meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Alvo de toque de 44px nas abas da planilha (pilula mantida). */
+  .docpv__tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .docpv__foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .docpv__actions {
+    flex-direction: column;
+    margin-left: 0;
+  }
+
+  .docpv__actions .primary-button,
+  .docpv__actions .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 720px) {
   /* REVIEW rodada 4: gap de 16px entre as secoes no mobile (artboard
      Mobile.dc.html usa 16px no container raiz; desktop fica 20px). */
