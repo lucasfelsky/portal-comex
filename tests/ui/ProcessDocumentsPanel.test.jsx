@@ -1231,3 +1231,132 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
     )
   })
 })
+
+// S1: "Visualizar" no Relatório de carga (xlsx/xls/csv/pdf/imagem) abre o dialogo de
+// pre-visualizacao sem baixar para o computador.
+describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () => {
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+  function docCargo(overrides = {}) {
+    return docBl({
+      id: 'c1',
+      type: 'cargoReport',
+      slotKey: 'cargoReport',
+      name: 'FR.CMX.001.xlsx',
+      mimeType: XLSX_MIME,
+      ...overrides,
+    })
+  }
+
+  function rowOf(title) {
+    return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  }
+
+  it('aparece no Relatório de carga com xlsx anexado, antes do Baixar', async () => {
+    mockListProcessDocuments.mockResolvedValue([docCargo()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const row = rowOf('Relatório de carga')
+    const view = within(row).getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })
+    const download = within(row).getByRole('button', { name: 'Baixar FR.CMX.001.xlsx' })
+    expect(view).toHaveClass('documents-icon-button', 'ghost-button', 'ghost-button--outline')
+    expect(view.compareDocumentPosition(download) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('logística também vê o botão', async () => {
+    mockListProcessDocuments.mockResolvedValue([docCargo()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(
+      within(rowOf('Relatório de carga')).getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })
+    ).toBeInTheDocument()
+  })
+
+  it('NÃO aparece no BL nem na Invoice, mesmo com arquivo', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      docBl(),
+      docBl({ id: 'i1', type: 'invoice', slotKey: 'invoice', name: 'inv.pdf' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+  })
+
+  it('NÃO aparece no Relatório de carga sem arquivo', async () => {
+    mockListProcessDocuments.mockResolvedValue([])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+  })
+
+  it('NÃO aparece para .docx', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      docCargo({
+        name: 'rel.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar rel.docx' })).toBeInTheDocument()
+  })
+
+  it('clicar abre o diálogo e baixa o blob com (processId, docId), sem salvar arquivo', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockReturnValue(new Promise(() => {}))
+    mockListProcessDocuments.mockResolvedValue([docCargo()])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Relatório de carga' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText(/FR\.CMX\.001\.xlsx · Excel · enviado em/)).toBeInTheDocument()
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'c1')
+    expect(mockSaveBlobAsFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProcessDocumentsPanel — Visualizar: PDF e imagem (S1)', () => {
+  function docCargoOf(name, mimeType) {
+    return docBl({ id: 'c1', type: 'cargoReport', slotKey: 'cargoReport', name, mimeType })
+  }
+
+  function rowOf(title) {
+    return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  }
+
+  it.each([
+    ['rel.pdf', 'application/pdf'],
+    ['foto.png', 'image/png'],
+    ['foto.jpg', 'image/jpeg'],
+    ['rel.csv', 'text/csv'],
+    ['rel.xls', 'application/vnd.ms-excel'],
+  ])('aparece no Relatório de carga para %s', async (name, mimeType) => {
+    mockListProcessDocuments.mockResolvedValue([docCargoOf(name, mimeType)])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(within(rowOf('Relatório de carga')).getByRole('button', { name: `Visualizar ${name}` })).toBeInTheDocument()
+  })
+
+  it('NÃO aparece em BL e Invoice, mesmo com PDF/imagem/xlsx, nem para .docx no Relatório de carga', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      docBl({ id: 'b1', name: 'bl.pdf', mimeType: 'application/pdf' }),
+      docBl({ id: 'i1', type: 'invoice', slotKey: 'invoice', name: 'inv.png', mimeType: 'image/png' }),
+      docCargoOf('rel.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
+  })
+})
