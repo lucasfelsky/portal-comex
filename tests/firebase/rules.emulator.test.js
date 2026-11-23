@@ -4146,6 +4146,15 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['', 'ok@sqquimica.com'] })))
     })
 
+    it('documenta limitacao conhecida e benigna: item unico com virgula ou vazio passa na rule', async () => {
+      // O join(',') de UM unico item e' a propria string: 'a@sqquimica.com,b@sqquimica.com' casa o regex.
+      // Limitacao conhecida da rule (rules nao iteram listas). Benigna: so' admin ativo escreve, dominio e
+      // charset seguem travados em @sqquimica.com, backend e cliente normalizam/descartam e a UI valida
+      // item a item (a validacao estrita por item fica no cliente). Se a rule for endurecida, inverter aqui.
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com,b@sqquimica.com'] })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ faturamento: [''] })))
+    })
+
     it('falham: duplicado, item nao-string e campo string em vez de lista', async () => {
       await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com', 'a@sqquimica.com'] })))
       await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: [42] })))
