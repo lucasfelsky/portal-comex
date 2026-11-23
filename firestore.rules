@@ -84,6 +84,18 @@ service cloud.firestore {
       return isApprovedUser() && myRole() == 'logistica';
     }
 
+    // Perfis de leitura de documentos do processo (so Relatorio de carga e
+    // COA Original): `tecnico` e `faturamento`, permissoes identicas. Lista
+    // espelhada em `DOCUMENT_READER_ROLES` (funcoes, modulo de indice de documentos).
+    function isDocumentReader() {
+      return isApprovedUser() && myRole() in ['tecnico', 'faturamento'];
+    }
+
+    // Tipos de documento liberados aos perfis acima. Espelha `DOCUMENT_READER_TYPES`.
+    function isDocumentReaderType(type) {
+      return type in ['cargoReport', 'coaOriginal'];
+    }
+
     function isPreCollectionStatus(status) {
       // Status pre-coleta: o processo ainda nao foi coletado. A logistica
       // NAO pode "voltar atras" para esses valores via collectionStatus.
@@ -621,6 +633,7 @@ service cloud.firestore {
           && request.resource.data.slotKey.matches('^other:.+$'))
         || (request.resource.data.type == 'bl' && request.resource.data.slotKey == 'bl')
         || (request.resource.data.type == 'cargoReport' && request.resource.data.slotKey == 'cargoReport')
+        || (request.resource.data.type == 'coaOriginal' && request.resource.data.slotKey == 'coaOriginal')
         || (
           (request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
           && get(/databases/$(database)/documents/processes/$(processId)).data.category == 'CONSOLIDADO'
@@ -660,6 +673,7 @@ service cloud.firestore {
             ))
           || (
             (request.resource.data.type == 'bl' || request.resource.data.type == 'cargoReport'
+              || request.resource.data.type == 'coaOriginal'
               || request.resource.data.type == 'other'
               || ((request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
                 && request.resource.data.slotKey == request.resource.data.type))
@@ -687,7 +701,7 @@ service cloud.firestore {
 
     function isValidProcessDocumentFieldShapes() {
       return request.resource.data.type in
-          ['bl', 'cargoReport', 'fispq', 'containerWash', 'invoice', 'packingList', 'other']
+          ['bl', 'cargoReport', 'coaOriginal', 'fispq', 'containerWash', 'invoice', 'packingList', 'other']
         && request.resource.data.slotKey is string && request.resource.data.slotKey.size() > 0
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 200
@@ -797,15 +811,19 @@ service cloud.firestore {
 
       // F18a (D1-D5) + AD-1 (adendo do orquestrador): metadado IMUTAVEL de
       // documentos do processo (BL/AWB, relatorio de carga, invoice/packing
-      // list, FISPQ por item, lavacao por conteiner, outros). Leitura so
-      // admin/logistica (nunca usuario comum). Imutavel, EXCETO o vinculo
+      // list, FISPQ por item, lavacao por conteiner, COA Original, outros).
+      // Leitura: admin/logistica (todos os tipos) e os perfis `tecnico`/
+      // `faturamento` SO' para `cargoReport`/`coaOriginal` - rules nao filtram:
+      // a query desses perfis precisa de `where('type','in',[...])`. Nunca
+      // usuario comum. Imutavel, EXCETO o vinculo
       // Invoice -> Packing List (`isValidInvoicePackingListLinkUpdate`, so
       // admin) e o nome do documento adicional
       // (`isValidAdditionalDocumentRenameUpdate`, so admin) - "versao
       // anterior" e' derivada por ordem de `uploadedAt` dentro do mesmo
       // `slotKey` (D1), nunca reescrita.
       match /documents/{documentId} {
-        allow read: if isAdmin() || isLogistics();
+        allow read: if isAdmin() || isLogistics()
+          || (isDocumentReader() && isDocumentReaderType(resource.data.type));
         allow create: if isValidProcessDocumentCreate(processId)
           && (
             isAdmin()

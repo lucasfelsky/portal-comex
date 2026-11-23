@@ -62,7 +62,9 @@ service firebase.storage {
     // (nunca usuario comum, mesma restricao da subcolecao `documents` no
     // firestore.rules).
     // L38: hoje SEM uso nas rules (leitura = false); a function
-    // `downloadProcessDocument` espelha este conjunto via claims.
+    // `downloadProcessDocument` espelha este conjunto via claims. Os perfis
+    // `tecnico`/`faturamento` tambem baixam, mas SO' `cargoReport`/`coaOriginal`:
+    // esse filtro por tipo e' feito na funcao HTTP (as rules daqui nao leem).
     function canReadProcessDocuments() {
       return isApprovedUser() && (myRole() == 'admin' || myRole() == 'logistica');
     }
@@ -174,7 +176,7 @@ service firebase.storage {
       // TODOS - senao admin/logistica poderiam gerar URL com token permanente.
       allow read: if false;
       allow create: if canUploadProcessDocumentType(type)
-        && type in ['bl', 'cargoReport', 'invoice', 'packingList', 'other']
+        && type in ['bl', 'cargoReport', 'coaOriginal', 'invoice', 'packingList', 'other']
         && isAllowedFileContentType()
         && isWithinDocumentSizeLimit()
         // D3: o nome do arquivo carrega o uid de quem envia (mesmo formato

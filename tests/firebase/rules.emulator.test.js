@@ -2632,6 +2632,189 @@ describeEmulator('firestore.rules (emulador)', () => {
       await assertFails(setDoc(doc(anon(), 'processes/p1/documents/d2'), baseFields()))
     })
 
+    // Perfis `tecnico`/`faturamento`: so leem cargoReport/coaOriginal (get e
+    // query filtrada por type); nunca escrevem.
+    describe.each(['tecnico', 'faturamento'])('perfil leitor %s', (role) => {
+      const reader = (uid = `${role}-1`, overrides = {}) =>
+        testEnv
+          .authenticatedContext(uid, {
+            email: `${role}@sqquimica.com`,
+            role,
+            status: 'Ativo',
+            name: 'Leitor',
+            ...overrides,
+          })
+          .firestore()
+
+      const coaFields = (overrides = {}) =>
+        baseFields({
+          type: 'coaOriginal',
+          slotKey: 'coaOriginal',
+          storagePath: 'processes/p1/documents/coaOriginal/1-admin-1-coa.pdf',
+          ...overrides,
+        })
+
+      const cargoFields = (overrides = {}) =>
+        baseFields({
+          type: 'cargoReport',
+          slotKey: 'cargoReport',
+          storagePath: 'processes/p1/documents/cargoReport/1-admin-1-cr.pdf',
+          ...overrides,
+        })
+
+      beforeEach(async () => {
+        await seed(async (db) => {
+          await setDoc(doc(db, 'processes/p1/documents/coa1'), coaFields({ uploadedAt: new Date() }))
+          await setDoc(doc(db, 'processes/p1/documents/cr1'), cargoFields({ uploadedAt: new Date() }))
+          await setDoc(doc(db, 'processes/p1/documents/bl1'), baseFields({ uploadedAt: new Date() }))
+          await setDoc(
+            doc(db, 'processes/p1/documents/inv1'),
+            baseFields({
+              type: 'invoice',
+              slotKey: 'invoice',
+              storagePath: 'processes/p1/documents/invoice/1-admin-1-inv.pdf',
+              uploadedAt: new Date(),
+            })
+          )
+          await setDoc(
+            doc(db, 'processes/p1/documents/oth1'),
+            baseFields({
+              type: 'other',
+              slotKey: 'other:oth1',
+              description: 'x',
+              storagePath: 'processes/p1/documents/other/1-admin-1-x.pdf',
+              uploadedAt: new Date(),
+            })
+          )
+        })
+      })
+
+      it('le (get) cargoReport e coaOriginal', async () => {
+        await assertSucceeds(getDoc(doc(reader(), 'processes/p1/documents/cr1')))
+        await assertSucceeds(getDoc(doc(reader(), 'processes/p1/documents/coa1')))
+      })
+
+      it('NAO le (get) bl, invoice nem other', async () => {
+        await assertFails(getDoc(doc(reader(), 'processes/p1/documents/bl1')))
+        await assertFails(getDoc(doc(reader(), 'processes/p1/documents/inv1')))
+        await assertFails(getDoc(doc(reader(), 'processes/p1/documents/oth1')))
+      })
+
+      it('list SEM filtro e negada', async () => {
+        await assertFails(getDocs(collection(reader(), 'processes/p1/documents')))
+      })
+
+      it("list com where('type','in',[cargoReport, coaOriginal]) e permitida", async () => {
+        await assertSucceeds(
+          getDocs(
+            query(
+              collection(reader(), 'processes/p1/documents'),
+              where('type', 'in', ['cargoReport', 'coaOriginal'])
+            )
+          )
+        )
+      })
+
+      it('list filtrada por tipo nao liberado e negada', async () => {
+        await assertFails(
+          getDocs(query(collection(reader(), 'processes/p1/documents'), where('type', 'in', ['bl', 'coaOriginal'])))
+        )
+        await assertFails(
+          getDocs(query(collection(reader(), 'processes/p1/documents'), where('type', '==', 'bl')))
+        )
+      })
+
+      it('NAO cria, atualiza nem exclui documentos', async () => {
+        await assertFails(
+          setDoc(
+            doc(reader(), 'processes/p1/documents/novo'),
+            coaFields({ uploadedById: `${role}-1`, uploadedByRole: role, uploadedByName: 'Leitor' })
+          )
+        )
+        await assertFails(updateDoc(doc(reader(), 'processes/p1/documents/coa1'), { name: 'outro.pdf' }))
+        await assertFails(deleteDoc(doc(reader(), 'processes/p1/documents/coa1')))
+        await assertFails(deleteDoc(doc(reader(), 'processes/p1/documents/cr1')))
+      })
+
+      it('leitor Pendente ou com e-mail externo NAO le', async () => {
+        await assertFails(getDoc(doc(reader('pend-1', { status: 'Pendente' }), 'processes/p1/documents/coa1')))
+        await assertFails(getDoc(doc(reader('ext-1', { email: 'x@gmail.com' }), 'processes/p1/documents/coa1')))
+      })
+
+      it('NAO le o historico (events)', async () => {
+        await seed((db) => setDoc(doc(db, 'processes/p1/events/e1'), { type: 'berthed', processId: 'p1' }))
+        await assertFails(getDoc(doc(reader(), 'processes/p1/events/e1')))
+      })
+    })
+
+    describe('coaOriginal (D-2/D-3)', () => {
+      const coaFields = (overrides = {}) =>
+        baseFields({
+          type: 'coaOriginal',
+          slotKey: 'coaOriginal',
+          storagePath: 'processes/p1/documents/coaOriginal/1-admin-1-coa.pdf',
+          ...overrides,
+        })
+
+      it('admin cria coaOriginal', async () => {
+        await assertSucceeds(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields()))
+      })
+
+      it('admin cria coaOriginal em processo CONSOLIDADO e LCL (1 slot por processo)', async () => {
+        await assertSucceeds(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
+            coaFields({ storagePath: 'processes/p-consolidado/documents/coaOriginal/1-admin-1-coa.pdf' })
+          )
+        )
+        await assertSucceeds(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p-lcl/documents/d1'),
+            coaFields({ storagePath: 'processes/p-lcl/documents/coaOriginal/1-admin-1-coa.pdf' })
+          )
+        )
+      })
+
+      it('logistica NAO cria coaOriginal', async () => {
+        await assertFails(
+          setDoc(
+            doc(logistics('log-1'), 'processes/p1/documents/d1'),
+            coaFields({
+              uploadedById: 'log-1',
+              uploadedByRole: 'logistica',
+              uploadedByName: 'Logistica',
+              storagePath: 'processes/p1/documents/coaOriginal/1-log-1-coa.pdf',
+            })
+          )
+        )
+      })
+
+      it('coaOriginal com slotKey errado falha', async () => {
+        await assertFails(
+          setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey: 'coaOriginal:x' }))
+        )
+        await assertFails(
+          setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey: 'cargoReport' }))
+        )
+      })
+
+      it('coaOriginal com storagePath de outro tipo falha', async () => {
+        await assertFails(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p1/documents/d1'),
+            coaFields({ storagePath: 'processes/p1/documents/bl/1-admin-1-coa.pdf' })
+          )
+        )
+      })
+
+      it('admin e logistica leem coaOriginal; usuario comum nao', async () => {
+        await seed((db) => setDoc(doc(db, 'processes/p1/documents/coa1'), coaFields({ uploadedAt: new Date() })))
+        await assertSucceeds(getDoc(doc(admin('admin-1'), 'processes/p1/documents/coa1')))
+        await assertSucceeds(getDoc(doc(logistics('log-1'), 'processes/p1/documents/coa1')))
+        await assertFails(getDoc(doc(approvedUser('user-1'), 'processes/p1/documents/coa1')))
+      })
+    })
+
     // Invoice que tambem contem o Packing List: unico update permitido em
     // documento (admin, doc invoice, so as 3 chaves do vinculo).
     describe('vinculo Invoice -> Packing List (alsoPackingList)', () => {

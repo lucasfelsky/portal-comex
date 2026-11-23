@@ -1,8 +1,9 @@
 // L38: download autenticado dos documentos do processo.
 //
 // Function HTTP (v2 `onRequest`) que valida o ID token Firebase + claims
-// (mesmo conjunto de `canReadProcessDocuments()` em storage.rules: admin OU
-// logistica, status Ativo, e-mail @sqquimica.com), le o METADADO em
+// (admin OU logistica, status Ativo, e-mail @sqquimica.com - como
+// `canReadProcessDocuments()` em storage.rules - mais os perfis tecnico/
+// faturamento, restritos por tipo de documento), le o METADADO em
 // `processes/{processId}/documents/{documentId}` e faz stream do arquivo
 // com `Content-Disposition: attachment`. Usa o Admin SDK (ignora rules) - as
 // storage.rules negam a leitura via SDK cliente, entao ninguem gera URL
@@ -14,9 +15,18 @@ import { getFirestore } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { onRequest } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions/logger'
+import { DOCUMENT_READER_ROLES, DOCUMENT_READER_TYPES } from './documentIndex.js'
 
-const ALLOWED_ROLES = ['admin', 'logistica']
+const ALLOWED_ROLES = ['admin', 'logistica', ...DOCUMENT_READER_ROLES]
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
+// Admin/logistica baixam todos os tipos; os perfis de `DOCUMENT_READER_ROLES`
+// (tecnico/faturamento) so' os de `DOCUMENT_READER_TYPES`; qualquer outro, nada.
+export function canDownloadProcessDocumentType(role, type) {
+  if (role === 'admin' || role === 'logistica') return true
+  if (DOCUMENT_READER_ROLES.includes(role)) return DOCUMENT_READER_TYPES.includes(type)
+  return false
+}
 
 export function canDownloadProcessDocuments(token) {
   if (!token || typeof token !== 'object') return false
@@ -98,6 +108,13 @@ export async function handleProcessDocumentDownload(req, res) {
   } catch (error) {
     logger.error('Falha ao ler metadado do documento.', { processId, documentId, error })
     sendError(res, 500, 'internal')
+    return
+  }
+
+  // 404 (e nao 403) para nao revelar a existencia/tipo do documento pelo id.
+  if (!canDownloadProcessDocumentType(decoded.role, data.type)) {
+    logger.warn('Download de documento de tipo nao liberado para o perfil.', { processId, documentId, uid: decoded.uid })
+    sendError(res, 404, 'not-found')
     return
   }
 
