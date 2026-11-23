@@ -103,8 +103,11 @@ export function normalizeCargoReportRecipientsConfig(raw, isCorporateEmail = def
   return { tecnico, faturamento, ignoredNonCorporate }
 }
 
-// Une admins + logistica + usuarios ATIVOS da config (dedupe por `id`,
-// sem o ator). `configEmails` = uniao deduplicada de tecnico + faturamento;
+// Une admins + logistica + usuarios ATIVOS da config (dedupe por `id`).
+// O AUTOR do upload tambem recebe quando elegivel (pedido do Comex, 2026-11),
+// diferente do padrao dos demais avisos de processo, que excluem o ator;
+// elegibilidade segue sendo admin/logistica ativos ou usuario ativo das
+// listas. `configEmails` = uniao deduplicada de tecnico + faturamento;
 // `usersByEmail` = `Map<emailMinusculo, userDoc>`. E-mail da config com
 // usuario encontrado mas NAO ativo some das duas listas; so' e-mail SEM
 // usuario vai para `directEmails`. Ordem deterministica (id / e-mail).
@@ -113,14 +116,12 @@ export function planCargoReportRecipients({
   logistics = [],
   configEmails = [],
   usersByEmail = new Map(),
-  actorUserId = '',
 } = {}) {
-  const actorId = String(actorUserId ?? '')
   const byId = new Map()
 
   const addUser = (user) => {
     const id = String(user?.id ?? '')
-    if (!id || id === actorId || byId.has(id)) return
+    if (!id || byId.has(id)) return
     byId.set(id, user)
   }
 

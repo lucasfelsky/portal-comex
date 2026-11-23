@@ -583,7 +583,7 @@ describe('notifyCargoReportUploaded', () => {
     resetSecrets()
   })
 
-  it('cargoReport por admin-1 -> notifica admin-2, logistica ativa e tecnico com conta (nao o ator)', async () => {
+  it('cargoReport por admin-1 -> notifica admin-1 (autor), admin-2, logistica ativa e tecnico com conta', async () => {
     setupChain({
       users: [ADMIN_1, ADMIN_2, LOGI_1, LOGI_BLOCKED, TEC_1],
       config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] },
@@ -593,7 +593,7 @@ describe('notifyCargoReportUploaded', () => {
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
     const notifications = cargoNotifications()
-    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1', 'tec-1'])
+    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1', 'tec-1'])
     for (const data of notifications) {
       expect(data.body).toBe(BODY)
       expect(data.targetTab).toBe('documents')
@@ -605,6 +605,7 @@ describe('notifyCargoReportUploaded', () => {
 
     // titulo fixo pedido pelo Comex: IGUAL para todos os perfis (FCL mostra o nome tambem a nao-admin).
     const titleOf = (uid) => notifications.find((data) => data.recipientUserId === uid).title
+    expect(titleOf('admin-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
     expect(titleOf('admin-2')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
     expect(titleOf('logi-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
     expect(titleOf('tec-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
@@ -624,7 +625,7 @@ describe('notifyCargoReportUploaded', () => {
     expect(mail.to).toBe('fiscal@sqquimica.com')
     expect(mail.subject).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
     expect(mail.text).toContain(BODY)
-    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1'])
 
     // HTML (imagem + botao) + deep link + banner por CID. O processo vai no
     // assunto e no texto puro (mesmo assunto para todos os perfis).
@@ -681,8 +682,9 @@ describe('notifyCargoReportUploaded', () => {
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
     const notifications = cargoNotifications()
-    expect(notifications).toHaveLength(1)
-    expect(notifications[0].recipientUserId).toBe('logi-1')
+    expect(notifications).toHaveLength(2)
+    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'logi-1'])
+    expect(notifications.filter((data) => data.recipientUserId === 'logi-1')).toHaveLength(1)
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
@@ -692,7 +694,7 @@ describe('notifyCargoReportUploaded', () => {
 
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
-    expect(cargoNotifications()).toHaveLength(0)
+    expect(cargoNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
@@ -705,7 +707,7 @@ describe('notifyCargoReportUploaded', () => {
 
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
-    expect(cargoNotifications()).toHaveLength(0)
+    expect(cargoNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
@@ -730,7 +732,7 @@ describe('notifyCargoReportUploaded', () => {
 
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
-    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1'])
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
@@ -740,7 +742,7 @@ describe('notifyCargoReportUploaded', () => {
 
     await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
 
-    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1'])
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
@@ -777,12 +779,65 @@ describe('notifyCargoReportUploaded', () => {
     const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
     expect(finalCall[1]).toEqual({
       processId: PROCESS_ID,
-      inAppRecipients: 2,
+      inAppRecipients: 3,
       directEmails: 1,
       ignoredNonCorporate: 1,
       failedDirectEmails: 0,
     })
     expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('fiscal@sqquimica.com')
+  })
+
+  it('autor logistica tambem recebe o aviso', async () => {
+    setupChain({ users: [ADMIN_1, LOGI_1], config: { tecnico: [], faturamento: [] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(
+      makeEvent({ ...CARGO_REPORT, uploadedById: 'logi-1', uploadedByName: 'Logi Um', uploadedByRole: 'logistica' })
+    )
+
+    const notifications = cargoNotifications()
+    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'logi-1'])
+    for (const data of notifications) expect(data.actorUserId).toBe('logi-1')
+  })
+
+  it('autor sem papel elegivel (usuario comum fora das listas) nao recebe', async () => {
+    setupChain({ users: [ADMIN_1, TEC_1], config: { tecnico: [], faturamento: [] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(
+      makeEvent({ ...CARGO_REPORT, uploadedById: 'tec-1', uploadedByName: 'Tecnico Um', uploadedByRole: 'user' })
+    )
+
+    const notifications = cargoNotifications()
+    expect(notifications.map((data) => data.recipientUserId)).toEqual(['admin-1'])
+    expect(notifications.some((data) => data.recipientUserId === 'tec-1')).toBe(false)
+    expect(notifications[0].actorUserId).toBe('tec-1')
+  })
+
+  it('autor admin tambem nas listas -> 1 notificacao e nenhum e-mail direto', async () => {
+    setupChain({
+      users: [ADMIN_1, LOGI_1],
+      config: { tecnico: ['admin1@sqquimica.com'], faturamento: ['admin1@sqquimica.com'] },
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    const notifications = cargoNotifications()
+    expect(notifications).toHaveLength(2)
+    expect(notifications.filter((data) => data.recipientUserId === 'admin-1')).toHaveLength(1)
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('autor logistica BLOQUEADO nao recebe', async () => {
+    setupChain({ users: [ADMIN_1, LOGI_BLOCKED], config: { tecnico: [], faturamento: [] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(
+      makeEvent({ ...CARGO_REPORT, uploadedById: 'logi-2', uploadedByName: 'Logi Dois', uploadedByRole: 'logistica' })
+    )
+
+    expect(cargoNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
   })
 
   it('processo inexistente / sem dado criado -> nada', async () => {
