@@ -8,6 +8,7 @@ import {
   MAX_PURCHASE_ORDERS,
   MIN_CONSOLIDATED_PURCHASE_ORDERS,
   canSeePurchaseOrderDetails,
+  canSeePurchaseOrderDetailsForRole,
   clearRemovedPurchaseOrderLinks,
   formatPurchaseOrderLine,
   formatPurchaseOrdersSummary,
@@ -208,6 +209,19 @@ describe('canSeePurchaseOrderDetails', () => {
     expect(canSeePurchaseOrderDetails(true)).toBe(true)
     expect(canSeePurchaseOrderDetails(false)).toBe(false)
     expect(canSeePurchaseOrderDetails(undefined)).toBe(false)
+  })
+})
+
+describe('canSeePurchaseOrderDetailsForRole', () => {
+  it('admin e logistica veem referencia/fornecedor das POs', () => {
+    expect(canSeePurchaseOrderDetailsForRole('admin')).toBe(true)
+    expect(canSeePurchaseOrderDetailsForRole('logistica')).toBe(true)
+  })
+
+  it('tecnico, faturamento, user, compras, viewer e ausente NAO veem (mesmo vendo o nome do processo)', () => {
+    for (const role of ['tecnico', 'faturamento', 'user', 'compras', 'viewer', '', undefined, null]) {
+      expect(canSeePurchaseOrderDetailsForRole(role)).toBe(false)
+    }
   })
 })
 

@@ -674,6 +674,44 @@ describe('F4c - aba Detalhes gerais', () => {
     expect([...masked.container.querySelectorAll('.pdv-pos li')].map((li) => li.textContent)).toEqual(['9010', '9011'])
   })
 
+  it('CONSOLIDADO: tecnico (ve o nome, sem canSeePoDetails) ve so o numero das POs, sem Ref./Fornecedor', () => {
+    const process = makeProcess({
+      category: 'CONSOLIDADO',
+      processNumber: '',
+      purchaseOrders: [{ po: '9010', reference: 'ALFA SEA 905-26', supplierName: 'ALFA CHEM' }],
+    })
+    const { container } = renderDetail({
+      selectedProcess: process,
+      isAdmin: false,
+      canSeeName: true,
+      canSeePoDetails: false,
+      profile: { name: 'Téo', role: 'tecnico' },
+    })
+    expect([...container.querySelectorAll('.pdv-pos li')].map((li) => li.textContent)).toEqual(['9010'])
+    expect(container.textContent).not.toContain('Ref.:')
+  })
+
+  it('canal vazio para tecnico (ve o nome, mas nao a DUIMP antes da atracacao): dica neutra, sem "Aguardando parametrizacao"', () => {
+    const { container } = renderDetail({
+      isAdmin: false,
+      canSeeName: true,
+      canSeePoDetails: false,
+      profile: { name: 'Téo', role: 'tecnico' },
+    })
+    const hint = [...container.querySelectorAll('.pdv-stat')][3].querySelector('.pdv-stat__hint')
+    expect(hint).toHaveTextContent('Canal ainda não definido.')
+  })
+
+  it('canal vazio para logistica: segue "Aguardando parametrizacao da DUIMP."', () => {
+    const { container } = renderDetail({
+      isAdmin: false,
+      canSeeName: true,
+      profile: { name: 'Ana', role: 'logistica' },
+    })
+    const hint = [...container.querySelectorAll('.pdv-stat')][3].querySelector('.pdv-stat__hint')
+    expect(hint).toHaveTextContent('Aguardando parametrização da DUIMP.')
+  })
+
   it('avisos ERP (admin): destino, ETD, ETA e fornecedor da Identificacao; nao-admin nao ve nenhum', () => {
     const process = makeProcess({
       category: 'FCL', processNumber: '9036', destination: 'NAVEGANTES', etd: '2026-09-30', eta: '2026-10-20',

@@ -255,6 +255,32 @@ describe('ProcessDocumentsPanel — (f) CONSOLIDADO', () => {
     expect(within(prefixed).queryByText('PO PO-12345')).not.toBeInTheDocument()
   })
 
+  // `tecnico`/`faturamento` veem o nome do processo, mas a Referencia da PO segue restrita a admin/logistica.
+  // Hoje o painel deles e' somente-leitura (sem tabela por PO); o teste trava o vazamento caso isso mude.
+  it.each(['tecnico', 'faturamento'])('Referencia da PO NAO aparece para %s', async (role) => {
+    render(
+      <ProcessDocumentsPanel
+        process={{ ...CONSOLIDATED_PROCESS, purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-2' }] }}
+        profile={{ uid: `${role}-1`, name: 'Teste', role }}
+      />
+    )
+    await waitForDocumentsLoaded()
+    expect(screen.queryByText('BLUESKY SEA 003-26')).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('BLUESKY SEA 003-26')
+  })
+
+  it('Referencia da PO aparece para logistica (tabela por PO)', async () => {
+    render(
+      <ProcessDocumentsPanel
+        process={{ ...CONSOLIDATED_PROCESS, purchaseOrders: [{ po: '5093', reference: 'BLUESKY SEA 003-26' }, { po: 'PO-2' }] }}
+        profile={LOGISTICS_PROFILE}
+      />
+    )
+    await waitForDocumentsLoaded()
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('BLUESKY SEA 003-26')).toBeInTheDocument()
+  })
+
   it('renderiza table com cabecalhos PO/Invoice/Packing List sem combobox; upload da PO-2 repassa po', async () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)

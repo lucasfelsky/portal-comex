@@ -1133,6 +1133,38 @@ describe('F17.2d-2 - searchProcesses mascarado (AD-1)', () => {
     expect(await searchProcesses('REF-X', { canSeeName: true })).toHaveLength(1)
     expect(await searchProcesses('ACME', { canSeeName: true })).toHaveLength(1)
   })
+
+  // tecnico/faturamento: veem o nome do processo, mas NAO a referencia/fornecedor das POs.
+  it('canSeeName sem canSeePoDetails (tecnico/faturamento): acha FCL pelo nome e NAO acha CONSOLIDADO por referencia/fornecedor da PO', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        {
+          id: 'p-fcl',
+          data: () => ({
+            id: 'p-fcl',
+            name: 'Importacao Secreta',
+            category: 'FCL',
+            processNumber: 'FCL-1',
+          }),
+        },
+        {
+          id: 'p-cons',
+          data: () => ({
+            id: 'p-cons',
+            name: 'Consolidado X',
+            category: 'CONSOLIDADO',
+            purchaseOrders: [{ po: 'PO-9', reference: 'REF-X', supplierName: 'ACME' }],
+          }),
+        },
+      ],
+    })
+
+    const options = { canSeeName: true, canSeePoDetails: false }
+    expect(await searchProcesses('Secreta', options)).toHaveLength(1)
+    expect(await searchProcesses('REF-X', options)).toEqual([])
+    expect(await searchProcesses('ACME', options)).toEqual([])
+    expect(await searchProcesses('PO-9', options)).toHaveLength(1)
+  })
 })
 
 // F17.3a (D-14): chegada com data, CE/terminal/free time, presenca de carga.

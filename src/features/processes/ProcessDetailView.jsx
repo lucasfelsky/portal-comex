@@ -15,6 +15,7 @@ import {
 import { getStatusTagClass } from './processStatusView'
 import { getProcessSubtitle, getProcessTitle } from './processLabels'
 import { getCollectionWindowLabel } from './containers'
+import { canSeeCustomsBeforeArrival } from './customsVisibility'
 import {
   canSeePurchaseOrderDetails,
   formatPurchaseOrderLine,
@@ -87,6 +88,7 @@ export default function ProcessDetailView({
   detailTab,
   isAdmin,
   canSeeName,
+  canSeePoDetails = canSeeName,
   isSaving,
   favoriteProcessIds,
   canEditPostReceiptNotes,
@@ -458,7 +460,7 @@ export default function ProcessDetailView({
             <ul className="detail-stack detail-stack--compact">
               {consolidatedOrders.map((order) => (
                 <li key={order.po}>
-                  {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
+                  {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeePoDetails))}
                   <ErpHint hint={erpHints.po[erpOrderKey(order.po)]} />
                 </li>
               ))}
@@ -860,6 +862,8 @@ export default function ProcessDetailView({
             <ProcessGeneralDesktop
               process={selectedProcess}
               canSeeName={canSeeName}
+              canSeePoDetails={canSeePoDetails}
+              canSeeCustomsEarly={canSeeCustomsBeforeArrival(profile?.role)}
               isAdmin={isAdmin}
               pendingFields={pendingFields}
               erpHints={erpHints}

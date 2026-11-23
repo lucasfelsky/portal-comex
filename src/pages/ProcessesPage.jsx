@@ -68,8 +68,9 @@ import {
 } from '../features/processes/arrivalCustoms'
 import CollectionWindowsEditor from '../features/processes/CollectionWindowsEditor'
 import { getCollectionWindows } from '../utils/collectionWindows'
+import { canSeeProcessName } from '../features/processes/processNameAccess'
 import {
-  canSeePurchaseOrderDetails,
+  canSeePurchaseOrderDetailsForRole,
   clearRemovedPurchaseOrderLinks,
   getPurchaseOrderSearchTerms,
   normalizePurchaseOrders,
@@ -542,7 +543,9 @@ export default function ProcessesPage() {
   const { profile, toggleFavoriteProcess } = useAuth()
   const toast = useToast()
   const isAdmin = profile?.role === 'admin'
-  const canSeeName = isAdmin || profile?.role === 'logistica'
+  const canSeeName = canSeeProcessName(profile?.role)
+  // Referencia/fornecedor de cada PO do CONSOLIDADO: so admin/logistica (independe do nome).
+  const canSeePoDetails = canSeePurchaseOrderDetailsForRole(profile?.role)
   // Refino F4b: na lista, o desktop (>= 1041px) tem cabecalho proprio
   // (eyebrow + "Fila de chegadas" + acoes) dentro do ProcessListView.
   const isDesktopLayout = useMediaQuery('(min-width: 1041px)')
@@ -854,7 +857,7 @@ export default function ProcessesPage() {
           item.etd,
           item.processStatus,
           item.collectionStatus,
-          ...getPurchaseOrderSearchTerms(item.purchaseOrders, canSeePurchaseOrderDetails(canSeeName)),
+          ...getPurchaseOrderSearchTerms(item.purchaseOrders, canSeePoDetails),
           ...(item.items ?? []).map((processItem) => processItem?.poNumber ?? ''),
         ]
           .join(' ')
@@ -867,7 +870,7 @@ export default function ProcessesPage() {
         if (!right.eta) return -1
         return left.eta.localeCompare(right.eta)
       })
-  }, [canSeeName, processes])
+  }, [canSeeName, canSeePoDetails, processes])
 
   const filteredProcesses = useMemo(
     () => applyListFilters({ searchTerm, categoryFilter, etaStartDate, etaEndDate, operationFilter }),
@@ -2103,6 +2106,7 @@ export default function ProcessesPage() {
                 rows: Array.isArray(rows) ? rows : filteredProcesses,
                 toast,
                 canSeeName,
+                canSeePoDetails,
                 showProgress: exportOptions?.showProgress === true,
               })
             } finally {
@@ -2200,6 +2204,7 @@ export default function ProcessesPage() {
           detailTab={detailTab}
           isAdmin={isAdmin}
           canSeeName={canSeeName}
+          canSeePoDetails={canSeePoDetails}
           isSaving={isSaving}
           favoriteProcessIds={favoriteProcessIds}
           canEditPostReceiptNotes={canEditPostReceiptNotes}

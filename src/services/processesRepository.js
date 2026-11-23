@@ -1281,16 +1281,18 @@ export async function deleteProcess(processId, actor = null) {
 // pra nao pesar o command palette.
 //
 // F17.2d-2 (D-6/AD-1): `canSeeName` mascara o `name` de categoria restrita
-// (`isRestrictedCategory`) e a referencia/fornecedor de cada PO do
-// CONSOLIDADO (`getPurchaseOrderSearchTerms`) - o rotulo ja saia mascarado,
-// mas o MATCH da busca vazava (`user` achava FCL/LCL/AEREO pelo nome).
-export async function searchProcesses(rawQuery, { canSeeName = false } = {}) {
+// (`isRestrictedCategory`) e `canSeePoDetails` mascara a referencia/fornecedor
+// de cada PO do CONSOLIDADO (`getPurchaseOrderSearchTerms`) - o rotulo ja saia
+// mascarado, mas o MATCH da busca vazava (`user` achava FCL/LCL/AEREO pelo nome).
+// `canSeePoDetails` default = `canSeeName` (compat); chamadores de producao
+// passam a flag explicita (admin/logistica).
+export async function searchProcesses(rawQuery, { canSeeName = false, canSeePoDetails = canSeeName } = {}) {
   const q = String(rawQuery ?? '').trim().toLowerCase()
   if (q.length < 2) return []
 
   // Arquivados automaticos (recebidos ha 7+ dias) seguem fora da busca global, como antes.
   const all = (await listProcesses()).filter((process) => !process.autoArchived)
-  const canSeeDetails = canSeePurchaseOrderDetails(canSeeName)
+  const canSeeDetails = canSeePurchaseOrderDetails(canSeePoDetails)
   const matches = all.filter((process) => {
     const showName = canSeeName || !isRestrictedCategory(process.category)
     const haystack = [

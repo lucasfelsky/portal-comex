@@ -39,8 +39,7 @@ import {
   pickSingleDroppedFile,
 } from './processDocuments'
 import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
-import { canSeePurchaseOrderDetails, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
-import { canSeeProcessName } from './processLabels'
+import { canSeePurchaseOrderDetailsForRole, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { isShipmentConfirmed } from './shipmentConfirmation'
 
 // F18b-2 (design aprovado - canvas Claude Design M8NdiBoZfvbmJxVY5oZL6e):
@@ -134,7 +133,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     () => (isReadOnlyViewer ? PROCESS_LEVEL_TYPES.filter((type) => readableTypes.includes(type)) : PROCESS_LEVEL_TYPES),
     [isReadOnlyViewer, readableTypes]
   )
-  const canSeePoReference = canSeePurchaseOrderDetails(canSeeProcessName(role))
+  const canSeePoReference = canSeePurchaseOrderDetailsForRole(role)
   const isConsolidated = category === 'CONSOLIDADO'
   const purchaseOrders = isConsolidated ? getProcessPurchaseOrders(process) : []
 
