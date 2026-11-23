@@ -9,9 +9,11 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore/lite'
 import { deleteObject, ref, uploadBytes } from 'firebase/storage'
@@ -67,11 +69,21 @@ function normalizeDocument(rawDocument, fallbackId) {
   }
 }
 
-export async function listProcessDocuments(processId) {
+// `types` (perfis leitores): lista filtrada por `where('type','in',types)` -
+// as rules nao funcionam como filtro, entao a query PRECISA carregar o
+// filtro. Sem `types` (admin/logistica): subcolecao inteira.
+export async function listProcessDocuments(processId, { types } = {}) {
   if (!processId) return []
   if (!isFirebaseConfigured || !firestore) return []
+  // `types: []` = perfil sem nenhum tipo legivel. Nunca cai na query sem filtro:
+  // a rule nega o list sem filtro de tipo para os leitores (so daria erro).
+  if (Array.isArray(types) && types.length === 0) return []
 
-  const snapshot = await getDocs(collection(firestore, 'processes', processId, 'documents'))
+  const documentsCollection = collection(firestore, 'processes', processId, 'documents')
+  const source = Array.isArray(types)
+    ? query(documentsCollection, where('type', 'in', types))
+    : documentsCollection
+  const snapshot = await getDocs(source)
 
   return snapshot.docs.map((item) => normalizeDocument(item.data(), item.id))
 }

@@ -9,7 +9,7 @@
 const DEFAULT_ROLE = 'user'
 const DEFAULT_STATUS = 'Pendente'
 
-const ALLOWED_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer'])
+const ALLOWED_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer', 'tecnico', 'faturamento'])
 const ALLOWED_STATUSES = new Set(['Pendente', 'Ativo', 'Bloqueado', 'Reprovado'])
 
 function normalizeRole(value) {

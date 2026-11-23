@@ -220,6 +220,22 @@ describe('AuthProvider', () => {
     expect(mockSetDoc).toHaveBeenCalled()
   })
 
+  it.each(['tecnico', 'faturamento'])('claim role "%s" chega como profile.role (nao cai em user)', async (role) => {
+    const user = makeUser({ email: 'giulia@sqquimica.com' })
+    mockGetIdTokenResult.mockResolvedValue({ claims: { role, status: 'Ativo' } })
+    setupAuthObserver(user)
+
+    const { result } = renderHook(() => React.useContext(AuthContext), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    })
+
+    await waitFor(() => expect(result.current.profile).not.toBeNull(), { timeout: 5000 })
+    expect(result.current.profile.role).toBe(role)
+    expect(result.current.profile.status).toBe('Ativo')
+    expect(result.current.profile.scopes).toEqual(['Dashboard', 'Processos', 'Documentos'])
+    expect(result.current.hasAccess).toBe(true)
+  })
+
   it('aplica defaults (user, Pendente) quando claims ausentes', async () => {
     const user = makeUser()
     mockGetIdTokenResult.mockResolvedValue({ claims: {} })

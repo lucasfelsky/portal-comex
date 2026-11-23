@@ -32,6 +32,7 @@ import {
   getDocumentIndexFromDocuments,
   getDocumentTypeLabel,
   getInvoicePackingListLink,
+  getReadableDocumentTypes,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
   isFileDragEvent,
@@ -51,12 +52,14 @@ import { isShipmentConfirmed } from './shipmentConfirmation'
 // (variante local de `buildActionErrorMessage` com titulo/detalhe
 // separados, E6 do PLAN.md).
 //
-// Secoes: "Documentos do processo" (BL/AWB, Relatorio de carga, Invoice/
-// Packing List fora do CONSOLIDADO, "Outro"), "Invoice e Packing List por
+// Secoes: "Documentos do processo" (BL/AWB, Relatorio de carga, COA Original,
+// Invoice/Packing List fora do CONSOLIDADO, "Outro"), "Invoice e Packing List por
 // PO" (so CONSOLIDADO), "FISPQ por item" (so item IMO com id), "Relatorio
 // de lavacao por conteiner" (so FCL/CONSOLIDADO com conteineres) e
-// "Documentos sem vinculo atual".
-const PROCESS_LEVEL_TYPES = ['bl', 'cargoReport']
+// "Documentos sem vinculo atual". Perfis leitores (tecnico/faturamento) ficam em
+// MODO LEITURA: so as linhas de `getReadableDocumentTypes(role)` (Relatorio de
+// carga e COA Original), sem envio/pendencias/demais secoes.
+const PROCESS_LEVEL_TYPES = ['bl', 'cargoReport', 'coaOriginal']
 const PO_SCOPABLE_TYPES = ['invoice', 'packingList']
 
 function buildDocumentError(title, error) {
@@ -124,6 +127,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const processId = process?.id
   const category = process?.category
   const role = profile?.role
+  // `null` = todos os tipos (admin/logistica); lista = perfil leitor (so leitura).
+  const readableTypes = useMemo(() => getReadableDocumentTypes(role), [role])
+  const isReadOnlyViewer = Array.isArray(readableTypes)
+  const processLevelTypes = useMemo(
+    () => (isReadOnlyViewer ? PROCESS_LEVEL_TYPES.filter((type) => readableTypes.includes(type)) : PROCESS_LEVEL_TYPES),
+    [isReadOnlyViewer, readableTypes]
+  )
   const canSeePoReference = canSeePurchaseOrderDetails(canSeeProcessName(role))
   const isConsolidated = category === 'CONSOLIDADO'
   const purchaseOrders = isConsolidated ? getProcessPurchaseOrders(process) : []
@@ -177,7 +187,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
       setRefreshError(null)
 
       try {
-        const list = await listProcessDocuments(processId)
+        // Perfis leitores: a query PRECISA carregar o filtro por tipo (as rules
+        // nao funcionam como filtro - list sem `where` e negada).
+        const list = isReadOnlyViewer
+          ? await listProcessDocuments(processId, { types: readableTypes })
+          : await listProcessDocuments(processId)
         if (!isMounted) return
         setDocuments(list)
         hasLoadedOnceRef.current = true
@@ -198,7 +212,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     return () => {
       isMounted = false
     }
-  }, [processId, reloadToken])
+  }, [processId, reloadToken, isReadOnlyViewer, readableTypes])
 
   const groups = useMemo(() => groupDocumentsBySlot(documents), [documents])
 
@@ -207,8 +221,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   }
 
   const otherDocuments = useMemo(
-    () => documents.filter((document) => document.type === 'other'),
-    [documents]
+    () => (isReadOnlyViewer ? [] : documents.filter((document) => document.type === 'other')),
+    [documents, isReadOnlyViewer]
   )
 
   const allItems = Array.isArray(process?.items) ? process.items : []
@@ -218,16 +232,16 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     [process]
   )
   const nonImoCount = allItems.length - imoItems.length
-  const showFispqSection = imoItems.length > 0
+  const showFispqSection = !isReadOnlyViewer && imoItems.length > 0
 
   const allContainers = Array.isArray(process?.containers) ? process.containers : []
   const washContainers = CONTAINER_WASH_CATEGORIES.includes(category) ? allContainers : []
-  const showWashSection = washContainers.length > 0
+  const showWashSection = !isReadOnlyViewer && washContainers.length > 0
 
   const unlinkedGroups = useMemo(
-    () => getUnlinkedDocumentGroups(groups, process, purchaseOrders),
+    () => (isReadOnlyViewer ? [] : getUnlinkedDocumentGroups(groups, process, purchaseOrders)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups, process, purchaseOrders]
+    [groups, process, purchaseOrders, isReadOnlyViewer]
   )
 
   function getWashRowState(container) {
@@ -243,9 +257,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   // BL/Relatorio de carga/Invoice/Packing List): a mesma regra usada pelo
   // contador da aba e pelo card "Dados pendentes". Le a subcolecao real.
   const shipmentConfirmed = isShipmentConfirmed(process)
+  // Perfis leitores nao veem pendencias (0, e o painel nao publica a contagem).
   const pendentesCount = useMemo(
-    () => buildDocumentPendingFields(process, getDocumentIndexFromDocuments(documents)).length,
-    [process, documents]
+    () =>
+      isReadOnlyViewer
+        ? 0
+        : buildDocumentPendingFields(process, getDocumentIndexFromDocuments(documents)).length,
+    [process, documents, isReadOnlyViewer]
   )
 
   // Slot Invoice/Packing List coberto: arquivo proprio OU (so' Packing List)
@@ -259,9 +277,10 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
 
   const enviadosCount = useMemo(() => {
     let count = 0
-    for (const type of PROCESS_LEVEL_TYPES) {
+    for (const type of processLevelTypes) {
       if (findGroup(buildDocumentSlotKey(type))?.primary) count += 1
     }
+    if (isReadOnlyViewer) return count
     for (const type of PO_SCOPABLE_TYPES) {
       if (!isConsolidated) {
         if (hasDocumentCoverage(type, { category })) count += 1
@@ -284,15 +303,15 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
     return count
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection])
+  }, [groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection, processLevelTypes, isReadOnlyViewer])
 
   // Review #202: so' publica a contagem derivada depois da 1a carga com
   // sucesso - durante o loading (`documents` = []) ou com erro na 1a carga
   // a aba mantem a contagem do `documentIndex` (sem falso "4 pendentes").
   useEffect(() => {
-    if (isLoading || loadError) return
+    if (isLoading || loadError || isReadOnlyViewer) return
     if (typeof onPendingCountChange === 'function') onPendingCountChange(pendentesCount)
-  }, [pendentesCount, onPendingCountChange, isLoading, loadError])
+  }, [pendentesCount, onPendingCountChange, isLoading, loadError, isReadOnlyViewer])
 
   useEffect(() => {
     if (!focusAfterUploadRef.current) return
@@ -1045,7 +1064,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
 
   const isEmptyDocuments = documents.length === 0
   const showLoadedContent = !isLoading && !loadError
-  const visibilityNote = `Visível só para COMEX e logística · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`
+  const visibilityNote = `Visível para COMEX e logística (Relatório de carga e COA Original também para Técnico e Faturamento/fiscal) · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`
 
   const missingConsolidatedCount = isConsolidated
     ? purchaseOrders.reduce((count, order) => {
@@ -1077,9 +1096,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             <Icon name="inbox" size={28} />
             <strong>Nenhum documento ainda</strong>
             <p>
-              {role === 'logistica'
-                ? 'Os documentos enviados pelo COMEX aparecem aqui.'
-                : 'Envie BL, relatório de carga, invoice e packing list. FISPQ e lavação aparecem quando houver item IMO ou contêiner.'}
+              {isReadOnlyViewer
+                ? 'O Relatório de carga e o COA Original enviados pelo COMEX aparecem aqui.'
+                : role === 'logistica'
+                  ? 'Os documentos enviados pelo COMEX aparecem aqui.'
+                  : 'Envie BL, relatório de carga, invoice e packing list. FISPQ e lavação aparecem quando houver item IMO ou contêiner.'}
             </p>
             {pendentesCount > 0 ? (
               <span className="inline-badge inline-badge--warn">
@@ -1159,7 +1180,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               }
             />
             <div className="documents-section__rows">
-              {PROCESS_LEVEL_TYPES.map((type) => {
+              {processLevelTypes.map((type) => {
                 const slotKey = buildDocumentSlotKey(type)
                 const group = findGroup(slotKey)
                 const primary = group?.primary ?? null
@@ -1189,11 +1210,15 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                           setIsPreviewOpen(true)
                         }
                       : null,
-                  ...(shipmentConfirmed ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' } : {}),
+                  // Pendente (embarque confirmado) so para BL/Relatorio de carga e so
+                  // para quem envia; COA Original nunca vira pendencia (D-4).
+                  ...(shipmentConfirmed && !isReadOnlyViewer && type !== 'coaOriginal'
+                    ? { emptyBadgeText: 'Pendente', emptyBadgeTone: 'warn' }
+                    : {}),
                 })
               })}
 
-              {!isConsolidated
+              {!isReadOnlyViewer && !isConsolidated
                 ? PO_SCOPABLE_TYPES.map((type) => {
                     const slotKey = buildDocumentSlotKey(type, { category })
                     const group = findGroup(slotKey)
@@ -1260,7 +1285,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 })
               })}
 
-              {canUploadDocumentType(role, 'other') ? (
+              {!isReadOnlyViewer && canUploadDocumentType(role, 'other') ? (
                 <div
                   className={`documents-add-other-row${dragOverKey === 'other:new' ? ' documents-drop-active' : ''}`}
                   {...getDropTargetProps('other:new', { enabled: true, onFile: handleAddOtherDocument })}
@@ -1312,7 +1337,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             </div>
           </div>
 
-          {isConsolidated ? (
+          {!isReadOnlyViewer && isConsolidated ? (
             <div className="documents-section">
               <DocumentsSectionHeader
                 title="Invoice e Packing List por PO"

@@ -322,6 +322,52 @@ describe('ProcessDetailView — aba "Documentos" (F18a)', () => {
   })
 })
 
+// Perfis leitores (tecnico/faturamento): Documentos em modo leitura, sem Historico.
+describe.each(['tecnico', 'faturamento'])('ProcessDetailView — perfil leitor (%s)', (role) => {
+  const readerProfile = { uid: 'u-9', name: 'Giulia', role }
+
+  it('botao e opcao "Documentos" aparecem; "Histórico" nao; sem contador de pendentes', () => {
+    renderDetail({
+      isAdmin: false,
+      profile: readerProfile,
+      selectedProcess: makeProcess({
+        id: 'p-reader',
+        items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+        documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+        shippedAt: '2026-09-01',
+      }),
+    })
+    expect(screen.getByRole('button', { name: 'Documentos' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Documentos' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Histórico' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Histórico' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
+  })
+
+  it('deep link detailTab="documents" abre o painel (so as 2 linhas)', async () => {
+    renderDetail({
+      detailTab: 'documents',
+      isAdmin: false,
+      profile: readerProfile,
+      selectedProcess: makeProcess({ id: 'p-doc' }),
+    })
+    expect(await screen.findByText('Documentos do processo')).toBeInTheDocument()
+    const labels = Array.from(document.querySelectorAll('.documents-row__label')).map((node) => node.textContent)
+    expect(labels).toEqual(['Relatório de carga', 'COA Original'])
+  })
+
+  it('deep link detailTab="history" cai na aba geral', () => {
+    renderDetail({
+      detailTab: 'history',
+      isAdmin: false,
+      profile: readerProfile,
+      selectedProcess: makeProcess({ id: 'p-history' }),
+    })
+    expect(screen.queryByText('Histórico de marcos')).not.toBeInTheDocument()
+    expect(screen.getByText('ETD / ETA')).toBeInTheDocument()
+  })
+})
+
 // F18b-2 (E3): contador de documentos pendentes na aba/select "Documentos".
 describe('ProcessDetailView — contador da aba "Documentos" (F18b-2)', () => {
   it('N=0: nome acessível continua "Documentos" (sem contador)', () => {

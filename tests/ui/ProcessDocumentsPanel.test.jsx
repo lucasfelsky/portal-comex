@@ -32,6 +32,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 
 const ADMIN_PROFILE = { uid: 'admin-1', name: 'Admin', role: 'admin' }
 const LOGISTICS_PROFILE = { uid: 'log-1', name: 'Logística', role: 'logistica' }
+const READER_ROLES = ['tecnico', 'faturamento']
 
 const FCL_PROCESS = {
   id: 'p1',
@@ -1358,5 +1359,154 @@ describe('ProcessDocumentsPanel — Visualizar: PDF e imagem (S1)', () => {
 
     expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
+  })
+})
+
+// COA Original (admin) + modo leitura dos perfis tecnico/faturamento.
+describe('ProcessDocumentsPanel — COA Original (admin)', () => {
+  const SHIPPED_FCL = { ...FCL_PROCESS, shippedAt: '2026-09-01' }
+
+  function rowOf(title) {
+    return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  }
+
+  it('linha "COA Original" com Enviar e sem badge Pendente mesmo com embarque confirmado', async () => {
+    render(<ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const row = rowOf('COA Original')
+    expect(within(row).getByRole('button', { name: 'Enviar' })).toBeInTheDocument()
+    expect(within(row).queryByText('Pendente')).not.toBeInTheDocument()
+    expect(within(row).getByText('Não enviado')).toBeInTheDocument()
+    // admin continua listando a subcolecao inteira (sem filtro por tipo)
+    expect(mockListProcessDocuments).toHaveBeenCalledWith('p1')
+  })
+
+  it('upload do COA usa type coaOriginal e slot unico; COA enviado nao entra nas pendencias', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const onPendingCountChange = vi.fn()
+    render(<ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} onPendingCountChange={onPendingCountChange} />)
+    await waitForDocumentsLoaded()
+    // 2 FISPQ + 1 lavacao + BL/Relatorio/Invoice/Packing List (COA fora)
+    await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(7))
+
+    const fileInput = rowOf('COA Original').querySelector('input[type="file"]')
+    await user.upload(fileInput, new File(['x'], 'coa.pdf', { type: 'application/pdf' }))
+    await waitFor(() =>
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'coaOriginal' }))
+    )
+  })
+
+  it('logística vê a linha COA Original sem botão de envio', async () => {
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitForDocumentsLoaded()
+    expect(within(rowOf('COA Original')).queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument()
+  })
+})
+
+describe.each(READER_ROLES)('ProcessDocumentsPanel — modo leitura (%s)', (role) => {
+  const READER_PROFILE = { uid: `${role}-1`, name: 'Leitor', role }
+  const SHIPPED_CONSOLIDATED = {
+    ...FCL_PROCESS,
+    category: 'CONSOLIDADO',
+    shippedAt: '2026-09-01',
+    purchaseOrders: [{ po: 'PO-1' }],
+  }
+
+  function readerDoc(type, overrides = {}) {
+    return docBl({
+      id: `r-${type}`,
+      type,
+      slotKey: type,
+      name: type === 'cargoReport' ? 'carga.pdf' : 'coa.pdf',
+      ...overrides,
+    })
+  }
+
+  it('consulta com { types: [cargoReport, coaOriginal] }, mostra só 2 linhas e Baixar', async () => {
+    mockListProcessDocuments.mockResolvedValue([readerDoc('cargoReport'), readerDoc('coaOriginal')])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={READER_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    expect(mockListProcessDocuments).toHaveBeenCalledWith('p1', { types: ['cargoReport', 'coaOriginal'] })
+    const labels = Array.from(document.querySelectorAll('.documents-row__label')).map((node) => node.textContent)
+    expect(labels).toEqual(['Relatório de carga', 'COA Original'])
+    expect(screen.getByRole('button', { name: 'Baixar carga.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar coa.pdf' })).toBeInTheDocument()
+    // Visualizar (S1) continua disponivel no Relatorio de carga
+    expect(screen.getByRole('button', { name: 'Visualizar carga.pdf' })).toBeInTheDocument()
+  })
+
+  it('sem Enviar/Substituir/Excluir/Renomear, sem adicionar outro e sem resumo/badge de pendente', async () => {
+    mockListProcessDocuments.mockResolvedValue([readerDoc('cargoReport'), readerDoc('coaOriginal')])
+    const onPendingCountChange = vi.fn()
+    render(
+      <ProcessDocumentsPanel process={SHIPPED_CONSOLIDATED} profile={READER_PROFILE} onPendingCountChange={onPendingCountChange} />
+    )
+    await waitFor(() => expect(screen.getByText('2 enviados')).toBeInTheDocument())
+
+    for (const name of [/^Enviar/, /Substituir/, /Excluir/, /Renomear/, /Adicionar outro documento/]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
+    expect(onPendingCountChange).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['FCL com embarque confirmado', { ...FCL_PROCESS, shippedAt: '2026-09-01' }],
+    ['CONSOLIDADO com embarque confirmado', SHIPPED_CONSOLIDATED],
+  ])('%s e sem documentos: linha vazia "Não enviado", sem badge Pendente', async (_label, process) => {
+    mockListProcessDocuments.mockResolvedValue([])
+    render(<ProcessDocumentsPanel process={process} profile={READER_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const cargoRow = screen
+      .getByText('Relatório de carga', { selector: '.documents-row__label' })
+      .closest('.documents-row')
+    expect(within(cargoRow).getByText('Não enviado')).toBeInTheDocument()
+    expect(screen.queryByText('Pendente')).not.toBeInTheDocument()
+    expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
+  })
+
+  it('nenhum rótulo de BL/Invoice/Packing List/FISPQ/lavação/Outro nem seção de PO', async () => {
+    mockListProcessDocuments.mockResolvedValue([readerDoc('cargoReport')])
+    render(<ProcessDocumentsPanel process={SHIPPED_CONSOLIDATED} profile={READER_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    for (const text of [
+      /BL\/AWB/,
+      /Invoice/,
+      /Packing List/,
+      /FISPQ/,
+      /lavação/i,
+      /Documentos sem vínculo/,
+      /Documento adicional/,
+      /^Outro$/,
+      'Resina Atlas',
+    ]) {
+      expect(screen.queryByText(text)).not.toBeInTheDocument()
+    }
+  })
+
+  it('estado vazio e nota de visibilidade conforme D-6', async () => {
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={READER_PROFILE} variant="desktop" />)
+    await waitForDocumentsLoaded()
+
+    expect(
+      screen.getByText('O Relatório de carga e o COA Original enviados pelo COMEX aparecem aqui.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Envie BL/)).not.toBeInTheDocument()
+  })
+
+  it('baixar chama o download autenticado com (processId, docId)', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['x']))
+    mockListProcessDocuments.mockResolvedValue([readerDoc('coaOriginal')])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={READER_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(screen.getByRole('button', { name: 'Baixar coa.pdf' }))
+    await waitFor(() => expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'r-coaOriginal'))
   })
 })

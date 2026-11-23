@@ -36,7 +36,12 @@ import { ProcessItemsDesktop, ProcessRelatedItemDesktop } from './ProcessItemsDe
 import ProcessMessagesPanel from './ProcessMessagesPanel'
 import ProcessHistoryPanel from './ProcessHistoryPanel'
 import ProcessDocumentsPanel from './ProcessDocumentsPanel'
-import { canViewProcessRecords, getDocumentPendingFields, normalizeDocumentIndex } from './processDocuments'
+import {
+  canViewProcessDocuments,
+  canViewProcessHistory,
+  getDocumentPendingFields,
+  normalizeDocumentIndex,
+} from './processDocuments'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import ErpHint from '../erp/ErpHint'
 import { EMPTY_ERP_HINTS, buildErpFieldHints, erpItemGroupKey, erpOrderKey } from '../erp/erpReference'
@@ -139,12 +144,16 @@ export default function ProcessDetailView({
   const firstMenuItemRef = useRef(null)
   // D-E: pendencias so pro admin.
   const pendingFields = isAdmin ? getPendingFields(selectedProcess) : []
-  // F18a (D6): "Histórico"/"Documentos" so pra admin/logistica. Deep link
+  // F18a (D6): "Histórico" so pra admin/logistica; "Documentos" tambem para os
+  // perfis leitores (tecnico/faturamento, modo leitura). Deep link
   // (`location.state.detailTab`, `ProcessesPage.jsx:813`) pode cair aqui
-  // com um role sem acesso - o guard redireciona pra "Detalhes gerais".
-  const canViewRecords = canViewProcessRecords(profile?.role)
+  // com um role sem acesso - o guard (por aba) redireciona pra "Detalhes gerais".
+  const canViewHistory = canViewProcessHistory(profile?.role)
+  const canViewDocuments = canViewProcessDocuments(profile?.role)
   const effectiveTab =
-    !canViewRecords && (detailTab === 'history' || detailTab === 'documents') ? 'general' : detailTab
+    (!canViewHistory && detailTab === 'history') || (!canViewDocuments && detailTab === 'documents')
+      ? 'general'
+      : detailTab
 
   // F18b-2 (E3): contador de documentos pendentes na aba - `documentIndex`
   // (aba/select, atualizado no reload assincrono do trigger) EXCETO quando o
@@ -152,7 +161,7 @@ export default function ProcessDetailView({
   // `onPendingCountChange` nesta sessao (apos um upload, evita divergencia
   // entre a aba e o resumo do painel).
   const [pendingCountOverride, setPendingCountOverride] = useState(null)
-  const documentsPendingCount = canViewRecords
+  const documentsPendingCount = canViewHistory
     ? pendingCountOverride && pendingCountOverride.processId === selectedProcess.id
       ? pendingCountOverride.count
       : getDocumentPendingFields(selectedProcess).length
@@ -169,8 +178,8 @@ export default function ProcessDetailView({
   )
 
   // F18b-2 (E9): indicadores read-only de FISPQ/lavacao (aba Itens/bloco
-  // Carga), lidos do `documentIndex` do processo - so canViewRecords.
-  const documentIndex = canViewRecords ? normalizeDocumentIndex(selectedProcess.documentIndex) : null
+  // Carga), lidos do `documentIndex` do processo - so canViewHistory.
+  const documentIndex = canViewHistory ? normalizeDocumentIndex(selectedProcess.documentIndex) : null
 
   useEffect(() => {
     if (!isMobileLayout) return undefined
@@ -799,8 +808,8 @@ export default function ProcessDetailView({
       { key: 'process', label: 'Processo' },
       { key: 'items', label: 'Itens' },
       { key: 'messages', label: 'Mensagens' },
-      ...(canViewRecords ? [{ key: 'history', label: 'Histórico' }] : []),
-      ...(canViewRecords
+      ...(canViewHistory ? [{ key: 'history', label: 'Histórico' }] : []),
+      ...(canViewDocuments
         ? [
             {
               key: 'documents',
@@ -860,7 +869,7 @@ export default function ProcessDetailView({
               etdHint={etdHint}
               onEditMode={isAdmin ? onEditMode : undefined}
               onOpenItems={() => onDetailTabChange('items')}
-              onOpenDocuments={canViewRecords ? () => onDetailTabChange('documents') : undefined}
+              onOpenDocuments={canViewHistory ? () => onDetailTabChange('documents') : undefined}
             />
           ) : effectiveTab === 'items' ? (
             <ProcessItemsDesktop
@@ -1052,8 +1061,8 @@ export default function ProcessDetailView({
           <option value="process">Processo</option>
           <option value="items">Itens</option>
           <option value="messages">Mensagens</option>
-          {canViewRecords ? <option value="history">Histórico</option> : null}
-          {canViewRecords ? (
+          {canViewHistory ? <option value="history">Histórico</option> : null}
+          {canViewDocuments ? (
             <option value="documents">
               {documentsPendingCount > 0
                 ? `Documentos (${documentsPendingCount} ${documentsPendingCount === 1 ? 'pendente' : 'pendentes'})`
@@ -1069,10 +1078,10 @@ export default function ProcessDetailView({
         <button type="button" className={`tab-button${effectiveTab === 'process' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'process' : undefined} onClick={() => onDetailTabChange('process')}>Processo</button>
         <button type="button" className={`tab-button${effectiveTab === 'items' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'items' : undefined} onClick={() => onDetailTabChange('items')}>Itens</button>
         <button type="button" className={`tab-button${effectiveTab === 'messages' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'messages' : undefined} onClick={() => onDetailTabChange('messages')}>Mensagens</button>
-        {canViewRecords ? (
+        {canViewHistory ? (
           <button type="button" className={`tab-button${effectiveTab === 'history' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'history' : undefined} onClick={() => onDetailTabChange('history')}>Histórico</button>
         ) : null}
-        {canViewRecords ? (
+        {canViewDocuments ? (
           <button type="button" className={`tab-button${effectiveTab === 'documents' ? ' tab-button--active' : ''}`} aria-pressed={isMobileLayout ? effectiveTab === 'documents' : undefined} onClick={() => onDetailTabChange('documents')}>
             Documentos
             {documentsPendingCount > 0 ? (

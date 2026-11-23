@@ -278,6 +278,30 @@ describe('AdminUsersPanel', () => {
     expect(screen.getByText('Processos')).toBeInTheDocument()
   })
 
+  it('select Perfil oferece Técnico e Faturamento/fiscal', async () => {
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    const roleSelect = screen.getAllByRole('combobox')[1]
+    const labels = within(roleSelect).getAllByRole('option').map((option) => option.textContent)
+    expect(labels).toEqual(expect.arrayContaining(['Técnico', 'Faturamento/fiscal']))
+    expect(within(roleSelect).getByRole('option', { name: 'Técnico' })).toHaveValue('tecnico')
+    expect(within(roleSelect).getByRole('option', { name: 'Faturamento/fiscal' })).toHaveValue('faturamento')
+  })
+
+  it.each([
+    ['tecnico', 'Técnico'],
+    ['faturamento', 'Faturamento/fiscal'],
+  ])('salvar com perfil %s envia role "%s" no payload', async (value, label) => {
+    const user = userEvent.setup()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Maria Souza')).toBeInTheDocument())
+    const roleSelect = screen.getAllByRole('combobox')[1]
+    await user.selectOptions(roleSelect, label)
+    await user.click(screen.getByRole('button', { name: /Salvar altera/i }))
+    await waitFor(() => expect(mockSaveUser).toHaveBeenCalledTimes(1))
+    expect(mockSaveUser.mock.calls[0][0].role).toBe(value)
+  })
+
   it('salvar criar: chama createUser com payload + profile (Firebase desligado)', async () => {
     const user = userEvent.setup()
     mockCreateUser.mockResolvedValueOnce({ id: 'new-99', name: 'Novo', email: 'novo@sq.com', role: 'user' })

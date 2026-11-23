@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   mockCollection,
   mockDoc,
+  mockQuery,
+  mockWhere,
   mockGetDocs,
   mockSetDoc,
   mockDeleteDoc,
@@ -22,6 +24,8 @@ const {
 } = vi.hoisted(() => ({
   mockCollection: vi.fn(),
   mockDoc: vi.fn(),
+  mockQuery: vi.fn(),
+  mockWhere: vi.fn(),
   mockGetDocs: vi.fn(),
   mockSetDoc: vi.fn(),
   mockDeleteDoc: vi.fn(),
@@ -51,6 +55,8 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('firebase/firestore/lite', () => ({
   collection: (...args) => mockCollection(...args),
   doc: (...args) => mockDoc(...args),
+  query: (...args) => mockQuery(...args),
+  where: (...args) => mockWhere(...args),
   getDocs: (...args) => mockGetDocs(...args),
   setDoc: (...args) => mockSetDoc(...args),
   deleteDoc: (...args) => mockDeleteDoc(...args),
@@ -80,6 +86,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   firebaseConfigured = true
   mockCollection.mockReturnValue('COLLECTION_REF')
+  mockWhere.mockReturnValue('WHERE_CLAUSE')
+  mockQuery.mockReturnValue('FILTERED_QUERY')
   mockDoc.mockImplementation((...args) => (args.length > 1 ? 'DOC_REF' : { id: 'new-doc-id' }))
   mockRef.mockReturnValue('STORAGE_REF')
   mockUploadBytes.mockResolvedValue(undefined)
@@ -100,6 +108,34 @@ describe('listProcessDocuments', () => {
   it('nao configurado -> []', async () => {
     firebaseConfigured = false
     expect(await listProcessDocuments('p1')).toEqual([])
+    expect(mockGetDocs).not.toHaveBeenCalled()
+  })
+
+  it('sem types: le a subcolecao inteira (sem query/where)', async () => {
+    mockGetDocs.mockResolvedValue({ docs: [] })
+    await listProcessDocuments('p1')
+    expect(mockCollection).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents')
+    expect(mockQuery).not.toHaveBeenCalled()
+    expect(mockWhere).not.toHaveBeenCalled()
+    expect(mockGetDocs).toHaveBeenCalledWith('COLLECTION_REF')
+  })
+
+  it('com types (leitores): getDocs recebe a query com where("type","in",types)', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [{ id: 'd9', data: () => ({ type: 'coaOriginal', slotKey: 'coaOriginal', name: 'coa.pdf' }) }],
+    })
+    const result = await listProcessDocuments('p1', { types: ['cargoReport', 'coaOriginal'] })
+    expect(mockWhere).toHaveBeenCalledWith('type', 'in', ['cargoReport', 'coaOriginal'])
+    expect(mockQuery).toHaveBeenCalledWith('COLLECTION_REF', 'WHERE_CLAUSE')
+    expect(mockGetDocs).toHaveBeenCalledWith('FILTERED_QUERY')
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ id: 'd9', type: 'coaOriginal' })
+  })
+
+  it('types vazio: devolve [] sem consultar o Firestore (nunca query sem filtro)', async () => {
+    expect(await listProcessDocuments('p1', { types: [] })).toEqual([])
+    expect(mockCollection).not.toHaveBeenCalled()
+    expect(mockQuery).not.toHaveBeenCalled()
     expect(mockGetDocs).not.toHaveBeenCalled()
   })
 
