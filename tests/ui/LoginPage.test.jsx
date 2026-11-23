@@ -8,7 +8,7 @@
 //   - Feedback de sucesso do register aparece no success-banner
 //   - Botao "Esqueci minha senha" toggle mostra o painel de reset
 //   - Reset chama useAuth.requestPasswordReset(email)
-//   - Quando isAuthenticated && hasAccess: redireciona para redirectTo (location.state.from: pathname + search + hash, so caminho interno) ou "/"
+//   - Quando isAuthenticated && hasAccess: redireciona para redirectTo (location.state.from: pathname + search + hash, so caminho interno, sem "//" nem barra invertida) ou "/"
 //   - Quando isAuthenticated && !isEmailVerified: redireciona para /verificar-email
 //   - Quando isAuthenticated && !hasAccess: redireciona para /aguardando-aprovacao
 //   - Submit desabilitado quando submitting=true
@@ -48,6 +48,12 @@ function SearchProbe() {
   return <div data-testid="processos-search">{location.search}</div>
 }
 
+// Fallback (rota "*"): expoe o pathname quando nenhuma rota declarada casa.
+function PathProbe() {
+  const location = useLocation()
+  return <div data-testid="fallback-path">{location.pathname}</div>
+}
+
 function renderPage({ initialEntries = ['/login'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -59,6 +65,7 @@ function renderPage({ initialEntries = ['/login'] } = {}) {
           <Route path="/aguardando-aprovacao" element={<div data-testid="pending">pending</div>} />
           <Route path="/destino-original" element={<div data-testid="destino">destino</div>} />
           <Route path="/processos" element={<SearchProbe />} />
+          <Route path="*" element={<PathProbe />} />
         </Routes>
       </ToastProvider>
     </MemoryRouter>
@@ -224,6 +231,45 @@ describe('LoginPage', () => {
     })
     renderPage({ initialEntries: [{ pathname: '/login', state: { from: { pathname: '//evil.com' } } }] })
     expect(screen.getByTestId('home')).toBeInTheDocument()
+  })
+
+  it.each(['/\\evil.com', '/\\\\evil.com', '\\evil.com'])(
+    'from.pathname com barra invertida (%s) e ignorado: redireciona para /',
+    (pathname) => {
+      mockUseAuth.mockReturnValue({
+        ...defaultAuth(),
+        isAuthenticated: true,
+        hasAccess: true,
+      })
+      renderPage({ initialEntries: [{ pathname: '/login', state: { from: { pathname } } }] })
+      expect(screen.getByTestId('home')).toBeInTheDocument()
+      expect(screen.queryByTestId('fallback-path')).not.toBeInTheDocument()
+    }
+  )
+
+  it('from.pathname "/%5Cevil.com" (percent-encoded) e mantido como caminho interno', () => {
+    mockUseAuth.mockReturnValue({
+      ...defaultAuth(),
+      isAuthenticated: true,
+      hasAccess: true,
+    })
+    renderPage({ initialEntries: [{ pathname: '/login', state: { from: { pathname: '/%5Cevil.com' } } }] })
+    expect(screen.queryByTestId('home')).not.toBeInTheDocument()
+    const probe = screen.getByTestId('fallback-path')
+    expect(probe.textContent.startsWith('/')).toBe(true)
+    expect(probe.textContent.startsWith('//')).toBe(false)
+  })
+
+  it('from com pathname + hash legitimos: redireciona para o destino original', () => {
+    mockUseAuth.mockReturnValue({
+      ...defaultAuth(),
+      isAuthenticated: true,
+      hasAccess: true,
+    })
+    renderPage({
+      initialEntries: [{ pathname: '/login', state: { from: { pathname: '/destino-original', hash: '#sec' } } }],
+    })
+    expect(screen.getByTestId('destino')).toBeInTheDocument()
   })
 
   it('quando isAuthenticated && hasAccess e sem from: redireciona para /', () => {

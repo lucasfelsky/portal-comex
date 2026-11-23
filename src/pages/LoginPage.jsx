@@ -7,6 +7,7 @@ import Icon from '../components/Icon'
 import { ProductMark, SqQuimicaLogo } from '../components/BrandMark'
 import { LoginPortScene, LoginSeaChart, LoginWaves } from '../components/LoginArt'
 import sqQuimicaLogo from '../../assets/sqquimica.png'
+import { isSafeReturnTo } from '../utils/processNavigation'
 
 // Refino F5b (Login.dc.html): >= 1041px o campo de senha ganha a linha do rotulo com
 // "Esqueci minha senha" e o botao mostrar/ocultar; tablet/mobile ficam com o campo legado.
@@ -35,11 +36,10 @@ export default function LoginPage() {
   const [feedback, setFeedback] = useState('')
 
   // Preserva `search`/`hash` do destino original (deep link do e-mail), com
-  // guarda de caminho interno (sem `//host` nem URL absoluta).
+  // guarda de caminho interno (sem `//host`, barra invertida nem URL absoluta).
   const from = location.state?.from
   const redirectCandidate = `${from?.pathname ?? ''}${from?.search ?? ''}${from?.hash ?? ''}`
-  const redirectTo =
-    redirectCandidate.startsWith('/') && !redirectCandidate.startsWith('//') ? redirectCandidate : '/'
+  const redirectTo = isSafeReturnTo(redirectCandidate) ? redirectCandidate : '/'
 
   if (isAuthenticated && hasAccess) {
     return <Navigate to={redirectTo} replace />

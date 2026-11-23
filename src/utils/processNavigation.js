@@ -12,8 +12,13 @@ const RETURN_LABELS = {
   '/menu': 'Menu',
 }
 
-function isSafeReturnTo(value) {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
+// `\` e tratado como `/` pelo navegador (`/\host` equivale a `//host`), entao e rejeitado.
+// `%5C` NAO e decodificado antes de resolver a URL: vira segmento literal do path
+// interno, portanto `/%5Chost` e aceito.
+export function isSafeReturnTo(value) {
+  return (
+    typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
+  )
 }
 
 // `location` = objeto do react-router (`useLocation()`): so' vira returnTo fora de /processos.

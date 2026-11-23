@@ -3,6 +3,7 @@ import {
   buildProcessLinkState,
   getReturnLabel,
   getReturnToFromLocation,
+  isSafeReturnTo,
   PROCESS_DETAIL_TABS,
   readProcessLinkFromSearch,
   readReturnTo,
@@ -26,6 +27,26 @@ describe('processNavigation (origem do deep link do detalhe)', () => {
     expect(buildProcessLinkState('p1', 'messages', '/processos')).not.toHaveProperty('returnTo')
     expect(buildProcessLinkState('p1', 'messages', '//evil.com')).not.toHaveProperty('returnTo')
     expect(buildProcessLinkState('p1', 'messages', 'https://evil.com')).not.toHaveProperty('returnTo')
+  })
+
+  it('isSafeReturnTo rejeita barra invertida; %5C (percent-encoded) e aceito como caminho interno', () => {
+    for (const value of ['/\\evil.com', '/\\\\evil.com', '\\evil.com', '/ok?x=a\\b', '//evil.com', 'https://evil.com', undefined]) {
+      expect(isSafeReturnTo(value)).toBe(false)
+    }
+    for (const value of ['/', '/news', '/processos?processo=ID&aba=documents', '/destino-original#sec', '/%5Cevil.com']) {
+      expect(isSafeReturnTo(value)).toBe(true)
+    }
+
+    expect(readReturnTo({ returnTo: '/\\evil.com' })).toBe('')
+    expect(readReturnTo({ returnTo: '/%5Cevil.com' })).toBe('/%5Cevil.com')
+
+    expect(buildProcessLinkState('p1', 'messages', '/\\evil.com')).not.toHaveProperty('returnTo')
+    expect(buildProcessLinkState('p1', 'messages', '\\evil.com')).not.toHaveProperty('returnTo')
+    expect(buildProcessLinkState('p1', 'messages', '/%5Cevil.com')).toHaveProperty('returnTo', '/%5Cevil.com')
+
+    expect(getReturnToFromLocation({ pathname: '/\\evil.com', search: '' })).toBe('')
+    expect(getReturnToFromLocation({ pathname: '/news', search: '?q=a\\b' })).toBe('')
+    expect(getReturnToFromLocation({ pathname: '/%5Cevil.com', search: '' })).toBe('/%5Cevil.com')
   })
 
   it('readReturnTo e getReturnLabel', () => {
