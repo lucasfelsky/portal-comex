@@ -3,6 +3,8 @@ import {
   buildProcessLinkState,
   getReturnLabel,
   getReturnToFromLocation,
+  PROCESS_DETAIL_TABS,
+  readProcessLinkFromSearch,
   readReturnTo,
 } from '../../src/utils/processNavigation'
 
@@ -33,5 +35,50 @@ describe('processNavigation (origem do deep link do detalhe)', () => {
     expect(getReturnLabel('/')).toBe('Dashboard')
     expect(getReturnLabel('/notifications?x=1')).toBe('Notificações')
     expect(getReturnLabel('/admin/suporte')).toBe('')
+  })
+})
+
+describe('readProcessLinkFromSearch (deep link por URL)', () => {
+  it('PROCESS_DETAIL_TABS lista as 6 abas reais do detalhe, na ordem', () => {
+    expect(PROCESS_DETAIL_TABS).toEqual(['general', 'process', 'items', 'messages', 'history', 'documents'])
+  })
+
+  it('le processo e aba, com ou sem "?"', () => {
+    expect(readProcessLinkFromSearch('?processo=p-1&aba=documents')).toEqual({
+      selectedProcessId: 'p-1',
+      detailTab: 'documents',
+    })
+    expect(readProcessLinkFromSearch('processo=p-1&aba=history')).toEqual({
+      selectedProcessId: 'p-1',
+      detailTab: 'history',
+    })
+  })
+
+  it('aba invalida ou ausente cai em general', () => {
+    expect(readProcessLinkFromSearch('?processo=p-1&aba=xyz')).toEqual({
+      selectedProcessId: 'p-1',
+      detailTab: 'general',
+    })
+    expect(readProcessLinkFromSearch('?processo=p-1')).toEqual({
+      selectedProcessId: 'p-1',
+      detailTab: 'general',
+    })
+  })
+
+  it('processo vazio, grande demais ou entrada nao-string -> null', () => {
+    expect(readProcessLinkFromSearch('?processo=&aba=documents')).toBeNull()
+    expect(readProcessLinkFromSearch('?processo=%20%20')).toBeNull()
+    expect(readProcessLinkFromSearch('?aba=documents')).toBeNull()
+    expect(readProcessLinkFromSearch(`?processo=${'a'.repeat(201)}`)).toBeNull()
+    expect(readProcessLinkFromSearch(`?processo=${'a'.repeat(200)}`)).not.toBeNull()
+    expect(readProcessLinkFromSearch(undefined)).toBeNull()
+    expect(readProcessLinkFromSearch(42)).toBeNull()
+  })
+
+  it('decodifica o id (%2F)', () => {
+    expect(readProcessLinkFromSearch('?processo=a%2Fb&aba=documents')).toEqual({
+      selectedProcessId: 'a/b',
+      detailTab: 'documents',
+    })
   })
 })

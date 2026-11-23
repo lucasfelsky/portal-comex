@@ -237,11 +237,49 @@ describe('sendProcessNotificationEmail', () => {
       makeEvent({
         type: 'process_cargo_report_uploaded',
         recipientUserId: RECIPIENT_UID,
-        title: 'Relatório de Carga disponível: PO 12345',
+        processId: 'proc-1',
+        title: 'Relatório de Carga - PO 12345 - Resina Atlas',
         body: 'Relatório de Carga preenchido e disponível no Portal COMEX. Documentação necessária para emissão do COA está disponível na pasta do processo.',
       })
     )
     expect(mockSendMail).toHaveBeenCalledTimes(1)
+
+    const args = mockSendMail.mock.calls[0][0]
+    expect(args.to).toBe('maria@sqquimica.com')
+    // assunto = titulo montado pelo trigger, SEM o prefixo "[Portal COMEX]".
+    expect(args.subject).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(args.subject).not.toContain('[Portal COMEX]')
+    expect(args.html).toContain('processos?processo=proc-1&amp;aba=documents')
+    expect(args.text).toContain('Processo: PO 12345 - Resina Atlas')
+    expect(args.attachments).toHaveLength(1)
+    expect(args.attachments[0].cid).toBe('cargo-report-banner@portal-comex')
+    expect(args.attachments[0].contentType).toBe('image/jpeg')
+    expect(args.html).toContain('src="cid:cargo-report-banner@portal-comex"')
+    expect(args.text).toContain('Olá, Maria Souza.')
+    expect(args.text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
+  })
+
+  it('outro tipo de e-mail de processo -> texto puro, sem html nem anexos', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'process_question_answered',
+        recipientUserId: RECIPIENT_UID,
+        processId: 'proc-1',
+        title: 'Sua duvida foi respondida',
+        body: 'Veja os detalhes do processo PO 12345',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const args = mockSendMail.mock.calls[0][0]
+    expect(args.subject).toBe('[Portal COMEX] Sua duvida foi respondida')
+    expect(args.html).toBeUndefined()
+    expect(args.attachments).toBeUndefined()
+    expect(args.text).toContain('Veja os detalhes do processo PO 12345')
   })
 
   it('recipientUserId vazio -> ignora', async () => {

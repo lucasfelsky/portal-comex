@@ -16,8 +16,48 @@ export const CARGO_REPORT_NOTIFICATION_BODY =
 // Teto de e-mails por lista da config (protege contra doc adulterado/enorme).
 const MAX_EMAILS_PER_LIST = 50
 
-export function buildCargoReportNotificationTitle(processLabel) {
-  return `Relatório de Carga disponível: ${processLabel}`
+export const CARGO_REPORT_SUBJECT_PREFIX = 'Relatório de Carga'
+const CARGO_REPORT_SUBJECT_SEPARATOR = ' - '
+
+// Remove quebras de linha (header injection no assunto do e-mail), colapsa
+// espacos e aplica trim.
+export function sanitizeCargoReportText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+// Assunto do e-mail E titulo da notificacao in-app (sao o MESMO texto, sem o
+// prefixo "[Portal COMEX]"):
+//   FCL/LCL/AEREO (nao consolidado): `Relatório de Carga - PO <numero> - <nome>`
+//   CONSOLIDADO:                     `Relatório de Carga - <nome>`
+// Partes ausentes sao omitidas sem hifen sobrando; sem nada: `Relatório de Carga`.
+//
+// REGRA (assunto fixo pedido pelo Comex): o mesmo assunto vale para TODOS os
+// destinatarios, inclusive e-mail direto da lista. Por isso NAO depende de
+// role: o `name` de processos FCL/LCL/AEREO aparece tambem para perfis nao
+// admin neste aviso (ao contrario de `buildRecipientProcessLabel`).
+export function buildCargoReportSubject(process) {
+  const category = sanitizeCargoReportText(process?.category)
+  const processNumber = sanitizeCargoReportText(process?.processNumber)
+  const name = sanitizeCargoReportText(process?.name)
+
+  const parts =
+    category === 'CONSOLIDADO' && name
+      ? [name]
+      : [processNumber ? `PO ${processNumber}` : '', name].filter(Boolean)
+
+  return parts.length > 0
+    ? `${CARGO_REPORT_SUBJECT_PREFIX}${CARGO_REPORT_SUBJECT_SEPARATOR}${parts.join(CARGO_REPORT_SUBJECT_SEPARATOR)}`
+    : CARGO_REPORT_SUBJECT_PREFIX
+}
+
+// Parte do processo de um assunto ja montado (o doc de `notifications` so'
+// carrega o titulo): `Relatório de Carga - X` -> `X`; so' o prefixo ou vazio
+// -> ''; texto fora do padrao -> o proprio texto (sanitizado).
+export function extractCargoReportProcessLabel(subject) {
+  const text = sanitizeCargoReportText(subject)
+  const prefixWithSeparator = `${CARGO_REPORT_SUBJECT_PREFIX}${CARGO_REPORT_SUBJECT_SEPARATOR}`
+  if (text === CARGO_REPORT_SUBJECT_PREFIX) return ''
+  return text.startsWith(prefixWithSeparator) ? text.slice(prefixWithSeparator.length).trim() : text
 }
 
 function defaultIsCorporateEmail(email) {

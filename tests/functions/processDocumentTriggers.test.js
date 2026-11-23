@@ -603,11 +603,11 @@ describe('notifyCargoReportUploaded', () => {
       expect(data.actorName).toBe('Admin Um')
     }
 
-    // titulo por role do destinatario: admin ve o nome; logistica/user, o rotulo restrito (FCL).
+    // titulo fixo pedido pelo Comex: IGUAL para todos os perfis (FCL mostra o nome tambem a nao-admin).
     const titleOf = (uid) => notifications.find((data) => data.recipientUserId === uid).title
-    expect(titleOf('admin-2')).toBe('Relatório de Carga disponível: Resina Atlas')
-    expect(titleOf('logi-1')).toBe('Relatório de Carga disponível: PO 12345')
-    expect(titleOf('tec-1')).toBe('Relatório de Carga disponível: PO 12345')
+    expect(titleOf('admin-2')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(titleOf('logi-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(titleOf('tec-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
 
     // todos tem conta: nenhum e-mail direto (o e-mail deles sai por sendProcessNotificationEmail).
     expect(mockSendMail).not.toHaveBeenCalled()
@@ -622,10 +622,53 @@ describe('notifyCargoReportUploaded', () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1)
     const [mail] = mockSendMail.mock.calls[0]
     expect(mail.to).toBe('fiscal@sqquimica.com')
-    expect(mail.subject.startsWith('[Portal COMEX] Relatório de Carga disponível:')).toBe(true)
-    expect(mail.subject).toBe('[Portal COMEX] Relatório de Carga disponível: PO 12345')
+    expect(mail.subject).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
     expect(mail.text).toContain(BODY)
     expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+
+    // HTML (imagem + botao) + deep link + banner por CID. O processo vai no
+    // assunto e no texto puro (mesmo assunto para todos os perfis).
+    expect(mail.html).toContain('aba=documents')
+    expect(mail.html).toContain(`processo=${PROCESS_ID}`)
+    expect(mail.html).toContain(`alt="${BODY}"`)
+    expect(mail.text).toContain('Processo: PO 12345 - Resina Atlas')
+    expect(mail.attachments).toHaveLength(1)
+    expect(mail.attachments[0].cid).toBe('cargo-report-banner@portal-comex')
+    expect(mail.attachments[0].contentType).toBe('image/jpeg')
+    expect(mail.text).toContain(`https://portal-comex.com/processos?processo=${PROCESS_ID}&aba=documents`)
+  })
+
+  it('e-mail direto escapa HTML do nome do processo (categoria nao restrita)', async () => {
+    setupChain({
+      config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] },
+      processes: [{ id: PROCESS_ID, data: { processNumber: '', category: 'Granel', name: '<b>Resina</b>' } }],
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.html).toContain('&lt;b&gt;Resina&lt;/b&gt;')
+    expect(mail.html).not.toContain('<b>Resina</b>')
+  })
+
+  it('e-mail direto: CONSOLIDADO usa so o nome e o assunto nunca tem CR/LF', async () => {
+    setupChain({
+      config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] },
+      processes: [
+        { id: PROCESS_ID, data: { processNumber: '', category: 'CONSOLIDADO', name: 'CON CN 901-26\r\nBcc: x@evil.com' } },
+      ],
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.subject).toBe('Relatório de Carga - CON CN 901-26 Bcc: x@evil.com')
+    expect(/[\r\n]/.test(mail.subject)).toBe(false)
+    expect(cargoNotifications().every((data) => data.title === mail.subject)).toBe(true)
   })
 
   it('mesmo usuario em tecnico, faturamento e logistica -> 1 notificacao', async () => {

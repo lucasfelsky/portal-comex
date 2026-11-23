@@ -140,6 +140,8 @@ vi.mock('../../src/features/processes/processLabels', () => ({
   getProcessTitle: (p) => p?.name || 'Processo',
   getProcessSubtitle: (p) => p?.processNumber || '',
   canShowProcessName: () => true,
+  // Deep link `aba=documents`: o ProcessDocumentsPanel (aba Documentos) usa este export.
+  canSeeProcessName: () => true,
 }))
 vi.mock('../../src/features/processes/processCategories', () => ({
   // Espelha src/features/processes/processCategories.js (L37): so AEREO e' aereo.
@@ -2202,5 +2204,82 @@ describe('ProcessesPage — deep link do detalhe (paleta Ctrl+K, notificacoes, D
     await user.click(screen.getByRole('button', { name: '‹ Voltar' }))
 
     await waitFor(() => expect(activeDetailTab()).toBeNull())
+  })
+
+  // Deep link por URL (`?processo=<id>&aba=<tab>`, e-mail do Relatorio de Carga).
+  describe('por query string', () => {
+    function renderWithSearchProbe(entry) {
+      function LocationProbe() {
+        const location = useLocation()
+        return <span data-testid="search">{location.search}</span>
+      }
+      return render(
+        <MemoryRouter initialEntries={[entry]}>
+          <UnsavedChangesProvider>
+            <ToastProvider>
+              <Routes>
+                <Route
+                  path="/processos"
+                  element={
+                    <>
+                      <ProcessesPage />
+                      <LocationProbe />
+                    </>
+                  }
+                />
+              </Routes>
+            </ToastProvider>
+          </UnsavedChangesProvider>
+        </MemoryRouter>
+      )
+    }
+
+    it('admin: ?processo=p-2&aba=documents abre o detalhe de p-2 na aba Documentos e consome a query', async () => {
+      mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+      renderWithSearchProbe('/processos?processo=p-2&aba=documents')
+
+      await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+      expect(activeDetailTab()).toHaveTextContent(/Documentos/)
+      expect(screen.getAllByText(/PO 67890 - Exportacao B/).length).toBeGreaterThan(0)
+      await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(/^$/))
+    })
+
+    it('aba invalida cai em "Detalhes gerais"', async () => {
+      mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+      renderWithSearchProbe('/processos?processo=p-2&aba=xyz')
+
+      await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+      expect(activeDetailTab()).toHaveTextContent('Detalhes gerais')
+    })
+
+    it('processo inexistente: fica na lista, sem erro, e consome a query', async () => {
+      mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+      renderWithSearchProbe('/processos?processo=nao-existe&aba=documents')
+
+      await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+      await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(/^$/))
+      expect(activeDetailTab()).toBeNull()
+    })
+
+    it('role user com aba=documents: fallback existente para "Detalhes gerais"', async () => {
+      mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
+      renderWithSearchProbe('/processos?processo=p-2&aba=documents')
+
+      await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+      expect(activeDetailTab()).toHaveTextContent('Detalhes gerais')
+    })
+
+    it('state { selectedProcessId } tem prioridade sobre a query (continua abrindo "Mensagens")', async () => {
+      mockUseAuth.mockReturnValue({ profile: { uid: 'admin-1', role: 'admin' } })
+      renderWithSearchProbe({
+        pathname: '/processos',
+        search: '?processo=p-1&aba=documents',
+        state: { selectedProcessId: 'p-2' },
+      })
+
+      await waitFor(() => expect(activeDetailTab()).not.toBeNull())
+      expect(activeDetailTab()).toHaveTextContent('Mensagens')
+      expect(screen.getAllByText(/PO 67890 - Exportacao B/).length).toBeGreaterThan(0)
+    })
   })
 })

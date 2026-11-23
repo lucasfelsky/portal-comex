@@ -46,17 +46,18 @@ import {
 import {
   CARGO_REPORT_NOTIFICATION_BODY,
   CARGO_REPORT_NOTIFICATION_TYPE,
-  buildCargoReportNotificationTitle,
+  buildCargoReportSubject,
   normalizeCargoReportRecipientsConfig,
   planCargoReportRecipients,
 } from './cargoReportNotification.js';
+import { buildCargoReportEmail } from './cargoReportEmail.js';
 import {
+  APP_URL,
   SMTP_HOST,
   SMTP_PORT,
   SMTP_USER,
   SMTP_PASS,
   SMTP_FROM,
-  buildEmailMessage,
   buildRecipientProcessLabel,
   createNotifications,
   getEmailFromAddress,
@@ -372,6 +373,14 @@ export const notifyCargoReportUploaded = onDocumentCreated(
     const { userRecipients, directEmails } = plan
     let failedDirectEmails = 0
 
+    // Assunto/titulo fixo pedido pelo Comex, igual para TODOS os destinatarios
+    // (nao depende de role; ver `buildCargoReportSubject`).
+    const cargoReportSubject = buildCargoReportSubject({
+      category: process.category,
+      processNumber: repairTextEncoding(String(process.processNumber ?? '')),
+      name: repairTextEncoding(String(process.name ?? '')),
+    })
+
     // Bloco A: in-app/push (+ e-mail via sendProcessNotificationEmail).
     try {
       await createNotifications(
@@ -382,9 +391,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
           type: CARGO_REPORT_NOTIFICATION_TYPE,
           processId,
           messageId: '',
-          title: buildCargoReportNotificationTitle(
-            buildRecipientProcessLabel(process, String(user?.role ?? ''))
-          ),
+          title: cargoReportSubject,
           body: CARGO_REPORT_NOTIFICATION_BODY,
           targetTab: 'documents',
         }))
@@ -406,13 +413,12 @@ export const notifyCargoReportUploaded = onDocumentCreated(
             directEmails: directEmails.length,
           })
         } else {
-          const message = buildEmailMessage(
-            {
-              title: buildCargoReportNotificationTitle(buildRecipientProcessLabel(process, 'user')),
-              body: CARGO_REPORT_NOTIFICATION_BODY,
-            },
-            { name: '' }
-          )
+          const message = buildCargoReportEmail({
+            subject: cargoReportSubject,
+            processId,
+            recipientName: '',
+            appUrl: APP_URL,
+          })
 
           for (const to of directEmails) {
             try {
@@ -421,6 +427,8 @@ export const notifyCargoReportUploaded = onDocumentCreated(
                 to,
                 subject: message.subject,
                 text: message.text,
+                html: message.html,
+                attachments: message.attachments,
               })
             } catch (error) {
               failedDirectEmails += 1

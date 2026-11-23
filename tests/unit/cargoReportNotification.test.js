@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest'
 import {
   CARGO_REPORT_NOTIFICATION_BODY,
   CARGO_REPORT_NOTIFICATION_TYPE,
-  buildCargoReportNotificationTitle,
+  buildCargoReportSubject,
+  extractCargoReportProcessLabel,
   normalizeCargoReportRecipientsConfig,
   planCargoReportRecipients,
 } from '../../functions/src/process/cargoReportNotification.js'
@@ -21,11 +22,78 @@ describe('texto da notificacao', () => {
     )
   })
 
-  it('titulo carrega o rotulo do processo', () => {
-    expect(buildCargoReportNotificationTitle('PO 12345')).toBe('Relatório de Carga disponível: PO 12345')
-    expect(buildCargoReportNotificationTitle('Resina Atlas')).toBe(
-      'Relatório de Carga disponível: Resina Atlas'
+})
+
+describe('buildCargoReportSubject (assunto fixo pedido pelo Comex)', () => {
+  it.each(['FCL', 'LCL', 'AEREO'])('%s: PO <numero> - <nome>', (category) => {
+    expect(buildCargoReportSubject({ category, processNumber: '9036', name: 'BETA SEA 904-26' })).toBe(
+      'Relatório de Carga - PO 9036 - BETA SEA 904-26'
     )
+  })
+
+  it.each(['CON CN 901-26', 'CON DG 902-26', 'CON TW 903-26'])('CONSOLIDADO: so o nome (%s)', (name) => {
+    expect(buildCargoReportSubject({ category: 'CONSOLIDADO', processNumber: '', name })).toBe(
+      `Relatório de Carga - ${name}`
+    )
+    // mesmo com numero preenchido, o consolidado usa so o nome.
+    expect(buildCargoReportSubject({ category: 'CONSOLIDADO', processNumber: '1', name })).toBe(
+      `Relatório de Carga - ${name}`
+    )
+  })
+
+  it('partes ausentes sao omitidas sem hifen sobrando', () => {
+    expect(buildCargoReportSubject({ category: 'FCL', processNumber: '', name: 'Resina' })).toBe(
+      'Relatório de Carga - Resina'
+    )
+    expect(buildCargoReportSubject({ category: 'FCL', processNumber: '9036', name: '' })).toBe(
+      'Relatório de Carga - PO 9036'
+    )
+    expect(buildCargoReportSubject({ category: 'FCL' })).toBe('Relatório de Carga')
+    expect(buildCargoReportSubject(undefined)).toBe('Relatório de Carga')
+    expect(buildCargoReportSubject({ category: 'CONSOLIDADO', processNumber: '', name: '' })).toBe(
+      'Relatório de Carga'
+    )
+  })
+
+  it('trim e sem quebra de linha (header injection)', () => {
+    const subject = buildCargoReportSubject({
+      category: 'FCL',
+      processNumber: ' 9036 \r\n',
+      name: '  BETA\r\nBcc: x@evil.com  SEA\n',
+    })
+    expect(subject).toBe('Relatório de Carga - PO 9036 - BETA Bcc: x@evil.com SEA')
+    expect(/[\r\n]/.test(subject)).toBe(false)
+  })
+
+  it('nao usa o prefixo "[Portal COMEX]"', () => {
+    expect(buildCargoReportSubject({ category: 'FCL', processNumber: '1', name: 'A' })).not.toContain(
+      '[Portal COMEX]'
+    )
+  })
+})
+
+describe('extractCargoReportProcessLabel', () => {
+  it('inverte buildCargoReportSubject', () => {
+    expect(
+      extractCargoReportProcessLabel(
+        buildCargoReportSubject({ category: 'FCL', processNumber: '9036', name: 'BETA SEA 904-26' })
+      )
+    ).toBe('PO 9036 - BETA SEA 904-26')
+    expect(
+      extractCargoReportProcessLabel(
+        buildCargoReportSubject({ category: 'CONSOLIDADO', name: 'CON CN 901-26' })
+      )
+    ).toBe('CON CN 901-26')
+  })
+
+  it('texto fora do padrao -> o proprio texto', () => {
+    expect(extractCargoReportProcessLabel('Outro titulo')).toBe('Outro titulo')
+  })
+
+  it('so o prefixo / vazio / indefinido -> ""', () => {
+    expect(extractCargoReportProcessLabel('Relatório de Carga')).toBe('')
+    expect(extractCargoReportProcessLabel('')).toBe('')
+    expect(extractCargoReportProcessLabel(undefined)).toBe('')
   })
 })
 

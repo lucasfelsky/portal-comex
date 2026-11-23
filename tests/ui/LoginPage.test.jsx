@@ -8,7 +8,7 @@
 //   - Feedback de sucesso do register aparece no success-banner
 //   - Botao "Esqueci minha senha" toggle mostra o painel de reset
 //   - Reset chama useAuth.requestPasswordReset(email)
-//   - Quando isAuthenticated && hasAccess: redireciona para redirectTo (location.state.from.pathname) ou "/"
+//   - Quando isAuthenticated && hasAccess: redireciona para redirectTo (location.state.from: pathname + search + hash, so caminho interno) ou "/"
 //   - Quando isAuthenticated && !isEmailVerified: redireciona para /verificar-email
 //   - Quando isAuthenticated && !hasAccess: redireciona para /aguardando-aprovacao
 //   - Submit desabilitado quando submitting=true
@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import React from 'react'
 
 // Mock de useAuth
@@ -42,6 +42,12 @@ function defaultAuth() {
   }
 }
 
+// Destino que expoe `location.search` (deep link preservado no redirect do login).
+function SearchProbe() {
+  const location = useLocation()
+  return <div data-testid="processos-search">{location.search}</div>
+}
+
 function renderPage({ initialEntries = ['/login'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -52,6 +58,7 @@ function renderPage({ initialEntries = ['/login'] } = {}) {
           <Route path="/verificar-email" element={<div data-testid="verify">verify</div>} />
           <Route path="/aguardando-aprovacao" element={<div data-testid="pending">pending</div>} />
           <Route path="/destino-original" element={<div data-testid="destino">destino</div>} />
+          <Route path="/processos" element={<SearchProbe />} />
         </Routes>
       </ToastProvider>
     </MemoryRouter>
@@ -190,6 +197,33 @@ describe('LoginPage', () => {
     })
     renderPage({ initialEntries: [{ pathname: '/login', state: { from: { pathname: '/destino-original' } } }] })
     expect(screen.getByTestId('destino')).toBeInTheDocument()
+  })
+
+  it('quando isAuthenticated && hasAccess: preserva search de state.from (deep link do e-mail)', () => {
+    mockUseAuth.mockReturnValue({
+      ...defaultAuth(),
+      isAuthenticated: true,
+      hasAccess: true,
+    })
+    renderPage({
+      initialEntries: [
+        {
+          pathname: '/login',
+          state: { from: { pathname: '/processos', search: '?processo=p-1&aba=documents' } },
+        },
+      ],
+    })
+    expect(screen.getByTestId('processos-search')).toHaveTextContent('?processo=p-1&aba=documents')
+  })
+
+  it('from.pathname externo ("//evil.com") e ignorado: redireciona para /', () => {
+    mockUseAuth.mockReturnValue({
+      ...defaultAuth(),
+      isAuthenticated: true,
+      hasAccess: true,
+    })
+    renderPage({ initialEntries: [{ pathname: '/login', state: { from: { pathname: '//evil.com' } } }] })
+    expect(screen.getByTestId('home')).toBeInTheDocument()
   })
 
   it('quando isAuthenticated && hasAccess e sem from: redireciona para /', () => {
