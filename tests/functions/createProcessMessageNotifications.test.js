@@ -261,6 +261,33 @@ describe('createProcessMessageNotifications', () => {
     expect(payload.readAt).toBe(null)
   })
 
+  it('favorito user em processo restrito sem numero recebe rotulo neutro (nao vaza o name)', async () => {
+    const restrictedProcess = {
+      id: PROCESS_ID,
+      name: 'Cliente Sigiloso',
+      processNumber: '',
+      category: 'FCL',
+    }
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: restrictedProcess }],
+      users: [
+        { id: AUTHOR_UID, data: AUTHOR_USER },
+        { id: FAVORITER_UID, data: { ...FAVORITER_USER, role: 'user' } },
+      ],
+    })
+    mockFirestoreApi.batch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+
+    await handler(makeEvent({ authorId: AUTHOR_UID, authorName: 'Joao', text: 'oi' }))
+
+    const payload = mockBatch.set.mock.calls
+      .map(([, data]) => data)
+      .find((data) => data.type === 'favorite_process_message' && data.recipientUserId === FAVORITER_UID)
+    expect(payload).toBeDefined()
+    expect(payload.body).toContain(' em processo, ')
+    expect(payload.body).not.toContain('Cliente Sigiloso')
+  })
+
   it('logger info registra o evento', async () => {
     const message = { authorId: AUTHOR_UID, text: 'oi' }
     await handler(makeEvent(message))

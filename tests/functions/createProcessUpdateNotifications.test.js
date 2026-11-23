@@ -1751,3 +1751,83 @@ describe('createProcessUpdateNotifications - DUIMP sob aguas', () => {
     expect(bodyFor('user-fav')).toContain('DUIMP registrada')
   })
 })
+
+describe('rotulo do processo por destinatario (categorias restritas)', () => {
+  const USER_FAV = {
+    id: 'user-fav',
+    name: 'Usuario Favorito',
+    email: 'user@sqquimica.com',
+    role: 'user',
+    status: 'Ativo',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+  const ADMIN_FAV = {
+    id: 'admin-2',
+    name: 'Admin Dois',
+    email: 'admin2@sqquimica.com',
+    role: 'admin',
+    status: 'Ativo',
+    favoriteProcessIds: [PROCESS_ID],
+  }
+  const ACTOR = { updatedById: 'admin-1', updatedByName: 'Admin Root' }
+
+  function setupUsers() {
+    setupFirestoreChain({
+      users: [
+        { id: 'admin-1', data: ADMIN_USER },
+        { id: USER_FAV.id, data: USER_FAV },
+        { id: ADMIN_FAV.id, data: ADMIN_FAV },
+      ],
+    })
+  }
+
+  async function runEtaChange(overrides) {
+    setupUsers()
+    const base = { ...PROCESS_BASE, name: 'Cliente Sigiloso', eta: '2099-01-10', ...overrides }
+    const after = { ...base, eta: '2099-01-15', ...ACTOR }
+    await handler(makeEvent(base, after))
+  }
+
+  function payloadFor(userId) {
+    const call = mockBatch.set.mock.calls.find(([, payload]) => payload.recipientUserId === userId)
+    return call ? call[1] : undefined
+  }
+
+  it.each(['FCL', 'LCL', 'AEREO'])(
+    '%s restrito sem processNumber -> favorito user recebe rotulo neutro, sem o name',
+    async (category) => {
+      await runEtaChange({ category, processNumber: '' })
+
+      const payload = payloadFor('user-fav')
+      expect(payload).toBeDefined()
+      expect(payload.title).toBe('Processo atualizado: processo')
+      expect(payload.body.startsWith('processo: ')).toBe(true)
+      expect(payload.body).not.toContain('Cliente Sigiloso')
+    }
+  )
+
+  it('FCL sem processNumber -> favorito admin continua vendo o name', async () => {
+    await runEtaChange({ category: 'FCL', processNumber: '' })
+
+    const payload = payloadFor('admin-2')
+    expect(payload).toBeDefined()
+    expect(payload.title).toBe('Processo atualizado: Cliente Sigiloso')
+  })
+
+  it('CONSOLIDADO (nao restrito) sem processNumber -> favorito user ve o name', async () => {
+    await runEtaChange({ category: 'CONSOLIDADO', processNumber: '' })
+
+    const payload = payloadFor('user-fav')
+    expect(payload).toBeDefined()
+    expect(payload.title).toBe('Processo atualizado: Cliente Sigiloso')
+  })
+
+  it('FCL com processNumber -> favorito user recebe "PO n", sem o name', async () => {
+    await runEtaChange({ category: 'FCL', processNumber: '9036' })
+
+    const payload = payloadFor('user-fav')
+    expect(payload).toBeDefined()
+    expect(payload.title).toBe('Processo atualizado: PO 9036')
+    expect(payload.body).not.toContain('Cliente Sigiloso')
+  })
+})
