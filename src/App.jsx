@@ -42,6 +42,10 @@ const AdminAnnouncementsPanel = lazyWithRetry(() => import('./features/admin/Adm
 const AdminBarStatusPanel = lazyWithRetry(() => import('./features/admin/AdminBarStatusPanel'), 'admin-bar-panel')
 const AdminSupportPanel = lazyWithRetry(() => import('./features/admin/AdminSupportPanel'), 'admin-support-panel')
 const AdminLeadTimePanel = lazyWithRetry(() => import('./features/admin/AdminLeadTimePanel'), 'admin-lead-time-panel')
+const AdminCargoReportRecipientsPanel = lazyWithRetry(
+  () => import('./features/admin/AdminCargoReportRecipientsPanel'),
+  'admin-cargo-report-panel'
+)
 const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'), 'dashboard-page')
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'), 'login-page')
 const NewsPage = lazyWithRetry(() => import('./pages/NewsPage'), 'news-page')
@@ -106,6 +110,7 @@ export default function App() {
             <Route path="previsoes" element={<AdminForecastPage />} />
             <Route path="lead-time" element={<AdminLeadTimePanel />} />
             <Route path="suporte" element={<AdminSupportPanel />} />
+            <Route path="relatorio-carga" element={<AdminCargoReportRecipientsPanel />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

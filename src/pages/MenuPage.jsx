@@ -67,6 +67,7 @@ const ADMIN_SHORTCUTS = [
   { to: '/admin/previsoes', label: 'Previsões', icon: 'trend' },
   { to: '/admin/lead-time', label: 'Lead time', icon: 'clock' },
   { to: '/admin/suporte', label: 'Chamados de suporte', icon: 'help', sub: 'Chamados abertos pelos usuários' },
+  { to: '/admin/relatorio-carga', label: 'Relatório de Carga', icon: 'mail', sub: 'Destinatários do aviso por e-mail' },
 ]
 
 export default function MenuPage() {

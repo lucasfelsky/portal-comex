@@ -9,6 +9,7 @@ const sections = [
   { to: '/admin/previsoes', label: 'Previsões', description: 'Regras de entrega e cutoff' },
   { to: '/admin/lead-time', label: 'Lead time', description: 'Tempo real por modal e porto' },
   { to: '/admin/suporte', label: 'Suporte', description: 'Chamados abertos pelos usuários' },
+  { to: '/admin/relatorio-carga', label: 'Relatório de Carga', description: 'Destinatários do aviso por e-mail' },
 ]
 
 // Folga (px) deixada entre a aba ativa e a borda do nav ao rolar ate ela.
@@ -21,7 +22,7 @@ function prefersReducedMotion() {
   return Boolean(window.matchMedia('(prefers-reduced-motion: reduce)')?.matches)
 }
 
-// Entre 1041 e 1279px as 6 abas podem passar da largura do nav (overflow-x: auto): rola o
+// Entre 1041 e 1279px as 7 abas podem passar da largura do nav (overflow-x: auto): rola o
 // PROPRIO nav (scrollLeft, nunca scrollIntoView, que poderia rolar a pagina na vertical)
 // ate a aba ativa. No-op quando a aba ja esta inteira visivel ou sem geometria real (jsdom).
 // Tambem e chamada pelo ResizeObserver (ver AdminLayout) quando o tamanho do nav ou das abas

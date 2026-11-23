@@ -57,12 +57,13 @@
     "count": 12
   },
   "srcServices": {
-    "count": 20,
+    "count": 21,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
       "authRepository.js",
       "barStatusRepository.js",
+      "cargoReportRecipientsRepository.js",
       "erpReferenceRepository.js",
       "exchangeRatesRepository.js",
       "externalNewsRepository.js",
@@ -128,11 +129,11 @@
     ]
   },
   "tests": {
-    "totalFiles": 83,
+    "totalFiles": 84,
     "_breakdown": {
       "firebase": 4,
       "functions": 16,
-      "ui": 63
+      "ui": 64
     }
   },
   "_l26_comment": "Checks de CONTEUDO (L26, 2026-07-23). Antes o script validava so' cardinalidade e passava 9/9 enquanto 31 arquivos do vault estavam com drift. Ao atualizar qualquer bloco abaixo, atualize TAMBEM o arquivo da vault que a mensagem de erro indica.",
@@ -344,6 +345,10 @@
       "savedById",
       "shipment",
       "snapshotId"
+    ],
+    "isValidCargoReportRecipientsConfig": [
+      "faturamento",
+      "tecnico"
     ]
   },
   "routes": {
@@ -363,6 +368,7 @@
       "comunicados",
       "lead-time",
       "previsoes",
+      "relatorio-carga",
       "suporte",
       "usuarios"
     ]
