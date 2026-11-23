@@ -22,6 +22,16 @@ describe('firestore.rules structure', () => {
     it('declara service cloud.firestore', () => {
       expect(rules).toMatch(/service\s+cloud\.firestore\s*\{/)
     })
+
+    // D6 (notificacao Relatorio de Carga): `config/cargoReportRecipients` e'
+    // lido SO' via Admin SDK (trigger) e editado pelo Console do Firebase -
+    // nenhum cliente le `config/*`, entao NAO ha `match /config/...`: o
+    // catch-all `match /{document=**}` (allow ... if false) ja nega tudo ao
+    // cliente. Quando a tela admin vier, entra `match /config/...` admin-only
+    // (com aprovacao humana) e este teste e' atualizado junto.
+    it('nao declara match /config (config/cargoReportRecipients e so Admin SDK - D6)', () => {
+      expect(rules).not.toMatch(/match\s+\/config\//)
+    })
   })
 
   describe('funcoes auxiliares (S3 / custom claims)', () => {

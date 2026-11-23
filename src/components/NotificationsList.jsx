@@ -62,6 +62,8 @@ function getDrawerVisual(type) {
       return { icon: 'doc', tone: 'ok' }
     case 'process_document_uploaded':
       return { icon: 'doc', tone: 'warn' }
+    case 'process_cargo_report_uploaded':
+      return { icon: 'doc', tone: 'ok' }
     case 'receipt_divergence_reported':
     case 'license_rejected':
       return { icon: 'alert-triangle', tone: 'danger' }

@@ -7,6 +7,7 @@
 //   - cleanupDeletedProcessData: chama recursiveDelete + deleteFiles com o
 //     prefixo do processo; falha do Storage nao impede o recursiveDelete.
 //   - planDocumentRotation (funcao pura).
+//   - notifyCargoReportUploaded: aviso do Relatorio de Carga (in-app + e-mail).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,8 +16,13 @@ import {
   mockBucket,
   mockFirestoreApi,
   mockStorageFile,
+  mockLogger,
   mocks,
+  mockSendMail,
+  resetSecrets,
+  setSecretValue,
   setupFirestoreChain,
+  setupMailer,
   getHandler,
 } from '../setup-triggers.js'
 
@@ -37,6 +43,7 @@ const {
   planDocumentRotation,
   syncProcessDocumentIndex,
   recordProcessDocumentEvents,
+  notifyCargoReportUploaded,
 } = await import('../../functions/index.js')
 
 const { groupDocumentsBySlot } = await import('../../src/features/processes/processDocuments.js')
@@ -519,6 +526,275 @@ describe('recordProcessDocumentEvents', () => {
     const handler = getHandler(recordProcessDocumentEvents)
     await handler({ params: { processId: PROCESS_ID, documentId: 'x' }, data: { data: () => undefined } })
     expect(mockBatch.set).not.toHaveBeenCalled()
+  })
+})
+
+// Notificacao "Relatorio de Carga": `notifyCargoReportUploaded`.
+describe('notifyCargoReportUploaded', () => {
+  const BODY =
+    'Relatório de Carga preenchido e disponível no Portal COMEX. Documentação necessária para emissão do COA está disponível na pasta do processo.'
+  const ADMIN_1 = { id: 'admin-1', name: 'Admin Um', email: 'admin1@sqquimica.com', role: 'admin', status: 'Ativo' }
+  const ADMIN_2 = { id: 'admin-2', name: 'Admin Dois', email: 'admin2@sqquimica.com', role: 'admin', status: 'Ativo' }
+  const LOGI_1 = { id: 'logi-1', name: 'Logi Um', email: 'logi@sqquimica.com', role: 'logistica', status: 'Ativo' }
+  const LOGI_BLOCKED = { id: 'logi-2', name: 'Logi Dois', email: 'logi2@sqquimica.com', role: 'logistica', status: 'Bloqueado' }
+  const TEC_1 = { id: 'tec-1', name: 'Tecnico Um', email: 'tecnico@sqquimica.com', role: 'user', status: 'Ativo' }
+  const PROCESS = { processNumber: '12345', category: 'FCL', name: 'Resina Atlas' }
+  const CARGO_REPORT = {
+    type: 'cargoReport',
+    uploadedById: 'admin-1',
+    uploadedByName: 'Admin Um',
+    uploadedByRole: 'admin',
+    uploadedAt: '2026-09-20T10:00:00.000Z',
+  }
+
+  function makeEvent(created, { processId = PROCESS_ID, documentId = 'doc-1' } = {}) {
+    return { id: 'evt-1', params: { processId, documentId }, data: { data: () => created } }
+  }
+
+  function setupChain({ users, config, processes = [{ id: PROCESS_ID, data: PROCESS }] } = {}) {
+    setupFirestoreChain({
+      processes,
+      users: (users ?? [ADMIN_1, ADMIN_2, LOGI_1]).map((user) => ({ id: user.id, data: user })),
+      ...(config === undefined ? {} : { config: [{ id: 'cargoReportRecipients', data: config }] }),
+    })
+  }
+
+  function cargoNotifications() {
+    return mockBatch.set.mock.calls
+      .map(([, data]) => data)
+      .filter((data) => data?.type === 'process_cargo_report_uploaded')
+  }
+
+  function configureSmtp() {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+  }
+
+  beforeEach(() => {
+    resetSecrets()
+    mockSendMail.mockResolvedValue({ messageId: 'msg-1' })
+    mockFirestoreApi.batch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    resetSecrets()
+  })
+
+  it('cargoReport por admin-1 -> notifica admin-2, logistica ativa e tecnico com conta (nao o ator)', async () => {
+    setupChain({
+      users: [ADMIN_1, ADMIN_2, LOGI_1, LOGI_BLOCKED, TEC_1],
+      config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] },
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    const notifications = cargoNotifications()
+    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1', 'tec-1'])
+    for (const data of notifications) {
+      expect(data.body).toBe(BODY)
+      expect(data.targetTab).toBe('documents')
+      expect(data.messageId).toBe('')
+      expect(data.processId).toBe(PROCESS_ID)
+      expect(data.actorUserId).toBe('admin-1')
+      expect(data.actorName).toBe('Admin Um')
+    }
+
+    // titulo fixo pedido pelo Comex: IGUAL para todos os perfis (FCL mostra o nome tambem a nao-admin).
+    const titleOf = (uid) => notifications.find((data) => data.recipientUserId === uid).title
+    expect(titleOf('admin-2')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(titleOf('logi-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(titleOf('tec-1')).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+
+    // todos tem conta: nenhum e-mail direto (o e-mail deles sai por sendProcessNotificationEmail).
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('e-mail da config SEM usuario -> e-mail direto (1 envio) e sem in-app para ele', async () => {
+    setupChain({ config: { tecnico: [], faturamento: ['Fiscal@sqquimica.com'] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.to).toBe('fiscal@sqquimica.com')
+    expect(mail.subject).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(mail.text).toContain(BODY)
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+
+    // HTML (imagem + botao) + deep link + banner por CID. O processo vai no
+    // assunto e no texto puro (mesmo assunto para todos os perfis).
+    expect(mail.html).toContain('aba=documents')
+    expect(mail.html).toContain(`processo=${PROCESS_ID}`)
+    expect(mail.html).toContain(`alt="${BODY}"`)
+    expect(mail.text).toContain('Processo: PO 12345 - Resina Atlas')
+    expect(mail.attachments).toHaveLength(1)
+    expect(mail.attachments[0].cid).toBe('cargo-report-banner@portal-comex')
+    expect(mail.attachments[0].contentType).toBe('image/jpeg')
+    expect(mail.text).toContain(`https://portal-comex.com/processos?processo=${PROCESS_ID}&aba=documents`)
+  })
+
+  it('e-mail direto escapa HTML do nome do processo (categoria nao restrita)', async () => {
+    setupChain({
+      config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] },
+      processes: [{ id: PROCESS_ID, data: { processNumber: '', category: 'Granel', name: '<b>Resina</b>' } }],
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.html).toContain('&lt;b&gt;Resina&lt;/b&gt;')
+    expect(mail.html).not.toContain('<b>Resina</b>')
+  })
+
+  it('e-mail direto: CONSOLIDADO usa so o nome e o assunto nunca tem CR/LF', async () => {
+    setupChain({
+      config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] },
+      processes: [
+        { id: PROCESS_ID, data: { processNumber: '', category: 'CONSOLIDADO', name: 'CON CN 901-26\r\nBcc: x@evil.com' } },
+      ],
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.subject).toBe('Relatório de Carga - CON CN 901-26 Bcc: x@evil.com')
+    expect(/[\r\n]/.test(mail.subject)).toBe(false)
+    expect(cargoNotifications().every((data) => data.title === mail.subject)).toBe(true)
+  })
+
+  it('mesmo usuario em tecnico, faturamento e logistica -> 1 notificacao', async () => {
+    setupChain({
+      users: [ADMIN_1, LOGI_1],
+      config: { tecnico: ['logi@sqquimica.com'], faturamento: ['logi@sqquimica.com'] },
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    const notifications = cargoNotifications()
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0].recipientUserId).toBe('logi-1')
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('e-mail nao-corporativo na config -> nem notificacao nem sendMail', async () => {
+    setupChain({ users: [ADMIN_1], config: { tecnico: ['externo@gmail.com'], faturamento: [] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(cargoNotifications()).toHaveLength(0)
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('usuario da config encontrado mas bloqueado -> nao recebe nada (nem e-mail direto)', async () => {
+    setupChain({
+      users: [ADMIN_1, { ...TEC_1, status: 'Bloqueado' }],
+      config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] },
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(cargoNotifications()).toHaveLength(0)
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it("documento de outro tipo ('bl', 'invoice') -> nada", async () => {
+    for (const type of ['bl', 'invoice']) {
+      setupChain({ config: { tecnico: ['fiscal@sqquimica.com'], faturamento: [] } })
+      configureSmtp()
+
+      await getHandler(notifyCargoReportUploaded)(makeEvent({ ...CARGO_REPORT, type }))
+
+      expect(mockBatch.set).not.toHaveBeenCalled()
+      expect(mockSendMail).not.toHaveBeenCalled()
+      vi.clearAllMocks()
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+    }
+  })
+
+  it('doc config/cargoReportRecipients ausente -> so admin + logistica', async () => {
+    setupChain({ users: [ADMIN_1, ADMIN_2, LOGI_1, TEC_1] })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('SMTP sem secrets -> notificacoes in-app gravadas, sendMail nao chamado', async () => {
+    setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+    setupMailer()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(cargoNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-2', 'logi-1'])
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('falha no sendMail do 1o e-mail direto nao impede o 2o', async () => {
+    setupChain({
+      users: [ADMIN_1],
+      config: { tecnico: ['alfa@sqquimica.com'], faturamento: ['zeta@sqquimica.com'] },
+    })
+    configureSmtp()
+    mockSendMail.mockRejectedValueOnce(new Error('smtp down'))
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(2)
+    expect(mockSendMail.mock.calls.map(([mail]) => mail.to)).toEqual(['alfa@sqquimica.com', 'zeta@sqquimica.com'])
+  })
+
+  it('falha no in-app (batch.commit) nao impede o e-mail direto', async () => {
+    setupChain({ config: { tecnico: ['fiscal@sqquimica.com'], faturamento: [] } })
+    configureSmtp()
+    mockBatch.commit.mockRejectedValueOnce(new Error('boom'))
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+  })
+
+  it('logs so com contagens (sem e-mail nem nome)', async () => {
+    setupChain({ config: { tecnico: ['externo@gmail.com'], faturamento: ['fiscal@sqquimica.com'] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
+    expect(finalCall[1]).toEqual({
+      processId: PROCESS_ID,
+      inAppRecipients: 2,
+      directEmails: 1,
+      ignoredNonCorporate: 1,
+      failedDirectEmails: 0,
+    })
+    expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('fiscal@sqquimica.com')
+  })
+
+  it('processo inexistente / sem dado criado -> nada', async () => {
+    setupChain({ processes: [] })
+    configureSmtp()
+    const handler = getHandler(notifyCargoReportUploaded)
+
+    await handler(makeEvent(CARGO_REPORT))
+    await handler({ id: 'evt-1', params: { processId: PROCESS_ID, documentId: 'x' }, data: { data: () => undefined } })
+
+    expect(mockBatch.set).not.toHaveBeenCalled()
+    expect(mockSendMail).not.toHaveBeenCalled()
   })
 })
 

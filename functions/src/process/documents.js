@@ -18,6 +18,12 @@
 //   `blUploaded`/`fispqUploaded`/`containerWashUploaded` no Historico +
 //   aviso `process_document_uploaded` para admins quando quem envia e' a
 //   logistica. Trigger SEPARADO (falha de marco/aviso nao impede o sync).
+// - `notifyCargoReportUploaded`: quando um documento `cargoReport` e' CRIADO,
+//   avisa Comex (admins), Logistica e as listas Tecnico/Faturamento de
+//   `config/cargoReportRecipients` (in-app + e-mail; e-mail da lista SEM
+//   usuario recebe e-mail direto). Trigger SEPARADO: declara os secrets SMTP
+//   e sua falha nao derruba os demais. Logica pura em
+//   `./cargoReportNotification.js`.
 //
 // Este arquivo pode importar `firebase-admin`/`firebase-functions` (ao
 // contrario de `milestones.js`, que fica puro por causa do teste sem
@@ -38,9 +44,28 @@ import {
   normalizeDocumentIndexMirror,
 } from './documentIndex.js';
 import {
+  CARGO_REPORT_NOTIFICATION_BODY,
+  CARGO_REPORT_NOTIFICATION_TYPE,
+  buildCargoReportSubject,
+  normalizeCargoReportRecipientsConfig,
+  planCargoReportRecipients,
+} from './cargoReportNotification.js';
+import { buildCargoReportEmail } from './cargoReportEmail.js';
+import {
+  APP_URL,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_USER,
+  SMTP_PASS,
+  SMTP_FROM,
   buildRecipientProcessLabel,
   createNotifications,
+  getEmailFromAddress,
+  getMailer,
+  isActiveStatus,
+  isCorporateEmail,
   listActiveAdminUsers,
+  normalizeEmail,
   repairTextEncoding,
 } from '../core/shared.js';
 
@@ -255,6 +280,180 @@ export const recordProcessDocumentEvents = onDocumentCreated(
         error: error?.message,
       })
     }
+  }
+)
+
+// Notificacao "Relatorio de Carga": documento `cargoReport` CRIADO ->
+// (a) Comex = admins ativos; (b) Logistica = role logistica ativa;
+// (c) Tecnico e (d) Faturamento = e-mails de `config/cargoReportRecipients`
+// (`{ tecnico: string[], faturamento: string[] }`, so' via Admin SDK).
+// E-mail da lista que bate com usuario de `users` segue o fluxo normal
+// (`createNotifications` -> in-app + push + e-mail por
+// `sendProcessNotificationEmail`, respeitando `notificationPreferences`);
+// e-mail SEM usuario recebe e-mail direto. Usuario da lista encontrado mas
+// nao ativo nao recebe nada. Re-upload (nova versao do slot) notifica de novo.
+// Bloco A (in-app) e bloco B (e-mail direto) tem try/catch proprio.
+const CONFIG_USERS_IN_CHUNK = 30 // limite do operador `in` do Firestore
+
+async function listActiveLogisticsUsers(firestore) {
+  const snapshot = await firestore.collection('users').where('role', '==', 'logistica').get()
+
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .filter((user) => isActiveStatus(user.status) && isCorporateEmail(user.email))
+}
+
+async function loadUsersByEmail(firestore, emails) {
+  const usersByEmail = new Map()
+
+  for (let index = 0; index < emails.length; index += CONFIG_USERS_IN_CHUNK) {
+    const chunk = emails.slice(index, index + CONFIG_USERS_IN_CHUNK)
+    const snapshot = await firestore.collection('users').where('email', 'in', chunk).get()
+
+    for (const item of snapshot.docs) {
+      const user = { id: item.id, ...item.data() }
+      const email = normalizeEmail(user.email)
+      if (email && !usersByEmail.has(email)) usersByEmail.set(email, user)
+    }
+  }
+
+  return usersByEmail
+}
+
+export const notifyCargoReportUploaded = onDocumentCreated(
+  {
+    document: 'processes/{processId}/documents/{documentId}',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM],
+  },
+  async (event) => {
+    const created = event.data?.data()
+    if (!created) return
+    if (created?.type !== 'cargoReport') return
+
+    const processId = event.params.processId
+    const firestore = getFirestore()
+    const processSnapshot = await firestore.collection('processes').doc(processId).get()
+    if (!processSnapshot.exists) return
+
+    const process = { id: processSnapshot.id, ...processSnapshot.data() }
+    const actorUserId = String(created.uploadedById ?? '')
+    const actorName = repairTextEncoding(String(created.uploadedByName ?? ''))
+
+    let plan
+    let ignoredNonCorporate = 0
+    try {
+      const admins = await listActiveAdminUsers(firestore)
+      const logistics = await listActiveLogisticsUsers(firestore)
+      const configSnapshot = await firestore.collection('config').doc('cargoReportRecipients').get()
+
+      if (!configSnapshot.exists) {
+        logger.info('config/cargoReportRecipients ausente: notificando so Comex e Logistica.', {
+          processId,
+        })
+      }
+
+      const config = normalizeCargoReportRecipientsConfig(
+        configSnapshot.exists ? configSnapshot.data() : undefined,
+        isCorporateEmail
+      )
+      ignoredNonCorporate = config.ignoredNonCorporate
+
+      const configEmails = [...new Set([...config.tecnico, ...config.faturamento])]
+      const usersByEmail = await loadUsersByEmail(firestore, configEmails)
+
+      plan = planCargoReportRecipients({ admins, logistics, configEmails, usersByEmail, actorUserId })
+    } catch (error) {
+      logger.warn('Falha ao montar destinatarios do Relatorio de Carga.', {
+        processId,
+        error: error?.message,
+      })
+      return
+    }
+
+    const { userRecipients, directEmails } = plan
+    let failedDirectEmails = 0
+
+    // Assunto/titulo fixo pedido pelo Comex, igual para TODOS os destinatarios
+    // (nao depende de role; ver `buildCargoReportSubject`).
+    const cargoReportSubject = buildCargoReportSubject({
+      category: process.category,
+      processNumber: repairTextEncoding(String(process.processNumber ?? '')),
+      name: repairTextEncoding(String(process.name ?? '')),
+    })
+
+    // Bloco A: in-app/push (+ e-mail via sendProcessNotificationEmail).
+    try {
+      await createNotifications(
+        userRecipients.map((user) => ({
+          recipientUserId: user.id,
+          actorUserId,
+          actorName,
+          type: CARGO_REPORT_NOTIFICATION_TYPE,
+          processId,
+          messageId: '',
+          title: cargoReportSubject,
+          body: CARGO_REPORT_NOTIFICATION_BODY,
+          targetTab: 'documents',
+        }))
+      )
+    } catch (error) {
+      logger.warn('Falha ao notificar Relatorio de Carga (in-app).', {
+        processId,
+        error: error?.message,
+      })
+    }
+
+    // Bloco B: e-mail direto (lista sem usuario). Roda mesmo se A falhar.
+    try {
+      if (directEmails.length > 0) {
+        const mailer = getMailer()
+        if (!mailer) {
+          logger.info('SMTP nao configurado: e-mail direto do Relatorio de Carga nao enviado.', {
+            processId,
+            directEmails: directEmails.length,
+          })
+        } else {
+          const message = buildCargoReportEmail({
+            subject: cargoReportSubject,
+            processId,
+            recipientName: '',
+            appUrl: APP_URL,
+          })
+
+          for (const to of directEmails) {
+            try {
+              await mailer.sendMail({
+                from: getEmailFromAddress(),
+                to,
+                subject: message.subject,
+                text: message.text,
+                html: message.html,
+                attachments: message.attachments,
+              })
+            } catch (error) {
+              failedDirectEmails += 1
+              logger.warn('Falha ao enviar e-mail direto do Relatorio de Carga.', {
+                processId,
+                error: error?.message,
+              })
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('Falha ao enviar e-mails diretos do Relatorio de Carga.', {
+        processId,
+        error: error?.message,
+      })
+    }
+
+    logger.info('Relatorio de Carga notificado.', {
+      processId,
+      inAppRecipients: userRecipients.length,
+      directEmails: directEmails.length,
+      ignoredNonCorporate,
+      failedDirectEmails,
+    })
   }
 )
 

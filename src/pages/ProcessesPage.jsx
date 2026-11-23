@@ -104,7 +104,7 @@ import {
   resolvePostReceiptImagesForSave,
 } from '../services/postReceiptImagesStorage'
 import { buildActionErrorMessage } from '../utils/errorMessages'
-import { getReturnLabel, readReturnTo } from '../utils/processNavigation'
+import { getReturnLabel, readProcessLinkFromSearch, readReturnTo } from '../utils/processNavigation'
 import { useUnsavedChanges, useUnsavedChangesGuard } from '../contexts/UnsavedChangesContext'
 import { areProcessDraftsEquivalent } from '../features/processes/processDraftDirty'
 import { applyHouseBlInput } from '../features/processes/houseBl'
@@ -1023,7 +1023,13 @@ export default function ProcessesPage() {
   }, [location.key, location.state?.openCreate, isAdmin])
 
   useEffect(() => {
-    const processIdFromNotification = location.state?.selectedProcessId
+    // Deep link por URL (`?processo=<id>&aba=<tab>`, e-mail do Relatorio de
+    // Carga): o state tem prioridade (fluxos de notificacao/Dashboard).
+    const linkFromSearch = location.state?.selectedProcessId
+      ? null
+      : readProcessLinkFromSearch(location.search)
+    const processIdFromNotification =
+      location.state?.selectedProcessId ?? linkFromSearch?.selectedProcessId
 
     if (!processIdFromNotification || processes.length === 0) {
       return
@@ -1032,17 +1038,22 @@ export default function ProcessesPage() {
     const processFromNotification = processes.find((item) => item.id === processIdFromNotification)
 
     if (!processFromNotification) {
+      if (linkFromSearch) navigate(location.pathname, { replace: true, state: null })
       return
     }
 
     setSelectedProcessId(processFromNotification.id)
     setDraft(processFromNotification)
     setViewMode('detail')
-    setDetailReturnTo(readReturnTo(location.state))
-    setDetailTab(location.state?.detailTab ?? 'messages')
+    setDetailReturnTo(linkFromSearch ? '' : readReturnTo(location.state))
+    setDetailTab(linkFromSearch ? linkFromSearch.detailTab : (location.state?.detailTab ?? 'messages'))
     setMessageDraft('')
     setMessagesError('')
-  }, [location.key, location.state, processes])
+
+    // Consome a query: sem isso, cada recarga de `processes` reabriria a aba
+    // e a URL ficaria "grudada".
+    if (linkFromSearch) navigate(location.pathname, { replace: true, state: null })
+  }, [location.key, location.state, location.search, processes])
 
   useEffect(() => {
     if (viewMode !== 'detail' || !selectedProcess?.id) {

@@ -118,6 +118,22 @@ describe('ProtectedRoute', () => {
     expect(lastLocation.state.from.pathname).toBe('/protected')
   })
 
+  it('nao autenticado: preserva a query do destino em state.from.search (deep link do e-mail)', async () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: false,
+      hasAccess: false,
+      isEmailVerified: false,
+      loading: false,
+      profile: null,
+    })
+    renderAt(['/protected?processo=p-1&aba=documents'])
+    await waitFor(() =>
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    )
+    expect(lastLocation.state.from.pathname).toBe('/protected')
+    expect(lastLocation.state.from.search).toBe('?processo=p-1&aba=documents')
+  })
+
   it('redireciona para /verificar-email quando email nao verificado', async () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,

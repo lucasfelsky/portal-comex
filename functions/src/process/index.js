@@ -9,14 +9,16 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/logger';
 import nodemailer from 'nodemailer';
 import {
-  EMAIL_NOTIFICATION_TYPES, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
+  EMAIL_NOTIFICATION_TYPES, APP_URL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
   normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
+import { CARGO_REPORT_NOTIFICATION_TYPE } from './cargoReportNotification.js';
+import { buildCargoReportEmail } from './cargoReportEmail.js';
 import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { getSaoPauloDateKey } from './operationalAlerts.js';
 import { canSeeCustomsBeforeArrivalMirror, projectProcessForRestrictedRecipientMirror } from './customsVisibility.js';
-export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents } from './documents.js';
+export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents, notifyCargoReportUploaded } from './documents.js';
 export { downloadProcessDocument } from './documentDownload.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';
@@ -423,6 +425,26 @@ export const sendProcessNotificationEmail = onDocumentCreated(
       logger.info('SMTP não configurado. Email de notificação não enviado.', {
         notificationId: event.params.notificationId,
         recipientUserId,
+      })
+      return
+    }
+
+    if (normalizeString(notification.type) === CARGO_REPORT_NOTIFICATION_TYPE) {
+      const cargoMessage = buildCargoReportEmail({
+        // `title` ja e' o assunto montado pelo trigger (`buildCargoReportSubject`).
+        subject: repairTextEncoding(normalizeString(notification.title)),
+        processId: normalizeString(notification.processId),
+        recipientName: repairTextEncoding(normalizeString(recipient?.name)),
+        appUrl: APP_URL,
+      })
+
+      await mailer.sendMail({
+        from: getEmailFromAddress(),
+        to: recipientEmail,
+        subject: cargoMessage.subject,
+        text: cargoMessage.text,
+        html: cargoMessage.html,
+        attachments: cargoMessage.attachments,
       })
       return
     }

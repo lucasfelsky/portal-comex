@@ -34,7 +34,12 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
 
-  const redirectTo = location.state?.from?.pathname ?? '/'
+  // Preserva `search`/`hash` do destino original (deep link do e-mail), com
+  // guarda de caminho interno (sem `//host` nem URL absoluta).
+  const from = location.state?.from
+  const redirectCandidate = `${from?.pathname ?? ''}${from?.search ?? ''}${from?.hash ?? ''}`
+  const redirectTo =
+    redirectCandidate.startsWith('/') && !redirectCandidate.startsWith('//') ? redirectCandidate : '/'
 
   if (isAuthenticated && hasAccess) {
     return <Navigate to={redirectTo} replace />

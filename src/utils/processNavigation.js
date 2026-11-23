@@ -34,6 +34,33 @@ export function readReturnTo(state) {
   return isSafeReturnTo(state?.returnTo) ? state.returnTo : ''
 }
 
+// Abas reais do detalhe do processo (`ProcessDetailView.jsx`).
+export const PROCESS_DETAIL_TABS = ['general', 'process', 'items', 'messages', 'history', 'documents']
+
+const MAX_LINK_PROCESS_ID_LENGTH = 200
+
+// Deep link por URL: `/processos?processo=<id>&aba=<tab>` (e-mail do Relatorio
+// de Carga). `search` com ou sem `?`. Nunca lanca: entrada invalida -> `null`.
+// `aba` ausente/invalida -> 'general'.
+export function readProcessLinkFromSearch(search) {
+  if (typeof search !== 'string') return null
+
+  let params
+  try {
+    params = new URLSearchParams(search)
+  } catch {
+    return null
+  }
+
+  const selectedProcessId = (params.get('processo') ?? '').trim()
+  if (!selectedProcessId || selectedProcessId.length > MAX_LINK_PROCESS_ID_LENGTH) return null
+
+  const tab = params.get('aba') ?? ''
+  const detailTab = PROCESS_DETAIL_TABS.includes(tab) ? tab : 'general'
+
+  return { selectedProcessId, detailTab }
+}
+
 export function getReturnLabel(returnTo) {
   const pathname = String(returnTo ?? '').split('?')[0]
   return RETURN_LABELS[pathname] ?? ''
