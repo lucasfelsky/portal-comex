@@ -577,7 +577,7 @@ describe('F6 Menu (mobile)', () => {
     expect(container.querySelector('.menu-profile')).toBeNull()
   })
 
-  it('admin vê "Administração" com as 6 seções reais e cada uma navega para a sua rota', () => {
+  it('admin vê "Administração" com as 7 seções reais e cada uma navega para a sua rota', () => {
     const { container } = renderMenu('admin')
     expect(screen.getByRole('heading', { level: 2, name: 'Administração' })).toBeInTheDocument()
     const routes = {
@@ -587,9 +587,10 @@ describe('F6 Menu (mobile)', () => {
       Previsões: '/admin/previsoes',
       'Lead time': '/admin/lead-time',
       'Chamados de suporte Chamados abertos pelos usuários': '/admin/suporte',
+      'Relatório de Carga Destinatários do aviso por e-mail': '/admin/relatorio-carga',
     }
     const groupEl = container.querySelector('.m-group')
-    expect(within(groupEl).getAllByRole('button')).toHaveLength(6)
+    expect(within(groupEl).getAllByRole('button')).toHaveLength(7)
     for (const [label, route] of Object.entries(routes)) {
       mockNavigate.mockClear()
       fireEvent.click(within(groupEl).getByRole('button', { name: label }))

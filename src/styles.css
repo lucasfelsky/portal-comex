@@ -23591,3 +23591,77 @@ body {
     box-shadow: -24px 0 48px rgba(0, 0, 0, 0.2);
   }
 }
+
+/* ============================================================
+   Admin > Relatorio de Carga (destinatarios do aviso): lista de e-mails
+   com botao de remover, formulario de adicao e barra de salvar. Prefixo
+   crr-. APPEND-ONLY. O ajuste mobile (centralizado) mora no fim de
+   mobile-redesign.css, na faixa de ate 1040px.
+   ============================================================ */
+.crr-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.crr-card > .card-heading {
+  margin-bottom: 0;
+}
+
+.crr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.crr-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.crr-item:last-child {
+  border-bottom: 0;
+}
+
+.crr-item__email {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.crr-item__invalid {
+  display: block;
+  color: var(--danger);
+}
+
+.crr-item__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.crr-form {
+  gap: 10px;
+}
+
+.crr-form .action-row {
+  margin-top: 0;
+}
+
+.crr-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.crr-actions {
+  margin-top: 0;
+}

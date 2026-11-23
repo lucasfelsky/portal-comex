@@ -70,7 +70,7 @@ function renderAt(path = '/admin/suporte') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin" element={<AdminLayout />}>
-          {['usuarios', 'comunicados', 'barra', 'previsoes', 'lead-time', 'suporte'].map((slug) => (
+          {['usuarios', 'comunicados', 'barra', 'previsoes', 'lead-time', 'suporte', 'relatorio-carga'].map((slug) => (
             <Route key={slug} path={slug} element={<div>{slug}</div>} />
           ))}
         </Route>
@@ -237,14 +237,14 @@ describe('AdminLayout - ResizeObserver', () => {
     window.cancelAnimationFrame = orig.caf
   })
 
-  it('observa o nav e as 6 abas', () => {
+  it('observa o nav e as 7 abas', () => {
     const { observer, nav } = setup()
     expect(instances).toHaveLength(1)
     const targets = observer.observe.mock.calls.map(([el]) => el)
-    expect(targets).toHaveLength(7)
+    expect(targets).toHaveLength(8)
     expect(targets[0]).toBe(nav)
     expect(targets.slice(1).every((el) => el.classList.contains('admin-tab'))).toBe(true)
-    expect(nav.querySelectorAll('.admin-tab')).toHaveLength(6)
+    expect(nav.querySelectorAll('.admin-tab')).toHaveLength(7)
   })
 
   it('a primeira notificacao so registra o tamanho base: sem rAF e sem escrita', () => {

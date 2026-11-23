@@ -925,6 +925,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Destinatarios do aviso "Relatorio de Carga" (D6 do PR #270 revista):
+    // o admin le/grava pela tela /admin/relatorio-carga; o trigger
+    // notifyCargoReportUploaded continua lendo via Admin SDK (que ignora rules).
+    // SO' este doc de config/* e' aberto; o resto continua no catch-all.
+    // Rules nao iteram listas: cada lista e' validada por join(',') + regex.
+    // Item nao-string faz o join falhar -> nega. toSet() barra duplicados.
+    // LIMITACAO CONHECIDA: o join NAO e' inambiguo. Um item UNICO contendo
+    // virgula (ex.: ['a@sqquimica.com,b@sqquimica.com']) ou ['']  e' aceito
+    // pela rule, pois o join e' a propria string e casa o regex. E' benigno:
+    // so' admin ativo @sqquimica.com escreve, dominio e charset continuam
+    // travados, o backend e a normalizacao do cliente descartam esses itens e
+    // a UI valida item a item (a validacao estrita fica no cliente).
+    function isValidCargoReportRecipientList(value) {
+      return value is list
+        && value.size() <= 50
+        && value.toSet().size() == value.size()
+        && value.join(',').matches('^([a-z0-9._%+-]+@sqquimica\\.com(,[a-z0-9._%+-]+@sqquimica\\.com)*)?$');
+    }
+
+    function isValidCargoReportRecipientsConfig() {
+      return request.resource.data.keys().hasOnly(['tecnico', 'faturamento'])
+        && request.resource.data.keys().hasAll(['tecnico', 'faturamento'])
+        && isValidCargoReportRecipientList(request.resource.data.tecnico)
+        && isValidCargoReportRecipientList(request.resource.data.faturamento);
+    }
+
+    match /config/cargoReportRecipients {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidCargoReportRecipientsConfig();
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -116,6 +116,10 @@ const pageMeta = {
     title: 'Centro Administrativo',
     breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Suporte' }],
   },
+  '/admin/relatorio-carga': {
+    title: 'Centro Administrativo',
+    breadcrumb: [{ label: 'Admin', to: '/admin' }, { label: 'Relatório de Carga' }],
+  },
 }
 
 // Mobile: nas sub-abas do Admin o large title e' o nome da secao e o eyebrow
@@ -128,6 +132,7 @@ const adminSectionTitles = {
   '/admin/previsoes': 'Previsões',
   '/admin/lead-time': 'Lead time',
   '/admin/suporte': 'Suporte',
+  '/admin/relatorio-carga': 'Relatório de Carga',
 }
 
 export default function AppLayout() {
@@ -315,6 +320,7 @@ export default function AppLayout() {
             { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
             { id: 'go-admin-lead-time', label: 'Lead time', group: 'Admin', to: '/admin/lead-time', icon: 'sparkle' },
             { id: 'go-admin-support', label: 'Suporte', group: 'Admin', to: '/admin/suporte', icon: 'help', keywords: ['chamado', 'bug', 'ticket'] },
+            { id: 'go-admin-cargo-report', label: 'Destinatários do Relatório de Carga', group: 'Admin', to: '/admin/relatorio-carga', icon: 'mail', keywords: ['relatório de carga', 'técnico', 'faturamento', 'e-mail', 'coa'] },
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', action: () => window.open(INTELLIQUOTE_WEB_URL, '_blank', 'noopener,noreferrer'), icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),
