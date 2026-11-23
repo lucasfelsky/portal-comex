@@ -16,7 +16,7 @@ import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } 
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { getSaoPauloDateKey } from './operationalAlerts.js';
 import { canSeeCustomsBeforeArrivalMirror, projectProcessForRestrictedRecipientMirror } from './customsVisibility.js';
-export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents } from './documents.js';
+export { rotateProcessDocumentVersions, deleteProcessDocumentFile, cleanupDeletedProcessData, planDocumentRotation, syncProcessDocumentIndex, recordProcessDocumentEvents, notifyCargoReportUploaded } from './documents.js';
 export { downloadProcessDocument } from './documentDownload.js';
 import { hasCollectionStatusChangedMirror, getDisplayedCollectionStatusMirror } from '../core/collectionStatus.js';
 import { isReceiptDivergenceReportedMirror, normalizeReceiptDivergenceFieldsMirror } from '../core/receiptDivergence.js';

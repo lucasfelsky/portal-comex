@@ -225,6 +225,25 @@ describe('sendProcessNotificationEmail', () => {
     expect(mockSendMail).not.toHaveBeenCalled()
   })
 
+  // Relatorio de Carga: entra em `EMAIL_NOTIFICATION_TYPES` (diferente de
+  // `process_document_uploaded`), o e-mail sai por este trigger.
+  it('process_cargo_report_uploaded -> envia e-mail', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'process_cargo_report_uploaded',
+        recipientUserId: RECIPIENT_UID,
+        title: 'Relatório de Carga disponível: PO 12345',
+        body: 'Relatório de Carga preenchido e disponível no Portal COMEX. Documentação necessária para emissão do COA está disponível na pasta do processo.',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+  })
+
   it('recipientUserId vazio -> ignora', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

@@ -472,6 +472,7 @@ describe('NotificationsList variant="drawer"', () => {
     ['collection_status_updated', 'ok', 'truck'],
     ['post_receipt_notes_updated', 'ok', 'doc'],
     ['process_document_uploaded', 'warn', 'doc'],
+    ['process_cargo_report_uploaded', 'ok', 'doc'],
     ['process_daily_alerts', 'warn', 'alert-triangle'],
     ['license_rejected', 'danger', 'alert-triangle'],
     ['receipt_divergence_reported', 'danger', 'alert-triangle'],
