@@ -6080,3 +6080,40 @@
     display: none;
   }
 }
+
+/* 19. Admin > Relatorio de Carga: itens e botoes centralizados (padrao COMEX).
+   Prefixo crr-, APPEND-ONLY. Fica depois das secoes 15e/15h; os seletores
+   aninham em .crr-card/.crr-actions para vencer .admin-section .list-card. -- */
+@media (max-width: 1040px) {
+  .crr-card .crr-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 0;
+    text-align: center;
+  }
+
+  .crr-card .crr-item__email {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+
+  .crr-card .crr-form .field {
+    text-align: center;
+  }
+
+  .crr-card .crr-form .action-row,
+  .crr-actions {
+    justify-content: center;
+  }
+
+  .crr-card .crr-form .action-row .secondary-button,
+  .crr-actions .primary-button,
+  .crr-actions .secondary-button {
+    min-height: 44px;
+  }
+
+  .crr-card .crr-error {
+    text-align: center;
+  }
+}

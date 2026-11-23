@@ -1608,6 +1608,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/processes/CollectionStatusEditView.jsx': [1, 0, 0],
   'features/processes/CollectionWindowsEditor.jsx': [2, 2, 0],
   'features/processes/ContainersEditor.jsx': [1, 1, 0],
+  // S1: dialogo de pre-visualizacao do Relatorio de carga ("Tentar novamente" e "Baixar", ambos outline).
+  'features/processes/DocumentPreviewDialog.jsx': [2, 0, 2],
   'features/processes/ImportProcessesModal.jsx': [1, 0, 0],
   'features/processes/LicensesEditor.jsx': [1, 1, 0],
   'features/processes/PostReceiptEditView.jsx': [1, 0, 0],
@@ -1615,7 +1617,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/processes/PostReceiptImagesField.jsx': [2, 1, 1],
   'features/processes/ProcessCargoFields.jsx': [1, 1, 0],
   'features/processes/ProcessDetailView.jsx': [6, 3, 2],
-  'features/processes/ProcessDocumentsPanel.jsx': [15, 1, 12],
+  // S1: +1 botao "Visualizar" (outline) do Relatorio de carga.
+  'features/processes/ProcessDocumentsPanel.jsx': [16, 1, 13],
   'features/processes/ProcessForm.jsx': [7, 5, 0],
   // F4d: o rodape do modal (ProcessFormDialog) tem 1 fantasma (Voltar); Salvar = .secondary-button, Avancar = .primary-button.
   'features/processes/ProcessFormDialog.jsx': [1, 0, 0],

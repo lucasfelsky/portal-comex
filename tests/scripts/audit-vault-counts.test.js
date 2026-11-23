@@ -50,22 +50,23 @@ describe('audit-vault-counts', () => {
   // List - isValidInvoicePackingListLinkUpdate, +1 do renome do documento
   // adicional - isValidAdditionalDocumentRenameUpdate, +3 da referencia do
   // ERP do PR 3 - isValidErpSnapshotMeta, isValidErpLatestPointer e
-  // isValidErpProcessHint); 29 quando a vault esta' presente (+2 checks que a
-  // leem). O teste aceita os dois modos porque a vault existe na maquina do
+  // isValidErpProcessHint, +1 do destinatario do Relatorio de Carga -
+  // isValidCargoReportRecipientsConfig); 30 quando a vault esta' presente
+  // (+2 checks que a leem). O teste aceita os dois modos porque a vault existe na maquina do
   // dev e nao no CI.
-  it('output lista 27 checks sem vault (29 com vault)', () => {
+  it('output lista 28 checks sem vault (30 com vault)', () => {
     const result = runScript()
     expect(isAuditFailure(result)).toBe(false)
-    expect(result.stdout).toMatch(/2[79] checks/)
+    expect(result.stdout).toMatch(/(28|30) checks/)
     expect(result.stdout).toMatch(/src\/ directories = 9/)
     expect(result.stdout).toMatch(/src\/components\/ top-level = 26/)
     expect(result.stdout).toMatch(/src\/features\/ directories = 3/)
     expect(result.stdout).toMatch(/src\/pages\/ count = 12/)
-    expect(result.stdout).toMatch(/src\/services\/ count = 20/)
+    expect(result.stdout).toMatch(/src\/services\/ count = 21/)
     expect(result.stdout).toMatch(/src\/utils\/ count = 16/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 14/)
     expect(result.stdout).toMatch(/firestore\.rules subcollections = 3/)
-    expect(result.stdout).toMatch(/tests\/ total = 83/)
+    expect(result.stdout).toMatch(/tests\/ total = 84/)
   })
 
   describe('detecao de drift', () => {
@@ -162,7 +163,7 @@ describe('audit-vault-counts', () => {
       expect(result.stdout).toMatch(/firestore\.rules isAllowedSelfUserUpdate\(\) = 9 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 81 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isLogisticsCollectionStatusUpdate\(\) = 10 campos/)
-      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 16/)
+      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 17/)
       expect(result.stdout).toMatch(/declaredDependencies = \d+ \(todas instaladas\)/)
       expect(result.stdout).toMatch(
         /src\/services com onSnapshot = 1 \(forecastSettingsRepository\.js\)/
@@ -307,7 +308,7 @@ describe('audit-vault-counts', () => {
       const result = runWithEnv({ SKIP_VAULT_CHECK: '1' })
       expect(isAuditFailure(result)).toBe(false)
       expect(result.stdout).toMatch(/checks de vault PULADOS/)
-      expect(result.stdout).toMatch(/27 checks, 0 mismatches/)
+      expect(result.stdout).toMatch(/28 checks, 0 mismatches/)
     })
 
     it('pula (sem falhar) quando VAULT_DIR aponta para pasta inexistente', () => {
@@ -316,12 +317,12 @@ describe('audit-vault-counts', () => {
       expect(result.stdout).toMatch(/checks de vault PULADOS/)
     })
 
-    it('quando a vault existe, roda 29 checks (27 + 2 de vault)', () => {
+    it('quando a vault existe, roda 30 checks (28 + 2 de vault)', () => {
       const result = runScript()
       // Se a vault nao estiver presente na maquina, o teste nao se aplica.
       if (/checks de vault PULADOS/.test(result.stdout)) return
       expect(isAuditFailure(result)).toBe(false)
-      expect(result.stdout).toMatch(/29 checks, 0 mismatches/)
+      expect(result.stdout).toMatch(/30 checks, 0 mismatches/)
       expect(result.stdout).toMatch(/vault menciona todos os \d+ identificadores/)
       expect(result.stdout).toMatch(/vault sem mencao ativa aos \d+ fantasmas/)
     })

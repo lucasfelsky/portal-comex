@@ -811,3 +811,49 @@ describe('styles.css - balao do chip ERP dentro de .field (ETD/ETA)', () => {
     expect(stylesTop.some((block) => block.prelude.split(',').map((s) => s.trim()).includes('.field span'))).toBe(true)
   })
 })
+
+// Pre-visualizacao do Relatorio de carga (DocumentPreviewDialog, S1): o valor dos
+// cartoes do cabecalho usa token que INVERTE no tema escuro (--navy continua
+// #004153 no dark e some sobre o cartao #163845) e as abas da planilha (botoes
+// `.inline-badge`, 22-26px) ganham alvo de toque de 44px no celular.
+describe('styles.css - pre-visualizacao do Relatorio de carga (docpv)', () => {
+  const stylesCss = stripComments(fs.readFileSync(path.resolve(ROOT, 'src/styles.css'), 'utf8'))
+  const stylesTop = readBlocks(stylesCss).blocks.map((block) => ({
+    prelude: normalizePrelude(block.prelude),
+    body: block.body,
+  }))
+  const prop = (body, name) => new RegExp(`(?:^|[;\\s])${name}\\s*:\\s*([^;]+?)\\s*(?:;|$)`).exec(body)?.[1]
+
+  it('o valor do cartao do cabecalho usa --ink (inverte no tema escuro), nunca --navy', () => {
+    const rules = stylesTop.filter((block) => block.prelude === '.docpv__meta-card dd')
+    expect(rules).toHaveLength(1)
+    expect(prop(rules[0].body, 'color')).toBe('var(--ink)')
+  })
+
+  it('nenhuma cor de TEXTO dos blocos docpv usa --navy (so o fundo do cabecalho da tabela)', () => {
+    const docpv = stylesTop.filter((block) => block.prelude.includes('docpv'))
+    expect(docpv.length).toBeGreaterThan(5)
+    for (const block of docpv) {
+      expect(prop(block.body, 'color'), block.prelude).not.toBe('var(--navy)')
+    }
+  })
+
+  it('em <= 720px a aba da planilha tem alvo de toque de 44px (pilula mantida)', () => {
+    const media = stylesTop.filter(
+      (block) => block.prelude === '@media (max-width: 720px)' && block.body.includes('.docpv__tab')
+    )
+    expect(media).toHaveLength(1)
+    const rule = readBlocks(media[0].body).blocks.find((block) => normalizePrelude(block.prelude) === '.docpv__tab')
+    expect(rule).toBeDefined()
+    expect(prop(rule.body, 'min-height')).toBe('44px')
+    expect(prop(rule.body, 'display')).toBe('inline-flex')
+    expect(prop(rule.body, 'align-items')).toBe('center')
+  })
+
+  it('a regra base da aba nao fixa altura menor que o alvo de toque', () => {
+    const base = stylesTop.filter((block) => block.prelude === '.docpv__tab')
+    expect(base).toHaveLength(1)
+    expect(prop(base[0].body, 'height')).toBeUndefined()
+    expect(prop(base[0].body, 'max-height')).toBeUndefined()
+  })
+})

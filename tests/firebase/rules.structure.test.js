@@ -27,14 +27,22 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/service\s+cloud\.firestore\s*\{/)
     })
 
-    // D6 (notificacao Relatorio de Carga): `config/cargoReportRecipients` e'
-    // lido SO' via Admin SDK (trigger) e editado pelo Console do Firebase -
-    // nenhum cliente le `config/*`, entao NAO ha `match /config/...`: o
-    // catch-all `match /{document=**}` (allow ... if false) ja nega tudo ao
-    // cliente. Quando a tela admin vier, entra `match /config/...` admin-only
-    // (com aprovacao humana) e este teste e' atualizado junto.
-    it('nao declara match /config (config/cargoReportRecipients e so Admin SDK - D6)', () => {
-      expect(rules).not.toMatch(/match\s+\/config\//)
+    // D6 revista (tela admin /admin/relatorio-carga, aprovada pelo Lucas): SO'
+    // `config/cargoReportRecipients` tem match no cliente, admin-only e com
+    // validacao de shape; o trigger segue lendo via Admin SDK. Os demais docs de
+    // `config/*` continuam no catch-all `match /{document=**}` (negado).
+    it('declara match /config/cargoReportRecipients admin-only com validacao de shape', () => {
+      const block = rules.match(/match\s+\/config\/cargoReportRecipients\s*\{[^}]*\}/)
+      expect(block).not.toBeNull()
+      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*;/)
+      expect(block[0]).toMatch(
+        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidCargoReportRecipientsConfig\(\)\s*;/
+      )
+      expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('nao declara match curinga em config (so o doc cargoReportRecipients e aberto)', () => {
+      expect(rules).not.toMatch(/match\s+\/config\/\{/)
     })
   })
 

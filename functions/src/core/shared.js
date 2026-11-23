@@ -233,9 +233,13 @@ function buildProcessLabel(process) {
   return processNumber ? `PO ${processNumber}` : 'processo'
 }
 
+// Paridade com `canSeeProcessName` (src/features/processes/processLabels.js): admin e logistica
+// veem o name de FCL/LCL/AEREO; demais roles recebem `PO <n>` ou 'processo'.
+// Excecao: `buildCargoReportSubject`.
 function canShowProcessNameForRole(process, role) {
   const category = normalizeString(process?.category)
-  return role === 'admin' || !RESTRICTED_PROCESS_CATEGORIES.has(category)
+  const normalizedRole = normalizeString(role)
+  return normalizedRole === 'admin' || normalizedRole === 'logistica' || !RESTRICTED_PROCESS_CATEGORIES.has(category)
 }
 
 function buildRecipientProcessLabel(process, role) {

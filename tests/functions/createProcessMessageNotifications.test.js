@@ -288,6 +288,120 @@ describe('createProcessMessageNotifications', () => {
     expect(payload.body).not.toContain('Cliente Sigiloso')
   })
 
+  describe('rotulo do processo restrito por destinatario (duvida respondida / favorito)', () => {
+    const ADMIN_ACTOR = { id: 'admin-actor', name: 'Admin', email: 'admin@sqquimica.com', role: 'admin', status: 'Ativo' }
+
+    function restrictedProcess(category, processNumber = '9036') {
+      return { id: PROCESS_ID, name: 'Cliente Sigiloso', processNumber, category }
+    }
+
+    function setupReply({ process, previousUser }) {
+      setupFirestoreChain({
+        processes: [{ id: PROCESS_ID, data: process }],
+        users: [
+          { id: 'admin-actor', data: ADMIN_ACTOR },
+          { id: PREVIOUS_AUTHOR_UID, data: previousUser },
+        ],
+        [`processes/${PROCESS_ID}/messages`]: [
+          { id: 'msg-prev', data: { authorId: PREVIOUS_AUTHOR_UID, text: 'duvida anterior' } },
+        ],
+      })
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+    }
+
+    function payloadOfType(type, recipientUserId) {
+      return mockBatch.set.mock.calls
+        .map(([, data]) => data)
+        .find((data) => data.type === type && data.recipientUserId === recipientUserId)
+    }
+
+    const replyEvent = () => makeEvent({ authorId: 'admin-actor', authorName: 'Admin', text: 'Resposta da duvida' })
+
+    it.each(['FCL', 'LCL', 'AEREO'])(
+      'resposta de admin a autor user em %s restrito usa PO <numero> e nao vaza o name',
+      async (category) => {
+        setupReply({ process: restrictedProcess(category), previousUser: PREVIOUS_USER })
+
+        await handler(replyEvent())
+
+        const payload = payloadOfType('process_question_answered', PREVIOUS_AUTHOR_UID)
+        expect(payload).toBeDefined()
+        expect(payload.body).toBe('Admin respondeu uma dúvida sua em PO 9036.')
+        expect(payload.body).not.toContain('Cliente Sigiloso')
+      }
+    )
+
+    it('resposta de admin a autor user em FCL restrito sem numero usa "processo" (nao vaza o name)', async () => {
+      setupReply({ process: restrictedProcess('FCL', ''), previousUser: PREVIOUS_USER })
+
+      await handler(replyEvent())
+
+      const payload = payloadOfType('process_question_answered', PREVIOUS_AUTHOR_UID)
+      expect(payload).toBeDefined()
+      expect(payload.body.endsWith(' em processo.')).toBe(true)
+      expect(payload.body).not.toContain('Cliente Sigiloso')
+    })
+
+    it.each(['FCL', 'LCL', 'AEREO'])(
+      'resposta de admin a autor logistica em %s restrito mostra o name',
+      async (category) => {
+        setupReply({
+          process: restrictedProcess(category),
+          previousUser: { ...PREVIOUS_USER, role: 'logistica' },
+        })
+
+        await handler(replyEvent())
+
+        const payload = payloadOfType('process_question_answered', PREVIOUS_AUTHOR_UID)
+        expect(payload).toBeDefined()
+        expect(payload.body).toContain('Cliente Sigiloso')
+      }
+    )
+
+    it('favorite_process_message em FCL restrito: logistica ve o name, user ve PO <numero>', async () => {
+      setupFirestoreChain({
+        processes: [{ id: PROCESS_ID, data: restrictedProcess('FCL') }],
+        users: [
+          { id: AUTHOR_UID, data: AUTHOR_USER },
+          { id: FAVORITER_UID, data: FAVORITER_USER },
+          { id: 'user-fav', data: { ...FAVORITER_USER, id: 'user-fav', email: 'userfav@sqquimica.com', role: 'user' } },
+        ],
+      })
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+
+      await handler(makeEvent({ authorId: AUTHOR_UID, authorName: 'Joao', text: 'oi' }))
+
+      const logisticaPayload = payloadOfType('favorite_process_message', FAVORITER_UID)
+      expect(logisticaPayload).toBeDefined()
+      expect(logisticaPayload.body).toContain('Cliente Sigiloso')
+
+      const userPayload = payloadOfType('favorite_process_message', 'user-fav')
+      expect(userPayload).toBeDefined()
+      expect(userPayload.body).toContain('PO 9036')
+      expect(userPayload.body).not.toContain('Cliente Sigiloso')
+    })
+
+    it('mensagem de user em FCL restrito: process_question_created (admin-only) mostra o name', async () => {
+      setupFirestoreChain({
+        processes: [{ id: PROCESS_ID, data: restrictedProcess('FCL') }],
+        users: [
+          { id: AUTHOR_UID, data: AUTHOR_USER },
+          { id: ADMIN_UID, data: ADMIN_USER },
+        ],
+      })
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+
+      await handler(makeEvent({ authorId: AUTHOR_UID, authorName: 'Joao', text: 'duvida' }))
+
+      const payload = payloadOfType('process_question_created', ADMIN_UID)
+      expect(payload).toBeDefined()
+      expect(payload.body).toContain('Cliente Sigiloso')
+    })
+  })
+
   it('logger info registra o evento', async () => {
     const message = { authorId: AUTHOR_UID, text: 'oi' }
     await handler(makeEvent(message))

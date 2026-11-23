@@ -4261,6 +4261,120 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  // D6 revista: SO' config/cargoReportRecipients esta aberto (tela /admin/relatorio-carga).
+  // Validacao de shape feita por join(',') + regex por lista (rules nao iteram listas).
+  describe('config/cargoReportRecipients (tela admin, D6 revista)', () => {
+    const PATH = 'config/cargoReportRecipients'
+    const valid = (overrides = {}) => ({
+      tecnico: ['tec@sqquimica.com'],
+      faturamento: ['fiscal@sqquimica.com'],
+      ...overrides,
+    })
+    const seedDoc = () => seed((db) => setDoc(doc(db, PATH), valid()))
+    const fifty = (count) => Array.from({ length: count }, (_, index) => `user${index}@sqquimica.com`)
+
+    it('admin le com o doc ausente e com o doc presente', async () => {
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+      await seedDoc()
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+    })
+
+    it('admin cria com setDoc valido (inclusive listas vazias)', async () => {
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid()))
+      await seed((db) => deleteDoc(doc(db, PATH)))
+      await assertSucceeds(setDoc(doc(admin(), PATH), { tecnico: [], faturamento: [] }))
+    })
+
+    it('admin atualiza com setDoc e com updateDoc parcial valido', async () => {
+      await seedDoc()
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com', 'b@sqquimica.com'] })))
+      await assertSucceeds(updateDoc(doc(admin(), PATH), { faturamento: ['novo@sqquimica.com'] }))
+      await assertSucceeds(updateDoc(doc(admin(), PATH), { tecnico: [] }))
+    })
+
+    it('50 itens passam e 51 falham', async () => {
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ tecnico: fifty(50) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: fifty(51) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ faturamento: fifty(51) })))
+    })
+
+    it('falham: campo extra, so um campo no create, e update que deixa de ser valido', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), { ...valid(), updatedAt: 'x' }))
+      await assertFails(setDoc(doc(admin(), PATH), { tecnico: ['a@sqquimica.com'] }))
+      await assertFails(setDoc(doc(admin(), PATH), { faturamento: ['a@sqquimica.com'] }))
+      await seedDoc()
+      await assertFails(updateDoc(doc(admin(), PATH), { updatedAt: 'x' }))
+      await assertFails(updateDoc(doc(admin(), PATH), { tecnico: ['externo@gmail.com'] }))
+    })
+
+    it('falham itens fora do padrao: maiuscula, dominio externo, sem local-part, virgula, espaco', async () => {
+      const bad = [
+        'Maiuscula@sqquimica.com',
+        'externo@gmail.com',
+        'x@sub.sqquimica.com',
+        '@sqquimica.com',
+        'a,b@sqquimica.com',
+        'a b@sqquimica.com',
+        ' a@sqquimica.com',
+        'joão@sqquimica.com',
+      ]
+      // Nota: uma lista com UM unico item '' (`['']`) passa na rule (join = '' casa o grupo opcional).
+      // E' benigno: o backend e a normalizacao do cliente descartam string vazia; a UI nunca grava isso.
+      // Combinado com outros itens ('' + e-mail) o join ganha virgula e a rule nega (coberto abaixo).
+      for (const email of bad) {
+        await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: [email] })))
+        await assertFails(setDoc(doc(admin(), PATH), valid({ faturamento: ['ok@sqquimica.com', email] })))
+      }
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['ok@sqquimica.com', ''] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['', 'ok@sqquimica.com'] })))
+    })
+
+    it('documenta limitacao conhecida e benigna: item unico com virgula ou vazio passa na rule', async () => {
+      // O join(',') de UM unico item e' a propria string: 'a@sqquimica.com,b@sqquimica.com' casa o regex.
+      // Limitacao conhecida da rule (rules nao iteram listas). Benigna: so' admin ativo escreve, dominio e
+      // charset seguem travados em @sqquimica.com, backend e cliente normalizam/descartam e a UI valida
+      // item a item (a validacao estrita por item fica no cliente). Se a rule for endurecida, inverter aqui.
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com,b@sqquimica.com'] })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ faturamento: [''] })))
+    })
+
+    it('falham: duplicado, item nao-string e campo string em vez de lista', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com', 'a@sqquimica.com'] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: [42] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ tecnico: ['a@sqquimica.com', 42] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ faturamento: 'a@sqquimica.com' })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ faturamento: null })))
+    })
+
+    it('admin NAO deleta', async () => {
+      await seedDoc()
+      await assertFails(deleteDoc(doc(admin(), PATH)))
+    })
+
+    it('user aprovado, logistica e anonimo nao leem nem gravam', async () => {
+      await seedDoc()
+      for (const db of [approvedUser(), logistics(), anon()]) {
+        await assertFails(getDoc(doc(db, PATH)))
+        await assertFails(setDoc(doc(db, PATH), valid()))
+        await assertFails(updateDoc(doc(db, PATH), { tecnico: [] }))
+        await assertFails(deleteDoc(doc(db, PATH)))
+      }
+    })
+
+    it('admin Pendente e admin com e-mail nao corporativo nao leem nem gravam', async () => {
+      await seedDoc()
+      for (const db of [admin('admin-p', { status: 'Pendente' }), admin('admin-x', { email: 'admin@gmail.com' })]) {
+        await assertFails(getDoc(doc(db, PATH)))
+        await assertFails(setDoc(doc(db, PATH), valid()))
+      }
+    })
+
+    it('admin nao le nem grava outro doc de config (catch-all continua valendo)', async () => {
+      await assertFails(getDoc(doc(admin(), 'config/outroDoc')))
+      await assertFails(setDoc(doc(admin(), 'config/outroDoc'), valid()))
+    })
+  })
+
   describe('catch-all', () => {
     it('colecao desconhecida eh negada ate pra admin', async () => {
       await assertFails(getDoc(doc(admin(), 'colecaoAleatoria/x')))

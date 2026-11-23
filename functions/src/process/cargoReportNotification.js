@@ -33,8 +33,8 @@ export function sanitizeCargoReportText(value) {
 //
 // REGRA (assunto fixo pedido pelo Comex): o mesmo assunto vale para TODOS os
 // destinatarios, inclusive e-mail direto da lista. Por isso NAO depende de
-// role: o `name` de processos FCL/LCL/AEREO aparece tambem para perfis nao
-// admin neste aviso (ao contrario de `buildRecipientProcessLabel`).
+// role: o `name` de processos FCL/LCL/AEREO aparece tambem para perfis que
+// nao sao admin/logistica neste aviso (ao contrario de `buildRecipientProcessLabel`).
 export function buildCargoReportSubject(process) {
   const category = sanitizeCargoReportText(process?.category)
   const processNumber = sanitizeCargoReportText(process?.processNumber)

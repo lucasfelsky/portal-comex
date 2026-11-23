@@ -101,7 +101,10 @@ export const createProcessMessageNotifications = onDocumentCreated(
           previousAuthorProfile,
           'process_question_answered',
           'Sua dúvida recebeu uma resposta',
-          buildReplyNotificationBody(buildProcessLabel(process), actorName)
+          buildReplyNotificationBody(
+            buildRecipientProcessLabel(process, normalizeString(previousAuthorProfile.role)),
+            actorName
+          )
         )
         break
       }
