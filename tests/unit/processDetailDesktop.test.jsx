@@ -401,6 +401,37 @@ describe('F4c - abas (controle segmentado)', () => {
     expect(screen.getByRole('tab', { name: 'Detalhes gerais' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it.each(['tecnico', 'faturamento'])(
+    '%s ve a aba Documentos (sem contador) e NAO ve Historico; documents abre o painel em modo leitura',
+    async (role) => {
+      const { listProcessDocuments } = await import('../../src/services/processDocumentsRepository')
+      listProcessDocuments.mockClear()
+      renderDetail({
+        isAdmin: false,
+        profile: { uid: 'u-9', name: 'Giulia', role },
+        detailTab: 'documents',
+        selectedProcess: makeProcess({
+          id: 'p-reader',
+          items: [{ id: 'ITEM-1', commercialName: 'Resina Atlas', dangerousGoods: true, quantity: 1 }],
+          documentIndex: { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] },
+        }),
+      })
+      const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent)
+      expect(tabs).toEqual(['Detalhes gerais', 'Processo', 'Itens', 'Mensagens', 'Documentos'])
+      expect(screen.getByRole('tab', { name: 'Documentos' })).toHaveAttribute('aria-selected', 'true')
+      expect(await screen.findByText('Documentos do processo')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(listProcessDocuments).toHaveBeenCalledWith('p-reader', { types: ['cargoReport', 'coaOriginal'] })
+      )
+    }
+  )
+
+  it.each(['tecnico', 'faturamento'])('%s: deep link para history cai em Detalhes gerais', (role) => {
+    renderDetail({ isAdmin: false, profile: { name: 'Giulia', role }, detailTab: 'history' })
+    expect(screen.queryByRole('heading', { name: 'Histórico de marcos' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Detalhes gerais' })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('clicar numa aba e usar setas/Home/End chama onDetailTabChange', async () => {
     const user = userEvent.setup()
     const { props } = renderDetail({ detailTab: 'items' })

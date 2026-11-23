@@ -26,6 +26,7 @@ export const MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH = 80
 export const DOCUMENT_TYPES = [
   { id: 'bl', label: 'BL/AWB', scope: 'process', roles: ['admin'] },
   { id: 'cargoReport', label: 'Relatório de carga', scope: 'process', roles: ['admin'] },
+  { id: 'coaOriginal', label: 'COA Original', scope: 'process', roles: ['admin'] },
   { id: 'invoice', label: 'Invoice', scope: 'process', roles: ['admin'] },
   { id: 'packingList', label: 'Packing List', scope: 'process', roles: ['admin'] },
   { id: 'fispq', label: 'FISPQ', scope: 'item', roles: ['admin'] },
@@ -34,6 +35,13 @@ export const DOCUMENT_TYPES = [
 ]
 
 const DOCUMENT_TYPE_MAP = new Map(DOCUMENT_TYPES.map((type) => [type.id, type]))
+
+// Perfis (claim `role`) que so leem/baixam os tipos de `DOCUMENT_READER_TYPES`.
+// Espelhado (sem importar) em `functions/src/process/documentIndex.js` e na
+// lista literal de `firestore.rules` - teste de paridade em
+// `tests/unit/processDocuments.test.js`.
+export const DOCUMENT_READER_ROLES = ['tecnico', 'faturamento']
+export const DOCUMENT_READER_TYPES = ['cargoReport', 'coaOriginal']
 
 // F18b-1 (B3): tipos de documento que geram marco no Historico. Espelhado
 // (sem importar) em `functions/src/process/documentIndex.js` - teste de
@@ -56,9 +64,23 @@ export function getDocumentTypeLabel(type) {
   return DOCUMENT_TYPE_MAP.get(type)?.label ?? type
 }
 
-// D6: aba "Histórico" e "Documentos" so admin/logistica.
-export function canViewProcessRecords(role) {
+// D6: aba "Histórico" so admin/logistica.
+export function canViewProcessHistory(role) {
   return role === 'admin' || role === 'logistica'
+}
+
+// Aba "Documentos": admin/logistica (tudo) + perfis leitores (so os tipos de
+// `DOCUMENT_READER_TYPES`, ver `getReadableDocumentTypes`).
+export function canViewProcessDocuments(role) {
+  return canViewProcessHistory(role) || DOCUMENT_READER_ROLES.includes(role)
+}
+
+// Tipos que o perfil pode LER: `null` = todos (admin/logistica); lista = so
+// esses (perfis leitores, copia); `[]` = nenhum.
+export function getReadableDocumentTypes(role) {
+  if (canViewProcessHistory(role)) return null
+  if (DOCUMENT_READER_ROLES.includes(role)) return [...DOCUMENT_READER_TYPES]
+  return []
 }
 
 // D4/D5: admin envia qualquer tipo; logistica so `containerWash`.
@@ -406,7 +428,7 @@ export function getUnlinkedDocumentGroups(groups, process, purchaseOrders) {
       }
     } else if (slotKey.startsWith('other:')) {
       reason = ''
-    } else if (slotKey === 'bl' || slotKey === 'cargoReport') {
+    } else if (slotKey === 'bl' || slotKey === 'cargoReport' || slotKey === 'coaOriginal') {
       reason = ''
     } else if (slotKey === 'invoice' || slotKey === 'packingList') {
       if (category === 'CONSOLIDADO') reason = UNLINKED_REASON_CATEGORY_CHANGED

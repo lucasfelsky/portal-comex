@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import {
   CONTAINER_WASH_CATEGORIES,
   DOCUMENT_MILESTONE_EVENT_TYPES,
+  DOCUMENT_READER_ROLES,
+  DOCUMENT_READER_TYPES,
   DOCUMENT_TYPES,
   buildDocumentPendingFields,
   buildDocumentSlotKey,
@@ -12,7 +14,8 @@ import {
   canDeleteDocument,
   canRenameDocument,
   canUploadDocumentType,
-  canViewProcessRecords,
+  canViewProcessDocuments,
+  canViewProcessHistory,
   formatDocumentSize,
   getDocumentFileKindLabel,
   getDocumentIndexFromDocuments,
@@ -20,6 +23,7 @@ import {
   getDocumentTypeLabel,
   getInvoicePackingListLink,
   getPackingListSlotKeyForInvoice,
+  getReadableDocumentTypes,
   getSlotKeyPoNumber,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
@@ -30,6 +34,8 @@ import {
 } from '../../src/features/processes/processDocuments'
 import {
   DOCUMENT_MILESTONE_EVENT_TYPES as DOCUMENT_MILESTONE_EVENT_TYPES_FUNCTIONS,
+  DOCUMENT_READER_ROLES as DOCUMENT_READER_ROLES_FUNCTIONS,
+  DOCUMENT_READER_TYPES as DOCUMENT_READER_TYPES_FUNCTIONS,
   DOCUMENT_TYPE_LABELS,
   buildDocumentIndex,
   buildDocumentUploadedNotificationBody,
@@ -39,10 +45,25 @@ import {
 } from '../../functions/src/process/documentIndex.js'
 
 describe('DOCUMENT_TYPES', () => {
-  it('tem os 7 tipos esperados', () => {
+  it('tem os 8 tipos esperados', () => {
     expect(DOCUMENT_TYPES.map((type) => type.id)).toEqual([
-      'bl', 'cargoReport', 'invoice', 'packingList', 'fispq', 'containerWash', 'other',
+      'bl', 'cargoReport', 'coaOriginal', 'invoice', 'packingList', 'fispq', 'containerWash', 'other',
     ])
+  })
+
+  it('coaOriginal: "COA Original", escopo processo, so o admin envia', () => {
+    expect(getDocumentTypeLabel('coaOriginal')).toBe('COA Original')
+    expect(DOCUMENT_TYPES.find((type) => type.id === 'coaOriginal')).toEqual({
+      id: 'coaOriginal',
+      label: 'COA Original',
+      scope: 'process',
+      roles: ['admin'],
+    })
+    expect(buildDocumentSlotKey('coaOriginal')).toBe('coaOriginal')
+    expect(canUploadDocumentType('admin', 'coaOriginal')).toBe(true)
+    expect(canUploadDocumentType('logistica', 'coaOriginal')).toBe(false)
+    expect(canUploadDocumentType('tecnico', 'coaOriginal')).toBe(false)
+    expect(canUploadDocumentType('faturamento', 'coaOriginal')).toBe(false)
   })
 
   it('isProcessDocumentType/getDocumentTypeLabel', () => {
@@ -53,12 +74,49 @@ describe('DOCUMENT_TYPES', () => {
   })
 })
 
-describe('canViewProcessRecords', () => {
-  it('admin/logistica veem; user/undefined nao', () => {
-    expect(canViewProcessRecords('admin')).toBe(true)
-    expect(canViewProcessRecords('logistica')).toBe(true)
-    expect(canViewProcessRecords('user')).toBe(false)
-    expect(canViewProcessRecords(undefined)).toBe(false)
+describe('canViewProcessHistory', () => {
+  it('so admin/logistica veem; leitores, user e undefined nao', () => {
+    expect(canViewProcessHistory('admin')).toBe(true)
+    expect(canViewProcessHistory('logistica')).toBe(true)
+    expect(canViewProcessHistory('tecnico')).toBe(false)
+    expect(canViewProcessHistory('faturamento')).toBe(false)
+    expect(canViewProcessHistory('user')).toBe(false)
+    expect(canViewProcessHistory(undefined)).toBe(false)
+  })
+})
+
+describe('canViewProcessDocuments', () => {
+  it('admin/logistica veem', () => {
+    expect(canViewProcessDocuments('admin')).toBe(true)
+    expect(canViewProcessDocuments('logistica')).toBe(true)
+  })
+
+  it.each(['tecnico', 'faturamento'])('%s ve (modo leitura)', (role) => {
+    expect(canViewProcessDocuments(role)).toBe(true)
+  })
+
+  it('user/compras/viewer/undefined nao veem', () => {
+    for (const role of ['user', 'compras', 'viewer', undefined, '']) {
+      expect(canViewProcessDocuments(role)).toBe(false)
+    }
+  })
+})
+
+describe('getReadableDocumentTypes', () => {
+  it('admin/logistica -> null (todos os tipos)', () => {
+    expect(getReadableDocumentTypes('admin')).toBeNull()
+    expect(getReadableDocumentTypes('logistica')).toBeNull()
+  })
+
+  it.each(['tecnico', 'faturamento'])('%s -> so cargoReport e coaOriginal (copia)', (role) => {
+    const types = getReadableDocumentTypes(role)
+    expect(types).toEqual(['cargoReport', 'coaOriginal'])
+    expect(types).not.toBe(DOCUMENT_READER_TYPES)
+  })
+
+  it('demais perfis -> nenhum tipo', () => {
+    expect(getReadableDocumentTypes('user')).toEqual([])
+    expect(getReadableDocumentTypes(undefined)).toEqual([])
   })
 })
 
@@ -267,6 +325,42 @@ describe('paridade DOCUMENT_MILESTONE_EVENT_TYPES src x functions', () => {
     expect(Object.keys(DOCUMENT_MILESTONE_EVENT_TYPES).sort()).toEqual(
       ['bl', 'containerWash', 'fispq'].sort()
     )
+  })
+})
+
+// Perfis leitores (tecnico/faturamento): espelho no front tem que ser IGUAL ao
+// de `functions/` (e a lista literal de `firestore.rules`, ver rules.structure).
+describe('paridade DOCUMENT_READER_ROLES/DOCUMENT_READER_TYPES src x functions', () => {
+  it('mesmos perfis leitores', () => {
+    expect(DOCUMENT_READER_ROLES).toEqual(DOCUMENT_READER_ROLES_FUNCTIONS)
+    expect(DOCUMENT_READER_ROLES).toEqual(['tecnico', 'faturamento'])
+  })
+
+  it('mesmos tipos legiveis', () => {
+    expect(DOCUMENT_READER_TYPES).toEqual(DOCUMENT_READER_TYPES_FUNCTIONS)
+    expect(DOCUMENT_READER_TYPES).toEqual(['cargoReport', 'coaOriginal'])
+  })
+})
+
+// D-4: COA Original nao vira pendencia (nem com embarque confirmado) e nao
+// entra no `documentIndex` (nao e slot de processo de pendencia).
+describe('COA Original sem pendencia', () => {
+  it('embarcado sem COA -> nenhuma pendencia de COA', () => {
+    const noDocs = { fispqItemIds: [], containerWashIds: [], processSlotKeys: [] }
+    const fields = buildDocumentPendingFields({ category: 'FCL', shippedAt: '2026-09-01' }, noDocs)
+    expect(fields.map((field) => field.id)).not.toContain('coaOriginal')
+    expect(fields.some((field) => /COA/i.test(field.label))).toBe(false)
+  })
+
+  it('getDocumentIndexFromDocuments ignora coaOriginal', () => {
+    const index = getDocumentIndexFromDocuments([
+      { id: 'c', type: 'coaOriginal', slotKey: 'coaOriginal', uploadedAt: '2026-09-01T10:00:00.000Z' },
+    ])
+    expect(index.processSlotKeys).toEqual([])
+  })
+
+  it('coaOriginal nao gera marco no Historico', () => {
+    expect(DOCUMENT_MILESTONE_EVENT_TYPES).not.toHaveProperty('coaOriginal')
   })
 })
 
@@ -649,10 +743,11 @@ describe('getUnlinkedDocumentGroups', () => {
     ).toEqual([{ slotKey: 'invoice', primary: { id: 'd1' }, reason: 'Categoria mudou' }])
   })
 
-  it('bl/cargoReport/other: sempre vinculados', () => {
+  it('bl/cargoReport/coaOriginal/other: sempre vinculados', () => {
     const groups = [
       { slotKey: 'bl', primary: { id: 'd1' } },
       { slotKey: 'cargoReport', primary: { id: 'd2' } },
+      { slotKey: 'coaOriginal', primary: { id: 'd4' } },
       { slotKey: 'other:doc-1', primary: { id: 'd3' } },
     ]
     expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([])

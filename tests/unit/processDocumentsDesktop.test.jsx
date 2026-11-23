@@ -104,7 +104,9 @@ describe('F4c - Documentos: markup da variante desktop', () => {
     const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
     await loaded()
     const note = container.querySelector('.documents-section--process .documents-section__header .documents-section__note')
-    expect(note).toHaveTextContent(/^Visível só para COMEX e logística · PDF, Excel, Word ou imagem até \d+ MB$/)
+    expect(note).toHaveTextContent(
+      /^Visível para COMEX e logística \(Relatório de carga e COA Original também para Técnico e Faturamento\/fiscal\) · PDF, Excel, Word ou imagem até \d+ MB$/
+    )
     expect(container.querySelectorAll('.documents-section__note')).toHaveLength(1)
     expect(container.querySelector('.documents-summary__hint')).toBeNull()
   })
@@ -112,7 +114,9 @@ describe('F4c - Documentos: markup da variante desktop', () => {
   it('legado (sem variante): a nota segue no resumo e nao ha wrapper de grade nem titulo "Documento adicional"', async () => {
     const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} />)
     await loaded()
-    expect(container.querySelector('.documents-summary__hint')).toHaveTextContent('Visível só para COMEX e logística')
+    expect(container.querySelector('.documents-summary__hint')).toHaveTextContent(
+      'Visível para COMEX e logística (Relatório de carga e COA Original também para Técnico e Faturamento/fiscal)'
+    )
     expect(container.querySelector('.documents-section__note')).toBeNull()
     // o mobile-redesign mira `.documents-section__rows >` so no 1o grupo (secao do processo)
     expect(container.querySelectorAll('.documents-section__rows')).toHaveLength(1)
