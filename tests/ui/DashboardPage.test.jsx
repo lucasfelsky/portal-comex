@@ -29,6 +29,8 @@ const mockNavigate = vi.fn()
 const mockListAnnouncements = vi.fn()
 const mockGetBarStatus = vi.fn()
 const mockListProcesses = vi.fn()
+// Espia o 2o argumento (canSeeName) que a pagina repassa a `getProcessTitle`.
+const mockGetProcessTitle = vi.fn((p) => p?.name || 'Processo')
 // Por padrao as categorias sao mockadas como falsas (nao ativam blocos
 // pos-chegada); os testes de sinal de chegada ligam o modo real.
 const mockCategoryMode = { real: false }
@@ -81,7 +83,7 @@ vi.mock('../../src/features/processes/processStatusView', () => ({
   shouldHideProcessStatusBadge: () => false,
 }))
 vi.mock('../../src/features/processes/processLabels', () => ({
-  getProcessTitle: (p) => p?.name || 'Processo',
+  getProcessTitle: (...args) => mockGetProcessTitle(...args),
   getProcessSubtitle: (p) => p?.processNumber || '',
 }))
 vi.mock('../../src/features/processes/processCategories', () => ({
@@ -365,6 +367,29 @@ describe('DashboardPage', () => {
       const favoriteItems = favoriteCard?.querySelectorAll('.process-item') ?? []
       expect(favoriteItems.length).toBe(1)
     })
+  })
+
+  // `canSeeName` do Dashboard (favoritos e Chegadas da semana) vem da lista unica de perfis.
+  it.each([
+    ['admin', true],
+    ['logistica', true],
+    ['tecnico', true],
+    ['faturamento', true],
+    ['user', false],
+    ['compras', false],
+    ['viewer', false],
+  ])('Favoritos: role %s -> canSeeName=%s ao montar o titulo do FCL', async (role, expected) => {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: 'u-1', role, favoriteProcessIds: ['p-1'] },
+    })
+    renderPage()
+    await waitFor(() => {
+      const favoriteItems = document.querySelector('.dashboard-favorites-card')?.querySelectorAll('.process-item') ?? []
+      expect(favoriteItems.length).toBe(1)
+    })
+    const calls = mockGetProcessTitle.mock.calls.filter(([process]) => process?.id === 'p-1')
+    expect(calls.length).toBeGreaterThan(0)
+    for (const [, canSeeName] of calls) expect(canSeeName).toBe(expected)
   })
 
   it('ordem dos cards: Comunicados recentes -> Processos favoritos -> Chegadas da semana', async () => {

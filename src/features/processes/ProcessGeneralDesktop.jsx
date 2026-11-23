@@ -92,6 +92,8 @@ function buildIdentRows({ process, canSeeName, erpHints }) {
 export default function ProcessGeneralDesktop({
   process,
   canSeeName,
+  canSeePoDetails = canSeeName,
+  canSeeCustomsEarly = false,
   isAdmin,
   pendingFields,
   erpHints,
@@ -115,10 +117,11 @@ export default function ProcessGeneralDesktop({
   const dataField = pendingFields.find((field) => typeof field.field === 'string' && field.field && field.field !== 'documents')
   const completeAction = dataField ? (onEditMode ? () => onEditMode(dataField.field) : null) : onOpenDocuments ?? null
   // Canal: a dica "Aguardando parametrizacao da DUIMP" so para quem ja ve a DUIMP
-  // antes da atracacao (admin/logistica); os demais veem uma dica neutra.
+  // antes da atracacao (`canSeeCustomsBeforeArrival`, regra aduaneira - nao o nome);
+  // os demais veem uma dica neutra.
   const channelHint = channel
     ? 'Canal de parametrização da DUIMP.'
-    : isAdmin || canSeeName
+    : isAdmin || canSeeCustomsEarly
       ? 'Aguardando parametrização da DUIMP.'
       : 'Canal ainda não definido.'
 
@@ -200,7 +203,7 @@ export default function ProcessGeneralDesktop({
           <ul className="pdv-pos">
             {consolidatedOrders.map((order) => (
               <li key={order.po}>
-                {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeeName))}
+                {formatPurchaseOrderLine(order, canSeePurchaseOrderDetails(canSeePoDetails))}
                 <ErpHint hint={erpHints.po[erpOrderKey(order.po)]} />
               </li>
             ))}

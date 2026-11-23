@@ -168,6 +168,7 @@ vi.mock('../../src/utils/postReceiptImages', () => ({
 }))
 
 import ProcessesPage from '../../src/pages/ProcessesPage'
+import * as exportModule from '../../src/utils/exportProcesses'
 import { getActiveProcess } from '../../src/utils/activeProcessContext'
 import { getLocalDateKey } from '../../src/features/processes/shipmentConfirmation'
 
@@ -347,6 +348,75 @@ describe('ProcessesPage — busca por PO do CONSOLIDADO mascarada (F17.2d-2)', (
       expect(screen.getByText('Consolidado Delta')).toBeInTheDocument()
     })
   })
+
+  // tecnico/faturamento veem o NOME de FCL/LCL/AEREO, mas nao referencia/fornecedor das POs.
+  it.each(['tecnico', 'faturamento'])('%s digitando REF-SECRETA NAO encontra o processo', async (role) => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-2', role } })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'REF-SECRETA')
+    await waitFor(() => {
+      expect(screen.queryByText('Consolidado Delta')).not.toBeInTheDocument()
+    })
+  })
+
+  it.each(['tecnico', 'faturamento'])('%s buscando pelo nome de um FCL encontra o processo', async (role) => {
+    mockListProcesses.mockResolvedValue([
+      ...PROCESSES,
+      {
+        id: 'p-fcl-nome',
+        name: 'Importacao Sigilosa',
+        processNumber: 'PO 77777',
+        category: 'FCL',
+        status: 'Em Andamento',
+        collectionStatus: 'Aguardando',
+        channel: 'Maritima',
+        destination: 'Itajai',
+        eta: '2026-07-22',
+      },
+    ])
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-2', role } })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    const inputs = container.querySelectorAll('input[type="text"], input[type="search"]')
+    await user.type(inputs[0], 'Sigilosa')
+    await waitFor(() => {
+      expect(screen.getAllByText('Importacao Sigilosa').length).toBeGreaterThan(0)
+    })
+  })
+
+  // Fiacao ProcessesPage -> ProcessDetailView: sem `canSeePoDetails` o detalhe cairia no
+  // default (`canSeeName`) e tecnico/faturamento passariam a ver Ref./Fornecedor das POs.
+  it(
+    'detalhe do CONSOLIDADO: tecnico/faturamento NAO veem referencia nem fornecedor das POs; logistica ve',
+    async () => {
+      const detailTab = 'general'
+      const openDetail = (role) => {
+        mockUseAuth.mockReturnValue({ profile: { uid: 'u-3', role } })
+        return renderPage({
+          initialEntries: [{ pathname: '/processos', state: { selectedProcessId: 'p-cons', detailTab } }],
+        })
+      }
+
+      for (const role of ['tecnico', 'faturamento']) {
+        const view = openDetail(role)
+        await waitFor(() => expect(document.querySelector('.detail-tab-row .tab-button--active')).not.toBeNull())
+        expect(view.container.textContent).toContain('PO-9')
+        expect(view.container.textContent).not.toContain('Ref.:')
+        expect(view.container.textContent).not.toContain('REF-SECRETA')
+        expect(view.container.textContent).not.toContain('ACME')
+        view.unmount()
+      }
+
+      const logistica = openDetail('logistica')
+      await waitFor(() => expect(logistica.container.textContent).toContain('REF-SECRETA'))
+      expect(logistica.container.textContent).toContain('Ref.: REF-SECRETA')
+      expect(logistica.container.textContent).toContain('Fornecedor: ACME')
+    }
+  )
 
   it('user digitando PO-9 encontra o processo (numero da PO nunca e mascarado)', async () => {
     mockUseAuth.mockReturnValue({ profile: { uid: 'u-1', role: 'user' } })
@@ -2281,5 +2351,36 @@ describe('ProcessesPage — deep link do detalhe (paleta Ctrl+K, notificacoes, D
       expect(activeDetailTab()).toHaveTextContent('Mensagens')
       expect(screen.getAllByText(/PO 67890 - Exportacao B/).length).toBeGreaterThan(0)
     })
+  })
+})
+
+// Fiacao ProcessesPage -> runProcessesExport: tecnico/faturamento veem o NOME, mas o XLSX nao
+// pode sair com Referencias/Fornecedores das POs (so admin/logistica). O `runProcessesExport` e'
+// espiado (sem novo vi.mock: o `erpReadOnlyGuard` conta os mocks desta suite); a montagem das
+// linhas por flag ja' e' coberta em tests/ui/exportProcesses.test.jsx.
+describe('ProcessesPage - exportacao repassa as flags de visibilidade por role', () => {
+  let exportSpy
+  beforeEach(() => {
+    exportSpy = vi.spyOn(exportModule, 'runProcessesExport').mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    exportSpy.mockRestore()
+  })
+
+  it.each([
+    ['tecnico', { canSeeName: true, canSeePoDetails: false }],
+    ['faturamento', { canSeeName: true, canSeePoDetails: false }],
+    ['logistica', { canSeeName: true, canSeePoDetails: true }],
+    ['admin', { canSeeName: true, canSeePoDetails: true }],
+    ['user', { canSeeName: false, canSeePoDetails: false }],
+  ])('%s -> runProcessesExport recebe %j', async (role, expected) => {
+    mockUseAuth.mockReturnValue({ profile: { uid: 'u-4', role } })
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(/PO 12345/).length).toBeGreaterThan(0))
+    await user.click(await screen.findByRole('button', { name: /Exportar \(\d+\)/ }))
+    await waitFor(() => expect(exportSpy).toHaveBeenCalledTimes(1))
+    expect(exportSpy.mock.calls[0][0]).toMatchObject(expected)
+    expect(Object.keys(exportSpy.mock.calls[0][0])).toContain('canSeePoDetails')
   })
 })

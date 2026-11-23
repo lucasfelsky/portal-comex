@@ -39,7 +39,7 @@ function writeHistory(items) {
   }
 }
 
-export function useGlobalSearch(canSeeName) {
+export function useGlobalSearch(canSeeName, canSeePoDetails = false) {
   const navigate = useNavigate()
   // Origem do clique (para o "Voltar" do detalhe); ref mantem o `searcher` estavel.
   const location = useLocation()
@@ -74,7 +74,7 @@ export function useGlobalSearch(canSeeName) {
 
       pushRecent(trimmed)
 
-      const processResults = await searchProcesses(trimmed, { canSeeName }).catch(() => [])
+      const processResults = await searchProcesses(trimmed, { canSeeName, canSeePoDetails }).catch(() => [])
 
       return processResults.slice(0, 8).map((process) => {
         // Refino F2: subtitulo da paleta = "PO ... · status" (Flutuantes.dc.html).
@@ -99,7 +99,7 @@ export function useGlobalSearch(canSeeName) {
         }
       })
     },
-    [navigate, pushRecent, canSeeName]
+    [navigate, pushRecent, canSeeName, canSeePoDetails]
   )
 
   return { searcher, recentSearches, clearRecent }

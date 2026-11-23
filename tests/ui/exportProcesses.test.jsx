@@ -200,6 +200,20 @@ describe('buildProcessesExportRows — colunas Referências/Fornecedores das POs
     expect(rows[0]['Fornecedores das POs']).toBe('')
   })
 
+  it('canSeeName: true + canSeePoDetails: false (tecnico/faturamento) -> Nome preenchido em FCL e colunas das POs vazias', () => {
+    const options = { canSeeName: true, canSeePoDetails: false }
+    const rows = buildProcessesExportRows([PROCESS, CONSOLIDATED], NOW, options)
+    expect(rows[0].Nome).toBe(PROCESS.name)
+    expect(rows[1]['Referências das POs']).toBe('')
+    expect(rows[1]['Fornecedores das POs']).toBe('')
+  })
+
+  it('canSeeName: true + canSeePoDetails: true -> colunas das POs preenchidas', () => {
+    const rows = buildProcessesExportRows([CONSOLIDATED], NOW, { canSeeName: true, canSeePoDetails: true })
+    expect(rows[0]['Referências das POs']).toBe('REF-A')
+    expect(rows[0]['Fornecedores das POs']).toBe('ACME, BETA')
+  })
+
   it('a chave esta presente mesmo sem canSeeName/sem POs', () => {
     const rows = buildProcessesExportRows([PROCESS], NOW)
     expect(rows[0]).toHaveProperty('Referências das POs', '')

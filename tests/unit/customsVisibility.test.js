@@ -63,7 +63,8 @@ describe('canSeeCustomsBeforeArrival (D-1)', () => {
   it('admin e logistica veem; os demais roles (e ausente) sao restritos', () => {
     expect(canSeeCustomsBeforeArrival('admin')).toBe(true)
     expect(canSeeCustomsBeforeArrival('logistica')).toBe(true)
-    for (const role of ['user', 'compras', 'viewer', '', undefined, null, 'ADMIN']) {
+    // `tecnico`/`faturamento` veem o NOME do processo, mas a regra aduaneira segue restrita.
+    for (const role of ['user', 'compras', 'viewer', 'tecnico', 'faturamento', '', undefined, null, 'ADMIN']) {
       expect(canSeeCustomsBeforeArrival(role)).toBe(false)
     }
   })

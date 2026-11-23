@@ -28,6 +28,19 @@ vi.mock('../../src/services/notificationsRepository', () => ({
   markNotificationAsRead: vi.fn(async () => {}),
 }))
 
+// Espia as flags que o AppLayout repassa a `useGlobalSearch` (o hook real continua rodando).
+const mockUseGlobalSearchSpy = vi.fn()
+vi.mock('../../src/hooks/useGlobalSearch', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useGlobalSearch: (...args) => {
+      mockUseGlobalSearchSpy(...args)
+      return actual.useGlobalSearch(...args)
+    },
+  }
+})
+
 vi.mock('../../src/services/exchangeRatesRepository', () => ({
   getDailyPtaxRates: vi.fn(async () => null),
 }))
@@ -81,6 +94,27 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+// Busca global: nome do processo (admin/logistica/tecnico/faturamento) x referencia/fornecedor
+// das POs (so admin/logistica).
+describe('AppLayout - flags da busca global por role', () => {
+  it.each([
+    ['admin', true, true],
+    ['logistica', true, true],
+    ['tecnico', true, false],
+    ['faturamento', true, false],
+    ['user', false, false],
+    ['compras', false, false],
+  ])('%s -> useGlobalSearch(canSeeName=%s, canSeePoDetails=%s)', (role, canSeeName, canSeePoDetails) => {
+    mockUseGlobalSearchSpy.mockClear()
+    renderWithRole(role)
+    expect(mockUseGlobalSearchSpy).toHaveBeenCalled()
+    for (const args of mockUseGlobalSearchSpy.mock.calls) {
+      expect(args[0]).toBe(canSeeName)
+      expect(args[1]).toBe(canSeePoDetails)
+    }
+  })
 })
 
 describe('AppLayout (IntelliQuote admin-only)', () => {

@@ -4,6 +4,7 @@
 // (renomeado de `isAdmin`, mesma semantica `Boolean(x)`).
 import { describe, expect, it } from 'vitest'
 import {
+  PROCESS_NAME_VIEWER_ROLES,
   canSeeProcessName,
   getProcessTitle,
   getProcessSubtitle,
@@ -16,6 +17,14 @@ describe('canSeeProcessName', () => {
 
   it('logistica -> true', () => {
     expect(canSeeProcessName('logistica')).toBe(true)
+  })
+
+  it('tecnico -> true', () => {
+    expect(canSeeProcessName('tecnico')).toBe(true)
+  })
+
+  it('faturamento -> true', () => {
+    expect(canSeeProcessName('faturamento')).toBe(true)
   })
 
   it('user -> false', () => {
@@ -32,6 +41,36 @@ describe('canSeeProcessName', () => {
 
   it('undefined -> false', () => {
     expect(canSeeProcessName(undefined)).toBe(false)
+  })
+})
+
+// Paridade front x backend: a lista de perfis que veem o nome vive em
+// `processNameAccess.js` (front) e e espelhada em `functions/src/core/shared.js`.
+describe('paridade canSeeProcessName x functions/src/core/shared.js', () => {
+  const ROLES = ['admin', 'logistica', 'tecnico', 'faturamento', 'user', 'compras', 'viewer', '', undefined]
+  const loadServer = () => import('../../functions/src/core/shared.js')
+
+  it('as listas de perfis sao identicas', async () => {
+    const server = await loadServer()
+    expect([...server.PROCESS_NAME_VIEWER_ROLES].sort()).toEqual([...PROCESS_NAME_VIEWER_ROLES].sort())
+  })
+
+  it('canSeeProcessName(role) === canShowProcessNameForRole(FCL, role) para todos os perfis', async () => {
+    const server = await loadServer()
+    for (const role of ROLES) {
+      expect(server.canShowProcessNameForRole({ category: 'FCL' }, role)).toBe(canSeeProcessName(role))
+    }
+  })
+
+  it('buildRecipientProcessLabel: FCL mostra o nome para tecnico/faturamento e "PO <n>" para user/compras/viewer', async () => {
+    const server = await loadServer()
+    const process = { category: 'FCL', name: 'Importação Acetona', processNumber: '9036' }
+    for (const role of ['admin', 'logistica', 'tecnico', 'faturamento']) {
+      expect(server.buildRecipientProcessLabel(process, role)).toBe('Importação Acetona')
+    }
+    for (const role of ['user', 'compras', 'viewer']) {
+      expect(server.buildRecipientProcessLabel(process, role)).toBe('PO 9036')
+    }
   })
 })
 

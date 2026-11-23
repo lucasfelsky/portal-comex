@@ -13,6 +13,7 @@ import NotificationPreferencesModal from './NotificationPreferencesModal'
 import { formatRemaining } from '../hooks/useDoNotDisturb'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { canSeeProcessName, getProcessTitle } from '../features/processes/processLabels'
+import { canSeePurchaseOrderDetailsForRole } from '../features/processes/purchaseOrders'
 import { getActiveProcess, subscribeActiveProcess } from '../utils/activeProcessContext'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -284,7 +285,10 @@ export default function AppLayout() {
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
-  const globalSearch = useGlobalSearch(canSeeProcessName(profile?.role))
+  const globalSearch = useGlobalSearch(
+    canSeeProcessName(profile?.role),
+    canSeePurchaseOrderDetailsForRole(profile?.role)
+  )
   const processSearcherForPalette = globalSearch.searcher
   // C17 (toggle): tema claro/escuro/automatico, persistido em localStorage.
   const theme = useTheme()

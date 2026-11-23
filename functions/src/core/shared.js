@@ -233,13 +233,15 @@ function buildProcessLabel(process) {
   return processNumber ? `PO ${processNumber}` : 'processo'
 }
 
-// Paridade com `canSeeProcessName` (src/features/processes/processLabels.js): admin e logistica
-// veem o name de FCL/LCL/AEREO; demais roles recebem `PO <n>` ou 'processo'.
-// Excecao: `buildCargoReportSubject`.
+// Paridade com `PROCESS_NAME_VIEWER_ROLES` (src/features/processes/processNameAccess.js; teste em
+// tests/unit/processLabels.test.js): esses roles veem o name de FCL/LCL/AEREO; demais roles
+// recebem `PO <n>` ou 'processo'. Excecao: `buildCargoReportSubject`.
+const PROCESS_NAME_VIEWER_ROLES = Object.freeze(['admin', 'logistica', 'tecnico', 'faturamento'])
+
 function canShowProcessNameForRole(process, role) {
   const category = normalizeString(process?.category)
   const normalizedRole = normalizeString(role)
-  return normalizedRole === 'admin' || normalizedRole === 'logistica' || !RESTRICTED_PROCESS_CATEGORIES.has(category)
+  return PROCESS_NAME_VIEWER_ROLES.includes(normalizedRole) || !RESTRICTED_PROCESS_CATEGORIES.has(category)
 }
 
 function buildRecipientProcessLabel(process, role) {
@@ -875,6 +877,6 @@ export {
   EMAIL_NOTIFICATION_TYPES, ALLOWED_ROLES, ALLOWED_STATUSES, RESTRICTED_PROCESS_CATEGORIES, ROLE_PERMISSIONS_MAP, BRAND_COLORS,
   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL, MOJIBAKE_PATTERN, MOJIBAKE_GLOBAL_PATTERN,
   normalizeString, normalizeEmail, normalizeList, normalizeTimestamp, isCorporateEmail, isActiveStatus, countMojibakeMarkers, repairTextEncoding, escapeHtml, getRolePermissions, getStatusTone, getDefaultLastAccess, getDefaultNotes, getUserDisplayName,
-  normalizePostReceiptImages, buildProcessLabel, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
+  normalizePostReceiptImages, buildProcessLabel, PROCESS_NAME_VIEWER_ROLES, canShowProcessNameForRole, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, formatDateLabel, buildProcessUpdateSummary, sanitizeProcessForComparison, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, getMailer, getEmailFromAddress, buildEmailMessage,
   getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, recordAuditEvent, assertActiveAdmin, assertApprovedCaller, prefCategoryForType, shouldNotify, createNotifications, sendPushForEntries, deleteNotificationsForRecipient
 };

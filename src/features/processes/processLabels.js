@@ -2,9 +2,7 @@ import { formatPurchaseOrdersSummary, getProcessPurchaseOrders } from './purchas
 
 const RESTRICTED_CATEGORIES = new Set(['FCL', 'LCL', 'AEREO'])
 
-export function canSeeProcessName(role) {
-  return role === 'admin' || role === 'logistica'
-}
+export { canSeeProcessName, PROCESS_NAME_VIEWER_ROLES } from './processNameAccess'
 
 export function canShowProcessName(process, canSeeName) {
   return Boolean(canSeeName) || !RESTRICTED_CATEGORIES.has(process?.category)

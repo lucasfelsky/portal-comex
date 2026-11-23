@@ -383,6 +383,33 @@ describe('createProcessMessageNotifications', () => {
       expect(userPayload.body).not.toContain('Cliente Sigiloso')
     })
 
+    it('favorite_process_message em FCL restrito: tecnico e faturamento veem o name; user segue com PO <numero>', async () => {
+      setupFirestoreChain({
+        processes: [{ id: PROCESS_ID, data: restrictedProcess('FCL') }],
+        users: [
+          { id: AUTHOR_UID, data: AUTHOR_USER },
+          { id: 'user-tec', data: { ...FAVORITER_USER, id: 'user-tec', email: 'tec@sqquimica.com', role: 'tecnico' } },
+          { id: 'user-fat', data: { ...FAVORITER_USER, id: 'user-fat', email: 'fat@sqquimica.com', role: 'faturamento' } },
+          { id: 'user-fav', data: { ...FAVORITER_USER, id: 'user-fav', email: 'userfav@sqquimica.com', role: 'user' } },
+        ],
+      })
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+
+      await handler(makeEvent({ authorId: AUTHOR_UID, authorName: 'Joao', text: 'oi' }))
+
+      for (const uid of ['user-tec', 'user-fat']) {
+        const payload = payloadOfType('favorite_process_message', uid)
+        expect(payload).toBeDefined()
+        expect(payload.body).toContain('Cliente Sigiloso')
+      }
+
+      const userPayload = payloadOfType('favorite_process_message', 'user-fav')
+      expect(userPayload).toBeDefined()
+      expect(userPayload.body).toContain('PO 9036')
+      expect(userPayload.body).not.toContain('Cliente Sigiloso')
+    })
+
     it('mensagem de user em FCL restrito: process_question_created (admin-only) mostra o name', async () => {
       setupFirestoreChain({
         processes: [{ id: PROCESS_ID, data: restrictedProcess('FCL') }],

@@ -40,6 +40,7 @@ import {
 } from '../features/processes/dashboardKpis'
 import { getProcessStage, PROCESS_STAGES } from '../features/processes/processStage'
 import { projectProcessesForViewer } from '../features/processes/customsVisibility'
+import { canSeeProcessName } from '../features/processes/processNameAccess'
 import Icon from '../components/Icon'
 import StatCard from '../components/StatCard'
 import MobileHeroSlot from '../components/MobileHeroSlot'
@@ -577,7 +578,7 @@ export default function DashboardPage() {
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const isMobile = useMobileViewport(!isDesktop)
   const navigate = useNavigate()
-  const canSeeName = profile?.role === 'admin' || profile?.role === 'logistica'
+  const canSeeName = canSeeProcessName(profile?.role)
   const favoriteKey = (profile?.favoriteProcessIds ?? []).join('|')
   const [announcements, setAnnouncements] = useState([])
   const [barStatus, setBarStatus] = useState(null)

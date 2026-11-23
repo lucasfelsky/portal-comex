@@ -34,8 +34,8 @@ function LocationProbe() {
   )
 }
 
-function Probe({ isAdmin } = {}) {
-  const { searcher, recentSearches, clearRecent } = useGlobalSearch(isAdmin)
+function Probe({ isAdmin, canSeePoDetails } = {}) {
+  const { searcher, recentSearches, clearRecent } = useGlobalSearch(isAdmin, canSeePoDetails)
   return (
     <div>
       <button
@@ -165,7 +165,23 @@ describe('useGlobalSearch', () => {
     await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
 
     await waitFor(() => {
-      expect(mockSearchProcesses).toHaveBeenCalledWith('atlas', { canSeeName: true })
+      expect(mockSearchProcesses).toHaveBeenCalledWith('atlas', { canSeeName: true, canSeePoDetails: false })
+    })
+  })
+
+  it('repassa as duas flags (nome e detalhes das POs) para searchProcesses', async () => {
+    mockSearchProcesses.mockResolvedValue([])
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Probe isAdmin canSeePoDetails />
+      </MemoryRouter>
+    )
+    await user.click(screen.getByRole('button', { name: 'SearchAtlas' }))
+
+    await waitFor(() => {
+      expect(mockSearchProcesses).toHaveBeenCalledWith('atlas', { canSeeName: true, canSeePoDetails: true })
     })
   })
 

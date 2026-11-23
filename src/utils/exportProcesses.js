@@ -54,8 +54,13 @@ function nextCollectionWindowLabel(process) {
 
 // Datas como TEXTO pt-BR de propósito: evita o serial date do Excel e
 // mantém o arquivo legível sem formatação extra.
-export function buildProcessesExportRows(processes, now = new Date(), { canSeeName = false } = {}) {
-  const canSeeDetails = canSeePurchaseOrderDetails(canSeeName)
+export function buildProcessesExportRows(
+  processes,
+  now = new Date(),
+  { canSeeName = false, canSeePoDetails = canSeeName } = {},
+) {
+  // Referencia/fornecedor das POs seguem `canSeePoDetails` (admin/logistica), nao o nome.
+  const canSeeDetails = canSeePurchaseOrderDetails(canSeePoDetails)
   return (Array.isArray(processes) ? processes : []).map((process) => {
     const showName = canShowProcessName(process, canSeeName)
     const purchaseOrders = getProcessPurchaseOrders(process)
@@ -142,6 +147,7 @@ export async function runProcessesExport({
   rows,
   toast,
   canSeeName = false,
+  canSeePoDetails = canSeeName,
   showProgress = false,
   exportFn = exportProcessesToXlsx,
   progressDelayMs = PROGRESS_TOAST_DELAY_MS,
@@ -166,7 +172,7 @@ export async function runProcessesExport({
   }
   const resultOptions = () => (progressId ? { replaces: progressId } : undefined)
   try {
-    const exportedCount = await exportFn(rows, new Date(), { canSeeName })
+    const exportedCount = await exportFn(rows, new Date(), { canSeeName, canSeePoDetails })
     finish()
     toast.success(`Exportados ${exportedCount} processos para Excel.`, resultOptions())
   } catch (error) {

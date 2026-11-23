@@ -142,6 +142,14 @@ export function canSeePurchaseOrderDetails(canSeeName) {
   return Boolean(canSeeName)
 }
 
+// Referencia/fornecedor de cada PO ficam restritos a admin/logistica,
+// independente da lista de perfis que veem o nome do processo.
+export const PURCHASE_ORDER_DETAILS_ROLES = Object.freeze(['admin', 'logistica'])
+
+export function canSeePurchaseOrderDetailsForRole(role) {
+  return PURCHASE_ORDER_DETAILS_ROLES.includes(role)
+}
+
 /**
  * Linha textual de exibicao de uma PO: `po` sozinho; com `canSeeDetails`,
  * acrescenta " · Ref.: <reference>" e " · Fornecedor: <supplierName>"
