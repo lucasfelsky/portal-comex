@@ -312,6 +312,38 @@ describeEmulator('storage.rules (emulador)', () => {
       )
     })
 
+    it('admin sobe PDF em coaOriginal (sem escopo)', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'admin-1', 'admin@sqquimica.com', 'admin', 'Ativo',
+          'processes/p1/documents/coaOriginal/1-admin-1-coa.pdf'
+        )
+      )
+    })
+
+    it('logistica NAO sobe em coaOriginal', async () => {
+      await assertFails(
+        uploadDoc(
+          'log-1', 'log@sqquimica.com', 'logistica', 'Ativo',
+          'processes/p1/documents/coaOriginal/1-log-1-coa.pdf'
+        )
+      )
+    })
+
+    it.each(['tecnico', 'faturamento'])('%s NAO sobe em coaOriginal/cargoReport e NAO le via SDK', async (role) => {
+      const email = `${role}@sqquimica.com`
+      await assertFails(
+        uploadDoc(`${role}-1`, email, role, 'Ativo', `processes/p1/documents/coaOriginal/1-${role}-1-coa.pdf`)
+      )
+      await assertFails(
+        uploadDoc(`${role}-1`, email, role, 'Ativo', `processes/p1/documents/cargoReport/1-${role}-1-cr.pdf`)
+      )
+      await seedObject('processes/p1/documents/coaOriginal/1-admin-1-coa.pdf')
+      await assertFails(
+        getMetadata(ref(storageAs(`${role}-1`, email, role, 'Ativo'), 'processes/p1/documents/coaOriginal/1-admin-1-coa.pdf'))
+      )
+    })
+
     it('admin sobe imagem em fispq/{itemId} (com escopo)', async () => {
       await assertSucceeds(
         uploadDoc(

@@ -146,6 +146,26 @@ describe('adminCreateUser (S3 / custom claims)', () => {
     })
   })
 
+  it.each(['tecnico', 'faturamento'])('aceita o perfil %s e grava {role, status} nas claims', async (role) => {
+    const handler = getHandler(adminCreateUser)
+    const result = await handler({
+      auth: { uid: 'admin-1', token: { email: 'admin@sqquimica.com' } },
+      data: {
+        email: 'novo@sqquimica.com',
+        password: 'senha-segura-123',
+        name: 'Novo Funcionario',
+        role,
+        status: 'Ativo',
+      },
+    })
+
+    expect(result).toEqual({ uid: 'new-uid-1', email: 'novo@sqquimica.com' })
+    expect(mockAuthApi.setCustomUserClaims).toHaveBeenCalledWith('new-uid-1', {
+      role,
+      status: 'Ativo',
+    })
+  })
+
   it('rejeita email nao corporativo', async () => {
     const handler = getHandler(adminCreateUser)
     await expect(

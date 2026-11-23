@@ -37,7 +37,7 @@ if (!UID) {
   process.exit(1)
 }
 
-const VALID_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer'])
+const VALID_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer', 'tecnico', 'faturamento'])
 const VALID_STATUSES = new Set(['Pendente', 'Ativo', 'Bloqueado', 'Reprovado'])
 
 if (!VALID_ROLES.has(ROLE)) {

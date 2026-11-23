@@ -8,6 +8,10 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  DOCUMENT_READER_ROLES,
+  DOCUMENT_READER_TYPES,
+} from '../../functions/src/process/documentIndex.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const RULES_PATH = join(HERE, '..', '..', 'firestore.rules')
@@ -116,7 +120,9 @@ describe('firestore.rules structure', () => {
       const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
-      expect(body).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)/)
+      expect(body).toMatch(
+        /allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)\s*\|\|\s*\(\s*isDocumentReader\s*\(\s*\)\s*&&\s*isDocumentReaderType\s*\(\s*resource\.data\.type\s*\)\s*\)\s*;/
+      )
       expect(body).toMatch(
         /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*\(\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)\s*\|\|\s*isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\)/
       )
@@ -193,6 +199,43 @@ describe('firestore.rules structure', () => {
       expect(match).not.toBeNull()
       expect(match[1]).toMatch(/isApprovedUser\s*\(\s*\)/)
       expect(match[1]).toMatch(/['"]logistica['"]/)
+    })
+
+    it('isDocumentReader() exige isApprovedUser() E a lista exata [tecnico, faturamento]', () => {
+      const match = rules.match(/function\s+isDocumentReader\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/isApprovedUser\s*\(\s*\)/)
+      expect(match[1]).toMatch(/myRole\s*\(\s*\)\s+in\s+\[\s*'tecnico'\s*,\s*'faturamento'\s*\]/)
+    })
+
+    it('isDocumentReaderType(type) libera exatamente [cargoReport, coaOriginal]', () => {
+      const match = rules.match(/function\s+isDocumentReaderType\s*\(\s*type\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/type\s+in\s+\[\s*'cargoReport'\s*,\s*'coaOriginal'\s*\]/)
+    })
+
+    it('as listas literais das rules sao iguais a DOCUMENT_READER_ROLES/DOCUMENT_READER_TYPES do backend', () => {
+      const parseList = (source) => [...source.matchAll(/'([^']+)'/g)].map((m) => m[1])
+      const roles = rules.match(/function\s+isDocumentReader\s*\(\s*\)\s*\{[\s\S]*?myRole\s*\(\s*\)\s+in\s+\[([^\]]*)\]/)
+      const types = rules.match(/function\s+isDocumentReaderType\s*\(\s*type\s*\)\s*\{[\s\S]*?type\s+in\s+\[([^\]]*)\]/)
+      expect(roles).not.toBeNull()
+      expect(types).not.toBeNull()
+      expect(parseList(roles[1])).toEqual(DOCUMENT_READER_ROLES)
+      expect(parseList(types[1])).toEqual(DOCUMENT_READER_TYPES)
+    })
+
+    it('perfis leitores nao entram em nenhum ramo de escrita de documents', () => {
+      const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
+      expect(match).not.toBeNull()
+      const withoutRead = match[1].replace(/allow\s+read:[^;]*;/, '')
+      expect(withoutRead).toMatch(/allow\s+create:/)
+      expect(withoutRead).not.toMatch(/isDocumentReader/)
+    })
+
+    it('coaOriginal e valido em type, slotKey e storagePath de documents', () => {
+      expect(rules).toMatch(/request\.resource\.data\.type\s*==\s*'coaOriginal'\s*&&\s*request\.resource\.data\.slotKey\s*==\s*'coaOriginal'/)
+      expect(rules).toMatch(/request\.resource\.data\.type\s+in\s*\[[^\]]*'coaOriginal'[^\]]*\]/)
+      expect(rules).toMatch(/request\.resource\.data\.type\s*==\s*'cargoReport'\s*\|\|\s*request\.resource\.data\.type\s*==\s*'coaOriginal'/)
     })
   })
 

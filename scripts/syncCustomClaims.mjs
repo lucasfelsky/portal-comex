@@ -19,7 +19,7 @@ import { cert, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const ALLOWED_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer']);
+const ALLOWED_ROLES = new Set(['user', 'admin', 'logistica', 'compras', 'viewer', 'tecnico', 'faturamento']);
 const ALLOWED_STATUSES = new Set(['Pendente', 'Ativo', 'Bloqueado', 'Reprovado']);
 
 function loadServiceAccount() {

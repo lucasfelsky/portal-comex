@@ -152,6 +152,24 @@ describe('adminUpdateUserClaims (S3)', () => {
     })
   })
 
+  it.each(['tecnico', 'faturamento'])('aceita o perfil %s e grava {role, status} nas claims', async (role) => {
+    const handler = getHandler(adminUpdateUserClaims)
+    const result = await handler({
+      auth: authCtx,
+      data: { uid: TARGET_UID, role, status: 'Ativo' },
+    })
+
+    expect(result).toEqual({ uid: TARGET_UID, role, status: 'Ativo' })
+    expect(targetDocRef.set).toHaveBeenCalledWith(
+      expect.objectContaining({ role, status: 'Ativo', scopes: ['Dashboard', 'Processos', 'Documentos'] }),
+      { merge: true }
+    )
+    expect(mockAuthApi.setCustomUserClaims).toHaveBeenCalledWith(TARGET_UID, {
+      role,
+      status: 'Ativo',
+    })
+  })
+
   it('preserva role ao atualizar apenas status', async () => {
     targetDocRef = buildDocRef({ ...TARGET_PROFILE_BASE, role: 'user', status: 'Pendente' })
     mockFirestoreApi.doc.mockImplementation((uid) => (uid === ACTOR_UID ? actorDocRef : targetDocRef))

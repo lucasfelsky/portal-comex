@@ -30,7 +30,7 @@ const EMAIL_NOTIFICATION_TYPES = new Set([
   'process_cargo_report_uploaded',
 ])
 
-const ALLOWED_ROLES = new Set(['admin', 'user', 'logistica'])
+const ALLOWED_ROLES = new Set(['admin', 'user', 'logistica', 'tecnico', 'faturamento'])
 const ALLOWED_STATUSES = new Set(['Ativo', 'Pendente', 'Bloqueado', 'Reprovado'])
 const RESTRICTED_PROCESS_CATEGORIES = new Set(['FCL', 'LCL', 'AEREO'])
 
@@ -38,6 +38,8 @@ const ROLE_PERMISSIONS_MAP = {
   admin: ['Usuários', 'Permissões', 'Comunicados', 'Auditoria', 'Processos'],
   user: ['Dashboard', 'Processos'],
   logistica: ['Dashboard', 'Processos'],
+  tecnico: ['Dashboard', 'Processos', 'Documentos'],
+  faturamento: ['Dashboard', 'Processos', 'Documentos'],
 }
 
 // Cores da marca (sprint 8 / sprint 6.7). Espelham os tokens do

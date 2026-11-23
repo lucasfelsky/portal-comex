@@ -19,8 +19,16 @@ export const DOCUMENT_TYPE_LABELS = {
   packingList: 'Packing List',
   fispq: 'FISPQ',
   containerWash: 'Relatório de lavação',
+  coaOriginal: 'COA Original',
   other: 'Outro',
 }
+
+// Perfis (claim `role`) que so leem/baixam os tipos de `DOCUMENT_READER_TYPES`.
+// Espelhado (sem importar) em `src/features/processes/processDocuments.js` -
+// teste de paridade em `tests/unit/processDocuments.test.js`. As `firestore.rules`
+// (`isDocumentReader`/`isDocumentReaderType`) usam lista literal equivalente.
+export const DOCUMENT_READER_ROLES = ['tecnico', 'faturamento']
+export const DOCUMENT_READER_TYPES = ['cargoReport', 'coaOriginal']
 
 // B3: quais tipos de documento geram marco no Historico. Espelhado (sem
 // importar) em `src/features/processes/processDocuments.js` - teste de

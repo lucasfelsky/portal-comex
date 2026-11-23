@@ -25,6 +25,7 @@ vi.mock('nodemailer', () => mocks.nodemailer())
 const { downloadProcessDocument } = await import('../../functions/index.js')
 const {
   canDownloadProcessDocuments,
+  canDownloadProcessDocumentType,
   buildContentDisposition,
   resolveProcessDocumentStoragePath,
 } = await import('../../functions/src/process/documentDownload.js')
@@ -146,6 +147,74 @@ describe('downloadProcessDocument - autorizacao', () => {
   })
 })
 
+describe('downloadProcessDocument - perfis leitores (tecnico/faturamento)', () => {
+  const READERS = ['tecnico', 'faturamento']
+  const readerCases = READERS.flatMap((role) => [
+    [role, 'cargoReport'],
+    [role, 'coaOriginal'],
+  ])
+  const deniedCases = READERS.flatMap((role) =>
+    ['bl', 'invoice', 'packingList', 'other', 'fispq', 'containerWash'].map((type) => [role, type])
+  )
+
+  it.each(readerCases)('%s baixa %s -> 200', async (role, type) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role })
+    const storagePath = `processes/p1/documents/${type}/1-u1-x.pdf`
+    mockDocument({ type, name: 'x.pdf', storagePath, mimeType: 'application/pdf' })
+    const res = createRes()
+    await handler(createReq(), res)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(res.statusCode).toBe(200)
+    expect(res.body()).toBe('PDF')
+    expect(mockBucket.file).toHaveBeenCalledWith(storagePath)
+  })
+
+  it.each(deniedCases)('%s + %s -> 404 sem stream e sem tocar o Storage', async (role, type) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role })
+    mockDocument({ type, name: 'x.pdf', storagePath: `processes/p1/documents/${type}/1-u1-x.pdf` })
+    const res = createRes()
+    await handler(createReq(), res)
+    expect(res.statusCode).toBe(404)
+    expect(res.jsonBody).toEqual({ error: 'not-found' })
+    expect(mockBucket.file).not.toHaveBeenCalled()
+    expect(mockStorageFile.createReadStream).not.toHaveBeenCalled()
+  })
+
+  it.each(READERS)('%s sem type no metadado -> 404', async (role) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role })
+    mockDocument({ name: 'x.pdf', storagePath: VALID_PATH })
+    const res = createRes()
+    await handler(createReq(), res)
+    expect(res.statusCode).toBe(404)
+    expect(mockBucket.file).not.toHaveBeenCalled()
+  })
+
+  it.each(READERS)('%s Bloqueado -> 403 sem tocar o Firestore', async (role) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role, status: 'Bloqueado' })
+    const res = createRes()
+    await handler(createReq(), res)
+    expect(res.statusCode).toBe(403)
+    expect(mockFirestoreApi.doc).not.toHaveBeenCalled()
+  })
+
+  it.each(['user', 'compras', 'viewer'])('%s continua 403 para cargoReport/coaOriginal', async (role) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role })
+    mockDocument({ type: 'coaOriginal', name: 'x.pdf', storagePath: 'processes/p1/documents/coaOriginal/1-u1-x.pdf' })
+    const res = createRes()
+    await handler(createReq(), res)
+    expect(res.statusCode).toBe(403)
+    expect(mockFirestoreApi.doc).not.toHaveBeenCalled()
+  })
+
+  it.each(['admin', 'logistica'])('%s baixa coaOriginal -> 200', async (role) => {
+    mockAuthApi.verifyIdToken.mockResolvedValue({ ...ADMIN, role })
+    mockDocument({ type: 'coaOriginal', name: 'x.pdf', storagePath: 'processes/p1/documents/coaOriginal/1-u1-x.pdf' })
+    const res = createRes()
+    await handler(createReq(), res)
+    expect(res.statusCode).toBe(200)
+  })
+})
+
 describe('downloadProcessDocument - sucesso', () => {
   it('admin Ativo -> 200 com stream e headers de download', async () => {
     const res = createRes()
@@ -238,6 +307,26 @@ describe('helpers puros', () => {
     expect(canDownloadProcessDocuments({ ...ADMIN, status: 'Reprovado' })).toBe(false)
     expect(canDownloadProcessDocuments({ ...ADMIN, email: undefined })).toBe(false)
     expect(canDownloadProcessDocuments(null)).toBe(false)
+  })
+
+  it.each(['tecnico', 'faturamento'])('canDownloadProcessDocuments aceita %s Ativo', (role) => {
+    expect(canDownloadProcessDocuments({ ...ADMIN, role })).toBe(true)
+    expect(canDownloadProcessDocuments({ ...ADMIN, role, status: 'Pendente' })).toBe(false)
+  })
+
+  it('canDownloadProcessDocumentType', () => {
+    for (const role of ['admin', 'logistica']) {
+      expect(canDownloadProcessDocumentType(role, 'bl')).toBe(true)
+      expect(canDownloadProcessDocumentType(role, 'coaOriginal')).toBe(true)
+    }
+    for (const role of ['tecnico', 'faturamento']) {
+      expect(canDownloadProcessDocumentType(role, 'cargoReport')).toBe(true)
+      expect(canDownloadProcessDocumentType(role, 'coaOriginal')).toBe(true)
+      expect(canDownloadProcessDocumentType(role, 'bl')).toBe(false)
+      expect(canDownloadProcessDocumentType(role, undefined)).toBe(false)
+    }
+    expect(canDownloadProcessDocumentType('user', 'cargoReport')).toBe(false)
+    expect(canDownloadProcessDocumentType(undefined, 'cargoReport')).toBe(false)
   })
 
   it('resolveProcessDocumentStoragePath', () => {
