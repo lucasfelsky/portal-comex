@@ -42,6 +42,7 @@ import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned }
 import { canSeePurchaseOrderDetailsForRole, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { isShipmentConfirmed } from './shipmentConfirmation'
 import { canEditCargoReport, canOpenCargoReport } from './cargoReportFormModel'
+import { isPortalGeneratedCargoReport } from './cargoReportSheet'
 
 // S3 do Relatorio de Carga: o formulario (com repositorio e catalogo) so' carrega ao abrir.
 const CargoReportForm = lazy(() => import('./CargoReportForm'))
@@ -1217,11 +1218,23 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                       .filter(Boolean)
                       .join(' · ')
                   : 'Nenhum arquivo enviado'
+                // S4: xlsx anexado pelo "Concluir e anexar" do formulario (so texto; vale para todos os perfis).
+                const isPortalGenerated = type === 'cargoReport' && isPortalGeneratedCargoReport(primary)
                 return renderRow({
                   slotKey,
                   title: getDocumentTypeLabel(type),
                   fileLine: primary ? <p className="documents-row__file">{primary.name}</p> : null,
-                  metaLine: <p className="documents-row__meta field-hint">{metaText}</p>,
+                  metaLine: (
+                    <p className="documents-row__meta field-hint">
+                      {metaText}
+                      {isPortalGenerated ? (
+                        <>
+                          {' · '}
+                          <b className="documents-row__generated">Gerado no Portal</b>
+                        </>
+                      ) : null}
+                    </p>
+                  ),
                   group,
                   canUpload: canUploadDocumentType(role, type),
                   canDelete: primary ? canDeleteDocument(profile, primary) : false,
@@ -1237,7 +1250,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     ? {
                         primaryAction: (
                           <button type="button" className="primary-button" onClick={() => setIsCargoFormOpen(true)}>
-                            {canEditCargoReport(role) ? 'Preencher no Portal' : 'Conferir relatório'}
+                            {canEditCargoReport(role)
+                              ? isPortalGenerated
+                                ? 'Abrir formulário'
+                                : 'Preencher no Portal'
+                              : 'Conferir relatório'}
                           </button>
                         ),
                         ...(canEditCargoReport(role) ? { uploadLabel: 'Enviar arquivo' } : {}),

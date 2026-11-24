@@ -4643,15 +4643,15 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(admin(), CUR), current({ cargoType: 'AEREO', revision: 2 })))
       })
 
-      it('linhas: 29 falham e 28 passam; rows[0] com chave extra/faltando ou id vazio falha', async () => {
+      it('linhas: 201 falham e 200 passam; rows[0] com chave extra/faltando ou id vazio falha', async () => {
         await seedProcess()
-        await assertFails(setDoc(doc(admin(), CUR), current({ rows: rows(29) })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: rows(201) })))
         await assertFails(setDoc(doc(admin(), CUR), current({ rows: [{ ...row(0), extra: 1 }] })))
         const { po: _po, ...semPo } = row(0)
         await assertFails(setDoc(doc(admin(), CUR), current({ rows: [semPo] })))
         await assertFails(setDoc(doc(admin(), CUR), current({ rows: [row(0, { id: '' })] })))
         await assertFails(setDoc(doc(admin(), CUR), current({ rows: [row(0, { id: 'x'.repeat(65) })] })))
-        await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: rows(28) })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: rows(200) })))
         await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: [], revision: 2 })))
       })
 
@@ -4730,12 +4730,12 @@ describeEmulator('firestore.rules (emulador)', () => {
         }
       })
 
-      it('okByRowId: valor nao booleano e mais de 28 chaves falham; 28 passam', async () => {
+      it('okByRowId: valor nao booleano e mais de 200 chaves falham; 200 passam', async () => {
         await seedCurrent()
         await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: { 'r-0': 'sim' } })))
         const ok = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, true]))
-        await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(29) })))
-        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(28) })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(201) })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(200) })))
       })
 
       it('checkedByName de 121 falha; shape com campo extra falha', async () => {

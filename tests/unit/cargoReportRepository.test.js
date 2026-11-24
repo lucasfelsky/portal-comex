@@ -3,13 +3,23 @@
 // OBRIGATORIO mockar Firebase e o audit: sem isso um teste que escapasse falaria com o projeto real.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockDoc, mockGetDoc, mockSetDoc, mockServerTimestamp, mockCreateAuditEvent, mockAuth, state } = vi.hoisted(
+const {
+  mockDoc,
+  mockGetDoc,
+  mockSetDoc,
+  mockServerTimestamp,
+  mockCreateAuditEvent,
+  mockUploadProcessDocument,
+  mockAuth,
+  state,
+} = vi.hoisted(
   () => ({
     mockDoc: vi.fn((...args) => ({ path: args.slice(1).join('/') })),
     mockGetDoc: vi.fn(),
     mockSetDoc: vi.fn(),
     mockServerTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
     mockCreateAuditEvent: vi.fn(),
+    mockUploadProcessDocument: vi.fn(),
     mockAuth: { currentUser: { uid: 'uid-1' } },
     state: { configured: true },
   })
@@ -36,8 +46,15 @@ vi.mock('../../src/services/auditRepository', () => ({
   createAuditEvent: (...args) => mockCreateAuditEvent(...args),
 }))
 
+vi.mock('../../src/services/processDocumentsRepository', () => ({
+  uploadProcessDocument: (...args) => mockUploadProcessDocument(...args),
+}))
+
 import {
+  concludeCargoReport,
   getCargoReport,
+  reopenCargoReport,
+  retryConcludeWrite,
   saveCargoReportConference,
   saveCargoReportDraft,
 } from '../../src/services/cargoReportRepository'
@@ -251,5 +268,174 @@ describe('fallback localStorage (sem Firebase)', () => {
 
   it('sem nada salvo, getCargoReport devolve null nos dois', async () => {
     expect(await getCargoReport('P9')).toEqual({ current: null, conference: null })
+  })
+})
+
+describe('S4: concludeCargoReport', () => {
+  const concludedPayload = (revision = 5) => ({ ...draftPayload(revision), status: 'concluido', completedDate: '2026-11-23' })
+  const file = { name: 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx', size: 100 }
+  const actor = { uid: 'uid-1', name: 'Lucas Admin', email: 'lucas@sqquimica.com', role: 'admin' }
+
+  beforeEach(() => {
+    mockGetDoc.mockResolvedValue(snapshot({ revision: 4 }))
+    mockUploadProcessDocument.mockResolvedValue({ id: 'doc-9' })
+  })
+
+  it('confere a revisão, anexa e grava o concluído, nessa ordem', async () => {
+    const order = []
+    mockGetDoc.mockImplementation(async () => {
+      order.push('getDoc')
+      return snapshot({ revision: 4 })
+    })
+    mockUploadProcessDocument.mockImplementation(async () => {
+      order.push('upload')
+      return { id: 'doc-9' }
+    })
+    mockSetDoc.mockImplementation(async () => {
+      order.push('setDoc')
+    })
+
+    const result = await concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+
+    expect(order).toEqual(['getDoc', 'upload', 'setDoc'])
+    expect(result).toEqual({ revision: 5, documentId: 'doc-9' })
+    expect(mockUploadProcessDocument).toHaveBeenCalledWith('P1', {
+      type: 'cargoReport',
+      file,
+      category: 'FCL',
+      actor: { uid: 'uid-1', name: 'Lucas Admin', role: 'admin' },
+    })
+  })
+
+  it('grava lastGenerated com o documento, a revisão, serverTimestamp e o uid', async () => {
+    await concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+
+    const [ref, data, options] = mockSetDoc.mock.calls[0]
+    expect(ref.path).toBe('processes/P1/cargoReport/current')
+    expect(options).toBeUndefined()
+    expect(data).toMatchObject({
+      status: 'concluido',
+      revision: 5,
+      completedDate: '2026-11-23',
+      lastGenerated: { documentId: 'doc-9', revision: 5, at: 'SERVER_TIMESTAMP', byId: 'uid-1' },
+      updatedById: 'uid-1',
+    })
+    expect(mockCreateAuditEvent).toHaveBeenCalledWith({
+      action: 'Relatório de carga concluído e anexado',
+      actor: 'Lucas Admin',
+      target: 'ACME SEA 021-26 · revisão 5 · 2 linhas',
+    })
+  })
+
+  it('revisão do servidor diferente: conflito, sem anexar nem gravar', async () => {
+    mockGetDoc.mockResolvedValue(snapshot({ revision: 7 }))
+
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+    ).rejects.toMatchObject({ code: 'cargoReport/revision-conflict' })
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+    expect(mockSetDoc).not.toHaveBeenCalled()
+  })
+
+  it('doc ainda inexistente conta como revisão 0', async () => {
+    mockGetDoc.mockResolvedValue(snapshot(undefined))
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(1), file, category: 'FCL', actor })
+    ).resolves.toEqual({ revision: 1, documentId: 'doc-9' })
+  })
+
+  it('falha no setDoc depois do anexo vira cargoReport/attached-not-saved com o documentId', async () => {
+    const original = Object.assign(new Error('offline'), { code: 'unavailable' })
+    mockSetDoc.mockRejectedValue(original)
+
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+    ).rejects.toMatchObject({ code: 'cargoReport/attached-not-saved', documentId: 'doc-9', cause: original })
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1)
+    expect(mockCreateAuditEvent).not.toHaveBeenCalled()
+  })
+
+  it('falha no upload relança o erro original e não grava', async () => {
+    const original = new Error('storage/unauthorized')
+    mockUploadProcessDocument.mockRejectedValue(original)
+
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+    ).rejects.toBe(original)
+    expect(mockSetDoc).not.toHaveBeenCalled()
+  })
+
+  it('falha de auditoria não vira erro', async () => {
+    mockCreateAuditEvent.mockRejectedValue(new Error('audits negado'))
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+    ).resolves.toEqual({ revision: 5, documentId: 'doc-9' })
+  })
+
+  it('sem Firebase lança o mesmo erro do upload e não toca em nada', async () => {
+    state.configured = false
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(1), file, category: 'FCL', actor })
+    ).rejects.toThrow('Documentos disponíveis apenas com o Firebase configurado.')
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+    expect(mockSetDoc).not.toHaveBeenCalled()
+  })
+
+  it('sem uid autenticado lança erro antes de anexar', async () => {
+    mockAuth.currentUser = null
+    await expect(
+      concludeCargoReport('P1', { payload: concludedPayload(5), file, category: 'FCL', actor })
+    ).rejects.toThrow(/não autenticado/)
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+  })
+})
+
+describe('S4: retryConcludeWrite', () => {
+  it('grava só o formulário apontando para o documento já anexado, sem novo upload', async () => {
+    const payload = { ...draftPayload(5), status: 'concluido', completedDate: '2026-11-23' }
+    const result = await retryConcludeWrite('P1', { payload, documentId: 'doc-9', actor: ADMIN })
+
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+    expect(mockSetDoc.mock.calls[0][1]).toMatchObject({
+      status: 'concluido',
+      lastGenerated: { documentId: 'doc-9', revision: 5, at: 'SERVER_TIMESTAMP', byId: 'uid-1' },
+    })
+    expect(result).toEqual({ revision: 5, documentId: 'doc-9' })
+  })
+
+  it('conflito de revisão é relançado como veio', async () => {
+    mockSetDoc.mockRejectedValue(permissionDenied())
+    mockGetDoc.mockResolvedValue(snapshot({ revision: 9 }))
+    await expect(
+      retryConcludeWrite('P1', { payload: draftPayload(5), documentId: 'doc-9', actor: ADMIN })
+    ).rejects.toMatchObject({ code: 'cargoReport/revision-conflict' })
+  })
+})
+
+describe('S4: reopenCargoReport', () => {
+  it('grava o rascunho e audita', async () => {
+    const payload = { ...draftPayload(6), status: 'rascunho' }
+    const result = await reopenCargoReport('P1', payload, ADMIN)
+
+    const [ref, data] = mockSetDoc.mock.calls[0]
+    expect(ref.path).toBe('processes/P1/cargoReport/current')
+    expect(data).toMatchObject({ status: 'rascunho', revision: 6, updatedByName: 'Lucas Admin' })
+    expect(mockCreateAuditEvent).toHaveBeenCalledWith({
+      action: 'Relatório de carga reaberto para correção',
+      actor: 'Lucas Admin',
+      target: 'ACME SEA 021-26 · revisão 6',
+    })
+    expect(result).toEqual({ revision: 6 })
+  })
+
+  it('falha de auditoria não vira erro e conflito é classificado', async () => {
+    mockCreateAuditEvent.mockRejectedValue(new Error('audits negado'))
+    await expect(reopenCargoReport('P1', draftPayload(6), ADMIN)).resolves.toEqual({ revision: 6 })
+
+    mockSetDoc.mockRejectedValue(permissionDenied())
+    mockGetDoc.mockResolvedValue(snapshot({ revision: 9 }))
+    await expect(reopenCargoReport('P1', draftPayload(6), ADMIN)).rejects.toMatchObject({
+      code: 'cargoReport/revision-conflict',
+    })
   })
 })

@@ -1,0 +1,205 @@
+// S4 do Relatório de Carga: folha pura (Excel e impressão leem a mesma). Fixtures SINTÉTICAS.
+import { describe, expect, it } from 'vitest'
+import { CARGO_REPORT_MAX_ROWS, createEmptyCargoReportRow, fromCargoReportDoc } from '../../src/features/processes/cargoReportFormModel'
+import {
+  buildCargoReportFileName,
+  buildCargoReportSheet,
+  describeCargoReportAlerts,
+  formatCargoDateBr,
+  isPortalGeneratedCargoReport,
+} from '../../src/features/processes/cargoReportSheet'
+
+const CATALOG = {
+  items: [
+    { code: 'AD5240', description: 'DEA FOAM', packagingType: 'BOMBONA', netWeightKg: 25 },
+    { code: 'RE5116', description: 'DEGALAN', packagingType: 'CAIXA', netWeightKg: 25 },
+  ],
+}
+
+const PROCESS = { name: 'ACME SEA 021-26', duimpNumber: '25BR00001234567' }
+
+function makeRow(overrides = {}) {
+  return { ...createEmptyCargoReportRow('r-1'), ...overrides }
+}
+
+function makeForm(rows, overrides = {}) {
+  return {
+    ...fromCargoReportDoc({ revision: 2, cargoType: 'FCL', titleSuffix: 'ACME SEA 021-26' }),
+    rows,
+    ...overrides,
+  }
+}
+
+describe('buildCargoReportSheet', () => {
+  it('monta cabeçalho, linhas calculadas e OK da conferência', () => {
+    const form = makeForm(
+      [
+        makeRow({
+          id: 'a',
+          po: '4500123',
+          dbcorpCode: 'AD5240',
+          supplierLot: 'DF2406A',
+          quantityKg: '12.500',
+          count: '500',
+          packageWeightKg: '1,2',
+        }),
+      ],
+      { receivedDate: '2026-11-22', completedDate: '2026-11-23', nfNumber: '000.123.456', receiptStatus: 'com_ressalva' }
+    )
+    const sheet = buildCargoReportSheet(form, {
+      process: PROCESS,
+      conference: { okByRowId: { a: true }, checkedByName: ' Operador Logística ' },
+      catalog: CATALOG,
+    })
+
+    expect(sheet).toMatchObject({
+      titleSuffix: 'ACME SEA 021-26',
+      title: 'RELATÓRIO DE CARGA - ACME SEA 021-26',
+      duimpNumber: '25BR00001234567',
+      cargoType: 'FCL',
+      checkedByName: 'Operador Logística',
+      receivedDateBr: '22/11/2026',
+      completedDateBr: '23/11/2026',
+      nfNumber: '000.123.456',
+      receiptStatus: 'com_ressalva',
+      alerts: [],
+    })
+    expect(sheet.rows).toHaveLength(1)
+    expect(sheet.rows[0]).toMatchObject({
+      po: '4500123',
+      dbcorpCode: 'AD5240',
+      ok: true,
+      supplierLot: 'DF2406A',
+      lotSq: 'DF2406A450',
+      quantityKg: 12500,
+      count: 500,
+      netWeightKg: 25,
+      packageWeightKg: 1.2,
+      packages: 500,
+    })
+  })
+
+  it('descarta linhas vazias, não corta nas 28 do modelo, para no teto e usa ok=false sem conferência', () => {
+    const rows = [makeRow({ id: 'vazia' }), ...Array.from({ length: CARGO_REPORT_MAX_ROWS + 3 }, (_, index) => makeRow({ id: `r-${index}`, po: `45${index}` }))]
+    const sheet = buildCargoReportSheet(makeForm(rows), { process: PROCESS, conference: null, catalog: CATALOG })
+    expect(sheet.rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
+    expect(sheet.rows.every((row) => row.ok === false)).toBe(true)
+    expect(sheet.rows.some((row) => row.id === 'vazia')).toBe(false)
+  })
+
+  it('valores congelados vencem a tabela: mudar a tabela depois de concluir não muda a folha', () => {
+    const frozenRow = makeRow({
+      id: 'a',
+      po: '4500123',
+      dbcorpCode: 'AD5240',
+      supplierLot: 'L1',
+      quantityKg: 12500,
+      frozenNetWeightKg: 25,
+      frozenPackages: 500,
+    })
+    const changedCatalog = { items: [{ code: 'AD5240', description: 'X', packagingType: 'BOMBONA', netWeightKg: 50 }] }
+    const emptyCatalog = { items: [] }
+
+    for (const catalog of [CATALOG, changedCatalog, emptyCatalog, null]) {
+      const sheet = buildCargoReportSheet(makeForm([frozenRow]), { process: PROCESS, conference: {}, catalog })
+      expect(sheet.rows[0]).toMatchObject({ netWeightKg: 25, packages: 500 })
+    }
+  })
+
+  it('gera alertas na ordem da linha (lote, peso da embalagem, sem embalagem)', () => {
+    const form = makeForm([
+      makeRow({ id: 'a', po: '1', dbcorpCode: 'RE5116', quantityKg: 5000 }),
+      makeRow({ id: 'b', po: '1', dbcorpCode: 'ZZ9999', supplierLot: 'XR0911', packageWeightKg: 0.9, quantityKg: 800 }),
+    ])
+    const sheet = buildCargoReportSheet(form, { process: PROCESS, conference: {}, catalog: CATALOG })
+    expect(sheet.alerts).toEqual([
+      { rowId: 'a', code: 'RE5116', kind: 'missingLot' },
+      { rowId: 'a', code: 'RE5116', kind: 'missingPackageWeight' },
+      { rowId: 'b', code: 'ZZ9999', kind: 'noPackaging' },
+    ])
+    expect(sheet.rows[1]).toMatchObject({ netWeightKg: null, packages: null })
+  })
+
+  it('sem DUIMP ou conferência devolve strings vazias', () => {
+    const sheet = buildCargoReportSheet(makeForm([]), { process: {}, conference: undefined, catalog: null })
+    expect(sheet).toMatchObject({ duimpNumber: '', checkedByName: '', receivedDateBr: '', completedDateBr: '' })
+  })
+})
+
+describe('formatCargoDateBr', () => {
+  it('converte por split, sem Date', () => {
+    expect(formatCargoDateBr('2026-11-22')).toBe('22/11/2026')
+    expect(formatCargoDateBr('2026-01-05')).toBe('05/01/2026')
+  })
+
+  it('vazio ou inválido vira vazio', () => {
+    expect(formatCargoDateBr('')).toBe('')
+    expect(formatCargoDateBr(null)).toBe('')
+    expect(formatCargoDateBr('22/11/2026')).toBe('')
+  })
+})
+
+describe('buildCargoReportFileName', () => {
+  it('usa o prefixo do modelo e a extensão xlsx', () => {
+    expect(buildCargoReportFileName('ACME SEA 021-26')).toBe('FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx')
+  })
+
+  it('remove caracteres proibidos e colapsa espaços', () => {
+    const name = buildCargoReportFileName('A/B:C  D\\E*F?G"H<I>J|K\u0001L')
+    expect(name).toBe('FR.CMX.001 - RELATORIO DE CARGA - A B C D E F G H I J K L.xlsx')
+    expect(name.slice('FR.CMX.001 - RELATORIO DE CARGA - '.length)).not.toMatch(/[\\/:*?"<>|]/)
+  })
+
+  it('título vazio vira SEM TITULO e o nome cabe em 200 caracteres', () => {
+    expect(buildCargoReportFileName('')).toBe('FR.CMX.001 - RELATORIO DE CARGA - SEM TITULO.xlsx')
+    expect(buildCargoReportFileName(' / : ')).toBe('FR.CMX.001 - RELATORIO DE CARGA - SEM TITULO.xlsx')
+    const long = buildCargoReportFileName('x'.repeat(500))
+    expect(long.length).toBeLessThanOrEqual(200)
+    expect(long.endsWith('.xlsx')).toBe(true)
+  })
+})
+
+describe('isPortalGeneratedCargoReport', () => {
+  const portalDoc = {
+    type: 'cargoReport',
+    uploadedByRole: 'admin',
+    name: 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx',
+  }
+
+  it('nome do Portal enviado por admin é do Portal', () => {
+    expect(isPortalGeneratedCargoReport(portalDoc)).toBe(true)
+  })
+
+  it('xlsx manual, outro tipo, outro perfil ou extensão diferente não são', () => {
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, name: 'RELATORIO DE CARGA - ACME SEA 021-26.xlsx' })).toBe(false)
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, uploadedByRole: 'logistica' })).toBe(false)
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, type: 'bl' })).toBe(false)
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, name: 'FR.CMX.001 - RELATORIO DE CARGA - X.pdf' })).toBe(false)
+    expect(isPortalGeneratedCargoReport(null)).toBe(false)
+  })
+})
+
+describe('describeCargoReportAlerts', () => {
+  const lot = { code: 'RE5116', kind: 'missingLot' }
+  const weight = { code: 'RE5116', kind: 'missingPackageWeight' }
+  const none = { code: 'ZZ9999', kind: 'noPackaging' }
+
+  it('1 alerta', () => {
+    expect(describeCargoReportAlerts([lot])).toBe('falta lote em RE5116')
+  })
+
+  it('2 alertas usam "e" antes do último', () => {
+    expect(describeCargoReportAlerts([lot, weight])).toBe('falta lote em RE5116 e falta peso da embalagem em RE5116')
+  })
+
+  it('3 alertas seguem o texto do mock', () => {
+    expect(describeCargoReportAlerts([lot, weight, none])).toBe(
+      'falta lote em RE5116, falta peso da embalagem em RE5116 e ZZ9999 sem embalagem cadastrada'
+    )
+  })
+
+  it('lista vazia ou inválida devolve vazio', () => {
+    expect(describeCargoReportAlerts([])).toBe('')
+    expect(describeCargoReportAlerts(undefined)).toBe('')
+  })
+})

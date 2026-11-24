@@ -11,12 +11,14 @@ import {
 } from '../../services/cargoReportRepository'
 import { formatDateTime } from '../../utils/dateFormat'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
+import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
 import {
   CARGO_REPORT_CONFLICT_CODE,
   CARGO_REPORT_LIMITS,
   CARGO_REPORT_MAX_ROWS,
+  CARGO_REPORT_ROWS_LIMIT_MESSAGE,
   CARGO_TYPE_OPTIONS,
   RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
@@ -63,6 +65,7 @@ const MESSAGES = {
     'Itens sem tipo e peso na tabela aparecem como "Sem embalagem cadastrada". Peça ao admin para atualizar a tabela em Admin › Relatório de Carga.',
   catalogMissing:
     'A tabela Item x Emb. ainda não foi importada. Peso líquido e nº de embalagens ficam vazios até o admin importar em Admin › Relatório de Carga.',
+  lockedForConference: 'Relatório concluído pelo COMEX. Para alterar a conferência, peça ao COMEX para reabrir.',
 }
 
 // Cache de módulo (sessão): a tabela Item x Emb. tem ~276 KB; reaproveitada por 5 min e zerada em erro.
@@ -225,7 +228,12 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const isDirty = canEdit ? draftDirty || conferenceDirty : conferenceDirty
   const canSave = canEdit ? isDirty || isNew : isDirty
   const isLimitReached = rows.length >= CARGO_REPORT_MAX_ROWS
-  const canImport = canEdit && form?.status !== 'concluido'
+  // S4: concluído trava o preenchimento e a conferência até o COMEX reabrir.
+  const isConcluded = form?.status === 'concluido'
+  const canEditFields = canEdit && !isConcluded
+  const canConferNow = canConfer && !isConcluded
+  // S5: importar planilha só para o admin e enquanto o relatório não está concluído.
+  const canImport = canEditFields
 
   function patchForm(patch) {
     setForm((current) => ({ ...current, ...patch }))
@@ -256,7 +264,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }
 
   function toggleOk(rowId) {
-    if (!canConfer) return
+    if (!canConferNow) return
     setConference((current) => ({
       ...current,
       okByRowId: { ...current.okByRowId, [rowId]: current.okByRowId?.[rowId] !== true },
@@ -316,20 +324,25 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     }))
   }
 
+  // Marca as células inválidas e mostra a mensagem (número inválido ou limite de linhas).
+  function showPayloadErrors(errors) {
+    const cells = {}
+    for (const error of errors) {
+      if (error.rowId) cells[`${error.rowId}:${error.field}`] = error.message
+    }
+    setFieldErrors(cells)
+    const limitError = errors.find((error) => error.field === 'rows')
+    setFeedback({ kind: 'error', text: limitError?.message ?? MESSAGES.invalidNumbers })
+  }
+
   async function handleSaveDraft() {
-    if (!canEdit || isSaving || !canSave) return
+    if (!canEditFields || isSaving || !canSave) return
     setFeedback(null)
     setFieldErrors({})
 
     const { payload, errors } = buildCargoReportPayload(form, { catalogVersion: catalog?.exists ? catalog.version : 0 })
     if (errors.length > 0) {
-      const cells = {}
-      for (const error of errors) {
-        if (error.rowId) cells[`${error.rowId}:${error.field}`] = error.message
-      }
-      setFieldErrors(cells)
-      const limitError = errors.find((error) => error.field === 'rows')
-      setFeedback({ kind: 'error', text: limitError?.message ?? MESSAGES.invalidNumbers })
+      showPayloadErrors(errors)
       return
     }
 
@@ -372,7 +385,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }
 
   async function handleSaveConference() {
-    if (!canConfer || canEdit || isSaving || !canSave) return
+    if (!canConferNow || canEdit || isSaving || !canSave) return
     setFeedback(null)
     setIsSaving(true)
     try {
@@ -387,6 +400,19 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   function handleDiscardConference() {
     setConference(savedConference)
     setFeedback(null)
+  }
+
+  // O formulário passa a refletir o que foi gravado (concluir e reabrir, feitos pela barra de ações).
+  function applyPersistedForm(payload, extra = {}) {
+    const next = fromCargoReportDoc({
+      ...payload,
+      ...extra,
+      updatedAt: new Date(),
+      updatedByName: String(profile?.name ?? profile?.email ?? '').trim(),
+    })
+    setForm(next)
+    setBaseKey(formKey(next))
+    setIsNew(false)
   }
 
   function handleBack() {
@@ -435,7 +461,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     )
   }
 
-  const editMode = canEdit ? 'edit' : 'confer'
+  const editMode = canEditFields ? 'edit' : canConferNow ? 'confer' : 'view'
   const cargoTypeHint = form.cargoType ? '' : 'Escolha um tipo'
   const tableBadge = catalog?.exists
     ? `Tabela Item x Emb. v${catalog.version}`
@@ -450,17 +476,22 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         form.updatedByName ? ` por ${form.updatedByName}` : ''
       } · revisão ${form.revision}`
 
+  // Conflito oferece "Recarregar"; a barra de ações pode trazer a própria ação (ex.: "Gravar de novo").
+  const feedbackAction =
+    feedback?.action ??
+    (feedback?.kind === 'conflict' ? { label: 'Recarregar', run: () => setReloadToken((token) => token + 1) } : null)
+
   const feedbackNode = feedback ? (
     feedback.kind === 'success' ? (
       <div className="success-banner" role="status">
         {feedback.text}
       </div>
     ) : (
-      <div className={`error-banner${feedback.kind === 'conflict' ? ' error-banner--retry' : ''}`} role="alert">
+      <div className={`error-banner${feedbackAction ? ' error-banner--retry' : ''}`} role="alert">
         <span>{feedback.text}</span>
-        {feedback.kind === 'conflict' ? (
-          <button type="button" className="ghost-button" onClick={() => setReloadToken((token) => token + 1)}>
-            Recarregar
+        {feedbackAction ? (
+          <button type="button" className="ghost-button" onClick={feedbackAction.run}>
+            {feedbackAction.label}
           </button>
         ) : null}
       </div>
@@ -471,7 +502,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     <div className={`crf-wrap${isDesktop ? '' : ' crf-wrap--mobile'}`}>
       {backBar}
 
-      {!canEdit ? <div className="crf-note crf-note--info">{MESSAGES.conferBanner}</div> : null}
+      {!canEdit ? (
+        <div className="crf-note crf-note--info">{isConcluded ? MESSAGES.lockedForConference : MESSAGES.conferBanner}</div>
+      ) : null}
       {catalogError ? (
         <div className="error-banner" role="alert">
           {catalogError}
@@ -486,7 +519,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       {catalog?.exists && hasNoPackaging ? <div className="crf-note crf-note--info">{MESSAGES.noPackaging}</div> : null}
       {isLimitReached ? (
         <div className="error-banner" role="alert">
-          {`O relatório já tem ${CARGO_REPORT_MAX_ROWS} linhas, o limite do modelo FR.CMX.001. Para mais itens, gere um segundo relatório.`}
+          {CARGO_REPORT_ROWS_LIMIT_MESSAGE}
         </div>
       ) : null}
 
@@ -497,12 +530,10 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             <p className="sub">{subtitle}</p>
           </div>
           <div className="crf-badges">
-            {canEdit ? (
-              form.status === 'concluido' ? (
-                <span className="inline-badge inline-badge--ok">Concluído</span>
-              ) : (
-                <span className="inline-badge inline-badge--warn">Rascunho</span>
-              )
+            {isConcluded ? (
+              <span className="inline-badge inline-badge--ok">Concluído</span>
+            ) : canEdit ? (
+              <span className="inline-badge inline-badge--warn">Rascunho</span>
             ) : (
               <span className="inline-badge inline-badge--ok">Conferência da logística</span>
             )}
@@ -533,14 +564,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
               {CARGO_TYPE_OPTIONS.map((option) => {
                 const selected = form.cargoType === option.value
                 return (
-                  <label key={option.value} className={`crf-radio${selected ? ' on' : ''}${canEdit ? '' : ' is-disabled'}`}>
+                  <label key={option.value} className={`crf-radio${selected ? ' on' : ''}${canEditFields ? '' : ' is-disabled'}`}>
                     <input
                       type="radio"
                       name={`${radioName}-cargo-type`}
                       value={option.value}
                       aria-label={option.label}
                       checked={selected}
-                      disabled={!canEdit}
+                      disabled={!canEditFields}
                       onChange={() => patchForm({ cargoType: option.value })}
                     />
                     <i aria-hidden="true" />
@@ -556,7 +587,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             label="Título no relatório"
             value={form.titleSuffix}
             maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             hint="PO / referência do processo"
             onChange={(value) => patchForm({ titleSuffix: value })}
           />
@@ -586,7 +617,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           onChangeRow={changeRow}
           onToggleOk={toggleOk}
           onAddRow={addRow}
-          canAddRow={canEdit && !isLimitReached}
+          canAddRow={canEditFields && !isLimitReached}
           errorsByCell={fieldErrors}
         />
 
@@ -604,7 +635,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
               <b className="crf-leg__ok" />
               OK? é marcado pela logística
             </span>
-            <span>{`Limite do modelo: ${CARGO_REPORT_MAX_ROWS} linhas (${rows.length} usadas)`}</span>
+            <span>{`Limite do Portal: ${CARGO_REPORT_MAX_ROWS} linhas (${rows.length} usadas)`}</span>
           </p>
         ) : null}
       </section>
@@ -617,7 +648,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             label="Conferido por"
             value={conference.checkedByName}
             maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canConfer}
+            disabled={!canConferNow}
             onChange={(value) => {
               setConference((current) => ({ ...current, checkedByName: value }))
               setFeedback(null)
@@ -627,14 +658,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             label="Etiquetado por"
             value={form.labeledBy}
             maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             onChange={(value) => patchForm({ labeledBy: value })}
           />
           <TextField
             label="Etiqueta feita por"
             value={form.labelMadeBy}
             maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             onChange={(value) => patchForm({ labelMadeBy: value })}
           />
           <div className="crf-field">
@@ -642,7 +673,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             <select
               id={`${radioName}-receipt`}
               value={form.receiptStatus}
-              disabled={!canEdit}
+              disabled={!canEditFields}
               onChange={(event) => patchForm({ receiptStatus: event.target.value })}
             >
               {RECEIPT_STATUS_OPTIONS.map((option) => (
@@ -656,14 +687,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             label="Data de recebimento"
             type="date"
             value={form.receivedDate}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             onChange={(value) => patchForm({ receivedDate: value })}
           />
           <TextField
             label="Nº da NF"
             value={form.nfNumber}
             maxLength={CARGO_REPORT_LIMITS.nf}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             onChange={(value) => patchForm({ nfNumber: value })}
           />
         </div>
@@ -673,7 +704,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             id={`${radioName}-notes`}
             value={form.notes}
             maxLength={CARGO_REPORT_LIMITS.notes}
-            disabled={!canEdit}
+            disabled={!canEditFields}
             onChange={(event) => patchForm({ notes: event.target.value })}
           />
         </div>
@@ -681,19 +712,28 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
 
       {feedbackNode}
 
-      <div className="crf-bar">
-        <div className="l">
-          {isSaving ? (
-            <span className="field-hint" role="status">
-              {canEdit ? 'Salvando rascunho…' : 'Salvando conferência…'}
-            </span>
-          ) : null}
-          {!canEdit && !isSaving ? (
-            <span className="docs-note">
-              Você marca o OK? e informa quem conferiu. As demais colunas são só do COMEX.
-            </span>
-          ) : null}
-          {canImport ? (
+      <CargoReportActionBar
+        process={process}
+        processId={processId}
+        profile={profile}
+        form={form}
+        conference={conference}
+        savedConference={savedConference}
+        catalog={catalog}
+        isDesktop={isDesktop}
+        isSaving={isSaving}
+        canSave={canSave}
+        conferenceDirty={conferenceDirty}
+        onSaveDraft={handleSaveDraft}
+        onSaveConference={handleSaveConference}
+        onDiscardConference={handleDiscardConference}
+        saveConference={saveConference}
+        describeSaveError={describeSaveError}
+        onErrors={showPayloadErrors}
+        onPersisted={applyPersistedForm}
+        onFeedback={setFeedback}
+        renderImport={(busy) =>
+          canImport ? (
             <>
               <input
                 ref={importInputRef}
@@ -706,41 +746,15 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
               <button
                 type="button"
                 className="secondary-button"
-                disabled={isSaving}
+                disabled={busy}
                 onClick={() => importInputRef.current?.click()}
               >
                 Importar de planilha
               </button>
             </>
-          ) : null}
-        </div>
-        <div className="r">
-          {canEdit ? (
-            <button type="button" className="primary-button" disabled={isSaving || !canSave} onClick={handleSaveDraft}>
-              Salvar rascunho
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isSaving || !conferenceDirty}
-                onClick={handleDiscardConference}
-              >
-                Descartar
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                disabled={isSaving || !canSave}
-                onClick={handleSaveConference}
-              >
-                Salvar conferência
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {canImport ? (
         <CargoReportImportDialog

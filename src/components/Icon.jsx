@@ -389,6 +389,13 @@ const ICONS = {
       <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" />
     </>
   ),
+  print: (
+    <>
+      <path d="M7 9V4h10v5" />
+      <rect x="5" y="9" width="14" height="8" rx="2" />
+      <path d="M8 14h8v6H8z" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, className = '', strokeWidth = 1.75, ...rest }) {

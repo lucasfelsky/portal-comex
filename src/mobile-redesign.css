@@ -6383,3 +6383,15 @@
     font-weight: 600;
   }
 }
+
+/* S4 do Relatorio de Carga: barra de acoes no celular (Salvar rascunho | Concluir e anexar, com
+   "Mais ações" em largura total). Bloco APPEND-ONLY. */
+@media (max-width: 1040px) {
+  .crf-wrap--mobile .crf-bar .r {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crf-wrap--mobile .crf-bar .crf-bar__wide {
+    grid-column: 1 / -1;
+  }
+}

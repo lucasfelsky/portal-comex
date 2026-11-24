@@ -1,0 +1,250 @@
+// S4 do Relatório de Carga: folha de impressão (larguras por coluna, 28 linhas, CSS que mantém 1 página)
+// e ciclo de vida da classe `crf-printing` no body (afterprint, desmontagem e saídas alternativas).
+import fs from 'node:fs'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
+import CargoReportPrintSheet, {
+  CargoReportPrintView,
+  PRINT_BODY_CLASS,
+  PRINT_COLUMNS,
+} from '../../src/features/processes/CargoReportPrintSheet'
+
+const css = fs.readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'utf8').replace(/\r\n/g, '\n')
+
+const row = (i) => ({
+  id: `r${i}`,
+  po: '4500123',
+  dbcorpCode: 'AD5240',
+  supplierDescription: 'DEA FOAM14339 - BOMBONA 25KG',
+  sqDescription: 'DEA FOAM14339 - BB 25KG',
+  ok: i % 2 === 0,
+  supplierLot: 'DF2406A',
+  lotSq: 'DF2406A450',
+  wmsLabel: 'WMS-77120',
+  sqLabel: 'SQ-001245',
+  quantityKg: 12500,
+  count: 500,
+  netWeightKg: 25,
+  packageWeightKg: 1.2,
+  packages: 500,
+})
+
+const makeSheet = (count) => ({
+  title: 'RELATÓRIO DE CARGA - ACME SEA 021-26',
+  duimpNumber: '25BR00001234567',
+  cargoType: 'FCL',
+  rows: Array.from({ length: count }, (_, index) => row(index)),
+  notes: 'obs',
+  checkedByName: 'Operador Logística',
+  labeledBy: 'A',
+  labelMadeBy: 'B',
+  receiptStatus: 'com_ressalva',
+  receivedDateBr: '22/11/2026',
+  completedDateBr: '',
+  nfNumber: '1',
+  alerts: [],
+})
+
+// Bloco do `@media print` da folha, sem comentários.
+function printCss() {
+  const at = css.indexOf('@media print {')
+  expect(at).toBeGreaterThan(0)
+  return css.slice(at, css.indexOf('/* ============', at))
+}
+
+function ruleBody(block, selector) {
+  const at = block.indexOf(`${selector} {`)
+  expect(at, selector).toBeGreaterThanOrEqual(0)
+  return block.slice(at, block.indexOf('}', at))
+}
+
+describe('CargoReportPrintView: larguras e linhas', () => {
+  it('as colunas somam 100% e as de descrição são as mais largas', () => {
+    expect(PRINT_COLUMNS).toHaveLength(14)
+    const total = PRINT_COLUMNS.reduce((sum, column) => sum + column.width, 0)
+    expect(total).toBeCloseTo(100, 5)
+
+    const wide = PRINT_COLUMNS.filter((column) => column.wide)
+    expect(wide.map((column) => column.key)).toEqual(['supplierDescription', 'sqDescription'])
+    const narrow = PRINT_COLUMNS.filter((column) => !column.wide)
+    const widestNarrow = Math.max(...narrow.map((column) => column.width))
+    for (const column of wide) expect(column.width).toBeGreaterThanOrEqual(2 * widestNarrow)
+  })
+
+  it('renderiza um <colgroup> com a largura de cada coluna e a classe is-wide nas descrições', () => {
+    const { container } = render(<CargoReportPrintView sheet={makeSheet(5)} />)
+
+    const cols = [...container.querySelectorAll('colgroup col')]
+    expect(cols).toHaveLength(14)
+    expect(cols.map((col) => col.style.width)).toEqual(PRINT_COLUMNS.map((column) => `${column.width}%`))
+    expect(cols.filter((col) => col.classList.contains('is-wide'))).toHaveLength(2)
+
+    const firstRowCells = [...container.querySelectorAll('tbody tr')[0].children]
+    expect(firstRowCells.filter((cell) => cell.classList.contains('is-wide'))).toHaveLength(2)
+    expect(firstRowCells[9]).toHaveClass('is-number')
+  })
+
+  it('a tabela tem sempre 28 linhas: as vazias completam as preenchidas', () => {
+    for (const filled of [0, 5, 28]) {
+      const { container, unmount } = render(<CargoReportPrintView sheet={makeSheet(filled)} />)
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(28)
+      expect(container.querySelectorAll('tbody tr[aria-hidden="true"]')).toHaveLength(28 - filled)
+      unmount()
+    }
+  })
+
+  it('acima de 28 linhas a tabela cresce (sem linhas vazias) e o rodapé continua uma vez só', () => {
+    for (const filled of [29, 45, 200]) {
+      const { container, unmount } = render(<CargoReportPrintView sheet={makeSheet(filled)} />)
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(filled)
+      expect(container.querySelectorAll('tbody tr[aria-hidden="true"]')).toHaveLength(0)
+      expect(container.querySelectorAll('thead tr')).toHaveLength(1)
+      expect(container.querySelectorAll('.crf-print__foot')).toHaveLength(1)
+      unmount()
+    }
+  })
+
+  it('mostra os rótulos do modelo e o Nº da DUIMP', () => {
+    render(<CargoReportPrintView sheet={makeSheet(1)} />)
+    const region = screen.getByRole('region', { name: 'Visão de impressão do relatório de carga' })
+    expect(region).toHaveTextContent('Nº da DUIMP: 25BR00001234567')
+    expect(region).toHaveTextContent('☑ COM RESSALVA')
+    expect(region).toHaveTextContent('☐ SEM RESSALVA')
+  })
+})
+
+describe('CSS da folha de impressão (1 página A4 paisagem)', () => {
+  it('a tabela usa layout fixo e as células ficam em uma linha, com reticências e altura fixa', () => {
+    const block = printCss()
+    expect(ruleBody(block, '.crf-print__table')).toContain('table-layout: fixed')
+    const cell = ruleBody(block, '.crf-print__table th,\n  .crf-print__table td')
+    for (const declaration of ['white-space: nowrap', 'text-overflow: ellipsis', 'overflow: hidden', 'height: 4.6mm', 'max-height: 4.6mm']) {
+      expect(cell).toContain(declaration)
+    }
+  })
+
+  it('as descrições vão alinhadas à esquerda e o cabeçalho, rodapé e título têm altura limitada', () => {
+    const block = printCss()
+    expect(ruleBody(block, '.crf-print__head')).toContain('max-height: 20mm')
+    expect(ruleBody(block, '.crf-print__title h1')).toContain('max-height: 2.3em')
+    expect(ruleBody(block, '.crf-print__foot > div')).toContain('max-height: 22mm')
+  })
+
+  it('a folha usa a página nomeada A4 paisagem e fica 2 mm menor que a área útil', () => {
+    expect(css).toContain('@page cargo-report {\n  size: A4 landscape;\n  margin: 8mm;\n}')
+    expect(ruleBody(printCss(), 'body.crf-printing .crf-print')).toContain('width: calc(100% - 2mm)')
+  })
+})
+
+describe('CargoReportPrintSheet: ciclo de vida do body.crf-printing', () => {
+  let print
+
+  beforeEach(() => {
+    print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    document.body.classList.remove(PRINT_BODY_CLASS)
+  })
+
+  afterEach(() => {
+    print.mockRestore()
+    vi.restoreAllMocks()
+    delete window.matchMedia
+    document.body.classList.remove(PRINT_BODY_CLASS)
+  })
+
+  it('liga a classe e chama window.print uma vez', () => {
+    render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={vi.fn()} />)
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS)
+    expect(print).toHaveBeenCalledTimes(1)
+  })
+
+  it('afterprint tira a classe e avisa uma só vez', () => {
+    const onDone = vi.fn()
+    render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={onDone} />)
+
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'))
+      window.dispatchEvent(new Event('afterprint'))
+    })
+
+    expect(document.body).not.toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('desmontar tira a classe mesmo sem afterprint e não deixa listener para trás', () => {
+    const onDone = vi.fn()
+    const { unmount } = render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={onDone} />)
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS)
+
+    unmount()
+    expect(document.body).not.toHaveClass(PRINT_BODY_CLASS)
+
+    document.body.classList.add(PRINT_BODY_CLASS)
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'))
+    })
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS) // listener removido: nada mexe na classe
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('o 1º beforeprint (da própria impressão) mantém a classe; um 2º com ela presa limpa e avisa', () => {
+    const onDone = vi.fn()
+    render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={onDone} />)
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeprint'))
+    })
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).not.toHaveBeenCalled()
+
+    // afterprint perdido; o usuário aperta Ctrl+P: novo beforeprint com a classe ainda ligada
+    act(() => {
+      window.dispatchEvent(new Event('beforeprint'))
+    })
+    expect(document.body).not.toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('saída do modo de impressão (matchMedia print) também encerra', () => {
+    let listener = null
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: (_type, handler) => {
+        listener = handler
+      },
+      removeEventListener: vi.fn(),
+    }))
+    const onDone = vi.fn()
+    render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={onDone} />)
+    expect(window.matchMedia).toHaveBeenCalledWith('print')
+
+    act(() => listener({ matches: true }))
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).not.toHaveBeenCalled()
+
+    act(() => listener({ matches: false }))
+    expect(document.body).not.toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('o foco da janela só encerra bem depois do window.print (não corta a impressão em curso)', () => {
+    const now = vi.spyOn(Date, 'now')
+    now.mockReturnValue(1_000_000)
+    const onDone = vi.fn()
+    render(<CargoReportPrintSheet sheet={makeSheet(2)} onDone={onDone} />)
+
+    now.mockReturnValue(1_000_000 + 300)
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(document.body).toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).not.toHaveBeenCalled()
+
+    now.mockReturnValue(1_000_000 + 5000)
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(document.body).not.toHaveClass(PRINT_BODY_CLASS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+})
