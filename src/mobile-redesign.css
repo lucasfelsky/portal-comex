@@ -6395,3 +6395,11 @@
     grid-column: 1 / -1;
   }
 }
+
+/* S6 do Relatorio de Carga: Lote SQ maior que meia largura do cartao quebra em vez de vazar. Bloco APPEND-ONLY. */
+@media (max-width: 1040px) {
+  .crf-calc {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

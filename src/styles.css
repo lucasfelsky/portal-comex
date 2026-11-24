@@ -1685,6 +1685,18 @@ body {
     text-align: center;
   }
 
+  /* S6: lote do fornecedor e lote SQ em ate 2 linhas na mesma altura de linha (2 x 5,6 pt cabem nos
+     4,0 mm uteis da celula), sem reticencias: quebra em qualquer ponto em vez de cortar. */
+  .crf-print__table td .crf-print__lot {
+    display: block;
+    max-height: 2em;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-size: 5.6pt;
+    line-height: 1;
+    white-space: normal;
+  }
+
   .crf-print__table tr {
     break-inside: avoid;
   }
@@ -24629,4 +24641,17 @@ table.crf {
   gap: 8px;
   justify-content: flex-end;
   padding-top: 4px;
+}
+
+/* S6 do Relatorio de Carga: coluna LOTE SQ sem corte. O <col> cresce pelo maior lote (ver
+   CargoReportItems.jsx); a celula nao quebra ate 40 caracteres e acima disso quebra sem cortar.
+   (A regra da impressao, .crf-print__lot, fica dentro do bloco de impressao da S4: o bloco "reduce
+   desktop" precisa continuar sendo o ultimo bloco de midia do arquivo.) Bloco APPEND-ONLY. */
+.crf td.calc.lotsq {
+  white-space: nowrap;
+}
+
+.crf td.calc.lotsq.is-long {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }

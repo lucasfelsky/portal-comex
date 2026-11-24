@@ -26,6 +26,7 @@ import {
   freezeCargoReportRows,
   formatCargoReportTitle,
   fromCargoReportDoc,
+  fromConferenceDoc,
   isCargoReportRowEmpty,
   parseCargoCount,
   parseCargoNumber,
@@ -396,14 +397,99 @@ describe('buildConferencePayload', () => {
       schemaVersion: 1,
       revision: 3,
       okByRowId: { a: true, b: false },
+      countOkByRowId: {},
+      labelsByRowId: {},
       checkedByName: 'Operador',
     })
+    expect(Object.keys(payload)).toEqual([
+      'schemaVersion',
+      'revision',
+      'okByRowId',
+      'countOkByRowId',
+      'labelsByRowId',
+      'checkedByName',
+    ])
+  })
+
+  it('S6: poda id orfao nos 3 mapas e força booleano na contagem', () => {
+    const payload = buildConferencePayload(
+      {
+        okByRowId: { a: true, orfa: true },
+        countOkByRowId: { a: 1, b: false, orfa: true },
+        labelsByRowId: { a: { wms: 'W1', sq: 'S1' }, orfa: { wms: 'X', sq: 'Y' } },
+        checkedByName: 'Op',
+        revision: 0,
+      },
+      [{ id: 'a' }, { id: 'b' }]
+    )
+    expect(payload.okByRowId).toEqual({ a: true })
+    expect(payload.countOkByRowId).toEqual({ a: true, b: false })
+    expect(payload.labelsByRowId).toEqual({ a: { wms: 'W1', sq: 'S1' } })
+  })
+
+  it('S6: etiqueta é cortada em 120 com trim; entrada vazia some; mantém só uma etiqueta preenchida', () => {
+    const payload = buildConferencePayload(
+      {
+        labelsByRowId: {
+          a: { wms: `  ${'w'.repeat(200)}  `, sq: ' S ' },
+          b: { wms: '   ', sq: '' },
+          c: { wms: 'X', sq: '' },
+          d: 'texto solto',
+        },
+        revision: 0,
+      },
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+    )
+    expect(payload.labelsByRowId.a).toEqual({ wms: 'w'.repeat(120), sq: 'S' })
+    expect(payload.labelsByRowId).not.toHaveProperty('b')
+    expect(payload.labelsByRowId.c).toEqual({ wms: 'X', sq: '' })
+    expect(payload.labelsByRowId).not.toHaveProperty('d')
   })
 
   it('corta o nome em 120 caracteres', () => {
     const payload = buildConferencePayload({ okByRowId: {}, checkedByName: 'x'.repeat(200), revision: 0 }, [])
     expect(payload.checkedByName).toHaveLength(120)
     expect(payload.revision).toBe(1)
+  })
+})
+
+describe('fromConferenceDoc (S6)', () => {
+  it('lê os mapas, ignora não booleano e etiqueta que não é mapa, e corta etiqueta em 120', () => {
+    const conference = fromConferenceDoc({
+      revision: 4,
+      okByRowId: { a: true, b: 'sim' },
+      countOkByRowId: { a: false, b: true, c: 1 },
+      labelsByRowId: { a: { wms: 'x'.repeat(200), sq: 'S' }, b: 'solto', c: { wms: 7 } },
+      checkedByName: ' Op ',
+    })
+    expect(conference.revision).toBe(4)
+    expect(conference.okByRowId).toEqual({ a: true })
+    expect(conference.countOkByRowId).toEqual({ a: false, b: true })
+    expect(conference.labelsByRowId.a).toEqual({ wms: 'x'.repeat(120), sq: 'S' })
+    expect(conference.labelsByRowId).not.toHaveProperty('b')
+    expect(conference.labelsByRowId.c).toEqual({ wms: '', sq: '' })
+    expect(conference.checkedByName).toBe('Op')
+  })
+
+  it('doc sem labelsByRowId pré-preenche as etiquetas pelas linhas legadas do current; count legado não vira contagem', () => {
+    const legacyRows = [
+      { id: 'a', wmsLabel: 'W1', sqLabel: '', count: 40 },
+      { id: 'b', wmsLabel: '', sqLabel: '', count: 3 },
+    ]
+    const conference = fromConferenceDoc({ revision: 2, okByRowId: { a: true }, checkedByName: 'Op' }, legacyRows)
+    expect(conference.labelsByRowId).toEqual({ a: { wms: 'W1', sq: '' } })
+    expect(conference.countOkByRowId).toEqual({})
+  })
+
+  it('doc nulo (conferência ainda não gravada) também pré-preenche pelas linhas legadas', () => {
+    const conference = fromConferenceDoc(null, [{ id: 'a', wmsLabel: '', sqLabel: 'S1' }])
+    expect(conference.revision).toBe(0)
+    expect(conference.labelsByRowId).toEqual({ a: { wms: '', sq: 'S1' } })
+  })
+
+  it('doc COM labelsByRowId (mesmo vazio) não pré-preenche: o legado deixa de ser lido', () => {
+    const conference = fromConferenceDoc({ revision: 1, labelsByRowId: {} }, [{ id: 'a', wmsLabel: 'W1', sqLabel: 'S1' }])
+    expect(conference.labelsByRowId).toEqual({})
   })
 })
 

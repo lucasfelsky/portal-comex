@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   initializeTestEnvironment,
   assertSucceeds,
@@ -4562,6 +4562,8 @@ describeEmulator('firestore.rules (emulador)', () => {
       schemaVersion: 1,
       revision: 1,
       okByRowId: { 'r-0': true, 'r-1': false },
+      countOkByRowId: { 'r-0': true, 'r-1': false },
+      labelsByRowId: { 'r-0': { wms: 'WMS-77120', sq: 'SQ-0001' } },
       checkedByName: 'Operador Logistica',
       updatedAt: serverTimestamp(),
       updatedById: 'log-1',
@@ -4736,6 +4738,74 @@ describeEmulator('firestore.rules (emulador)', () => {
         const ok = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, true]))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(201) })))
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(200) })))
+      })
+
+      it('S6: logistica cria com etiquetas e contagem e admin atualiza (+ 1); ambos leem o conteudo', async () => {
+        await seedCurrent()
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference()))
+        const fromLogistics = await assertSucceeds(getDoc(doc(logistics(), CONF)))
+        expect(fromLogistics.data().labelsByRowId).toEqual({ 'r-0': { wms: 'WMS-77120', sq: 'SQ-0001' } })
+        expect(fromLogistics.data().countOkByRowId).toEqual({ 'r-0': true, 'r-1': false })
+        await assertSucceeds(
+          setDoc(
+            doc(admin(), CONF),
+            conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin', labelsByRowId: { 'r-1': { wms: 'W2', sq: '' } } })
+          )
+        )
+        const fromAdmin = await assertSucceeds(getDoc(doc(admin(), CONF)))
+        expect(fromAdmin.data().labelsByRowId).toEqual({ 'r-1': { wms: 'W2', sq: '' } })
+      })
+
+      it('S6: payload sem labelsByRowId ou sem countOkByRowId falha (bundle antigo nao apaga dados)', async () => {
+        await seedCurrent()
+        const { labelsByRowId: _labels, ...semEtiquetas } = conference()
+        const { countOkByRowId: _count, ...semContagem } = conference()
+        await assertFails(setDoc(doc(logistics(), CONF), semEtiquetas))
+        await assertFails(setDoc(doc(logistics(), CONF), semContagem))
+      })
+
+      it('S6: countOkByRowId com valor nao booleano e mais de 200 chaves falham; 200 passam', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ countOkByRowId: { 'r-0': 'sim' } })))
+        const flags = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, true]))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ countOkByRowId: flags(201) })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ countOkByRowId: flags(200) })))
+      })
+
+      it('S6: labelsByRowId como texto ou lista falha; 201 entradas falham; 200 passam', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ labelsByRowId: 'WMS-1' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ labelsByRowId: [{ wms: 'W', sq: 'S' }] })))
+        const labels = (count) =>
+          Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, { wms: 'W', sq: 'S' }]))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ labelsByRowId: labels(201) })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ labelsByRowId: labels(200) })))
+      })
+
+      it('S6: tecnico, faturamento, usuario aprovado e anonimo nao leem nem gravam o payload completo', async () => {
+        await seedCurrent()
+        await seedConference(1)
+        for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+          await assertFails(getDoc(doc(db, CONF)))
+          await assertFails(
+            setDoc(doc(db, CONF), conference({ revision: 2, labelsByRowId: { 'r-0': { wms: 'X', sq: 'Y' } } }))
+          )
+        }
+      })
+
+      it('S6: revisao errada com o payload completo falha', async () => {
+        await seedCurrent()
+        await seedConference(1)
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 1 })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 3 })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      it('S6: etiqueta com 121 caracteres e ACEITA pela rule (limite de 120 e do cliente; rules nao iteram mapas)', async () => {
+        await seedCurrent()
+        await assertSucceeds(
+          setDoc(doc(logistics(), CONF), conference({ labelsByRowId: { 'r-0': { wms: 'x'.repeat(121), sq: '' } } }))
+        )
       })
 
       it('checkedByName de 121 falha; shape com campo extra falha', async () => {

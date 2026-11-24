@@ -86,6 +86,8 @@ const conferencePayload = (revision = 1) => ({
   schemaVersion: 1,
   revision,
   okByRowId: { 'r-1': true, 'r-2': false },
+  countOkByRowId: { 'r-1': true, 'r-2': false },
+  labelsByRowId: { 'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' } },
   checkedByName: 'Operador Logística',
 })
 
@@ -214,6 +216,28 @@ describe('saveCargoReportConference', () => {
       updatedByName: 'Operador Logística',
     })
     expect(result).toEqual({ revision: 2 })
+  })
+
+  it('S6: grava contagem e etiquetas intactas (as 2 chaves novas que as rules exigem) sem merge', async () => {
+    await saveCargoReportConference('P1', conferencePayload(2), LOGISTICS)
+
+    const [, data, options] = mockSetDoc.mock.calls[0]
+    expect(options).toBeUndefined()
+    expect(data.countOkByRowId).toEqual({ 'r-1': true, 'r-2': false })
+    expect(data.labelsByRowId).toEqual({ 'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' } })
+    expect(Object.keys(data).sort()).toEqual(
+      [
+        'checkedByName',
+        'countOkByRowId',
+        'labelsByRowId',
+        'okByRowId',
+        'revision',
+        'schemaVersion',
+        'updatedAt',
+        'updatedById',
+        'updatedByName',
+      ].sort()
+    )
   })
 
   it('NAO audita a conferencia da logistica (audits e admin-only)', async () => {

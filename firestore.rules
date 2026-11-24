@@ -772,9 +772,12 @@ service cloud.firestore {
 
     // S3 do Relatorio de Carga (FR.CMX.001 rev. 005): formulario preenchido no
     // Portal. `current` = preenchimento do COMEX (so' admin grava); `conference`
-    // = coluna OK? + "Conferido por" (admin e logistica gravam), em doc separado
-    // para a conferencia nao conflitar com quem esta editando. Colunas calculadas
-    // (lote SQ, peso liquido, no de embalagens) NAO sao gravadas.
+    // = OK?, contagem, etiquetas WMS/SQ e "Conferido por" (S6; admin e logistica
+    // gravam), em doc separado para a conferencia nao conflitar com quem esta
+    // editando. wmsLabel/sqLabel/count das linhas do `current` ficam so' por
+    // compatibilidade. Formato e tamanho de cada etiqueta sao validados no
+    // cliente. Colunas calculadas (lote SQ, peso liquido, no de embalagens)
+    // NAO sao gravadas.
     // `revision` e' trava otimista: gravar sobre revisao antiga e' negado.
     // Rules nao iteram listas: so' tamanho e shape de rows[0]; o cliente
     // (src/features/processes/cargoReportFormModel.js) normaliza cada linha.
@@ -843,11 +846,11 @@ service cloud.firestore {
 
     function isValidCargoReportConference(processId) {
       return request.resource.data.keys().hasOnly([
-        'schemaVersion', 'revision', 'okByRowId', 'checkedByName',
+        'schemaVersion', 'revision', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
         'updatedAt', 'updatedById', 'updatedByName',
       ])
         && request.resource.data.keys().hasAll([
-          'schemaVersion', 'revision', 'okByRowId', 'checkedByName',
+          'schemaVersion', 'revision', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
           'updatedAt', 'updatedById', 'updatedByName',
         ])
         && exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/current)
@@ -857,6 +860,11 @@ service cloud.firestore {
         && request.resource.data.okByRowId is map
         && request.resource.data.okByRowId.size() <= 200
         && request.resource.data.okByRowId.values().hasOnly([true, false])
+        && request.resource.data.countOkByRowId is map
+        && request.resource.data.countOkByRowId.size() <= 200
+        && request.resource.data.countOkByRowId.values().hasOnly([true, false])
+        && request.resource.data.labelsByRowId is map
+        && request.resource.data.labelsByRowId.size() <= 200
         && request.resource.data.checkedByName is string
         && request.resource.data.checkedByName.size() <= 120
         && request.resource.data.updatedAt == request.time

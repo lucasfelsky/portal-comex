@@ -152,11 +152,21 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
     })
 
-    it('isValidCargoReportConference: hasOnly + hasAll das 7 chaves, okByRowId booleano e current existente', () => {
+    it('isValidCargoReportConference: hasOnly + hasAll das 9 chaves, mapas de OK?/contagem/etiquetas e current existente', () => {
       const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
-      const keys = ['schemaVersion', 'revision', 'okByRowId', 'checkedByName', 'updatedAt', 'updatedById', 'updatedByName']
+      const keys = [
+        'schemaVersion',
+        'revision',
+        'okByRowId',
+        'countOkByRowId',
+        'labelsByRowId',
+        'checkedByName',
+        'updatedAt',
+        'updatedById',
+        'updatedByName',
+      ]
       const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
       const all = body.match(/request\.resource\.data\.keys\(\)\.hasAll\(\[([^\]]*)\]\)/)
       expect(only).not.toBeNull()
@@ -167,6 +177,10 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\/cargoReport\/current\)/)
       expect(body).toMatch(/okByRowId\.size\(\)\s*<=\s*200/)
       expect(body).toMatch(/okByRowId\.values\(\)\.hasOnly\(\[\s*true,\s*false\s*\]\)/)
+      expect(body).toMatch(/countOkByRowId\.size\(\)\s*<=\s*200/)
+      expect(body).toMatch(/countOkByRowId\.values\(\)\.hasOnly\(\[\s*true,\s*false\s*\]\)/)
+      expect(body).toMatch(/labelsByRowId is map/)
+      expect(body).toMatch(/labelsByRowId\.size\(\)\s*<=\s*200/)
       expect(body).toMatch(/checkedByName\.size\(\)\s*<=\s*120/)
       expect(body).toMatch(/resource\s*==\s*null\s*\?\s*1\s*:\s*resource\.data\.revision\s*\+\s*1/)
       expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)

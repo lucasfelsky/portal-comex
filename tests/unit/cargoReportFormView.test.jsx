@@ -122,6 +122,12 @@ const conferenceDoc = (overrides = {}) => ({
   schemaVersion: 1,
   revision: 2,
   okByRowId: { 'r-1': true, 'r-2': true, 'r-4': true, orfa: true },
+  countOkByRowId: { 'r-1': true, 'r-4': false, orfa: true },
+  labelsByRowId: {
+    'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' },
+    'r-2': { wms: 'WMS-77121', sq: '' },
+    orfa: { wms: 'X', sq: 'Y' },
+  },
   checkedByName: '',
   updatedAt: new Date(2026, 10, 23, 20, 0),
   updatedByName: 'Operador Logística',
@@ -351,7 +357,7 @@ describe('admin: salvar rascunho', () => {
 
     expect(
       await screen.findByText(
-        'Sem permissão para editar. O COMEX preenche o relatório e a logística só marca o OK? e o "Conferido por".'
+        'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o "Conferido por".'
       )
     ).toBeInTheDocument()
   })
@@ -432,7 +438,7 @@ describe('logistica: conferencia', () => {
     expect(screen.queryByRole('textbox', { name: /PO \/ processo/ })).not.toBeInTheDocument()
     expect(
       screen.getByText(
-        'Marque o OK? de cada linha conferida e informe quem conferiu. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando.'
+        'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e informe quem conferiu. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando.'
       )
     ).toBeInTheDocument()
     expect(screen.getByText('Conferência da logística')).toBeInTheDocument()
@@ -923,7 +929,8 @@ describe('S4: Concluir e anexar', () => {
       )
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Recarregar' }))
-    await waitFor(() => expect(mockGetCargoReport).toHaveBeenCalledTimes(2))
+    // carga inicial + releitura da conferência ao concluir (S6) + recarga
+    await waitFor(() => expect(mockGetCargoReport).toHaveBeenCalledTimes(3))
     expect(mockRetry).not.toHaveBeenCalled()
   })
 
@@ -1027,6 +1034,8 @@ describe('S4: Reabrir para corrigir', () => {
     expect(payload).toMatchObject({ status: 'rascunho', completedDate: '', revision: 7 })
     expect(payload.rows.every((item) => item.frozenNetWeightKg === null && item.frozenPackages === null)).toBe(true)
     expect(payload.lastGenerated).toMatchObject({ documentId: 'doc-1' })
+    // S6: reabrir só grava o `current`; a conferência (OK?, contagem, etiquetas) fica como está.
+    expect(mockSaveConference).not.toHaveBeenCalled()
 
     expect(await screen.findByText('Relatório reaberto. Para gerar uma nova versão, conclua de novo.')).toBeInTheDocument()
     expect(screen.getByText('Rascunho')).toBeInTheDocument()
@@ -1143,7 +1152,7 @@ describe('S4: logística com o relatório concluído', () => {
     expect(
       screen.getByText('Relatório concluído pelo COMEX. Para alterar a conferência, peça ao COMEX para reabrir.')
     ).toBeInTheDocument()
-    expect(screen.queryByText(/Marque o OK\? de cada linha conferida/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Marque o OK\? e a contagem de cada linha conferida/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Conferido por')).toBeDisabled()
     for (const label of ['Concluir e anexar', 'Reabrir para corrigir', 'Salvar conferência', 'Descartar', 'Exportar Excel']) {
       expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
@@ -1255,5 +1264,323 @@ describe('S4: diálogo ocupado, saídas bloqueadas e tabela ausente', () => {
     const dialog = await openConcludeDialog(user)
     expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
     expect(dialog).not.toHaveTextContent('A tabela Item x Emb. não está disponível')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// S6: etiquetas e contagem da logística (doc `conference`) + coluna LOTE SQ sem corte
+// ---------------------------------------------------------------------------
+describe('S6: logística edita etiquetas e contagem (desktop)', () => {
+  const label = (field, row) => screen.getByRole('textbox', { name: `Etiqueta ${field} da linha ${row}` })
+  const countOk = (row) => screen.getByRole('checkbox', { name: `Contagem da linha ${row}` })
+
+  it('etiquetas viram campos de texto com o valor da conferência e a contagem alterna como o OK?', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+
+    expect(label('WMS', 1)).toHaveValue('WMS-77120')
+    expect(label('SQ', 1)).toHaveValue('SQ-001245')
+    expect(label('WMS', 3)).toHaveValue('')
+    expect(label('WMS', 1)).toHaveAttribute('maxlength', '120')
+    expect(countOk(1)).toHaveAttribute('aria-checked', 'true')
+    expect(countOk(3)).toHaveAttribute('aria-checked', 'false')
+    expect(countOk(3)).not.toHaveAttribute('aria-disabled')
+    expect(countOk(3).className).toBe(screen.getByRole('checkbox', { name: 'OK? da linha 3' }).className)
+
+    await user.click(countOk(3))
+    expect(countOk(3)).toHaveAttribute('aria-checked', 'true')
+    countOk(1).focus()
+    await user.keyboard('{Enter}')
+    expect(countOk(1)).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('"Salvar conferência" grava OK?, contagem, etiquetas e "Conferido por" no MESMO payload; "Descartar" volta os 4', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ checkedByName: 'Giulia' }) })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    await user.type(label('SQ', 3), '  SQ-003  ')
+    await user.click(countOk(3))
+    await user.click(screen.getByRole('checkbox', { name: 'OK? da linha 5' }))
+    await user.type(screen.getByLabelText('Conferido por'), ' Bruno')
+    expect(save).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(label('SQ', 3)).toHaveValue('')
+    expect(countOk(3)).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('checkbox', { name: 'OK? da linha 5' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByLabelText('Conferido por')).toHaveValue('Giulia')
+    expect(save).toBeDisabled()
+
+    await user.type(label('WMS', 2), 'W-2B')
+    await user.click(save)
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const [, payload] = mockSaveConference.mock.calls[0]
+    expect(payload).toMatchObject({
+      revision: 3,
+      checkedByName: 'Giulia',
+      okByRowId: { 'r-1': true, 'r-2': true, 'r-4': true },
+      countOkByRowId: { 'r-1': true, 'r-4': false },
+      labelsByRowId: { 'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' }, 'r-2': { wms: 'WMS-77121W-2B', sq: '' } },
+    })
+    expect(payload.countOkByRowId).not.toHaveProperty('orfa')
+    expect(payload.labelsByRowId).not.toHaveProperty('orfa')
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+    expect(await screen.findByText(/Conferência salva às \d{2}:\d{2}\./)).toBeInTheDocument()
+    // depois de salvar, a tela continua com o que foi gravado e nada fica pendente
+    expect(label('WMS', 2)).toHaveValue('WMS-77121W-2B')
+    expect(save).toBeDisabled()
+  })
+
+  it('só a etiqueta alterada já habilita o salvar (sem tocar em OK?, contagem ou nome)', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ checkedByName: 'Giulia' }) })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await user.type(label('WMS', 4), 'W4')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+    await user.clear(label('WMS', 4))
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+  })
+
+  it('só a Etiqueta SQ alterada (sem tocar em WMS, OK?, contagem ou nome) habilita o salvar e volta a desabilitar ao limpar', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ checkedByName: 'Giulia' }) })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    await user.type(label('SQ', 4), 'SQ-4')
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].labelsByRowId['r-4']).toEqual({ wms: '', sq: 'SQ-4' })
+
+    await user.clear(label('SQ', 4))
+    expect(save).toBeEnabled()
+  })
+
+  it('só a Etiqueta SQ de uma linha que já tinha etiqueta: editar habilita e restaurar o valor salvo desabilita', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ checkedByName: 'Giulia' }) })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+
+    await user.type(label('SQ', 1), 'X')
+    expect(save).toBeEnabled()
+    await user.type(label('SQ', 1), '{Backspace}')
+    expect(label('SQ', 1)).toHaveValue('SQ-001245')
+    expect(save).toBeDisabled()
+  })
+
+  it('só a Contagem alterada (sem tocar em etiquetas, OK? ou nome) habilita o salvar e alternar de volta desabilita', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ checkedByName: 'Giulia' }) })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    await user.click(countOk(3))
+    expect(save).toBeEnabled()
+    await user.click(countOk(3))
+    expect(save).toBeDisabled()
+  })
+
+  it('conferência de antes da S6 (sem labelsByRowId): as etiquetas das linhas pré-preenchem sem sujar a tela e a contagem antiga não vira OK', async () => {
+    const { labelsByRowId: _labels, countOkByRowId: _count, ...legacyConference } = conferenceDoc({ checkedByName: 'Giulia' })
+    const legacyRows = [row({ id: 'r-1' }), row({ id: 'r-5', wmsLabel: '', sqLabel: '', count: 40 })]
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: legacyRows }), conference: legacyConference })
+    const { user } = await renderForm({ profile: LOGISTICA })
+
+    expect(label('WMS', 1)).toHaveValue('WMS-77120')
+    expect(label('SQ', 1)).toHaveValue('SQ-001245')
+    expect(label('WMS', 2)).toHaveValue('')
+    for (const line of [1, 2]) expect(countOk(line)).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+
+    // a 1ª gravação persiste o legado
+    await user.type(label('WMS', 2), 'W5')
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].labelsByRowId).toMatchObject({
+      'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' },
+      'r-5': { wms: 'W5', sq: '' },
+    })
+    expect(mockSaveConference.mock.calls[0][1].countOkByRowId).toEqual({})
+  })
+
+  it('relatório concluído: nada editável para a logística (etiquetas em texto, contagem sem clique)', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: conferenceDoc() })
+    const { user } = await renderForm({ profile: LOGISTICA })
+
+    expect(screen.queryByRole('textbox', { name: /Etiqueta (WMS|SQ) da linha/ })).not.toBeInTheDocument()
+    expect(screen.getByText('WMS-77120')).toBeInTheDocument()
+    expect(countOk(1)).toHaveAttribute('aria-disabled', 'true')
+    await user.click(countOk(3))
+    expect(countOk(3)).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByRole('button', { name: 'Salvar conferência' })).not.toBeInTheDocument()
+  })
+})
+
+describe('S6: admin vê etiquetas e contagem sem editar', () => {
+  it('em rascunho: etiquetas em texto, contagem com aria-disabled e clique não muda nada', async () => {
+    const { user } = await renderForm()
+    const countOk = (row) => screen.getByRole('checkbox', { name: `Contagem da linha ${row}` })
+
+    expect(screen.queryByRole('textbox', { name: /Etiqueta (WMS|SQ) da linha/ })).not.toBeInTheDocument()
+    expect(screen.getByText('WMS-77120')).toBeInTheDocument()
+    expect(screen.getByText('SQ-001245')).toBeInTheDocument()
+    expect(countOk(1)).toHaveAttribute('aria-checked', 'true')
+    expect(countOk(1)).toHaveAttribute('aria-disabled', 'true')
+
+    await user.click(countOk(1))
+    await user.click(countOk(3))
+    await user.type(countOk(3), '{Enter}{ }')
+    expect(countOk(1)).toHaveAttribute('aria-checked', 'true')
+    expect(countOk(3)).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+  })
+
+  it('mudar o "Conferido por" grava a conferência levando etiquetas e contagem carregadas (nunca zera)', async () => {
+    const { user } = await renderForm()
+
+    await user.type(screen.getByLabelText('Conferido por'), 'Giulia')
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const [, payload] = mockSaveConference.mock.calls[0]
+    expect(payload.checkedByName).toBe('Giulia')
+    expect(payload.countOkByRowId).toEqual({ 'r-1': true, 'r-4': false })
+    expect(payload.labelsByRowId).toEqual({
+      'r-1': { wms: 'WMS-77120', sq: 'SQ-001245' },
+      'r-2': { wms: 'WMS-77121', sq: '' },
+    })
+  })
+
+  it('Exportar Excel monta a folha com as etiquetas e a contagem da conferência, não as das linhas', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [row({ id: 'r-1', wmsLabel: 'LEGADO-W', sqLabel: 'LEGADO-S', count: 99 })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Exportar Excel' }))
+
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1))
+    const sheetRow = mockGenerate.mock.calls[0][0].rows[0]
+    expect(sheetRow).toMatchObject({ wmsLabel: 'WMS-77120', sqLabel: 'SQ-001245', countOk: true })
+    expect(sheetRow).not.toHaveProperty('count')
+  })
+})
+
+describe('S6: logística no mobile', () => {
+  it('o selo da contagem alterna como o do OK? e as etiquetas são campos de texto', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA, variant: 'mobile' })
+
+    const toggle = screen.getByRole('checkbox', { name: 'Contagem da linha 3' })
+    expect(toggle).toHaveTextContent('Sem OK')
+    expect(toggle.className).toBe(screen.getByRole('checkbox', { name: 'OK? da linha 3' }).className)
+    expect(toggle).toHaveClass('inline-badge', 'crf-rc__ok')
+    expect(screen.getByRole('checkbox', { name: 'Contagem da linha 1' })).toHaveTextContent('OK')
+
+    await user.click(toggle)
+    expect(screen.getByRole('checkbox', { name: 'Contagem da linha 3' })).toHaveTextContent('OK')
+
+    const sq = screen.getByRole('textbox', { name: 'Etiqueta SQ da linha 3' })
+    await user.type(sq, 'SQ-3')
+    expect(sq).toHaveValue('SQ-3')
+    expect(screen.getByRole('textbox', { name: 'Etiqueta WMS da linha 1' })).toHaveValue('WMS-77120')
+  })
+
+  it('admin no mobile vê o selo da contagem sem botão e as etiquetas em texto', async () => {
+    await renderForm({ variant: 'mobile' })
+    expect(screen.queryByRole('checkbox', { name: 'Contagem da linha 1' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Etiqueta (WMS|SQ) da linha/ })).not.toBeInTheDocument()
+    expect(screen.getByText('WMS-77120')).toBeInTheDocument()
+  })
+})
+
+describe('S6: Concluir e anexar relê a conferência no servidor', () => {
+  beforeEach(() => {
+    mockConclude.mockResolvedValue({ revision: 5, documentId: 'doc-9' })
+  })
+
+  it('conferência com revisão maior no servidor: mostra o aviso com "Recarregar" e não anexa nem envia nada', async () => {
+    const { user } = await renderForm()
+    // depois da carga inicial a logística salvou de novo (revisão 3 > 2)
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc({ revision: 3 }) })
+
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(
+      await screen.findByText(
+        'A logística salvou a conferência depois que você abriu o relatório. Recarregue para ver o OK?, as etiquetas e a contagem antes de concluir.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeInTheDocument()
+    expect(mockGenerate).not.toHaveBeenCalled()
+    expect(mockConclude).not.toHaveBeenCalled()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+    await waitDialogClosed()
+  })
+
+  it('revisão igual no servidor: conclui normalmente', async () => {
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+    await waitFor(() => expect(mockConclude).toHaveBeenCalledTimes(1))
+    expect(mockGetCargoReport).toHaveBeenCalledTimes(2)
+    expect(mockGenerate.mock.calls[0][0].rows[0]).toMatchObject({ wmsLabel: 'WMS-77120', countOk: true })
+  })
+})
+
+describe('S6: coluna LOTE SQ sem corte (largura do <col> pelo maior lote)', () => {
+  const lotSqCol = (container) => container.querySelectorAll('colgroup col')[6]
+  const lotSqCells = (container) => [...container.querySelectorAll('tbody tr[data-row-index] td:nth-child(7)')]
+  const withLots = (lots, po = 'GOO 021-26') =>
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: lots.map((supplierLot, index) => row({ id: `r-${index + 1}`, po, supplierLot })) }),
+      conference: conferenceDoc(),
+    })
+
+  it('lote de 20 + 3 caracteres: largura calc(29.9ch + 20px), célula lotsq em uma linha', async () => {
+    withLots(['2609G00020GOWMWM8888'])
+    const { container } = await renderForm()
+
+    expect(lotSqCol(container).style.width).toBe('calc(29.9ch + 20px)')
+    const [cell] = lotSqCells(container)
+    expect(cell).toHaveTextContent('2609G00020GOWMWM8888GOO')
+    expect(cell).toHaveClass('calc', 'lotsq')
+    expect(cell).not.toHaveClass('is-long')
+  })
+
+  it('lote curto ou vazio usa o mínimo de 13 caracteres: calc(16.9ch + 20px)', async () => {
+    const first = await renderForm()
+    expect(lotSqCol(first.container).style.width).toBe('calc(16.9ch + 20px)')
+    first.unmount()
+
+    withLots([''])
+    const second = await renderForm()
+    expect(lotSqCol(second.container).style.width).toBe('calc(16.9ch + 20px)')
+    expect(lotSqCells(second.container)[0]).toHaveClass('empty')
+  })
+
+  it('o exemplo do Lucas (2609G00020GOO, 13 caracteres) cabe no mínimo', async () => {
+    withLots(['2609G00020'], 'GOO 021-26')
+    const { container } = await renderForm()
+    expect(lotSqCells(container)[0]).toHaveTextContent('2609G00020GOO')
+    expect(lotSqCol(container).style.width).toBe('calc(16.9ch + 20px)')
+  })
+
+  it('lote de 60 caracteres: largura máxima (40 × 1,3 = calc(52.0ch + 20px)) e célula is-long, que quebra sem cortar', async () => {
+    withLots(['L'.repeat(60)])
+    const { container } = await renderForm()
+
+    expect(lotSqCol(container).style.width).toBe('calc(52.0ch + 20px)')
+    expect(lotSqCells(container)[0]).toHaveClass('calc', 'lotsq', 'is-long')
+    expect(lotSqCells(container)[0]).toHaveTextContent(`${'L'.repeat(60)}GOO`)
+  })
+
+  it('as demais colunas continuam em px', async () => {
+    const { container } = await renderForm()
+    const widths = [...container.querySelectorAll('colgroup col')].map((col) => col.style.width)
+    expect(widths[5]).toBe('112px')
+    expect(widths[0]).toBe('96px')
+    expect(widths).toHaveLength(14)
   })
 })

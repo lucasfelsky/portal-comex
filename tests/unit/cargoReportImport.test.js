@@ -242,24 +242,41 @@ describe('conversões', () => {
       supplierLot: '26030086',
       dbcorpCode: 'AP5012',
       quantityKg: 1.5,
-      count: 40,
+      count: null,
     })
   })
 
   it('valor inválido vira vazio com aviso da linha do Excel', async () => {
     const result = await importFile({
-      rows: [r5Row({ qty: 'abc' }), r5Row({ count: 2.5 }), r5Row({ qty: -3 })],
+      rows: [r5Row({ qty: 'abc' }), r5Row({ packageWeight: 'x1' }), r5Row({ qty: -3 })],
     })
 
     expect(result.fatal).toBeNull()
     expect(result.rows[0].quantityKg).toBeNull()
-    expect(result.rows[1].count).toBeNull()
+    expect(result.rows[1].packageWeightKg).toBeNull()
     expect(result.rows[2].quantityKg).toBeNull()
     expect(result.warnings).toEqual([
       { row: 9, message: 'Linha 9: QTD (KG) inválido ("abc"); ficou vazio.' },
-      { row: 10, message: 'Linha 10: CONTAGEM inválido ("2.5"); ficou vazio.' },
+      { row: 10, message: 'Linha 10: PESO DA EMB. (KG) inválido ("x1"); ficou vazio.' },
       { row: 11, message: 'Linha 11: QTD (KG) inválido ("-3"); ficou vazio.' },
     ])
+  })
+
+  it('S6: etiquetas WMS/SQ e contagem do arquivo são ignoradas, sem aviso de CONTAGEM', async () => {
+    const result = await importFile({
+      rows: [r5Row({ wms: 'WMS-77120', sqLabel: 'SQ-001245', count: 40 }), r5Row({ count: 2.5 })],
+    })
+
+    expect(result.fatal).toBeNull()
+    expect(result.warnings).toEqual([])
+    expect(result.missingOptional).toEqual([])
+    for (const row of result.rows) expect(row).toMatchObject({ wmsLabel: '', sqLabel: '', count: null })
+  })
+
+  it('S6: as colunas de etiqueta e contagem continuam reconhecidas no cabeçalho (B8:O8)', async () => {
+    const result = await importFile({ rows: [r5Row({ wms: 'W', sqLabel: 'S', count: 3 })] })
+    expect(result.headerRange).toBe('B8:O8')
+    expect(result.rows).toHaveLength(1)
   })
 
   it('normaliza texto: espaços, NBSP e corte da descrição em 200', async () => {
@@ -323,13 +340,13 @@ describe('cabeçalho e colunas', () => {
   })
 
   it('coluna opcional ausente vai para missingOptional e o campo fica vazio', async () => {
-    const header = R5_HEADER.filter((label) => label !== 'ETIQUETA WMS')
-    const rows = [r5Row()].map((row) => row.filter((_, index) => index !== 7))
+    const header = R5_HEADER.filter((label) => label !== 'PESO DA EMB. (KG)')
+    const rows = [r5Row()].map((row) => row.filter((_, index) => index !== 12))
     const result = await importFile({ header, rows })
 
     expect(result.fatal).toBeNull()
-    expect(result.missingOptional).toEqual(['ETIQUETA WMS'])
-    expect(result.rows[0].wmsLabel).toBe('')
+    expect(result.missingOptional).toEqual(['PESO DA EMB. (KG)'])
+    expect(result.rows[0].packageWeightKg).toBeNull()
   })
 })
 

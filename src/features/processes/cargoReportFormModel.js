@@ -369,35 +369,94 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
   return { payload, errors }
 }
 
-// Conferência da logística: poda chaves de linhas que não existem mais e força booleanos.
-export function buildConferencePayload({ okByRowId, checkedByName, revision }, rows) {
-  const source = okByRowId && typeof okByRowId === 'object' ? okByRowId : {}
-  const next = {}
+// S6: o que é da logística no doc `conference`. Coluna nova "da logística" = 1 item aqui + 1 chave
+// nas rules (`isValidCargoReportConference`) + a fixture do audit-vault.
+// Mapas `{ [rowId]: boolean }` (OK? e contagem OK) e campos de texto por linha (etiquetas WMS e SQ).
+export const CONFERENCE_FLAG_MAPS = ['okByRowId', 'countOkByRowId']
+export const CONFERENCE_LABEL_FIELDS = ['wms', 'sq']
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key)
+}
+
+// Conferência da logística: poda chaves de linhas que não existem mais, força booleanos e corta
+// as etiquetas em 120 caracteres. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
+export function buildConferencePayload({ okByRowId, countOkByRowId, labelsByRowId, checkedByName, revision }, rows) {
+  const sources = { okByRowId, countOkByRowId }
+  const maps = Object.fromEntries(CONFERENCE_FLAG_MAPS.map((name) => [name, {}]))
+  const labels = {}
+  const labelSource = isPlainObject(labelsByRowId) ? labelsByRowId : {}
+
   for (const row of Array.isArray(rows) ? rows : []) {
     const id = row?.id
-    if (typeof id === 'string' && Object.prototype.hasOwnProperty.call(source, id)) next[id] = Boolean(source[id])
+    if (typeof id !== 'string') continue
+    for (const name of CONFERENCE_FLAG_MAPS) {
+      const source = isPlainObject(sources[name]) ? sources[name] : {}
+      if (hasOwn(source, id)) maps[name][id] = Boolean(source[id])
+    }
+    const entry = isPlainObject(labelSource[id]) ? labelSource[id] : null
+    if (!entry) continue
+    const clipped = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, clip(entry[field], CARGO_REPORT_LIMITS.text)]))
+    if (CONFERENCE_LABEL_FIELDS.some((field) => clipped[field] !== '')) labels[id] = clipped
   }
 
   return {
     schemaVersion: CARGO_REPORT_SCHEMA_VERSION,
     revision: (Number.isInteger(revision) && revision >= 0 ? revision : 0) + 1,
-    okByRowId: next,
+    okByRowId: maps.okByRowId,
+    countOkByRowId: maps.countOkByRowId,
+    labelsByRowId: labels,
     checkedByName: clip(checkedByName, CARGO_REPORT_LIMITS.text),
   }
 }
 
-// Conferência lida do doc (chave órfã é ignorada na leitura pela tela).
-export function fromConferenceDoc(data) {
-  const doc = data && typeof data === 'object' ? data : {}
-  const okByRowId = {}
-  if (doc.okByRowId && typeof doc.okByRowId === 'object') {
-    for (const [id, value] of Object.entries(doc.okByRowId)) {
-      if (typeof value === 'boolean') okByRowId[id] = value
+function readFlagMap(value) {
+  const result = {}
+  if (isPlainObject(value)) {
+    for (const [id, flag] of Object.entries(value)) {
+      if (typeof flag === 'boolean') result[id] = flag
     }
   }
+  return result
+}
+
+function readLabelsMap(value) {
+  const result = {}
+  if (!isPlainObject(value)) return result
+  for (const [id, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) continue
+    result[id] = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, readText(entry[field], CARGO_REPORT_LIMITS.text)]))
+  }
+  return result
+}
+
+// Conferência anterior à S6 (sem a chave `labelsByRowId`): as etiquetas que o COMEX digitou nas linhas
+// do `current` pré-preenchem a tela. A 1ª gravação da conferência as persiste; `count` antigo (número
+// de embalagens) não tem tradução para "Contagem OK" e é ignorado.
+function labelsFromLegacyRows(legacyRows) {
+  const result = {}
+  for (const row of Array.isArray(legacyRows) ? legacyRows : []) {
+    const id = typeof row?.id === 'string' ? row.id : ''
+    if (!id) continue
+    const wms = readText(row.wmsLabel, CARGO_REPORT_LIMITS.text)
+    const sq = readText(row.sqLabel, CARGO_REPORT_LIMITS.text)
+    if (wms || sq) result[id] = { wms, sq }
+  }
+  return result
+}
+
+// Conferência lida do doc (chave órfã é ignorada na leitura pela tela).
+export function fromConferenceDoc(data, legacyRows = []) {
+  const doc = isPlainObject(data) ? data : {}
   return {
     revision: Number.isInteger(doc.revision) && doc.revision >= 0 ? doc.revision : 0,
-    okByRowId,
+    okByRowId: readFlagMap(doc.okByRowId),
+    countOkByRowId: readFlagMap(doc.countOkByRowId),
+    labelsByRowId: hasOwn(doc, 'labelsByRowId') ? readLabelsMap(doc.labelsByRowId) : labelsFromLegacyRows(legacyRows),
     checkedByName: readText(doc.checkedByName, CARGO_REPORT_LIMITS.text),
     updatedAt: toDateOrNull(doc.updatedAt),
     updatedByName: readText(doc.updatedByName, CARGO_REPORT_LIMITS.text),
