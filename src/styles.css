@@ -23856,3 +23856,471 @@ body {
 .ipc-preview__actions {
   margin-top: 0;
 }
+
+/* ============================================================
+   S3 DO RELATORIO DE CARGA - FORMULARIO FR.CMX.001 (prefixo crf-)
+   Mock aprovado (quadros s3-form / s3-readonly / s3-mobile). Somente tokens
+   do tema: nenhuma cor literal, o tema escuro vem dos proprios tokens.
+   Bloco APPEND-ONLY: o responsivo (<= 1040px) esta em mobile-redesign.css.
+   ============================================================ */
+.crf-wrap {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.crf-wrap > * {
+  min-width: 0;
+}
+
+.crf-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: -4px;
+}
+
+.crf-top h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-headline);
+  color: var(--ink);
+}
+
+.crf-back {
+  padding-left: 6px;
+}
+
+.crf-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+}
+
+.crf-card h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-heading);
+  font-size: var(--fs-headline);
+  color: var(--ink);
+}
+
+.crf-card .sub {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.crf-head .sub {
+  margin: 0;
+}
+
+.crf-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.crf-note {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+}
+
+.crf-note--info {
+  background: var(--primary-50);
+  border-color: var(--border-strong);
+  color: var(--success-700);
+}
+
+.crf-note--warn {
+  background: var(--warning-50);
+  border-color: var(--warning);
+  color: var(--warning-700);
+}
+
+.crf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+/* Cabecalho em grade de 3 colunas (DUIMP / Tipo de carga / Titulo), controles de mesma
+   altura e dica de altura fixa abaixo de cada um. */
+.crf-grid.top {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 24px;
+}
+
+.crf-field {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+div.crf-field {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.crf-field input,
+.crf-field select,
+.crf-field textarea {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-subhead);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.crf-field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.crf-field input:disabled,
+.crf-field select:disabled,
+.crf-field textarea:disabled {
+  border-color: var(--border);
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+.crf-grid.top input {
+  height: 42px;
+  min-height: 42px;
+}
+
+.crf-field .auto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 14px;
+  color: var(--primary-700);
+  font-size: var(--fs-caption-2);
+  font-weight: 600;
+  line-height: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.crf-field .auto.muted {
+  color: var(--text-muted);
+}
+
+.crf-field > label {
+  margin: 0;
+}
+
+.crf-field--notes {
+  margin-top: 12px;
+}
+
+.crf-radios {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.crf-radio {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.crf-radio input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.crf-radio i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-control);
+  border-radius: 50%;
+}
+
+.crf-radio.on {
+  border-color: var(--primary-700);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.crf-radio.on i {
+  border-color: var(--primary-700);
+  background: radial-gradient(var(--primary-700) 45%, var(--surface) 50%);
+}
+
+.crf-radio:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.crf-radio.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.crf-tw {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+table.crf {
+  width: 100%;
+  min-width: 1480px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-footnote);
+}
+
+.crf th {
+  padding: 8px;
+  background: var(--navy);
+  color: var(--sidebar-ink);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1.25;
+  text-align: left;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.crf th.calc {
+  background: color-mix(in srgb, var(--navy) 72%, var(--info));
+}
+
+.crf td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.crf td.calc {
+  padding: 5px 9px;
+  background: var(--bg-tint-1);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.crf td.calc.empty {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.crf-text {
+  font-size: var(--fs-footnote);
+  overflow-wrap: anywhere;
+}
+
+.crf input.c {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-footnote);
+}
+
+.crf td.num input {
+  text-align: right;
+}
+
+.crf td.num .crf-text {
+  display: block;
+  text-align: right;
+}
+
+.crf td.warn input.c {
+  border-color: var(--warning);
+  background: var(--warning-50);
+}
+
+.crf td.err input.c {
+  border-color: var(--danger);
+  background: var(--danger-50);
+}
+
+.crf .okcol {
+  text-align: center;
+}
+
+.crf .chk {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-control);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--surface);
+  font-size: var(--fs-footnote);
+  line-height: 1;
+}
+
+.crf .chk.on {
+  border-color: var(--primary-700);
+  background: var(--primary-700);
+}
+
+.crf .chk.edit {
+  cursor: pointer;
+  box-shadow: 0 0 0 3px var(--sidebar-pill-active);
+}
+
+.crf td.okcol-edit {
+  background: var(--primary-50);
+}
+
+.crf tr.free td {
+  padding: 0;
+  background: var(--surface-alt);
+  text-align: center;
+}
+
+.crf-free {
+  width: 100%;
+  padding: 7px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-caption-2);
+  cursor: pointer;
+}
+
+.crf-free:hover {
+  color: var(--primary-700);
+}
+
+.crf td .hint,
+.crf-pair .hint {
+  display: block;
+  margin-top: 3px;
+  color: var(--warning-700);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+}
+
+.crf td .hint.r,
+.crf-pair .hint.r {
+  color: var(--danger-700);
+}
+
+.crf-leg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.crf-leg b {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.crf-leg__calc {
+  background: color-mix(in srgb, var(--navy) 72%, var(--info));
+}
+
+.crf-leg__warn {
+  border: 1px solid var(--warning);
+  background: var(--warning-50);
+}
+
+.crf-leg__ok {
+  border: 2px solid var(--primary-700);
+  background: var(--primary-50);
+}
+
+.crf-foot {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.crf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crf-bar .l,
+.crf-bar .r {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.crf-bar .docs-note {
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-wrap .error-banner,
+.crf-wrap .success-banner {
+  margin-bottom: 0;
+}

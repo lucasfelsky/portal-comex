@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDateTime } from '../../utils/dateFormat'
 import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { isFirebaseConfigured } from '../../lib/firebase'
@@ -41,6 +41,10 @@ import {
 import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
 import { canSeePurchaseOrderDetailsForRole, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { isShipmentConfirmed } from './shipmentConfirmation'
+import { canEditCargoReport, canOpenCargoReport } from './cargoReportFormModel'
+
+// S3 do Relatorio de Carga: o formulario (com repositorio e catalogo) so' carrega ao abrir.
+const CargoReportForm = lazy(() => import('./CargoReportForm'))
 
 // F18b-2 (design aprovado - canvas Claude Design M8NdiBoZfvbmJxVY5oZL6e):
 // reescrita da aba "Documentos" (rodada 3: fidelidade visual aos artboards
@@ -160,6 +164,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [dragOverKey, setDragOverKey] = useState('')
   const [pendingCombine, setPendingCombine] = useState({})
   const [linkBusyKey, setLinkBusyKey] = useState('')
+  const [isCargoFormOpen, setIsCargoFormOpen] = useState(false)
 
   // As chaves de `pendingCombine` sao genericas (`invoice`, `invoice:<po>`):
   // trocar de processo no mesmo painel nao pode herdar a escolha nao salva.
@@ -653,6 +658,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     onPreview = null,
     extraContent = null,
     includedInInvoice = null,
+    primaryAction = null,
   }) {
     const primary = group?.primary ?? null
     const previous = group?.previous ?? null
@@ -713,6 +719,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               )}
           </div>
           <div className="documents-row__actions">
+            {primaryAction}
             {includedInInvoice ? (
               <>
                 <button
@@ -782,7 +789,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 />
                 <button
                   type="button"
-                  className={primary ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
+                  className={primary || primaryAction ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
                   aria-label={primary ? `Substituir ${title}` : uploadLabel}
                   title={primary ? `Substituir ${title}` : uploadLabel}
                   disabled={isRowUploading}
@@ -1061,6 +1068,23 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     )
   }
 
+  // S3 do Relatorio de Carga: o formulario ocupa o lugar da lista; ao fechar, recarrega os documentos.
+  if (isCargoFormOpen) {
+    return (
+      <Suspense fallback={<Skeleton variant="card" />}>
+        <CargoReportForm
+          process={process}
+          profile={profile}
+          variant={variant}
+          onClose={() => {
+            setIsCargoFormOpen(false)
+            setReloadToken((token) => token + 1)
+          }}
+        />
+      </Suspense>
+    )
+  }
+
   const isEmptyDocuments = documents.length === 0
   const showLoadedContent = !isLoading && !loadError
   const visibilityNote = `Visível para COMEX e logística (Relatório de carga e COA Original também para Técnico e Faturamento/fiscal) · PDF, Excel, Word ou imagem até ${MAX_DOCUMENT_MB} MB`
@@ -1209,6 +1233,16 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                           setIsPreviewOpen(true)
                         }
                       : null,
+                  ...(type === 'cargoReport' && !isReadOnlyViewer && canOpenCargoReport(role)
+                    ? {
+                        primaryAction: (
+                          <button type="button" className="primary-button" onClick={() => setIsCargoFormOpen(true)}>
+                            {canEditCargoReport(role) ? 'Preencher no Portal' : 'Conferir relatório'}
+                          </button>
+                        ),
+                        ...(canEditCargoReport(role) ? { uploadLabel: 'Enviar arquivo' } : {}),
+                      }
+                    : {}),
                   // Pendente (embarque confirmado) so para BL/Relatorio de carga e so
                   // para quem envia; COA Original nunca vira pendencia (D-4).
                   ...(shipmentConfirmed && !isReadOnlyViewer && type !== 'coaOriginal'

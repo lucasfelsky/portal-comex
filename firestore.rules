@@ -770,6 +770,100 @@ service cloud.firestore {
         && request.resource.data.descriptionUpdatedById == request.auth.uid;
     }
 
+    // S3 do Relatorio de Carga (FR.CMX.001 rev. 005): formulario preenchido no
+    // Portal. `current` = preenchimento do COMEX (so' admin grava); `conference`
+    // = coluna OK? + "Conferido por" (admin e logistica gravam), em doc separado
+    // para a conferencia nao conflitar com quem esta editando. Colunas calculadas
+    // (lote SQ, peso liquido, no de embalagens) NAO sao gravadas.
+    // `revision` e' trava otimista: gravar sobre revisao antiga e' negado.
+    // Rules nao iteram listas: so' tamanho e shape de rows[0]; o cliente
+    // (src/features/processes/cargoReportFormModel.js) normaliza cada linha.
+    // Limpeza: cleanupDeletedProcessData (recursiveDelete do processo).
+    function isValidCargoReportCurrent(processId) {
+      return request.resource.data.keys().hasOnly([
+        'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
+        'cargoType', 'titleSuffix', 'rows', 'notes', 'labeledBy', 'labelMadeBy',
+        'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
+        'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
+      ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
+          'cargoType', 'titleSuffix', 'rows', 'notes', 'labeledBy', 'labelMadeBy',
+          'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
+          'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
+        ])
+        && exists(/databases/$(database)/documents/processes/$(processId))
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.formCode == 'FR.CMX.001'
+        && request.resource.data.formRevision == '005'
+        && request.resource.data.revision is int
+        && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
+        && request.resource.data.status in ['rascunho', 'concluido']
+        && request.resource.data.cargoType in ['', 'FCL', 'LCL', 'CONSOLIDADO', 'AEREO']
+        && request.resource.data.titleSuffix is string
+        && request.resource.data.titleSuffix.size() <= 120
+        && request.resource.data.rows is list
+        && request.resource.data.rows.size() <= 28
+        && (request.resource.data.rows.size() == 0
+          || (request.resource.data.rows[0] is map
+            && request.resource.data.rows[0].keys().hasAll([
+              'id', 'po', 'dbcorpCode', 'supplierDescription', 'sqDescription',
+              'supplierLot', 'wmsLabel', 'sqLabel', 'quantityKg', 'count',
+              'packageWeightKg', 'frozenNetWeightKg', 'frozenPackages',
+            ])
+            && request.resource.data.rows[0].keys().size() == 13
+            && request.resource.data.rows[0].id is string
+            && request.resource.data.rows[0].id.size() >= 1
+            && request.resource.data.rows[0].id.size() <= 64))
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 2000
+        && request.resource.data.labeledBy is string
+        && request.resource.data.labeledBy.size() <= 120
+        && request.resource.data.labelMadeBy is string
+        && request.resource.data.labelMadeBy.size() <= 120
+        && request.resource.data.nfNumber is string
+        && request.resource.data.nfNumber.size() <= 40
+        && request.resource.data.receiptStatus in ['', 'com_ressalva', 'sem_ressalva']
+        && request.resource.data.receivedDate is string
+        && (request.resource.data.receivedDate == ''
+          || request.resource.data.receivedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && request.resource.data.completedDate is string
+        && (request.resource.data.completedDate == ''
+          || request.resource.data.completedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && request.resource.data.catalogVersion is int
+        && request.resource.data.catalogVersion >= 0
+        && (request.resource.data.lastGenerated == null
+          || (request.resource.data.lastGenerated is map
+            && request.resource.data.lastGenerated.keys().hasAll(['documentId', 'revision', 'at', 'byId'])
+            && request.resource.data.lastGenerated.keys().size() == 4))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedById == request.auth.uid
+        && request.resource.data.updatedByName == myName();
+    }
+
+    function isValidCargoReportConference(processId) {
+      return request.resource.data.keys().hasOnly([
+        'schemaVersion', 'revision', 'okByRowId', 'checkedByName',
+        'updatedAt', 'updatedById', 'updatedByName',
+      ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion', 'revision', 'okByRowId', 'checkedByName',
+          'updatedAt', 'updatedById', 'updatedByName',
+        ])
+        && exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/current)
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.revision is int
+        && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
+        && request.resource.data.okByRowId is map
+        && request.resource.data.okByRowId.size() <= 28
+        && request.resource.data.okByRowId.values().hasOnly([true, false])
+        && request.resource.data.checkedByName is string
+        && request.resource.data.checkedByName.size() <= 120
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedById == request.auth.uid
+        && request.resource.data.updatedByName == myName();
+    }
+
     match /processes/{processId} {
       allow read: if isApprovedUser();
       allow create: if isAdmin()
@@ -832,6 +926,20 @@ service cloud.firestore {
         allow update: if isAdmin() && (isValidInvoicePackingListLinkUpdate() || isValidAdditionalDocumentRenameUpdate());
         allow delete: if isAdmin()
           || (isLogistics() && resource.data.uploadedById == request.auth.uid);
+      }
+
+      // S3 do Relatorio de Carga: docs nomeados (outros ids caem no catch-all).
+      // Tecnico/Faturamento NAO leem (so' veem o arquivo anexado em documents).
+      match /cargoReport/current {
+        allow read: if isAdmin() || isLogistics();
+        allow create, update: if isAdmin() && isValidCargoReportCurrent(processId);
+        allow delete: if false;
+      }
+
+      match /cargoReport/conference {
+        allow read: if isAdmin() || isLogistics();
+        allow create, update: if (isAdmin() || isLogistics()) && isValidCargoReportConference(processId);
+        allow delete: if false;
       }
     }
 

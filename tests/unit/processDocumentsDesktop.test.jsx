@@ -31,6 +31,17 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 vi.mock('../../src/services/processEventsRepository', () => ({
   listProcessEvents: vi.fn().mockResolvedValue([]),
 }))
+// S3 do Relatório de Carga: o formulário é lazy e tem testes próprios
+// (tests/unit/cargoReportFormView.test.jsx); aqui só importa a entrada no painel e a volta à lista.
+vi.mock('../../src/features/processes/CargoReportForm', () => ({
+  default: ({ onClose }) => (
+    <div data-testid="cargo-report-form">
+      <button type="button" onClick={onClose}>
+        ‹ Documentos
+      </button>
+    </div>
+  ),
+}))
 
 import ProcessDocumentsPanel from '../../src/features/processes/ProcessDocumentsPanel'
 import ProcessDetailView from '../../src/features/processes/ProcessDetailView'
@@ -325,5 +336,89 @@ describe('F4c - Documentos dentro do detalhe desktop', () => {
     await loaded()
     expect(container.querySelector('.documents-summary__hint')).not.toBeNull()
     expect(container.querySelector('.documents-section__note')).toBeNull()
+  })
+})
+
+// S3 do Relatório de Carga: botão de entrada do formulário na linha "Relatório de carga".
+describe('S3 - Documentos: entrada do formulário do Relatório de carga', () => {
+  const rowOf = (title) =>
+    screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  const cargoDoc = () =>
+    doc({
+      id: 'c1',
+      type: 'cargoReport',
+      slotKey: 'cargoReport',
+      name: 'rel.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+  it('admin vê "Preencher no Portal" na linha, com e sem arquivo', async () => {
+    const { unmount } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+    expect(within(rowOf('Relatório de carga')).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
+    unmount()
+
+    mockListProcessDocuments.mockResolvedValue([...DOCS, cargoDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Substituir Relatório de carga' })).toBeInTheDocument()
+  })
+
+  it('sem arquivo, o envio do admin vira "Enviar arquivo" e o botão novo vem primeiro', async () => {
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getAllByRole('button')[0]).toHaveTextContent('Preencher no Portal')
+    expect(within(row).getByRole('button', { name: 'Enviar arquivo' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument()
+  })
+
+  it('logística vê "Conferir relatório" e não vê "Substituir" nem "Preencher no Portal"', async () => {
+    mockListProcessDocuments.mockResolvedValue([...DOCS, cargoDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={LOGISTICA} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByRole('button', { name: 'Conferir relatório' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /Substituir/ })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
+  })
+
+  it.each(['tecnico', 'faturamento'])('%s não vê nenhum dos dois botões', async (role) => {
+    mockListProcessDocuments.mockResolvedValue([cargoDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={{ uid: 'l-1', name: 'Leitor', role }} variant="desktop" />)
+    await loaded()
+
+    expect(screen.queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Conferir relatório' })).not.toBeInTheDocument()
+  })
+
+  it('BL, Invoice e COA Original não ganham o botão', async () => {
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    expect(screen.getAllByRole('button', { name: 'Preencher no Portal' })).toHaveLength(1)
+    for (const title of ['BL/AWB', 'Invoice', 'COA Original']) {
+      expect(within(rowOf(title)).queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
+    }
+  })
+
+  it('clicar abre o formulário no lugar da lista e "‹ Documentos" volta recarregando', async () => {
+    const user = userEvent.setup()
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+    const loadsBefore = mockListProcessDocuments.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Preencher no Portal' }))
+    expect(await screen.findByTestId('cargo-report-form')).toBeInTheDocument()
+    expect(screen.queryByText('Documentos do processo')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '‹ Documentos' }))
+    expect(await screen.findByText('Documentos do processo')).toBeInTheDocument()
+    expect(screen.queryByTestId('cargo-report-form')).not.toBeInTheDocument()
+    await waitFor(() => expect(mockListProcessDocuments.mock.calls.length).toBeGreaterThan(loadsBefore))
   })
 })
