@@ -44,6 +44,45 @@ describe('firestore.rules structure', () => {
     it('nao declara match curinga em config (so o doc cargoReportRecipients e aberto)', () => {
       expect(rules).not.toMatch(/match\s+\/config\/\{/)
     })
+
+    // S2 do Relatorio de Carga: tabela mestra "Item x Emb." em doc unico. Admin grava,
+    // admin e logistica leem; nenhum curinga em cargoReportCatalog (demais ids no catch-all).
+    it('declara match /cargoReportCatalog/itemPackaging com leitura admin/logistica e escrita admin validada', () => {
+      const block = rules.match(/match\s+\/cargoReportCatalog\/itemPackaging\s*\{[^}]*\}/)
+      expect(block).not.toBeNull()
+      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
+      expect(block[0]).toMatch(
+        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidItemPackagingCatalog\(\)\s*;/
+      )
+      expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('nao declara match curinga em cargoReportCatalog (so o doc itemPackaging e aberto)', () => {
+      expect(rules).not.toMatch(/match\s+\/cargoReportCatalog\/\{/)
+    })
+
+    it('isValidItemPackagingCatalog: hasOnly + hasAll das 10 chaves, limites, autoria e trava de versao', () => {
+      const fn = rules.match(/function\s+isValidItemPackagingCatalog\s*\(\s*\)\s*\{[\s\S]*?\n\s{4}\}/)
+      expect(fn).not.toBeNull()
+      const body = fn[0]
+      const keys = [
+        'schemaVersion', 'version', 'items', 'itemCount', 'sourceFileName',
+        'sourceSheetName', 'sourceSha256', 'importedAt', 'importedById', 'importedByName',
+      ]
+      const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
+      const all = body.match(/keys\(\)\.hasAll\(\[([^\]]*)\]\)/)
+      expect(only).not.toBeNull()
+      expect(all).not.toBeNull()
+      const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
+      expect(parse(only)).toEqual([...keys].sort())
+      expect(parse(all)).toEqual([...keys].sort())
+      expect(body).toMatch(/items\.size\(\)\s*<=\s*5000/)
+      expect(body).toMatch(/itemCount\s*==\s*request\.resource\.data\.items\.size\(\)/)
+      expect(body).toMatch(/importedAt\s*==\s*request\.time/)
+      expect(body).toMatch(/importedById\s*==\s*request\.auth\.uid/)
+      expect(body).toMatch(/resource\.data\.version\s*\+\s*1/)
+      expect(body).toMatch(/sourceSha256\.matches\('\^\[0-9a-f\]\{64\}\$'\)/)
+    })
   })
 
   describe('funcoes auxiliares (S3 / custom claims)', () => {

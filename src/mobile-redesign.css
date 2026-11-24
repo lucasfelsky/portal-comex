@@ -6117,3 +6117,43 @@
     text-align: center;
   }
 }
+
+/* -- Admin > Relatorio de Carga > tabela Item x Emb. (S2), mobile.
+   Prefixo ipc-, APPEND-ONLY. Ate 1040px: botoes com alvo de toque de 44px.
+   Ate 720px (mesma faixa do bottom sheet do Modal): a previa abre num <Modal>
+   (portal em document.body, fora do .page-fade) e o Modal ja faz a folha
+   inferior; aqui so' tabela rolavel e botoes em largura total. -- */
+@media (max-width: 1040px) {
+  .ipc-card .action-row .primary-button,
+  .ipc-preview .action-row .primary-button,
+  .ipc-preview .action-row .secondary-button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 720px) {
+  .ipc-card .ipc-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ipc-preview .ipc-table-wrap {
+    max-height: 260px;
+  }
+
+  .ipc-preview .ipc-table {
+    min-width: 560px;
+  }
+
+  .ipc-preview .ipc-preview__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .ipc-preview .ipc-preview__actions .primary-button,
+  .ipc-preview .ipc-preview__actions .secondary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

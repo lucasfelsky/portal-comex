@@ -4375,6 +4375,142 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  // S2 do Relatorio de Carga: tabela mestra "Item x Emb." (doc unico cargoReportCatalog/itemPackaging).
+  // Admin grava (create version 1; update version atual + 1 = trava otimista); admin e logistica leem.
+  // Rules nao iteram listas: so' o shape, a contagem e o 1o item sao validados aqui.
+  describe('cargoReportCatalog/itemPackaging (S2)', () => {
+    const PATH = 'cargoReportCatalog/itemPackaging'
+    const ADMIN_UID = 'admin-1'
+    const SHA = 'a'.repeat(64)
+    const item = (index = 0) => ({
+      code: `AA${String(index).padStart(4, '0')}`,
+      description: `ITEM ${index}`,
+      packagingType: index % 2 === 0 ? 'BALDE' : '',
+      netWeightKg: index % 2 === 0 ? 5 : null,
+    })
+    const items = (count) => Array.from({ length: count }, (_, index) => item(index))
+    const valid = (overrides = {}) => {
+      const list = overrides.items ?? items(3)
+      return {
+        schemaVersion: 1,
+        version: 1,
+        items: list,
+        itemCount: list.length,
+        sourceFileName: 'FR.CMX.001 - RELATORIO DE CARGA.R5.xlsx',
+        sourceSheetName: 'Item x Emb.',
+        sourceSha256: SHA,
+        importedAt: serverTimestamp(),
+        importedById: ADMIN_UID,
+        importedByName: 'Admin',
+        ...overrides,
+      }
+    }
+    const seedDoc = (version = 1) =>
+      seed((db) => setDoc(doc(db, PATH), { ...valid({ version }), importedAt: new Date('2026-11-01T10:00:00Z') }))
+    const tecnico = () =>
+      testEnv
+        .authenticatedContext('tec-1', { email: 'tec@sqquimica.com', role: 'tecnico', status: 'Ativo', name: 'Tecnico' })
+        .firestore()
+
+    it('admin le com o doc ausente e presente; logistica le o doc presente', async () => {
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+      await seedDoc()
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+      await assertSucceeds(getDoc(doc(logistics(), PATH)))
+    })
+
+    it('user aprovado, tecnico e anonimo nao leem', async () => {
+      await seedDoc()
+      for (const db of [approvedUser(), tecnico(), anon()]) {
+        await assertFails(getDoc(doc(db, PATH)))
+      }
+    })
+
+    it('logistica, user aprovado, tecnico e anonimo nao gravam', async () => {
+      for (const db of [logistics(), approvedUser(), tecnico(), anon()]) {
+        await assertFails(setDoc(doc(db, PATH), valid()))
+      }
+      await seedDoc()
+      for (const db of [logistics(), approvedUser(), tecnico(), anon()]) {
+        await assertFails(setDoc(doc(db, PATH), valid({ version: 2 })))
+      }
+    })
+
+    it('admin Pendente e admin com e-mail nao corporativo nao leem nem gravam', async () => {
+      await seedDoc()
+      for (const db of [admin('admin-p', { status: 'Pendente' }), admin('admin-x', { email: 'admin@gmail.com' })]) {
+        await assertFails(getDoc(doc(db, PATH)))
+        await assertFails(setDoc(doc(db, PATH), valid({ version: 2, importedById: 'admin-p' })))
+      }
+    })
+
+    it('admin cria com version 1; create com version 2 falha', async () => {
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid()))
+      await seed((db) => deleteDoc(doc(db, PATH)))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 2 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 0 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 1.5 })))
+    })
+
+    it('trava otimista: update exige version atual + 1', async () => {
+      await seedDoc(3)
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 3 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 5 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 1 })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ version: 4 })))
+    })
+
+    it('falham: campo extra, chave faltando e itemCount divergente', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), { ...valid(), extra: 'x' }))
+      const missing = valid()
+      delete missing.sourceSheetName
+      await assertFails(setDoc(doc(admin(), PATH), missing))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ itemCount: 4 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ schemaVersion: 2 })))
+    })
+
+    it('falham: lista vazia, 5001 itens, item 0 com chave extra, sem code string ou com chave faltando', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: [] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: items(5001) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: [{ ...item(0), extra: 1 }, item(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: [{ ...item(0), code: 42 }, item(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: [{ description: 'x', packagingType: '', netWeightKg: null }] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: [{ code: 'AA0001', description: 'x', packagingType: '' }] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ items: ['AA0001'] })))
+    })
+
+    it('5000 itens pequenos passam', async () => {
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ items: items(5000) })))
+    })
+
+    it('falham: sourceSha256 maiusculo, curto ou nao-string; arquivo e aba fora do limite', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceSha256: 'A'.repeat(64) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceSha256: 'a'.repeat(63) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceSha256: 42 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceFileName: '' })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceFileName: 'x'.repeat(256) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ sourceSheetName: 'x'.repeat(65) })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ sourceFileName: 'x'.repeat(255), sourceSheetName: 'x'.repeat(64) })))
+    })
+
+    it('falham: importedById de outro uid, importedAt literal e importedByName com 121 chars', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ importedById: 'outro-uid' })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ importedAt: new Date('2026-11-01T10:00:00Z') })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ importedByName: 'x'.repeat(121) })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ importedByName: 'x'.repeat(120) })))
+    })
+
+    it('admin NAO deleta', async () => {
+      await seedDoc()
+      await assertFails(deleteDoc(doc(admin(), PATH)))
+    })
+
+    it('admin nao le nem grava outro doc de cargoReportCatalog (catch-all continua valendo)', async () => {
+      await assertFails(getDoc(doc(admin(), 'cargoReportCatalog/outroDoc')))
+      await assertFails(setDoc(doc(admin(), 'cargoReportCatalog/outroDoc'), valid()))
+    })
+  })
+
   describe('catch-all', () => {
     it('colecao desconhecida eh negada ate pra admin', async () => {
       await assertFails(getDoc(doc(admin(), 'colecaoAleatoria/x')))

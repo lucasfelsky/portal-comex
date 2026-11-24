@@ -23665,3 +23665,194 @@ body {
 .crr-actions {
   margin-top: 0;
 }
+
+/* ============================================================
+   Admin > Relatorio de Carga > tabela mestra "Item x Emb." (S2): card da versao
+   atual, previa da importacao (mudancas, erros e avisos) e estados de leitura.
+   Prefixo ipc-. APPEND-ONLY. A folha inferior do celular (<= 720px) e o ajuste
+   de grade (<= 1040px) moram no fim de mobile-redesign.css.
+   ============================================================ */
+.ipc-card,
+.ipc-preview {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.ipc-card > .card-heading,
+.ipc-preview > .card-heading {
+  margin-bottom: 0;
+}
+
+.ipc-card .error-banner,
+.ipc-card .success-banner,
+.ipc-preview .error-banner,
+.ipc-preview .success-banner {
+  margin-bottom: 0;
+}
+
+.ipc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.ipc-facts > div {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--surface-alt);
+}
+
+.ipc-facts dt {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: var(--fs-caption-2);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ipc-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ipc-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ipc-reading__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.ipc-preview h3:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-xs);
+}
+
+.ipc-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ipc-table-wrap {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.ipc-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-caption);
+}
+
+.ipc-table th {
+  position: sticky;
+  top: 0;
+  padding: 8px 10px;
+  background: var(--navy);
+  color: var(--sidebar-ink);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ipc-table td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.ipc-table tbody tr:nth-child(even) td {
+  background: var(--surface-alt);
+}
+
+.ipc-chg {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+}
+
+.ipc-chg--novo {
+  background: var(--success-50);
+  color: var(--success-700);
+}
+
+.ipc-chg--alterado {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.ipc-chg--removido {
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+
+.ipc-problems {
+  display: grid;
+  gap: 8px;
+}
+
+.ipc-problems__title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.ipc-problems__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ipc-problems__list li {
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-field);
+  font-size: var(--fs-footnote);
+  overflow-wrap: anywhere;
+}
+
+.ipc-problems__list--error li {
+  background: var(--danger-50);
+  border-color: var(--danger);
+  color: var(--danger-700);
+}
+
+.ipc-problems__list--warn li {
+  background: var(--warning-50);
+  border-color: var(--warning);
+  color: var(--warning-700);
+}
+
+.ipc-problems__list b {
+  font-family: var(--font-mono);
+}
+
+.ipc-preview__actions {
+  margin-top: 0;
+}

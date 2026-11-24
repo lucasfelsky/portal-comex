@@ -975,6 +975,54 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // S2 do Relatorio de Carga: tabela mestra "Item x Emb." (FR.CMX.001 rev. 005),
+    // importada pelo admin em /admin/relatorio-carga. Doc UNICO (~280 KB com
+    // 2.361 itens; teto de 1 MiB por doc). Admin grava; admin e logistica leem
+    // (o formulario da S3 calcula peso/no de embalagens na leitura).
+    // Rules nao iteram listas: aqui so' o shape do doc, a contagem, o 1o item, a
+    // autoria e a versao. Codigo/duplicado/peso de cada item sao validados no
+    // cliente (src/features/processes/cargoReportCatalog.js). LIMITACAO CONHECIDA:
+    // itens 2..N nao passam pela rule; so' admin ativo @sqquimica.com escreve.
+    // `version` e' trava otimista: import feito sobre uma versao antiga e' negado.
+    function isValidItemPackagingCatalog() {
+      return request.resource.data.keys().hasOnly([
+        'schemaVersion', 'version', 'items', 'itemCount', 'sourceFileName',
+        'sourceSheetName', 'sourceSha256', 'importedAt', 'importedById', 'importedByName',
+      ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion', 'version', 'items', 'itemCount', 'sourceFileName',
+          'sourceSheetName', 'sourceSha256', 'importedAt', 'importedById', 'importedByName',
+        ])
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.version is int
+        && request.resource.data.version == (resource == null ? 1 : resource.data.version + 1)
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1
+        && request.resource.data.items.size() <= 5000
+        && request.resource.data.itemCount == request.resource.data.items.size()
+        && request.resource.data.items[0] is map
+        && request.resource.data.items[0].keys().hasAll(['code', 'description', 'packagingType', 'netWeightKg'])
+        && request.resource.data.items[0].keys().size() == 4
+        && request.resource.data.items[0].code is string
+        && request.resource.data.sourceFileName is string
+        && request.resource.data.sourceFileName.size() >= 1
+        && request.resource.data.sourceFileName.size() <= 255
+        && request.resource.data.sourceSheetName is string
+        && request.resource.data.sourceSheetName.size() <= 64
+        && request.resource.data.sourceSha256 is string
+        && request.resource.data.sourceSha256.matches('^[0-9a-f]{64}$')
+        && request.resource.data.importedAt == request.time
+        && request.resource.data.importedById == request.auth.uid
+        && request.resource.data.importedByName is string
+        && request.resource.data.importedByName.size() <= 120;
+    }
+
+    match /cargoReportCatalog/itemPackaging {
+      allow read: if isAdmin() || isLogistics();
+      allow create, update: if isAdmin() && isValidItemPackagingCatalog();
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
