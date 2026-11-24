@@ -1605,6 +1605,8 @@ describe('F3 - consumidores de .ghost-button (secundario nao pode virar fantasma
   'features/admin/AdminUsersPanel.jsx': [8, 3, 0],
   'features/erp/ErpCreateProcessesPanel.jsx': [1, 0, 0],
   'features/erp/ErpReconcileModal.jsx': [2, 1, 0],
+  // S3: formulário FR.CMX.001 - fantasmas: "‹ Documentos" (voltar, como no mock), "Tentar novamente" e "Recarregar" (banners de erro).
+  'features/processes/CargoReportForm.jsx': [3, 0, 0],
   'features/processes/CollectionStatusEditView.jsx': [1, 0, 0],
   'features/processes/CollectionWindowsEditor.jsx': [2, 2, 0],
   'features/processes/ContainersEditor.jsx': [1, 1, 0],

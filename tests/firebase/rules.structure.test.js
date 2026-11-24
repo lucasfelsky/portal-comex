@@ -83,6 +83,94 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/resource\.data\.version\s*\+\s*1/)
       expect(body).toMatch(/sourceSha256\.matches\('\^\[0-9a-f\]\{64\}\$'\)/)
     })
+
+    // S3 do Relatorio de Carga: formulario FR.CMX.001 em 2 docs nomeados por processo.
+    // `current` so' admin grava; `conference` admin e logistica; Tecnico/Faturamento nao leem.
+    // Docs nomeados (e nao `match /cargoReport/{id}`) para o audit-vault-counts nao contar
+    // uma colecao top-level nova; qualquer outro id cai no catch-all (negado).
+    it('declara match /cargoReport/current (admin grava; admin e logistica leem) dentro de processes', () => {
+      const processes = rules.match(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*?\n {4}\}/)
+      expect(processes).not.toBeNull()
+      const block = processes[0].match(/match\s+\/cargoReport\/current\s*\{[^}]*\}/)
+      expect(block).not.toBeNull()
+      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
+      expect(block[0]).toMatch(
+        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidCargoReportCurrent\(processId\)\s*;/
+      )
+      expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('declara match /cargoReport/conference (admin e logistica gravam e leem) dentro de processes', () => {
+      const processes = rules.match(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*?\n {4}\}/)
+      expect(processes).not.toBeNull()
+      const block = processes[0].match(/match\s+\/cargoReport\/conference\s*\{[^}]*\}/)
+      expect(block).not.toBeNull()
+      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
+      expect(block[0]).toMatch(
+        /allow\s+create,\s*update:\s*if\s+\(isAdmin\(\)\s*\|\|\s*isLogistics\(\)\)\s*&&\s*isValidCargoReportConference\(processId\)\s*;/
+      )
+      expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('nao declara match curinga em cargoReport (so os docs current e conference sao abertos)', () => {
+      expect(rules).not.toMatch(/match\s+\/cargoReport\/\{/)
+    })
+
+    it('Tecnico e Faturamento nao leem cargoReport (leitura so admin/logistica)', () => {
+      const blocks = rules.match(/match\s+\/cargoReport\/(?:current|conference)\s*\{[^}]*\}/g)
+      expect(blocks).toHaveLength(2)
+      for (const block of blocks) {
+        expect(block).not.toMatch(/isDocumentReader|tecnico|faturamento/)
+      }
+    })
+
+    it('isValidCargoReportCurrent: hasOnly + hasAll das 20 chaves, limites, revisao e autoria', () => {
+      const fn = rules.match(/function\s+isValidCargoReportCurrent\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
+      expect(fn).not.toBeNull()
+      const body = fn[0]
+      const keys = [
+        'schemaVersion', 'formCode', 'formRevision', 'revision', 'status', 'cargoType', 'titleSuffix',
+        'rows', 'notes', 'labeledBy', 'labelMadeBy', 'receiptStatus', 'receivedDate', 'completedDate',
+        'nfNumber', 'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
+      ]
+      const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
+      const all = body.match(/request\.resource\.data\.keys\(\)\.hasAll\(\[([^\]]*)\]\)/)
+      expect(only).not.toBeNull()
+      expect(all).not.toBeNull()
+      const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
+      expect(parse(only)).toEqual([...keys].sort())
+      expect(parse(all)).toEqual([...keys].sort())
+      expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\)/)
+      expect(body).toMatch(/formCode\s*==\s*'FR\.CMX\.001'/)
+      expect(body).toMatch(/formRevision\s*==\s*'005'/)
+      expect(body).toMatch(/rows\.size\(\)\s*<=\s*28/)
+      expect(body).toMatch(/rows\[0\]\.keys\(\)\.size\(\)\s*==\s*13/)
+      expect(body).toMatch(/cargoType\s+in\s+\[\s*'',\s*'FCL',\s*'LCL',\s*'CONSOLIDADO',\s*'AEREO'\s*\]/)
+      expect(body).toMatch(/resource\s*==\s*null\s*\?\s*1\s*:\s*resource\.data\.revision\s*\+\s*1/)
+      expect(body).toMatch(/updatedAt\s*==\s*request\.time/)
+      expect(body).toMatch(/updatedById\s*==\s*request\.auth\.uid/)
+      expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
+    })
+
+    it('isValidCargoReportConference: hasOnly + hasAll das 7 chaves, okByRowId booleano e current existente', () => {
+      const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
+      expect(fn).not.toBeNull()
+      const body = fn[0]
+      const keys = ['schemaVersion', 'revision', 'okByRowId', 'checkedByName', 'updatedAt', 'updatedById', 'updatedByName']
+      const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
+      const all = body.match(/request\.resource\.data\.keys\(\)\.hasAll\(\[([^\]]*)\]\)/)
+      expect(only).not.toBeNull()
+      expect(all).not.toBeNull()
+      const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
+      expect(parse(only)).toEqual([...keys].sort())
+      expect(parse(all)).toEqual([...keys].sort())
+      expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\/cargoReport\/current\)/)
+      expect(body).toMatch(/okByRowId\.size\(\)\s*<=\s*28/)
+      expect(body).toMatch(/okByRowId\.values\(\)\.hasOnly\(\[\s*true,\s*false\s*\]\)/)
+      expect(body).toMatch(/checkedByName\.size\(\)\s*<=\s*120/)
+      expect(body).toMatch(/resource\s*==\s*null\s*\?\s*1\s*:\s*resource\.data\.revision\s*\+\s*1/)
+      expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
+    })
   })
 
   describe('funcoes auxiliares (S3 / custom claims)', () => {

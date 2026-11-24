@@ -6157,3 +6157,229 @@
     justify-content: center;
   }
 }
+
+/* S3 do Relatorio de Carga (formulario FR.CMX.001): cartoes por linha, grade de 2 colunas,
+   barra de acao fixa no rodape (a tab bar some com o detalhe aberto). Bloco APPEND-ONLY. */
+@media (max-width: 1040px) {
+  .crf-wrap {
+    gap: 12px;
+  }
+
+  .crf-card {
+    padding: 14px;
+  }
+
+  .crf-back {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  /* Itens: os cartoes por linha ja sao a moldura (mock s3-mobile); o titulo vem de "Itens (N de 28)". */
+  .crf-card--items {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .crf-card--items .crf-head > div:first-child {
+    display: none;
+  }
+
+  .crf-grid.top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .crf-radios {
+    flex-direction: column;
+  }
+
+  .crf-radio {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .crf-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .crf-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 0 -14px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .crf-bar .l:empty {
+    display: none;
+  }
+
+  .crf-bar .l,
+  .crf-bar .r {
+    width: 100%;
+  }
+
+  .crf-bar .r {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .crf-bar .primary-button,
+  .crf-bar .secondary-button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .crf-mobile {
+    display: grid;
+    gap: 12px;
+  }
+
+  .crf-mobile__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .crf-mobile__head h4 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: var(--fs-headline);
+    color: var(--ink);
+  }
+
+  .crf-mobile__head .secondary-button {
+    width: auto;
+    min-height: 44px;
+  }
+
+  .crf-rc {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .crf-rc.warn {
+    border-color: var(--warning);
+  }
+
+  .crf-rc__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .crf-rc__top b {
+    color: var(--ink);
+    font-size: var(--fs-subhead);
+    line-height: 1.3;
+  }
+
+  .crf-rc__top small {
+    display: block;
+    color: var(--text-muted);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+  }
+
+  .crf-rc__ok {
+    flex: 0 0 auto;
+    min-height: 44px;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+  }
+
+  .crf-rc__id summary {
+    color: var(--primary-700);
+    font-size: var(--fs-footnote);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .crf-rc__id-grid,
+  .crf-pairs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    margin-top: 8px;
+  }
+
+  .crf-rc__id-grid .crf-pair {
+    grid-column: 1 / -1;
+  }
+
+  .crf-pair {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .crf-pair--full {
+    grid-column: 1 / -1;
+  }
+
+  .crf-pair__label {
+    color: var(--text-muted);
+    font-size: var(--fs-caption-2);
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .crf-pair input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-field);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-subhead);
+    font-weight: 600;
+  }
+
+  .crf-pair input.w {
+    border-color: var(--warning);
+    background: var(--warning-50);
+  }
+
+  .crf-pair input.err {
+    border-color: var(--danger);
+    background: var(--danger-50);
+  }
+
+  .crf-calc {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 42px;
+    padding: 9px 10px;
+    border-radius: var(--radius-field);
+    background: var(--bg-tint-1);
+    color: var(--ink);
+    font-size: var(--fs-subhead);
+    font-weight: 700;
+  }
+
+  .crf-pair .crf-text {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    font-weight: 600;
+  }
+}

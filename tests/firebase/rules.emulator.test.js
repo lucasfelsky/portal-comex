@@ -4511,6 +4511,255 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  // S3 do Relatorio de Carga: formulario FR.CMX.001 em 2 docs nomeados por processo.
+  // `current` so' admin grava (revision = anterior + 1, trava otimista); `conference` admin e logistica
+  // (coluna OK? + "Conferido por"); Tecnico/Faturamento nao leem; outros ids caem no catch-all.
+  describe('processes/{id}/cargoReport (S3)', () => {
+    const PID = 'p-cr'
+    const CUR = `processes/${PID}/cargoReport/current`
+    const CONF = `processes/${PID}/cargoReport/conference`
+    const row = (index = 0, overrides = {}) => ({
+      id: `r-${index}`,
+      po: '4500123',
+      dbcorpCode: 'AD5240',
+      supplierDescription: 'DEA FOAM - BOMBONA 25KG',
+      sqDescription: 'DEA FOAM - BB 25KG',
+      supplierLot: 'DF2406A',
+      wmsLabel: '',
+      sqLabel: '',
+      quantityKg: 1000,
+      count: 10,
+      packageWeightKg: 1.2,
+      frozenNetWeightKg: null,
+      frozenPackages: null,
+      ...overrides,
+    })
+    const rows = (count) => Array.from({ length: count }, (_, index) => row(index))
+    const current = (overrides = {}) => ({
+      schemaVersion: 1,
+      formCode: 'FR.CMX.001',
+      formRevision: '005',
+      revision: 1,
+      status: 'rascunho',
+      cargoType: 'FCL',
+      titleSuffix: 'ACME SEA 021-26',
+      rows: rows(2),
+      notes: '',
+      labeledBy: '',
+      labelMadeBy: '',
+      nfNumber: '',
+      receiptStatus: '',
+      receivedDate: '',
+      completedDate: '',
+      catalogVersion: 3,
+      lastGenerated: null,
+      updatedAt: serverTimestamp(),
+      updatedById: 'admin-1',
+      updatedByName: 'Admin',
+      ...overrides,
+    })
+    const conference = (overrides = {}) => ({
+      schemaVersion: 1,
+      revision: 1,
+      okByRowId: { 'r-0': true, 'r-1': false },
+      checkedByName: 'Operador Logistica',
+      updatedAt: serverTimestamp(),
+      updatedById: 'log-1',
+      updatedByName: 'Logistica',
+      ...overrides,
+    })
+    const seedProcess = () => seed((db) => setDoc(doc(db, `processes/${PID}`), { name: 'ACME SEA 021-26' }))
+    const seedCurrent = async (revision = 1) => {
+      await seedProcess()
+      await seed((db) => setDoc(doc(db, CUR), { ...current({ revision }), updatedAt: new Date('2026-11-01T10:00:00Z') }))
+    }
+    const seedConference = (revision = 1) =>
+      seed((db) => setDoc(doc(db, CONF), { ...conference({ revision }), updatedAt: new Date('2026-11-01T11:00:00Z') }))
+    const roleDb = (role) =>
+      testEnv
+        .authenticatedContext(`${role}-1`, { email: `${role}@sqquimica.com`, role, status: 'Ativo', name: role })
+        .firestore()
+
+    describe('current', () => {
+      it('admin cria revision 1 e le; logistica le e NAO grava', async () => {
+        await seedProcess()
+        await assertSucceeds(setDoc(doc(admin(), CUR), current()))
+        await assertSucceeds(getDoc(doc(admin(), CUR)))
+        await assertSucceeds(getDoc(doc(logistics(), CUR)))
+        await assertFails(setDoc(doc(logistics('log-1'), CUR), current({ revision: 2, updatedById: 'log-1', updatedByName: 'Logistica' })))
+      })
+
+      it('tecnico e faturamento nao leem nem gravam', async () => {
+        await seedCurrent()
+        for (const role of ['tecnico', 'faturamento']) {
+          await assertFails(getDoc(doc(roleDb(role), CUR)))
+          await assertFails(setDoc(doc(roleDb(role), CUR), current({ revision: 2, updatedById: `${role}-1`, updatedByName: role })))
+        }
+      })
+
+      it('usuario aprovado e anonimo nao leem nem gravam', async () => {
+        await seedCurrent()
+        for (const db of [approvedUser(), anon()]) {
+          await assertFails(getDoc(doc(db, CUR)))
+          await assertFails(setDoc(doc(db, CUR), current({ revision: 2 })))
+        }
+      })
+
+      it('admin Pendente e admin com e-mail externo sao negados', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin('admin-1', { status: 'Pendente' }), CUR), current()))
+        await assertFails(setDoc(doc(admin('admin-1', { email: 'admin@gmail.com' }), CUR), current()))
+      })
+
+      it('revisao: create com 2 falha; update atual + 1 passa; igual ou + 2 falham', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 1 })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ revision: 1 })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ revision: 3 })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+      })
+
+      it('processo inexistente falha', async () => {
+        await assertFails(setDoc(doc(admin(), CUR), current()))
+      })
+
+      it('shape: campo extra, chave faltando, formCode/formRevision e status errados falham', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ extra: 1 })))
+        const { notes: _notes, ...semNotes } = current()
+        await assertFails(setDoc(doc(admin(), CUR), semNotes))
+        await assertFails(setDoc(doc(admin(), CUR), current({ formCode: 'FR.CMX.002' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ formRevision: '006' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ status: 'aberto' })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ status: 'concluido' })))
+      })
+
+      it('cargoType: AEREO passa, AÉREO (com acento) e valor desconhecido falham, vazio passa', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ cargoType: 'AÉREO' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ cargoType: 'RODOVIARIO' })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ cargoType: '', revision: 1 })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ cargoType: 'AEREO', revision: 2 })))
+      })
+
+      it('linhas: 29 falham e 28 passam; rows[0] com chave extra/faltando ou id vazio falha', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: rows(29) })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: [{ ...row(0), extra: 1 }] })))
+        const { po: _po, ...semPo } = row(0)
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: [semPo] })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: [row(0, { id: '' })] })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ rows: [row(0, { id: 'x'.repeat(65) })] })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: rows(28) })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: [], revision: 2 })))
+      })
+
+      it('datas, status do recebimento e limites de texto', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ receivedDate: '22/11/2026' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ completedDate: '2026-1-2' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ receiptStatus: 'conforme' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ titleSuffix: 'x'.repeat(121) })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ notes: 'x'.repeat(2001) })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ nfNumber: 'x'.repeat(41) })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ catalogVersion: -1 })))
+        await assertSucceeds(
+          setDoc(doc(admin(), CUR), current({ receivedDate: '2026-11-22', receiptStatus: 'com_ressalva', titleSuffix: 'x'.repeat(120) }))
+        )
+      })
+
+      it('autoria: uid de outro, updatedAt literal e nome diferente da claim falham', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ updatedById: 'outro-uid' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ updatedAt: new Date('2026-11-01T10:00:00Z') })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ updatedByName: 'Outro Nome' })))
+      })
+
+      it('lastGenerated: mapa com 4 chaves passa e com 3 falha', async () => {
+        await seedProcess()
+        const lastGenerated = { documentId: 'd1', revision: 1, at: 'x', byId: 'admin-1' }
+        await assertFails(setDoc(doc(admin(), CUR), current({ lastGenerated: { documentId: 'd1', revision: 1, at: 'x' } })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ lastGenerated })))
+      })
+
+      it('delete negado ate para admin; outro id em cargoReport cai no catch-all', async () => {
+        await seedCurrent()
+        await assertFails(deleteDoc(doc(admin(), CUR)))
+        await assertFails(getDoc(doc(admin(), `processes/${PID}/cargoReport/outro`)))
+        await assertFails(setDoc(doc(admin(), `processes/${PID}/cargoReport/outro`), current()))
+      })
+    })
+
+    describe('conference', () => {
+      it('sem current a criacao falha', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(logistics(), CONF), conference()))
+        await assertFails(setDoc(doc(admin(), CONF), conference({ updatedById: 'admin-1', updatedByName: 'Admin' })))
+      })
+
+      it('com current: logistica cria revision 1 e admin atualiza com + 1; ambos leem', async () => {
+        await seedCurrent()
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference()))
+        await assertSucceeds(getDoc(doc(logistics(), CONF)))
+        await assertSucceeds(getDoc(doc(admin(), CONF)))
+        await assertSucceeds(
+          setDoc(doc(admin(), CONF), conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin' }))
+        )
+      })
+
+      it('logistica atualiza a propria conferencia (+ 1); revisao errada falha', async () => {
+        await seedCurrent()
+        await seedConference(1)
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 1 })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 3 })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      it('create com revisao diferente de 1 falha', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      it('tecnico, faturamento, usuario aprovado e anonimo nao leem nem gravam', async () => {
+        await seedCurrent()
+        await seedConference(1)
+        for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+          await assertFails(getDoc(doc(db, CONF)))
+          await assertFails(setDoc(doc(db, CONF), conference({ revision: 2 })))
+        }
+      })
+
+      it('okByRowId: valor nao booleano e mais de 28 chaves falham; 28 passam', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: { 'r-0': 'sim' } })))
+        const ok = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, true]))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(29) })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(28) })))
+      })
+
+      it('checkedByName de 121 falha; shape com campo extra falha', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'x'.repeat(121) })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ extra: 1 })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'x'.repeat(120) })))
+      })
+
+      it('autoria: uid de outro e nome diferente da claim falham', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ updatedById: 'outro-uid' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ updatedByName: 'Outro Nome' })))
+      })
+
+      it('delete negado ate para admin', async () => {
+        await seedCurrent()
+        await seedConference(1)
+        await assertFails(deleteDoc(doc(admin(), CONF)))
+        await assertFails(deleteDoc(doc(logistics(), CONF)))
+      })
+    })
+  })
+
   describe('catch-all', () => {
     it('colecao desconhecida eh negada ate pra admin', async () => {
       await assertFails(getDoc(doc(admin(), 'colecaoAleatoria/x')))

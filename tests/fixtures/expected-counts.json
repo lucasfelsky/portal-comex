@@ -57,13 +57,14 @@
     "count": 12
   },
   "srcServices": {
-    "count": 22,
+    "count": 23,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
       "authRepository.js",
       "barStatusRepository.js",
       "cargoReportRecipientsRepository.js",
+      "cargoReportRepository.js",
       "erpReferenceRepository.js",
       "exchangeRatesRepository.js",
       "externalNewsRepository.js",
@@ -362,6 +363,37 @@
       "sourceSha256",
       "sourceSheetName",
       "version"
+    ],
+    "isValidCargoReportCurrent": [
+      "cargoType",
+      "catalogVersion",
+      "completedDate",
+      "formCode",
+      "formRevision",
+      "labelMadeBy",
+      "labeledBy",
+      "lastGenerated",
+      "nfNumber",
+      "notes",
+      "receiptStatus",
+      "receivedDate",
+      "revision",
+      "rows",
+      "schemaVersion",
+      "status",
+      "titleSuffix",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
+    ],
+    "isValidCargoReportConference": [
+      "checkedByName",
+      "okByRowId",
+      "revision",
+      "schemaVersion",
+      "updatedAt",
+      "updatedById",
+      "updatedByName"
     ]
   },
   "routes": {
