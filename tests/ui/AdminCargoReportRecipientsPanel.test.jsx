@@ -23,6 +23,10 @@ vi.mock('../../src/services/cargoReportRecipientsRepository', () => ({
   getCargoReportRecipients: (...args) => mockGetRecipients(...args),
   saveCargoReportRecipients: (...args) => mockSaveRecipients(...args),
 }))
+// Card da tabela Item x Emb. (S2) tem teste proprio (tests/unit/itemPackagingCatalogCard.test.jsx).
+vi.mock('../../src/features/admin/ItemPackagingCatalogCard', () => ({
+  default: () => <div data-testid="item-packaging-card" />,
+}))
 
 import AdminCargoReportRecipientsPanel from '../../src/features/admin/AdminCargoReportRecipientsPanel'
 
@@ -88,6 +92,22 @@ describe('AdminCargoReportRecipientsPanel', () => {
     renderPanel()
     expect(await screen.findByText(/Não foi possível carregar os destinatários/i)).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Técnico' })).not.toBeInTheDocument()
+  })
+
+  it('o card da tabela Item x Emb. aparece carregando, com erro e com os destinatários prontos', async () => {
+    let resolveGet
+    mockGetRecipients.mockReturnValueOnce(new Promise((resolve) => { resolveGet = resolve }))
+    const { unmount } = renderPanel()
+    expect(screen.getByTestId('item-packaging-card')).toBeInTheDocument()
+    resolveGet(LOADED)
+    await screen.findByRole('heading', { name: 'Técnico' })
+    expect(screen.getByTestId('item-packaging-card')).toBeInTheDocument()
+    unmount()
+
+    mockGetRecipients.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'permission-denied' }))
+    renderPanel()
+    expect(await screen.findByText(/Não foi possível carregar os destinatários/i)).toBeInTheDocument()
+    expect(screen.getByTestId('item-packaging-card')).toBeInTheDocument()
   })
 
   it('doc inexistente: banner e listas vazias', async () => {

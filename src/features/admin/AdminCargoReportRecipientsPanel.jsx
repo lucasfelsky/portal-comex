@@ -7,6 +7,7 @@ import {
 } from '../../services/cargoReportRecipientsRepository'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import CargoReportRecipientListCard from './CargoReportRecipientListCard'
+import ItemPackagingCatalogCard from './ItemPackagingCatalogCard'
 import {
   CARGO_REPORT_RECIPIENT_LISTS,
   isValidCargoReportRecipientEmail,
@@ -23,7 +24,7 @@ function areListsEqual(first, second) {
 }
 
 // Tela /admin/relatorio-carga: destinatários do aviso por e-mail quando um Relatório de Carga é
-// anexado (`config/cargoReportRecipients`); aqui só se editam as listas Técnico e Faturamento/fiscal.
+// anexado (`config/cargoReportRecipients`), mais a tabela mestra Item x Emb. (ItemPackagingCatalogCard).
 export default function AdminCargoReportRecipientsPanel() {
   const { profile } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
@@ -107,29 +108,22 @@ export default function AdminCargoReportRecipientsPanel() {
     }
   }
 
+  // Destinatários (loading/erro/listas): independentes do card da tabela Item x Emb., que sempre aparece.
+  let recipientsSection
+
   if (isLoading) {
-    return (
-      <div className="admin-panel admin-panel--cargo-report">
-        <div className="admin-panel-stack" role="status" aria-label="Carregando destinatários">
-          <Skeleton variant="card" style={{ height: 60 }} />
-          <Skeleton variant="card" style={{ height: 220 }} />
-          <Skeleton variant="card" style={{ height: 220 }} />
-        </div>
+    recipientsSection = (
+      <div className="admin-panel-stack" role="status" aria-label="Carregando destinatários">
+        <Skeleton variant="card" style={{ height: 60 }} />
+        <Skeleton variant="card" style={{ height: 220 }} />
+        <Skeleton variant="card" style={{ height: 220 }} />
       </div>
     )
-  }
-
-  if (loadError) {
-    return (
-      <div className="admin-panel admin-panel--cargo-report">
-        <div className="error-banner">{loadError}</div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="admin-panel admin-panel--cargo-report">
-      <div className="admin-panel-stack">
+  } else if (loadError) {
+    recipientsSection = <div className="error-banner">{loadError}</div>
+  } else {
+    recipientsSection = (
+      <>
         <p className="field-hint">
           Quem está nestas listas recebe o aviso por e-mail quando um Relatório de Carga é anexado a um
           processo.
@@ -194,6 +188,15 @@ export default function AdminCargoReportRecipientsPanel() {
             Descartar alterações
           </button>
         </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="admin-panel admin-panel--cargo-report">
+      <div className="admin-panel-stack">
+        {recipientsSection}
+        <ItemPackagingCatalogCard />
       </div>
     </div>
   )

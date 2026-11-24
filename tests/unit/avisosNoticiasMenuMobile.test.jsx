@@ -587,7 +587,7 @@ describe('F6 Menu (mobile)', () => {
       Previsões: '/admin/previsoes',
       'Lead time': '/admin/lead-time',
       'Chamados de suporte Chamados abertos pelos usuários': '/admin/suporte',
-      'Relatório de Carga Destinatários do aviso por e-mail': '/admin/relatorio-carga',
+      'Relatório de Carga Aviso por e-mail e tabela Item x Emb.': '/admin/relatorio-carga',
     }
     const groupEl = container.querySelector('.m-group')
     expect(within(groupEl).getAllByRole('button')).toHaveLength(7)

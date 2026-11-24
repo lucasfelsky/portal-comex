@@ -324,7 +324,7 @@ export default function AppLayout() {
             { id: 'go-admin-forecast', label: 'Regras de previsão', group: 'Admin', to: '/admin/previsoes', icon: 'sparkle' },
             { id: 'go-admin-lead-time', label: 'Lead time', group: 'Admin', to: '/admin/lead-time', icon: 'sparkle' },
             { id: 'go-admin-support', label: 'Suporte', group: 'Admin', to: '/admin/suporte', icon: 'help', keywords: ['chamado', 'bug', 'ticket'] },
-            { id: 'go-admin-cargo-report', label: 'Destinatários do Relatório de Carga', group: 'Admin', to: '/admin/relatorio-carga', icon: 'mail', keywords: ['relatório de carga', 'técnico', 'faturamento', 'e-mail', 'coa'] },
+            { id: 'go-admin-cargo-report', label: 'Destinatários do Relatório de Carga', group: 'Admin', to: '/admin/relatorio-carga', icon: 'mail', keywords: ['relatório de carga', 'técnico', 'faturamento', 'e-mail', 'coa', 'item x emb', 'embalagem', 'peso líquido'] },
             { id: 'go-intelliquote', label: 'IntelliQuote (suite SQ)', group: 'Externo', action: () => window.open(INTELLIQUOTE_WEB_URL, '_blank', 'noopener,noreferrer'), icon: 'external', keywords: ['quote', 'cotacao'] },
           ]
         : []),

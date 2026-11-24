@@ -57,7 +57,7 @@
     "count": 12
   },
   "srcServices": {
-    "count": 21,
+    "count": 22,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -69,6 +69,7 @@
       "externalNewsRepository.js",
       "fcmService.js",
       "forecastSettingsRepository.js",
+      "itemPackagingCatalogRepository.js",
       "managedUsersRepository.js",
       "newsMediaStorage.js",
       "newsRepository.js",
@@ -349,6 +350,18 @@
     "isValidCargoReportRecipientsConfig": [
       "faturamento",
       "tecnico"
+    ],
+    "isValidItemPackagingCatalog": [
+      "importedAt",
+      "importedById",
+      "importedByName",
+      "itemCount",
+      "items",
+      "schemaVersion",
+      "sourceFileName",
+      "sourceSha256",
+      "sourceSheetName",
+      "version"
     ]
   },
   "routes": {

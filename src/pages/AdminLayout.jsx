@@ -9,7 +9,7 @@ const sections = [
   { to: '/admin/previsoes', label: 'Previsões', description: 'Regras de entrega e cutoff' },
   { to: '/admin/lead-time', label: 'Lead time', description: 'Tempo real por modal e porto' },
   { to: '/admin/suporte', label: 'Suporte', description: 'Chamados abertos pelos usuários' },
-  { to: '/admin/relatorio-carga', label: 'Relatório de Carga', description: 'Destinatários do aviso por e-mail' },
+  { to: '/admin/relatorio-carga', label: 'Relatório de Carga', description: 'Aviso por e-mail e tabela Item x Emb.' },
 ]
 
 // Folga (px) deixada entre a aba ativa e a borda do nav ao rolar ate ela.

@@ -107,7 +107,7 @@ describe('AdminLayout', () => {
       ['Previsões', 'Regras de entrega e cutoff'],
       ['Lead time', 'Tempo real por modal e porto'],
       ['Suporte', 'Chamados abertos pelos usuários'],
-      ['Relatório de Carga', 'Destinatários do aviso por e-mail'],
+      ['Relatório de Carga', 'Aviso por e-mail e tabela Item x Emb.'],
     ]
     links.forEach((link, index) => {
       expect(link.querySelector('.admin-tab__label')).toHaveTextContent(expected[index][0])
