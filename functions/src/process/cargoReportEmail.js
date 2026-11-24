@@ -1,4 +1,5 @@
-// E-mail HTML do tipo `process_cargo_report_uploaded` (Relatorio de Carga).
+// E-mail HTML do tipo `process_cargo_report_uploaded` (Relatorio de Carga) e, desde a S7, do tipo
+// `process_cargo_report_conference` (`buildCargoReportConferenceEmail`: mesma estrutura, banner proprio).
 //
 // Layout IMAGEM + BOTAO: a arte (banner com logo, titulo, mensagem e cartao de
 // documento) e' uma imagem pronta (`functions/assets/email/cargo-report-banner.jpg`)
@@ -22,6 +23,7 @@
 
 import { fileURLToPath } from 'node:url'
 import {
+  CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX,
   CARGO_REPORT_NOTIFICATION_BODY,
   CARGO_REPORT_SUBJECT_PREFIX,
   extractCargoReportProcessLabel,
@@ -33,6 +35,14 @@ export const CARGO_REPORT_EMAIL_BANNER_PATH = fileURLToPath(
   new URL('../../assets/email/cargo-report-banner.jpg', import.meta.url)
 )
 
+// S7: banner do e-mail "Conferencia da Logistica concluida" (arte propria, mesma entrega por CID).
+export const CARGO_CONFERENCE_EMAIL_BANNER_CID = 'cargo-conference-banner@portal-comex'
+export const CARGO_CONFERENCE_EMAIL_BANNER_PATH = fileURLToPath(
+  new URL('../../assets/email/cargo-conference-banner.jpg', import.meta.url)
+)
+// Texto EXATO do corpo (L maiusculo, igual a arte): desenhado na imagem, no `alt`, na versao texto e no preheader.
+export const CARGO_CONFERENCE_EMAIL_TEXT = 'Conferência da Logística concluída no Relatório de Carga.'
+
 export const CTA_BG = '#008F76'
 export const CTA_TEXT = '#FFFFFF'
 
@@ -40,6 +50,8 @@ const DEFAULT_APP_URL = 'https://portal-comex.com'
 const FONT = 'Poppins, Arial, Helvetica, sans-serif'
 const PAGE_BG = '#F4F7F7'
 const FOOTER_TEXT = '#6b7b82'
+// Fundo da celula da imagem da conferencia: com as imagens bloqueadas (Outlook) o `alt` aparece em branco sobre o navy.
+const CONFERENCE_BANNER_BG = '#144155'
 
 // Mesma semantica de `escapeHtml` do modulo `core` compartilhado, duplicada
 // aqui para manter este modulo puro.
@@ -133,6 +145,109 @@ export function buildCargoReportEmail({
 <tr>
 <td align="center" style="padding:0;">
 <img src="${safeImgSrc}" width="600" alt="${safeAlt}" style="display:block;width:100%;max-width:600px;height:auto;border-radius:24px;border:0">
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:28px 0 8px 0;">
+<table ${tableAttrs} align="center">
+<tr>
+<td align="center" bgcolor="${CTA_BG}" style="border-radius:14px;background-color:${CTA_BG};">
+<a href="${safeUrl}" target="_blank" style="display:inline-block;padding:17px 36px;font-family:${FONT};font-size:16px;font-weight:600;line-height:22px;color:${CTA_TEXT};text-decoration:none;border-radius:14px;">Abrir processo no Portal COMEX</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td align="center" style="padding:20px 12px 0 12px;font-family:${FONT};font-size:12px;line-height:18px;color:${FOOTER_TEXT};text-align:center;">
+E-mail automático do Portal COMEX
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+`
+
+  return { subject, text, html, attachments }
+}
+
+// S7: e-mail do fechamento da conferencia da logistica (`process_cargo_report_conference`). Mesma estrutura do
+// e-mail do COMEX (container 600, banner por CID, botao, rodape); mudam a arte, o `alt`, o preheader e o texto puro.
+// `subject` = assunto ja montado por `buildCargoReportConferenceSubject`.
+export function buildCargoReportConferenceEmail({
+  subject: rawSubject,
+  processId,
+  recipientName = '',
+  appUrl = DEFAULT_APP_URL,
+  bannerSrc,
+} = {}) {
+  const subject = sanitizeCargoReportText(rawSubject) || CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX
+  const label = extractCargoReportProcessLabel(subject)
+  const name = String(recipientName ?? '').trim()
+  const url = buildCargoReportProcessUrl(processId, appUrl)
+  const greeting = name ? `Olá, ${name}.` : 'Olá.'
+
+  const text = [
+    greeting,
+    '',
+    CARGO_CONFERENCE_EMAIL_TEXT,
+    '',
+    ...(label ? [`Processo: ${label}`, ''] : []),
+    'Abra o processo no Portal COMEX (aba Documentos):',
+    url,
+  ].join('\n')
+
+  const useInlineSrc = typeof bannerSrc === 'string' && bannerSrc !== ''
+  const imgSrc = useInlineSrc ? bannerSrc : `cid:${CARGO_CONFERENCE_EMAIL_BANNER_CID}`
+  const attachments = useInlineSrc
+    ? []
+    : [
+        {
+          filename: 'cargo-conference-banner.jpg',
+          path: CARGO_CONFERENCE_EMAIL_BANNER_PATH,
+          cid: CARGO_CONFERENCE_EMAIL_BANNER_CID,
+          contentType: 'image/jpeg',
+          contentDisposition: 'inline',
+        },
+      ]
+
+  const safeSubject = escapeEmailHtml(subject)
+  const safePreheader = escapeEmailHtml(
+    label
+      ? `Conferência do Relatório de Carga do processo ${label} concluída no Portal COMEX.`
+      : 'Conferência do Relatório de Carga concluída no Portal COMEX.'
+  )
+  const safeAlt = escapeEmailHtml(CARGO_CONFERENCE_EMAIL_TEXT)
+  const safeUrl = escapeEmailHtml(url)
+  const safeImgSrc = escapeEmailHtml(imgSrc)
+  const tableAttrs = 'role="presentation" cellpadding="0" cellspacing="0" border="0"'
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>${safeSubject}</title>
+<style>
+@media only screen and (max-width:620px) {
+  .sq-container { width:100% !important; }
+}
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:${PAGE_BG};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:${PAGE_BG};">${safePreheader}</div>
+<table ${tableAttrs} width="100%" bgcolor="${PAGE_BG}" style="width:100%;background-color:${PAGE_BG};">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<table ${tableAttrs} width="600" class="sq-container" style="width:100%;max-width:600px;">
+<tr>
+<td align="center" bgcolor="${CONFERENCE_BANNER_BG}" style="padding:0;background-color:${CONFERENCE_BANNER_BG};border-radius:24px;">
+<img src="${safeImgSrc}" width="600" alt="${safeAlt}" style="display:block;width:100%;max-width:600px;height:auto;border-radius:24px;border:0;font-family:${FONT};font-size:24px;line-height:32px;font-weight:600;color:#FFFFFF;">
 </td>
 </tr>
 <tr>

@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-vi.mock('../../src/lib/firebase', () => ({ isFirebaseConfigured: true }))
+// S7: `firestore`/`auth` nulos fazem o painel ler os selos de área do Relatório de carga do fallback local (localStorage).
+vi.mock('../../src/lib/firebase', () => ({ isFirebaseConfigured: true, firestore: null, auth: null }))
 
 const mockListProcessDocuments = vi.fn()
 const mockUploadProcessDocument = vi.fn()
@@ -99,6 +100,13 @@ async function loaded() {
   })
 }
 
+// S7: as ações secundárias do cartão ficam no menu "Ações" (desktop: role="menu"; celular: ActionSheet).
+async function openMenu(user, scope) {
+  const trigger = within(scope).getByRole('button', { name: /^Ações de / })
+  await user.click(trigger)
+  return { trigger, menu: within(await screen.findByRole('menu')) }
+}
+
 const ORIGINAL_MATCH_MEDIA = window.matchMedia
 
 beforeEach(() => {
@@ -166,7 +174,7 @@ describe('F4c - Documentos: markup da variante desktop', () => {
 })
 
 describe('F4c - Documentos: nenhuma acao se perde no desktop', () => {
-  it('slot BL: arquivo atual, Baixar, Substituir, Excluir, tag "Atual" e versao anterior com Baixar', async () => {
+  it('slot BL: arquivo atual, Baixar direto, Substituir/Excluir/versao anterior no menu "Ações" e tag "Atual"', async () => {
     const user = userEvent.setup()
     mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['x']))
     const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
@@ -175,10 +183,17 @@ describe('F4c - Documentos: nenhuma acao se perde no desktop', () => {
     expect(group).toBeTruthy()
     expect(within(group).getByText('BL_MEDU.pdf')).toHaveClass('documents-row__file')
     expect(within(group).getByRole('button', { name: 'Baixar BL_MEDU.pdf' })).toHaveTextContent('Baixar')
-    expect(within(group).getByRole('button', { name: 'Substituir BL/AWB' })).toHaveTextContent('Substituir')
-    expect(within(group).getByRole('button', { name: 'Excluir BL_MEDU.pdf' })).toHaveTextContent('Excluir')
     expect(within(group).getByText('Atual')).toBeInTheDocument()
-    expect(group.querySelector('.documents-row__previous')).toHaveTextContent('Versão anterior: BL_antigo.pdf')
+    // S7: a versão anterior saiu do corpo do cartão (vira item do menu).
+    expect(group.querySelector('.documents-row__previous')).toBeNull()
+    expect(within(group).queryByRole('button', { name: 'Substituir BL/AWB' })).not.toBeInTheDocument()
+
+    const { menu } = await openMenu(user, group)
+    expect(menu.getByRole('menuitem', { name: 'Substituir BL/AWB' })).toHaveTextContent('Substituir')
+    expect(menu.getByRole('menuitem', { name: 'Excluir BL_MEDU.pdf' })).toHaveTextContent('Excluir')
+    expect(menu.getByRole('menuitem', { name: 'Baixar versão anterior: BL_antigo.pdf' })).toHaveTextContent('Baixar versão anterior')
+    await user.keyboard('{Escape}')
+
     await user.click(within(group).getByRole('button', { name: 'Baixar BL_MEDU.pdf' }))
     await waitFor(() => expect(mockDownloadProcessDocumentBlob).toHaveBeenCalled())
   })
@@ -195,12 +210,14 @@ describe('F4c - Documentos: nenhuma acao se perde no desktop', () => {
     await waitFor(() => expect(mockSetInvoicePackingListLink).toHaveBeenCalled())
   })
 
-  it('documento adicional ja enviado: Renomear e Excluir (sem tag de estado)', async () => {
+  it('documento adicional ja enviado: Renomear e Excluir no menu "Ações" (sem tag de estado)', async () => {
+    const user = userEvent.setup()
     const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
     await loaded()
     const group = [...container.querySelectorAll('.documents-row-group')].find((el) => el.textContent.includes('Certificado de análise'))
-    expect(within(group).getByRole('button', { name: 'Renomear Certificado de análise' })).toBeInTheDocument()
-    expect(within(group).getByRole('button', { name: 'Excluir cert.pdf' })).toBeInTheDocument()
+    const { menu } = await openMenu(user, group)
+    expect(menu.getByRole('menuitem', { name: 'Renomear Certificado de análise' })).toBeInTheDocument()
+    expect(menu.getByRole('menuitem', { name: 'Excluir cert.pdf' })).toBeInTheDocument()
     expect(group.querySelector('.documents-row__badge .inline-badge')).toBeNull()
   })
 
@@ -228,13 +245,15 @@ describe('F4c - Documentos: nenhuma acao se perde no desktop', () => {
     expect(within(notYet).getByText('Ainda não exigido')).toBeInTheDocument()
   })
 
-  it('"Documentos sem vínculo atual" lista o documento orfao com o motivo e a exclusao', async () => {
+  it('"Documentos sem vínculo atual" lista o documento orfao com o motivo e a exclusao (menu "Ações")', async () => {
+    const user = userEvent.setup()
     const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
     await loaded()
     const unlinked = [...container.querySelectorAll('.documents-section')].find((s) => s.textContent.includes('Documentos sem vínculo atual'))
     expect(within(unlinked).getByText('FISPQ_orfa.pdf', { selector: '.documents-row__label' })).toBeInTheDocument()
     expect(within(unlinked).getByText('Item removido')).toBeInTheDocument()
-    expect(within(unlinked).getByRole('button', { name: 'Excluir FISPQ_orfa.pdf' })).toBeInTheDocument()
+    const { menu } = await openMenu(user, unlinked)
+    expect(menu.getByRole('menuitem', { name: 'Excluir FISPQ_orfa.pdf' })).toBeInTheDocument()
   })
 
   it('CONSOLIDADO: tabela "Invoice e Packing List por PO" com o nome do processo (so quem ve) e envio por PO', async () => {
@@ -353,6 +372,7 @@ describe('S3 - Documentos: entrada do formulário do Relatório de carga', () =>
     })
 
   it('admin vê "Preencher no Portal" na linha, com e sem arquivo', async () => {
+    const user = userEvent.setup()
     const { unmount } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
     await loaded()
     expect(within(rowOf('Relatório de carga')).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
@@ -363,7 +383,8 @@ describe('S3 - Documentos: entrada do formulário do Relatório de carga', () =>
     await loaded()
     const row = rowOf('Relatório de carga')
     expect(within(row).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Substituir Relatório de carga' })).toBeInTheDocument()
+    const { menu } = await openMenu(user, row)
+    expect(menu.getByRole('menuitem', { name: 'Substituir Relatório de carga' })).toBeInTheDocument()
   })
 
   it('sem arquivo, o envio do admin vira "Enviar arquivo" e o botão novo vem primeiro', async () => {
@@ -376,15 +397,18 @@ describe('S3 - Documentos: entrada do formulário do Relatório de carga', () =>
     expect(within(row).queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument()
   })
 
-  it('logística vê "Conferir relatório" e não vê "Substituir" nem "Preencher no Portal"', async () => {
+  it('logística vê "Conferir relatório" e, no menu "Ações", só Visualizar e Baixar (sem Substituir, Excluir nem "Preencher no Portal")', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([...DOCS, cargoDoc()])
     render(<ProcessDocumentsPanel process={FCL} profile={LOGISTICA} variant="desktop" />)
     await loaded()
 
     const row = rowOf('Relatório de carga')
     expect(within(row).getByRole('button', { name: 'Conferir relatório' })).toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: /Substituir/ })).not.toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
+    const { menu } = await openMenu(user, row)
+    expect(menu.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Visualizar', 'Baixar'])
+    expect(menu.queryByRole('menuitem', { name: /Substituir|Excluir/ })).not.toBeInTheDocument()
   })
 
   it.each(['tecnico', 'faturamento'])('%s não vê nenhum dos dois botões', async (role) => {
@@ -448,7 +472,7 @@ describe('S4 - Documentos: relatório de carga gerado no Portal', () => {
     expect(within(row).getByText('Gerado no Portal')).toHaveClass('documents-row__generated')
     expect(within(row).getByRole('button', { name: 'Abrir formulário' })).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Substituir Relatório de carga' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: /^Ações de Relatório de carga$/ })).toBeInTheDocument()
   })
 
   it('xlsx manual continua com "Preencher no Portal" e sem "Gerado no Portal"', async () => {
@@ -465,8 +489,18 @@ describe('S4 - Documentos: relatório de carga gerado no Portal', () => {
     expect(within(row).queryByRole('button', { name: 'Abrir formulário' })).not.toBeInTheDocument()
   })
 
-  it('nome do Portal enviado por logística não conta como gerado no Portal', async () => {
+  it('S7: nome do Portal enviado pela logística (fechamento da conferência) conta como gerado no Portal', async () => {
     mockListProcessDocuments.mockResolvedValue([...DOCS, portalDoc({ uploadedByRole: 'logistica' })])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByText('Gerado no Portal')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Abrir formulário' })).toBeInTheDocument()
+  })
+
+  it('nome do Portal enviado por outro perfil não conta como gerado no Portal', async () => {
+    mockListProcessDocuments.mockResolvedValue([...DOCS, portalDoc({ uploadedByRole: 'user' })])
     render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
     await loaded()
 
@@ -495,5 +529,242 @@ describe('S4 - Documentos: relatório de carga gerado no Portal', () => {
     expect(within(row).getByText('Gerado no Portal')).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Abrir formulário' })).not.toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Conferir relatório' })).not.toBeInTheDocument()
+  })
+})
+
+// S7: cartão de documento compacto (botão principal + "Ações"), selos de área e menu acessível.
+describe('S7 - Documentos: cartão compacto e menu "Ações"', () => {
+  const rowOf = (title) =>
+    screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const portalDoc = (overrides = {}) =>
+    doc({
+      id: 'c2',
+      type: 'cargoReport',
+      slotKey: 'cargoReport',
+      name: 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx',
+      mimeType: XLSX_MIME,
+      uploadedByRole: 'admin',
+      ...overrides,
+    })
+  const withStage = (current, conference) =>
+    window.localStorage.setItem('sq-comex-cargo-report:p1', JSON.stringify({ current, conference }))
+
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('BL e Invoice: "Baixar" direto + "Ações"; COA Original sem arquivo: "Enviar" direto e sem "Ações"', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      doc({ id: 'b1', name: 'BL ACME.pdf' }),
+      doc({ id: 'i1', type: 'invoice', slotKey: 'invoice', name: 'INV-1.pdf' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    for (const [title, file] of [['BL/AWB', 'BL ACME.pdf'], ['Invoice', 'INV-1.pdf']]) {
+      const row = rowOf(title)
+      expect(within(row).getByRole('button', { name: `Baixar ${file}` })).toBeInTheDocument()
+      expect(within(row).getByRole('button', { name: `Ações de ${title}` })).toHaveAttribute('aria-haspopup', 'menu')
+    }
+    const coa = rowOf('COA Original')
+    expect(within(coa).getByRole('button', { name: 'Enviar' })).toBeInTheDocument()
+    expect(within(coa).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
+  })
+
+  it('o menu usa role="menu", itens menuitem, Excluir separado e em vermelho, e some ao escolher o item', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([doc({ id: 'b1', name: 'BL ACME.pdf' })])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('BL/AWB')
+    const trigger = within(row).getByRole('button', { name: 'Ações de BL/AWB' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await user.click(trigger)
+
+    const menuElement = await screen.findByRole('menu', { name: 'Ações de BL/AWB' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(trigger).toHaveAttribute('aria-controls', menuElement.id)
+    expect(menuElement).toHaveClass('process-detail-more__menu')
+    const items = within(menuElement).getAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual(['Substituir', 'Excluir'])
+    expect(items[1]).toHaveClass('process-detail-more__item--danger')
+    expect(within(menuElement).getByRole('separator')).toBeInTheDocument()
+    // A separação vem ANTES do Excluir, não depois do Substituir.
+    expect(menuElement.querySelector('[role="separator"] + [role="menuitem"]')).toHaveTextContent('Excluir')
+
+    await user.click(items[1])
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument()
+  })
+
+  it('teclado: ao abrir o foco vai ao 1º item; setas, Home e End navegam em ciclo; Esc fecha e devolve o foco ao botão', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([
+      doc({ id: 'b1', name: 'BL_novo.pdf', uploadedAt: '2026-09-18T10:00:00.000Z' }),
+      doc({ id: 'b0', name: 'BL_velho.pdf', uploadedAt: '2026-09-10T10:00:00.000Z' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const trigger = within(rowOf('BL/AWB')).getByRole('button', { name: 'Ações de BL/AWB' })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    const menu = await screen.findByRole('menu')
+    const items = within(menu).getAllByRole('menuitem')
+    expect(items).toHaveLength(3)
+    await waitFor(() => expect(items[0]).toHaveFocus())
+
+    await user.keyboard('{ArrowDown}')
+    expect(items[1]).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    expect(items[2]).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    expect(items[0]).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(items[2]).toHaveFocus()
+    await user.keyboard('{Home}')
+    expect(items[0]).toHaveFocus()
+    await user.keyboard('{End}')
+    expect(items[2]).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    expect(trigger).toHaveFocus()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('ArrowDown no botão abre o menu; clicar fora e Tab fecham', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([doc({ id: 'b1', name: 'BL ACME.pdf' })])
+    render(
+      <div>
+        <button type="button">fora</button>
+        <ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />
+      </div>
+    )
+    await loaded()
+
+    const trigger = within(rowOf('BL/AWB')).getByRole('button', { name: 'Ações de BL/AWB' })
+    trigger.focus()
+    await user.keyboard('{ArrowDown}')
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'fora' }))
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+
+    await user.click(trigger)
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    await user.keyboard('{Tab}')
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+  })
+
+  it('Esc depois de abrir o renomear devolve o foco ao botão "Ações" (de onde o item saiu)', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([
+      doc({ id: 'o1', type: 'other', slotKey: 'other:cert', name: 'cert.pdf', description: 'Certificado' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const { trigger, menu } = await openMenu(user, rowOf('Certificado'))
+    await user.click(menu.getByRole('menuitem', { name: 'Renomear Certificado' }))
+    expect(await screen.findByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('Relatório de carga: versão anterior (COMEX) vira item do menu com tamanho e data, e baixa o documento anterior', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['x']))
+    mockListProcessDocuments.mockResolvedValue([
+      portalDoc({ id: 'cr-comex', size: 41 * 1024, uploadedAt: '2026-11-24T14:32:00.000Z', uploadedByRole: 'admin' }),
+      portalDoc({ id: 'cr-log', size: 44 * 1024, uploadedAt: '2026-11-24T16:05:00.000Z', uploadedByRole: 'logistica', uploadedByName: 'Operador Logística' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByText('Gerado no Portal')).toBeInTheDocument()
+    expect(row.closest('.documents-row-group').querySelector('.documents-row__previous')).toBeNull()
+    const { menu } = await openMenu(user, row)
+    expect(menu.getAllByRole('menuitem').map((item) => item.querySelector('span > span')?.textContent)).toEqual([
+      'Visualizar',
+      'Baixar',
+      'Substituir',
+      'Baixar versão anterior (COMEX)',
+      'Excluir',
+    ])
+    const previous = menu.getByRole('menuitem', { name: /^Baixar versão anterior \(COMEX\)/ })
+    expect(previous).toHaveTextContent('41 KB')
+    expect(previous).toHaveTextContent('24/11/2026')
+    await user.click(previous)
+    await waitFor(() => expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'cr-comex'))
+  })
+
+  it('selos de área do Relatório de carga numa linha só (classe docs-chips), um por estado', async () => {
+    mockListProcessDocuments.mockResolvedValue([portalDoc()])
+    const labels = (container) =>
+      [...container.querySelectorAll('.docs-chips .inline-badge')].map((badge) => badge.textContent)
+
+    withStage(null, null)
+    const draft = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+    await waitFor(() => expect(labels(draft.container)).toEqual(['COMEX: Rascunho', 'Logística: Aguardando']))
+    expect(draft.container.querySelectorAll('.docs-chips')).toHaveLength(1)
+    draft.unmount()
+
+    withStage({ status: 'concluido', revision: 3 }, { status: 'aberta', revision: 1 })
+    const comexClosed = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+    await waitFor(() => expect(labels(comexClosed.container)).toEqual(['COMEX: Fechado', 'Logística: Em conferência']))
+    comexClosed.unmount()
+
+    withStage({ status: 'concluido', revision: 3 }, { status: 'fechada', revision: 2 })
+    const done = render(<ProcessDocumentsPanel process={FCL} profile={LOGISTICA} variant="desktop" />)
+    await loaded()
+    await waitFor(() => expect(labels(done.container)).toEqual(['COMEX: Fechado', 'Logística: Fechada']))
+  })
+
+  it('tecnico e faturamento não leem current/conference: sem selos de área', async () => {
+    mockListProcessDocuments.mockResolvedValue([portalDoc()])
+    withStage({ status: 'concluido', revision: 3 }, { status: 'fechada', revision: 2 })
+    render(<ProcessDocumentsPanel process={FCL} profile={{ uid: 'l-1', name: 'Leitor', role: 'tecnico' }} variant="desktop" />)
+    await loaded()
+    expect(document.querySelector('.docs-chips')).toBeNull()
+  })
+
+  it('no celular (sem variant "desktop") o "Ações" abre o ActionSheet com ícones, dica da versão anterior e Excluir destrutivo', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([
+      portalDoc({ id: 'cr-comex', size: 41 * 1024, uploadedAt: '2026-11-24T14:32:00.000Z' }),
+      portalDoc({ id: 'cr-log', size: 44 * 1024, uploadedAt: '2026-11-24T16:05:00.000Z', uploadedByRole: 'logistica' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} />)
+    await loaded()
+
+    const trigger = within(rowOf('Relatório de carga')).getByRole('button', { name: 'Ações de Relatório de carga' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+    await user.click(trigger)
+
+    const sheet = await screen.findByRole('dialog', { name: 'Relatório de carga' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    const options = within(sheet).getAllByRole('button').filter((button) => button.classList.contains('action-sheet__option'))
+    expect(options).toHaveLength(5)
+    expect(options.every((option) => option.querySelector('svg'))).toBe(true)
+    const destructive = within(sheet).getByRole('button', { name: /^Excluir / })
+    expect(destructive).toHaveClass('action-sheet__option--danger')
+    expect(within(sheet).getByRole('button', { name: /^Baixar versão anterior \(COMEX\)/ })).toHaveTextContent('41 KB')
+    expect(within(sheet).getByRole('separator')).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Relatório de carga' })).not.toBeInTheDocument())
+    expect(trigger).toHaveFocus()
   })
 })

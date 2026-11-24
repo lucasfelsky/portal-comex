@@ -772,9 +772,9 @@ service cloud.firestore {
 
     // S3 do Relatorio de Carga (FR.CMX.001 rev. 005): formulario preenchido no
     // Portal. `current` = preenchimento do COMEX (so' admin grava); `conference`
-    // = OK?, contagem, etiquetas WMS/SQ e "Conferido por" (S6; admin e logistica
-    // gravam), em doc separado para a conferencia nao conflitar com quem esta
-    // editando. wmsLabel/sqLabel/count das linhas do `current` ficam so' por
+    // = OK?, contagem, etiquetas WMS/SQ, "Conferido por" automatico e dados do
+    // recebimento (S6/S7; so' a logistica grava e fecha, o admin so' reabre),
+    // em doc separado para a conferencia nao conflitar com quem esta editando. wmsLabel/sqLabel/count das linhas do `current` ficam so' por
     // compatibilidade. Formato e tamanho de cada etiqueta sao validados no
     // cliente. Colunas calculadas (lote SQ, peso liquido, no de embalagens)
     // NAO sao gravadas.
@@ -782,16 +782,40 @@ service cloud.firestore {
     // Rules nao iteram listas: so' tamanho e shape de rows[0]; o cliente
     // (src/features/processes/cargoReportFormModel.js) normaliza cada linha.
     // Limpeza: cleanupDeletedProcessData (recursiveDelete do processo).
+    // S7: estados por area. `current.status == 'concluido'` = parte do COMEX
+    // fechada; `conference.status == 'fechada'` = conferencia da logistica fechada
+    // (doc legado sem a chave conta como 'aberta'). Invariante: conferencia
+    // fechada implica COMEX fechado.
+    function isCargoReportComexClosed(processId) {
+      return exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/current)
+        && get(/databases/$(database)/documents/processes/$(processId)/cargoReport/current).data.status == 'concluido';
+    }
+
+    function isCargoConferenceClosedNow(processId) {
+      return exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/conference)
+        && get(/databases/$(database)/documents/processes/$(processId)/cargoReport/conference).data.get('status', 'aberta') == 'fechada';
+    }
+
+    // `current`: rascunho grava livre (salvar ou fechar); `concluido` so' volta a
+    // `rascunho`, e so' com a conferencia aberta.
+    function isAllowedCargoReportCurrentTransition(processId) {
+      return resource == null
+        || resource.data.status == 'rascunho'
+        || (resource.data.status == 'concluido'
+          && request.resource.data.status == 'rascunho'
+          && !isCargoConferenceClosedNow(processId));
+    }
+
     function isValidCargoReportCurrent(processId) {
       return request.resource.data.keys().hasOnly([
         'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
-        'cargoType', 'titleSuffix', 'rows', 'notes', 'labeledBy', 'labelMadeBy',
+        'cargoType', 'titleSuffix', 'rows', 'notes',
         'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
         'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
-          'cargoType', 'titleSuffix', 'rows', 'notes', 'labeledBy', 'labelMadeBy',
+          'cargoType', 'titleSuffix', 'rows', 'notes',
           'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
           'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
         ])
@@ -820,10 +844,6 @@ service cloud.firestore {
             && request.resource.data.rows[0].id.size() <= 64))
         && request.resource.data.notes is string
         && request.resource.data.notes.size() <= 2000
-        && request.resource.data.labeledBy is string
-        && request.resource.data.labeledBy.size() <= 120
-        && request.resource.data.labelMadeBy is string
-        && request.resource.data.labelMadeBy.size() <= 120
         && request.resource.data.nfNumber is string
         && request.resource.data.nfNumber.size() <= 40
         && request.resource.data.receiptStatus in ['', 'com_ressalva', 'sem_ressalva']
@@ -846,17 +866,22 @@ service cloud.firestore {
 
     function isValidCargoReportConference(processId) {
       return request.resource.data.keys().hasOnly([
-        'schemaVersion', 'revision', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+        'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+        'receiptStatus', 'receivedDate', 'nfNumber', 'notes',
+        'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
         'updatedAt', 'updatedById', 'updatedByName',
       ])
         && request.resource.data.keys().hasAll([
-          'schemaVersion', 'revision', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+          'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+          'receiptStatus', 'receivedDate', 'nfNumber', 'notes',
+          'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
           'updatedAt', 'updatedById', 'updatedByName',
         ])
         && exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/current)
         && request.resource.data.schemaVersion == 1
         && request.resource.data.revision is int
         && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
+        && request.resource.data.status in ['aberta', 'fechada']
         && request.resource.data.okByRowId is map
         && request.resource.data.okByRowId.size() <= 200
         && request.resource.data.okByRowId.values().hasOnly([true, false])
@@ -867,9 +892,63 @@ service cloud.firestore {
         && request.resource.data.labelsByRowId.size() <= 200
         && request.resource.data.checkedByName is string
         && request.resource.data.checkedByName.size() <= 120
+        && request.resource.data.receiptStatus in ['', 'com_ressalva', 'sem_ressalva']
+        && request.resource.data.receivedDate is string
+        && (request.resource.data.receivedDate == ''
+          || request.resource.data.receivedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && request.resource.data.nfNumber is string
+        && request.resource.data.nfNumber.size() <= 40
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 2000
+        && request.resource.data.closedDate is string
+        && request.resource.data.closedById is string
+        && request.resource.data.closedByName is string
+        && request.resource.data.closedByName.size() <= 120
+        && request.resource.data.closedDocumentId is string
+        && request.resource.data.closedDocumentId.size() <= 128
+        && (request.resource.data.status == 'fechada'
+          ? (request.resource.data.closedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && request.resource.data.closedById.size() > 0
+            && request.resource.data.closedByName.size() > 0
+            && request.resource.data.closedDocumentId.size() > 0)
+          : (request.resource.data.closedDate == ''
+            && request.resource.data.closedById == ''
+            && request.resource.data.closedByName == ''
+            && request.resource.data.closedDocumentId == ''))
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedById == request.auth.uid
         && request.resource.data.updatedByName == myName();
+    }
+
+    // S7: a logistica grava o conteudo da conferencia (aberta) e a fecha. Fechar so'
+    // no estado "COMEX fechado" e com o documento `cargoReport` que ELA mesma
+    // anexou (`closedDocumentId`). Conferencia fechada nao aceita gravacao da
+    // logistica; quem reabre e' o admin (`isAdminCargoConferenceReopen`).
+    function isLogisticsCargoConferenceWrite(processId) {
+      return (resource == null || resource.data.get('status', 'aberta') == 'aberta')
+        && request.resource.data.checkedByName == myName()
+        && (
+          request.resource.data.status == 'aberta'
+          || (
+            isCargoReportComexClosed(processId)
+            && request.resource.data.closedById == request.auth.uid
+            && request.resource.data.closedByName == myName()
+            && exists(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId))
+            && get(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId)).data.type == 'cargoReport'
+            && get(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId)).data.uploadedById == request.auth.uid
+          )
+        );
+    }
+
+    // S7: o admin so' REABRE a conferencia (fechada -> aberta); o conteudo fica intacto.
+    function isAdminCargoConferenceReopen() {
+      return resource != null
+        && resource.data.get('status', 'aberta') == 'fechada'
+        && request.resource.data.status == 'aberta'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'revision', 'status', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
+          'updatedAt', 'updatedById', 'updatedByName',
+        ]);
     }
 
     match /processes/{processId} {
@@ -930,23 +1009,32 @@ service cloud.firestore {
           && (
             isAdmin()
             || (isLogistics() && request.resource.data.type == 'containerWash')
+            || (isLogistics() && request.resource.data.type == 'cargoReport'
+              && isCargoReportComexClosed(processId) && !isCargoConferenceClosedNow(processId))
           );
         allow update: if isAdmin() && (isValidInvoicePackingListLinkUpdate() || isValidAdditionalDocumentRenameUpdate());
         allow delete: if isAdmin()
-          || (isLogistics() && resource.data.uploadedById == request.auth.uid);
+          || (isLogistics() && resource.data.uploadedById == request.auth.uid
+            && resource.data.type != 'cargoReport');
       }
 
       // S3 do Relatorio de Carga: docs nomeados (outros ids caem no catch-all).
       // Tecnico/Faturamento NAO leem (so' veem o arquivo anexado em documents).
       match /cargoReport/current {
         allow read: if isAdmin() || isLogistics();
-        allow create, update: if isAdmin() && isValidCargoReportCurrent(processId);
+        allow create, update: if isAdmin() && isValidCargoReportCurrent(processId)
+          && isAllowedCargoReportCurrentTransition(processId);
         allow delete: if false;
       }
 
+      // S7: so' a logistica grava o conteudo e fecha; o admin so' reabre.
       match /cargoReport/conference {
         allow read: if isAdmin() || isLogistics();
-        allow create, update: if (isAdmin() || isLogistics()) && isValidCargoReportConference(processId);
+        allow create, update: if isValidCargoReportConference(processId)
+          && (
+            (isLogistics() && isLogisticsCargoConferenceWrite(processId))
+            || (isAdmin() && isAdminCargoConferenceReopen())
+          );
         allow delete: if false;
       }
     }

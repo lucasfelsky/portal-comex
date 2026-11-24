@@ -63,6 +63,7 @@ function getDrawerVisual(type) {
     case 'process_document_uploaded':
       return { icon: 'doc', tone: 'warn' }
     case 'process_cargo_report_uploaded':
+    case 'process_cargo_report_conference':
       return { icon: 'doc', tone: 'ok' }
     case 'receipt_divergence_reported':
     case 'license_rejected':

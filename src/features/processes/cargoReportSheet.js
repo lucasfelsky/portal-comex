@@ -3,10 +3,14 @@
 // folha, então os dois não divergem. Números vêm de `deriveCargoReportRow`, que já dá precedência
 // aos valores congelados ao concluir.
 import {
+  CARGO_CONFERENCE_STATUS,
+  CARGO_REPORT_LIMITS,
   CARGO_REPORT_MAX_ROWS,
+  RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
   deriveCargoReportRow,
   formatCargoReportTitle,
+  normalizeCargoLabel,
 } from './cargoReportFormModel'
 
 export const CARGO_REPORT_FILE_PREFIX = 'FR.CMX.001 - RELATORIO DE CARGA - '
@@ -38,12 +42,13 @@ export function buildCargoReportFileName(titleSuffix) {
   return `${CARGO_REPORT_FILE_PREFIX}${suffix}${CARGO_REPORT_FILE_EXTENSION}`
 }
 
-// Documento anexado pelo próprio Portal ("Concluir e anexar"): nome padrão + enviado por admin.
+// Documento anexado pelo próprio Portal ("Salvar e fechar" do COMEX ou "Salvar e fechar conferência" da
+// logística): nome padrão + enviado por admin ou logística.
 export function isPortalGeneratedCargoReport(document) {
   const name = String(document?.name ?? '')
   return (
     document?.type === 'cargoReport' &&
-    document?.uploadedByRole === 'admin' &&
+    (document?.uploadedByRole === 'admin' || document?.uploadedByRole === 'logistica') &&
     name.startsWith(CARGO_REPORT_FILE_PREFIX) &&
     name.endsWith(CARGO_REPORT_FILE_EXTENSION)
   )
@@ -64,8 +69,12 @@ export function describeCargoReportAlerts(alerts) {
   return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`
 }
 
-// `form` é o estado da tela (ou o doc lido); `conference` traz o OK?, a contagem, as etiquetas WMS/SQ
-// e quem conferiu (S6: tudo da logística; `wmsLabel/sqLabel/count` das linhas do `current` não valem).
+const RECEIPT_STATUS_VALUES = RECEIPT_STATUS_OPTIONS.map((option) => option.value)
+
+// `form` é o estado da tela (ou o doc lido); `conference` traz o OK?, a contagem, as etiquetas WMS/SQ,
+// quem conferiu e o rodapé do recebimento (S6/S7: tudo da logística; `wmsLabel/sqLabel/count` e
+// `notes/receiptStatus/receivedDate/nfNumber` do `current` não valem). DATA CONCLUSÃO = dia em que a
+// logística fechou (`closedDate`) quando a conferência está fechada; senão, a do COMEX (`completedDate`).
 export function buildCargoReportSheet(form, { process, conference, catalog } = {}) {
   // O payload normaliza texto e números (a tela guarda número como texto) e descarta linhas vazias.
   const { payload } = buildCargoReportPayload(form, {})
@@ -90,8 +99,8 @@ export function buildCargoReportSheet(form, { process, conference, catalog } = {
       ok: okByRowId[row.id] === true,
       supplierLot: row.supplierLot,
       lotSq: derived.lotSq,
-      wmsLabel: labelsByRowId[row.id]?.wms ?? '',
-      sqLabel: labelsByRowId[row.id]?.sq ?? '',
+      wmsLabel: normalizeCargoLabel(labelsByRowId[row.id]?.wms),
+      sqLabel: normalizeCargoLabel(labelsByRowId[row.id]?.sq),
       quantityKg: row.quantityKg,
       countOk: countOkByRowId[row.id] === true,
       netWeightKg: derived.netWeightKg,
@@ -106,14 +115,14 @@ export function buildCargoReportSheet(form, { process, conference, catalog } = {
     duimpNumber: String(process?.duimpNumber ?? '').trim(),
     cargoType: payload.cargoType,
     rows,
-    notes: payload.notes,
+    notes: String(conference?.notes ?? '').trim().slice(0, CARGO_REPORT_LIMITS.notes),
     checkedByName: String(conference?.checkedByName ?? '').trim(),
-    labeledBy: payload.labeledBy,
-    labelMadeBy: payload.labelMadeBy,
-    receiptStatus: payload.receiptStatus,
-    receivedDateBr: formatCargoDateBr(payload.receivedDate),
-    completedDateBr: formatCargoDateBr(payload.completedDate),
-    nfNumber: payload.nfNumber,
+    receiptStatus: RECEIPT_STATUS_VALUES.includes(conference?.receiptStatus) ? conference.receiptStatus : '',
+    receivedDateBr: formatCargoDateBr(conference?.receivedDate),
+    completedDateBr: formatCargoDateBr(
+      conference?.status === CARGO_CONFERENCE_STATUS.closed ? conference.closedDate : payload.completedDate
+    ),
+    nfNumber: String(conference?.nfNumber ?? '').trim().slice(0, CARGO_REPORT_LIMITS.nf),
     alerts,
   }
 }

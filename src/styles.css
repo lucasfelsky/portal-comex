@@ -24655,3 +24655,152 @@ table.crf {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+/* S7 do Relatorio de Carga: cartao de documento compacto. Botao principal (quando faz sentido) + "Acoes"
+   (menu no padrao do .process-detail-more; no celular vira o ActionSheet), selos de area numa linha so e a
+   versao anterior fora do corpo do cartao. Bloco APPEND-ONLY, so regras de base (sem consulta de midia). */
+.docs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  order: 5;
+  flex: 1 1 100%;
+}
+
+.docs-chips .inline-badge {
+  min-height: 0;
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.docs-more {
+  position: relative;
+  margin-left: auto;
+}
+
+.documents-row__actions .docs-more__trigger,
+.process-detail-view .docs-more .docs-more__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.documents-row__actions .docs-more__trigger svg {
+  display: inline-block;
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.docs-more .docs-more__trigger[aria-expanded="true"] {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+
+.docs-more .process-detail-more__menu {
+  min-width: 260px;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(16, 34, 44, 0.16), 0 2px 6px rgba(16, 34, 44, 0.08);
+  z-index: 20;
+}
+
+.docs-more .process-detail-more__item {
+  min-height: 38px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  border: 0;
+  gap: 10px;
+}
+
+.docs-more .process-detail-more__item svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.docs-more .process-detail-more__item:hover:not(:disabled) {
+  background: var(--surface-alt);
+}
+
+.docs-more .process-detail-more__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.docs-more .process-detail-more__item--danger,
+.docs-more .process-detail-more__item--danger svg {
+  color: var(--danger-700);
+}
+
+.docs-more .process-detail-more__item--danger:hover:not(:disabled) {
+  background: var(--danger-50);
+}
+
+.docs-more .process-detail-more__sep {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--border);
+}
+
+.docs-more .pdm-t {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.docs-more .pdm-t small {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ink-soft);
+}
+
+.action-sheet__option .as-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-sheet__option .as-opt svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.action-sheet__option .as-opt small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.action-sheet__option--danger,
+.action-sheet__option--danger .as-opt svg {
+  color: var(--danger-700);
+}
+
+.action-sheet__sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+  list-style: none;
+}
+
+/* S7: o chevron do botao "Acoes" precisa vencer a regra do painel de documentos que esconde os icones dos botoes de
+   acao (.documents-icon-button svg). Mesma especificidade da regra escondida, declarada depois. */
+.process-detail-view .pdv-panel .documents-row__actions .docs-more__trigger svg {
+  display: inline-block;
+  flex: none;
+}
+
+/* S7: com a dica da logistica comprida, as acoes quebram para a linha de baixo; sem isto ficariam a esquerda.
+   O mock alinha os botoes a direita. */
+.crf-bar .r {
+  margin-left: auto;
+}

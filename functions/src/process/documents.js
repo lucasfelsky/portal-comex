@@ -22,7 +22,9 @@
 //   avisa Comex (admins), Logistica e as listas Tecnico/Faturamento de
 //   `config/cargoReportRecipients` (in-app + e-mail; e-mail da lista SEM
 //   usuario recebe e-mail direto; o autor do upload tambem recebe quando
-//   elegivel). Trigger SEPARADO: declara os secrets SMTP
+//   elegivel). S7: o estagio sai do `uploadedByRole` do documento (logistica =
+//   conferencia fechada, aviso proprio; demais = fechamento do COMEX, aviso de
+//   hoje). Trigger SEPARADO: declara os secrets SMTP
 //   e sua falha nao derruba os demais. Logica pura em
 //   `./cargoReportNotification.js`.
 //
@@ -45,13 +47,17 @@ import {
   normalizeDocumentIndexMirror,
 } from './documentIndex.js';
 import {
+  CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY,
+  CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE,
   CARGO_REPORT_NOTIFICATION_BODY,
   CARGO_REPORT_NOTIFICATION_TYPE,
+  buildCargoReportConferenceSubject,
   buildCargoReportSubject,
   normalizeCargoReportRecipientsConfig,
   planCargoReportRecipients,
+  resolveCargoReportUploadStage,
 } from './cargoReportNotification.js';
-import { buildCargoReportEmail } from './cargoReportEmail.js';
+import { buildCargoReportConferenceEmail, buildCargoReportEmail } from './cargoReportEmail.js';
 import {
   APP_URL,
   SMTP_HOST,
@@ -247,7 +253,9 @@ export const recordProcessDocumentEvents = onDocumentCreated(
     }
 
     try {
-      if (String(created?.uploadedByRole ?? '') === 'logistica') {
+      // S7: `cargoReport` anexado pela logistica (fechamento da conferencia) tem aviso proprio em
+      // `notifyCargoReportUploaded`; o aviso generico "Novo documento no processo" nao se repete.
+      if (String(created?.uploadedByRole ?? '') === 'logistica' && created?.type !== 'cargoReport') {
         const activeAdmins = await listActiveAdminUsers()
         const actorUserId = String(created?.uploadedById ?? '')
         const actorName = repairTextEncoding(String(created?.uploadedByName ?? ''))
@@ -378,12 +386,25 @@ export const notifyCargoReportUploaded = onDocumentCreated(
     let failedDirectEmails = 0
 
     // Assunto/titulo fixo pedido pelo Comex, igual para TODOS os destinatarios
-    // (nao depende de role; ver `buildCargoReportSubject`).
-    const cargoReportSubject = buildCargoReportSubject({
+    // (nao depende de role; ver `buildCargoReportSubject`). S7: a conferencia da logistica tem
+    // assunto, tipo, corpo e e-mail proprios; o resto do fluxo e' o mesmo.
+    const stage = resolveCargoReportUploadStage(created)
+    const isConferenceStage = stage === 'conferencia'
+    const subjectSource = {
       category: process.category,
       processNumber: repairTextEncoding(String(process.processNumber ?? '')),
       name: repairTextEncoding(String(process.name ?? '')),
-    })
+    }
+    const cargoReportSubject = isConferenceStage
+      ? buildCargoReportConferenceSubject(subjectSource)
+      : buildCargoReportSubject(subjectSource)
+    const notificationType = isConferenceStage
+      ? CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE
+      : CARGO_REPORT_NOTIFICATION_TYPE
+    const notificationBody = isConferenceStage
+      ? CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY
+      : CARGO_REPORT_NOTIFICATION_BODY
+    const buildDirectEmail = isConferenceStage ? buildCargoReportConferenceEmail : buildCargoReportEmail
 
     // Bloco A: in-app/push (+ e-mail via sendProcessNotificationEmail).
     try {
@@ -392,11 +413,11 @@ export const notifyCargoReportUploaded = onDocumentCreated(
           recipientUserId: user.id,
           actorUserId,
           actorName,
-          type: CARGO_REPORT_NOTIFICATION_TYPE,
+          type: notificationType,
           processId,
           messageId: '',
           title: cargoReportSubject,
-          body: CARGO_REPORT_NOTIFICATION_BODY,
+          body: notificationBody,
           targetTab: 'documents',
         }))
       )
@@ -417,7 +438,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
             directEmails: directEmails.length,
           })
         } else {
-          const message = buildCargoReportEmail({
+          const message = buildDirectEmail({
             subject: cargoReportSubject,
             processId,
             recipientName: '',
@@ -453,6 +474,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
 
     logger.info('Relatorio de Carga notificado.', {
       processId,
+      stage,
       inAppRecipients: userRecipients.length,
       directEmails: directEmails.length,
       ignoredNonCorporate,

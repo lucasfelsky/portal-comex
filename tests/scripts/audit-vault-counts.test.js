@@ -45,7 +45,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/0 mismatches/)
   })
 
-  // 31 checks sem a vault (9 de cardinalidade + 13 de conteudo da L26, +1
+  // 32 checks sem a vault (9 de cardinalidade + 13 de conteudo da L26, +1
   // do F18a - isValidProcessDocumentCreate, +1 do vinculo Invoice->Packing
   // List - isValidInvoicePackingListLinkUpdate, +1 do renome do documento
   // adicional - isValidAdditionalDocumentRenameUpdate, +3 da referencia do
@@ -53,13 +53,13 @@ describe('audit-vault-counts', () => {
   // isValidErpProcessHint, +1 do destinatario do Relatorio de Carga -
   // isValidCargoReportRecipientsConfig, +1 da tabela Item x Emb. -
   // isValidItemPackagingCatalog, +2 do formulario do Relatorio de Carga -
-  // isValidCargoReportCurrent/isValidCargoReportConference); 33 quando a vault esta' presente
-  // (+2 checks que a leem). O teste aceita os dois modos porque a vault existe na maquina do
+  // isValidCargoReportCurrent/isValidCargoReportConference, +1 da S7 - isAdminCargoConferenceReopen);
+  // 34 quando a vault esta' presente (+2 checks que a leem). O teste aceita os dois modos porque a vault existe na maquina do
   // dev e nao no CI.
-  it('output lista 31 checks sem vault (33 com vault)', () => {
+  it('output lista 32 checks sem vault (34 com vault)', () => {
     const result = runScript()
     expect(isAuditFailure(result)).toBe(false)
-    expect(result.stdout).toMatch(/(31|33) checks/)
+    expect(result.stdout).toMatch(/(32|34) checks/)
     expect(result.stdout).toMatch(/src\/ directories = 9/)
     expect(result.stdout).toMatch(/src\/components\/ top-level = 26/)
     expect(result.stdout).toMatch(/src\/features\/ directories = 3/)
@@ -310,7 +310,7 @@ describe('audit-vault-counts', () => {
       const result = runWithEnv({ SKIP_VAULT_CHECK: '1' })
       expect(isAuditFailure(result)).toBe(false)
       expect(result.stdout).toMatch(/checks de vault PULADOS/)
-      expect(result.stdout).toMatch(/31 checks, 0 mismatches/)
+      expect(result.stdout).toMatch(/32 checks, 0 mismatches/)
     })
 
     it('pula (sem falhar) quando VAULT_DIR aponta para pasta inexistente', () => {
@@ -319,12 +319,12 @@ describe('audit-vault-counts', () => {
       expect(result.stdout).toMatch(/checks de vault PULADOS/)
     })
 
-    it('quando a vault existe, roda 33 checks (31 + 2 de vault)', () => {
+    it('quando a vault existe, roda 34 checks (32 + 2 de vault)', () => {
       const result = runScript()
       // Se a vault nao estiver presente na maquina, o teste nao se aplica.
       if (/checks de vault PULADOS/.test(result.stdout)) return
       expect(isAuditFailure(result)).toBe(false)
-      expect(result.stdout).toMatch(/33 checks, 0 mismatches/)
+      expect(result.stdout).toMatch(/34 checks, 0 mismatches/)
       expect(result.stdout).toMatch(/vault menciona todos os \d+ identificadores/)
       expect(result.stdout).toMatch(/vault sem mencao ativa aos \d+ fantasmas/)
     })

@@ -85,7 +85,8 @@ describe('firestore.rules structure', () => {
     })
 
     // S3 do Relatorio de Carga: formulario FR.CMX.001 em 2 docs nomeados por processo.
-    // `current` so' admin grava; `conference` admin e logistica; Tecnico/Faturamento nao leem.
+    // `current` so' admin grava; `conference` so' a logistica grava/fecha e o admin so' reabre (S7);
+    // Tecnico/Faturamento nao leem.
     // Docs nomeados (e nao `match /cargoReport/{id}`) para o audit-vault-counts nao contar
     // uma colecao top-level nova; qualquer outro id cai no catch-all (negado).
     it('declara match /cargoReport/current (admin grava; admin e logistica leem) dentro de processes', () => {
@@ -95,20 +96,20 @@ describe('firestore.rules structure', () => {
       expect(block).not.toBeNull()
       expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
       expect(block[0]).toMatch(
-        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidCargoReportCurrent\(processId\)\s*;/
+        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidCargoReportCurrent\(processId\)\s*&&\s*isAllowedCargoReportCurrentTransition\(processId\)\s*;/
       )
       expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
     })
 
-    it('declara match /cargoReport/conference (admin e logistica gravam e leem) dentro de processes', () => {
+    it('declara match /cargoReport/conference (logistica grava e fecha, admin so reabre, ambos leem) dentro de processes', () => {
       const processes = rules.match(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*?\n {4}\}/)
       expect(processes).not.toBeNull()
       const block = processes[0].match(/match\s+\/cargoReport\/conference\s*\{[^}]*\}/)
       expect(block).not.toBeNull()
       expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
-      expect(block[0]).toMatch(
-        /allow\s+create,\s*update:\s*if\s+\(isAdmin\(\)\s*\|\|\s*isLogistics\(\)\)\s*&&\s*isValidCargoReportConference\(processId\)\s*;/
-      )
+      expect(block[0]).toMatch(/allow\s+create,\s*update:\s*if\s+isValidCargoReportConference\(processId\)/)
+      expect(block[0]).toMatch(/isLogistics\(\)\s*&&\s*isLogisticsCargoConferenceWrite\(processId\)/)
+      expect(block[0]).toMatch(/isAdmin\(\)\s*&&\s*isAdminCargoConferenceReopen\(\)/)
       expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
     })
 
@@ -124,13 +125,13 @@ describe('firestore.rules structure', () => {
       }
     })
 
-    it('isValidCargoReportCurrent: hasOnly + hasAll das 20 chaves, limites, revisao e autoria', () => {
+    it('isValidCargoReportCurrent: hasOnly + hasAll das 18 chaves (sem labeledBy/labelMadeBy), limites, revisao e autoria', () => {
       const fn = rules.match(/function\s+isValidCargoReportCurrent\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
       const keys = [
         'schemaVersion', 'formCode', 'formRevision', 'revision', 'status', 'cargoType', 'titleSuffix',
-        'rows', 'notes', 'labeledBy', 'labelMadeBy', 'receiptStatus', 'receivedDate', 'completedDate',
+        'rows', 'notes', 'receiptStatus', 'receivedDate', 'completedDate',
         'nfNumber', 'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
       ]
       const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
@@ -150,19 +151,29 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/updatedAt\s*==\s*request\.time/)
       expect(body).toMatch(/updatedById\s*==\s*request\.auth\.uid/)
       expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
+      expect(body).not.toMatch(/labeledBy|labelMadeBy/)
     })
 
-    it('isValidCargoReportConference: hasOnly + hasAll das 9 chaves, mapas de OK?/contagem/etiquetas e current existente', () => {
+    it('isValidCargoReportConference: hasOnly + hasAll das 18 chaves, mapas, recebimento, fechamento e current existente', () => {
       const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
       const keys = [
         'schemaVersion',
         'revision',
+        'status',
         'okByRowId',
         'countOkByRowId',
         'labelsByRowId',
         'checkedByName',
+        'receiptStatus',
+        'receivedDate',
+        'nfNumber',
+        'notes',
+        'closedDate',
+        'closedById',
+        'closedByName',
+        'closedDocumentId',
         'updatedAt',
         'updatedById',
         'updatedByName',
@@ -182,8 +193,72 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/labelsByRowId is map/)
       expect(body).toMatch(/labelsByRowId\.size\(\)\s*<=\s*200/)
       expect(body).toMatch(/checkedByName\.size\(\)\s*<=\s*120/)
+      expect(body).toMatch(/status\s+in\s+\[\s*'aberta',\s*'fechada'\s*\]/)
+      expect(body).toMatch(/receiptStatus\s+in\s+\[\s*'',\s*'com_ressalva',\s*'sem_ressalva'\s*\]/)
+      expect(body).toMatch(/nfNumber\.size\(\)\s*<=\s*40/)
+      expect(body).toMatch(/notes\.size\(\)\s*<=\s*2000/)
+      expect(body).toMatch(/closedByName\.size\(\)\s*<=\s*120/)
+      expect(body).toMatch(/closedDocumentId\.size\(\)\s*<=\s*128/)
+      expect(body).toMatch(/status\s*==\s*'fechada'\s*\?/)
       expect(body).toMatch(/resource\s*==\s*null\s*\?\s*1\s*:\s*resource\.data\.revision\s*\+\s*1/)
       expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
+    })
+
+    // S7: estados por area, travas e permissoes novas.
+    function fnBody(name) {
+      const fn = rules.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\n {4}\\}`))
+      expect(fn, `funcao ${name} nao encontrada`).not.toBeNull()
+      return fn[0]
+    }
+
+    it('S7: isCargoReportComexClosed e isCargoConferenceClosedNow leem current/conference (legado sem status = aberta)', () => {
+      expect(fnBody('isCargoReportComexClosed')).toMatch(/cargoReport\/current\)\.data\.status\s*==\s*'concluido'/)
+      const closed = fnBody('isCargoConferenceClosedNow')
+      expect(closed).toMatch(/cargoReport\/conference\)/)
+      expect(closed).toMatch(/data\.get\('status',\s*'aberta'\)\s*==\s*'fechada'/)
+    })
+
+    it('S7: isAllowedCargoReportCurrentTransition so deixa concluido voltar a rascunho com a conferencia aberta', () => {
+      const body = fnBody('isAllowedCargoReportCurrentTransition')
+      expect(body).toMatch(/resource\s*==\s*null/)
+      expect(body).toMatch(/resource\.data\.status\s*==\s*'rascunho'/)
+      expect(body).toMatch(/resource\.data\.status\s*==\s*'concluido'/)
+      expect(body).toMatch(/request\.resource\.data\.status\s*==\s*'rascunho'/)
+      expect(body).toContain('!isCargoConferenceClosedNow')
+    })
+
+    it('S7: isLogisticsCargoConferenceWrite trava nome, exige documento cargoReport proprio e COMEX fechado', () => {
+      const body = fnBody('isLogisticsCargoConferenceWrite')
+      expect(body).toMatch(/resource\s*==\s*null\s*\|\|\s*resource\.data\.get\('status',\s*'aberta'\)\s*==\s*'aberta'/)
+      expect(body).toContain('checkedByName == myName()')
+      expect(body).toContain('isCargoReportComexClosed(processId)')
+      expect(body).toContain('closedById == request.auth.uid')
+      expect(body).toContain('closedByName == myName()')
+      expect(body).toMatch(/\.data\.type\s*==\s*'cargoReport'/)
+      expect(body).toContain('uploadedById == request.auth.uid')
+    })
+
+    it('S7: isAdminCargoConferenceReopen so muda revision, status, closed* e carimbos', () => {
+      const body = fnBody('isAdminCargoConferenceReopen')
+      expect(body).toMatch(/resource\.data\.get\('status',\s*'aberta'\)\s*==\s*'fechada'/)
+      expect(body).toMatch(/request\.resource\.data\.status\s*==\s*'aberta'/)
+      const keys = body.match(/affectedKeys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
+      expect(keys).not.toBeNull()
+      const parsed = keys[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
+      expect(parsed).toEqual(
+        ['revision', 'status', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId', 'updatedAt', 'updatedById', 'updatedByName'].sort()
+      )
+    })
+
+    it('S7: documents create aceita cargoReport da logistica so no estado COMEX fechado; delete da logistica exclui cargoReport', () => {
+      const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(
+        /isLogistics\(\)\s*&&\s*request\.resource\.data\.type\s*==\s*'cargoReport'\s*&&\s*isCargoReportComexClosed\(processId\)\s*&&\s*!isCargoConferenceClosedNow\(processId\)/
+      )
+      expect(body).toMatch(/isLogistics\(\)\s*&&\s*request\.resource\.data\.type\s*==\s*'containerWash'/)
+      expect(body).toMatch(/allow\s+delete:[\s\S]*resource\.data\.type\s*!=\s*'cargoReport'/)
     })
   })
 

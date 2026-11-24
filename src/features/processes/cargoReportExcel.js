@@ -194,9 +194,10 @@ function patchSheetXml(sourceXml, sheet, extra) {
 
   if (isFilled(sheet.notes)) put(`B${38 + extra}`, { kind: 'text', value: sheet.notes })
   if (isFilled(sheet.checkedByName)) put(`I${38 + extra}`, { kind: 'text', value: withLabel('CONFERÊNCIA:', sheet.checkedByName) })
-  if (isFilled(sheet.labeledBy)) put(`L${37 + extra}`, { kind: 'text', value: withLabel('ETIQUETAGEM:', sheet.labeledBy) })
-  if (isFilled(sheet.labelMadeBy)) {
-    put(`L${38 + extra}`, { kind: 'text', value: withLabel('CONFECÇÃO ETIQUETA:', sheet.labelMadeBy) })
+  // S7: ETIQUETAGEM e CONFECÇÃO ETIQUETA do modelo recebem o "Conferido por" (automático); vazio mantém o rótulo do modelo.
+  if (isFilled(sheet.checkedByName)) {
+    put(`L${37 + extra}`, { kind: 'text', value: withLabel('ETIQUETAGEM:', sheet.checkedByName) })
+    put(`L${38 + extra}`, { kind: 'text', value: withLabel('CONFECÇÃO ETIQUETA:', sheet.checkedByName) })
   }
   if (isFilled(sheet.receivedDateBr)) {
     put(`I${39 + extra}`, { kind: 'text', value: withLabel('DATA RECEBIMENTO:', sheet.receivedDateBr) })

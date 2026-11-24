@@ -4545,8 +4545,6 @@ describeEmulator('firestore.rules (emulador)', () => {
       titleSuffix: 'ACME SEA 021-26',
       rows: rows(2),
       notes: '',
-      labeledBy: '',
-      labelMadeBy: '',
       nfNumber: '',
       receiptStatus: '',
       receivedDate: '',
@@ -4558,25 +4556,87 @@ describeEmulator('firestore.rules (emulador)', () => {
       updatedByName: 'Admin',
       ...overrides,
     })
+    // S7: 18 chaves. `checkedByName` e' travado no nome da claim da logistica ('Logistica').
     const conference = (overrides = {}) => ({
       schemaVersion: 1,
       revision: 1,
+      status: 'aberta',
       okByRowId: { 'r-0': true, 'r-1': false },
       countOkByRowId: { 'r-0': true, 'r-1': false },
       labelsByRowId: { 'r-0': { wms: 'WMS-77120', sq: 'SQ-0001' } },
-      checkedByName: 'Operador Logistica',
+      checkedByName: 'Logistica',
+      receiptStatus: '',
+      receivedDate: '',
+      nfNumber: '',
+      notes: '',
+      closedDate: '',
+      closedById: '',
+      closedByName: '',
+      closedDocumentId: '',
       updatedAt: serverTimestamp(),
       updatedById: 'log-1',
       updatedByName: 'Logistica',
       ...overrides,
     })
+    const CLOSED_DOC_ID = 'doc-cr-log'
+    const closedConference = (overrides = {}) =>
+      conference({
+        status: 'fechada',
+        closedDate: '2026-11-24',
+        closedById: 'log-1',
+        closedByName: 'Logistica',
+        closedDocumentId: CLOSED_DOC_ID,
+        ...overrides,
+      })
     const seedProcess = () => seed((db) => setDoc(doc(db, `processes/${PID}`), { name: 'ACME SEA 021-26' }))
-    const seedCurrent = async (revision = 1) => {
+    const seedCurrent = async (revision = 1, status = 'rascunho') => {
       await seedProcess()
-      await seed((db) => setDoc(doc(db, CUR), { ...current({ revision }), updatedAt: new Date('2026-11-01T10:00:00Z') }))
+      await seed((db) =>
+        setDoc(doc(db, CUR), { ...current({ revision, status }), updatedAt: new Date('2026-11-01T10:00:00Z') })
+      )
     }
-    const seedConference = (revision = 1) =>
-      seed((db) => setDoc(doc(db, CONF), { ...conference({ revision }), updatedAt: new Date('2026-11-01T11:00:00Z') }))
+    // Conferencia semeada: `status` aberta|fechada; `legacy` = doc anterior a S7 (9 chaves, sem `status`).
+    const seedConference = (revision = 1, status = 'aberta') =>
+      seed((db) =>
+        setDoc(doc(db, CONF), {
+          ...(status === 'fechada' ? closedConference({ revision }) : conference({ revision })),
+          updatedAt: new Date('2026-11-01T11:00:00Z'),
+        })
+      )
+    const seedLegacyConference = (revision = 1) =>
+      seed((db) =>
+        setDoc(doc(db, CONF), {
+          schemaVersion: 1,
+          revision,
+          okByRowId: { 'r-0': true },
+          countOkByRowId: {},
+          labelsByRowId: {},
+          checkedByName: 'Nome digitado',
+          updatedAt: new Date('2026-11-01T11:00:00Z'),
+          updatedById: 'admin-1',
+          updatedByName: 'Admin',
+        })
+      )
+    const cargoDocFields = (overrides = {}) => ({
+      type: 'cargoReport',
+      slotKey: 'cargoReport',
+      name: 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: 4096,
+      storagePath: `processes/${PID}/documents/cargoReport/1-log-1-x.xlsx`,
+      uploadedAt: serverTimestamp(),
+      uploadedById: 'log-1',
+      uploadedByName: 'Logistica',
+      uploadedByRole: 'logistica',
+      ...overrides,
+    })
+    const seedCargoDoc = (uploadedById = 'log-1', type = 'cargoReport') =>
+      seed((db) =>
+        setDoc(doc(db, `processes/${PID}/documents/${CLOSED_DOC_ID}`), {
+          ...cargoDocFields({ type, slotKey: type, uploadedById }),
+          uploadedAt: new Date('2026-11-01T11:30:00Z'),
+        })
+      )
     const roleDb = (role) =>
       testEnv
         .authenticatedContext(`${role}-1`, { email: `${role}@sqquimica.com`, role, status: 'Ativo', name: role })
@@ -4691,6 +4751,45 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertFails(getDoc(doc(admin(), `processes/${PID}/cargoReport/outro`)))
         await assertFails(setDoc(doc(admin(), `processes/${PID}/cargoReport/outro`), current()))
       })
+
+      it('S7: payload com labeledBy ou labelMadeBy falha; sem eles passa', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(admin(), CUR), current({ labeledBy: 'Fulano' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ labelMadeBy: 'Fulano' })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current()))
+      })
+
+      it('S7: rascunho -> rascunho e rascunho -> concluido passam; concluido -> concluido falha', async () => {
+        await seedCurrent(1, 'rascunho')
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, status: 'rascunho' })))
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 3, status: 'concluido' })))
+        await assertFails(setDoc(doc(admin(), CUR), current({ revision: 4, status: 'concluido' })))
+      })
+
+      it('S7: concluido -> rascunho passa com a conferencia ausente ou aberta', async () => {
+        await seedCurrent(1, 'concluido')
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, status: 'rascunho' })))
+        await seedCurrent(3, 'concluido')
+        await seedConference(1, 'aberta')
+        await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 4, status: 'rascunho' })))
+      })
+
+      it('S7: concluido -> rascunho FALHA com a conferencia fechada', async () => {
+        await seedCurrent(1, 'concluido')
+        await seedConference(1, 'fechada')
+        await assertFails(setDoc(doc(admin(), CUR), current({ revision: 2, status: 'rascunho' })))
+      })
+
+      it('S7: logistica nao grava o current em nenhum dos 3 estados', async () => {
+        const payload = (revision, status) =>
+          current({ revision, status, updatedById: 'log-1', updatedByName: 'Logistica' })
+        await seedCurrent(1, 'rascunho')
+        await assertFails(setDoc(doc(logistics(), CUR), payload(2, 'rascunho')))
+        await seedCurrent(1, 'concluido')
+        await assertFails(setDoc(doc(logistics(), CUR), payload(2, 'rascunho')))
+        await seedConference(1, 'fechada')
+        await assertFails(setDoc(doc(logistics(), CUR), payload(2, 'rascunho')))
+      })
     })
 
     describe('conference', () => {
@@ -4700,12 +4799,13 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertFails(setDoc(doc(admin(), CONF), conference({ updatedById: 'admin-1', updatedByName: 'Admin' })))
       })
 
-      it('com current: logistica cria revision 1 e admin atualiza com + 1; ambos leem', async () => {
+      it('com current: logistica cria revision 1 e le; admin le mas NAO cria nem salva conteudo', async () => {
         await seedCurrent()
+        await assertFails(setDoc(doc(admin(), CONF), conference({ updatedById: 'admin-1', updatedByName: 'Admin' })))
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference()))
         await assertSucceeds(getDoc(doc(logistics(), CONF)))
         await assertSucceeds(getDoc(doc(admin(), CONF)))
-        await assertSucceeds(
+        await assertFails(
           setDoc(doc(admin(), CONF), conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin' }))
         )
       })
@@ -4723,12 +4823,19 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
       })
 
-      it('tecnico, faturamento, usuario aprovado e anonimo nao leem nem gravam', async () => {
-        await seedCurrent()
-        await seedConference(1)
+      it('tecnico, faturamento, usuario aprovado e anonimo nao leem nem gravam em nenhum estado', async () => {
+        for (const stage of ['rascunho', 'concluido']) {
+          await seedCurrent(1, stage)
+          await seedConference(1)
+          for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+            await assertFails(getDoc(doc(db, CONF)))
+            await assertFails(setDoc(doc(db, CONF), conference({ revision: 2 })))
+          }
+        }
+        await seedConference(2, 'fechada')
         for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
           await assertFails(getDoc(doc(db, CONF)))
-          await assertFails(setDoc(doc(db, CONF), conference({ revision: 2 })))
+          await assertFails(setDoc(doc(db, CONF), conference({ revision: 3 })))
         }
       })
 
@@ -4740,20 +4847,14 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ okByRowId: ok(200) })))
       })
 
-      it('S6: logistica cria com etiquetas e contagem e admin atualiza (+ 1); ambos leem o conteudo', async () => {
+      it('S6: logistica cria com etiquetas e contagem; ambos leem o conteudo', async () => {
         await seedCurrent()
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference()))
         const fromLogistics = await assertSucceeds(getDoc(doc(logistics(), CONF)))
         expect(fromLogistics.data().labelsByRowId).toEqual({ 'r-0': { wms: 'WMS-77120', sq: 'SQ-0001' } })
         expect(fromLogistics.data().countOkByRowId).toEqual({ 'r-0': true, 'r-1': false })
-        await assertSucceeds(
-          setDoc(
-            doc(admin(), CONF),
-            conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin', labelsByRowId: { 'r-1': { wms: 'W2', sq: '' } } })
-          )
-        )
         const fromAdmin = await assertSucceeds(getDoc(doc(admin(), CONF)))
-        expect(fromAdmin.data().labelsByRowId).toEqual({ 'r-1': { wms: 'W2', sq: '' } })
+        expect(fromAdmin.data().labelsByRowId).toEqual({ 'r-0': { wms: 'WMS-77120', sq: 'SQ-0001' } })
       })
 
       it('S6: payload sem labelsByRowId ou sem countOkByRowId falha (bundle antigo nao apaga dados)', async () => {
@@ -4782,25 +4883,6 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ labelsByRowId: labels(200) })))
       })
 
-      it('S6: tecnico, faturamento, usuario aprovado e anonimo nao leem nem gravam o payload completo', async () => {
-        await seedCurrent()
-        await seedConference(1)
-        for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
-          await assertFails(getDoc(doc(db, CONF)))
-          await assertFails(
-            setDoc(doc(db, CONF), conference({ revision: 2, labelsByRowId: { 'r-0': { wms: 'X', sq: 'Y' } } }))
-          )
-        }
-      })
-
-      it('S6: revisao errada com o payload completo falha', async () => {
-        await seedCurrent()
-        await seedConference(1)
-        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 1 })))
-        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 3 })))
-        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
-      })
-
       it('S6: etiqueta com 121 caracteres e ACEITA pela rule (limite de 120 e do cliente; rules nao iteram mapas)', async () => {
         await seedCurrent()
         await assertSucceeds(
@@ -4812,7 +4894,13 @@ describeEmulator('firestore.rules (emulador)', () => {
         await seedCurrent()
         await assertFails(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'x'.repeat(121) })))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ extra: 1 })))
-        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'x'.repeat(120) })))
+      })
+
+      it('S7: checkedByName diferente da claim da logistica falha (Conferido por automatico e travado)', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'Outra Pessoa' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ checkedByName: '' })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ checkedByName: 'Logistica' })))
       })
 
       it('autoria: uid de outro e nome diferente da claim falham', async () => {
@@ -4826,6 +4914,246 @@ describeEmulator('firestore.rules (emulador)', () => {
         await seedConference(1)
         await assertFails(deleteDoc(doc(admin(), CONF)))
         await assertFails(deleteDoc(doc(logistics(), CONF)))
+      })
+
+      it('S7: logistica salva a conferencia aberta nos estados 1 (rascunho) e 2 (COMEX fechado)', async () => {
+        await seedCurrent(1, 'rascunho')
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 1 })))
+        await seedCurrent(2, 'concluido')
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      it('S7: shape novo: status, receiptStatus, receivedDate, nfNumber, notes e closedByName invalidos falham', async () => {
+        await seedCurrent()
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ status: 'x' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ receiptStatus: 'x' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ receivedDate: '24/11/2026' })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ nfNumber: 'x'.repeat(41) })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ notes: 'x'.repeat(2001) })))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ closedByName: 'x'.repeat(121) })))
+        await assertSucceeds(
+          setDoc(
+            doc(logistics(), CONF),
+            conference({
+              receiptStatus: 'com_ressalva',
+              receivedDate: '2026-11-22',
+              nfNumber: 'x'.repeat(40),
+              notes: 'x'.repeat(2000),
+            })
+          )
+        )
+      })
+
+      it('S7: payload sem status ou sem notes (bundle antigo) falha; revisao errada falha', async () => {
+        await seedCurrent()
+        const { status: _status, ...semStatus } = conference()
+        const { notes: _notes, ...semNotes } = conference()
+        await assertFails(setDoc(doc(logistics(), CONF), semStatus))
+        await assertFails(setDoc(doc(logistics(), CONF), semNotes))
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      it('S7: conferencia legada SEM status (9 chaves) conta como aberta: logistica atualiza com o payload novo', async () => {
+        await seedCurrent()
+        await seedLegacyConference(1)
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+      })
+
+      describe('fechar (logistica)', () => {
+        it('estado 2 com documento cargoReport proprio: fecha', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertSucceeds(setDoc(doc(logistics(), CONF), closedConference({ revision: 2 })))
+        })
+
+        it('estado 2 sem conferencia previa (create ja fechando): passa com o documento proprio', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedCargoDoc('log-1')
+          await assertSucceeds(setDoc(doc(logistics(), CONF), closedConference({ revision: 1 })))
+        })
+
+        it('estado 1 (COMEX em rascunho): fechar falha', async () => {
+          await seedCurrent(1, 'rascunho')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2 })))
+        })
+
+        it('falha com documento de outro uid, de outro tipo ou inexistente', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('outro-uid')
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2 })))
+          await seedCargoDoc('log-1', 'bl')
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2 })))
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, closedDocumentId: 'nao-existe' })))
+        })
+
+        it('falha com closedById de outro, closedDate invalida ou closedByName diferente da claim', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, closedById: 'outro-uid' })))
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, closedDate: '24/11/2026' })))
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, closedDate: '' })))
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, closedByName: 'Outra Pessoa' })))
+        })
+
+        it('fechada com closure vazia falha; aberta com closure preenchida falha', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertFails(
+            setDoc(
+              doc(logistics(), CONF),
+              closedConference({ revision: 2, closedDate: '', closedById: '', closedByName: '', closedDocumentId: '' })
+            )
+          )
+          await assertFails(
+            setDoc(
+              doc(logistics(), CONF),
+              conference({
+                revision: 2,
+                closedDate: '2026-11-24',
+                closedById: 'log-1',
+                closedByName: 'Logistica',
+                closedDocumentId: CLOSED_DOC_ID,
+              })
+            )
+          )
+        })
+
+        it('qualquer gravacao da logistica sobre conferencia ja fechada falha (salvar, refechar, reabrir)', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          await seedCargoDoc('log-1')
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2 })))
+          await assertFails(
+            setDoc(
+              doc(logistics(), CONF),
+              conference({ revision: 2, closedDate: '', closedById: '', closedByName: '', closedDocumentId: '' })
+            )
+          )
+        })
+      })
+
+      describe('reabrir (admin)', () => {
+        const reopened = (overrides = {}) =>
+          conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin', ...overrides })
+        const adminReopened = async (overrides = {}) => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          return setDoc(doc(admin(), CONF), reopened(overrides))
+        }
+
+        it('fechada -> aberta com a closure zerada e o conteudo intacto passa', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          await assertSucceeds(setDoc(doc(admin(), CONF), reopened()))
+          const snapshot = await assertSucceeds(getDoc(doc(logistics(), CONF)))
+          expect(snapshot.data().status).toBe('aberta')
+          expect(snapshot.data().closedDocumentId).toBe('')
+          expect(snapshot.data().checkedByName).toBe('Logistica')
+        })
+
+        it('reabrir mudando okByRowId, labelsByRowId, notes ou checkedByName falha', async () => {
+          await assertFails(adminReopened({ okByRowId: { 'r-0': false } }))
+          await assertFails(adminReopened({ labelsByRowId: { 'r-0': { wms: 'OUTRA', sq: '' } } }))
+          await assertFails(adminReopened({ notes: 'texto do admin' }))
+          await assertFails(adminReopened({ checkedByName: 'Admin' }))
+        })
+
+        it('admin nao fecha, nao salva conteudo e nao cria; reabrir doc ja aberto falha', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'aberta')
+          await assertFails(setDoc(doc(admin(), CONF), reopened()))
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ okByRowId: { 'r-0': false } })))
+          await assertFails(
+            setDoc(
+              doc(admin(), CONF),
+              closedConference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin' })
+            )
+          )
+        })
+
+        it('reabrir com revisao errada falha', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ revision: 3 })))
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ revision: 1 })))
+        })
+      })
+    })
+
+    describe('documents cargoReport (S7)', () => {
+      const DOC_PATH = `processes/${PID}/documents/d-new`
+
+      it('logistica cria cargoReport no estado 2 (COMEX fechado, conferencia aberta)', async () => {
+        await seedCurrent(1, 'concluido')
+        await assertSucceeds(setDoc(doc(logistics(), DOC_PATH), cargoDocFields()))
+        await seedConference(1, 'aberta')
+        await assertSucceeds(setDoc(doc(logistics(), `${DOC_PATH}-2`), cargoDocFields()))
+      })
+
+      it('logistica NAO cria cargoReport no estado 1, no estado 3 nem sem current', async () => {
+        await seedProcess()
+        await assertFails(setDoc(doc(logistics(), DOC_PATH), cargoDocFields()))
+        await seedCurrent(1, 'rascunho')
+        await assertFails(setDoc(doc(logistics(), DOC_PATH), cargoDocFields()))
+        await seedCurrent(2, 'concluido')
+        await seedConference(1, 'fechada')
+        await assertFails(setDoc(doc(logistics(), DOC_PATH), cargoDocFields()))
+      })
+
+      it('logistica continua sem criar bl, mesmo no estado 2', async () => {
+        await seedCurrent(1, 'concluido')
+        await assertFails(
+          setDoc(
+            doc(logistics(), DOC_PATH),
+            cargoDocFields({
+              type: 'bl',
+              slotKey: 'bl',
+              storagePath: `processes/${PID}/documents/bl/1-log-1-x.pdf`,
+            })
+          )
+        )
+      })
+
+      it('admin cria cargoReport em qualquer estado', async () => {
+        const adminFields = cargoDocFields({
+          storagePath: `processes/${PID}/documents/cargoReport/1-admin-1-x.xlsx`,
+          uploadedById: 'admin-1',
+          uploadedByName: 'Admin',
+          uploadedByRole: 'admin',
+        })
+        await seedProcess()
+        await assertSucceeds(setDoc(doc(admin(), `${DOC_PATH}-a`), adminFields))
+        await seedCurrent(1, 'rascunho')
+        await assertSucceeds(setDoc(doc(admin(), `${DOC_PATH}-b`), adminFields))
+        await seedCurrent(2, 'concluido')
+        await seedConference(1, 'fechada')
+        await assertSucceeds(setDoc(doc(admin(), `${DOC_PATH}-c`), adminFields))
+      })
+
+      it('logistica NAO apaga o proprio cargoReport e continua apagando o proprio containerWash', async () => {
+        await seedProcess()
+        await seedCargoDoc('log-1')
+        await assertFails(deleteDoc(doc(logistics(), `processes/${PID}/documents/${CLOSED_DOC_ID}`)))
+        await seed((db) =>
+          setDoc(doc(db, `processes/${PID}/documents/d-wash`), {
+            ...cargoDocFields({
+              type: 'containerWash',
+              slotKey: 'containerWash:CNT-1',
+              containerId: 'CNT-1',
+              storagePath: `processes/${PID}/documents/containerWash/CNT-1/1-log-1-x.pdf`,
+            }),
+            uploadedAt: new Date('2026-11-01T11:30:00Z'),
+          })
+        )
+        await assertSucceeds(deleteDoc(doc(logistics(), `processes/${PID}/documents/d-wash`)))
+        await assertSucceeds(deleteDoc(doc(admin(), `processes/${PID}/documents/${CLOSED_DOC_ID}`)))
       })
     })
   })

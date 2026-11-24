@@ -9,14 +9,19 @@ import {
   CARGO_TYPE_OPTIONS,
   RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
+  buildClosedConferencePayload,
   buildConcludedCargoReportPayload,
   buildConferencePayload,
   buildInitialCargoReport,
   buildReopenedCargoReportPayload,
+  canCloseCargoConference,
   canConcludeCargoReport,
   canConferCargoReport,
   canEditCargoReport,
   canOpenCargoReport,
+  canReopenCargoConference,
+  canReopenCargoReportComex,
+  canSaveCargoConference,
   computeLotSq,
   computePackages,
   countCargoReportAlerts,
@@ -27,7 +32,9 @@ import {
   formatCargoReportTitle,
   fromCargoReportDoc,
   fromConferenceDoc,
+  getCargoReportStage,
   isCargoReportRowEmpty,
+  normalizeCargoLabel,
   parseCargoCount,
   parseCargoNumber,
   resolveNetWeightKg,
@@ -51,7 +58,7 @@ function makeRow(overrides = {}) {
 // Allowlist literal das rules (secao C do PLAN): copia de `isValidCargoReportCurrent`.
 const RULE_ALLOWLIST = [
   'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
-  'cargoType', 'titleSuffix', 'rows', 'notes', 'labeledBy', 'labelMadeBy',
+  'cargoType', 'titleSuffix', 'rows', 'notes',
   'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
   'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
 ]
@@ -342,7 +349,11 @@ describe('buildCargoReportPayload', () => {
   it('as chaves do payload estao contidas na allowlist da rule', () => {
     const { payload } = buildCargoReportPayload(baseForm())
     for (const key of Object.keys(payload)) expect(RULE_ALLOWLIST).toContain(key)
+    // S7: 18 chaves no `current` (sem labeledBy/labelMadeBy); o repositório acrescenta updatedAt/ById/ByName.
+    expect(RULE_ALLOWLIST).toHaveLength(18)
     expect(Object.keys(payload)).toHaveLength(RULE_ALLOWLIST.length - 3)
+    expect(payload).not.toHaveProperty('labeledBy')
+    expect(payload).not.toHaveProperty('labelMadeBy')
   })
 
   it('a allowlist literal confere com o texto de firestore.rules', () => {
@@ -387,28 +398,38 @@ describe('buildCargoReportPayload', () => {
   })
 })
 
+const CONFERENCE_KEYS = [
+  'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+  'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
+]
+
 describe('buildConferencePayload', () => {
-  it('poda ids orfaos, converte para booleano e soma 1 na revisao', () => {
+  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 15 chaves (S7)', () => {
     const payload = buildConferencePayload(
-      { okByRowId: { a: true, b: 0, orfa: true }, checkedByName: '  Operador  ', revision: 2 },
-      [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+      { okByRowId: { a: true, b: 0, orfa: true }, revision: 2 },
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+      { actorName: '  Operador  ' }
     )
     expect(payload).toEqual({
       schemaVersion: 1,
       revision: 3,
+      status: 'aberta',
       okByRowId: { a: true, b: false },
       countOkByRowId: {},
       labelsByRowId: {},
       checkedByName: 'Operador',
+      receiptStatus: '',
+      receivedDate: '',
+      nfNumber: '',
+      notes: '',
+      closedDate: '',
+      closedById: '',
+      closedByName: '',
+      closedDocumentId: '',
     })
-    expect(Object.keys(payload)).toEqual([
-      'schemaVersion',
-      'revision',
-      'okByRowId',
-      'countOkByRowId',
-      'labelsByRowId',
-      'checkedByName',
-    ])
+    expect(Object.keys(payload)).toEqual(CONFERENCE_KEYS)
+    // O repositório acrescenta updatedAt/updatedById/updatedByName: 15 + 3 = 18 chaves nas rules.
+    expect(CONFERENCE_KEYS).toHaveLength(15)
   })
 
   it('S6: poda id orfao nos 3 mapas e força booleano na contagem', () => {
@@ -417,43 +438,113 @@ describe('buildConferencePayload', () => {
         okByRowId: { a: true, orfa: true },
         countOkByRowId: { a: 1, b: false, orfa: true },
         labelsByRowId: { a: { wms: 'W1', sq: 'S1' }, orfa: { wms: 'X', sq: 'Y' } },
-        checkedByName: 'Op',
         revision: 0,
       },
-      [{ id: 'a' }, { id: 'b' }]
+      [{ id: 'a' }, { id: 'b' }],
+      { actorName: 'Op' }
     )
     expect(payload.okByRowId).toEqual({ a: true })
     expect(payload.countOkByRowId).toEqual({ a: true, b: false })
     expect(payload.labelsByRowId).toEqual({ a: { wms: 'W1', sq: 'S1' } })
   })
 
-  it('S6: etiqueta é cortada em 120 com trim; entrada vazia some; mantém só uma etiqueta preenchida', () => {
+  it('S7: etiqueta vira MAIÚSCULAS (pt-BR), com trim; corte em 120 vale DEPOIS das maiúsculas; entrada vazia some', () => {
     const payload = buildConferencePayload(
       {
         labelsByRowId: {
-          a: { wms: `  ${'w'.repeat(200)}  `, sq: ' S ' },
+          a: { wms: `  ${'w'.repeat(200)}  `, sq: ' s ' },
           b: { wms: '   ', sq: '' },
-          c: { wms: 'X', sq: '' },
+          c: { wms: 'wms-ç ß', sq: 'ação' },
           d: 'texto solto',
+          e: { wms: 'ß'.repeat(100), sq: '' },
         },
         revision: 0,
       },
-      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }],
+      { actorName: 'Op' }
     )
-    expect(payload.labelsByRowId.a).toEqual({ wms: 'w'.repeat(120), sq: 'S' })
+    expect(payload.labelsByRowId.a).toEqual({ wms: 'W'.repeat(120), sq: 'S' })
     expect(payload.labelsByRowId).not.toHaveProperty('b')
-    expect(payload.labelsByRowId.c).toEqual({ wms: 'X', sq: '' })
+    expect(payload.labelsByRowId.c).toEqual({ wms: 'WMS-Ç SS', sq: 'AÇÃO' })
     expect(payload.labelsByRowId).not.toHaveProperty('d')
+    // 100 x "ß" viram 200 letras ("SS"): o corte em 120 vale depois da conversão.
+    expect(payload.labelsByRowId.e.wms).toBe('S'.repeat(120))
   })
 
-  it('corta o nome em 120 caracteres', () => {
-    const payload = buildConferencePayload({ okByRowId: {}, checkedByName: 'x'.repeat(200), revision: 0 }, [])
-    expect(payload.checkedByName).toHaveLength(120)
+  it('S7: "Conferido por" é SEMPRE o actorName, mesmo se o input trouxer outro nome; corta em 120', () => {
+    const payload = buildConferencePayload({ okByRowId: {}, checkedByName: 'Outra Pessoa', revision: 0 }, [], {
+      actorName: 'x'.repeat(200),
+    })
+    expect(payload.checkedByName).toBe('x'.repeat(120))
     expect(payload.revision).toBe(1)
+    expect(buildConferencePayload({ checkedByName: 'Outra Pessoa', revision: 0 }, [], { actorName: 'Logística' }).checkedByName).toBe(
+      'Logística'
+    )
+    expect(buildConferencePayload({ checkedByName: 'Outra Pessoa', revision: 0 }, []).checkedByName).toBe('')
+  })
+
+  it('S7: rodapé do recebimento normalizado (enum inválido, data inválida, NF e observações cortadas)', () => {
+    const invalid = buildConferencePayload(
+      { receiptStatus: 'conforme', receivedDate: '24/11/2026', nfNumber: 'n'.repeat(41), notes: '  obs  ', revision: 0 },
+      [],
+      { actorName: 'Op' }
+    )
+    expect(invalid).toMatchObject({ receiptStatus: '', receivedDate: '', notes: 'obs' })
+    expect(invalid.nfNumber).toBe('n'.repeat(40))
+
+    const valid = buildConferencePayload(
+      { receiptStatus: 'com_ressalva', receivedDate: '2026-11-22', nfNumber: ' 000.123 ', notes: 'x'.repeat(2500), revision: 0 },
+      [],
+      { actorName: 'Op' }
+    )
+    expect(valid).toMatchObject({ receiptStatus: 'com_ressalva', receivedDate: '2026-11-22', nfNumber: '000.123' })
+    expect(valid.notes).toHaveLength(2000)
   })
 })
 
-describe('fromConferenceDoc (S6)', () => {
+describe('S7: buildClosedConferencePayload', () => {
+  it('fecha com a trilha de quem fechou; closedDocumentId fica vazio (o repositório preenche)', () => {
+    const payload = buildClosedConferencePayload(
+      { okByRowId: { a: true }, receiptStatus: 'sem_ressalva', revision: 4 },
+      [{ id: 'a' }],
+      { actorName: ' Operador Logística ', actorUid: 'log-1', today: '2026-11-24' }
+    )
+    expect(Object.keys(payload)).toEqual(CONFERENCE_KEYS)
+    expect(payload).toMatchObject({
+      revision: 5,
+      status: 'fechada',
+      checkedByName: 'Operador Logística',
+      receiptStatus: 'sem_ressalva',
+      closedDate: '2026-11-24',
+      closedById: 'log-1',
+      closedByName: 'Operador Logística',
+      closedDocumentId: '',
+    })
+  })
+
+  it('closedDate usa o dia local (toCargoDateKey), nunca UTC; data inválida vira vazio', () => {
+    const lateEvening = new Date(2026, 10, 24, 23, 30)
+    const payload = buildClosedConferencePayload({ revision: 0 }, [], {
+      actorName: 'Op',
+      actorUid: 'u1',
+      today: toCargoDateKey(lateEvening),
+    })
+    expect(payload.closedDate).toBe('2026-11-24')
+    expect(buildClosedConferencePayload({ revision: 0 }, [], { actorName: 'Op', actorUid: 'u1', today: '24/11' }).closedDate).toBe('')
+  })
+})
+
+describe('normalizeCargoLabel (S7)', () => {
+  it('MAIÚSCULAS pt-BR, trim e corte em 120; vazio e não texto viram vazio', () => {
+    expect(normalizeCargoLabel(' wms-ç ã ')).toBe('WMS-Ç Ã')
+    expect(normalizeCargoLabel('ß')).toBe('SS')
+    expect(normalizeCargoLabel('a'.repeat(130))).toHaveLength(120)
+    expect(normalizeCargoLabel(null)).toBe('')
+    expect(normalizeCargoLabel(undefined)).toBe('')
+  })
+})
+
+describe('fromConferenceDoc (S6/S7)', () => {
   it('lê os mapas, ignora não booleano e etiqueta que não é mapa, e corta etiqueta em 120', () => {
     const conference = fromConferenceDoc({
       revision: 4,
@@ -465,10 +556,20 @@ describe('fromConferenceDoc (S6)', () => {
     expect(conference.revision).toBe(4)
     expect(conference.okByRowId).toEqual({ a: true })
     expect(conference.countOkByRowId).toEqual({ a: false, b: true })
-    expect(conference.labelsByRowId.a).toEqual({ wms: 'x'.repeat(120), sq: 'S' })
+    expect(conference.labelsByRowId.a).toEqual({ wms: 'X'.repeat(120), sq: 'S' })
     expect(conference.labelsByRowId).not.toHaveProperty('b')
     expect(conference.labelsByRowId.c).toEqual({ wms: '', sq: '' })
     expect(conference.checkedByName).toBe('Op')
+  })
+
+  it('S7: etiqueta minúscula legada é lida em MAIÚSCULAS (doc e linhas legadas)', () => {
+    expect(fromConferenceDoc({ labelsByRowId: { a: { wms: 'wms-1', sq: 'sq-ç' } } }).labelsByRowId.a).toEqual({
+      wms: 'WMS-1',
+      sq: 'SQ-Ç',
+    })
+    expect(fromConferenceDoc(null, [{ id: 'a', wmsLabel: 'w1', sqLabel: '' }]).labelsByRowId).toEqual({
+      a: { wms: 'W1', sq: '' },
+    })
   })
 
   it('doc sem labelsByRowId pré-preenche as etiquetas pelas linhas legadas do current; count legado não vira contagem', () => {
@@ -490,6 +591,95 @@ describe('fromConferenceDoc (S6)', () => {
   it('doc COM labelsByRowId (mesmo vazio) não pré-preenche: o legado deixa de ser lido', () => {
     const conference = fromConferenceDoc({ revision: 1, labelsByRowId: {} }, [{ id: 'a', wmsLabel: 'W1', sqLabel: 'S1' }])
     expect(conference.labelsByRowId).toEqual({})
+  })
+
+  it('S7: doc sem status é aberta; status fechada traz a trilha; qualquer outro valor é aberta', () => {
+    expect(fromConferenceDoc({ revision: 1 }).status).toBe('aberta')
+    expect(fromConferenceDoc({ status: 'x' }).status).toBe('aberta')
+    const closed = fromConferenceDoc({
+      revision: 3,
+      status: 'fechada',
+      receiptStatus: '',
+      closedDate: '2026-11-24',
+      closedById: 'log-1',
+      closedByName: 'Op',
+      closedDocumentId: 'd1',
+    })
+    expect(closed).toMatchObject({
+      status: 'fechada',
+      closedDate: '2026-11-24',
+      closedById: 'log-1',
+      closedByName: 'Op',
+      closedDocumentId: 'd1',
+    })
+    // Aberta ignora uma trilha órfã.
+    expect(fromConferenceDoc({ status: 'aberta', closedDate: '2026-11-24', closedById: 'x' })).toMatchObject({
+      closedDate: '',
+      closedById: '',
+    })
+  })
+
+  it('S7: doc sem receiptStatus (anterior à S7) pré-preenche o rodapé pelo current legado; com a chave, não', () => {
+    const legacyCurrent = {
+      notes: ' Palete 3 avariado ',
+      receiptStatus: 'com_ressalva',
+      receivedDate: '2026-11-22',
+      nfNumber: '000.123.456',
+    }
+    const prefilled = fromConferenceDoc({ revision: 2, checkedByName: 'Op' }, [], legacyCurrent)
+    expect(prefilled).toMatchObject({
+      notes: 'Palete 3 avariado',
+      receiptStatus: 'com_ressalva',
+      receivedDate: '2026-11-22',
+      nfNumber: '000.123.456',
+    })
+    expect(fromConferenceDoc(null, [], legacyCurrent).notes).toBe('Palete 3 avariado')
+
+    const own = fromConferenceDoc({ revision: 3, receiptStatus: '', receivedDate: '', nfNumber: '', notes: '' }, [], legacyCurrent)
+    expect(own).toMatchObject({ notes: '', receiptStatus: '', receivedDate: '', nfNumber: '' })
+  })
+})
+
+describe('S7: getCargoReportStage', () => {
+  it('3 estados derivados de current.status e conference.status; doc ausente = rascunho', () => {
+    expect(getCargoReportStage('rascunho', 'aberta')).toBe('rascunho')
+    expect(getCargoReportStage(undefined, undefined)).toBe('rascunho')
+    expect(getCargoReportStage('rascunho', 'fechada')).toBe('rascunho')
+    expect(getCargoReportStage('concluido', 'aberta')).toBe('comexFechado')
+    expect(getCargoReportStage('concluido', undefined)).toBe('comexFechado')
+    expect(getCargoReportStage('concluido', 'fechada')).toBe('concluido')
+  })
+})
+
+describe('S7: matriz de permissões por papel e estado (B2/B3)', () => {
+  const stages = ['rascunho', 'comexFechado', 'concluido']
+
+  it('salvar a conferência: só a logística, nos estados 1 e 2', () => {
+    expect(stages.map((stage) => canSaveCargoConference('logistica', stage))).toEqual([true, true, false])
+    for (const role of ['admin', 'tecnico', 'faturamento', 'user', undefined]) {
+      expect(stages.map((stage) => canSaveCargoConference(role, stage))).toEqual([false, false, false])
+    }
+  })
+
+  it('fechar a conferência: só a logística, só com o COMEX fechado', () => {
+    expect(stages.map((stage) => canCloseCargoConference('logistica', stage))).toEqual([false, true, false])
+    for (const role of ['admin', 'tecnico', 'faturamento', 'user']) {
+      expect(stages.map((stage) => canCloseCargoConference(role, stage))).toEqual([false, false, false])
+    }
+  })
+
+  it('reabrir a conferência: só o admin, no estado 3', () => {
+    expect(stages.map((stage) => canReopenCargoConference('admin', stage))).toEqual([false, false, true])
+    for (const role of ['logistica', 'tecnico', 'faturamento', 'user']) {
+      expect(stages.map((stage) => canReopenCargoConference(role, stage))).toEqual([false, false, false])
+    }
+  })
+
+  it('reabrir a parte do COMEX: só o admin, nos estados 2 e 3', () => {
+    expect(stages.map((stage) => canReopenCargoReportComex('admin', stage))).toEqual([false, true, true])
+    for (const role of ['logistica', 'tecnico', 'faturamento', 'user']) {
+      expect(stages.map((stage) => canReopenCargoReportComex(role, stage))).toEqual([false, false, false])
+    }
   })
 })
 

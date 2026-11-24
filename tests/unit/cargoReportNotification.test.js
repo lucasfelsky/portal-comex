@@ -4,12 +4,17 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY,
+  CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE,
+  CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX,
   CARGO_REPORT_NOTIFICATION_BODY,
   CARGO_REPORT_NOTIFICATION_TYPE,
+  buildCargoReportConferenceSubject,
   buildCargoReportSubject,
   extractCargoReportProcessLabel,
   normalizeCargoReportRecipientsConfig,
   planCargoReportRecipients,
+  resolveCargoReportUploadStage,
 } from '../../functions/src/process/cargoReportNotification.js'
 
 const isCorporateEmail = (email) => String(email ?? '').trim().toLowerCase().endsWith('@sqquimica.com')
@@ -239,5 +244,70 @@ describe('planCargoReportRecipients', () => {
       usersByEmail,
     })
     expect(userRecipients.map((user) => user.id)).toEqual(['admin-1', 'admin-2', 'logi-1', 'tec-1'])
+  })
+})
+
+// S7: aviso da conferência da logística (mesmo trigger, estágio pelo `uploadedByRole` do documento).
+describe('S7: aviso da conferência da logística', () => {
+  it('tipo, corpo in-app e prefixo do assunto EXATOS', () => {
+    expect(CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE).toBe('process_cargo_report_conference')
+    expect(CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY).toBe(
+      'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.'
+    )
+    expect(CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX).toBe('Conferência do Relatório de Carga')
+  })
+
+  it.each(['FCL', 'LCL', 'AEREO'])('buildCargoReportConferenceSubject %s: PO <numero> - <nome>', (category) => {
+    expect(buildCargoReportConferenceSubject({ category, processNumber: '9036', name: 'BETA SEA 904-26' })).toBe(
+      'Conferência do Relatório de Carga - PO 9036 - BETA SEA 904-26'
+    )
+  })
+
+  it('CONSOLIDADO usa só o nome; partes ausentes somem sem hífen; sem nada, só o prefixo', () => {
+    expect(buildCargoReportConferenceSubject({ category: 'CONSOLIDADO', processNumber: '9', name: 'CON CN 901-26' })).toBe(
+      'Conferência do Relatório de Carga - CON CN 901-26'
+    )
+    expect(buildCargoReportConferenceSubject({ category: 'FCL', processNumber: '9036' })).toBe(
+      'Conferência do Relatório de Carga - PO 9036'
+    )
+    expect(buildCargoReportConferenceSubject({ category: 'FCL', name: 'X' })).toBe('Conferência do Relatório de Carga - X')
+    expect(buildCargoReportConferenceSubject({})).toBe('Conferência do Relatório de Carga')
+    expect(buildCargoReportConferenceSubject(undefined)).toBe('Conferência do Relatório de Carga')
+  })
+
+  it('sem CR/LF no assunto (header injection) e sem o prefixo "[Portal COMEX]"', () => {
+    const subject = buildCargoReportConferenceSubject({ category: 'FCL', processNumber: '1', name: 'A\r\nBcc: x@evil.com' })
+    expect(/[\r\n]/.test(subject)).toBe(false)
+    expect(subject).toBe('Conferência do Relatório de Carga - PO 1 - A Bcc: x@evil.com')
+    expect(subject).not.toContain('[Portal COMEX]')
+  })
+
+  it('o assunto do COMEX não muda nem 1 caractere', () => {
+    expect(buildCargoReportSubject({ category: 'FCL', processNumber: '9036', name: 'BETA SEA 904-26' })).toBe(
+      'Relatório de Carga - PO 9036 - BETA SEA 904-26'
+    )
+    expect(buildCargoReportSubject({ category: 'CONSOLIDADO', name: 'CON CN 901-26' })).toBe('Relatório de Carga - CON CN 901-26')
+    expect(buildCargoReportSubject({})).toBe('Relatório de Carga')
+  })
+
+  it('extractCargoReportProcessLabel reconhece os 2 prefixos', () => {
+    expect(
+      extractCargoReportProcessLabel(
+        buildCargoReportConferenceSubject({ category: 'FCL', processNumber: '9036', name: 'BETA SEA 904-26' })
+      )
+    ).toBe('PO 9036 - BETA SEA 904-26')
+    expect(extractCargoReportProcessLabel('Conferência do Relatório de Carga - CON CN 901-26')).toBe('CON CN 901-26')
+    expect(extractCargoReportProcessLabel('Conferência do Relatório de Carga')).toBe('')
+    expect(extractCargoReportProcessLabel('Relatório de Carga - PO 1 - X')).toBe('PO 1 - X')
+  })
+
+  it('resolveCargoReportUploadStage: logística = conferência; admin, vazio e ausente = COMEX', () => {
+    expect(resolveCargoReportUploadStage({ uploadedByRole: 'logistica' })).toBe('conferencia')
+    expect(resolveCargoReportUploadStage({ uploadedByRole: ' logistica ' })).toBe('conferencia')
+    expect(resolveCargoReportUploadStage({ uploadedByRole: 'admin' })).toBe('comex')
+    expect(resolveCargoReportUploadStage({ uploadedByRole: '' })).toBe('comex')
+    expect(resolveCargoReportUploadStage({})).toBe('comex')
+    expect(resolveCargoReportUploadStage(null)).toBe('comex')
+    expect(resolveCargoReportUploadStage(undefined)).toBe('comex')
   })
 })
