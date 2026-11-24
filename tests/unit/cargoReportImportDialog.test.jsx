@@ -112,7 +112,7 @@ describe('CargoReportImportDialog', () => {
     expect(screen.getByText('sem lote')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Lote SQ, peso líquido e nº de embalagens não são importados: o Portal recalcula com a tabela Item x Emb. atual.'
+        'Lote SQ, peso líquido e nº de embalagens não são importados: o Portal recalcula com a tabela Item x Emb. atual. OK?, etiquetas e contagem também não: são da conferência da logística.'
       )
     ).toBeInTheDocument()
 

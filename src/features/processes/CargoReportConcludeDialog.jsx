@@ -4,6 +4,7 @@ import Icon from '../../components/Icon'
 import Modal from '../../components/Modal'
 import {
   concludeCargoReport,
+  getCargoReport,
   reopenCargoReport,
   retryConcludeWrite,
 } from '../../services/cargoReportRepository'
@@ -18,6 +19,7 @@ import {
   buildReopenedCargoReportPayload,
   canConcludeCargoReport,
   canEditCargoReport,
+  fromConferenceDoc,
   toCargoDateKey,
 } from './cargoReportFormModel'
 import { buildCargoReportSheet, describeCargoReportAlerts } from './cargoReportSheet'
@@ -35,7 +37,10 @@ const MESSAGES = {
   attachedNotSaved: 'O Excel foi anexado e o aviso enviado, mas o relatório não foi marcado como concluído.',
   attachedConflict:
     'O Excel foi anexado e o aviso enviado, mas outra pessoa salvou o relatório antes. Recarregue e confira.',
-  conferHint: 'Você marca o OK? e informa quem conferiu. As demais colunas são só do COMEX.',
+  conferHint:
+    'Você marca o OK? e a contagem, preenche as etiquetas e informa quem conferiu. As demais colunas são só do COMEX.',
+  conferenceChanged:
+    'A logística salvou a conferência depois que você abriu o relatório. Recarregue para ver o OK?, as etiquetas e a contagem antes de concluir.',
   catalogMissing:
     'A tabela Item x Emb. não está disponível: peso líquido e nº de embalagens vão vazios no relatório concluído, e ao reabrir a tabela volta a calcular.',
 }
@@ -226,6 +231,8 @@ export function CargoReportActionBar({
   }
 
   // Salva o "Conferido por" se mudou, gera o Excel, anexa pelo fluxo de documentos e grava o concluído.
+  // Antes de tudo relê a conferência no servidor: se a logística salvou depois que a tela abriu, o Excel
+  // sairia com OK?, contagem e etiquetas velhos; nesse caso nada é anexado nem enviado.
   async function handleConfirmConclude() {
     if (!canConclude || isBusy) return
     await runWork(async () => {
@@ -242,6 +249,12 @@ export function CargoReportActionBar({
           return
         }
         concluded = built.payload
+
+        const latest = await getCargoReport(processId)
+        if (fromConferenceDoc(latest.conference).revision !== savedConference.revision) {
+          onFeedback({ kind: 'conflict', text: MESSAGES.conferenceChanged })
+          return
+        }
 
         const nameChanged =
           String(conference.checkedByName ?? '').trim() !== String(savedConference.checkedByName ?? '').trim()

@@ -40,6 +40,7 @@ describe('buildCargoReportSheet', () => {
           dbcorpCode: 'AD5240',
           supplierLot: 'DF2406A',
           quantityKg: '12.500',
+          wmsLabel: 'WMS-LEGADO',
           count: '500',
           packageWeightKg: '1,2',
         }),
@@ -48,7 +49,12 @@ describe('buildCargoReportSheet', () => {
     )
     const sheet = buildCargoReportSheet(form, {
       process: PROCESS,
-      conference: { okByRowId: { a: true }, checkedByName: ' Operador Logística ' },
+      conference: {
+        okByRowId: { a: true },
+        countOkByRowId: { a: true },
+        labelsByRowId: { a: { wms: 'WMS-77120', sq: 'SQ-0001' } },
+        checkedByName: ' Operador Logística ',
+      },
       catalog: CATALOG,
     })
 
@@ -65,18 +71,29 @@ describe('buildCargoReportSheet', () => {
       alerts: [],
     })
     expect(sheet.rows).toHaveLength(1)
+    expect(sheet.rows[0]).not.toHaveProperty('count')
     expect(sheet.rows[0]).toMatchObject({
       po: '4500123',
       dbcorpCode: 'AD5240',
       ok: true,
       supplierLot: 'DF2406A',
       lotSq: 'DF2406A450',
+      wmsLabel: 'WMS-77120',
+      sqLabel: 'SQ-0001',
       quantityKg: 12500,
-      count: 500,
+      countOk: true,
       netWeightKg: 25,
       packageWeightKg: 1.2,
       packages: 500,
     })
+  })
+
+  it('S6: etiquetas legadas do current não valem; sem conferência etiquetas vazias e contagem sem OK', () => {
+    const form = makeForm([makeRow({ id: 'a', po: '1', wmsLabel: 'LEGADO-W', sqLabel: 'LEGADO-S', count: 40 })])
+    for (const conference of [null, {}, { labelsByRowId: {} }]) {
+      const sheet = buildCargoReportSheet(form, { process: PROCESS, conference, catalog: CATALOG })
+      expect(sheet.rows[0]).toMatchObject({ wmsLabel: '', sqLabel: '', countOk: false })
+    }
   })
 
   it('descarta linhas vazias, não corta nas 28 do modelo, para no teto e usa ok=false sem conferência', () => {

@@ -75,10 +75,7 @@ function mockScenarioForm(overrides = {}) {
         supplierDescription: 'DEA FOAM14339 - BOMBONA 25KG',
         sqDescription: 'DEA FOAM14339 - BB 25KG',
         supplierLot: 'DF2406A',
-        wmsLabel: 'WMS-77120',
-        sqLabel: 'SQ-001245',
         quantityKg: 12500,
-        count: 500,
         packageWeightKg: 1.2,
       }),
       makeRow('b', {
@@ -86,10 +83,7 @@ function mockScenarioForm(overrides = {}) {
         dbcorpCode: 'RE5116',
         supplierDescription: 'DEGALAN 64/12 N - CX 25KG',
         sqDescription: 'DEGALAN 64/12 N - CX 25KG',
-        wmsLabel: 'WMS-77121',
-        sqLabel: 'SQ-001246',
         quantityKg: 5000,
-        count: 200,
       }),
       makeRow('c', {
         po: '4500123',
@@ -98,7 +92,6 @@ function mockScenarioForm(overrides = {}) {
         sqDescription: 'ADITIVO NOVO XR',
         supplierLot: 'XR0911',
         quantityKg: 800,
-        count: 40,
         packageWeightKg: 0.9,
       }),
       makeRow('d', {
@@ -107,10 +100,7 @@ function mockScenarioForm(overrides = {}) {
         supplierDescription: 'MONOMERO EXEMPLO - BLD 5KG',
         sqDescription: 'MONOMERO EXEMPLO - BLD 5KG',
         supplierLot: 'ME2407',
-        wmsLabel: 'WMS-77125',
-        sqLabel: 'SQ-001249',
         quantityKg: 1000,
-        count: 200,
         packageWeightKg: 0.4,
       }),
       makeRow('e', {
@@ -134,7 +124,17 @@ function mockScenarioForm(overrides = {}) {
   }
 }
 
-const MOCK_CONFERENCE = { okByRowId: { a: true, b: true, d: true }, checkedByName: 'Operador Logística' }
+// S6: etiquetas, OK? e contagem OK são da conferência da logística (a linha b fica sem contagem OK).
+const MOCK_CONFERENCE = {
+  okByRowId: { a: true, b: true, d: true },
+  countOkByRowId: { a: true, d: true },
+  labelsByRowId: {
+    a: { wms: 'WMS-77120', sq: 'SQ-001245' },
+    b: { wms: 'WMS-77121', sq: 'SQ-001246' },
+    d: { wms: 'WMS-77125', sq: 'SQ-001249' },
+  },
+  checkedByName: 'Operador Logística',
+}
 
 function buildSheet(form = mockScenarioForm(), conference = MOCK_CONFERENCE) {
   return buildCargoReportSheet(form, { process: PROCESS, conference, catalog: CATALOG })
@@ -229,6 +229,14 @@ describe('cenário do mock (FCL, 5 linhas)', () => {
     expect(ws.N5.v).toBe('REVISÃO: 005')
   })
 
+  it('S6: etiquetas e contagem vêm da conferência; linha sem contagem OK deixa a coluna L como no modelo', () => {
+    expect(ws.I10.v).toBe('WMS-77121')
+    expect(ws.J10.v).toBe('SQ-001246')
+    expect(cellXml(xml, 'L10')).not.toContain('<v>')
+    expect(ws.L11?.v).toBeUndefined()
+    expect(ws.L12.v).toBe('OK')
+  })
+
   it('linha 9: textos, números e fórmulas com cache', () => {
     expect(ws.B9.v).toBe('4500123')
     expect(ws.C9.v).toBe('AD5240')
@@ -237,9 +245,11 @@ describe('cenário do mock (FCL, 5 linhas)', () => {
     expect(ws.H9.f).toBe('G9&(LEFT(B9,3))')
     expect(ws.H9.v).toBe('DF2406A450')
     expect(ws.I9.v).toBe('WMS-77120')
+    expect(ws.J9.v).toBe('SQ-001245')
     expect(ws.K9.v).toBe(12500)
     expect(ws.K9.t).toBe('n')
-    expect(ws.L9.v).toBe(500)
+    expect(ws.L9.v).toBe('OK')
+    expect(ws.L9.t).toBe('s')
     expect(ws.M9.v).toBe(25)
     expect(ws.M9.f).toBeUndefined()
     expect(ws.N9.v).toBe(1.2)
@@ -457,21 +467,36 @@ function manyRowsForm(count, overrides = {}) {
       supplierDescription: `DESCRICAO FORNECEDOR ${index}`,
       sqDescription: `DESCRICAO SQ ${index}`,
       supplierLot: `L${index}`,
-      wmsLabel: `WMS-${index}`,
-      sqLabel: `SQ-${index}`,
       quantityKg: 1000 + index,
-      count: index + 1,
       packageWeightKg: 1.5,
     })
   )
   return mockScenarioForm({ rows, ...overrides })
 }
 
+// Conferência das amostras com muitas linhas: OK?, contagem e etiquetas só nas linhas dadas.
+function manyRowsConference(count, { okIds = [], countOkIds = [] } = {}) {
+  const labelsByRowId = Object.fromEntries(
+    Array.from({ length: count }, (_, index) => [`m-${index}`, { wms: `WMS-${index}`, sq: `SQ-${index}` }])
+  )
+  return {
+    okByRowId: Object.fromEntries(okIds.map((id) => [id, true])),
+    countOkByRowId: Object.fromEntries(countOkIds.map((id) => [id, true])),
+    labelsByRowId,
+    checkedByName: 'Operador Logística',
+  }
+}
+
 const FOOTER_ROWS = { notes: 38, conference: 38, labeled: 37, labelMade: 38, received: 39, completed: 39, nf: 40, box: 40 }
 
 describe.each([29, 45, 200])('xlsx com %i linhas (acima das 28 do modelo)', (count) => {
   const extra = count - 28
-  const { bytes, files, book } = generate(buildSheet(manyRowsForm(count), { okByRowId: { 'm-0': true, [`m-${count - 1}`]: true }, checkedByName: 'Operador Logística' }))
+  const { bytes, files, book } = generate(
+    buildSheet(
+      manyRowsForm(count),
+      manyRowsConference(count, { okIds: ['m-0', `m-${count - 1}`], countOkIds: ['m-0', `m-${count - 1}`] })
+    )
+  )
   const xml = sheetXml(files)
   const ws = book.Sheets['SQ QUIMICA']
   const lastRow = 8 + count
@@ -493,6 +518,10 @@ describe.each([29, 45, 200])('xlsx com %i linhas (acima das 28 do modelo)', (cou
       expect(ws[`M${line}`].v).toBe(25)
     }
     expect(ws[`F${lastRow}`].v).toBe('OK')
+    expect(ws[`L${lastRow}`].v).toBe('OK')
+    expect(ws[`I${lastRow}`].v).toBe(`WMS-${count - 1}`)
+    expect(ws[`J${lastRow}`].v).toBe(`SQ-${count - 1}`)
+    expect(ws[`L${lastRow - 1}`]?.v).not.toBe('OK')
   })
 
   it('o rodapé desceu junto: rótulos, valores e caixas de ressalva nas linhas deslocadas', () => {
@@ -588,8 +617,10 @@ describe('xlsx acima de 28 linhas: ida e volta pelo importador da S5', () => {
 
     expect(result.fatal).toBeNull()
     expect(result.rows).toHaveLength(45)
-    expect(result.rows[0]).toMatchObject({ po: '4500000', dbcorpCode: 'AD5240', supplierLot: 'L0', quantityKg: 1000, count: 1 })
-    expect(result.rows[44]).toMatchObject({ po: '4500044', supplierLot: 'L44', quantityKg: 1044, count: 45 })
+    expect(result.rows[0]).toMatchObject({ po: '4500000', dbcorpCode: 'AD5240', supplierLot: 'L0', quantityKg: 1000 })
+    expect(result.rows[44]).toMatchObject({ po: '4500044', supplierLot: 'L44', quantityKg: 1044 })
+    // S6: etiquetas e contagem são da conferência e não voltam pelo importador.
+    expect(result.rows[0]).toMatchObject({ wmsLabel: '', sqLabel: '', count: null })
     expect(result.cargoType).toBe('FCL')
   })
 

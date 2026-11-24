@@ -64,11 +64,14 @@ export function describeCargoReportAlerts(alerts) {
   return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`
 }
 
-// `form` é o estado da tela (ou o doc lido); `conference` traz o OK? e quem conferiu.
+// `form` é o estado da tela (ou o doc lido); `conference` traz o OK?, a contagem, as etiquetas WMS/SQ
+// e quem conferiu (S6: tudo da logística; `wmsLabel/sqLabel/count` das linhas do `current` não valem).
 export function buildCargoReportSheet(form, { process, conference, catalog } = {}) {
   // O payload normaliza texto e números (a tela guarda número como texto) e descarta linhas vazias.
   const { payload } = buildCargoReportPayload(form, {})
   const okByRowId = conference?.okByRowId ?? {}
+  const countOkByRowId = conference?.countOkByRowId ?? {}
+  const labelsByRowId = conference?.labelsByRowId ?? {}
   const alerts = []
 
   const rows = payload.rows.slice(0, CARGO_REPORT_MAX_ROWS).map((row) => {
@@ -87,10 +90,10 @@ export function buildCargoReportSheet(form, { process, conference, catalog } = {
       ok: okByRowId[row.id] === true,
       supplierLot: row.supplierLot,
       lotSq: derived.lotSq,
-      wmsLabel: row.wmsLabel,
-      sqLabel: row.sqLabel,
+      wmsLabel: labelsByRowId[row.id]?.wms ?? '',
+      sqLabel: labelsByRowId[row.id]?.sq ?? '',
       quantityKg: row.quantityKg,
-      count: row.count,
+      countOk: countOkByRowId[row.id] === true,
       netWeightKg: derived.netWeightKg,
       packageWeightKg: row.packageWeightKg,
       packages: derived.packages,

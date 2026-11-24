@@ -9,7 +9,7 @@ import { uploadProcessDocument } from './processDocumentsRepository'
 
 // Formulário FR.CMX.001 (S3 do Relatório de Carga): 2 docs nomeados por processo.
 //   processes/{id}/cargoReport/current     preenchimento do COMEX (só admin grava)
-//   processes/{id}/cargoReport/conference  coluna OK? + "Conferido por" (admin e logística gravam)
+//   processes/{id}/cargoReport/conference  OK?, contagem, etiquetas WMS/SQ e "Conferido por" (admin e logística gravam)
 // `revision` é trava otimista: a rule exige `revision == revisão atual + 1`.
 const STORAGE_PREFIX = 'sq-comex-cargo-report:'
 const COLLECTION_ID = 'processes'

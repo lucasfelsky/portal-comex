@@ -164,7 +164,7 @@ export default function CargoReportImportDialog({
 
           <div className="cri-callout">
             Lote SQ, peso líquido e nº de embalagens não são importados: o Portal recalcula com a tabela Item x Emb.
-            atual.
+            atual. OK?, etiquetas e contagem também não: são da conferência da logística.
           </div>
         </>
       ) : null}

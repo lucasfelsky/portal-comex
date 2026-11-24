@@ -183,7 +183,8 @@ function patchSheetXml(sourceXml, sheet, extra) {
     putIfFilled(`I${line}`, row.wmsLabel)
     putIfFilled(`J${line}`, row.sqLabel)
     putIfFilled(`K${line}`, row.quantityKg)
-    putIfFilled(`L${line}`, row.count)
+    // Contagem OK da conferência da logística: texto `OK`, igual à coluna F; sem OK a célula fica como no modelo.
+    if (row.countOk) put(`L${line}`, { kind: 'text', value: 'OK' })
     putIfFilled(`M${line}`, row.netWeightKg)
     putIfFilled(`N${line}`, row.packageWeightKg)
     if (typeof row.packages === 'number' && Number.isFinite(row.packages)) {

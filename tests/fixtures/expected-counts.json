@@ -388,6 +388,8 @@
     ],
     "isValidCargoReportConference": [
       "checkedByName",
+      "countOkByRowId",
+      "labelsByRowId",
       "okByRowId",
       "revision",
       "schemaVersion",

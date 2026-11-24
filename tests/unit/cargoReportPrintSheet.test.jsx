@@ -24,7 +24,7 @@ const row = (i) => ({
   wmsLabel: 'WMS-77120',
   sqLabel: 'SQ-001245',
   quantityKg: 12500,
-  count: 500,
+  countOk: i % 2 === 1,
   netWeightKg: 25,
   packageWeightKg: 1.2,
   packages: 500,
@@ -85,6 +85,30 @@ describe('CargoReportPrintView: larguras e linhas', () => {
     expect(firstRowCells[9]).toHaveClass('is-number')
   })
 
+  it('S6: CONTAGEM mostra ☑/☐ como o OK?, centralizada, e a soma das larguras segue 100%', () => {
+    const countColumn = PRINT_COLUMNS.find((column) => column.key === 'countOk')
+    expect(countColumn).toMatchObject({ label: 'CONTAGEM', center: true })
+    expect(PRINT_COLUMNS.some((column) => column.key === 'count')).toBe(false)
+    expect(PRINT_COLUMNS.reduce((sum, column) => sum + column.width, 0)).toBeCloseTo(100, 5)
+
+    const { container } = render(<CargoReportPrintView sheet={makeSheet(2)} />)
+    const [first, second] = [...container.querySelectorAll('tbody tr')].map((tr) => [...tr.children])
+    expect(first[4]).toHaveTextContent('☑')
+    expect(first[10]).toHaveTextContent('☐')
+    expect(second[4]).toHaveTextContent('☐')
+    expect(second[10]).toHaveTextContent('☑')
+    expect(first[10]).toHaveClass('is-center')
+  })
+
+  it('S6: LOTE FORNEC. e LOTE SQ vão em span.crf-print__lot com o texto completo (sem reticências)', () => {
+    const longRow = { ...row(0), supplierLot: '2609G00020GOWMWM8888', lotSq: '2609G00020GOWMWM8888GOO' }
+    const { container } = render(<CargoReportPrintView sheet={{ ...makeSheet(1), rows: [longRow] }} />)
+    const cells = [...container.querySelectorAll('tbody tr')[0].children]
+    expect(cells[5].querySelector('span.crf-print__lot')).toHaveTextContent('2609G00020GOWMWM8888')
+    expect(cells[6].querySelector('span.crf-print__lot')).toHaveTextContent('2609G00020GOWMWM8888GOO')
+    expect(container.querySelectorAll('tbody span.crf-print__lot')).toHaveLength(2)
+  })
+
   it('a tabela tem sempre 28 linhas: as vazias completam as preenchidas', () => {
     for (const filled of [0, 5, 28]) {
       const { container, unmount } = render(<CargoReportPrintView sheet={makeSheet(filled)} />)
@@ -122,6 +146,16 @@ describe('CSS da folha de impressão (1 página A4 paisagem)', () => {
     for (const declaration of ['white-space: nowrap', 'text-overflow: ellipsis', 'overflow: hidden', 'height: 4.6mm', 'max-height: 4.6mm']) {
       expect(cell).toContain(declaration)
     }
+  })
+
+  it('S6: o lote em 2 linhas quebra em qualquer ponto e fica menor, sem aumentar a altura da linha', () => {
+    const lot = ruleBody(css, '.crf-print__table td .crf-print__lot')
+    for (const declaration of ['overflow-wrap: anywhere', 'white-space: normal', 'display: block', 'max-height: 2em', 'font-size: 5.6pt']) {
+      expect(lot).toContain(declaration)
+    }
+    // A regra mora dentro de um @media print (nunca vale na tela).
+    const before = css.slice(0, css.indexOf('.crf-print__table td .crf-print__lot {'))
+    expect(before.lastIndexOf('@media print {')).toBeGreaterThan(before.lastIndexOf('\n}\n'))
   })
 
   it('as descrições vão alinhadas à esquerda e o cabeçalho, rodapé e título têm altura limitada', () => {

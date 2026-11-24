@@ -3,8 +3,9 @@
 // matriz de valores e localiza tudo por RÓTULO (cabeçalho por texto, fim da tabela pelo rodapé),
 // nunca por posição fixa, porque o usuário insere linhas e o rodapé se desloca nos relatórios reais.
 // O único ponto com leitura de arquivo (SheetJS, carregado sob demanda) é `readCargoReportWorkbook`.
-// Colunas calculadas (lote SQ, peso líquido por embalagem, nº de embalagens) e OK? NÃO são importadas:
-// o Portal recalcula com a tabela Item x Emb. atual.
+// Colunas calculadas (lote SQ, peso líquido por embalagem, nº de embalagens) NÃO são importadas: o Portal
+// recalcula com a tabela Item x Emb. atual. OK?, etiquetas WMS/SQ e contagem também não (S6): são da
+// conferência da logística; as colunas continuam RECONHECIDAS no cabeçalho, com o valor ignorado.
 import { inspectZipExpansion } from '../erp/readDbcorpWorkbook'
 import { normalizeItemCode } from './cargoReportCatalog'
 import {
@@ -14,7 +15,6 @@ import {
   createCargoReportRowId,
   createEmptyCargoReportRow,
   deriveCargoReportRow,
-  parseCargoCount,
   parseCargoNumber,
 } from './cargoReportFormModel'
 
@@ -137,14 +137,14 @@ export const CARGO_REPORT_IMPORT_COLUMNS = [
     key: 'wmsLabel',
     label: 'ETIQUETA WMS',
     required: false,
-    imported: true,
+    imported: false,
     match: (folded) => folded.includes('etiqueta') && folded.includes('wms'),
   },
   {
     key: 'sqLabel',
     label: 'ETIQUETA SQ',
     required: false,
-    imported: true,
+    imported: false,
     match: (folded) => folded.includes('etiqueta') && (folded.endsWith(' sq') || folded.includes(' sq ')),
   },
   {
@@ -165,7 +165,7 @@ export const CARGO_REPORT_IMPORT_COLUMNS = [
     key: 'count',
     label: 'CONTAGEM',
     required: false,
-    imported: true,
+    imported: false,
     match: (folded) => folded.startsWith('contagem'),
   },
   {
@@ -190,10 +190,8 @@ const TEXT_FIELDS = {
   supplierDescription: 'description',
   sqDescription: 'description',
   supplierLot: 'text',
-  wmsLabel: 'text',
-  sqLabel: 'text',
 }
-const NUMBER_PARSERS = { quantityKg: parseCargoNumber, packageWeightKg: parseCargoNumber, count: parseCargoCount }
+const NUMBER_PARSERS = { quantityKg: parseCargoNumber, packageWeightKg: parseCargoNumber }
 const CHECKED_TEXTS = ['x', 'sim', 'true', 'verdadeiro', '✓', '✔']
 const FOOTER_PREFIXES = ['observacoes', 'responsaveis', 'status do recebimento']
 const REVISION_PATTERN = /revis[aã]o\s*:?\s*0*(\d{1,3})/i

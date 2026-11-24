@@ -39,12 +39,13 @@ import {
 import { applyCargoReportImport } from './cargoReportImport'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
-// COMEX (admin) preenche e salva rascunho; a logística só marca o OK? de cada linha e informa
-// quem conferiu (doc `conference`, separado para não conflitar com quem está editando).
+// COMEX (admin) preenche e salva rascunho; a logística marca o OK? e a contagem de cada linha, preenche
+// as etiquetas WMS/SQ e informa quem conferiu (S6; doc `conference`, separado para não conflitar com
+// quem está editando).
 // Padrões replicados (não são util compartilhado): guard `isMounted` na carga assíncrona.
 
 const CATALOG_TTL_MS = 5 * 60 * 1000
-const EMPTY_CONFERENCE = { revision: 0, okByRowId: {}, checkedByName: '' }
+const EMPTY_CONFERENCE = { revision: 0, okByRowId: {}, countOkByRowId: {}, labelsByRowId: {}, checkedByName: '' }
 
 const LOAD_ERROR_PREFIX = 'Não foi possível carregar o relatório de carga.'
 const CATALOG_ERROR_PREFIX = 'Não foi possível carregar a tabela Item x Emb.'
@@ -55,11 +56,11 @@ const MESSAGES = {
   conflictConference:
     'Outra pessoa salvou a conferência. Recarregue para ver a versão atual antes de salvar de novo.',
   permissionDenied:
-    'Sem permissão para editar. O COMEX preenche o relatório e a logística só marca o OK? e o "Conferido por".',
+    'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o "Conferido por".',
   conferenceFailed: 'Rascunho salvo, mas não foi possível salvar o "Conferido por".',
   invalidNumbers: 'Corrija os números destacados antes de salvar.',
   conferBanner:
-    'Marque o OK? de cada linha conferida e informe quem conferiu. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando.',
+    'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e informe quem conferiu. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando.',
   notFilled: 'O COMEX ainda não preencheu este relatório no Portal.',
   noPackaging:
     'Itens sem tipo e peso na tabela aparecem como "Sem embalagem cadastrada". Peça ao admin para atualizar a tabela em Admin › Relatório de Carga.',
@@ -98,7 +99,13 @@ function formKey(form) {
 }
 
 function conferenceKey(conference, rows) {
-  const marks = rows.map((row) => [row.id, conference.okByRowId?.[row.id] === true])
+  const marks = rows.map((row) => [
+    row.id,
+    conference.okByRowId?.[row.id] === true,
+    conference.countOkByRowId?.[row.id] === true,
+    String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),
+    String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
+  ])
   return JSON.stringify({ marks, name: String(conference.checkedByName ?? '').trim() })
 }
 
@@ -177,7 +184,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         ])
         if (!isMounted) return
 
-        const savedConferenceData = fromConferenceDoc(report.conference)
+        // Conferência anterior à S6 (sem `labelsByRowId`): as etiquetas das linhas do `current` pré-preenchem a tela.
+        const savedConferenceData = fromConferenceDoc(report.conference, report.current?.rows)
         setCatalog(catalogResult.data)
         setCatalogError(
           catalogResult.error ? buildActionErrorMessage(CATALOG_ERROR_PREFIX, catalogResult.error) : ''
@@ -272,6 +280,28 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     setFeedback(null)
   }
 
+  // S6: contagem e etiquetas são da logística; o admin em rascunho só vê (a conferência dele é o "Conferido por").
+  function toggleCountOk(rowId) {
+    if (!canConferNow || canEdit) return
+    setConference((current) => ({
+      ...current,
+      countOkByRowId: { ...current.countOkByRowId, [rowId]: current.countOkByRowId?.[rowId] !== true },
+    }))
+    setFeedback(null)
+  }
+
+  function changeLabel(rowId, field, value) {
+    if (!canConferNow || canEdit) return
+    setConference((current) => ({
+      ...current,
+      labelsByRowId: {
+        ...current.labelsByRowId,
+        [rowId]: { wms: '', sq: '', ...current.labelsByRowId?.[rowId], [field]: value },
+      },
+    }))
+    setFeedback(null)
+  }
+
   function handleImportFileChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -304,24 +334,28 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
 
   async function saveConference(revision, savedRows) {
     const payload = buildConferencePayload(
-      { okByRowId: conference.okByRowId, checkedByName: conference.checkedByName, revision },
+      {
+        okByRowId: conference.okByRowId,
+        countOkByRowId: conference.countOkByRowId,
+        labelsByRowId: conference.labelsByRowId,
+        checkedByName: conference.checkedByName,
+        revision,
+      },
       savedRows
     )
     await saveCargoReportConference(processId, payload, profile, {
       titleSuffix: form.titleSuffix,
       totalRows: savedRows.length,
     })
-    setSavedConference({
+    const persisted = {
       revision: payload.revision,
       okByRowId: payload.okByRowId,
+      countOkByRowId: payload.countOkByRowId,
+      labelsByRowId: payload.labelsByRowId,
       checkedByName: payload.checkedByName,
-    })
-    setConference((current) => ({
-      ...current,
-      revision: payload.revision,
-      okByRowId: payload.okByRowId,
-      checkedByName: payload.checkedByName,
-    }))
+    }
+    setSavedConference(persisted)
+    setConference((current) => ({ ...current, ...persisted }))
   }
 
   // Marca as células inválidas e mostra a mensagem (número inválido ou limite de linhas).
@@ -612,10 +646,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           rows={rows}
           derived={derived}
           okByRowId={conference.okByRowId}
+          countOkByRowId={conference.countOkByRowId}
+          labelsByRowId={conference.labelsByRowId}
           mode={editMode}
           variant={variant}
           onChangeRow={changeRow}
+          onChangeLabel={changeLabel}
           onToggleOk={toggleOk}
+          onToggleCountOk={toggleCountOk}
           onAddRow={addRow}
           canAddRow={canEditFields && !isLimitReached}
           errorsByCell={fieldErrors}
@@ -633,7 +671,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             </span>
             <span>
               <b className="crf-leg__ok" />
-              OK? é marcado pela logística
+              OK?, contagem e etiquetas são da logística
             </span>
             <span>{`Limite do Portal: ${CARGO_REPORT_MAX_ROWS} linhas (${rows.length} usadas)`}</span>
           </p>

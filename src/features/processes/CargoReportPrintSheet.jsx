@@ -30,7 +30,7 @@ export const PRINT_COLUMNS = [
   { key: 'wmsLabel', label: 'ETIQ. WMS', width: 6.2 },
   { key: 'sqLabel', label: 'ETIQ. SQ', width: 5.6 },
   { key: 'quantityKg', label: 'QTD (KG)', width: 5, number: true },
-  { key: 'count', label: 'CONTAGEM', width: 5.6, number: true },
+  { key: 'countOk', label: 'CONTAGEM', width: 5.6, center: true },
   { key: 'netWeightKg', label: 'PESO LÍQ. EMB.', width: 6.6, number: true },
   { key: 'packageWeightKg', label: 'PESO DA EMB.', width: 6.2, number: true },
   { key: 'packages', label: 'Nº EMB.', width: 5.4, number: true },
@@ -42,9 +42,11 @@ function box(checked) {
 
 function cellText(row, key) {
   if (key === 'ok') return box(row.ok)
+  if (key === 'countOk') return box(row.countOk)
   if (key === 'netWeightKg') return formatCargoNumber(row.netWeightKg, { decimals: 1 })
   if (key === 'quantityKg' || key === 'packageWeightKg' || key === 'packages') return formatCargoNumber(row[key])
-  if (key === 'count') return formatCargoNumber(row.count, { maxDecimals: 0 })
+  // Lotes longos quebram em até 2 linhas (nunca viram reticências); ver `.crf-print__lot` em styles.css.
+  if (key === 'supplierLot' || key === 'lotSq') return <span className="crf-print__lot">{row[key] ?? ''}</span>
   return row[key] ?? ''
 }
 
