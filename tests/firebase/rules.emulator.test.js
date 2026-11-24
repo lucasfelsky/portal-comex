@@ -4556,7 +4556,7 @@ describeEmulator('firestore.rules (emulador)', () => {
       updatedByName: 'Admin',
       ...overrides,
     })
-    // S7: 18 chaves. `checkedByName` e' travado no nome da claim da logistica ('Logistica').
+    // S8: 21 chaves (S7 + unloadStartAt, unloadEndAt, labelingOk). `checkedByName` e' travado no nome da claim da logistica ('Logistica').
     const conference = (overrides = {}) => ({
       schemaVersion: 1,
       revision: 1,
@@ -4569,6 +4569,9 @@ describeEmulator('firestore.rules (emulador)', () => {
       receivedDate: '',
       nfNumber: '',
       notes: '',
+      unloadStartAt: '',
+      unloadEndAt: '',
+      labelingOk: false,
       closedDate: '',
       closedById: '',
       closedByName: '',
@@ -5083,6 +5086,200 @@ describeEmulator('firestore.rules (emulador)', () => {
           await seedConference(1, 'fechada')
           await assertFails(setDoc(doc(admin(), CONF), reopened({ revision: 3 })))
           await assertFails(setDoc(doc(admin(), CONF), reopened({ revision: 1 })))
+        })
+      })
+
+      // S8: descarga (texto YYYY-MM-DDTHH:mm sem fuso), etiquetagem OK e `receivedDate` = dia do inicio.
+      describe('S8: descarga, etiquetagem e vinculo da data de recebimento', () => {
+        const UNLOAD = { unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T10:40', receivedDate: '2026-11-24' }
+        const write = (overrides = {}) => setDoc(doc(logistics(), CONF), conference(overrides))
+        // Doc fechado gravado pela S7 (18 chaves, sem as 3 novas); `receivedDate` preenchido pelo rodape antigo.
+        const seedS7ClosedConference = (revision = 1, overrides = {}) =>
+          seed((db) => {
+            const { unloadStartAt: _start, unloadEndAt: _end, labelingOk: _ok, ...s7 } = closedConference({ revision, ...overrides })
+            return setDoc(doc(db, CONF), { ...s7, updatedAt: new Date('2026-11-01T11:00:00Z') })
+          })
+
+        it('a. estados 1 e 2: grava descarga completa, fim = inicio, so inicio e virada de dia', async () => {
+          for (const status of ['rascunho', 'concluido']) {
+            await seedCurrent(1, status)
+            await seed((db) => deleteDoc(doc(db, CONF)))
+            await assertSucceeds(write({ ...UNLOAD, labelingOk: true }))
+            await assertSucceeds(write({ ...UNLOAD, revision: 2, unloadEndAt: UNLOAD.unloadStartAt }))
+            await assertSucceeds(write({ revision: 3, unloadStartAt: UNLOAD.unloadStartAt, receivedDate: '2026-11-24' }))
+            await assertSucceeds(
+              write({ revision: 4, unloadStartAt: '2026-11-24T23:30', unloadEndAt: '2026-11-25T01:10', receivedDate: '2026-11-24' })
+            )
+          }
+        })
+
+        it('b. shape: formato, calendario, tipo, fim antes do inicio, fim sem inicio e chave extra falham', async () => {
+          await seedCurrent()
+          const invalid = [
+            { ...UNLOAD, unloadEndAt: '2026-11-24T08:00' },
+            { unloadEndAt: '2026-11-24T10:40' },
+            { ...UNLOAD, unloadStartAt: '24/11/2026 08:15' },
+            { ...UNLOAD, unloadStartAt: '2026-11-24 08:15' },
+            { ...UNLOAD, unloadStartAt: '2026-11-24T08:15:00' },
+            { ...UNLOAD, unloadStartAt: '2019-11-24T08:15', receivedDate: '2019-11-24' },
+            { ...UNLOAD, unloadEndAt: '2026-11-24T10:61' },
+            { ...UNLOAD, unloadEndAt: 12 },
+            { ...UNLOAD, unloadStartAt: 12 },
+            { ...UNLOAD, labelingOk: 'sim' },
+            { ...UNLOAD, labelingOk: 1 },
+            { ...UNLOAD, unloadMinutes: 145 },
+          ]
+          for (const overrides of invalid) await assertFails(write(overrides))
+          await assertSucceeds(write({ ...UNLOAD, labelingOk: false }))
+        })
+
+        // Cada caso abaixo tem UMA unica violacao possivel: o formato (regex). O vinculo com receivedDate esta
+        // satisfeito e, no fim invalido, o fim e' lexicograficamente MAIOR que o inicio (a ordem nao pode ser a causa).
+        it('b. formato do inicio: hora, minuto, mes e dia fora de faixa falham mesmo sem fim', async () => {
+          await seedCurrent()
+          const invalidStart = [
+            ['2026-11-24T24:00', '2026-11-24'],
+            ['2026-11-24T25:00', '2026-11-24'],
+            ['2026-11-24T08:60', '2026-11-24'],
+            ['2026-13-01T08:00', '2026-13-01'],
+            ['2026-00-10T08:00', '2026-00-10'],
+            ['2026-11-32T08:00', '2026-11-32'],
+            ['2026-11-00T08:00', '2026-11-00'],
+            ['2026-11-24T08:15:00', '2026-11-24'],
+            ['2026-11-24T08:15T', '2026-11-24'],
+            ['2100-01-01T08:00', '2100-01-01'],
+            ['2026-11-24 08:15', '2026-11-24'],
+          ]
+          for (const [unloadStartAt, receivedDate] of invalidStart) {
+            await assertFails(write({ unloadStartAt, unloadEndAt: '', receivedDate }))
+          }
+        })
+
+        it('b. formato do fim: hora, minuto, mes, dia, sufixo e espaco falham com inicio valido e fim "maior"', async () => {
+          await seedCurrent()
+          const invalidEnd = [
+            ['2026-11-24T08:15', '2026-11-24T24:00'],
+            ['2026-11-24T08:15', '2026-11-24T25:00'],
+            ['2026-11-24T08:15', '2026-11-24T10:60'],
+            ['2026-11-24T08:15', '2026-13-24T10:00'],
+            ['2026-11-24T08:15', '2026-11-32T10:00'],
+            ['2026-11-24T08:15', '2026-11-24T10:40T'],
+            ['2026-11-24T08:15', '2100-01-01T10:00'],
+            ['2026-11-24T08:15', '2026-11-24T10:40:00'],
+            ['2026-11-23T08:15', '2026-11-24 10:40'],
+            ['2026-11-23T08:15', '2026-11-24/10:40'],
+          ]
+          for (const [unloadStartAt, unloadEndAt] of invalidEnd) {
+            await assertFails(write({ unloadStartAt, unloadEndAt, receivedDate: unloadStartAt.slice(0, 10) }))
+          }
+        })
+
+        it('b. limites validos do formato passam (00:00, 23:59, mes 12, dia 31, ano 2020 e 2099)', async () => {
+          await seedCurrent()
+          const valid = [
+            ['2020-01-01T00:00', '2020-01-01T00:00'],
+            ['2026-12-31T23:59', '2026-12-31T23:59'],
+            ['2099-12-31T08:00', '2099-12-31T23:59'],
+          ]
+          let revision = 1
+          for (const [unloadStartAt, unloadEndAt] of valid) {
+            await assertSucceeds(write({ revision, unloadStartAt, unloadEndAt, receivedDate: unloadStartAt.slice(0, 10) }))
+            revision += 1
+          }
+        })
+
+        it('b. payload sem qualquer uma das 3 chaves (bundle S7) falha', async () => {
+          await seedCurrent()
+          for (const key of ['unloadStartAt', 'unloadEndAt', 'labelingOk']) {
+            const { [key]: _removed, ...partial } = conference()
+            await assertFails(setDoc(doc(logistics(), CONF), partial))
+          }
+        })
+
+        it('c. vinculo: receivedDate precisa ser o dia do inicio; sem inicio o legado passa', async () => {
+          await seedCurrent()
+          await assertFails(write({ ...UNLOAD, receivedDate: '2026-11-23' }))
+          await assertFails(write({ ...UNLOAD, receivedDate: '' }))
+          await assertFails(
+            write({ unloadStartAt: '2026-11-24T23:30', unloadEndAt: '2026-11-25T01:10', receivedDate: '2026-11-25' })
+          )
+          await assertSucceeds(write({ receivedDate: '2026-11-20' }))
+          await assertSucceeds(write({ revision: 2, receivedDate: '' }))
+        })
+
+        it('d. fecha no estado 2 com descarga e data derivada; data divergente falha', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertFails(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, ...UNLOAD, receivedDate: '2026-11-20' })))
+          await assertSucceeds(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, ...UNLOAD, labelingOk: true })))
+        })
+
+        it('e. conferencia fechada: logistica nao muda etiquetagem, inicio nem data', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          await seedCargoDoc('log-1')
+          await assertFails(write({ revision: 2, labelingOk: true }))
+          await assertFails(write({ revision: 2, ...UNLOAD }))
+          await assertFails(write({ revision: 2, receivedDate: '2026-11-25' }))
+        })
+
+        describe('admin', () => {
+          const reopen = (overrides = {}) =>
+            setDoc(doc(admin(), CONF), conference({ revision: 2, updatedById: 'admin-1', updatedByName: 'Admin', ...overrides }))
+          const FILLED = { ...UNLOAD, labelingOk: true }
+          const seedFilled = async () => {
+            await seedCurrent(1, 'concluido')
+            await seed((db) =>
+              setDoc(doc(db, CONF), { ...closedConference({ revision: 1, ...FILLED }), updatedAt: new Date('2026-11-01T11:00:00Z') })
+            )
+          }
+
+          it('grava conteudo com as chaves novas em doc aberto: falha', async () => {
+            await seedCurrent(1, 'concluido')
+            await seedConference(1, 'aberta')
+            await assertFails(reopen({ ...FILLED }))
+            await assertFails(reopen({ labelingOk: true }))
+          })
+
+          it('reabre doc fechado mantendo os 3 valores: passa', async () => {
+            await seedFilled()
+            await assertSucceeds(reopen({ ...FILLED }))
+            const snapshot = await assertSucceeds(getDoc(doc(logistics(), CONF)))
+            expect(snapshot.data()).toMatchObject({ status: 'aberta', labelingOk: true, ...UNLOAD })
+          })
+
+          it('reabre mudando inicio, fim, etiquetagem ou data de recebimento: falha', async () => {
+            await seedFilled()
+            await assertFails(reopen({ ...FILLED, unloadStartAt: '2026-11-24T08:00' }))
+            await assertFails(reopen({ ...FILLED, unloadEndAt: '2026-11-24T11:00' }))
+            await assertFails(reopen({ ...FILLED, labelingOk: false }))
+            await assertFails(reopen({ ...FILLED, receivedDate: '2026-11-25' }))
+          })
+
+          it('reabre doc S7 (sem as chaves) so acrescentando o padrao; data de recebimento mantida', async () => {
+            await seedCurrent(1, 'concluido')
+            await seedS7ClosedConference(1, { receivedDate: '2026-11-20' })
+            await assertFails(reopen({ receivedDate: '2026-11-20', labelingOk: true }))
+            await assertFails(reopen({ receivedDate: '2026-11-20', unloadStartAt: '2026-11-20T08:00' }))
+            await assertFails(reopen({ receivedDate: '2026-11-21' }))
+            await assertSucceeds(reopen({ receivedDate: '2026-11-20' }))
+            const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+            expect(snapshot.data()).toMatchObject({
+              status: 'aberta',
+              receivedDate: '2026-11-20',
+              unloadStartAt: '',
+              unloadEndAt: '',
+              labelingOk: false,
+            })
+          })
+        })
+
+        it('g. tecnico, faturamento, usuario aprovado e anonimo nao gravam conferencia com as chaves novas', async () => {
+          await seedCurrent()
+          for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+            await assertFails(setDoc(doc(db, CONF), conference({ ...UNLOAD, labelingOk: true })))
+          }
         })
       })
     })

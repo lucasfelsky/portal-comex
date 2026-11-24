@@ -1721,7 +1721,7 @@ body {
     align-content: start;
     gap: 0.8mm;
     min-height: 14mm;
-    max-height: 22mm;
+    max-height: 32mm;
     padding: 1.2mm 2mm;
     border: 0.2mm solid black;
     overflow: hidden;
@@ -24803,4 +24803,33 @@ table.crf {
    O mock alinha os botoes a direita. */
 .crf-bar .r {
   margin-left: auto;
+}
+
+/* S8: card "Responsaveis e recebimento". O segundo grupo (descarga e etiquetagem) fica 12px abaixo do primeiro; o selo
+   de Etiquetagem (OK / Sem OK) tem 40px de altura, alinhado a esquerda, e nao estica na largura do campo. */
+.crf-card > .crf-foot + .crf-foot {
+  margin-top: 12px;
+}
+
+.crf-foot > .crf-field > .inline-badge {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.crf-foot > .crf-field > button.inline-badge {
+  cursor: pointer;
+}
+
+/* S8: campo com erro (aria-invalid) ganha borda vermelha; a mensagem usa o .field-error. */
+.crf-field input[aria-invalid="true"] {
+  border-color: var(--danger-700);
 }

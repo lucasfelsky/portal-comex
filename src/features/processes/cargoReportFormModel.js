@@ -39,6 +39,10 @@ const CARGO_TYPE_VALUES = CARGO_TYPE_OPTIONS.map((option) => option.value)
 const RECEIPT_STATUS_VALUES = RECEIPT_STATUS_OPTIONS.map((option) => option.value)
 const STATUS_VALUES = ['rascunho', 'concluido']
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+// S8: `YYYY-MM-DDTHH:mm` (hora de parede de Brasília, sem fuso); aceita segundos e frações, que são cortados.
+const DATE_TIME_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/
+// Descarga mais longa que 24 h é erro de digitação (limite só no cliente; as rules não calculam duração).
+export const CARGO_UNLOAD_MAX_MINUTES = 1440
 
 // Campos de texto e numéricos da linha (a ordem espelha as 13 chaves aceitas pelas rules).
 const ROW_TEXT_FIELDS = [
@@ -153,6 +157,64 @@ function readCount(value) {
 
 function readDateKey(value) {
   return typeof value === 'string' && DATE_KEY_PATTERN.test(value) ? value : ''
+}
+
+// S8: início/fim da descarga como texto `YYYY-MM-DDTHH:mm`. Ano 2020–2099 (igual às rules), mês, dia, hora e
+// minuto em faixa; o calendário não é conferido (2026-02-30 passa, como em `receivedDate`).
+export function readDateTimeKey(value) {
+  const match = typeof value === 'string' ? DATE_TIME_KEY_PATTERN.exec(value) : null
+  if (!match) return ''
+  const [year, month, day, hour, minute] = match.slice(1).map(Number)
+  const valid =
+    year >= 2020 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31 && hour <= 23 && minute <= 59
+  return valid ? value.slice(0, 16) : ''
+}
+
+// '2026-11-24T08:15' -> '2026-11-24'; inválido -> ''.
+export function cargoDatePart(value) {
+  return readDateTimeKey(value).slice(0, 10)
+}
+
+// "Data de recebimento" é fixa: o dia do início da descarga. Sem início, vale o valor já gravado (legado).
+export function resolveCargoReceivedDate({ unloadStartAt, receivedDate } = {}) {
+  return cargoDatePart(unloadStartAt) || readDateKey(receivedDate)
+}
+
+// Minutos de parede entre dois `YYYY-MM-DDTHH:mm`, pelos componentes do texto (independe do fuso do aparelho;
+// nunca `new Date(texto)`). Inválido, vazio ou fim antes do início -> null.
+export function computeCargoUnloadMinutes(start, end) {
+  const from = readDateTimeKey(start)
+  const to = readDateTimeKey(end)
+  if (!from || !to) return null
+  const toUtc = (key) => {
+    const [year, month, day, hour, minute] = [key.slice(0, 4), key.slice(5, 7), key.slice(8, 10), key.slice(11, 13), key.slice(14, 16)].map(Number)
+    return Date.UTC(year, month - 1, day, hour, minute)
+  }
+  const minutes = (toUtc(to) - toUtc(from)) / 60000
+  return minutes >= 0 ? minutes : null
+}
+
+export const CARGO_UNLOAD_MESSAGES = {
+  missingStart: 'Informe o início da descarga.',
+  endBeforeStart: 'O fim da descarga deve ser igual ou posterior ao início.',
+  tooLong: 'A descarga passa de 24 horas. Confira as datas.',
+}
+
+// -> { start, end } com a mensagem de cada campo ('' = sem erro). Fim sem início: erro no Início; fim antes do
+// início e mais de 24 h: erro no Fim. Só início, só fim vazio ou os dois vazios não são erro.
+export function validateCargoUnload({ unloadStartAt, unloadEndAt } = {}) {
+  const result = { start: '', end: '' }
+  const start = readDateTimeKey(unloadStartAt)
+  const end = readDateTimeKey(unloadEndAt)
+  if (!end) return result
+  if (!start) {
+    result.start = CARGO_UNLOAD_MESSAGES.missingStart
+    return result
+  }
+  const minutes = computeCargoUnloadMinutes(start, end)
+  if (minutes === null) result.end = CARGO_UNLOAD_MESSAGES.endBeforeStart
+  else if (minutes > CARGO_UNLOAD_MAX_MINUTES) result.end = CARGO_UNLOAD_MESSAGES.tooLong
+  return result
 }
 
 function readRowId(value) {
@@ -408,7 +470,7 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
   return { payload, errors }
 }
 
-// S6/S7: o que é da logística no doc `conference`. Coluna nova "da logística" = 1 item aqui + 1 chave
+// S6/S7/S8: o que é da logística no doc `conference`. Coluna nova "da logística" = 1 item aqui + 1 chave
 // nas rules (`isValidCargoReportConference`) + a fixture do audit-vault.
 // Mapas `{ [rowId]: boolean }` (OK? e contagem OK) e campos de texto por linha (etiquetas WMS e SQ).
 export const CONFERENCE_FLAG_MAPS = ['okByRowId', 'countOkByRowId']
@@ -422,12 +484,25 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-// Conferência da logística (15 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
+// Conferência da logística (18 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
 // linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
-// recebimento normalizado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
+// recebimento normalizado. S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
+// do dia do início (sem início, o valor carregado/legado). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
 // a rule exige `checkedByName == myName()`. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
 export function buildConferencePayload(
-  { okByRowId, countOkByRowId, labelsByRowId, receiptStatus, receivedDate, nfNumber, notes, revision },
+  {
+    okByRowId,
+    countOkByRowId,
+    labelsByRowId,
+    receiptStatus,
+    receivedDate,
+    unloadStartAt,
+    unloadEndAt,
+    labelingOk,
+    nfNumber,
+    notes,
+    revision,
+  },
   rows,
   { actorName = '' } = {}
 ) {
@@ -458,9 +533,12 @@ export function buildConferencePayload(
     labelsByRowId: labels,
     checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(receiptStatus, RECEIPT_STATUS_VALUES),
-    receivedDate: readDateKey(receivedDate),
+    receivedDate: resolveCargoReceivedDate({ unloadStartAt, receivedDate }),
     nfNumber: clip(nfNumber, CARGO_REPORT_LIMITS.nf),
     notes: clip(notes, CARGO_REPORT_LIMITS.notes),
+    unloadStartAt: readDateTimeKey(unloadStartAt),
+    unloadEndAt: readDateTimeKey(unloadEndAt),
+    labelingOk: labelingOk === true,
     closedDate: '',
     closedById: '',
     closedByName: '',
@@ -539,6 +617,10 @@ export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
     receivedDate: readDateKey(footerSource.receivedDate),
     nfNumber: readText(footerSource.nfNumber, CARGO_REPORT_LIMITS.nf),
     notes: readText(footerSource.notes, CARGO_REPORT_LIMITS.notes),
+    // S8: doc anterior (sem as chaves) lê como vazio / sem OK.
+    unloadStartAt: readDateTimeKey(doc.unloadStartAt),
+    unloadEndAt: readDateTimeKey(doc.unloadEndAt),
+    labelingOk: doc.labelingOk === true,
     closedDate: isClosed ? readDateKey(doc.closedDate) : '',
     closedById: isClosed ? readText(doc.closedById, CARGO_REPORT_LIMITS.text) : '',
     closedByName: isClosed ? readText(doc.closedByName, CARGO_REPORT_LIMITS.text) : '',

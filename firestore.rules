@@ -786,6 +786,8 @@ service cloud.firestore {
     // fechada; `conference.status == 'fechada'` = conferencia da logistica fechada
     // (doc legado sem a chave conta como 'aberta'). Invariante: conferencia
     // fechada implica COMEX fechado.
+    // S8: descarga (texto YYYY-MM-DDTHH:mm, hora de Brasilia, sem fuso; tempo total NAO gravado),
+    // receivedDate = dia do inicio da descarga (legado sem inicio mantem o valor) e etiquetagem OK.
     function isCargoReportComexClosed(processId) {
       return exists(/databases/$(database)/documents/processes/$(processId)/cargoReport/current)
         && get(/databases/$(database)/documents/processes/$(processId)/cargoReport/current).data.status == 'concluido';
@@ -867,13 +869,13 @@ service cloud.firestore {
     function isValidCargoReportConference(processId) {
       return request.resource.data.keys().hasOnly([
         'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
-        'receiptStatus', 'receivedDate', 'nfNumber', 'notes',
+        'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
         'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
         'updatedAt', 'updatedById', 'updatedByName',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
-          'receiptStatus', 'receivedDate', 'nfNumber', 'notes',
+          'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
           'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
           'updatedAt', 'updatedById', 'updatedByName',
         ])
@@ -900,6 +902,17 @@ service cloud.firestore {
         && request.resource.data.nfNumber.size() <= 40
         && request.resource.data.notes is string
         && request.resource.data.notes.size() <= 2000
+        && request.resource.data.unloadStartAt is string
+        && (request.resource.data.unloadStartAt == ''
+          || request.resource.data.unloadStartAt.matches('^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]$'))
+        && request.resource.data.unloadEndAt is string
+        && (request.resource.data.unloadEndAt == ''
+          || (request.resource.data.unloadEndAt.matches('^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && request.resource.data.unloadStartAt != ''
+            && request.resource.data.unloadEndAt >= request.resource.data.unloadStartAt))
+        && request.resource.data.labelingOk is bool
+        && (request.resource.data.unloadStartAt == ''
+          || request.resource.data.receivedDate == request.resource.data.unloadStartAt.split('T')[0])
         && request.resource.data.closedDate is string
         && request.resource.data.closedById is string
         && request.resource.data.closedByName is string
@@ -947,8 +960,12 @@ service cloud.firestore {
         && request.resource.data.status == 'aberta'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'revision', 'status', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
+          'unloadStartAt', 'unloadEndAt', 'labelingOk',
           'updatedAt', 'updatedById', 'updatedByName',
-        ]);
+        ])
+        && request.resource.data.unloadStartAt == resource.data.get('unloadStartAt', '')
+        && request.resource.data.unloadEndAt == resource.data.get('unloadEndAt', '')
+        && request.resource.data.labelingOk == resource.data.get('labelingOk', false);
     }
 
     match /processes/{processId} {

@@ -139,6 +139,11 @@ const MOCK_CONFERENCE = {
 // Excel da LOGÍSTICA (S7): conferência fechada em 24/11; DATA CONCLUSÃO vem de `closedDate`.
 const CLOSED_CONFERENCE = { ...MOCK_CONFERENCE, status: 'fechada', closedDate: '2026-11-24' }
 
+// S8: conferência com descarga (24/11, 08:10 às 09:45 = 95 min) e Etiquetagem OK; a data de recebimento é o dia do início.
+const S8_UNLOAD = { unloadStartAt: '2026-11-24T08:10', unloadEndAt: '2026-11-24T09:45', receivedDate: '2026-11-24' }
+const S8_SUMMARY = 'DESCARGA: 24/11/2026, 08:10 ÀS 09:45 · TEMPO TOTAL: 95 MIN'
+const S8_CONFERENCE = { ...CLOSED_CONFERENCE, ...S8_UNLOAD, labelingOk: true }
+
 function buildSheet(form = mockScenarioForm(), conference = MOCK_CONFERENCE) {
   return buildCargoReportSheet(form, { process: PROCESS, conference, catalog: CATALOG })
 }
@@ -462,12 +467,74 @@ describe('escape e limites', () => {
   })
 })
 
+describe('S8: descarga, tempo total e etiquetagem no Excel', () => {
+  const footer = (conference, form = mockScenarioForm()) => generate(buildSheet(form, conference)).book.Sheets['SQ QUIMICA']
+
+  it('B38 leva a linha da descarga (com tempo total) e as Observações separadas por " | "', () => {
+    expect(footer(S8_CONFERENCE).B38.v).toBe(`${S8_SUMMARY} | Palete 3 com avaria na embalagem externa, conteúdo íntegro.`)
+  })
+
+  it('só a descarga: B38 = resumo; só Observações: idêntico ao de antes; nenhum dos dois: B38 do modelo', () => {
+    expect(footer({ ...S8_CONFERENCE, notes: '' }).B38.v).toBe(S8_SUMMARY)
+    expect(footer(MOCK_CONFERENCE).B38.v).toBe('Palete 3 com avaria na embalagem externa, conteúdo íntegro.')
+    expect(footer({ ...MOCK_CONFERENCE, notes: '' }).B38).toBeUndefined()
+  })
+
+  it('virada de dia e só início têm o formato do X1', () => {
+    expect(
+      footer({ ...S8_CONFERENCE, notes: '', unloadStartAt: '2026-11-24T23:30', unloadEndAt: '2026-11-25T01:10' }).B38.v
+    ).toBe('DESCARGA: 24/11/2026 23:30 ATÉ 25/11/2026 01:10 · TEMPO TOTAL: 100 MIN')
+    expect(footer({ ...S8_CONFERENCE, notes: '', unloadEndAt: '' }).B38.v).toBe('DESCARGA: INÍCIO 24/11/2026 08:10')
+  })
+
+  it('I39 mostra o dia do início, mesmo com receivedDate divergente na conferência', () => {
+    expect(footer({ ...S8_CONFERENCE, receivedDate: '2026-11-20' }).I39.v).toBe('DATA RECEBIMENTO: 24/11/2026')
+    // legado: sem início, o valor gravado
+    expect(footer(MOCK_CONFERENCE).I39.v).toBe('DATA RECEBIMENTO: 22/11/2026')
+  })
+
+  it('L37: com OK vira "ETIQUETAGEM: OK · <nome>"; sem nome só "OK"; sem OK como na S7; L38 e I38 não mudam', () => {
+    const ok = footer(S8_CONFERENCE)
+    expect(ok.L37.v).toBe('ETIQUETAGEM: OK · Operador Logística')
+    expect(ok.L38.v).toBe('CONFECÇÃO ETIQUETA: Operador Logística')
+    expect(ok.I38.v).toBe('CONFERÊNCIA: Operador Logística')
+    expect(footer({ ...S8_CONFERENCE, checkedByName: '' }).L37.v).toBe('ETIQUETAGEM: OK')
+    expect(footer({ ...S8_CONFERENCE, labelingOk: false }).L37.v).toBe('ETIQUETAGEM: Operador Logística')
+    expect(footer({ okByRowId: {}, checkedByName: '' }).L37.v).toBe('ETIQUETAGEM:')
+  })
+
+  it('o estilo das células escritas não muda e o tempo total não vira célula própria', () => {
+    const xml = sheetXml(generate(buildSheet(mockScenarioForm(), S8_CONFERENCE)).files)
+    const template = sheetXml(unzipSync(TEMPLATE))
+    for (const ref of ['B38', 'L37', 'I39']) {
+      expect(cellXml(xml, ref).match(/ s="(\d+)"/)[1]).toBe(cellXml(template, ref).match(/ s="(\d+)"/)[1])
+    }
+    for (const ref of ['F39', 'G39', 'H39', 'F40', 'G40', 'H40']) {
+      expect(cellXml(xml, ref)).toBe(cellXml(template, ref))
+    }
+  })
+
+  it('com 45 linhas o resumo, a etiquetagem e a data desceram junto (B55, L54, I56)', () => {
+    const count = 45
+    const extra = count - 28
+    const conference = { ...manyRowsConference(count), ...S8_UNLOAD, labelingOk: true }
+    const ws = generate(buildSheet(manyRowsForm(count), conference)).book.Sheets['SQ QUIMICA']
+    expect(ws[`B${38 + extra}`].v).toBe(`${S8_SUMMARY} | Palete 3 com avaria na embalagem externa, conteúdo íntegro.`)
+    expect(ws[`L${37 + extra}`].v).toBe('ETIQUETAGEM: OK · Operador Logística')
+    expect(ws[`I${39 + extra}`].v).toBe('DATA RECEBIMENTO: 24/11/2026')
+    expect(ws[`B${38 + extra}`].v).toBe(ws.B55.v)
+    expect(ws.L54.v).toBe('ETIQUETAGEM: OK · Operador Logística')
+    expect(ws.I56.v).toBe('DATA RECEBIMENTO: 24/11/2026')
+  })
+})
+
 describe('amostra para o Lucas', () => {
   it('grava o xlsx do cenário do mock quando CARGO_REPORT_SAMPLE_OUT existe', () => {
     const out = process.env.CARGO_REPORT_SAMPLE_OUT
     if (!out) return
     // S7: a amostra é o Excel que a LOGÍSTICA gera ao fechar a conferência (conferência fechada).
-    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), CLOSED_CONFERENCE))
+    // S8: com descarga (início, fim e tempo total em B38 + Observações), data de recebimento derivada e Etiquetagem OK.
+    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), S8_CONFERENCE))
     fs.writeFileSync(out, bytes)
     expect(fs.statSync(out).size).toBeGreaterThan(10000)
   })

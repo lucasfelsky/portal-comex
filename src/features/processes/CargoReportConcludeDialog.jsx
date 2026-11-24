@@ -33,6 +33,7 @@ import {
   fromConferenceDoc,
   isCargoReportRowEmpty,
   toCargoDateKey,
+  validateCargoUnload,
 } from './cargoReportFormModel'
 import { buildCargoReportSheet, describeCargoReportAlerts } from './cargoReportSheet'
 
@@ -62,6 +63,7 @@ const MESSAGES = {
     'O Excel foi anexado e o aviso enviado, mas o COMEX ou outra pessoa alterou o relatório antes. Recarregue e confira.',
   currentChanged:
     'O COMEX alterou ou reabriu o relatório depois que você abriu. Recarregue antes de fechar a conferência.',
+  invalidUnload: 'Corrija o horário da descarga antes de salvar.',
   conferHint:
     'Você marca o OK? e a contagem, preenche as etiquetas e os dados do recebimento. As demais colunas são só do COMEX.',
   conferWaiting: 'Disponível depois que o COMEX fechar: "Salvar e fechar conferência".',
@@ -179,7 +181,7 @@ export function CargoReportCloseConferenceDialog({ open, processName, pendingTex
           <li>
             {'Envia o '}
             <b>aviso da conferência</b>
-            {' por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e uma notificação no Portal para os admins.'}
+            {' por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório.'}
           </li>
           <li>
             {'A conferência fica '}
@@ -411,6 +413,10 @@ export function CargoReportActionBar({
       withoutOk > 0 ? pluralLines(withoutOk, 'sem OK?') : '',
       withoutCount > 0 ? pluralLines(withoutCount, 'sem contagem') : '',
       conference.receiptStatus ? '' : 'Status do recebimento não informado',
+      // S8: pendências (não bloqueiam). Não existe pendência separada de "Data de recebimento": ela é o dia do início.
+      conference.unloadStartAt ? '' : 'Início da descarga não informado',
+      conference.unloadStartAt && !conference.unloadEndAt ? 'Fim da descarga não informado' : '',
+      conference.labelingOk ? '' : 'Etiquetagem sem OK',
     ]
       .filter(Boolean)
       .join(', ')
@@ -457,6 +463,12 @@ export function CargoReportActionBar({
   function handleOpenClose() {
     if (!canClose || isBusy) return
     onFeedback(null)
+    // S8: descarga inválida (fim sem início, fim antes do início, mais de 24 h) bloqueia: o diálogo nem abre.
+    const unloadErrors = validateCargoUnload(conference)
+    if (unloadErrors.start || unloadErrors.end) {
+      onFeedback({ kind: 'error', text: MESSAGES.invalidUnload })
+      return
+    }
     setIsCloseOpen(true)
   }
 
