@@ -154,7 +154,7 @@ describe('firestore.rules structure', () => {
       expect(body).not.toMatch(/labeledBy|labelMadeBy/)
     })
 
-    it('isValidCargoReportConference: hasOnly + hasAll das 18 chaves, mapas, recebimento, fechamento e current existente', () => {
+    it('isValidCargoReportConference: hasOnly + hasAll das 21 chaves, mapas, recebimento, descarga (S8), fechamento e current existente', () => {
       const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
@@ -170,6 +170,9 @@ describe('firestore.rules structure', () => {
         'receivedDate',
         'nfNumber',
         'notes',
+        'unloadStartAt',
+        'unloadEndAt',
+        'labelingOk',
         'closedDate',
         'closedById',
         'closedByName',
@@ -202,6 +205,17 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/status\s*==\s*'fechada'\s*\?/)
       expect(body).toMatch(/resource\s*==\s*null\s*\?\s*1\s*:\s*resource\.data\.revision\s*\+\s*1/)
       expect(body).toMatch(/updatedByName\s*==\s*myName\(\)/)
+    })
+
+    // S8: descarga como texto sem fuso, fim >= inicio comparado como string, etiquetagem booleana e o vinculo
+    // receivedDate = dia do inicio. O tempo total NAO e gravado (nenhuma chave nem calculo nas rules).
+    it('S8: isValidCargoReportConference valida a descarga, a etiquetagem e o vinculo da data de recebimento', () => {
+      const body = fnBody('isValidCargoReportConference')
+      expect(body).toContain('unloadEndAt >= request.resource.data.unloadStartAt')
+      expect(body).toContain('T([01][0-9]|2[0-3]):[0-5][0-9]$')
+      expect(body).toContain('labelingOk is bool')
+      expect(body).toContain("request.resource.data.receivedDate == request.resource.data.unloadStartAt.split('T')[0]")
+      expect(body).not.toContain('unloadMinutes')
     })
 
     // S7: estados por area, travas e permissoes novas.
@@ -238,7 +252,7 @@ describe('firestore.rules structure', () => {
       expect(body).toContain('uploadedById == request.auth.uid')
     })
 
-    it('S7: isAdminCargoConferenceReopen so muda revision, status, closed* e carimbos', () => {
+    it('S7/S8: isAdminCargoConferenceReopen so muda revision, status, closed* e carimbos (descarga so ganha o padrao)', () => {
       const body = fnBody('isAdminCargoConferenceReopen')
       expect(body).toMatch(/resource\.data\.get\('status',\s*'aberta'\)\s*==\s*'fechada'/)
       expect(body).toMatch(/request\.resource\.data\.status\s*==\s*'aberta'/)
@@ -246,8 +260,25 @@ describe('firestore.rules structure', () => {
       expect(keys).not.toBeNull()
       const parsed = keys[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
       expect(parsed).toEqual(
-        ['revision', 'status', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId', 'updatedAt', 'updatedById', 'updatedByName'].sort()
+        [
+          'revision',
+          'status',
+          'closedDate',
+          'closedById',
+          'closedByName',
+          'closedDocumentId',
+          'unloadStartAt',
+          'unloadEndAt',
+          'labelingOk',
+          'updatedAt',
+          'updatedById',
+          'updatedByName',
+        ].sort()
       )
+      expect(parsed).not.toContain('receivedDate')
+      expect(body).toContain("resource.data.get('labelingOk', false)")
+      expect(body).toContain("resource.data.get('unloadStartAt', '')")
+      expect(body).toContain("resource.data.get('unloadEndAt', '')")
     })
 
     it('S7: documents create aceita cargoReport da logistica so no estado COMEX fechado; delete da logistica exclui cargoReport', () => {

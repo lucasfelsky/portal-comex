@@ -142,6 +142,25 @@ function OkMark({ label, checked, interactive, onToggle }) {
   )
 }
 
+// Selo "OK" / "Sem OK" (OK? e Contagem dos cartões mobile; S8: também a Etiquetagem do card de recebimento).
+// Botão com `role="checkbox"` só quando interativo; senão um `span` sem botão. `label` é o nome acessível.
+export function CargoOkBadge({ checked, label, interactive, onToggle }) {
+  const badgeClass = checked ? 'inline-badge inline-badge--ok' : 'inline-badge documents-badge--neutral'
+  if (!interactive) return <span className={badgeClass}>{checked ? 'OK' : 'Sem OK'}</span>
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      className={`${badgeClass} crf-rc__ok`}
+      onClick={onToggle}
+    >
+      {checked ? 'OK' : 'Sem OK'}
+    </button>
+  )
+}
+
 function DesktopTable({
   rows,
   derived,
@@ -394,20 +413,7 @@ function MobileCard({
 
   // Mesmo selo "OK" / "Sem OK" para OK? e Contagem; botão só na conferência da logística.
   function renderOkBadge(checked, label, onToggle) {
-    const badgeClass = checked ? 'inline-badge inline-badge--ok' : 'inline-badge documents-badge--neutral'
-    if (!isConfer) return <span className={badgeClass}>{checked ? 'OK' : 'Sem OK'}</span>
-    return (
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={checked}
-        aria-label={label}
-        className={`${badgeClass} crf-rc__ok`}
-        onClick={onToggle}
-      >
-        {checked ? 'OK' : 'Sem OK'}
-      </button>
-    )
+    return <CargoOkBadge checked={checked} label={label} interactive={isConfer} onToggle={onToggle} />
   }
 
   return (

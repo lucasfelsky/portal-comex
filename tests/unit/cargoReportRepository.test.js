@@ -685,7 +685,31 @@ describe('S7: reopenCargoReportConference', () => {
     for (const key of ['okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName', 'receiptStatus', 'receivedDate', 'nfNumber', 'notes']) {
       expect(data[key]).toEqual(serverClosed[key])
     }
-    expect(Object.keys(data)).toHaveLength(18)
+    // S8: o doc fechado antes da S8 (sem as chaves da descarga) ganha o padrão, o receivedDate gravado fica e as
+    // 18 chaves antigas + 3 novas = 21.
+    expect(data).toMatchObject({ unloadStartAt: '', unloadEndAt: '', labelingOk: false, receivedDate: '2026-11-22' })
+    expect(Object.keys(data)).toHaveLength(21)
+  })
+
+  it('S8: doc com descarga e etiquetagem mantém os 3 valores (o valor do servidor vence o padrão)', async () => {
+    mockGetDoc.mockResolvedValue(
+      snapshot({
+        ...serverClosed,
+        unloadStartAt: '2026-11-22T08:15',
+        unloadEndAt: '2026-11-22T10:40',
+        labelingOk: true,
+      })
+    )
+    await reopenCargoReportConference('P1', ADMIN)
+    const [, data] = mockSetDoc.mock.calls[0]
+    expect(data).toMatchObject({
+      status: 'aberta',
+      unloadStartAt: '2026-11-22T08:15',
+      unloadEndAt: '2026-11-22T10:40',
+      labelingOk: true,
+      receivedDate: '2026-11-22',
+    })
+    expect(Object.keys(data)).toHaveLength(21)
   })
 
   it('audita a reabertura; falha de auditoria não vira erro', async () => {

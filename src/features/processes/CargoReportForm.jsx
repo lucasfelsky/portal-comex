@@ -38,6 +38,7 @@ import {
   fromConferenceDoc,
   getCargoReportStage,
   isCargoReportRowEmpty,
+  validateCargoUnload,
 } from './cargoReportFormModel'
 import { applyCargoReportImport } from './cargoReportImport'
 import { formatCargoDateBr } from './cargoReportSheet'
@@ -61,6 +62,9 @@ const EMPTY_CONFERENCE = {
   receivedDate: '',
   nfNumber: '',
   notes: '',
+  unloadStartAt: '',
+  unloadEndAt: '',
+  labelingOk: false,
   closedDate: '',
   closedById: '',
   closedByName: '',
@@ -80,6 +84,7 @@ const MESSAGES = {
   permissionDenied:
     'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o recebimento e fecha a conferência.',
   invalidNumbers: 'Corrija os números destacados antes de salvar.',
+  invalidUnload: 'Corrija o horário da descarga antes de salvar.',
   conferBanner:
     'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e os dados do recebimento. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando. O fechamento da conferência fica disponível quando o COMEX fechar a parte dele.',
   conferBannerComexClosed:
@@ -136,6 +141,9 @@ function conferenceKey(conference, rows) {
     marks,
     receiptStatus: conference.receiptStatus ?? '',
     receivedDate: conference.receivedDate ?? '',
+    unloadStartAt: conference.unloadStartAt ?? '',
+    unloadEndAt: conference.unloadEndAt ?? '',
+    labelingOk: conference.labelingOk === true,
     nfNumber: String(conference.nfNumber ?? '').trim(),
     notes: String(conference.notes ?? '').trim(),
   })
@@ -283,6 +291,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   // COMEX fechado trava o preenchimento até o admin reabrir; a logística confere nos estados 1 e 2.
   const canEditFields = canEdit && stage === CARGO_STAGE.draft
   const canConferNow = canSaveCargoConference(role, stage)
+  // S8: erros da descarga (fim sem início, fim antes do início, mais de 24 h) só aparecem para quem edita.
+  const unloadErrors = canConferNow ? validateCargoUnload(conference) : { start: '', end: '' }
+  const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
   // S5: importar planilha só para o admin e enquanto a parte do COMEX está aberta.
   const canImport = canEditFields
   const actorName = String(profile?.name ?? profile?.email ?? '').trim()
@@ -447,6 +458,10 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   async function handleSaveConference() {
     if (!canConferNow || isSaving || !canSave) return
     setFeedback(null)
+    if (hasUnloadError) {
+      setFeedback({ kind: 'error', text: MESSAGES.invalidUnload })
+      return
+    }
     setIsSaving(true)
     try {
       await saveConference(savedConference.revision, rows)
@@ -738,6 +753,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         canEdit={canConferNow}
         checkedByPreview={canConferNow ? actorName : ''}
         radioName={radioName}
+        unloadErrors={unloadErrors}
       />
 
       {feedbackNode}

@@ -123,7 +123,7 @@ const currentDoc = (overrides = {}) => ({
   ...overrides,
 })
 
-// S7: conferência no formato novo (18 chaves nas rules). Aberta = estados 1 e 2; `closedConferenceDoc` = estado 3.
+// S8: conferência no formato novo (21 chaves nas rules). Aberta = estados 1 e 2; `closedConferenceDoc` = estado 3.
 const conferenceDoc = (overrides = {}) => ({
   schemaVersion: 1,
   revision: 2,
@@ -140,6 +140,9 @@ const conferenceDoc = (overrides = {}) => ({
   receivedDate: '',
   nfNumber: '',
   notes: '',
+  unloadStartAt: '',
+  unloadEndAt: '',
+  labelingOk: false,
   closedDate: '',
   closedById: '',
   closedByName: '',
@@ -374,10 +377,21 @@ describe('admin: salvar rascunho', () => {
     expect(screen.queryByLabelText('Etiquetado por')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Etiqueta feita por')).not.toBeInTheDocument()
     expect(
-      screen.getByText('Preenchido pela logística. "Conferido por" é automático. A data de conclusão é preenchida ao fechar.')
+      screen.getByText(
+        'Preenchido pela logística. "Conferido por", "Data de recebimento" e o tempo total da descarga são automáticos. A data de conclusão é preenchida ao fechar.'
+      )
     ).toBeInTheDocument()
     expect(screen.getByText(/Fixo: quem faz a conferência/)).toBeInTheDocument()
-    for (const label of ['Status do recebimento', 'Data de recebimento', 'Nº da NF', 'Observações']) {
+    expect(screen.getByText(/Fixo: dia da descarga/)).toBeInTheDocument()
+    for (const label of [
+      'Status do recebimento',
+      'Data de recebimento',
+      'Nº da NF',
+      'Observações',
+      'Início da descarga',
+      'Fim da descarga',
+      'Tempo total da descarga',
+    ]) {
       expect(screen.getByLabelText(label)).toBeDisabled()
     }
   })
@@ -503,8 +517,12 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     const checkedBy = screen.getByLabelText('Conferido por')
     expect(checkedBy).toBeDisabled()
     expect(checkedBy).toHaveValue('Operador Logística')
-    for (const label of ['Status do recebimento', 'Data de recebimento', 'Nº da NF', 'Observações']) {
+    for (const label of ['Status do recebimento', 'Nº da NF', 'Observações', 'Início da descarga', 'Fim da descarga']) {
       expect(screen.getByLabelText(label)).toBeEnabled()
+    }
+    // S8: "Data de recebimento" e "Tempo total da descarga" são calculados (somente leitura).
+    for (const label of ['Data de recebimento', 'Tempo total da descarga']) {
+      expect(screen.getByLabelText(label)).toBeDisabled()
     }
   })
 
@@ -541,7 +559,7 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     expect(payload.checkedByName).toBe('Operador Logística')
     expect(payload.okByRowId).toEqual({ 'r-1': false, 'r-2': true, 'r-3': true, 'r-4': true })
     expect(payload.okByRowId).not.toHaveProperty('orfa')
-    expect(Object.keys(payload)).toHaveLength(15)
+    expect(Object.keys(payload)).toHaveLength(18)
     expect(mockSaveDraft).not.toHaveBeenCalled()
     expect(await screen.findByText(/Conferência salva às \d{2}:\d{2}\./)).toBeInTheDocument()
     expect(screen.getByLabelText('Conferido por')).toHaveValue('Operador Logística')
@@ -623,7 +641,8 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     expect(save).toBeDisabled()
 
     await user.selectOptions(screen.getByLabelText('Status do recebimento'), 'com_ressalva')
-    fireEvent.change(screen.getByLabelText('Data de recebimento'), { target: { value: '2026-11-22' } })
+    // S8: a data de recebimento não é digitada; ela é o dia do início da descarga.
+    fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value: '2026-11-22T08:15' } })
     await user.type(screen.getByLabelText('Nº da NF'), '000.123')
     await user.type(screen.getByLabelText('Observações'), 'Palete 3 avariado')
     expect(save).toBeEnabled()
@@ -649,7 +668,7 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
 
     expect(screen.getByLabelText('Observações')).toHaveValue('Obs do COMEX')
     expect(screen.getByLabelText('Status do recebimento')).toHaveValue('sem_ressalva')
-    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('2026-11-20')
+    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('20/11/2026')
     expect(screen.getByLabelText('Nº da NF')).toHaveValue('NF-9')
     expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
   })
@@ -1384,7 +1403,15 @@ describe('S7: logística nos estados 2 e 3', () => {
     expect(header.getByText('COMEX: Fechado em 23/11 19:52 por Lucas')).toBeInTheDocument()
     expect(header.getByText('Logística: Fechada em 24/11 16:05 por Operador Logística')).toBeInTheDocument()
     expect(screen.getByLabelText('Conferido por')).toBeDisabled()
-    for (const label of ['Status do recebimento', 'Data de recebimento', 'Nº da NF', 'Observações']) {
+    for (const label of [
+      'Status do recebimento',
+      'Data de recebimento',
+      'Nº da NF',
+      'Observações',
+      'Início da descarga',
+      'Fim da descarga',
+      'Tempo total da descarga',
+    ]) {
       expect(screen.getByLabelText(label)).toBeDisabled()
     }
     for (const label of [
@@ -1841,7 +1868,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
 
   async function fillReceipt(user) {
     await user.selectOptions(screen.getByLabelText('Status do recebimento'), 'com_ressalva')
-    fireEvent.change(screen.getByLabelText('Data de recebimento'), { target: { value: '2026-11-22' } })
+    fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value: '2026-11-22T08:15' } })
     await user.type(screen.getByLabelText('Nº da NF'), '000.123.456')
     await user.type(screen.getByLabelText('Observações'), 'Palete 3 avariado')
   }
@@ -1878,10 +1905,10 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     expect(dialog).toHaveTextContent('O Portal vai gerar o Excel do FR.CMX.001 com a sua conferência e anexar ao processo ACME SEA 021-26 como Relatório de carga.')
     expect(dialog).toHaveTextContent('Gera o Excel do FR.CMX.001 com OK?, contagem, etiquetas e recebimento e anexa como nova versão do Relatório de carga.')
     expect(dialog).toHaveTextContent('O Portal guarda as 2 últimas versões: a versão do COMEX vira "versão anterior".')
-    expect(dialog).toHaveTextContent('Envia o aviso da conferência por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e uma notificação no Portal para os admins.')
+    expect(dialog).toHaveTextContent('Envia o aviso da conferência por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório.')
     expect(dialog).toHaveTextContent('A conferência fica fechada. Para corrigir, peça ao COMEX para reabrir.')
     expect(within(dialog).getByRole('note')).toHaveTextContent(
-      'Pendências: 2 linhas sem OK?, 4 linhas sem contagem, Status do recebimento não informado. Dá para fechar assim.'
+      'Pendências: 2 linhas sem OK?, 4 linhas sem contagem, Status do recebimento não informado, Início da descarga não informado, Etiquetagem sem OK. Dá para fechar assim.'
     )
     expect(within(dialog).getByRole('button', { name: 'Salvar e fechar conferência' })).toHaveClass('primary-button')
   })
@@ -1889,7 +1916,14 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
   it('sem pendências o diálogo não mostra o aviso', async () => {
     mockGetCargoReport.mockResolvedValue({
       current: concludedDoc({ rows: [CONCLUDED_ROWS[0]] }),
-      conference: conferenceDoc({ receiptStatus: 'sem_ressalva', countOkByRowId: { 'r-1': true } }),
+      conference: conferenceDoc({
+        receiptStatus: 'sem_ressalva',
+        countOkByRowId: { 'r-1': true },
+        unloadStartAt: '2026-11-24T08:15',
+        unloadEndAt: '2026-11-24T10:40',
+        receivedDate: '2026-11-24',
+        labelingOk: true,
+      }),
     })
     const { user } = await renderForm({ profile: LOGISTICA })
     const dialog = await openCloseDialog(user)
@@ -1927,10 +1961,13 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
       closedDocumentId: '',
       receiptStatus: 'com_ressalva',
       receivedDate: '2026-11-22',
+      unloadStartAt: '2026-11-22T08:15',
+      unloadEndAt: '',
+      labelingOk: false,
       nfNumber: '000.123.456',
       notes: 'Palete 3 avariado',
     })
-    expect(Object.keys(args.payload)).toHaveLength(15)
+    expect(Object.keys(args.payload)).toHaveLength(18)
     expect(args.payload.okByRowId).not.toHaveProperty('orfa')
 
     // O arquivo anexado leva a conferência fechada: nome, rodapé e DATA CONCLUSÃO = dia do fechamento.
@@ -2125,5 +2162,275 @@ describe('S7: etiquetas WMS e SQ em MAIÚSCULAS na digitação', () => {
     await renderForm({ profile: LOGISTICA })
     expect(wmsOf(1)).toHaveValue('WMS-Ç1')
     expect(sqOf(1)).toHaveValue('SQ-Ã1')
+  })
+})
+
+describe('S8: descarga, data de recebimento fixa e etiquetagem', () => {
+  const group = () => screen.getByRole('group', { name: 'Descarga e etiquetagem' })
+  const etiquetagem = () => screen.getByRole('checkbox', { name: 'Etiquetagem' })
+  const setStart = (value) => fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value } })
+  const setEnd = (value) => fireEvent.change(screen.getByLabelText('Fim da descarga'), { target: { value } })
+
+  beforeEach(() => {
+    mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: conferenceDoc() })
+  })
+
+  it('logística no estado 2: início e fim editáveis, tempo total só leitura e Etiquetagem "Sem OK"', async () => {
+    await renderForm({ profile: LOGISTICA })
+
+    expect(group()).toBeInTheDocument()
+    expect(screen.getByLabelText('Início da descarga')).toBeEnabled()
+    expect(screen.getByLabelText('Início da descarga')).toHaveAttribute('type', 'datetime-local')
+    expect(screen.getByLabelText('Fim da descarga')).toBeEnabled()
+    const total = screen.getByLabelText('Tempo total da descarga')
+    expect(total).toBeDisabled()
+    expect(total).toHaveAttribute('readonly')
+    expect(total).toHaveAttribute('placeholder', '—')
+    expect(screen.getByText(/Calculado: fim menos início\./)).toBeInTheDocument()
+    expect(etiquetagem()).toHaveAttribute('aria-checked', 'false')
+    expect(etiquetagem()).toHaveTextContent('Sem OK')
+    expect(screen.getByText('Marque quando as etiquetas estiverem coladas.')).toBeInTheDocument()
+  })
+
+  it('ordem dos campos: linha 1 (Conferido por, Status, Nº da NF, Data de recebimento) e linha 2 (Início, Fim, Tempo total, Etiquetagem)', async () => {
+    await renderForm({ profile: LOGISTICA })
+
+    const card = screen.getByLabelText('Responsáveis e recebimento')
+    const rows = [...card.querySelectorAll(':scope > .crf-foot')]
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toBe(group())
+    const labelsOf = (row) =>
+      [...row.querySelectorAll(':scope > .crf-field')].map((field) => field.querySelector('label, span').textContent)
+    expect(labelsOf(rows[0])).toEqual(['Conferido por', 'Status do recebimento', 'Nº da NF', 'Data de recebimento'])
+    expect(labelsOf(rows[1])).toEqual(['Início da descarga', 'Fim da descarga', 'Tempo total da descarga', 'Etiquetagem'])
+    // As Observações vêm depois dos dois grupos.
+    const notes = screen.getByLabelText('Observações')
+    expect(rows[1].compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('"Data de recebimento" é fixa: travada, sem type=date, traço sem início e o dia do início depois', async () => {
+    await renderForm({ profile: LOGISTICA })
+
+    const date = screen.getByLabelText('Data de recebimento')
+    expect(date).toBeDisabled()
+    expect(date).toHaveAttribute('readonly')
+    expect(date).not.toHaveAttribute('type', 'date')
+    expect(date).toHaveAttribute('placeholder', '—')
+    expect(date).toHaveValue('')
+    expect(screen.getByText(/Fixo: dia da descarga/)).toBeInTheDocument()
+
+    setStart('2026-11-24T08:15')
+    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('24/11/2026')
+    setStart('')
+    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('')
+  })
+
+  it('fim preenchido mostra o tempo total em minutos; Etiquetagem liga o OK e habilita salvar; o payload leva tudo', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    // O seletor nativo do Fim só aceita a partir do início (atributo `min`); sem início, sem `min`.
+    expect(screen.getByLabelText('Fim da descarga')).not.toHaveAttribute('min')
+    setStart('2026-11-24T08:15')
+    expect(screen.getByLabelText('Fim da descarga')).toHaveAttribute('min', '2026-11-24T08:15')
+    setEnd('2026-11-24T10:40')
+    expect(screen.getByLabelText('Tempo total da descarga')).toHaveValue('145 min')
+
+    await user.click(etiquetagem())
+    expect(etiquetagem()).toHaveAttribute('aria-checked', 'true')
+    expect(etiquetagem()).toHaveTextContent('OK')
+    expect(save).toBeEnabled()
+
+    await user.click(save)
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1]).toMatchObject({
+      unloadStartAt: '2026-11-24T08:15',
+      unloadEndAt: '2026-11-24T10:40',
+      receivedDate: '2026-11-24',
+      labelingOk: true,
+    })
+    expect(Object.keys(mockSaveConference.mock.calls[0][1])).not.toContain('unloadMinutes')
+    expect(await screen.findByText(/Conferência salva às \d{2}:\d{2}\./)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+  })
+
+  it('só marcar a Etiquetagem já suja a conferência; "Descartar" desfaz', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await user.click(etiquetagem())
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(etiquetagem()).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+  })
+
+  it('doc anterior com receivedDate e sem início: mostra o valor gravado; salvar sem início mantém; informar o início troca', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc(),
+      conference: conferenceDoc({ receivedDate: '2026-11-20' }),
+    })
+    const { user } = await renderForm({ profile: LOGISTICA })
+
+    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('20/11/2026')
+    expect(screen.getByLabelText('Data de recebimento')).toBeDisabled()
+    await user.type(screen.getByLabelText('Nº da NF'), '1')
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1]).toMatchObject({ receivedDate: '2026-11-20', unloadStartAt: '' })
+
+    setStart('2026-11-24T08:15')
+    expect(screen.getByLabelText('Data de recebimento')).toHaveValue('24/11/2026')
+  })
+
+  it('fim antes do início: mensagem no campo Fim, aria-invalid, aria-describedby e salvar bloqueado', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    setStart('2026-11-24T10:40')
+    setEnd('2026-11-24T08:15')
+
+    const message = screen.getByText('O fim da descarga deve ser igual ou posterior ao início.')
+    const end = screen.getByLabelText('Fim da descarga')
+    expect(end).toHaveAttribute('aria-invalid', 'true')
+    expect(end.getAttribute('aria-describedby')).toContain(message.id)
+    expect(message).toHaveClass('field-error')
+    expect(screen.getByLabelText('Início da descarga')).not.toHaveAttribute('aria-invalid')
+    expect(screen.getByLabelText('Tempo total da descarga')).toHaveValue('')
+
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    expect(screen.getByText('Corrija o horário da descarga antes de salvar.')).toBeInTheDocument()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+  })
+
+  it('fim sem início: erro no campo Início; mais de 24 h: erro no campo Fim', async () => {
+    await renderForm({ profile: LOGISTICA })
+    setEnd('2026-11-24T10:40')
+    expect(screen.getByText('Informe o início da descarga.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Início da descarga')).toHaveAttribute('aria-invalid', 'true')
+
+    setStart('2026-11-23T08:00')
+    expect(screen.queryByText('Informe o início da descarga.')).not.toBeInTheDocument()
+    setEnd('2026-11-25T08:01')
+    expect(screen.getByText('A descarga passa de 24 horas. Confira as datas.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fim da descarga')).toHaveAttribute('aria-invalid', 'true')
+    // Com erro (também o de mais de 24 h) o tempo total fica vazio.
+    expect(screen.getByLabelText('Tempo total da descarga')).toHaveValue('')
+  })
+
+  describe('diálogo "Salvar e fechar conferência"', () => {
+    const openDialog = async (user) => {
+      await user.click(screen.getByRole('button', { name: 'Salvar e fechar conferência' }))
+      return screen.findByRole('dialog', { name: CLOSE_DIALOG })
+    }
+
+    it('lista as pendências da descarga e da etiquetagem; nunca "Data de recebimento"', async () => {
+      const { user } = await renderForm({ profile: LOGISTICA })
+      const dialog = await openDialog(user)
+      const note = within(dialog).getByRole('note')
+      expect(note).toHaveTextContent('Início da descarga não informado')
+      expect(note).toHaveTextContent('Etiquetagem sem OK')
+      expect(note).not.toHaveTextContent('Fim da descarga não informado')
+      expect(note).not.toHaveTextContent(/Data de recebimento/)
+    })
+
+    it('com início e sem fim, a pendência do fim aparece e a do início não', async () => {
+      const { user } = await renderForm({ profile: LOGISTICA })
+      setStart('2026-11-24T08:15')
+      const note = within(await openDialog(user)).getByRole('note')
+      expect(note).toHaveTextContent('Fim da descarga não informado')
+      expect(note).not.toHaveTextContent('Início da descarga não informado')
+    })
+
+    it('descarga e etiquetagem preenchidas não geram pendência dessas áreas', async () => {
+      const { user } = await renderForm({ profile: LOGISTICA })
+      setStart('2026-11-24T08:15')
+      setEnd('2026-11-24T10:40')
+      await user.click(etiquetagem())
+      const note = within(await openDialog(user)).getByRole('note')
+      expect(note).not.toHaveTextContent(/descarga não informado|Etiquetagem sem OK/)
+      expect(note).toHaveTextContent('Status do recebimento não informado')
+    })
+
+    it('descarga inválida bloqueia: o diálogo nem abre e o feedback explica', async () => {
+      const { user } = await renderForm({ profile: LOGISTICA })
+      setStart('2026-11-24T10:40')
+      setEnd('2026-11-24T08:15')
+      await user.click(screen.getByRole('button', { name: 'Salvar e fechar conferência' }))
+      expect(screen.queryByRole('dialog', { name: CLOSE_DIALOG })).not.toBeInTheDocument()
+      expect(screen.getByText('Corrija o horário da descarga antes de salvar.')).toBeInTheDocument()
+      expect(mockClose).not.toHaveBeenCalled()
+    })
+
+    it('confirmar leva a descarga e a data derivada ao payload e à folha do Excel', async () => {
+      mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+      const { user } = await renderForm({ profile: LOGISTICA })
+      setStart('2026-11-24T08:15')
+      setEnd('2026-11-24T10:40')
+      await user.click(etiquetagem())
+      await user.click(within(await openDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+
+      await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(1))
+      expect(mockClose.mock.calls[0][1].payload).toMatchObject({
+        unloadStartAt: '2026-11-24T08:15',
+        unloadEndAt: '2026-11-24T10:40',
+        receivedDate: '2026-11-24',
+        labelingOk: true,
+      })
+      expect(mockGenerate.mock.calls[0][0]).toMatchObject({
+        receivedDateBr: '24/11/2026',
+        unloadSummary: 'DESCARGA: 24/11/2026, 08:15 ÀS 10:40 · TEMPO TOTAL: 145 MIN',
+        labelingOk: true,
+      })
+    })
+  })
+
+  describe('somente leitura', () => {
+    const FILLED = {
+      unloadStartAt: '2026-11-24T08:15',
+      unloadEndAt: '2026-11-24T10:40',
+      receivedDate: '2026-11-24',
+      labelingOk: true,
+    }
+
+    it('estado 3 (logística): campos travados, tempo total e data visíveis, Etiquetagem sem botão', async () => {
+      mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: closedConferenceDoc(FILLED) })
+      await renderForm({ profile: LOGISTICA })
+
+      for (const label of ['Início da descarga', 'Fim da descarga']) expect(screen.getByLabelText(label)).toBeDisabled()
+      expect(screen.getByLabelText('Início da descarga')).toHaveValue('2026-11-24T08:15')
+      expect(screen.getByLabelText('Tempo total da descarga')).toHaveValue('145 min')
+      expect(screen.getByLabelText('Data de recebimento')).toHaveValue('24/11/2026')
+      expect(screen.queryByRole('checkbox', { name: 'Etiquetagem' })).not.toBeInTheDocument()
+      expect(within(group()).getByText('OK')).toBeInTheDocument()
+    })
+
+    it('admin (qualquer estado): campos travados e "Sem OK" sem botão', async () => {
+      await renderForm()
+      for (const label of ['Início da descarga', 'Fim da descarga', 'Tempo total da descarga', 'Data de recebimento']) {
+        expect(screen.getByLabelText(label)).toBeDisabled()
+      }
+      expect(screen.queryByRole('checkbox', { name: 'Etiquetagem' })).not.toBeInTheDocument()
+      expect(within(group()).getByText('Sem OK')).toBeInTheDocument()
+    })
+
+    it('erro de descarga não aparece para quem não edita', async () => {
+      mockGetCargoReport.mockResolvedValue({
+        current: concludedDoc(),
+        conference: closedConferenceDoc({ unloadStartAt: '2026-11-24T10:40', unloadEndAt: '2026-11-24T08:15', receivedDate: '2026-11-24' }),
+      })
+      await renderForm({ profile: LOGISTICA })
+      expect(screen.queryByText('O fim da descarga deve ser igual ou posterior ao início.')).not.toBeInTheDocument()
+    })
+  })
+
+  it('mobile: os mesmos campos; data de recebimento só leitura e Etiquetagem interativa', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA, variant: 'mobile' })
+
+    for (const label of ['Início da descarga', 'Fim da descarga']) expect(screen.getByLabelText(label)).toBeEnabled()
+    expect(screen.getByLabelText('Data de recebimento')).toBeDisabled()
+    expect(screen.getByLabelText('Tempo total da descarga')).toBeDisabled()
+    expect(etiquetagem()).toHaveClass('inline-badge', 'crf-rc__ok')
+    await user.click(etiquetagem())
+    expect(etiquetagem()).toHaveAttribute('aria-checked', 'true')
+    // O selo dos cartões continua o mesmo componente: mesmas classes do OK? da linha.
+    expect(etiquetagem().className).toBe(screen.getByRole('checkbox', { name: 'OK? da linha 3' }).className.replace('documents-badge--neutral', 'inline-badge--ok'))
   })
 })

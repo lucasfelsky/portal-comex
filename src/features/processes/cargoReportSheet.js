@@ -8,9 +8,12 @@ import {
   CARGO_REPORT_MAX_ROWS,
   RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
+  computeCargoUnloadMinutes,
   deriveCargoReportRow,
   formatCargoReportTitle,
   normalizeCargoLabel,
+  readDateTimeKey,
+  resolveCargoReceivedDate,
 } from './cargoReportFormModel'
 
 export const CARGO_REPORT_FILE_PREFIX = 'FR.CMX.001 - RELATORIO DE CARGA - '
@@ -24,6 +27,30 @@ const FORBIDDEN_FILE_CHARS = new Set(['\\', '/', ':', '*', '?', '"', '<', '>', '
 export function formatCargoDateBr(dateKey) {
   const match = DATE_KEY_PATTERN.exec(String(dateKey ?? ''))
   return match ? `${match[3]}/${match[2]}/${match[1]}` : ''
+}
+
+// '2026-11-24T08:15' -> '24/11/2026 08:15'. Por `split`, nunca por `Date`. Inválido -> ''.
+export function formatCargoDateTimeBr(dateTimeKey) {
+  const key = readDateTimeKey(dateTimeKey)
+  return key ? `${formatCargoDateBr(key.slice(0, 10))} ${key.slice(11, 16)}` : ''
+}
+
+// Linha de descarga que o Excel leva no início de OBSERVAÇÕES (o modelo FR.CMX.001 não tem células para isso).
+// Maiúsculas, como os rótulos do modelo. Sem início: ''. Fim antes do início não gera tempo total.
+//   mesmo dia:       DESCARGA: 24/11/2026, 08:15 ÀS 10:40 · TEMPO TOTAL: 145 MIN
+//   dias diferentes: DESCARGA: 24/11/2026 23:30 ATÉ 25/11/2026 01:10 · TEMPO TOTAL: 100 MIN
+//   só início:       DESCARGA: INÍCIO 24/11/2026 08:15
+export function formatCargoUnloadSummary(start, end) {
+  const from = readDateTimeKey(start)
+  if (!from) return ''
+  const to = readDateTimeKey(end)
+  if (!to) return `DESCARGA: INÍCIO ${formatCargoDateTimeBr(from)}`
+  const minutes = computeCargoUnloadMinutes(from, to)
+  const total = minutes === null ? '' : ` · TEMPO TOTAL: ${minutes} MIN`
+  if (from.slice(0, 10) === to.slice(0, 10)) {
+    return `DESCARGA: ${formatCargoDateBr(from.slice(0, 10))}, ${from.slice(11, 16)} ÀS ${to.slice(11, 16)}${total}`
+  }
+  return `DESCARGA: ${formatCargoDateTimeBr(from)} ATÉ ${formatCargoDateTimeBr(to)}${total}`
 }
 
 // Troca por espaço os caracteres proibidos em nome de arquivo e os de controle.
@@ -73,7 +100,7 @@ const RECEIPT_STATUS_VALUES = RECEIPT_STATUS_OPTIONS.map((option) => option.valu
 
 // `form` é o estado da tela (ou o doc lido); `conference` traz o OK?, a contagem, as etiquetas WMS/SQ,
 // quem conferiu e o rodapé do recebimento (S6/S7: tudo da logística; `wmsLabel/sqLabel/count` e
-// `notes/receiptStatus/receivedDate/nfNumber` do `current` não valem). DATA CONCLUSÃO = dia em que a
+// `notes/receiptStatus/receivedDate/nfNumber` do `current` não valem). S8: descarga, tempo total e etiquetagem OK. DATA CONCLUSÃO = dia em que a
 // logística fechou (`closedDate`) quando a conferência está fechada; senão, a do COMEX (`completedDate`).
 export function buildCargoReportSheet(form, { process, conference, catalog } = {}) {
   // O payload normaliza texto e números (a tela guarda número como texto) e descarta linhas vazias.
@@ -118,7 +145,13 @@ export function buildCargoReportSheet(form, { process, conference, catalog } = {
     notes: String(conference?.notes ?? '').trim().slice(0, CARGO_REPORT_LIMITS.notes),
     checkedByName: String(conference?.checkedByName ?? '').trim(),
     receiptStatus: RECEIPT_STATUS_VALUES.includes(conference?.receiptStatus) ? conference.receiptStatus : '',
-    receivedDateBr: formatCargoDateBr(conference?.receivedDate),
+    // S8: o dia do início da descarga; sem início, o valor gravado (legado).
+    receivedDateBr: formatCargoDateBr(resolveCargoReceivedDate(conference ?? {})),
+    unloadStartBr: formatCargoDateTimeBr(conference?.unloadStartAt),
+    unloadEndBr: formatCargoDateTimeBr(conference?.unloadEndAt),
+    unloadTotalMinutes: computeCargoUnloadMinutes(conference?.unloadStartAt, conference?.unloadEndAt),
+    unloadSummary: formatCargoUnloadSummary(conference?.unloadStartAt, conference?.unloadEndAt),
+    labelingOk: conference?.labelingOk === true,
     completedDateBr: formatCargoDateBr(
       conference?.status === CARGO_CONFERENCE_STATUS.closed ? conference.closedDate : payload.completedDate
     ),

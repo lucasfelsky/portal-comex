@@ -297,7 +297,9 @@ export async function reopenCargoReportConference(processId, actor = null) {
   if (!server || server.status !== 'fechada') throw revisionConflictError('conference')
 
   // `updatedAt/ById/ByName` são refeitos por `writeDocument`.
-  const content = { ...server }
+  // S8: conferência fechada antes da S8 não tem as chaves da descarga/etiquetagem; o padrão entra ANTES do spread
+  // (o valor do servidor vence) para a rule `hasAll` aceitar. É o único "acréscimo" que a rule de reabrir permite.
+  const content = { unloadStartAt: '', unloadEndAt: '', labelingOk: false, ...server }
   for (const key of ['updatedAt', 'updatedById', 'updatedByName']) delete content[key]
   const payload = {
     ...content,

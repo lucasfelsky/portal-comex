@@ -120,7 +120,7 @@ export function CargoReportPrintView({ sheet }) {
       <footer className="crf-print__foot">
         <div>
           <p>{`CONFERÊNCIA: ${sheet.checkedByName}`}</p>
-          <p>{`ETIQUETAGEM: ${sheet.checkedByName}`}</p>
+          <p>{`ETIQUETAGEM: ${sheet.labelingOk ? ['OK', sheet.checkedByName].filter(Boolean).join(' · ') : sheet.checkedByName}`}</p>
           <p>{`CONFECÇÃO ETIQUETA: ${sheet.checkedByName}`}</p>
         </div>
         <div>
@@ -130,6 +130,9 @@ export function CargoReportPrintView({ sheet }) {
             <span>{`${box(sheet.receiptStatus === 'sem_ressalva')} SEM RESSALVA`}</span>
           </p>
           <p>{`DATA RECEBIMENTO: ${sheet.receivedDateBr}`}</p>
+          <p>{`INÍCIO DA DESCARGA: ${sheet.unloadStartBr}`}</p>
+          <p>{`FIM DA DESCARGA: ${sheet.unloadEndBr}`}</p>
+          <p>{`TEMPO TOTAL DA DESCARGA: ${typeof sheet.unloadTotalMinutes === 'number' ? `${sheet.unloadTotalMinutes} min` : ''}`}</p>
           <p>{`DATA CONCLUSÃO: ${sheet.completedDateBr}`}</p>
           <p>{`Nº DA NF: ${sheet.nfNumber}`}</p>
         </div>

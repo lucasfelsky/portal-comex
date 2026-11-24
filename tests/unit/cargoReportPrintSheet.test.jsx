@@ -41,6 +41,10 @@ const makeSheet = (count) => ({
   labelMadeBy: 'B',
   receiptStatus: 'com_ressalva',
   receivedDateBr: '22/11/2026',
+  unloadStartBr: '',
+  unloadEndBr: '',
+  unloadTotalMinutes: null,
+  labelingOk: false,
   completedDateBr: '',
   nfNumber: '1',
   alerts: [],
@@ -136,6 +140,48 @@ describe('CargoReportPrintView: larguras e linhas', () => {
     expect(region).toHaveTextContent('☑ COM RESSALVA')
     expect(region).toHaveTextContent('☐ SEM RESSALVA')
   })
+
+  const footerLines = () =>
+    [...document.querySelectorAll('.crf-print__foot p')].map((line) => line.textContent)
+
+  it('S8: descarga e etiquetagem OK em linhas próprias; DATA RECEBIMENTO mostra o dia derivado', () => {
+    const sheet = {
+      ...makeSheet(1),
+      receivedDateBr: '24/11/2026',
+      unloadStartBr: '24/11/2026 08:15',
+      unloadEndBr: '24/11/2026 10:40',
+      unloadTotalMinutes: 145,
+      labelingOk: true,
+    }
+    render(<CargoReportPrintView sheet={sheet} />)
+    const lines = footerLines()
+    expect(lines).toContain('ETIQUETAGEM: OK · Operador Logística')
+    expect(lines).toContain('DATA RECEBIMENTO: 24/11/2026')
+    expect(lines).toContain('INÍCIO DA DESCARGA: 24/11/2026 08:15')
+    expect(lines).toContain('FIM DA DESCARGA: 24/11/2026 10:40')
+    expect(lines).toContain('TEMPO TOTAL DA DESCARGA: 145 min')
+    // OBSERVAÇÕES continua só com as notas.
+    expect(lines).toContain('OBSERVAÇÕES: obs')
+    // ordem da 2ª coluna: recebimento, início, fim, tempo total, conclusão
+    const order = ['DATA RECEBIMENTO', 'INÍCIO DA DESCARGA', 'FIM DA DESCARGA', 'TEMPO TOTAL DA DESCARGA', 'DATA CONCLUSÃO']
+    const positions = order.map((label) => lines.findIndex((line) => line.startsWith(label)))
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+    expect(positions.every((position) => position >= 0)).toBe(true)
+  })
+
+  it('S8: sem descarga e sem OK as linhas ficam só com o rótulo e a etiquetagem mostra só o nome', () => {
+    render(<CargoReportPrintView sheet={makeSheet(1)} />)
+    const lines = footerLines()
+    expect(lines).toContain('ETIQUETAGEM: Operador Logística')
+    expect(lines).toContain('INÍCIO DA DESCARGA: ')
+    expect(lines).toContain('FIM DA DESCARGA: ')
+    expect(lines).toContain('TEMPO TOTAL DA DESCARGA: ')
+  })
+
+  it('S8: etiquetagem OK sem nome mostra só "OK"', () => {
+    render(<CargoReportPrintView sheet={{ ...makeSheet(1), checkedByName: '', labelingOk: true }} />)
+    expect(footerLines()).toContain('ETIQUETAGEM: OK')
+  })
 })
 
 describe('CSS da folha de impressão (1 página A4 paisagem)', () => {
@@ -162,7 +208,7 @@ describe('CSS da folha de impressão (1 página A4 paisagem)', () => {
     const block = printCss()
     expect(ruleBody(block, '.crf-print__head')).toContain('max-height: 20mm')
     expect(ruleBody(block, '.crf-print__title h1')).toContain('max-height: 2.3em')
-    expect(ruleBody(block, '.crf-print__foot > div')).toContain('max-height: 22mm')
+    expect(ruleBody(block, '.crf-print__foot > div')).toContain('max-height: 32mm')
   })
 
   it('a folha usa a página nomeada A4 paisagem e fica 2 mm menor que a área útil', () => {

@@ -192,11 +192,22 @@ function patchSheetXml(sourceXml, sheet, extra) {
     }
   })
 
-  if (isFilled(sheet.notes)) put(`B${38 + extra}`, { kind: 'text', value: sheet.notes })
+  // S8: o modelo não tem células para a descarga: a linha DESCARGA vai no início de OBSERVAÇÕES (uma linha só: a
+  // célula não quebra texto), separada das notas por " | ". Sem os dois, B38 fica como no modelo.
+  const observations = [sheet.unloadSummary, sheet.notes].filter(isFilled).join(' | ')
+  if (isFilled(observations)) put(`B${38 + extra}`, { kind: 'text', value: observations })
   if (isFilled(sheet.checkedByName)) put(`I${38 + extra}`, { kind: 'text', value: withLabel('CONFERÊNCIA:', sheet.checkedByName) })
   // S7: ETIQUETAGEM e CONFECÇÃO ETIQUETA do modelo recebem o "Conferido por" (automático); vazio mantém o rótulo do modelo.
-  if (isFilled(sheet.checkedByName)) {
+  // S8: com a etiquetagem OK, ETIQUETAGEM vira "OK · <nome>" (sem nome, só "OK"); CONFECÇÃO ETIQUETA não muda.
+  if (sheet.labelingOk) {
+    put(`L${37 + extra}`, {
+      kind: 'text',
+      value: withLabel('ETIQUETAGEM:', isFilled(sheet.checkedByName) ? `OK · ${sheet.checkedByName}` : 'OK'),
+    })
+  } else if (isFilled(sheet.checkedByName)) {
     put(`L${37 + extra}`, { kind: 'text', value: withLabel('ETIQUETAGEM:', sheet.checkedByName) })
+  }
+  if (isFilled(sheet.checkedByName)) {
     put(`L${38 + extra}`, { kind: 'text', value: withLabel('CONFECÇÃO ETIQUETA:', sheet.checkedByName) })
   }
   if (isFilled(sheet.receivedDateBr)) {

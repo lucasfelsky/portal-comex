@@ -6,6 +6,8 @@ import {
   buildCargoReportSheet,
   describeCargoReportAlerts,
   formatCargoDateBr,
+  formatCargoDateTimeBr,
+  formatCargoUnloadSummary,
   isPortalGeneratedCargoReport,
 } from '../../src/features/processes/cargoReportSheet'
 
@@ -193,6 +195,80 @@ describe('buildCargoReportSheet', () => {
       nfNumber: '',
       receiptStatus: '',
     })
+  })
+})
+
+describe('S8: buildCargoReportSheet com descarga, etiquetagem e data de recebimento derivada', () => {
+  const conferenceWith = (overrides = {}) => ({ checkedByName: 'Operador Logística', ...overrides })
+  const build = (conference) => buildCargoReportSheet(makeForm([]), { process: PROCESS, conference, catalog: null })
+
+  it('traz início, fim, tempo total, resumo e etiquetagem OK', () => {
+    const sheet = build(
+      conferenceWith({ unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T10:40', labelingOk: true })
+    )
+    expect(sheet).toMatchObject({
+      unloadStartBr: '24/11/2026 08:15',
+      unloadEndBr: '24/11/2026 10:40',
+      unloadTotalMinutes: 145,
+      unloadSummary: 'DESCARGA: 24/11/2026, 08:15 ÀS 10:40 · TEMPO TOTAL: 145 MIN',
+      labelingOk: true,
+    })
+  })
+
+  it('receivedDateBr é o dia do início, mesmo com receivedDate divergente ou vazio', () => {
+    expect(build(conferenceWith({ unloadStartAt: '2026-11-24T08:15', receivedDate: '2026-11-20' })).receivedDateBr).toBe('24/11/2026')
+    expect(build(conferenceWith({ unloadStartAt: '2026-11-24T08:15', receivedDate: '' })).receivedDateBr).toBe('24/11/2026')
+  })
+
+  it('legado sem início: receivedDateBr vem do valor gravado', () => {
+    expect(build(conferenceWith({ receivedDate: '2026-11-20' })).receivedDateBr).toBe('20/11/2026')
+  })
+
+  it('sem conferência ou sem descarga: vazio, null e false', () => {
+    for (const conference of [undefined, conferenceWith()]) {
+      expect(build(conference)).toMatchObject({
+        receivedDateBr: '',
+        unloadStartBr: '',
+        unloadEndBr: '',
+        unloadTotalMinutes: null,
+        unloadSummary: '',
+        labelingOk: false,
+      })
+    }
+  })
+
+  it('só labelingOk === true conta; fim antes do início não gera tempo total', () => {
+    expect(build(conferenceWith({ labelingOk: 'true' })).labelingOk).toBe(false)
+    const sheet = build(conferenceWith({ unloadStartAt: '2026-11-24T10:40', unloadEndAt: '2026-11-24T08:15' }))
+    expect(sheet.unloadTotalMinutes).toBeNull()
+    expect(sheet.unloadSummary).toBe('DESCARGA: 24/11/2026, 10:40 ÀS 08:15')
+  })
+
+  it('o tempo total não vira chave gravável: a folha nunca expõe "unloadMinutes"', () => {
+    expect(build(conferenceWith())).not.toHaveProperty('unloadMinutes')
+  })
+})
+
+describe('S8: formatCargoDateTimeBr / formatCargoUnloadSummary', () => {
+  it('data e hora por split, sem Date; inválido vira vazio', () => {
+    expect(formatCargoDateTimeBr('2026-11-24T08:15')).toBe('24/11/2026 08:15')
+    expect(formatCargoDateTimeBr('2026-11-24T08:15:59')).toBe('24/11/2026 08:15')
+    expect(formatCargoDateTimeBr('2026-11-24 08:15')).toBe('')
+    expect(formatCargoDateTimeBr('')).toBe('')
+    expect(formatCargoDateTimeBr(null)).toBe('')
+  })
+
+  it('resumo nos 4 formatos do Excel (X1)', () => {
+    expect(formatCargoUnloadSummary('2026-11-24T08:15', '2026-11-24T10:40')).toBe(
+      'DESCARGA: 24/11/2026, 08:15 ÀS 10:40 · TEMPO TOTAL: 145 MIN'
+    )
+    expect(formatCargoUnloadSummary('2026-11-24T23:30', '2026-11-25T01:10')).toBe(
+      'DESCARGA: 24/11/2026 23:30 ATÉ 25/11/2026 01:10 · TEMPO TOTAL: 100 MIN'
+    )
+    expect(formatCargoUnloadSummary('2026-11-24T08:15', '')).toBe('DESCARGA: INÍCIO 24/11/2026 08:15')
+    expect(formatCargoUnloadSummary('', '')).toBe('')
+    // Fim sem início não gera linha (a tela bloqueia; aqui o resumo só não inventa).
+    expect(formatCargoUnloadSummary('', '2026-11-24T10:40')).toBe('')
   })
 })
 

@@ -2,7 +2,7 @@
 // alertas, normalizacao e payloads). Fixtures SINTETICAS: nunca o catalogo real.
 import fs from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CARGO_REPORT_CONFLICT_CODE,
   CARGO_REPORT_MAX_ROWS,
@@ -22,6 +22,8 @@ import {
   canReopenCargoConference,
   canReopenCargoReportComex,
   canSaveCargoConference,
+  cargoDatePart,
+  computeCargoUnloadMinutes,
   computeLotSq,
   computePackages,
   countCargoReportAlerts,
@@ -37,8 +39,11 @@ import {
   normalizeCargoLabel,
   parseCargoCount,
   parseCargoNumber,
+  readDateTimeKey,
+  resolveCargoReceivedDate,
   resolveNetWeightKg,
   toCargoDateKey,
+  validateCargoUnload,
 } from '../../src/features/processes/cargoReportFormModel'
 
 const CATALOG = {
@@ -400,11 +405,12 @@ describe('buildCargoReportPayload', () => {
 
 const CONFERENCE_KEYS = [
   'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
-  'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
+  'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
+  'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
 ]
 
 describe('buildConferencePayload', () => {
-  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 15 chaves (S7)', () => {
+  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 18 chaves (S8)', () => {
     const payload = buildConferencePayload(
       { okByRowId: { a: true, b: 0, orfa: true }, revision: 2 },
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
@@ -422,14 +428,17 @@ describe('buildConferencePayload', () => {
       receivedDate: '',
       nfNumber: '',
       notes: '',
+      unloadStartAt: '',
+      unloadEndAt: '',
+      labelingOk: false,
       closedDate: '',
       closedById: '',
       closedByName: '',
       closedDocumentId: '',
     })
     expect(Object.keys(payload)).toEqual(CONFERENCE_KEYS)
-    // O repositório acrescenta updatedAt/updatedById/updatedByName: 15 + 3 = 18 chaves nas rules.
-    expect(CONFERENCE_KEYS).toHaveLength(15)
+    // O repositório acrescenta updatedAt/updatedById/updatedByName: 18 + 3 = 21 chaves nas rules.
+    expect(CONFERENCE_KEYS).toHaveLength(18)
   })
 
   it('S6: poda id orfao nos 3 mapas e força booleano na contagem', () => {
@@ -819,5 +828,182 @@ describe('S4: buildReopenedCargoReportPayload', () => {
     expect(payload).toMatchObject({ status: 'rascunho', completedDate: '', revision: 6, catalogVersion: 3, lastGenerated })
     expect(payload.rows[0]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null, quantityKg: 12500 })
     expect(Object.keys(payload.rows[0])).toHaveLength(13)
+  })
+})
+
+describe('S8: readDateTimeKey / cargoDatePart', () => {
+  it('aceita YYYY-MM-DDTHH:mm; com segundos ou fração, corta nos minutos', () => {
+    expect(readDateTimeKey('2026-11-24T08:15')).toBe('2026-11-24T08:15')
+    expect(readDateTimeKey('2026-11-24T08:15:30')).toBe('2026-11-24T08:15')
+    expect(readDateTimeKey('2026-11-24T08:15:30.250')).toBe('2026-11-24T08:15')
+  })
+
+  it('rejeita formato, ano fora de 2020–2099, hora 24, minuto 60, mês e dia fora de faixa e não texto', () => {
+    for (const value of [
+      '2026-11-24 08:15',
+      '24/11/2026 08:15',
+      '2026-11-24',
+      '2019-11-24T08:15',
+      '2100-01-01T08:15',
+      '2026-11-24T24:00',
+      '2026-11-24T08:60',
+      '2026-13-01T08:00',
+      '2026-00-10T08:00',
+      '2026-11-00T08:00',
+      '2026-11-32T08:00',
+      '',
+      null,
+      undefined,
+      20261124,
+    ]) {
+      expect(readDateTimeKey(value)).toBe('')
+    }
+  })
+
+  it('não confere o calendário (2026-02-30 passa pelo padrão, como receivedDate); o seletor nativo não gera isso', () => {
+    expect(readDateTimeKey('2026-02-30T08:00')).toBe('2026-02-30T08:00')
+  })
+
+  it('cargoDatePart devolve só o dia; inválido vira vazio', () => {
+    expect(cargoDatePart('2026-11-24T08:15')).toBe('2026-11-24')
+    expect(cargoDatePart('2026-11-24 08:15')).toBe('')
+    expect(cargoDatePart('')).toBe('')
+    expect(cargoDatePart(undefined)).toBe('')
+  })
+})
+
+describe('S8: resolveCargoReceivedDate (data de recebimento = dia do início da descarga)', () => {
+  it('com início, vale o dia do início mesmo que receivedDate venha diferente', () => {
+    expect(resolveCargoReceivedDate({ unloadStartAt: '2026-11-24T08:15', receivedDate: '2026-01-01' })).toBe('2026-11-24')
+    expect(resolveCargoReceivedDate({ unloadStartAt: '2026-11-24T23:30', receivedDate: '' })).toBe('2026-11-24')
+  })
+
+  it('sem início, vale o receivedDate legado; sem nenhum dos dois, vazio', () => {
+    expect(resolveCargoReceivedDate({ unloadStartAt: '', receivedDate: '2026-11-20' })).toBe('2026-11-20')
+    expect(resolveCargoReceivedDate({ receivedDate: '20/11/2026' })).toBe('')
+    expect(resolveCargoReceivedDate({})).toBe('')
+    expect(resolveCargoReceivedDate()).toBe('')
+  })
+})
+
+describe('S8: computeCargoUnloadMinutes', () => {
+  it('diferença de parede em minutos: mesmo dia, virada de dia e fim igual ao início', () => {
+    expect(computeCargoUnloadMinutes('2026-11-24T08:15', '2026-11-24T10:40')).toBe(145)
+    expect(computeCargoUnloadMinutes('2026-11-24T23:30', '2026-11-25T01:10')).toBe(100)
+    expect(computeCargoUnloadMinutes('2026-11-24T08:15', '2026-11-24T08:15')).toBe(0)
+  })
+
+  it('fim antes do início, valor faltando ou inválido: null', () => {
+    expect(computeCargoUnloadMinutes('2026-11-24T10:40', '2026-11-24T08:15')).toBeNull()
+    expect(computeCargoUnloadMinutes('', '2026-11-24T08:15')).toBeNull()
+    expect(computeCargoUnloadMinutes('2026-11-24T08:15', '')).toBeNull()
+    expect(computeCargoUnloadMinutes('2026-11-24 08:15', '2026-11-24T10:40')).toBeNull()
+  })
+
+  it('conta pelos componentes do texto, sem Date local nem toISOString', () => {
+    const spy = vi.spyOn(Date.prototype, 'toISOString')
+    try {
+      expect(computeCargoUnloadMinutes('2026-03-08T01:00', '2026-03-08T04:00')).toBe(180)
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('S8: validateCargoUnload', () => {
+  it('sem erro: vazio, só início, início e fim válidos e fim igual ao início', () => {
+    const none = { start: '', end: '' }
+    expect(validateCargoUnload({ unloadStartAt: '', unloadEndAt: '' })).toEqual(none)
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:15', unloadEndAt: '' })).toEqual(none)
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T10:40' })).toEqual(none)
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T08:15' })).toEqual(none)
+    expect(validateCargoUnload()).toEqual(none)
+  })
+
+  it('fim sem início: erro no início; fim antes do início e mais de 24 h: erro no fim (mensagens exatas)', () => {
+    expect(validateCargoUnload({ unloadStartAt: '', unloadEndAt: '2026-11-24T10:40' })).toEqual({
+      start: 'Informe o início da descarga.',
+      end: '',
+    })
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T10:40', unloadEndAt: '2026-11-24T08:15' })).toEqual({
+      start: '',
+      end: 'O fim da descarga deve ser igual ou posterior ao início.',
+    })
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:00', unloadEndAt: '2026-11-26T09:45' })).toEqual({
+      start: '',
+      end: 'A descarga passa de 24 horas. Confira as datas.',
+    })
+  })
+
+  it('o limite é 1.440 min: 24 h exatas passam; 1.441 min falham', () => {
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:00', unloadEndAt: '2026-11-25T08:00' }).end).toBe('')
+    expect(validateCargoUnload({ unloadStartAt: '2026-11-24T08:00', unloadEndAt: '2026-11-25T08:01' }).end).toBe(
+      'A descarga passa de 24 horas. Confira as datas.'
+    )
+  })
+})
+
+describe('S8: buildConferencePayload com descarga, etiquetagem e data derivada', () => {
+  it('grava início e fim (sem segundos) e receivedDate = dia do início, ignorando o valor que veio', () => {
+    const payload = buildConferencePayload(
+      {
+        unloadStartAt: '2026-11-24T08:15:40',
+        unloadEndAt: '2026-11-24T10:40',
+        receivedDate: '2026-01-01',
+        labelingOk: true,
+        revision: 0,
+      },
+      [],
+      { actorName: 'Op' }
+    )
+    expect(payload).toMatchObject({
+      unloadStartAt: '2026-11-24T08:15',
+      unloadEndAt: '2026-11-24T10:40',
+      receivedDate: '2026-11-24',
+      labelingOk: true,
+    })
+    expect(Object.keys(payload)).toHaveLength(18)
+    // O tempo total é derivado: nenhuma chave de minutos entra no payload.
+    expect(Object.keys(payload).some((key) => /minutes/i.test(key))).toBe(false)
+  })
+
+  it('sem início, mantém o receivedDate legado; início inválido some', () => {
+    expect(buildConferencePayload({ receivedDate: '2026-11-20', revision: 0 }, [], {}).receivedDate).toBe('2026-11-20')
+    const invalid = buildConferencePayload({ unloadStartAt: '24/11/2026 08:15', unloadEndAt: 'x', revision: 0 }, [], {})
+    expect(invalid).toMatchObject({ unloadStartAt: '', unloadEndAt: '', receivedDate: '' })
+  })
+
+  it('labelingOk só é true com o booleano true', () => {
+    for (const value of ['true', 1, 'sim', null, undefined, false]) {
+      expect(buildConferencePayload({ labelingOk: value, revision: 0 }, [], {}).labelingOk).toBe(false)
+    }
+    expect(buildConferencePayload({ labelingOk: true, revision: 0 }, [], {}).labelingOk).toBe(true)
+  })
+
+  it('o fechamento herda as chaves novas', () => {
+    const closed = buildClosedConferencePayload(
+      { unloadStartAt: '2026-11-24T08:15', labelingOk: true, revision: 1 },
+      [],
+      { actorName: 'Op', actorUid: 'u1', today: '2026-11-24' }
+    )
+    expect(closed).toMatchObject({ unloadStartAt: '2026-11-24T08:15', receivedDate: '2026-11-24', labelingOk: true })
+    expect(Object.keys(closed)).toEqual(CONFERENCE_KEYS)
+  })
+})
+
+describe('S8: fromConferenceDoc com as chaves novas', () => {
+  it('doc anterior (sem as chaves) lê vazio, vazio e sem OK; o receivedDate gravado é preservado', () => {
+    const conference = fromConferenceDoc({ revision: 2, status: 'aberta', receiptStatus: '', receivedDate: '2026-11-20' })
+    expect(conference).toMatchObject({ unloadStartAt: '', unloadEndAt: '', labelingOk: false, receivedDate: '2026-11-20' })
+  })
+
+  it('lê início, fim e etiquetagem; valor inválido vira vazio e labelingOk só com booleano true', () => {
+    const doc = { receiptStatus: '', unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T10:40', labelingOk: true }
+    expect(fromConferenceDoc(doc)).toMatchObject({ unloadStartAt: '2026-11-24T08:15', unloadEndAt: '2026-11-24T10:40', labelingOk: true })
+    expect(fromConferenceDoc({ ...doc, unloadStartAt: 'x', labelingOk: 'true' })).toMatchObject({
+      unloadStartAt: '',
+      labelingOk: false,
+    })
   })
 })

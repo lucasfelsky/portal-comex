@@ -391,6 +391,7 @@
       "closedDate",
       "closedDocumentId",
       "countOkByRowId",
+      "labelingOk",
       "labelsByRowId",
       "nfNumber",
       "notes",
@@ -400,6 +401,8 @@
       "revision",
       "schemaVersion",
       "status",
+      "unloadEndAt",
+      "unloadStartAt",
       "updatedAt",
       "updatedById",
       "updatedByName"
@@ -409,8 +412,11 @@
       "closedByName",
       "closedDate",
       "closedDocumentId",
+      "labelingOk",
       "revision",
       "status",
+      "unloadEndAt",
+      "unloadStartAt",
       "updatedAt",
       "updatedById",
       "updatedByName"
