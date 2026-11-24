@@ -281,16 +281,21 @@ describe('linhas vazias e limite', () => {
     expect(result.rows.map((row) => row.po)).toEqual(['A', 'B'])
   })
 
-  it('28 linhas passam e 29 viram too-many-rows com o total', async () => {
+  it('200 linhas passam (mais que as 28 do modelo) e 201 viram too-many-rows com o total', async () => {
     const make = (total) => Array.from({ length: total }, (_, index) => r5Row({ po: `PO${index}` }))
 
-    const ok = await importFile({ rows: make(28) })
-    expect(ok.fatal).toBeNull()
-    expect(ok.rows).toHaveLength(28)
+    const beyondTemplate = await importFile({ rows: make(45) })
+    expect(beyondTemplate.fatal).toBeNull()
+    expect(beyondTemplate.rows).toHaveLength(45)
 
-    const tooMany = await importFile({ rows: make(29) })
+    const ok = await importFile({ rows: make(200) })
+    expect(ok.fatal).toBeNull()
+    expect(ok.rows).toHaveLength(200)
+
+    const tooMany = await importFile({ rows: make(201) })
     expect(tooMany.fatal.code).toBe('too-many-rows')
-    expect(tooMany.fatal.message).toContain('29')
+    expect(tooMany.fatal.message).toContain('201')
+    expect(tooMany.fatal.message).toContain('o Portal aceita até 200')
     expect(tooMany.rows).toEqual([])
   })
 
@@ -533,28 +538,28 @@ describe('applyCargoReportImport e alertas', () => {
   })
 })
 
-describe('buildCargoReportSheetMatrix (recorte de 200 x 30)', () => {
+describe('buildCargoReportSheetMatrix (recorte de 300 x 30)', () => {
   // Aba sintética (sem XLSX.write): `!ref` inflado como o de um arquivo malicioso.
   const inflatedSheet = {
     '!ref': 'A1:XFD1048576',
     A1: { t: 's', v: 'DENTRO-A1' },
-    AD200: { t: 'n', v: 7 },
-    B300: { t: 's', v: 'FORA' },
+    AD300: { t: 'n', v: 7 },
+    B301: { t: 's', v: 'FORA' },
     AE2: { t: 's', v: 'FORA' },
     XFD1048576: { t: 's', v: 'FORA' },
   }
 
-  it('o recorte padrão é 200 linhas x 30 colunas e as células fora dele não entram', () => {
-    expect(CARGO_REPORT_IMPORT_SCAN).toMatchObject({ rows: 200, cols: 30 })
+  it('o recorte padrão é 300 linhas x 30 colunas e as células fora dele não entram', () => {
+    expect(CARGO_REPORT_IMPORT_SCAN).toMatchObject({ rows: 300, cols: 30 })
 
     const { matrix, firstRow, firstCol } = buildCargoReportSheetMatrix(inflatedSheet)
 
     expect(firstRow).toBe(1)
     expect(firstCol).toBe(0)
-    expect(matrix).toHaveLength(200)
+    expect(matrix).toHaveLength(300)
     expect(matrix.every((row) => row.length === 30)).toBe(true)
     expect(matrix[0][0]).toBe('DENTRO-A1')
-    expect(matrix[199][29]).toBe(7)
+    expect(matrix[299][29]).toBe(7)
     expect(matrix.flat()).not.toContain('FORA')
   })
 

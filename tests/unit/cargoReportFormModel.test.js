@@ -9,8 +9,11 @@ import {
   CARGO_TYPE_OPTIONS,
   RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
+  buildConcludedCargoReportPayload,
   buildConferencePayload,
   buildInitialCargoReport,
+  buildReopenedCargoReportPayload,
+  canConcludeCargoReport,
   canConferCargoReport,
   canEditCargoReport,
   canOpenCargoReport,
@@ -20,12 +23,14 @@ import {
   createEmptyCargoReportRow,
   deriveCargoReportRow,
   formatCargoNumber,
+  freezeCargoReportRows,
   formatCargoReportTitle,
   fromCargoReportDoc,
   isCargoReportRowEmpty,
   parseCargoCount,
   parseCargoNumber,
   resolveNetWeightKg,
+  toCargoDateKey,
 } from '../../src/features/processes/cargoReportFormModel'
 
 const CATALOG = {
@@ -271,8 +276,8 @@ describe('buildInitialCargoReport', () => {
     expect(form.rows.map((row) => row.po)).toEqual(['4500111', '4500222'])
   })
 
-  it('corta em 28 linhas', () => {
-    const items = Array.from({ length: 35 }, (_, index) => ({ id: `i${index}`, commercialName: `Item ${index}`, quantity: 1 }))
+  it('corta no teto de linhas', () => {
+    const items = Array.from({ length: CARGO_REPORT_MAX_ROWS + 7 }, (_, index) => ({ id: `i${index}`, commercialName: `Item ${index}`, quantity: 1 }))
     expect(buildInitialCargoReport({ ...process, items }).rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
   })
 })
@@ -310,18 +315,18 @@ describe('buildCargoReportPayload', () => {
     ])
   })
 
-  it('29 linhas preenchidas geram o erro do limite', () => {
+  it('linhas acima do teto geram o erro do limite', () => {
     const form = baseForm()
-    form.rows = Array.from({ length: 29 }, (_, index) => makeRow({ id: `r-${index}`, po: `45${index}` }))
+    form.rows = Array.from({ length: CARGO_REPORT_MAX_ROWS + 1 }, (_, index) => makeRow({ id: `r-${index}`, po: `45${index}` }))
     const { payload, errors } = buildCargoReportPayload(form)
     expect(errors).toEqual([
       {
         field: 'rows',
         message:
-          'O relatório já tem 28 linhas, o limite do modelo FR.CMX.001. Para mais itens, gere um segundo relatório.',
+          'O relatório já tem 200 linhas, o limite do Portal. Para mais itens, gere um segundo relatório.',
       },
     ])
-    expect(payload.rows).toHaveLength(28)
+    expect(payload.rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
   })
 
   it('o payload nao grava colunas calculadas nem DUIMP e cada linha tem 13 chaves', () => {
@@ -409,11 +414,11 @@ describe('fromCargoReportDoc e isCargoReportRowEmpty', () => {
     expect(fromCargoReportDoc(null).rows).toEqual([])
   })
 
-  it('linha sem id ganha id novo e o doc corta em 28 linhas', () => {
-    const form = fromCargoReportDoc({ rows: Array.from({ length: 40 }, () => ({ po: '1' })) })
-    expect(form.rows).toHaveLength(28)
+  it('linha sem id ganha id novo e o doc corta no teto', () => {
+    const form = fromCargoReportDoc({ rows: Array.from({ length: CARGO_REPORT_MAX_ROWS + 12 }, () => ({ po: '1' })) })
+    expect(form.rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
     expect(form.rows.every((row) => row.id.startsWith('r-'))).toBe(true)
-    expect(new Set(form.rows.map((row) => row.id)).size).toBe(28)
+    expect(new Set(form.rows.map((row) => row.id)).size).toBe(CARGO_REPORT_MAX_ROWS)
   })
 
   it('converte updatedAt para Date', () => {
@@ -427,5 +432,116 @@ describe('fromCargoReportDoc e isCargoReportRowEmpty', () => {
     expect(isCargoReportRowEmpty(makeRow({ po: ' ' }))).toBe(true)
     expect(isCargoReportRowEmpty(makeRow({ count: 0 }))).toBe(false)
     expect(isCargoReportRowEmpty(makeRow({ wmsLabel: 'W' }))).toBe(false)
+  })
+})
+
+describe('S4: toCargoDateKey', () => {
+  it('usa o dia local, sem deslocar para UTC', () => {
+    expect(toCargoDateKey(new Date(2026, 10, 22, 23, 30))).toBe('2026-11-22')
+    expect(toCargoDateKey(new Date(2026, 0, 5, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+describe('S4: canConcludeCargoReport', () => {
+  it('só admin conclui e reabre', () => {
+    expect(canConcludeCargoReport('admin')).toBe(true)
+    expect(canConcludeCargoReport('logistica')).toBe(false)
+    expect(canConcludeCargoReport('compras')).toBe(false)
+    expect(canConcludeCargoReport(undefined)).toBe(false)
+  })
+})
+
+describe('S4: freezeCargoReportRows', () => {
+  it('congela peso líquido e nº de embalagens pela tabela vigente', () => {
+    const [row] = freezeCargoReportRows([makeRow({ dbcorpCode: 'AD5240', quantityKg: 12500 })], CATALOG)
+    expect(row.frozenNetWeightKg).toBe(25)
+    expect(row.frozenPackages).toBe(500)
+  })
+
+  it('código fora da tabela ou sem quantidade congela null', () => {
+    const rows = freezeCargoReportRows(
+      [makeRow({ id: 'a', dbcorpCode: 'ZZ9999', quantityKg: 800 }), makeRow({ id: 'b', dbcorpCode: 'AD5240' })],
+      CATALOG
+    )
+    expect(rows[0]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null })
+    expect(rows[1]).toMatchObject({ frozenNetWeightKg: 25, frozenPackages: null })
+  })
+
+  it('linha já congelada mantém o congelado, mesmo com a tabela diferente', () => {
+    const changed = { items: [{ code: 'AD5240', description: 'X', packagingType: 'B', netWeightKg: 50 }] }
+    const [row] = freezeCargoReportRows(
+      [makeRow({ dbcorpCode: 'AD5240', quantityKg: 12500, frozenNetWeightKg: 25, frozenPackages: 500 })],
+      changed
+    )
+    expect(row).toMatchObject({ frozenNetWeightKg: 25, frozenPackages: 500 })
+  })
+})
+
+describe('S4: buildConcludedCargoReportPayload', () => {
+  const form = () => ({
+    ...fromCargoReportDoc({ revision: 4, status: 'rascunho', cargoType: 'FCL', titleSuffix: 'ACME', receiptStatus: 'sem_ressalva' }),
+    rows: [
+      makeRow({ id: 'a', po: '4500123', dbcorpCode: 'AD5240', supplierLot: 'DF2406A', quantityKg: '12.500', count: '500', packageWeightKg: '1,2' }),
+      makeRow({ id: 'vazia' }),
+      makeRow({ id: 'b', po: '4500123', dbcorpCode: 'ZZ9999', quantityKg: 800 }),
+    ],
+  })
+
+  it('conclui com a data do dia, revisão + 1 e linhas congeladas', () => {
+    const { payload, errors } = buildConcludedCargoReportPayload(form(), {
+      catalogVersion: 3,
+      catalog: CATALOG,
+      today: '2026-11-23',
+    })
+    expect(errors).toEqual([])
+    expect(payload).toMatchObject({ status: 'concluido', completedDate: '2026-11-23', revision: 5, catalogVersion: 3 })
+    expect(payload.rows.map((row) => row.id)).toEqual(['a', 'b'])
+    expect(payload.rows[0]).toMatchObject({ quantityKg: 12500, frozenNetWeightKg: 25, frozenPackages: 500 })
+    expect(payload.rows[1]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null })
+  })
+
+  it('cada linha tem 13 chaves e as chaves do payload estão na allowlist da rule, sem colunas calculadas', () => {
+    const { payload } = buildConcludedCargoReportPayload(form(), { catalog: CATALOG, today: '2026-11-23' })
+    for (const row of payload.rows) expect(Object.keys(row)).toHaveLength(13)
+    for (const key of Object.keys(payload)) expect(RULE_ALLOWLIST).toContain(key)
+    const serialized = JSON.stringify(payload)
+    for (const forbidden of ['lotSq', '"netWeightKg"', '"packages"']) expect(serialized).not.toContain(forbidden)
+  })
+
+  it('número inválido e linhas acima do teto bloqueiam como no rascunho', () => {
+    const invalid = form()
+    invalid.rows[0].quantityKg = 'abc'
+    expect(buildConcludedCargoReportPayload(invalid, { catalog: CATALOG, today: '2026-11-23' }).errors).toEqual([
+      { rowId: 'a', field: 'quantityKg', message: 'Número inválido' },
+    ])
+
+    const many = form()
+    many.rows = Array.from({ length: CARGO_REPORT_MAX_ROWS + 1 }, (_, index) => makeRow({ id: `r-${index}`, po: `45${index}` }))
+    const { errors } = buildConcludedCargoReportPayload(many, { catalog: CATALOG, today: '2026-11-23' })
+    expect(errors.map((error) => error.field)).toEqual(['rows'])
+  })
+
+  it('lastGenerated fica como veio (o repositório o substitui)', () => {
+    const lastGenerated = { documentId: 'd0', revision: 2, at: '2026-11-20T10:00:00Z', byId: 'u1' }
+    const { payload } = buildConcludedCargoReportPayload({ ...form(), lastGenerated }, { catalog: CATALOG, today: '2026-11-23' })
+    expect(payload.lastGenerated).toEqual(lastGenerated)
+  })
+})
+
+describe('S4: buildReopenedCargoReportPayload', () => {
+  it('volta a rascunho, zera os congelados e a data de conclusão e preserva lastGenerated', () => {
+    const lastGenerated = { documentId: 'd1', revision: 5, at: '2026-11-23T10:00:00Z', byId: 'u1' }
+    const concluded = fromCargoReportDoc({
+      revision: 5,
+      status: 'concluido',
+      completedDate: '2026-11-23',
+      lastGenerated,
+      rows: [{ id: 'a', po: '1', dbcorpCode: 'AD5240', quantityKg: 12500, frozenNetWeightKg: 25, frozenPackages: 500 }],
+    })
+    const { payload, errors } = buildReopenedCargoReportPayload(concluded, { catalogVersion: 3 })
+    expect(errors).toEqual([])
+    expect(payload).toMatchObject({ status: 'rascunho', completedDate: '', revision: 6, catalogVersion: 3, lastGenerated })
+    expect(payload.rows[0]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null, quantityKg: 12500 })
+    expect(Object.keys(payload.rows[0])).toHaveLength(13)
   })
 })

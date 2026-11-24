@@ -1576,6 +1576,151 @@ body {
   text-decoration: none;
 }
 
+/* S4 do Relatorio de Carga: visao de impressao A4 paisagem (`.crf-print`, prefixo crf-print). Base
+   escondida, pagina nomeada (nao muda a impressao do resto do app) e @media print. Fica antes das
+   secoes F3+ porque as guardas exigem o bloco "reduce desktop" como ultimo @media do arquivo e
+   delimitam cada secao F ate ele. */
+.crf-print {
+  display: none;
+}
+
+@page cargo-report {
+  size: A4 landscape;
+  margin: 8mm;
+}
+
+@media print {
+  body.crf-printing #root {
+    display: none !important;
+  }
+
+  /* 2mm a menos que a area util: o Chromium corta a borda externa que encosta na margem da pagina. */
+  body.crf-printing .crf-print {
+    display: block;
+    width: calc(100% - 2mm);
+    page: cargo-report;
+    color: black;
+    background: white;
+    font-family: var(--font-body, system-ui, sans-serif);
+    font-size: 7pt;
+  }
+
+  .crf-print__head {
+    display: grid;
+    grid-template-columns: 38mm 1fr 62mm;
+    align-items: center;
+    gap: 4mm;
+    max-height: 20mm;
+    padding: 1.5mm 3mm;
+    border: 0.5mm solid black;
+    overflow: hidden;
+  }
+
+  .crf-print__title {
+    text-align: center;
+  }
+
+  .crf-print__title h1 {
+    max-height: 2.3em;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-heading);
+    font-size: 15pt;
+    line-height: 1.15;
+  }
+
+  .crf-print__title p,
+  .crf-print__type p,
+  .crf-print__foot p {
+    margin: 0;
+  }
+
+  .crf-print__type {
+    display: grid;
+    gap: 1mm;
+    font-size: 8pt;
+  }
+
+  .crf-print__type span {
+    margin-right: 2mm;
+  }
+
+  /* Larguras vem do <colgroup> (% por coluna). Uma linha por registro: texto longo corta com
+     reticencias e a altura da linha e fixa, entao 28 linhas cabem sempre na mesma folha. */
+  .crf-print__table {
+    width: 100%;
+    margin-top: 2mm;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .crf-print__table th,
+  .crf-print__table td {
+    height: 4.6mm;
+    max-height: 4.6mm;
+    padding: 0.3mm 1.2mm;
+    border: 0.2mm solid black;
+    overflow: hidden;
+    line-height: 1.15;
+    text-align: left;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .crf-print__table th {
+    height: auto;
+    max-height: 10mm;
+    background: color-mix(in srgb, var(--navy) 14%, white);
+    font-size: 6.5pt;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .crf-print__table td.is-number {
+    text-align: right;
+  }
+
+  .crf-print__table td.is-center {
+    text-align: center;
+  }
+
+  .crf-print__table tr {
+    break-inside: avoid;
+  }
+
+  .crf-print__foot {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr 1.7fr;
+    gap: 2mm;
+    margin-top: 2mm;
+    break-inside: avoid;
+  }
+
+  /* Responsaveis e recebimento: uma linha por rotulo; so as observacoes (texto livre) quebram. */
+  .crf-print__foot > div:not(:last-child) p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .crf-print__foot > div {
+    display: grid;
+    align-content: start;
+    gap: 0.8mm;
+    min-height: 14mm;
+    max-height: 22mm;
+    padding: 1.2mm 2mm;
+    border: 0.2mm solid black;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .crf-print__foot span {
+    margin-right: 2mm;
+  }
+}
+
 /* ============================================================
    REFINO VISUAL F3 — CHIPS E FILTROS (desktop >= 1041px)
    Fonte: Componentes.dc.html ("Campos e filtros") e Chegadas.dc.html (chips de
@@ -24432,4 +24577,56 @@ table.crf {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ============================================================
+   S4 DO RELATORIO DE CARGA - CONCLUIR E ANEXAR, IMPRESSAO (prefixos crf-dlg e crf-print)
+   Mock aprovado (s4-confirm / s4-done / s4-docs-after / s4-print). Somente tokens do tema;
+   a visao de impressao usa preto sobre branco (o papel nao segue o tema escuro).
+   Bloco APPEND-ONLY.
+   ============================================================ */
+.documents-row__generated {
+  color: var(--primary-700);
+  font-weight: 700;
+}
+
+.crf-bar .secondary-button svg {
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
+.crf-dlg {
+  display: grid;
+  gap: 12px;
+  color: var(--ink);
+  font-size: var(--fs-subhead);
+  line-height: 1.5;
+}
+
+.crf-dlg p {
+  margin: 0;
+}
+
+.crf-dlg__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.crf-dlg__warn {
+  padding: 10px 14px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-50);
+  color: var(--warning-700);
+  font-size: var(--fs-footnote);
+}
+
+.crf-dlg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
 }

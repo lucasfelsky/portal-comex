@@ -20,7 +20,7 @@ import {
 
 export const CARGO_REPORT_IMPORT_MAX_FILE_BYTES = 5 * 1024 * 1024
 export const CARGO_REPORT_IMPORT_MAX_REVISION = 5
-export const CARGO_REPORT_IMPORT_SCAN = { headerRows: 40, rows: 200, cols: 30, sheets: 10 }
+export const CARGO_REPORT_IMPORT_SCAN = { headerRows: 40, rows: 300, cols: 30, sheets: 10 }
 
 const NOT_CHANGED = 'Nada foi alterado no formulário.'
 
@@ -50,7 +50,7 @@ export const CARGO_REPORT_IMPORT_ERRORS = {
   'too-many-rows': {
     title: 'Linhas demais.',
     message: (total) =>
-      `O arquivo tem ${total} linhas preenchidas; o modelo FR.CMX.001 aceita até ${CARGO_REPORT_MAX_ROWS}. Divida em dois relatórios. ${NOT_CHANGED}`,
+      `O arquivo tem ${total} linhas preenchidas; o Portal aceita até ${CARGO_REPORT_MAX_ROWS}. Divida em dois relatórios. ${NOT_CHANGED}`,
   },
   'no-rows': {
     title: 'Nenhuma linha preenchida.',

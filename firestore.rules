@@ -803,7 +803,7 @@ service cloud.firestore {
         && request.resource.data.titleSuffix is string
         && request.resource.data.titleSuffix.size() <= 120
         && request.resource.data.rows is list
-        && request.resource.data.rows.size() <= 28
+        && request.resource.data.rows.size() <= 200
         && (request.resource.data.rows.size() == 0
           || (request.resource.data.rows[0] is map
             && request.resource.data.rows[0].keys().hasAll([
@@ -855,7 +855,7 @@ service cloud.firestore {
         && request.resource.data.revision is int
         && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
         && request.resource.data.okByRowId is map
-        && request.resource.data.okByRowId.size() <= 28
+        && request.resource.data.okByRowId.size() <= 200
         && request.resource.data.okByRowId.values().hasOnly([true, false])
         && request.resource.data.checkedByName is string
         && request.resource.data.checkedByName.size() <= 120

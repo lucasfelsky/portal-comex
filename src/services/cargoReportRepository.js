@@ -1,7 +1,11 @@
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { auth, firestore, isFirebaseConfigured } from '../lib/firebase'
-import { CARGO_REPORT_CONFLICT_CODE } from '../features/processes/cargoReportFormModel'
+import {
+  CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
+  CARGO_REPORT_CONFLICT_CODE,
+} from '../features/processes/cargoReportFormModel'
 import { createAuditEvent } from './auditRepository'
+import { uploadProcessDocument } from './processDocumentsRepository'
 
 // Formulário FR.CMX.001 (S3 do Relatório de Carga): 2 docs nomeados por processo.
 //   processes/{id}/cargoReport/current     preenchimento do COMEX (só admin grava)
@@ -150,6 +154,74 @@ export async function saveCargoReportConference(processId, payload, actor = null
       target: `${meta?.titleSuffix ?? ''} · ${okCount} de ${totalRows} linhas OK`,
     })
   }
+
+  return { revision: payload.revision }
+}
+
+// ---------- S4: concluir e anexar, reabrir ----------
+
+const NO_FIREBASE_MESSAGE = 'Documentos disponíveis apenas com o Firebase configurado.'
+
+function attachedNotSavedError(documentId, cause) {
+  return Object.assign(new Error('attached-not-saved'), { code: CARGO_REPORT_ATTACHED_NOT_SAVED_CODE, documentId, cause })
+}
+
+// Grava `current` como concluído, apontando para o documento anexado (`lastGenerated`).
+async function writeConcluded(processId, { payload, documentId, actor, uid }) {
+  const lastGenerated = { documentId, revision: payload.revision, at: serverTimestamp(), byId: uid }
+  await writeDocument(processId, CURRENT_ID, { ...payload, lastGenerated }, actor)
+
+  await tryAudit({
+    action: 'Relatório de carga concluído e anexado',
+    actor: actor?.name ?? actor?.email ?? 'Sistema',
+    target: `${payload.titleSuffix} · revisão ${payload.revision} · ${payload.rows.length} linhas`,
+  })
+  return { revision: payload.revision, documentId }
+}
+
+// Ordem: (a) confere a revisão no servidor, sem anexar nada se já houver conflito; (b) anexa o xlsx
+// pelo fluxo normal de documentos (o servidor rotaciona as versões e avisa por e-mail); (c) grava o
+// formulário como concluído; (d) audita. Se (c) falhar depois do anexo, o erro leva o `documentId`
+// (`cargoReport/attached-not-saved`) para a tela oferecer "Gravar de novo" sem anexar outra vez.
+export async function concludeCargoReport(processId, { payload, file, category, actor } = {}) {
+  if (!isFirebaseConfigured || !firestore) throw new Error(NO_FIREBASE_MESSAGE)
+
+  const uid = auth?.currentUser?.uid
+  if (!uid) throw new Error(NOT_AUTHENTICATED_MESSAGE)
+
+  const snapshot = await getDoc(cargoReportRef(processId, CURRENT_ID))
+  const serverRevision = snapshot.exists() && Number.isInteger(snapshot.data().revision) ? snapshot.data().revision : 0
+  if (serverRevision !== payload.revision - 1) throw revisionConflictError()
+
+  const uploaded = await uploadProcessDocument(processId, {
+    type: 'cargoReport',
+    file,
+    category,
+    actor: { uid: actor?.uid ?? uid, name: actor?.name, role: actor?.role },
+  })
+
+  try {
+    return await writeConcluded(processId, { payload, documentId: uploaded.id, actor, uid })
+  } catch (error) {
+    throw attachedNotSavedError(uploaded.id, error)
+  }
+}
+
+// Só o passo (c), para o botão "Gravar de novo": o arquivo já está anexado e o aviso já saiu.
+export async function retryConcludeWrite(processId, { payload, documentId, actor } = {}) {
+  const uid = auth?.currentUser?.uid
+  if (isFirebaseConfigured && firestore && !uid) throw new Error(NOT_AUTHENTICATED_MESSAGE)
+  return writeConcluded(processId, { payload, documentId, actor, uid })
+}
+
+export async function reopenCargoReport(processId, payload, actor = null) {
+  await writeDocument(processId, CURRENT_ID, payload, actor)
+
+  await tryAudit({
+    action: 'Relatório de carga reaberto para correção',
+    actor: actor?.name ?? actor?.email ?? 'Sistema',
+    target: `${payload.titleSuffix} · revisão ${payload.revision}`,
+  })
 
   return { revision: payload.revision }
 }

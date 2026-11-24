@@ -422,3 +422,78 @@ describe('S3 - Documentos: entrada do formulário do Relatório de carga', () =>
     await waitFor(() => expect(mockListProcessDocuments.mock.calls.length).toBeGreaterThan(loadsBefore))
   })
 })
+
+// S4 do Relatório de Carga: xlsx anexado pelo "Concluir e anexar" aparece como "Gerado no Portal".
+describe('S4 - Documentos: relatório de carga gerado no Portal', () => {
+  const rowOf = (title) =>
+    screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const portalDoc = (overrides = {}) =>
+    doc({
+      id: 'c2',
+      type: 'cargoReport',
+      slotKey: 'cargoReport',
+      name: 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx',
+      mimeType: XLSX_MIME,
+      uploadedByRole: 'admin',
+      ...overrides,
+    })
+
+  it('admin: nome do Portal enviado por admin mostra "Gerado no Portal" e o botão "Abrir formulário"', async () => {
+    mockListProcessDocuments.mockResolvedValue([...DOCS, portalDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByText('Gerado no Portal')).toHaveClass('documents-row__generated')
+    expect(within(row).getByRole('button', { name: 'Abrir formulário' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Preencher no Portal' })).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Substituir Relatório de carga' })).toBeInTheDocument()
+  })
+
+  it('xlsx manual continua com "Preencher no Portal" e sem "Gerado no Portal"', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      ...DOCS,
+      portalDoc({ id: 'c3', name: 'RELATORIO DE CARGA - ACME SEA 021-26.xlsx' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
+    expect(within(row).queryByText('Gerado no Portal')).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Abrir formulário' })).not.toBeInTheDocument()
+  })
+
+  it('nome do Portal enviado por logística não conta como gerado no Portal', async () => {
+    mockListProcessDocuments.mockResolvedValue([...DOCS, portalDoc({ uploadedByRole: 'logistica' })])
+    render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).queryByText('Gerado no Portal')).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Preencher no Portal' })).toBeInTheDocument()
+  })
+
+  it('logística com o arquivo do Portal continua vendo "Conferir relatório"', async () => {
+    mockListProcessDocuments.mockResolvedValue([...DOCS, portalDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={LOGISTICA} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByText('Gerado no Portal')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Conferir relatório' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Abrir formulário' })).not.toBeInTheDocument()
+  })
+
+  it.each(['tecnico', 'faturamento'])('%s vê "Gerado no Portal" como texto, sem botão novo', async (role) => {
+    mockListProcessDocuments.mockResolvedValue([portalDoc()])
+    render(<ProcessDocumentsPanel process={FCL} profile={{ uid: 'l-1', name: 'Leitor', role }} variant="desktop" />)
+    await loaded()
+
+    const row = rowOf('Relatório de carga')
+    expect(within(row).getByText('Gerado no Portal')).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Abrir formulário' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Conferir relatório' })).not.toBeInTheDocument()
+  })
+})

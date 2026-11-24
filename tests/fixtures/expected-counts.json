@@ -427,7 +427,8 @@
       "firebase",
       "vite",
       "tailwindcss",
-      "vitest"
+      "vitest",
+      "fflate"
     ]
   },
   "onSnapshotServices": {

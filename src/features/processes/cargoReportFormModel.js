@@ -8,12 +8,16 @@ import { getItemPackaging, normalizeItemCode, parseCatalogWeight } from './cargo
 export const CARGO_REPORT_FORM_CODE = 'FR.CMX.001'
 export const CARGO_REPORT_FORM_REVISION = '005'
 export const CARGO_REPORT_SCHEMA_VERSION = 1
-export const CARGO_REPORT_MAX_ROWS = 28
+// Teto de segurança do Portal (UI, importador, repositório e rules). O modelo FR.CMX.001 tem 28 linhas de
+// dados numa página; acima disso o Excel e a impressão ganham linhas extras e várias páginas.
+export const CARGO_REPORT_MAX_ROWS = 200
+export const CARGO_REPORT_TEMPLATE_ROWS = 28
 export const CARGO_REPORT_TITLE_PREFIX = 'RELATÓRIO DE CARGA - '
 export const CARGO_REPORT_LIMITS = { text: 120, description: 200, notes: 2000, nf: 40, rowId: 64 }
 export const CARGO_REPORT_CONFLICT_CODE = 'cargoReport/revision-conflict'
+export const CARGO_REPORT_ATTACHED_NOT_SAVED_CODE = 'cargoReport/attached-not-saved'
 export const CARGO_REPORT_ROWS_LIMIT_MESSAGE =
-  'O relatório já tem 28 linhas, o limite do modelo FR.CMX.001. Para mais itens, gere um segundo relatório.'
+  'O relatório já tem 200 linhas, o limite do Portal. Para mais itens, gere um segundo relatório.'
 export const CARGO_REPORT_INVALID_NUMBER_MESSAGE = 'Número inválido'
 
 export const CARGO_TYPE_OPTIONS = [
@@ -398,4 +402,49 @@ export function fromConferenceDoc(data) {
     updatedAt: toDateOrNull(doc.updatedAt),
     updatedByName: readText(doc.updatedByName, CARGO_REPORT_LIMITS.text),
   }
+}
+
+// ---------- S4: concluir e reabrir ----------
+
+export function canConcludeCargoReport(role) {
+  return role === 'admin'
+}
+
+// `YYYY-MM-DD` no fuso local (getFullYear/getMonth/getDate): nunca via UTC.
+export function toCargoDateKey(date) {
+  const year = String(date.getFullYear()).padStart(4, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Congela o peso líquido e o nº de embalagens de cada linha com a tabela vigente. Valor já
+// congelado é mantido. `null` quando o item não tem embalagem cadastrada ou falta quantidade.
+export function freezeCargoReportRows(rows, catalog) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const frozenNetWeightKg = resolveNetWeightKg(row, catalog)
+    const keptPackages = readNumber(row?.frozenPackages)
+    return {
+      ...row,
+      frozenNetWeightKg,
+      frozenPackages: keptPackages ?? computePackages(row?.quantityKg, frozenNetWeightKg),
+    }
+  })
+}
+
+// -> { payload, errors }. Mesma validação do rascunho; `lastGenerated` fica como veio (o
+// repositório o substitui depois do anexo).
+export function buildConcludedCargoReportPayload(form, { catalogVersion = 0, catalog = null, today = '' } = {}) {
+  const { payload, errors } = buildCargoReportPayload(
+    { ...form, status: 'concluido', completedDate: today },
+    { catalogVersion }
+  )
+  return { payload: { ...payload, rows: freezeCargoReportRows(payload.rows, catalog) }, errors }
+}
+
+// Reabrir volta a calcular pela tabela atual: zera os valores congelados e a data de conclusão.
+export function buildReopenedCargoReportPayload(form, { catalogVersion = 0 } = {}) {
+  const { payload, errors } = buildCargoReportPayload({ ...form, status: 'rascunho', completedDate: '' }, { catalogVersion })
+  const rows = payload.rows.map((row) => ({ ...row, frozenNetWeightKg: null, frozenPackages: null }))
+  return { payload: { ...payload, rows }, errors }
 }

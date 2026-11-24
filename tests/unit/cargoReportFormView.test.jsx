@@ -10,11 +10,25 @@ const mockSaveDraft = vi.fn()
 const mockSaveConference = vi.fn()
 const mockGetCatalog = vi.fn()
 const mockReadImport = vi.fn()
+const mockConclude = vi.fn()
+const mockRetry = vi.fn()
+const mockReopen = vi.fn()
+const mockGenerate = vi.fn()
+const mockSaveBlob = vi.fn()
 
 vi.mock('../../src/services/cargoReportRepository', () => ({
   getCargoReport: (...args) => mockGetCargoReport(...args),
   saveCargoReportDraft: (...args) => mockSaveDraft(...args),
   saveCargoReportConference: (...args) => mockSaveConference(...args),
+  concludeCargoReport: (...args) => mockConclude(...args),
+  retryConcludeWrite: (...args) => mockRetry(...args),
+  reopenCargoReport: (...args) => mockReopen(...args),
+}))
+vi.mock('../../src/features/processes/cargoReportExcel', () => ({
+  generateCargoReportFile: (...args) => mockGenerate(...args),
+}))
+vi.mock('../../src/services/processDocumentsRepository', () => ({
+  saveBlobAsFile: (...args) => mockSaveBlob(...args),
 }))
 vi.mock('../../src/services/itemPackagingCatalogRepository', () => ({
   getItemPackagingCatalog: (...args) => mockGetCatalog(...args),
@@ -29,6 +43,7 @@ vi.mock('../../src/features/processes/cargoReportImport', async (importOriginal)
 }))
 
 import CargoReportForm from '../../src/features/processes/CargoReportForm'
+import { buildCargoReportFileName } from '../../src/features/processes/cargoReportSheet'
 
 const ADMIN = { uid: 'admin-1', name: 'Lucas Admin', email: 'lucas@sqquimica.com', role: 'admin' }
 const LOGISTICA = { uid: 'log-1', name: 'Operador Logística', email: 'op@sqquimica.com', role: 'logistica' }
@@ -124,6 +139,7 @@ beforeEach(() => {
   mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc() })
   mockSaveDraft.mockResolvedValue({ revision: 5 })
   mockSaveConference.mockResolvedValue({ revision: 3 })
+  mockGenerate.mockImplementation(async (sheet) => new File(['xlsx'], buildCargoReportFileName(sheet.titleSuffix)))
 })
 
 afterEach(() => {
@@ -354,7 +370,7 @@ describe('admin: salvar rascunho', () => {
   })
 })
 
-describe('limite de 28 linhas e linhas livres', () => {
+describe('limite de 200 linhas e linhas livres', () => {
   const manyRows = (count) => Array.from({ length: count }, (_, index) => row({ id: `r-${index + 1}`, dbcorpCode: '' }))
 
   it('com 5 linhas mostra 3 linhas livres e clicar adiciona e foca a nova linha', async () => {
@@ -362,31 +378,31 @@ describe('limite de 28 linhas e linhas livres', () => {
 
     expect(screen.getByText('Linha 6 livre · clique para preencher')).toBeInTheDocument()
     expect(screen.getByText('Linha 8 livre · clique para preencher')).toBeInTheDocument()
-    expect(screen.getByText('Limite do modelo: 28 linhas (5 usadas)')).toBeInTheDocument()
+    expect(screen.getByText('Limite do Portal: 200 linhas (5 usadas)')).toBeInTheDocument()
 
     await user.click(screen.getByText('Linha 6 livre · clique para preencher'))
     const first = await screen.findByLabelText('PO / processo da linha 6')
     expect(first).toHaveFocus()
-    expect(screen.getByText('Limite do modelo: 28 linhas (6 usadas)')).toBeInTheDocument()
+    expect(screen.getByText('Limite do Portal: 200 linhas (6 usadas)')).toBeInTheDocument()
   })
 
-  it('com 28 linhas mostra o aviso e some com as linhas livres e o "Adicionar item"', async () => {
-    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: manyRows(28) }), conference: null })
+  it('com 200 linhas mostra o aviso e some com as linhas livres e o "Adicionar item"', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: manyRows(200) }), conference: null })
     await renderForm()
 
     expect(
       screen.getByText(
-        'O relatório já tem 28 linhas, o limite do modelo FR.CMX.001. Para mais itens, gere um segundo relatório.'
+        'O relatório já tem 200 linhas, o limite do Portal. Para mais itens, gere um segundo relatório.'
       )
     ).toBeInTheDocument()
     expect(screen.queryByText(/livre · clique para preencher/)).not.toBeInTheDocument()
   })
 
-  it('mobile com 28 linhas nao oferece "Adicionar item"', async () => {
-    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: manyRows(28) }), conference: null })
+  it('mobile com 200 linhas nao oferece "Adicionar item"', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: manyRows(200) }), conference: null })
     await renderForm({ variant: 'mobile' })
     expect(screen.queryByRole('button', { name: 'Adicionar item' })).not.toBeInTheDocument()
-    expect(screen.getByText('Itens (28 de 28)')).toBeInTheDocument()
+    expect(screen.getByText('Itens (200 de 200)')).toBeInTheDocument()
   })
 })
 
@@ -395,7 +411,7 @@ describe('mobile', () => {
     const { user } = await renderForm({ variant: 'mobile' })
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.getByText('Itens (5 de 28)')).toBeInTheDocument()
+    expect(screen.getByText('Itens (5 de 200)')).toBeInTheDocument()
     expect(screen.getByText('CONS.')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'CONSOLIDADO' })).toBeInTheDocument()
     expect(screen.getAllByText('Identificação do item')).toHaveLength(5)
@@ -404,7 +420,7 @@ describe('mobile', () => {
     expect(screen.getAllByText('Sem embalagem cadastrada').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Adicionar item' }))
-    expect(screen.getByText('Itens (6 de 28)')).toBeInTheDocument()
+    expect(screen.getByText('Itens (6 de 200)')).toBeInTheDocument()
     expect(await screen.findByLabelText('PO / processo da linha 6')).toHaveFocus()
   })
 })
@@ -553,20 +569,6 @@ describe('escopo da S3', () => {
     expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
     expect(mockSaveDraft).not.toHaveBeenCalled()
     expect(mockSaveConference).not.toHaveBeenCalled()
-  })
-
-  it('nao renderiza botoes da S4', async () => {
-    await renderForm()
-
-    for (const label of [
-      'Concluir e anexar',
-      'Exportar Excel',
-      'Imprimir / Salvar PDF',
-      'Reabrir para corrigir',
-      'Mais ações',
-    ]) {
-      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
-    }
   })
 
   it('cabecalho em 3 colunas: DUIMP, tipo de carga e titulo', async () => {
@@ -741,5 +743,517 @@ describe('importar de planilha (S5)', () => {
     expect(screen.getByRole('button', { name: 'Substituir as linhas atuais' })).toBeDisabled()
     expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEA FOAM14339 - BB 25KG')
     expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// S4: Exportar Excel, Imprimir / Salvar PDF, Concluir e anexar, Reabrir para corrigir
+// ---------------------------------------------------------------------------
+const CONCLUDED_ROWS = MOCK_ROWS.map((item) => ({ ...item, frozenNetWeightKg: 25, frozenPackages: 500 }))
+const concludedDoc = (overrides = {}) =>
+  currentDoc({
+    revision: 6,
+    status: 'concluido',
+    completedDate: '2026-11-23',
+    rows: CONCLUDED_ROWS,
+    lastGenerated: { documentId: 'doc-1', revision: 6, at: new Date(2026, 10, 23, 19, 55), byId: 'admin-1' },
+    ...overrides,
+  })
+
+const PORTAL_FILE_NAME = 'FR.CMX.001 - RELATORIO DE CARGA - ACME SEA 021-26.xlsx'
+
+// O Modal fecha com animação de 240 ms: espera sair do DOM antes de procurar botões da página.
+async function waitDialogClosed() {
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Concluir e anexar' })).not.toBeInTheDocument())
+}
+
+async function openConcludeDialog(user) {
+  await user.click(screen.getByRole('button', { name: 'Concluir e anexar' }))
+  return screen.findByRole('dialog', { name: 'Concluir e anexar' })
+}
+
+describe('S4: barra do admin em rascunho', () => {
+  it('mostra Exportar Excel, Imprimir / Salvar PDF, Salvar rascunho (secundário) e Concluir e anexar', async () => {
+    await renderForm()
+
+    expect(screen.getByRole('button', { name: 'Exportar Excel' })).toHaveClass('secondary-button')
+    expect(screen.getByRole('button', { name: 'Imprimir / Salvar PDF' })).toHaveClass('secondary-button')
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toHaveClass('secondary-button')
+    expect(screen.getByRole('button', { name: 'Concluir e anexar' })).toHaveClass('primary-button')
+    expect(screen.getByText('Rascunho')).toBeInTheDocument()
+  })
+
+  it('mostra Importar de planilha (S5) e não mostra Reabrir nem Mais ações no desktop', async () => {
+    await renderForm()
+
+    expect(screen.getByRole('button', { name: 'Importar de planilha' })).toHaveClass('secondary-button')
+    for (const label of ['Reabrir para corrigir', 'Mais ações']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
+    }
+  })
+})
+
+describe('S4: Concluir e anexar', () => {
+  beforeEach(() => {
+    mockConclude.mockResolvedValue({ revision: 5, documentId: 'doc-9' })
+  })
+
+  it('o diálogo mostra os 3 itens do mock, o nome do processo e o aviso dos 3 alertas', async () => {
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+
+    expect(dialog).toHaveTextContent('O Portal vai gerar o Excel do FR.CMX.001 e anexar ao processo ACME SEA 021-26 como Relatório de carga.')
+    expect(within(dialog).getByText('nova versão').tagName).toBe('B')
+    expect(dialog).toHaveTextContent('A atual vira "versão anterior" e a mais antiga é removida.')
+    expect(dialog).toHaveTextContent('Envia o aviso por e-mail para Comex, Técnico, Logística e Faturamento/fiscal, com o assunto padrão.')
+    expect(dialog).toHaveTextContent('O formulário passa a Concluído. Para corrigir, use "Reabrir para corrigir".')
+    expect(within(dialog).getByRole('note')).toHaveTextContent(
+      '3 alertas continuam abertos: falta lote em RE5116, falta peso da embalagem em RE5116 e ZZ9999 sem embalagem cadastrada. Dá para concluir assim.'
+    )
+  })
+
+  it('com 1 alerta usa o singular', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [row({ id: 'r-1' }), row({ id: 'r-2', dbcorpCode: 'RE5116', supplierLot: '' })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+    expect(within(dialog).getByRole('note')).toHaveTextContent('1 alerta continua aberto: falta lote em RE5116. Dá para concluir assim.')
+  })
+
+  it('sem alertas não mostra o aviso', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [row({ id: 'r-1' })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('Cancelar fecha o diálogo e não chama nada', async () => {
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+
+    await waitDialogClosed()
+    expect(mockConclude).not.toHaveBeenCalled()
+    expect(mockGenerate).not.toHaveBeenCalled()
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+  })
+
+  it('confirmar gera o Excel, anexa com payload concluído e congelado e mostra o banner', async () => {
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Concluir e anexar' }))
+
+    await waitFor(() => expect(mockConclude).toHaveBeenCalledTimes(1))
+    const [processId, args] = mockConclude.mock.calls[0]
+    expect(processId).toBe('p1')
+    expect(args.actor).toBe(ADMIN)
+    expect(args.category).toBe('FCL')
+    expect(args.file.name).toBe(PORTAL_FILE_NAME)
+    expect(args.payload).toMatchObject({ status: 'concluido', completedDate: '2026-11-24', revision: 5 })
+    expect(typeof args.payload.rows[0].frozenNetWeightKg).toBe('number')
+    expect(typeof args.payload.rows[0].frozenPackages).toBe('number')
+    expect(args.payload.rows[2]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null })
+    expect(mockGenerate.mock.calls[0][0]).toMatchObject({ title: 'RELATÓRIO DE CARGA - ACME SEA 021-26', duimpNumber: '25BR00001234567' })
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+
+    expect(
+      await screen.findByText(
+        'Relatório concluído e anexado. O aviso por e-mail foi enviado aos destinatários do Relatório de carga.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('depois de concluído: selo, campos travados e barra Imprimir + Exportar + Reabrir', async () => {
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+    await screen.findByText(/Relatório concluído e anexado/)
+    await waitDialogClosed()
+
+    expect(within(screen.getByLabelText('Cabeçalho do relatório')).getByText('Concluído')).toBeInTheDocument()
+    expect(screen.getByLabelText('Etiquetado por')).toBeDisabled()
+    expect(screen.getByLabelText('Título no relatório')).toBeDisabled()
+    expect(screen.queryByRole('textbox', { name: /PO \/ processo/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Imprimir / Salvar PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Exportar Excel' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Reabrir para corrigir' })).toHaveClass('secondary-button')
+    expect(screen.queryByRole('button', { name: 'Salvar rascunho' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Concluir e anexar' })).not.toBeInTheDocument()
+  })
+
+  it('"Conferido por" alterado é salvo antes de anexar', async () => {
+    const { user } = await renderForm()
+    await user.type(screen.getByLabelText('Conferido por'), 'Giulia')
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    await waitFor(() => expect(mockConclude).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference).toHaveBeenCalledTimes(1)
+    expect(mockSaveConference.mock.calls[0][1].checkedByName).toBe('Giulia')
+    expect(mockGenerate.mock.calls[0][0].checkedByName).toBe('Giulia')
+    expect(mockSaveConference.mock.invocationCallOrder[0]).toBeLessThan(mockConclude.mock.invocationCallOrder[0])
+  })
+
+  it('falha ao salvar o "Conferido por" aborta sem anexar', async () => {
+    mockSaveConference.mockRejectedValue(new Error('negado'))
+    const { user } = await renderForm()
+    await user.type(screen.getByLabelText('Conferido por'), 'Giulia')
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(await screen.findByText(/Não foi possível salvar o relatório de carga\./)).toBeInTheDocument()
+    expect(mockConclude).not.toHaveBeenCalled()
+    await waitDialogClosed()
+    expect(screen.getByRole('button', { name: 'Concluir e anexar' })).toBeEnabled()
+  })
+
+  it('conflito antes do anexo mostra o texto do S3 com "Recarregar" e nada é anexado', async () => {
+    mockConclude.mockRejectedValue(Object.assign(new Error('revision-conflict'), { code: 'cargoReport/revision-conflict' }))
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(
+      await screen.findByText(
+        'Outra pessoa salvou este relatório. Recarregue para ver a versão atual antes de salvar de novo.'
+      )
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Recarregar' }))
+    await waitFor(() => expect(mockGetCargoReport).toHaveBeenCalledTimes(2))
+    expect(mockRetry).not.toHaveBeenCalled()
+  })
+
+  it('anexado mas não gravado mostra "Gravar de novo", que grava sem anexar de novo', async () => {
+    mockConclude.mockRejectedValue(
+      Object.assign(new Error('attached-not-saved'), {
+        code: 'cargoReport/attached-not-saved',
+        documentId: 'doc-9',
+        cause: Object.assign(new Error('offline'), { code: 'unavailable' }),
+      })
+    )
+    mockRetry.mockResolvedValue({ revision: 5, documentId: 'doc-9' })
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(
+      await screen.findByText('O Excel foi anexado e o aviso enviado, mas o relatório não foi marcado como concluído.')
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Gravar de novo' }))
+
+    await waitFor(() => expect(mockRetry).toHaveBeenCalledTimes(1))
+    const [processId, args] = mockRetry.mock.calls[0]
+    expect(processId).toBe('p1')
+    expect(args).toMatchObject({ documentId: 'doc-9', actor: ADMIN })
+    expect(args.payload).toMatchObject({ status: 'concluido', revision: 5 })
+    expect(mockConclude).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/Relatório concluído e anexado/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reabrir para corrigir' })).toBeInTheDocument()
+  })
+
+  it('anexado mas outra pessoa salvou antes: texto próprio e sem "Gravar de novo"', async () => {
+    mockConclude.mockRejectedValue(
+      Object.assign(new Error('attached-not-saved'), {
+        code: 'cargoReport/attached-not-saved',
+        documentId: 'doc-9',
+        cause: Object.assign(new Error('revision-conflict'), { code: 'cargoReport/revision-conflict' }),
+      })
+    )
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(
+      await screen.findByText(
+        'O Excel foi anexado e o aviso enviado, mas outra pessoa salvou o relatório antes. Recarregue e confira.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gravar de novo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeInTheDocument()
+  })
+
+  it('falha na geração ou no upload mostra o erro e não grava nada', async () => {
+    mockGenerate.mockRejectedValue(new Error('Failed to fetch'))
+    const { user } = await renderForm()
+    await user.click(within(await openConcludeDialog(user)).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(await screen.findByText(/Não foi possível concluir e anexar o relatório\./)).toBeInTheDocument()
+    expect(mockConclude).not.toHaveBeenCalled()
+    await waitDialogClosed()
+  })
+
+  it('número inválido bloqueia o diálogo, como no salvar', async () => {
+    const { user } = await renderForm()
+    const quantity = screen.getByLabelText('Qtd (kg) da linha 2')
+    await user.clear(quantity)
+    await user.type(quantity, 'abc')
+
+    await user.click(screen.getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Concluir e anexar' })).not.toBeInTheDocument()
+    expect(screen.getByText('Corrija os números destacados antes de salvar.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Qtd (kg) da linha 2')).toHaveAttribute('aria-invalid', 'true')
+    expect(mockConclude).not.toHaveBeenCalled()
+  })
+})
+
+describe('S4: Reabrir para corrigir', () => {
+  beforeEach(() => {
+    mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: conferenceDoc() })
+    mockReopen.mockResolvedValue({ revision: 7 })
+  })
+
+  it('abre o relatório concluído travado, com a barra do concluído', async () => {
+    await renderForm()
+
+    expect(screen.getByText('Concluído')).toBeInTheDocument()
+    expect(screen.getByLabelText('Etiquetado por')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reabrir para corrigir' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Salvar rascunho' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Importar de planilha' })).not.toBeInTheDocument()
+  })
+
+  it('reabre sem diálogo, grava rascunho com congelados zerados e volta a editar', async () => {
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Reabrir para corrigir' }))
+
+    await waitFor(() => expect(mockReopen).toHaveBeenCalledTimes(1))
+    const [processId, payload, actor] = mockReopen.mock.calls[0]
+    expect(processId).toBe('p1')
+    expect(actor).toBe(ADMIN)
+    expect(payload).toMatchObject({ status: 'rascunho', completedDate: '', revision: 7 })
+    expect(payload.rows.every((item) => item.frozenNetWeightKg === null && item.frozenPackages === null)).toBe(true)
+    expect(payload.lastGenerated).toMatchObject({ documentId: 'doc-1' })
+
+    expect(await screen.findByText('Relatório reaberto. Para gerar uma nova versão, conclua de novo.')).toBeInTheDocument()
+    expect(screen.getByText('Rascunho')).toBeInTheDocument()
+    expect(screen.getByLabelText('Etiquetado por')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Concluir e anexar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reabrir para corrigir' })).not.toBeInTheDocument()
+  })
+
+  it('conflito ao reabrir mostra o texto do S3 com "Recarregar"', async () => {
+    mockReopen.mockRejectedValue(Object.assign(new Error('x'), { code: 'cargoReport/revision-conflict' }))
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Reabrir para corrigir' }))
+
+    expect(
+      await screen.findByText(
+        'Outra pessoa salvou este relatório. Recarregue para ver a versão atual antes de salvar de novo.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeInTheDocument()
+  })
+})
+
+describe('S4: Exportar Excel e Imprimir / Salvar PDF', () => {
+  it('Exportar Excel gera o arquivo do estado da tela e baixa, sem gravar nem anexar', async () => {
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Exportar Excel' }))
+
+    await waitFor(() => expect(mockSaveBlob).toHaveBeenCalledTimes(1))
+    expect(mockGenerate).toHaveBeenCalledTimes(1)
+    const [blob, name] = mockSaveBlob.mock.calls[0]
+    expect(name).toBe(PORTAL_FILE_NAME)
+    expect(blob.name).toBe(PORTAL_FILE_NAME)
+    for (const mock of [mockConclude, mockSaveDraft, mockSaveConference, mockReopen, mockRetry]) {
+      expect(mock).not.toHaveBeenCalled()
+    }
+  })
+
+  it('erro ao gerar o Excel mostra alerta', async () => {
+    mockGenerate.mockRejectedValue(new Error('Failed to fetch'))
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Exportar Excel' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível gerar o Excel.')
+    expect(mockSaveBlob).not.toHaveBeenCalled()
+  })
+
+  it('Imprimir / Salvar PDF abre a visão de impressão e chama window.print', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    const { user } = await renderForm()
+    expect(screen.queryByRole('region', { name: 'Visão de impressão do relatório de carga' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Imprimir / Salvar PDF' }))
+
+    const region = await screen.findByRole('region', { name: 'Visão de impressão do relatório de carga' })
+    expect(print).toHaveBeenCalledTimes(1)
+    expect(region).toHaveTextContent('RELATÓRIO DE CARGA - ACME SEA 021-26')
+    expect(region).toHaveTextContent('FR.CMX.001 · REVISÃO: 005')
+    expect(region).toHaveTextContent('Nº da DUIMP: 25BR00001234567')
+    expect(region).toHaveTextContent('CONFERÊNCIA:')
+    expect(region).toHaveTextContent('COM RESSALVA')
+    expect(region).toHaveTextContent('☑ FCL')
+    expect(region).toHaveTextContent('DF2406A450')
+    expect(document.body).toHaveClass('crf-printing')
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new Event('afterprint'))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Visão de impressão do relatório de carga' })).not.toBeInTheDocument())
+    expect(document.body).not.toHaveClass('crf-printing')
+    print.mockRestore()
+  })
+
+  it('no concluído a impressão e o Excel usam os valores congelados da tela', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc({ rows: [row({ id: 'r-1', frozenNetWeightKg: 40, frozenPackages: 312.5 })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Exportar Excel' }))
+
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1))
+    expect(mockGenerate.mock.calls[0][0].rows[0]).toMatchObject({ netWeightKg: 40, packages: 312.5 })
+  })
+})
+
+describe('S4: mobile', () => {
+  it('Mais ações abre o ActionSheet com Exportar Excel e Imprimir / Salvar PDF', async () => {
+    const { user } = await renderForm({ variant: 'mobile' })
+
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Concluir e anexar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Exportar Excel' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Mais ações' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Mais ações' })
+    expect(within(sheet).getByRole('button', { name: 'Exportar Excel' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Imprimir / Salvar PDF' })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'Importar de planilha' })).not.toBeInTheDocument()
+
+    await user.click(within(sheet).getByRole('button', { name: 'Exportar Excel' }))
+    await waitFor(() => expect(mockSaveBlob).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('dialog', { name: 'Mais ações' })).not.toBeInTheDocument()
+  })
+})
+
+describe('S4: logística com o relatório concluído', () => {
+  it('só leitura: aviso, sem Concluir/Reabrir e sem botões de salvar', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: conferenceDoc() })
+    await renderForm({ profile: LOGISTICA })
+
+    expect(
+      screen.getByText('Relatório concluído pelo COMEX. Para alterar a conferência, peça ao COMEX para reabrir.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Marque o OK\? de cada linha conferida/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Conferido por')).toBeDisabled()
+    for (const label of ['Concluir e anexar', 'Reabrir para corrigir', 'Salvar conferência', 'Descartar', 'Exportar Excel']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('checkbox', { name: 'OK? da linha 3' })?.getAttribute('aria-disabled') ?? 'true').toBe('true')
+  })
+
+  it('em rascunho a logística não vê os botões do COMEX', async () => {
+    await renderForm({ profile: LOGISTICA })
+    for (const label of ['Concluir e anexar', 'Reabrir para corrigir', 'Exportar Excel', 'Imprimir / Salvar PDF']) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
+    }
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeInTheDocument()
+  })
+})
+
+describe('S4: diálogo ocupado, saídas bloqueadas e tabela ausente', () => {
+  it('enquanto conclui, Esc, clique no fundo e "Fechar" não fecham o diálogo; ao terminar ele fecha', async () => {
+    let finish
+    mockConclude.mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ revision: 5, documentId: 'doc-9' })
+      })
+    )
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Concluir e anexar' }))
+
+    expect(await within(dialog).findByRole('button', { name: 'Concluindo…' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+
+    await user.keyboard('{Escape}')
+    await user.click(dialog.parentElement)
+    await user.click(within(dialog).getByRole('button', { name: 'Fechar' }))
+    // o Modal fecha com animação de 240 ms: espera passar para pegar um fechamento indevido
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    expect(screen.getByRole('dialog', { name: 'Concluir e anexar' })).toBeInTheDocument()
+    expect(mockConclude).toHaveBeenCalledTimes(1)
+
+    finish()
+    expect(await screen.findByText(/Relatório concluído e anexado/)).toBeInTheDocument()
+    await waitDialogClosed()
+  })
+
+  it('fora do estado ocupado, Esc e clique no fundo fecham o diálogo sem concluir', async () => {
+    const { user } = await renderForm()
+    await openConcludeDialog(user)
+    await user.keyboard('{Escape}')
+    await waitDialogClosed()
+
+    const dialog = await openConcludeDialog(user)
+    await user.click(dialog.parentElement)
+    await waitDialogClosed()
+    expect(mockConclude).not.toHaveBeenCalled()
+  })
+
+  it('Exportar Excel com número inválido bloqueia, marca a célula e não gera o arquivo', async () => {
+    const { user } = await renderForm()
+    const quantity = screen.getByLabelText('Qtd (kg) da linha 2')
+    await user.clear(quantity)
+    await user.type(quantity, 'abc')
+
+    await user.click(screen.getByRole('button', { name: 'Exportar Excel' }))
+
+    expect(mockGenerate).not.toHaveBeenCalled()
+    expect(mockSaveBlob).not.toHaveBeenCalled()
+    expect(screen.getByText('Corrija os números destacados antes de salvar.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Qtd (kg) da linha 2')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('Imprimir / Salvar PDF com número inválido bloqueia e não abre a visão de impressão', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    const { user } = await renderForm()
+    const quantity = screen.getByLabelText('Qtd (kg) da linha 2')
+    await user.clear(quantity)
+    await user.type(quantity, 'abc')
+
+    await user.click(screen.getByRole('button', { name: 'Imprimir / Salvar PDF' }))
+
+    expect(print).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'Visão de impressão do relatório de carga' })).not.toBeInTheDocument()
+    expect(screen.getByText('Corrija os números destacados antes de salvar.')).toBeInTheDocument()
+    print.mockRestore()
+  })
+
+  it('sem a tabela Item x Emb. o diálogo avisa que peso líquido e nº de embalagens vão vazios', async () => {
+    mockGetCatalog.mockResolvedValue({ exists: false, version: 0, items: [], itemCount: 0 })
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [row({ id: 'r-1' })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+
+    const notes = within(dialog).getAllByRole('note').map((note) => note.textContent)
+    expect(notes.some((text) => text.startsWith('A tabela Item x Emb. não está disponível: peso líquido e nº de embalagens vão vazios no relatório concluído'))).toBe(true)
+    await user.click(within(dialog).getByRole('button', { name: 'Concluir e anexar' }))
+    await waitFor(() => expect(mockConclude).toHaveBeenCalledTimes(1))
+    expect(mockConclude.mock.calls[0][1].payload.rows[0]).toMatchObject({ frozenNetWeightKg: null, frozenPackages: null })
+  })
+
+  it('com a tabela carregada o diálogo não mostra o aviso da tabela', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [row({ id: 'r-1' })] }),
+      conference: conferenceDoc(),
+    })
+    const { user } = await renderForm()
+    const dialog = await openConcludeDialog(user)
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent('A tabela Item x Emb. não está disponível')
   })
 })
