@@ -9,6 +9,7 @@ const mockGetCargoReport = vi.fn()
 const mockSaveDraft = vi.fn()
 const mockSaveConference = vi.fn()
 const mockGetCatalog = vi.fn()
+const mockReadImport = vi.fn()
 
 vi.mock('../../src/services/cargoReportRepository', () => ({
   getCargoReport: (...args) => mockGetCargoReport(...args),
@@ -20,6 +21,11 @@ vi.mock('../../src/services/itemPackagingCatalogRepository', () => ({
 }))
 vi.mock('../../src/services/auditRepository', () => ({
   createAuditEvent: vi.fn().mockResolvedValue(undefined),
+}))
+// S5: só a leitura do .xlsx é mockada (o parser tem testes próprios); o resto do módulo é real.
+vi.mock('../../src/features/processes/cargoReportImport', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readCargoReportWorkbook: (...args) => mockReadImport(...args),
 }))
 
 import CargoReportForm from '../../src/features/processes/CargoReportForm'
@@ -549,13 +555,12 @@ describe('escopo da S3', () => {
     expect(mockSaveConference).not.toHaveBeenCalled()
   })
 
-  it('nao renderiza botoes da S4/S5', async () => {
+  it('nao renderiza botoes da S4', async () => {
     await renderForm()
 
     for (const label of [
       'Concluir e anexar',
       'Exportar Excel',
-      'Importar de planilha',
       'Imprimir / Salvar PDF',
       'Reabrir para corrigir',
       'Mais ações',
@@ -571,5 +576,170 @@ describe('escopo da S3', () => {
     expect(top.children).toHaveLength(3)
     expect(screen.getByText('Salvar rascunho')).toBeInTheDocument()
     expect(screen.getByText(/FR\.CMX\.001 · revisão 005 · salvo em .* por Lucas Admin · revisão 4/)).toBeInTheDocument()
+  })
+})
+
+describe('importar de planilha (S5)', () => {
+  const IMPORTED_ROWS = [
+    {
+      id: 'imp-a',
+      po: '4500777',
+      dbcorpCode: 'AD5240',
+      supplierDescription: '',
+      sqDescription: 'PRODUTO IMPORTADO A',
+      supplierLot: 'LT-A',
+      wmsLabel: '',
+      sqLabel: '',
+      quantityKg: 250,
+      count: null,
+      packageWeightKg: 1,
+      frozenNetWeightKg: null,
+      frozenPackages: null,
+    },
+    {
+      id: 'imp-b',
+      po: '4500777',
+      dbcorpCode: 'MO5190',
+      supplierDescription: '',
+      sqDescription: 'PRODUTO IMPORTADO B',
+      supplierLot: 'LT-B',
+      wmsLabel: '',
+      sqLabel: '',
+      quantityKg: 50,
+      count: null,
+      packageWeightKg: 0.4,
+      frozenNetWeightKg: null,
+      frozenPackages: null,
+    },
+  ]
+
+  const IMPORT_RESULT = {
+    fatal: null,
+    fileName: 'antigo.xlsx',
+    fileSize: 90 * 1024,
+    sheetName: 'SQ QUIMICA',
+    headerRow: 8,
+    headerRange: 'B8:O8',
+    sourceRevision: 5,
+    cargoType: 'LCL',
+    cargoTypeRead: true,
+    warnings: [],
+    missingOptional: [],
+    rows: IMPORTED_ROWS,
+  }
+
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const pickFile = (user) =>
+    user.upload(
+      screen.getByLabelText('Planilha .xlsx do Relatório de Carga'),
+      new File(['x'], 'antigo.xlsx', { type: XLSX_TYPE })
+    )
+
+  beforeEach(() => {
+    mockReadImport.mockResolvedValue(IMPORT_RESULT)
+  })
+
+  it('admin vê o botão', async () => {
+    await renderForm()
+    expect(screen.getByRole('button', { name: 'Importar de planilha' })).toBeEnabled()
+  })
+
+  it('logística não vê o botão nem o campo de arquivo', async () => {
+    await renderForm({ profile: LOGISTICA })
+    expect(screen.queryByRole('button', { name: 'Importar de planilha' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Planilha .xlsx do Relatório de Carga')).not.toBeInTheDocument()
+  })
+
+  it('relatório concluído não mostra o botão', async () => {
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ status: 'concluido' }), conference: conferenceDoc() })
+    await renderForm()
+    expect(screen.queryByRole('button', { name: 'Importar de planilha' })).not.toBeInTheDocument()
+  })
+
+  it('escolher o arquivo abre o diálogo com a prévia e não altera o formulário', async () => {
+    const { user } = await renderForm()
+    await pickFile(user)
+
+    expect(await screen.findByRole('dialog', { name: 'Importar de planilha' })).toBeInTheDocument()
+    expect(mockReadImport).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('2 linhas reconhecidas')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Substituir as 5 linhas atuais' })).toBeEnabled()
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEA FOAM14339 - BB 25KG')
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+  })
+
+  it('confirmar troca as linhas e o tipo de carga, sem gravar nada', async () => {
+    const { user } = await renderForm()
+    expect(screen.getByRole('radio', { name: 'FCL' })).toBeChecked()
+
+    await pickFile(user)
+    await user.click(await screen.findByRole('button', { name: 'Substituir as 5 linhas atuais' }))
+
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('PRODUTO IMPORTADO A')
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('PRODUTO IMPORTADO B')
+    expect(screen.queryByLabelText('Descrição SQ da linha 3')).not.toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'LCL' })).toBeChecked()
+    expect(
+      screen.getByText('Planilha importada: 2 linhas. Confira e clique em "Salvar rascunho" para gravar.')
+    ).toBeInTheDocument()
+    expect(mockSaveDraft).not.toHaveBeenCalled()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+  })
+
+  it('depois de importar, "Salvar rascunho" grava a revisão + 1 com as linhas importadas', async () => {
+    const { user } = await renderForm()
+    await pickFile(user)
+    await user.click(await screen.findByRole('button', { name: 'Substituir as 5 linhas atuais' }))
+
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    const [processId, payload] = mockSaveDraft.mock.calls[0]
+    expect(processId).toBe('p1')
+    expect(payload.revision).toBe(5)
+    expect(payload.cargoType).toBe('LCL')
+    expect(payload.rows.map((item) => item.sqDescription)).toEqual(['PRODUTO IMPORTADO A', 'PRODUTO IMPORTADO B'])
+    expect(payload.rows[0]).toMatchObject({ po: '4500777', dbcorpCode: 'AD5240', supplierLot: 'LT-A', quantityKg: 250 })
+    for (const key of ['lotSq', 'netWeightKg', 'packages']) expect(payload.rows[0]).not.toHaveProperty(key)
+  })
+
+  it('depois de importar, voltar para Documentos pergunta se descarta as alterações', async () => {
+    const onClose = vi.fn()
+    const { user } = await renderForm({ onClose })
+    await pickFile(user)
+    await user.click(await screen.findByRole('button', { name: 'Substituir as 5 linhas atuais' }))
+
+    await user.click(screen.getByRole('button', { name: '‹ Documentos' }))
+    expect(await screen.findByText('Descartar alterações?')).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('enquanto salva o rascunho, o botão Importar fica desabilitado', async () => {
+    mockSaveDraft.mockReturnValue(new Promise(() => {}))
+    const { user } = await renderForm()
+    expect(screen.getByRole('button', { name: 'Importar de planilha' })).toBeEnabled()
+
+    await user.type(screen.getByLabelText('Descrição SQ da linha 1'), ' X')
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Importar de planilha' })).toBeDisabled())
+  })
+
+  it('arquivo com modelo não reconhecido não altera o formulário', async () => {
+    mockReadImport.mockResolvedValue({
+      ...IMPORT_RESULT,
+      fatal: {
+        code: 'model-not-recognized',
+        title: 'Modelo não reconhecido.',
+        message: 'Nada foi alterado no formulário.',
+      },
+      rows: [],
+    })
+    const { user } = await renderForm()
+    await pickFile(user)
+
+    expect(await screen.findByText('Modelo não reconhecido.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Substituir as linhas atuais' })).toBeDisabled()
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEA FOAM14339 - BB 25KG')
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
   })
 })
