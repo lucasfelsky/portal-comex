@@ -371,6 +371,26 @@ describeEmulator('storage.rules (emulador)', () => {
       )
     })
 
+    it('S7: logistica sobe XLSX em cargoReport com o proprio uid (Excel do fechamento da conferencia)', async () => {
+      await assertSucceeds(
+        uploadDoc(
+          'log-1', 'log@sqquimica.com', 'logistica', 'Ativo',
+          'processes/p1/documents/cargoReport/1-log-1-relatorio.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+      )
+    })
+
+    it('S7: logistica NAO sobe em cargoReport com o uid de outro', async () => {
+      await assertFails(
+        uploadDoc(
+          'log-1', 'log@sqquimica.com', 'logistica', 'Ativo',
+          'processes/p1/documents/cargoReport/1-admin-1-relatorio.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+      )
+    })
+
     it('logistica NAO sobe em bl', async () => {
       await assertFails(
         uploadDoc('log-1', 'log@sqquimica.com', 'logistica', 'Ativo', 'processes/p1/documents/bl/1-log-1-bl.pdf')

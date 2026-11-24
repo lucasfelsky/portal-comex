@@ -14,19 +14,21 @@ import { buildActionErrorMessage } from '../../utils/errorMessages'
 import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
+import CargoReportReceiptSection from './CargoReportReceiptSection'
 import {
+  CARGO_CONFERENCE_STATUS,
   CARGO_REPORT_CONFLICT_CODE,
   CARGO_REPORT_LIMITS,
   CARGO_REPORT_MAX_ROWS,
   CARGO_REPORT_ROWS_LIMIT_MESSAGE,
+  CARGO_STAGE,
   CARGO_TYPE_OPTIONS,
-  RECEIPT_STATUS_OPTIONS,
   buildCargoReportPayload,
   buildConferencePayload,
   buildInitialCargoReport,
-  canConferCargoReport,
   canEditCargoReport,
   canOpenCargoReport,
+  canSaveCargoConference,
   countCargoReportAlerts,
   createCargoReportRowId,
   createEmptyCargoReportRow,
@@ -34,18 +36,38 @@ import {
   formatCargoReportTitle,
   fromCargoReportDoc,
   fromConferenceDoc,
+  getCargoReportStage,
   isCargoReportRowEmpty,
 } from './cargoReportFormModel'
 import { applyCargoReportImport } from './cargoReportImport'
+import { formatCargoDateBr } from './cargoReportSheet'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
-// COMEX (admin) preenche e salva rascunho; a logística marca o OK? e a contagem de cada linha, preenche
-// as etiquetas WMS/SQ e informa quem conferiu (S6; doc `conference`, separado para não conflitar com
-// quem está editando).
+// COMEX (admin) preenche, salva rascunho e fecha a parte dele ("Salvar e fechar"); a logística marca o OK?
+// e a contagem de cada linha, preenche as etiquetas WMS/SQ e o recebimento, e fecha a conferência dela
+// (S6/S7; doc `conference`, separado para não conflitar com quem está editando). "Conferido por" é
+// automático (quem salva a conferência). Estados: ver `getCargoReportStage`.
 // Padrões replicados (não são util compartilhado): guard `isMounted` na carga assíncrona.
 
 const CATALOG_TTL_MS = 5 * 60 * 1000
-const EMPTY_CONFERENCE = { revision: 0, okByRowId: {}, countOkByRowId: {}, labelsByRowId: {}, checkedByName: '' }
+const EMPTY_CONFERENCE = {
+  revision: 0,
+  status: CARGO_CONFERENCE_STATUS.open,
+  okByRowId: {},
+  countOkByRowId: {},
+  labelsByRowId: {},
+  checkedByName: '',
+  receiptStatus: '',
+  receivedDate: '',
+  nfNumber: '',
+  notes: '',
+  closedDate: '',
+  closedById: '',
+  closedByName: '',
+  closedDocumentId: '',
+  updatedAt: null,
+  updatedByName: '',
+}
 
 const LOAD_ERROR_PREFIX = 'Não foi possível carregar o relatório de carga.'
 const CATALOG_ERROR_PREFIX = 'Não foi possível carregar a tabela Item x Emb.'
@@ -56,17 +78,20 @@ const MESSAGES = {
   conflictConference:
     'Outra pessoa salvou a conferência. Recarregue para ver a versão atual antes de salvar de novo.',
   permissionDenied:
-    'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o "Conferido por".',
-  conferenceFailed: 'Rascunho salvo, mas não foi possível salvar o "Conferido por".',
+    'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o recebimento e fecha a conferência.',
   invalidNumbers: 'Corrija os números destacados antes de salvar.',
   conferBanner:
-    'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e informe quem conferiu. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando.',
+    'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e os dados do recebimento. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando. O fechamento da conferência fica disponível quando o COMEX fechar a parte dele.',
+  conferBannerComexClosed:
+    'O COMEX fechou a parte dele. Confira os itens, preencha o recebimento e use "Salvar e fechar conferência".',
+  adminBannerComexClosed:
+    'Aguardando conferência da logística. Parte do COMEX fechada: a logística preenche a conferência e fecha a parte dela.',
+  adminBannerDone: 'Relatório concluído: COMEX e logística fecharam as partes.',
   notFilled: 'O COMEX ainda não preencheu este relatório no Portal.',
   noPackaging:
     'Itens sem tipo e peso na tabela aparecem como "Sem embalagem cadastrada". Peça ao admin para atualizar a tabela em Admin › Relatório de Carga.',
   catalogMissing:
     'A tabela Item x Emb. ainda não foi importada. Peso líquido e nº de embalagens ficam vazios até o admin importar em Admin › Relatório de Carga.',
-  lockedForConference: 'Relatório concluído pelo COMEX. Para alterar a conferência, peça ao COMEX para reabrir.',
 }
 
 // Cache de módulo (sessão): a tabela Item x Emb. tem ~276 KB; reaproveitada por 5 min e zerada em erro.
@@ -106,7 +131,28 @@ function conferenceKey(conference, rows) {
     String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),
     String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
   ])
-  return JSON.stringify({ marks, name: String(conference.checkedByName ?? '').trim() })
+  // "Conferido por" é automático (não digitado): fora da chave. O rodapé do recebimento entra.
+  return JSON.stringify({
+    marks,
+    receiptStatus: conference.receiptStatus ?? '',
+    receivedDate: conference.receivedDate ?? '',
+    nfNumber: String(conference.nfNumber ?? '').trim(),
+    notes: String(conference.notes ?? '').trim(),
+  })
+}
+
+// dd/MM HH:mm no fuso local (getters locais, sem UTC); `null` -> ''.
+function formatStamp(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${formatClock(date)}`
+}
+
+function firstName(name) {
+  return String(name ?? '').trim().split(/\s+/)[0] ?? ''
+}
+
+function joinParts(...parts) {
+  return parts.filter(Boolean).join(' ')
 }
 
 function plural(count, singular, pluralForm) {
@@ -143,7 +189,6 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const role = profile?.role
   const canOpen = canOpenCargoReport(role)
   const canEdit = canEditCargoReport(role)
-  const canConfer = canConferCargoReport(role)
   const isDesktop = variant === 'desktop'
   const radioName = useId()
 
@@ -184,17 +229,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         ])
         if (!isMounted) return
 
-        // Conferência anterior à S6 (sem `labelsByRowId`): as etiquetas das linhas do `current` pré-preenchem a tela.
-        const savedConferenceData = fromConferenceDoc(report.conference, report.current?.rows)
+        // Conferência legada: etiquetas (S6) e rodapé do recebimento (S7) pré-preenchem a tela a partir do `current`.
+        const savedConferenceData = fromConferenceDoc(report.conference, report.current?.rows, report.current)
         setCatalog(catalogResult.data)
         setCatalogError(
           catalogResult.error ? buildActionErrorMessage(CATALOG_ERROR_PREFIX, catalogResult.error) : ''
         )
         setSavedConference(savedConferenceData)
-
-        // Logística sem nome informado: pré-preenche só na tela com o próprio nome.
-        const prefillName = !canEdit && !savedConferenceData.checkedByName ? String(profile?.name ?? '').trim() : ''
-        setConference({ ...savedConferenceData, checkedByName: prefillName || savedConferenceData.checkedByName })
+        setConference(savedConferenceData)
 
         if (report.current) {
           const loaded = fromCargoReportDoc(report.current)
@@ -222,7 +264,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     // `process` e `profile` só alimentam o pré-preenchimento da 1ª carga; recarregar a cada
     // render de quem chama descartaria o que o usuário digitou.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processId, canOpen, canEdit, reloadToken])
+  }, [processId, canOpen, reloadToken])
 
   const rows = useMemo(() => form?.rows ?? [], [form])
   const derived = useMemo(() => rows.map((row) => deriveCargoReportRow(row, catalog)), [rows, catalog])
@@ -233,15 +275,17 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const hasNoPackaging = derived.some((item) => item.alerts.noPackaging)
   const draftDirty = form ? formKey(form) !== baseKey : false
   const conferenceDirty = form ? conferenceKey(conference, rows) !== conferenceKey(savedConference, rows) : false
-  const isDirty = canEdit ? draftDirty || conferenceDirty : conferenceDirty
+  // S7: o admin só grava o `current`; a logística só grava a conferência.
+  const isDirty = canEdit ? draftDirty : conferenceDirty
   const canSave = canEdit ? isDirty || isNew : isDirty
   const isLimitReached = rows.length >= CARGO_REPORT_MAX_ROWS
-  // S4: concluído trava o preenchimento e a conferência até o COMEX reabrir.
-  const isConcluded = form?.status === 'concluido'
-  const canEditFields = canEdit && !isConcluded
-  const canConferNow = canConfer && !isConcluded
-  // S5: importar planilha só para o admin e enquanto o relatório não está concluído.
+  const stage = getCargoReportStage(form?.status, savedConference.status)
+  // COMEX fechado trava o preenchimento até o admin reabrir; a logística confere nos estados 1 e 2.
+  const canEditFields = canEdit && stage === CARGO_STAGE.draft
+  const canConferNow = canSaveCargoConference(role, stage)
+  // S5: importar planilha só para o admin e enquanto a parte do COMEX está aberta.
   const canImport = canEditFields
+  const actorName = String(profile?.name ?? profile?.email ?? '').trim()
 
   function patchForm(patch) {
     setForm((current) => ({ ...current, ...patch }))
@@ -280,9 +324,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     setFeedback(null)
   }
 
-  // S6: contagem e etiquetas são da logística; o admin em rascunho só vê (a conferência dele é o "Conferido por").
+  // S6: contagem e etiquetas são da logística; o admin só vê.
   function toggleCountOk(rowId) {
-    if (!canConferNow || canEdit) return
+    if (!canConferNow) return
     setConference((current) => ({
       ...current,
       countOkByRowId: { ...current.countOkByRowId, [rowId]: current.countOkByRowId?.[rowId] !== true },
@@ -290,8 +334,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     setFeedback(null)
   }
 
+  function patchConference(patch) {
+    if (!canConferNow) return
+    setConference((current) => ({ ...current, ...patch }))
+    setFeedback(null)
+  }
+
   function changeLabel(rowId, field, value) {
-    if (!canConferNow || canEdit) return
+    if (!canConferNow) return
     setConference((current) => ({
       ...current,
       labelsByRowId: {
@@ -332,30 +382,21 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     return { kind: 'error', text: buildActionErrorMessage(SAVE_ERROR_PREFIX, error) }
   }
 
+  // Grava a conferência com o nome de quem salva (`actorName`); a tela passa a refletir o que foi gravado.
   async function saveConference(revision, savedRows) {
-    const payload = buildConferencePayload(
-      {
-        okByRowId: conference.okByRowId,
-        countOkByRowId: conference.countOkByRowId,
-        labelsByRowId: conference.labelsByRowId,
-        checkedByName: conference.checkedByName,
-        revision,
-      },
-      savedRows
-    )
+    const payload = buildConferencePayload({ ...conference, revision }, savedRows, { actorName })
     await saveCargoReportConference(processId, payload, profile, {
       titleSuffix: form.titleSuffix,
       totalRows: savedRows.length,
     })
-    const persisted = {
-      revision: payload.revision,
-      okByRowId: payload.okByRowId,
-      countOkByRowId: payload.countOkByRowId,
-      labelsByRowId: payload.labelsByRowId,
-      checkedByName: payload.checkedByName,
-    }
+    applyPersistedConference({ ...payload, updatedAt: new Date(), updatedByName: actorName })
+  }
+
+  // Estado gravado da conferência (salvar, fechar ou reabrir): tela e base de comparação ficam iguais.
+  function applyPersistedConference(next) {
+    const persisted = { ...EMPTY_CONFERENCE, ...next }
     setSavedConference(persisted)
-    setConference((current) => ({ ...current, ...persisted }))
+    setConference(persisted)
   }
 
   // Marca as células inválidas e mostra a mensagem (número inválido ou limite de linhas).
@@ -399,27 +440,12 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     setBaseKey(formKey(saved))
     setIsNew(false)
 
-    const nameChanged =
-      String(conference.checkedByName ?? '').trim() !== String(savedConference.checkedByName ?? '').trim()
-    let conferenceFailed = false
-    if (nameChanged) {
-      try {
-        await saveConference(savedConference.revision, saved.rows)
-      } catch {
-        conferenceFailed = true
-      }
-    }
-
-    setFeedback(
-      conferenceFailed
-        ? { kind: 'error', text: MESSAGES.conferenceFailed }
-        : { kind: 'success', text: `Rascunho salvo às ${formatClock(new Date())}. Nada foi enviado por e-mail.` }
-    )
+    setFeedback({ kind: 'success', text: `Rascunho salvo às ${formatClock(new Date())}. Nada foi enviado por e-mail.` })
     setIsSaving(false)
   }
 
   async function handleSaveConference() {
-    if (!canConferNow || canEdit || isSaving || !canSave) return
+    if (!canConferNow || isSaving || !canSave) return
     setFeedback(null)
     setIsSaving(true)
     try {
@@ -504,6 +530,12 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       : 'Tabela Item x Emb. não importada'
   const versionMismatch =
     catalog?.exists && form.catalogVersion > 0 && form.catalogVersion !== catalog.version
+  const comexStamp = joinParts(formatStamp(form.updatedAt), form.updatedByName ? `por ${firstName(form.updatedByName)}` : '')
+  const logisticsStamp = joinParts(
+    formatStamp(savedConference.updatedAt),
+    savedConference.closedByName ? `por ${savedConference.closedByName}` : ''
+  )
+  const closedLabel = (area, word, stamp) => (stamp ? `${area}: ${word} em ${stamp}` : `${area}: ${word}`)
   const subtitle = isNew
     ? 'FR.CMX.001 · revisão 005 · Ainda não salvo'
     : `FR.CMX.001 · revisão 005 · salvo em ${formatDateTime(form.updatedAt)}${
@@ -514,6 +546,20 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const feedbackAction =
     feedback?.action ??
     (feedback?.kind === 'conflict' ? { label: 'Recarregar', run: () => setReloadToken((token) => token + 1) } : null)
+
+  // Banner por papel e estado (S7).
+  let stageBanner = ''
+  if (canEdit) {
+    if (stage === CARGO_STAGE.comexClosed) stageBanner = MESSAGES.adminBannerComexClosed
+    else if (stage === CARGO_STAGE.done) stageBanner = MESSAGES.adminBannerDone
+  } else if (stage === CARGO_STAGE.draft) stageBanner = MESSAGES.conferBanner
+  else if (stage === CARGO_STAGE.comexClosed) stageBanner = MESSAGES.conferBannerComexClosed
+  else {
+    const closedOn = formatCargoDateBr(savedConference.closedDate)
+    stageBanner = `Conferência fechada${savedConference.closedByName ? ` por ${savedConference.closedByName}` : ''}${
+      closedOn ? ` em ${closedOn}` : ''
+    }. Para corrigir, peça ao COMEX para reabrir.`
+  }
 
   const feedbackNode = feedback ? (
     feedback.kind === 'success' ? (
@@ -536,9 +582,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     <div className={`crf-wrap${isDesktop ? '' : ' crf-wrap--mobile'}`}>
       {backBar}
 
-      {!canEdit ? (
-        <div className="crf-note crf-note--info">{isConcluded ? MESSAGES.lockedForConference : MESSAGES.conferBanner}</div>
-      ) : null}
+      {stageBanner ? <div className="crf-note crf-note--info">{stageBanner}</div> : null}
       {catalogError ? (
         <div className="error-banner" role="alert">
           {catalogError}
@@ -564,12 +608,22 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             <p className="sub">{subtitle}</p>
           </div>
           <div className="crf-badges">
-            {isConcluded ? (
-              <span className="inline-badge inline-badge--ok">Concluído</span>
-            ) : canEdit ? (
-              <span className="inline-badge inline-badge--warn">Rascunho</span>
+            {stage === CARGO_STAGE.draft ? (
+              <>
+                <span className="inline-badge inline-badge--warn">COMEX: Rascunho</span>
+                <span className="inline-badge documents-badge--neutral">Logística: Aguardando COMEX</span>
+              </>
             ) : (
-              <span className="inline-badge inline-badge--ok">Conferência da logística</span>
+              <>
+                <span className="inline-badge inline-badge--ok">{closedLabel('COMEX', 'Fechado', comexStamp)}</span>
+                {stage === CARGO_STAGE.comexClosed ? (
+                  <span className="inline-badge inline-badge--warn">Logística: Em conferência</span>
+                ) : (
+                  <span className="inline-badge inline-badge--ok">
+                    {closedLabel('Logística', 'Fechada', logisticsStamp)}
+                  </span>
+                )}
+              </>
             )}
             <span className="inline-badge">FR.CMX.001 R5</span>
           </div>
@@ -678,75 +732,13 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         ) : null}
       </section>
 
-      <section className="crf-card" aria-label="Responsáveis e recebimento">
-        <h3>Responsáveis e recebimento</h3>
-        <p className="sub">Texto livre. A data de conclusão é preenchida ao concluir.</p>
-        <div className="crf-foot">
-          <TextField
-            label="Conferido por"
-            value={conference.checkedByName}
-            maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canConferNow}
-            onChange={(value) => {
-              setConference((current) => ({ ...current, checkedByName: value }))
-              setFeedback(null)
-            }}
-          />
-          <TextField
-            label="Etiquetado por"
-            value={form.labeledBy}
-            maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEditFields}
-            onChange={(value) => patchForm({ labeledBy: value })}
-          />
-          <TextField
-            label="Etiqueta feita por"
-            value={form.labelMadeBy}
-            maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEditFields}
-            onChange={(value) => patchForm({ labelMadeBy: value })}
-          />
-          <div className="crf-field">
-            <label htmlFor={`${radioName}-receipt`}>Status do recebimento</label>
-            <select
-              id={`${radioName}-receipt`}
-              value={form.receiptStatus}
-              disabled={!canEditFields}
-              onChange={(event) => patchForm({ receiptStatus: event.target.value })}
-            >
-              {RECEIPT_STATUS_OPTIONS.map((option) => (
-                <option key={option.value || 'none'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <TextField
-            label="Data de recebimento"
-            type="date"
-            value={form.receivedDate}
-            disabled={!canEditFields}
-            onChange={(value) => patchForm({ receivedDate: value })}
-          />
-          <TextField
-            label="Nº da NF"
-            value={form.nfNumber}
-            maxLength={CARGO_REPORT_LIMITS.nf}
-            disabled={!canEditFields}
-            onChange={(value) => patchForm({ nfNumber: value })}
-          />
-        </div>
-        <div className="crf-field crf-field--notes">
-          <label htmlFor={`${radioName}-notes`}>Observações</label>
-          <textarea
-            id={`${radioName}-notes`}
-            value={form.notes}
-            maxLength={CARGO_REPORT_LIMITS.notes}
-            disabled={!canEditFields}
-            onChange={(event) => patchForm({ notes: event.target.value })}
-          />
-        </div>
-      </section>
+      <CargoReportReceiptSection
+        conference={conference}
+        onChange={patchConference}
+        canEdit={canConferNow}
+        checkedByPreview={canConferNow ? actorName : ''}
+        radioName={radioName}
+      />
 
       {feedbackNode}
 
@@ -758,6 +750,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         conference={conference}
         savedConference={savedConference}
         catalog={catalog}
+        stage={stage}
         isDesktop={isDesktop}
         isSaving={isSaving}
         canSave={canSave}
@@ -765,10 +758,10 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         onSaveDraft={handleSaveDraft}
         onSaveConference={handleSaveConference}
         onDiscardConference={handleDiscardConference}
-        saveConference={saveConference}
         describeSaveError={describeSaveError}
         onErrors={showPayloadErrors}
         onPersisted={applyPersistedForm}
+        onConferencePersisted={applyPersistedConference}
         onFeedback={setFeedback}
         renderImport={(busy) =>
           canImport ? (

@@ -92,12 +92,15 @@ export function canUploadDocumentType(role, type) {
   return false
 }
 
-// D5: admin apaga qualquer documento; logistica so o proprio.
+// D5: admin apaga qualquer documento; logistica so o proprio. S7: a logistica anexa o Excel do fechamento da
+// conferencia, mas nao apaga o `cargoReport` (versao oficial); quem apaga e o admin.
 export function canDeleteDocument(profile, document) {
   const role = profile?.role
   if (role === 'admin') return true
   if (role === 'logistica') {
-    return Boolean(document?.uploadedById) && document.uploadedById === profile?.uid
+    return (
+      Boolean(document?.uploadedById) && document.uploadedById === profile?.uid && document?.type !== 'cargoReport'
+    )
   }
   return false
 }

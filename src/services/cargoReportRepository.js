@@ -8,8 +8,9 @@ import { createAuditEvent } from './auditRepository'
 import { uploadProcessDocument } from './processDocumentsRepository'
 
 // Formulário FR.CMX.001 (S3 do Relatório de Carga): 2 docs nomeados por processo.
-//   processes/{id}/cargoReport/current     preenchimento do COMEX (só admin grava)
-//   processes/{id}/cargoReport/conference  OK?, contagem, etiquetas WMS/SQ e "Conferido por" (admin e logística gravam)
+//   processes/{id}/cargoReport/current     preenchimento do COMEX (só admin grava; `concluido` = parte do COMEX fechada)
+//   processes/{id}/cargoReport/conference  OK?, contagem, etiquetas WMS/SQ, "Conferido por" automático e recebimento
+//                                          (S7: só a logística grava e fecha; o admin só reabre)
 // `revision` é trava otimista: a rule exige `revision == revisão atual + 1`.
 const STORAGE_PREFIX = 'sq-comex-cargo-report:'
 const COLLECTION_ID = 'processes'
@@ -49,8 +50,9 @@ function resolveActorName(actor) {
   return String(actor?.name ?? actor?.email ?? '').trim()
 }
 
-function revisionConflictError() {
-  return Object.assign(new Error('revision-conflict'), { code: CARGO_REPORT_CONFLICT_CODE })
+// `scope` (S7) diz qual doc mudou no servidor: 'current' (COMEX alterou ou reabriu) ou 'conference'.
+function revisionConflictError(scope = '') {
+  return Object.assign(new Error('revision-conflict'), { code: CARGO_REPORT_CONFLICT_CODE, ...(scope ? { scope } : {}) })
 }
 
 function cargoReportRef(processId, documentId) {
@@ -141,7 +143,8 @@ export async function saveCargoReportDraft(processId, payload, actor = null) {
 }
 
 // `meta` (opcional): `{ titleSuffix, totalRows }` para o texto da auditoria.
-// `audits` só aceita escrita de admin: a conferência da logística não gera evento.
+// `audits` só aceita escrita de admin: a conferência da logística não gera evento (S7: o admin não grava
+// mais o conteúdo da conferência, então o ramo de auditoria abaixo fica inerte).
 export async function saveCargoReportConference(processId, payload, actor = null, meta = {}) {
   await writeDocument(processId, CONFERENCE_ID, payload, actor)
 
@@ -214,6 +217,8 @@ export async function retryConcludeWrite(processId, { payload, documentId, actor
   return writeConcluded(processId, { payload, documentId, actor, uid })
 }
 
+// Reabre a parte do COMEX (`current` volta a rascunho). A rule nega enquanto a conferência está fechada:
+// a tela reabre a conferência antes (`reopenCargoReportConference`).
 export async function reopenCargoReport(processId, payload, actor = null) {
   await writeDocument(processId, CURRENT_ID, payload, actor)
 
@@ -221,6 +226,94 @@ export async function reopenCargoReport(processId, payload, actor = null) {
     action: 'Relatório de carga reaberto para correção',
     actor: actor?.name ?? actor?.email ?? 'Sistema',
     target: `${payload.titleSuffix} · revisão ${payload.revision}`,
+  })
+
+  return { revision: payload.revision }
+}
+
+// ---------- S7: fechar e reabrir a conferência da logística ----------
+
+async function readServerDocument(processId, documentId) {
+  if (!isFirebaseConfigured || !firestore) return readLocalReport(processId)[documentId]
+  const snapshot = await getDoc(cargoReportRef(processId, documentId))
+  return snapshot.exists() ? snapshot.data() : null
+}
+
+function readRevision(data) {
+  return Number.isInteger(data?.revision) ? data.revision : 0
+}
+
+// Grava a conferência já fechada, apontando para o Excel anexado (`closedDocumentId`).
+async function writeClosedConference(processId, { payload, documentId, actor }) {
+  await writeDocument(processId, CONFERENCE_ID, { ...payload, closedDocumentId: documentId }, actor)
+  return { revision: payload.revision, documentId }
+}
+
+// Ordem: (a) relê `current` e `conference` no servidor, sem anexar nada se houver conflito (COMEX alterou ou
+// reabriu depois que a tela abriu, ou a conferência mudou); (b) anexa o xlsx pelo fluxo normal de documentos
+// como a logística (o servidor rotaciona as versões e manda o aviso da conferência); (c) grava a conferência
+// como fechada, apontando para o anexo. Se (c) falhar depois do anexo, o erro leva o `documentId`
+// (`cargoReport/attached-not-saved`) para a tela oferecer "Gravar de novo" sem anexar outra vez.
+export async function closeCargoReportConference(processId, { payload, file, category, actor, currentRevision } = {}) {
+  if (!isFirebaseConfigured || !firestore) throw new Error(NO_FIREBASE_MESSAGE)
+
+  const uid = auth?.currentUser?.uid
+  if (!uid) throw new Error(NOT_AUTHENTICATED_MESSAGE)
+
+  const [current, conference] = await Promise.all([
+    readServerDocument(processId, CURRENT_ID),
+    readServerDocument(processId, CONFERENCE_ID),
+  ])
+  if (current?.status !== 'concluido' || readRevision(current) !== currentRevision) {
+    throw revisionConflictError('current')
+  }
+  if (readRevision(conference) !== payload.revision - 1) throw revisionConflictError('conference')
+
+  const uploaded = await uploadProcessDocument(processId, {
+    type: 'cargoReport',
+    file,
+    category,
+    actor: { uid: actor?.uid ?? uid, name: actor?.name, role: actor?.role },
+  })
+
+  try {
+    return await writeClosedConference(processId, { payload, documentId: uploaded.id, actor })
+  } catch (error) {
+    throw attachedNotSavedError(uploaded.id, error)
+  }
+}
+
+// Só o passo (c), para o botão "Gravar de novo": o arquivo já está anexado e o aviso já saiu.
+export async function retryCloseConferenceWrite(processId, { payload, documentId, actor } = {}) {
+  const uid = auth?.currentUser?.uid
+  if (isFirebaseConfigured && firestore && !uid) throw new Error(NOT_AUTHENTICATED_MESSAGE)
+  return writeClosedConference(processId, { payload, documentId, actor })
+}
+
+// Só o admin reabre. Relê o doc do servidor e grava a cópia EXATA do conteúdo com `revision + 1`, status
+// `aberta` e a trilha de fechamento zerada: a rule só aceita mudança nessas chaves (e nos carimbos).
+export async function reopenCargoReportConference(processId, actor = null) {
+  const server = await readServerDocument(processId, CONFERENCE_ID)
+  if (!server || server.status !== 'fechada') throw revisionConflictError('conference')
+
+  // `updatedAt/ById/ByName` são refeitos por `writeDocument`.
+  const content = { ...server }
+  for (const key of ['updatedAt', 'updatedById', 'updatedByName']) delete content[key]
+  const payload = {
+    ...content,
+    revision: readRevision(server) + 1,
+    status: 'aberta',
+    closedDate: '',
+    closedById: '',
+    closedByName: '',
+    closedDocumentId: '',
+  }
+  await writeDocument(processId, CONFERENCE_ID, payload, actor)
+
+  await tryAudit({
+    action: 'Conferência do relatório de carga reaberta',
+    actor: actor?.name ?? actor?.email ?? 'Sistema',
+    target: `Conferência reaberta · revisão ${payload.revision}`,
   })
 
   return { revision: payload.revision }

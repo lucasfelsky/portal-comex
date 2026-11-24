@@ -127,8 +127,9 @@ describe('canUploadDocumentType', () => {
     }
   })
 
-  it('logistica so envia containerWash', () => {
+  it('logistica so envia containerWash (S7: sem botao de envio manual de cargoReport; o Excel e anexado pelo fechamento)', () => {
     expect(canUploadDocumentType('logistica', 'containerWash')).toBe(true)
+    expect(canUploadDocumentType('logistica', 'cargoReport')).toBe(false)
     expect(canUploadDocumentType('logistica', 'bl')).toBe(false)
     expect(canUploadDocumentType('logistica', 'invoice')).toBe(false)
   })
@@ -150,6 +151,13 @@ describe('canDeleteDocument', () => {
   it('logistica apaga so o proprio', () => {
     expect(canDeleteDocument({ role: 'logistica', uid: 'log-1' }, { uploadedById: 'log-1' })).toBe(true)
     expect(canDeleteDocument({ role: 'logistica', uid: 'log-1' }, { uploadedById: 'log-2' })).toBe(false)
+  })
+
+  it('S7: logistica nao apaga o proprio cargoReport (versao oficial) e continua apagando o proprio containerWash', () => {
+    const profile = { role: 'logistica', uid: 'log-1' }
+    expect(canDeleteDocument(profile, { type: 'cargoReport', uploadedById: 'log-1' })).toBe(false)
+    expect(canDeleteDocument(profile, { type: 'containerWash', uploadedById: 'log-1' })).toBe(true)
+    expect(canDeleteDocument({ role: 'admin', uid: 'admin-1' }, { type: 'cargoReport', uploadedById: 'log-1' })).toBe(true)
   })
 
   it('user nunca apaga', () => {

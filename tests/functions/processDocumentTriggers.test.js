@@ -443,6 +443,39 @@ describe('recordProcessDocumentEvents', () => {
     }
   })
 
+  it('S7: cargoReport enviado pela LOGISTICA (fechamento da conferencia) NAO gera "Novo documento no processo"; containerWash continua gerando', async () => {
+    const users = [
+      { id: ADMIN_1.id, data: ADMIN_1 },
+      { id: ADMIN_2.id, data: ADMIN_2 },
+      { id: 'logi-1', data: { id: 'logi-1', role: 'logistica', status: 'Ativo', email: 'logi@sqquimica.com' } },
+    ]
+    const logisticsDoc = (type, extra = {}) => ({
+      type,
+      ...extra,
+      uploadedById: 'logi-1',
+      uploadedByName: 'Logi da Silva',
+      uploadedByRole: 'logistica',
+      uploadedAt: '2026-09-20T10:00:00.000Z',
+    })
+    const genericNotifications = () =>
+      mockBatch.set.mock.calls.filter(([, data]) => data?.type === 'process_document_uploaded')
+
+    setupFirestoreChain({ processes: [{ id: PROCESS_ID, data: {} }], users })
+    await getHandler(recordProcessDocumentEvents)(makeEvent(logisticsDoc('cargoReport')))
+    expect(genericNotifications()).toHaveLength(0)
+    expect(mockBatch.set).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    mockFirestoreApi.batch.mockReturnValue(mockBatch)
+    mockBatch.commit.mockResolvedValue(undefined)
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: { containers: [{ id: 'CNT-1', number: 'MSCU1234567' }] } }],
+      users,
+    })
+    await getHandler(recordProcessDocumentEvents)(makeEvent(logisticsDoc('containerWash', { containerId: 'CNT-1' })))
+    expect(genericNotifications()).toHaveLength(2)
+  })
+
   it('invoice/other/cargoReport nao geram marco', async () => {
     for (const type of ['invoice', 'other', 'cargoReport']) {
       setupFirestoreChain({ processes: [{ id: PROCESS_ID, data: {} }], users: [] })
@@ -563,6 +596,24 @@ describe('notifyCargoReportUploaded', () => {
     return mockBatch.set.mock.calls
       .map(([, data]) => data)
       .filter((data) => data?.type === 'process_cargo_report_uploaded')
+  }
+
+  // S7: aviso da conferencia da logistica (documento `cargoReport` anexado pela logistica).
+  const CONFERENCE_BODY =
+    'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.'
+  const CONFERENCE_ALT = 'Conferência da Logística concluída no Relatório de Carga.'
+  const LOGISTICS_CARGO_REPORT = {
+    type: 'cargoReport',
+    uploadedById: 'logi-1',
+    uploadedByName: 'Logi Um',
+    uploadedByRole: 'logistica',
+    uploadedAt: '2026-11-24T16:05:00.000Z',
+  }
+
+  function conferenceNotifications() {
+    return mockBatch.set.mock.calls
+      .map(([, data]) => data)
+      .filter((data) => data?.type === 'process_cargo_report_conference')
   }
 
   function configureSmtp() {
@@ -779,6 +830,7 @@ describe('notifyCargoReportUploaded', () => {
     const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
     expect(finalCall[1]).toEqual({
       processId: PROCESS_ID,
+      stage: 'comex',
       inAppRecipients: 3,
       directEmails: 1,
       ignoredNonCorporate: 1,
@@ -787,17 +839,97 @@ describe('notifyCargoReportUploaded', () => {
     expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('fiscal@sqquimica.com')
   })
 
-  it('autor logistica tambem recebe o aviso', async () => {
+  it('autor logistica tambem recebe o aviso (da conferencia, S7)', async () => {
     setupChain({ users: [ADMIN_1, LOGI_1], config: { tecnico: [], faturamento: [] } })
     configureSmtp()
 
-    await getHandler(notifyCargoReportUploaded)(
-      makeEvent({ ...CARGO_REPORT, uploadedById: 'logi-1', uploadedByName: 'Logi Um', uploadedByRole: 'logistica' })
-    )
+    await getHandler(notifyCargoReportUploaded)(makeEvent(LOGISTICS_CARGO_REPORT))
 
-    const notifications = cargoNotifications()
+    const notifications = conferenceNotifications()
     expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'logi-1'])
     for (const data of notifications) expect(data.actorUserId).toBe('logi-1')
+    expect(cargoNotifications()).toHaveLength(0)
+  })
+
+  it('S7: cargoReport da LOGISTICA -> so notificacoes process_cargo_report_conference (titulo e corpo novos), zero do aviso do COMEX', async () => {
+    setupChain({
+      users: [ADMIN_1, ADMIN_2, LOGI_1, TEC_1],
+      config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] },
+    })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(LOGISTICS_CARGO_REPORT))
+
+    expect(cargoNotifications()).toHaveLength(0)
+    const notifications = conferenceNotifications()
+    expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1', 'tec-1'])
+    for (const data of notifications) {
+      expect(data.title).toBe('Conferência do Relatório de Carga - PO 12345 - Resina Atlas')
+      expect(data.body).toBe(CONFERENCE_BODY)
+      expect(data.targetTab).toBe('documents')
+      expect(data.processId).toBe(PROCESS_ID)
+      expect(data.actorUserId).toBe('logi-1')
+      expect(data.actorName).toBe('Logi Um')
+    }
+    expect(mockSendMail).not.toHaveBeenCalled()
+  })
+
+  it('S7: e-mail direto da conferencia: assunto novo, texto curto, alt exato e banner inline cargo-conference-banner.jpg', async () => {
+    setupChain({ config: { tecnico: [], faturamento: ['Fiscal@sqquimica.com'] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(LOGISTICS_CARGO_REPORT))
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.to).toBe('fiscal@sqquimica.com')
+    expect(mail.subject).toBe('Conferência do Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(mail.text).toContain(CONFERENCE_ALT)
+    expect(mail.text).not.toContain('Etiquetas, contagem')
+    expect(mail.text).toContain('Processo: PO 12345 - Resina Atlas')
+    expect(mail.html).toContain(`alt="${CONFERENCE_ALT}"`)
+    expect(mail.html).toContain('cid:cargo-conference-banner@portal-comex')
+    expect(mail.html).not.toContain('cargo-report-banner@portal-comex')
+    expect(mail.html).toContain(`processo=${PROCESS_ID}`)
+    expect(mail.attachments).toHaveLength(1)
+    expect(mail.attachments[0]).toMatchObject({
+      filename: 'cargo-conference-banner.jpg',
+      cid: 'cargo-conference-banner@portal-comex',
+      contentType: 'image/jpeg',
+      contentDisposition: 'inline',
+    })
+    expect(conferenceNotifications().map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1'])
+  })
+
+  it('S7: os logs do aviso da conferencia levam so contagens e o estagio', async () => {
+    setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(LOGISTICS_CARGO_REPORT))
+
+    const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
+    expect(finalCall[1]).toEqual({
+      processId: PROCESS_ID,
+      stage: 'conferencia',
+      inAppRecipients: 3,
+      directEmails: 1,
+      ignoredNonCorporate: 0,
+      failedDirectEmails: 0,
+    })
+    expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('fiscal@sqquimica.com')
+  })
+
+  it('S7: cargoReport do ADMIN continua com o aviso e o e-mail do COMEX (banner antigo)', async () => {
+    setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+    configureSmtp()
+
+    await getHandler(notifyCargoReportUploaded)(makeEvent(CARGO_REPORT))
+
+    expect(conferenceNotifications()).toHaveLength(0)
+    expect(cargoNotifications()).toHaveLength(3)
+    const [mail] = mockSendMail.mock.calls[0]
+    expect(mail.subject).toBe('Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(mail.attachments[0].cid).toBe('cargo-report-banner@portal-comex')
   })
 
   it('autor sem papel elegivel (usuario comum fora das listas) nao recebe', async () => {
@@ -837,7 +969,7 @@ describe('notifyCargoReportUploaded', () => {
       makeEvent({ ...CARGO_REPORT, uploadedById: 'logi-2', uploadedByName: 'Logi Dois', uploadedByRole: 'logistica' })
     )
 
-    expect(cargoNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
+    expect(conferenceNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
   })
 
   it('processo inexistente / sem dado criado -> nada', async () => {

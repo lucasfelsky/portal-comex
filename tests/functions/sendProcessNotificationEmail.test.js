@@ -259,6 +259,45 @@ describe('sendProcessNotificationEmail', () => {
     expect(args.text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
   })
 
+  // S7: conferencia da logistica fechada: e-mail proprio (banner novo por CID), nao o do COMEX.
+  it('process_cargo_report_conference -> envia o e-mail da conferencia com o banner inline novo', async () => {
+    setSecretValue('SMTP_HOST', 'smtp.test.com')
+    setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+    setSecretValue('SMTP_PASS', 'pass')
+    setupMailer()
+
+    await handler(
+      makeEvent({
+        type: 'process_cargo_report_conference',
+        recipientUserId: RECIPIENT_UID,
+        processId: 'proc-1',
+        title: 'Conferência do Relatório de Carga - PO 12345 - Resina Atlas',
+        body: 'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.',
+      })
+    )
+    expect(mockSendMail).toHaveBeenCalledTimes(1)
+
+    const args = mockSendMail.mock.calls[0][0]
+    expect(args.to).toBe('maria@sqquimica.com')
+    expect(args.subject).toBe('Conferência do Relatório de Carga - PO 12345 - Resina Atlas')
+    expect(args.subject).not.toContain('[Portal COMEX]')
+    expect(args.html).toContain('processos?processo=proc-1&amp;aba=documents')
+    expect(args.html).toContain('alt="Conferência da Logística concluída no Relatório de Carga."')
+    expect(args.html).toContain('src="cid:cargo-conference-banner@portal-comex"')
+    expect(args.html).not.toContain('cargo-report-banner@portal-comex')
+    expect(args.attachments).toHaveLength(1)
+    expect(args.attachments[0]).toMatchObject({
+      filename: 'cargo-conference-banner.jpg',
+      cid: 'cargo-conference-banner@portal-comex',
+      contentType: 'image/jpeg',
+      contentDisposition: 'inline',
+    })
+    expect(args.text).toContain('Olá, Maria Souza.')
+    expect(args.text).toContain('Conferência da Logística concluída no Relatório de Carga.')
+    expect(args.text).toContain('Processo: PO 12345 - Resina Atlas')
+    expect(args.text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
+  })
+
   it('outro tipo de e-mail de processo -> texto puro, sem html nem anexos', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

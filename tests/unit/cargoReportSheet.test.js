@@ -31,7 +31,8 @@ function makeForm(rows, overrides = {}) {
 }
 
 describe('buildCargoReportSheet', () => {
-  it('monta cabeçalho, linhas calculadas e OK da conferência', () => {
+  it('monta cabeçalho, linhas calculadas, OK da conferência e rodapé vindo da conferência (S7)', () => {
+    // O rodapé do `current` (legado) NÃO vale: a folha lê tudo da conferência da logística.
     const form = makeForm(
       [
         makeRow({
@@ -45,7 +46,13 @@ describe('buildCargoReportSheet', () => {
           packageWeightKg: '1,2',
         }),
       ],
-      { receivedDate: '2026-11-22', completedDate: '2026-11-23', nfNumber: '000.123.456', receiptStatus: 'com_ressalva' }
+      {
+        receivedDate: '2020-01-01',
+        completedDate: '2026-11-23',
+        nfNumber: 'NF-LEGADA',
+        receiptStatus: 'sem_ressalva',
+        notes: 'obs legada',
+      }
     )
     const sheet = buildCargoReportSheet(form, {
       process: PROCESS,
@@ -54,6 +61,10 @@ describe('buildCargoReportSheet', () => {
         countOkByRowId: { a: true },
         labelsByRowId: { a: { wms: 'WMS-77120', sq: 'SQ-0001' } },
         checkedByName: ' Operador Logística ',
+        receivedDate: '2026-11-22',
+        nfNumber: ' 000.123.456 ',
+        receiptStatus: 'com_ressalva',
+        notes: ' Palete 3 avariado ',
       },
       catalog: CATALOG,
     })
@@ -68,8 +79,12 @@ describe('buildCargoReportSheet', () => {
       completedDateBr: '23/11/2026',
       nfNumber: '000.123.456',
       receiptStatus: 'com_ressalva',
+      notes: 'Palete 3 avariado',
       alerts: [],
     })
+    // S7: "Etiquetado por"/"Etiqueta feita por" saíram da folha.
+    expect(sheet).not.toHaveProperty('labeledBy')
+    expect(sheet).not.toHaveProperty('labelMadeBy')
     expect(sheet.rows).toHaveLength(1)
     expect(sheet.rows[0]).not.toHaveProperty('count')
     expect(sheet.rows[0]).toMatchObject({
@@ -94,6 +109,36 @@ describe('buildCargoReportSheet', () => {
       const sheet = buildCargoReportSheet(form, { process: PROCESS, conference, catalog: CATALOG })
       expect(sheet.rows[0]).toMatchObject({ wmsLabel: '', sqLabel: '', countOk: false })
     }
+  })
+
+  it('S7: DATA CONCLUSÃO = data de fechamento da logística quando a conferência está fechada; senão a do COMEX', () => {
+    const form = makeForm([makeRow({ id: 'a', po: '1' })], { completedDate: '2026-11-23' })
+    const open = buildCargoReportSheet(form, { process: PROCESS, conference: { status: 'aberta', closedDate: '' }, catalog: CATALOG })
+    expect(open.completedDateBr).toBe('23/11/2026')
+    const legacy = buildCargoReportSheet(form, { process: PROCESS, conference: {}, catalog: CATALOG })
+    expect(legacy.completedDateBr).toBe('23/11/2026')
+    const closed = buildCargoReportSheet(form, {
+      process: PROCESS,
+      conference: { status: 'fechada', closedDate: '2026-11-24' },
+      catalog: CATALOG,
+    })
+    expect(closed.completedDateBr).toBe('24/11/2026')
+  })
+
+  it('S7: etiquetas saem em MAIÚSCULAS mesmo com dado legado em minúsculas; enum e data inválidos viram vazio', () => {
+    const form = makeForm([makeRow({ id: 'a', po: '1' })])
+    const sheet = buildCargoReportSheet(form, {
+      process: PROCESS,
+      conference: {
+        labelsByRowId: { a: { wms: 'wms-ç1', sq: ' sq-ã2 ' } },
+        receiptStatus: 'conforme',
+        receivedDate: '22/11/2026',
+      },
+      catalog: CATALOG,
+    })
+    expect(sheet.rows[0]).toMatchObject({ wmsLabel: 'WMS-Ç1', sqLabel: 'SQ-Ã2' })
+    expect(sheet.receiptStatus).toBe('')
+    expect(sheet.receivedDateBr).toBe('')
   })
 
   it('descarta linhas vazias, não corta nas 28 do modelo, para no teto e usa ok=false sem conferência', () => {
@@ -139,7 +184,15 @@ describe('buildCargoReportSheet', () => {
 
   it('sem DUIMP ou conferência devolve strings vazias', () => {
     const sheet = buildCargoReportSheet(makeForm([]), { process: {}, conference: undefined, catalog: null })
-    expect(sheet).toMatchObject({ duimpNumber: '', checkedByName: '', receivedDateBr: '', completedDateBr: '' })
+    expect(sheet).toMatchObject({
+      duimpNumber: '',
+      checkedByName: '',
+      receivedDateBr: '',
+      completedDateBr: '',
+      notes: '',
+      nfNumber: '',
+      receiptStatus: '',
+    })
   })
 })
 
@@ -187,9 +240,14 @@ describe('isPortalGeneratedCargoReport', () => {
     expect(isPortalGeneratedCargoReport(portalDoc)).toBe(true)
   })
 
+  it('S7: nome do Portal enviado pela logística (fechamento da conferência) também é do Portal', () => {
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, uploadedByRole: 'logistica' })).toBe(true)
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, uploadedByRole: 'user' })).toBe(false)
+  })
+
   it('xlsx manual, outro tipo, outro perfil ou extensão diferente não são', () => {
     expect(isPortalGeneratedCargoReport({ ...portalDoc, name: 'RELATORIO DE CARGA - ACME SEA 021-26.xlsx' })).toBe(false)
-    expect(isPortalGeneratedCargoReport({ ...portalDoc, uploadedByRole: 'logistica' })).toBe(false)
+    expect(isPortalGeneratedCargoReport({ ...portalDoc, uploadedByRole: 'tecnico' })).toBe(false)
     expect(isPortalGeneratedCargoReport({ ...portalDoc, type: 'bl' })).toBe(false)
     expect(isPortalGeneratedCargoReport({ ...portalDoc, name: 'FR.CMX.001 - RELATORIO DE CARGA - X.pdf' })).toBe(false)
     expect(isPortalGeneratedCargoReport(null)).toBe(false)

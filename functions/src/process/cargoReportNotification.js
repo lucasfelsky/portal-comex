@@ -8,15 +8,25 @@
 
 export const CARGO_REPORT_NOTIFICATION_TYPE = 'process_cargo_report_uploaded'
 
+// S7: aviso NOVO quando a LOGISTICA fecha a conferencia (documento `cargoReport` anexado por ela).
+// Mesmo trigger, mesmos destinatarios; o estagio sai do `uploadedByRole` do documento.
+export const CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE = 'process_cargo_report_conference'
+
 // Texto EXATO pedido pelo Comex (nao parafrasear). Como o corpo nao
 // identifica o processo, o processo vai no titulo.
 export const CARGO_REPORT_NOTIFICATION_BODY =
   'Relatório de Carga preenchido e disponível no Portal COMEX. Documentação necessária para emissão do COA está disponível na pasta do processo.'
 
+// Corpo da notificacao in-app da conferencia (texto longo). O e-mail da conferencia usa o texto curto
+// do banner (`CARGO_CONFERENCE_EMAIL_TEXT` em `./cargoReportEmail.js`, decisao do Comex).
+export const CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY =
+  'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.'
+
 // Teto de e-mails por lista da config (protege contra doc adulterado/enorme).
 const MAX_EMAILS_PER_LIST = 50
 
 export const CARGO_REPORT_SUBJECT_PREFIX = 'Relatório de Carga'
+export const CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX = 'Conferência do Relatório de Carga'
 const CARGO_REPORT_SUBJECT_SEPARATOR = ' - '
 
 // Remove quebras de linha (header injection no assunto do e-mail), colapsa
@@ -35,7 +45,7 @@ export function sanitizeCargoReportText(value) {
 // destinatarios, inclusive e-mail direto da lista. Por isso NAO depende de
 // role: o `name` de processos FCL/LCL/AEREO aparece tambem para perfis que
 // nao sao admin/logistica neste aviso (ao contrario de `buildRecipientProcessLabel`).
-export function buildCargoReportSubject(process) {
+function buildSubjectWithPrefix(prefix, process) {
   const category = sanitizeCargoReportText(process?.category)
   const processNumber = sanitizeCargoReportText(process?.processNumber)
   const name = sanitizeCargoReportText(process?.name)
@@ -45,19 +55,37 @@ export function buildCargoReportSubject(process) {
       ? [name]
       : [processNumber ? `PO ${processNumber}` : '', name].filter(Boolean)
 
-  return parts.length > 0
-    ? `${CARGO_REPORT_SUBJECT_PREFIX}${CARGO_REPORT_SUBJECT_SEPARATOR}${parts.join(CARGO_REPORT_SUBJECT_SEPARATOR)}`
-    : CARGO_REPORT_SUBJECT_PREFIX
+  return parts.length > 0 ? `${prefix}${CARGO_REPORT_SUBJECT_SEPARATOR}${parts.join(CARGO_REPORT_SUBJECT_SEPARATOR)}` : prefix
+}
+
+export function buildCargoReportSubject(process) {
+  return buildSubjectWithPrefix(CARGO_REPORT_SUBJECT_PREFIX, process)
+}
+
+// S7: `Conferência do Relatório de Carga - PO <numero> - <nome>` (CONSOLIDADO: `... - <nome>`); mesmas
+// regras do assunto do COMEX, inclusive "nao depende de role".
+export function buildCargoReportConferenceSubject(process) {
+  return buildSubjectWithPrefix(CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX, process)
+}
+
+// Estagio do aviso a partir do documento `cargoReport` criado: anexo da logistica = conferencia fechada;
+// qualquer outro papel (admin, vazio, ausente) = fechamento do COMEX (aviso de hoje).
+export function resolveCargoReportUploadStage(document) {
+  return String(document?.uploadedByRole ?? '').trim() === 'logistica' ? 'conferencia' : 'comex'
 }
 
 // Parte do processo de um assunto ja montado (o doc de `notifications` so'
 // carrega o titulo): `Relatório de Carga - X` -> `X`; so' o prefixo ou vazio
 // -> ''; texto fora do padrao -> o proprio texto (sanitizado).
+// Reconhece os 2 prefixos (o da conferencia vem ANTES: nenhum comeca com o outro, mas a ordem documenta).
 export function extractCargoReportProcessLabel(subject) {
   const text = sanitizeCargoReportText(subject)
-  const prefixWithSeparator = `${CARGO_REPORT_SUBJECT_PREFIX}${CARGO_REPORT_SUBJECT_SEPARATOR}`
-  if (text === CARGO_REPORT_SUBJECT_PREFIX) return ''
-  return text.startsWith(prefixWithSeparator) ? text.slice(prefixWithSeparator.length).trim() : text
+  for (const prefix of [CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX, CARGO_REPORT_SUBJECT_PREFIX]) {
+    if (text === prefix) return ''
+    const prefixWithSeparator = `${prefix}${CARGO_REPORT_SUBJECT_SEPARATOR}`
+    if (text.startsWith(prefixWithSeparator)) return text.slice(prefixWithSeparator.length).trim()
+  }
+  return text
 }
 
 function defaultIsCorporateEmail(email) {

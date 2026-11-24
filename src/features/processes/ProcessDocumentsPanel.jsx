@@ -16,6 +16,7 @@ import Skeleton from '../../components/Skeleton'
 import Icon from '../../components/Icon'
 import RenameDocumentDialog from './RenameDocumentDialog'
 import DocumentPreviewDialog from './DocumentPreviewDialog'
+import DocumentActionsMenu from './DocumentActionsMenu'
 import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
   CONTAINER_WASH_CATEGORIES,
@@ -41,7 +42,7 @@ import {
 import { CONTAINER_TYPE_OPTIONS, isContainerReturned, isContainerReturnPlanned } from './containers'
 import { canSeePurchaseOrderDetailsForRole, formatPurchaseOrderNumber, getProcessPurchaseOrders } from './purchaseOrders'
 import { isShipmentConfirmed } from './shipmentConfirmation'
-import { canEditCargoReport, canOpenCargoReport } from './cargoReportFormModel'
+import { CARGO_STAGE, canEditCargoReport, canOpenCargoReport, getCargoReportStage } from './cargoReportFormModel'
 import { isPortalGeneratedCargoReport } from './cargoReportSheet'
 
 // S3 do Relatorio de Carga: o formulario (com repositorio e catalogo) so' carrega ao abrir.
@@ -109,6 +110,29 @@ function RowsGroup({ enabled, children }) {
   return enabled ? <div className="documents-section__rows">{children}</div> : children
 }
 
+// S7: selos por área do Relatório de carga (COMEX x logística) na linha do documento.
+function CargoReportStageBadges({ stage }) {
+  return (
+    <div className="docs-chips">
+      {stage === CARGO_STAGE.draft ? (
+        <>
+          <span className="inline-badge inline-badge--warn">COMEX: Rascunho</span>
+          <span className="inline-badge documents-badge--neutral">Logística: Aguardando</span>
+        </>
+      ) : (
+        <>
+          <span className="inline-badge inline-badge--ok">COMEX: Fechado</span>
+          {stage === CARGO_STAGE.done ? (
+            <span className="inline-badge inline-badge--ok">Logística: Fechada</span>
+          ) : (
+            <span className="inline-badge inline-badge--warn">Logística: Em conferência</span>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function DocumentsSectionHeader({ title, subtitle, badge }) {
   return (
     <div className="documents-section__header">
@@ -166,6 +190,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const [pendingCombine, setPendingCombine] = useState({})
   const [linkBusyKey, setLinkBusyKey] = useState('')
   const [isCargoFormOpen, setIsCargoFormOpen] = useState(false)
+  // S7: estado do Relatório de carga (só admin e logística leem `current`/`conference`); `null` = não carregado.
+  const [cargoStage, setCargoStage] = useState(null)
 
   // As chaves de `pendingCombine` sao genericas (`invoice`, `invoice:<po>`):
   // trocar de processo no mesmo painel nao pode herdar a escolha nao salva.
@@ -218,6 +244,27 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
       isMounted = false
     }
   }, [processId, reloadToken, isReadOnlyViewer, readableTypes])
+
+  useEffect(() => {
+    if (!processId || isReadOnlyViewer || !canOpenCargoReport(role) || !isFirebaseConfigured) return undefined
+    let isMounted = true
+
+    async function loadCargoStage() {
+      try {
+        const { getCargoReport } = await import('../../services/cargoReportRepository')
+        const report = await getCargoReport(processId)
+        if (isMounted) setCargoStage(getCargoReportStage(report.current?.status, report.conference?.status))
+      } catch {
+        // Sem o estado os selos somem; o resto do painel segue normal.
+        if (isMounted) setCargoStage(null)
+      }
+    }
+
+    loadCargoStage()
+    return () => {
+      isMounted = false
+    }
+  }, [processId, role, isReadOnlyViewer, reloadToken])
 
   const groups = useMemo(() => groupDocumentsBySlot(documents), [documents])
 
@@ -613,32 +660,27 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
   }
 
-  // Sublinha "Versão anterior" - FORA da grade da linha (sibling), recuada
-  // pra alinhar com o inicio do texto (icone 40px + gap 14px do row).
-  function renderPreviousLine(previous) {
-    if (!previous) return null
-    return (
-      <div className="documents-row__previous">
-        <Icon name="history" size={16} />
-        <span>
-          {`Versão anterior: ${previous.name} · ${formatDocumentSize(previous.size)} · ${formatShortDateFromIso(previous.uploadedAt)}`}
-        </span>
-        <button
-          type="button"
-          className="documents-link-button"
-          disabled={downloadingId === previous.id}
-          aria-busy={downloadingId === previous.id || undefined}
-          onClick={() => handleDownload(previous)}
-        >
-          Baixar
-        </button>
-      </div>
-    )
+  // S7: texto do item "Baixar versão anterior" do menu "Ações" (a sublinha saiu do corpo do cartão). No
+  // Relatório de carga a origem da versão anterior aparece entre parênteses (COMEX ou Logística).
+  function describePreviousVersion(previous, type) {
+    const origin =
+      type === 'cargoReport'
+        ? previous.uploadedByRole === 'admin'
+          ? ' (COMEX)'
+          : previous.uploadedByRole === 'logistica'
+            ? ' (Logística)'
+            : ''
+        : ''
+    return {
+      label: `Baixar versão anterior${origin}`,
+      hint: [formatDocumentSize(previous.size), formatDateTime(previous.uploadedAt)].filter(Boolean).join(' · '),
+    }
   }
 
-  // E2: renderiza 1 linha (Documentos do processo / FISPQ / lavacao) em
-  // grid de 4 colunas (icone / conteudo / badge / acoes) + a sublinha de
-  // versao anterior como irmao (fora da grade), igual ao artboard.
+  // E2/S7: renderiza 1 linha (Documentos do processo / FISPQ / lavacao) em
+  // grid de 4 colunas (icone / conteudo / badge / acoes). Acoes compactas: botao principal (quando faz
+  // sentido), "Baixar" direto fora do Relatorio de carga e o menu "Acoes" com o resto (Visualizar, Baixar,
+  // Substituir, Renomear, versao anterior e Excluir, separado e em vermelho).
   function renderRow({
     slotKey,
     icon = 'file',
@@ -665,6 +707,78 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const previous = group?.previous ?? null
     const isRowUploading = uploadingKey === slotKey
     const rowError = rowErrors[slotKey]
+
+    // Itens do menu "Ações" (S7). Relatório de carga (`onPreview`): Visualizar e Baixar também ficam no menu;
+    // nos demais tipos "Baixar" é botão direto.
+    function buildMenuItems() {
+      if (!primary) return []
+      const items = []
+      if (onPreview && getDocumentPreviewKind(primary.mimeType, primary.name)) {
+        items.push({
+          key: 'preview',
+          label: 'Visualizar',
+          ariaLabel: `Visualizar ${primary.name}`,
+          icon: 'eye',
+          disabled: isRowUploading,
+          onSelect: () => onPreview(primary),
+        })
+      }
+      if (onPreview) {
+        items.push({
+          key: 'download',
+          label: 'Baixar',
+          ariaLabel: `Baixar ${primary.name}`,
+          icon: 'download',
+          disabled: isRowUploading || downloadingId === primary.id,
+          onSelect: () => handleDownload(primary),
+        })
+      }
+      if (canUpload) {
+        items.push({
+          key: 'replace',
+          label: 'Substituir',
+          ariaLabel: `Substituir ${title}`,
+          icon: 'upload',
+          disabled: isRowUploading,
+          onSelect: () => triggerFilePicker(slotKey),
+        })
+      }
+      if (onRename) {
+        items.push({
+          key: 'rename',
+          label: 'Renomear',
+          ariaLabel: `Renomear ${title}`,
+          icon: 'edit',
+          disabled: isRowUploading,
+          onSelect: onRename,
+        })
+      }
+      if (previous) {
+        const described = describePreviousVersion(previous, primary.type)
+        items.push({
+          key: 'previous',
+          label: described.label,
+          ariaLabel: `${described.label}: ${previous.name}`,
+          hint: described.hint,
+          icon: 'history',
+          disabled: downloadingId === previous.id,
+          onSelect: () => handleDownload(previous),
+        })
+      }
+      if (canDelete) {
+        items.push({
+          key: 'delete',
+          label: 'Excluir',
+          ariaLabel: `Excluir ${primary.name}`,
+          icon: 'trash',
+          danger: true,
+          separatorBefore: items.length > 0,
+          disabled: isRowUploading,
+          onSelect: () => setConfirmDeleteDoc(primary),
+        })
+      }
+      return items
+    }
 
     return (
       <div
@@ -749,20 +863,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 ) : null}
               </>
             ) : null}
-            {primary && onPreview && getDocumentPreviewKind(primary.mimeType, primary.name) ? (
-              <button
-                type="button"
-                className="documents-icon-button ghost-button ghost-button--outline"
-                aria-label={`Visualizar ${primary.name}`}
-                title={`Visualizar ${primary.name}`}
-                disabled={isRowUploading}
-                onClick={() => onPreview(primary)}
-              >
-                <Icon name="eye" />
-                <span className="documents-row__action-label">Visualizar</span>
-              </button>
-            ) : null}
-            {primary ? (
+            {primary && !onPreview ? (
               <button
                 type="button"
                 className="documents-icon-button ghost-button ghost-button--outline"
@@ -788,24 +889,18 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     if (file) onUpload(file)
                   }}
                 />
-                <button
-                  type="button"
-                  className={primary || primaryAction ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
-                  aria-label={primary ? `Substituir ${title}` : uploadLabel}
-                  title={primary ? `Substituir ${title}` : uploadLabel}
-                  disabled={isRowUploading}
-                  ref={primary ? registerSubstituteRef(slotKey) : undefined}
-                  onClick={() => triggerFilePicker(slotKey)}
-                >
-                  {primary ? (
-                    <>
-                      <Icon name="upload" />
-                      <span className="documents-row__action-label">Substituir</span>
-                    </>
-                  ) : (
-                    uploadLabel
-                  )}
-                </button>
+                {!primary ? (
+                  <button
+                    type="button"
+                    className={primaryAction ? 'documents-icon-button ghost-button ghost-button--outline' : 'primary-button'}
+                    aria-label={uploadLabel}
+                    title={uploadLabel}
+                    disabled={isRowUploading}
+                    onClick={() => triggerFilePicker(slotKey)}
+                  >
+                    {uploadLabel}
+                  </button>
+                ) : null}
               </>
             ) : !primary && !includedInInvoice ? (
               <span className="documents-lock">
@@ -813,35 +908,14 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 Somente o COMEX envia este documento
               </span>
             ) : null}
-            {primary && onRename ? (
-              <button
-                type="button"
-                className="documents-icon-button ghost-button ghost-button--outline"
-                aria-label={`Renomear ${title}`}
-                title={`Renomear ${title}`}
-                disabled={isRowUploading}
-                onClick={onRename}
-              >
-                <Icon name="edit" />
-                <span className="documents-row__action-label">Renomear</span>
-              </button>
-            ) : null}
-            {primary && canDelete ? (
-              <button
-                type="button"
-                className="documents-icon-button ghost-button ghost-button--outline"
-                aria-label={`Excluir ${primary.name}`}
-                title={`Excluir ${primary.name}`}
-                disabled={isRowUploading}
-                onClick={() => setConfirmDeleteDoc(primary)}
-              >
-                <Icon name="trash" />
-                <span className="documents-row__action-label">Excluir</span>
-              </button>
-            ) : null}
+            <DocumentActionsMenu
+              title={title}
+              mobile={!isDesktopVariant}
+              triggerRef={primary && canUpload ? registerSubstituteRef(slotKey) : null}
+              items={buildMenuItems()}
+            />
           </div>
         </div>
-        {renderPreviousLine(previous)}
       </div>
     )
   }
@@ -1239,6 +1313,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   canUpload: canUploadDocumentType(role, type),
                   canDelete: primary ? canDeleteDocument(profile, primary) : false,
                   onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
+                  extraContent: type === 'cargoReport' && cargoStage ? <CargoReportStageBadges stage={cargoStage} /> : null,
                   onPreview:
                     type === 'cargoReport'
                       ? (document_) => {

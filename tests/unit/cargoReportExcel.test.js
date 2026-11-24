@@ -113,13 +113,9 @@ function mockScenarioForm(overrides = {}) {
         packageWeightKg: 1.2,
       }),
     ],
-    notes: 'Palete 3 com avaria na embalagem externa, conteúdo íntegro.',
-    labeledBy: 'Operador do armazém',
-    labelMadeBy: 'Comex',
-    receiptStatus: 'sem_ressalva',
-    receivedDate: '2026-11-22',
+    // S7: o rodapé do recebimento (Observações, status, data, NF) vem da conferência; o `current` só tem a
+    // data em que o COMEX fechou.
     completedDate: '2026-11-23',
-    nfNumber: '000.123.456',
     ...overrides,
   }
 }
@@ -134,7 +130,14 @@ const MOCK_CONFERENCE = {
     d: { wms: 'WMS-77125', sq: 'SQ-001249' },
   },
   checkedByName: 'Operador Logística',
+  receiptStatus: 'sem_ressalva',
+  receivedDate: '2026-11-22',
+  nfNumber: '000.123.456',
+  notes: 'Palete 3 com avaria na embalagem externa, conteúdo íntegro.',
 }
+
+// Excel da LOGÍSTICA (S7): conferência fechada em 24/11; DATA CONCLUSÃO vem de `closedDate`.
+const CLOSED_CONFERENCE = { ...MOCK_CONFERENCE, status: 'fechada', closedDate: '2026-11-24' }
 
 function buildSheet(form = mockScenarioForm(), conference = MOCK_CONFERENCE) {
   return buildCargoReportSheet(form, { process: PROCESS, conference, catalog: CATALOG })
@@ -294,10 +297,10 @@ describe('cenário do mock (FCL, 5 linhas)', () => {
     expect(xml).not.toContain('Item x Emb.')
   })
 
-  it('rodapé: rótulo + valor, datas dd/mm/aaaa, observações e ressalva', () => {
+  it('rodapé: rótulo + valor, datas dd/mm/aaaa, observações e ressalva; ETIQUETAGEM e CONFECÇÃO = Conferido por (S7)', () => {
     expect(ws.I38.v).toBe('CONFERÊNCIA: Operador Logística')
-    expect(ws.L37.v).toBe('ETIQUETAGEM: Operador do armazém')
-    expect(ws.L38.v).toBe('CONFECÇÃO ETIQUETA: Comex')
+    expect(ws.L37.v).toBe('ETIQUETAGEM: Operador Logística')
+    expect(ws.L38.v).toBe('CONFECÇÃO ETIQUETA: Operador Logística')
     expect(ws.I39.v).toBe('DATA RECEBIMENTO: 22/11/2026')
     expect(ws.L39.v).toBe('DATA CONCLUSÃO: 23/11/2026')
     expect(ws.I40.v).toBe('Nº DA NF: 000.123.456')
@@ -313,22 +316,35 @@ describe('cenário do mock (FCL, 5 linhas)', () => {
     expect(other.Sheets['SQ QUIMICA'].B5.v).toBe('Nº da DUIMP:')
   })
 
+  it('S7: Excel da logística (conferência fechada): DATA CONCLUSÃO = dia do fechamento e o recebimento vem da conferência', () => {
+    const { book: other } = generate(buildSheet(mockScenarioForm(), CLOSED_CONFERENCE))
+    const sheet = other.Sheets['SQ QUIMICA']
+    expect(sheet.L39.v).toBe('DATA CONCLUSÃO: 24/11/2026')
+    expect(sheet.I39.v).toBe('DATA RECEBIMENTO: 22/11/2026')
+    expect(sheet.I38.v).toBe('CONFERÊNCIA: Operador Logística')
+    expect(sheet.L37.v).toBe('ETIQUETAGEM: Operador Logística')
+    expect(sheet.L38.v).toBe('CONFECÇÃO ETIQUETA: Operador Logística')
+    expect(sheet.B38.v).toBe('Palete 3 com avaria na embalagem externa, conteúdo íntegro.')
+  })
+
+  it('S7: etiquetas WMS/SQ saem em MAIÚSCULAS no Excel, mesmo com dado legado em minúsculas', () => {
+    const conference = {
+      ...MOCK_CONFERENCE,
+      labelsByRowId: { a: { wms: 'wms-ç1', sq: 'sq-ã1' } },
+    }
+    const { book: other } = generate(buildSheet(mockScenarioForm(), conference))
+    expect(other.Sheets['SQ QUIMICA'].I9.v).toBe('WMS-Ç1')
+    expect(other.Sheets['SQ QUIMICA'].J9.v).toBe('SQ-Ã1')
+  })
+
   it('com_ressalva marca D40 e não E40', () => {
-    const { book: other } = generate(buildSheet(mockScenarioForm({ receiptStatus: 'com_ressalva' })))
+    const { book: other } = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, receiptStatus: 'com_ressalva' }))
     expect(other.Sheets['SQ QUIMICA'].D40.v).toBe(true)
     expect(other.Sheets['SQ QUIMICA'].E40.v).toBe(false)
   })
 
   it('campos vazios mantêm só o rótulo original do modelo', () => {
-    const form = mockScenarioForm({
-      labeledBy: '',
-      labelMadeBy: '',
-      receivedDate: '',
-      completedDate: '',
-      nfNumber: '',
-      notes: '',
-      receiptStatus: '',
-    })
+    const form = mockScenarioForm({ completedDate: '' })
     const { book: other } = generate(buildSheet(form, { okByRowId: {}, checkedByName: '' }))
     const sheet = other.Sheets['SQ QUIMICA']
     expect(sheet.I38.v).toBe('CONFERÊNCIA:')
@@ -416,12 +432,12 @@ describe('escape e limites', () => {
   })
 
   it('caractere de controle é removido do texto', () => {
-    const { book } = generate(buildSheet(mockScenarioForm({ notes: 'obs\u0001erva\u0008ção\tok' })))
+    const { book } = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, notes: 'obs\u0001erva\u0008ção\tok' }))
     expect(book.Sheets['SQ QUIMICA'].B38.v).toBe('observação\tok')
   })
 
   it('texto com padrões especiais de substituição é gravado como veio', () => {
-    const { book } = generate(buildSheet(mockScenarioForm({ notes: "custo $& e $1 e $' ok" })))
+    const { book } = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, notes: "custo $& e $1 e $' ok" }))
     expect(book.Sheets['SQ QUIMICA'].B38.v).toBe("custo $& e $1 e $' ok")
   })
 
@@ -450,7 +466,8 @@ describe('amostra para o Lucas', () => {
   it('grava o xlsx do cenário do mock quando CARGO_REPORT_SAMPLE_OUT existe', () => {
     const out = process.env.CARGO_REPORT_SAMPLE_OUT
     if (!out) return
-    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet())
+    // S7: a amostra é o Excel que a LOGÍSTICA gera ao fechar a conferência (conferência fechada).
+    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), CLOSED_CONFERENCE))
     fs.writeFileSync(out, bytes)
     expect(fs.statSync(out).size).toBeGreaterThan(10000)
   })
@@ -484,6 +501,10 @@ function manyRowsConference(count, { okIds = [], countOkIds = [] } = {}) {
     countOkByRowId: Object.fromEntries(countOkIds.map((id) => [id, true])),
     labelsByRowId,
     checkedByName: 'Operador Logística',
+    receiptStatus: 'sem_ressalva',
+    receivedDate: '2026-11-22',
+    nfNumber: '000.123.456',
+    notes: 'Palete 3 com avaria na embalagem externa, conteúdo íntegro.',
   }
 }
 
@@ -527,8 +548,8 @@ describe.each([29, 45, 200])('xlsx com %i linhas (acima das 28 do modelo)', (cou
   it('o rodapé desceu junto: rótulos, valores e caixas de ressalva nas linhas deslocadas', () => {
     expect(ws[`B${FOOTER_ROWS.notes + extra}`].v).toBe('Palete 3 com avaria na embalagem externa, conteúdo íntegro.')
     expect(ws[`I${FOOTER_ROWS.conference + extra}`].v).toBe('CONFERÊNCIA: Operador Logística')
-    expect(ws[`L${FOOTER_ROWS.labeled + extra}`].v).toBe('ETIQUETAGEM: Operador do armazém')
-    expect(ws[`L${FOOTER_ROWS.labelMade + extra}`].v).toBe('CONFECÇÃO ETIQUETA: Comex')
+    expect(ws[`L${FOOTER_ROWS.labeled + extra}`].v).toBe('ETIQUETAGEM: Operador Logística')
+    expect(ws[`L${FOOTER_ROWS.labelMade + extra}`].v).toBe('CONFECÇÃO ETIQUETA: Operador Logística')
     expect(ws[`I${FOOTER_ROWS.received + extra}`].v).toBe('DATA RECEBIMENTO: 22/11/2026')
     expect(ws[`L${FOOTER_ROWS.completed + extra}`].v).toBe('DATA CONCLUSÃO: 23/11/2026')
     expect(ws[`I${FOOTER_ROWS.nf + extra}`].v).toBe('Nº DA NF: 000.123.456')
@@ -649,8 +670,8 @@ describe('amostra com 45 linhas para o Lucas', () => {
   it('grava o xlsx de 45 linhas, FCL e COM RESSALVA, quando CARGO_REPORT_SAMPLE45_OUT existe', () => {
     const out = process.env.CARGO_REPORT_SAMPLE45_OUT
     if (!out) return
-    const form = manyRowsForm(45, { receiptStatus: 'com_ressalva', cargoType: 'FCL' })
-    fs.writeFileSync(out, buildCargoReportXlsx(TEMPLATE, buildSheet(form)))
+    const form = manyRowsForm(45, { cargoType: 'FCL' })
+    fs.writeFileSync(out, buildCargoReportXlsx(TEMPLATE, buildSheet(form, { ...MOCK_CONFERENCE, receiptStatus: 'com_ressalva' })))
     expect(fs.statSync(out).size).toBeGreaterThan(10000)
   })
 })

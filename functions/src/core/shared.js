@@ -28,6 +28,9 @@ const EMAIL_NOTIFICATION_TYPES = new Set([
   // Relatorio de Carga anexado (`cargoReport`): avisa Comex, Logistica, Tecnico
   // e Faturamento (trigger `notifyCargoReportUploaded`, `process/documents.js`).
   'process_cargo_report_uploaded',
+  // S7: conferencia da logistica fechada (documento `cargoReport` anexado por ela): mesmo trigger e mesmos
+  // destinatarios, e-mail proprio (`buildCargoReportConferenceEmail`).
+  'process_cargo_report_conference',
 ])
 
 const ALLOWED_ROLES = new Set(['admin', 'user', 'logistica', 'tecnico', 'faturamento'])

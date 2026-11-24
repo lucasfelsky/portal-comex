@@ -3,6 +3,8 @@
 // peso líquido por lookup, nº de embalagens), alertas, normalização e montagem dos payloads
 // gravados em `processes/{id}/cargoReport/current` e `.../conference`.
 // As colunas calculadas (lote SQ, peso líquido, nº de embalagens) NUNCA são gravadas.
+// S7: "Salvar e fechar" por área. COMEX fecha o `current` (`status: 'concluido'`); a logística grava e
+// fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
 import { getItemPackaging, normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
 
 export const CARGO_REPORT_FORM_CODE = 'FR.CMX.001'
@@ -58,6 +60,47 @@ export function canEditCargoReport(role) {
 
 export function canConferCargoReport(role) {
   return role === 'admin' || role === 'logistica'
+}
+
+// ---------- S7: estados por área ----------
+// Derivados de 2 docs: `current.status` (rascunho | concluido) e `conference.status` (aberta | fechada).
+//   rascunho     = COMEX em rascunho (conferência aguarda)
+//   comexFechado = COMEX fechado, logística conferindo
+//   concluido    = COMEX e logística fechados
+export const CARGO_CONFERENCE_STATUS = { open: 'aberta', closed: 'fechada' }
+export const CARGO_STAGE = { draft: 'rascunho', comexClosed: 'comexFechado', done: 'concluido' }
+
+export function getCargoReportStage(currentStatus, conferenceStatus) {
+  if (currentStatus !== 'concluido') return CARGO_STAGE.draft
+  return conferenceStatus === CARGO_CONFERENCE_STATUS.closed ? CARGO_STAGE.done : CARGO_STAGE.comexClosed
+}
+
+// Logística salva a conferência (sem fechar) nos estados 1 e 2; o admin nunca grava o conteúdo dela.
+export function canSaveCargoConference(role, stage) {
+  return role === 'logistica' && (stage === CARGO_STAGE.draft || stage === CARGO_STAGE.comexClosed)
+}
+
+// Só a logística fecha, e só depois que o COMEX fechou a parte dele.
+export function canCloseCargoConference(role, stage) {
+  return role === 'logistica' && stage === CARGO_STAGE.comexClosed
+}
+
+// Só o admin reabre: a conferência (estado 3 -> 2) e a parte do COMEX (estados 2 e 3 -> 1).
+export function canReopenCargoConference(role, stage) {
+  return role === 'admin' && stage === CARGO_STAGE.done
+}
+
+export function canReopenCargoReportComex(role, stage) {
+  return role === 'admin' && (stage === CARGO_STAGE.comexClosed || stage === CARGO_STAGE.done)
+}
+
+// Etiqueta WMS/SQ: sempre MAIÚSCULAS (pt-BR: ç -> Ç, ã -> Ã), sem espaços nas pontas, até 120 caracteres.
+// O corte vale DEPOIS das maiúsculas (ß -> SS muda o tamanho).
+export function normalizeCargoLabel(value) {
+  return String(value ?? '')
+    .toLocaleUpperCase('pt-BR')
+    .trim()
+    .slice(0, CARGO_REPORT_LIMITS.text)
 }
 
 export function canOpenCargoReport(role) {
@@ -159,9 +202,9 @@ export function fromCargoReportDoc(data) {
     cargoType: sanitizeEnum(doc.cargoType, CARGO_TYPE_VALUES),
     titleSuffix: readText(doc.titleSuffix, CARGO_REPORT_LIMITS.text),
     rows: rows.map(normalizeRowFromDoc),
+    // `notes`, `receiptStatus`, `receivedDate` e `nfNumber` são legado do `current` (S7: quem edita é a logística,
+    // no doc `conference`); o valor lido volta intacto no próximo salvar para não apagar dado.
     notes: readText(doc.notes, CARGO_REPORT_LIMITS.notes),
-    labeledBy: readText(doc.labeledBy, CARGO_REPORT_LIMITS.text),
-    labelMadeBy: readText(doc.labelMadeBy, CARGO_REPORT_LIMITS.text),
     nfNumber: readText(doc.nfNumber, CARGO_REPORT_LIMITS.nf),
     receiptStatus: sanitizeEnum(doc.receiptStatus, RECEIPT_STATUS_VALUES),
     receivedDate: readDateKey(doc.receivedDate),
@@ -195,8 +238,6 @@ export function buildInitialCargoReport(process) {
     titleSuffix: clip(process?.name, CARGO_REPORT_LIMITS.text) || processNumber,
     rows,
     notes: '',
-    labeledBy: '',
-    labelMadeBy: '',
     nfNumber: '',
     receiptStatus: '',
     receivedDate: '',
@@ -356,8 +397,6 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
     titleSuffix: clip(form?.titleSuffix, CARGO_REPORT_LIMITS.text),
     rows,
     notes: clip(form?.notes, CARGO_REPORT_LIMITS.notes),
-    labeledBy: clip(form?.labeledBy, CARGO_REPORT_LIMITS.text),
-    labelMadeBy: clip(form?.labelMadeBy, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(form?.receiptStatus, RECEIPT_STATUS_VALUES),
     receivedDate: readDateKey(form?.receivedDate),
     completedDate: readDateKey(form?.completedDate),
@@ -369,7 +408,7 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
   return { payload, errors }
 }
 
-// S6: o que é da logística no doc `conference`. Coluna nova "da logística" = 1 item aqui + 1 chave
+// S6/S7: o que é da logística no doc `conference`. Coluna nova "da logística" = 1 item aqui + 1 chave
 // nas rules (`isValidCargoReportConference`) + a fixture do audit-vault.
 // Mapas `{ [rowId]: boolean }` (OK? e contagem OK) e campos de texto por linha (etiquetas WMS e SQ).
 export const CONFERENCE_FLAG_MAPS = ['okByRowId', 'countOkByRowId']
@@ -383,9 +422,15 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-// Conferência da logística: poda chaves de linhas que não existem mais, força booleanos e corta
-// as etiquetas em 120 caracteres. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
-export function buildConferencePayload({ okByRowId, countOkByRowId, labelsByRowId, checkedByName, revision }, rows) {
+// Conferência da logística (15 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
+// linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
+// recebimento normalizado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
+// a rule exige `checkedByName == myName()`. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
+export function buildConferencePayload(
+  { okByRowId, countOkByRowId, labelsByRowId, receiptStatus, receivedDate, nfNumber, notes, revision },
+  rows,
+  { actorName = '' } = {}
+) {
   const sources = { okByRowId, countOkByRowId }
   const maps = Object.fromEntries(CONFERENCE_FLAG_MAPS.map((name) => [name, {}]))
   const labels = {}
@@ -400,17 +445,39 @@ export function buildConferencePayload({ okByRowId, countOkByRowId, labelsByRowI
     }
     const entry = isPlainObject(labelSource[id]) ? labelSource[id] : null
     if (!entry) continue
-    const clipped = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, clip(entry[field], CARGO_REPORT_LIMITS.text)]))
-    if (CONFERENCE_LABEL_FIELDS.some((field) => clipped[field] !== '')) labels[id] = clipped
+    const normalized = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, normalizeCargoLabel(entry[field])]))
+    if (CONFERENCE_LABEL_FIELDS.some((field) => normalized[field] !== '')) labels[id] = normalized
   }
 
   return {
     schemaVersion: CARGO_REPORT_SCHEMA_VERSION,
     revision: (Number.isInteger(revision) && revision >= 0 ? revision : 0) + 1,
+    status: CARGO_CONFERENCE_STATUS.open,
     okByRowId: maps.okByRowId,
     countOkByRowId: maps.countOkByRowId,
     labelsByRowId: labels,
-    checkedByName: clip(checkedByName, CARGO_REPORT_LIMITS.text),
+    checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
+    receiptStatus: sanitizeEnum(receiptStatus, RECEIPT_STATUS_VALUES),
+    receivedDate: readDateKey(receivedDate),
+    nfNumber: clip(nfNumber, CARGO_REPORT_LIMITS.nf),
+    notes: clip(notes, CARGO_REPORT_LIMITS.notes),
+    closedDate: '',
+    closedById: '',
+    closedByName: '',
+    closedDocumentId: '',
+  }
+}
+
+// Fechamento da conferência: mesmo conteúdo + status `fechada` e a trilha de quem fechou. O repositório
+// preenche `closedDocumentId` com o id do Excel anexado (a rule exige que seja documento `cargoReport` dela).
+export function buildClosedConferencePayload(input, rows, { actorName = '', actorUid = '', today = '' } = {}) {
+  return {
+    ...buildConferencePayload(input, rows, { actorName }),
+    status: CARGO_CONFERENCE_STATUS.closed,
+    closedDate: readDateKey(today),
+    closedById: String(actorUid ?? ''),
+    closedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
+    closedDocumentId: '',
   }
 }
 
@@ -424,12 +491,16 @@ function readFlagMap(value) {
   return result
 }
 
+function readLabel(value) {
+  return typeof value === 'string' ? normalizeCargoLabel(value) : ''
+}
+
 function readLabelsMap(value) {
   const result = {}
   if (!isPlainObject(value)) return result
   for (const [id, entry] of Object.entries(value)) {
     if (!isPlainObject(entry)) continue
-    result[id] = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, readText(entry[field], CARGO_REPORT_LIMITS.text)]))
+    result[id] = Object.fromEntries(CONFERENCE_LABEL_FIELDS.map((field) => [field, readLabel(entry[field])]))
   }
   return result
 }
@@ -442,22 +513,36 @@ function labelsFromLegacyRows(legacyRows) {
   for (const row of Array.isArray(legacyRows) ? legacyRows : []) {
     const id = typeof row?.id === 'string' ? row.id : ''
     if (!id) continue
-    const wms = readText(row.wmsLabel, CARGO_REPORT_LIMITS.text)
-    const sq = readText(row.sqLabel, CARGO_REPORT_LIMITS.text)
+    const wms = readLabel(row.wmsLabel)
+    const sq = readLabel(row.sqLabel)
     if (wms || sq) result[id] = { wms, sq }
   }
   return result
 }
 
-// Conferência lida do doc (chave órfã é ignorada na leitura pela tela).
-export function fromConferenceDoc(data, legacyRows = []) {
+// Conferência lida do doc (chave órfã é ignorada na leitura pela tela). Doc legado:
+//   - sem `status` = `aberta`;
+//   - sem `receiptStatus` (anterior à S7): o rodapé do recebimento (Observações, status, data e NF) vem do
+//     `current` (`legacyCurrent`); a 1ª gravação da logística o persiste e daí em diante o legado não é lido.
+export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
   const doc = isPlainObject(data) ? data : {}
+  const footerSource = hasOwn(doc, 'receiptStatus') ? doc : isPlainObject(legacyCurrent) ? legacyCurrent : {}
+  const isClosed = doc.status === CARGO_CONFERENCE_STATUS.closed
   return {
     revision: Number.isInteger(doc.revision) && doc.revision >= 0 ? doc.revision : 0,
+    status: isClosed ? CARGO_CONFERENCE_STATUS.closed : CARGO_CONFERENCE_STATUS.open,
     okByRowId: readFlagMap(doc.okByRowId),
     countOkByRowId: readFlagMap(doc.countOkByRowId),
     labelsByRowId: hasOwn(doc, 'labelsByRowId') ? readLabelsMap(doc.labelsByRowId) : labelsFromLegacyRows(legacyRows),
     checkedByName: readText(doc.checkedByName, CARGO_REPORT_LIMITS.text),
+    receiptStatus: sanitizeEnum(footerSource.receiptStatus, RECEIPT_STATUS_VALUES),
+    receivedDate: readDateKey(footerSource.receivedDate),
+    nfNumber: readText(footerSource.nfNumber, CARGO_REPORT_LIMITS.nf),
+    notes: readText(footerSource.notes, CARGO_REPORT_LIMITS.notes),
+    closedDate: isClosed ? readDateKey(doc.closedDate) : '',
+    closedById: isClosed ? readText(doc.closedById, CARGO_REPORT_LIMITS.text) : '',
+    closedByName: isClosed ? readText(doc.closedByName, CARGO_REPORT_LIMITS.text) : '',
+    closedDocumentId: isClosed ? readText(doc.closedDocumentId, 128) : '',
     updatedAt: toDateOrNull(doc.updatedAt),
     updatedByName: readText(doc.updatedByName, CARGO_REPORT_LIMITS.text),
   }

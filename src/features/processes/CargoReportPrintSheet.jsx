@@ -120,8 +120,8 @@ export function CargoReportPrintView({ sheet }) {
       <footer className="crf-print__foot">
         <div>
           <p>{`CONFERÊNCIA: ${sheet.checkedByName}`}</p>
-          <p>{`ETIQUETAGEM: ${sheet.labeledBy}`}</p>
-          <p>{`CONFECÇÃO ETIQUETA: ${sheet.labelMadeBy}`}</p>
+          <p>{`ETIQUETAGEM: ${sheet.checkedByName}`}</p>
+          <p>{`CONFECÇÃO ETIQUETA: ${sheet.checkedByName}`}</p>
         </div>
         <div>
           <p>

@@ -12,8 +12,11 @@ import {
   EMAIL_NOTIFICATION_TYPES, APP_URL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
   normalizeString, normalizeEmail, isActiveStatus, isCorporateEmail, repairTextEncoding, getUserDisplayName, buildProcessLabel, buildRecipientProcessLabel, buildFavoriteNotificationBody, buildAdminNotificationBody, buildReplyNotificationBody, buildPostReceiptNotesNotificationBody, buildCollectionStatusNotificationBody, buildFavoriteProcessUpdatedTitle, buildReceiptDivergenceNotificationBody, buildLicenseRejectedNotificationBody, buildProcessUpdateSummary, hasMeaningfulProcessChanges, hasPostReceiptContentChanged, normalizePostReceiptImages, getMailer, getEmailFromAddress, buildEmailMessage, getUserProfile, listActiveAdminUsers, listActiveFavoriteUsers, shouldNotify, createNotifications
 } from '../core/shared.js';
-import { CARGO_REPORT_NOTIFICATION_TYPE } from './cargoReportNotification.js';
-import { buildCargoReportEmail } from './cargoReportEmail.js';
+import {
+  CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE,
+  CARGO_REPORT_NOTIFICATION_TYPE,
+} from './cargoReportNotification.js';
+import { buildCargoReportConferenceEmail, buildCargoReportEmail } from './cargoReportEmail.js';
 import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { getSaoPauloDateKey } from './operationalAlerts.js';
@@ -448,6 +451,27 @@ export const sendProcessNotificationEmail = onDocumentCreated(
         text: cargoMessage.text,
         html: cargoMessage.html,
         attachments: cargoMessage.attachments,
+      })
+      return
+    }
+
+    if (normalizeString(notification.type) === CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE) {
+      // S7: e-mail proprio da conferencia da logistica (banner proprio, anexo inline por CID).
+      const conferenceMessage = buildCargoReportConferenceEmail({
+        // `title` ja e' o assunto montado pelo trigger (`buildCargoReportConferenceSubject`).
+        subject: repairTextEncoding(normalizeString(notification.title)),
+        processId: normalizeString(notification.processId),
+        recipientName: repairTextEncoding(normalizeString(recipient?.name)),
+        appUrl: APP_URL,
+      })
+
+      await mailer.sendMail({
+        from: getEmailFromAddress(),
+        to: recipientEmail,
+        subject: conferenceMessage.subject,
+        text: conferenceMessage.text,
+        html: conferenceMessage.html,
+        attachments: conferenceMessage.attachments,
       })
       return
     }

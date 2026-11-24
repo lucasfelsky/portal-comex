@@ -70,12 +70,15 @@ service firebase.storage {
     }
 
     // F18a (D4): quem pode ENVIAR cada tipo. Admin sobe qualquer tipo;
-    // logistica so `containerWash` (lavacao de conteiner).
+    // logistica so `containerWash` (lavacao de conteiner) e, desde a S7,
+    // `cargoReport` (Excel gerado no fechamento da conferencia). O estado
+    // (COMEX fechado, conferencia aberta) e' checado no metadado do Firestore,
+    // nao aqui: Storage nao le Firestore.
     function canUploadProcessDocumentType(type) {
       return isApprovedUser()
         && (
           myRole() == 'admin'
-          || (myRole() == 'logistica' && type == 'containerWash')
+          || (myRole() == 'logistica' && (type == 'containerWash' || type == 'cargoReport'))
         );
     }
 

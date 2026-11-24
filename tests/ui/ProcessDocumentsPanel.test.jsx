@@ -57,6 +57,23 @@ async function waitForDocumentsLoaded() {
   })
 }
 
+// S7: as ações secundárias do cartão (Visualizar, Baixar do Relatório, Substituir, Renomear, versão anterior e
+// Excluir) ficam no menu "Ações". Neste arquivo o painel é renderizado sem `variant`, então o menu é o ActionSheet
+// do celular (role="dialog" com a lista de ações); o menu do desktop é coberto em processDocumentsDesktop.test.jsx.
+function docRowOf(title) {
+  return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
+}
+
+async function openActions(user, rowElement) {
+  await user.click(within(rowElement).getByRole('button', { name: /^Ações de / }))
+  return within(await screen.findByRole('dialog'))
+}
+
+async function pickAction(user, rowElement, name) {
+  const sheet = await openActions(user, rowElement)
+  await user.click(sheet.getByRole('button', { name }))
+}
+
 function docBl(overrides = {}) {
   return {
     id: 'd1',
@@ -198,7 +215,15 @@ describe('ProcessDocumentsPanel — (d) logística', () => {
     // e' o UNICO "Enviar" na tela (nenhum nas linhas de nivel-processo/FISPQ).
     expect(screen.getAllByRole('button', { name: 'Enviar' })).toHaveLength(1)
 
-    expect(screen.getByRole('button', { name: 'Excluir lavacao.pdf' })).toBeInTheDocument()
+    // Excluir mora no menu "Ações": só a linha do próprio documento (lavação) o oferece.
+    const user = userEvent.setup()
+    const washSheet = await openActions(user, screen.getByText(/lavacao\.pdf/, { selector: '.documents-row__meta' }).closest('.documents-row'))
+    expect(washSheet.getByRole('button', { name: 'Excluir lavacao.pdf' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    // BL do admin: a logística só baixa (botão direto) e não tem menu "Ações".
+    const blRow = screen.getByText('bl.pdf').closest('.documents-row')
+    expect(within(blRow).getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
+    expect(within(blRow).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Excluir bl.pdf' })).not.toBeInTheDocument()
   })
 })
@@ -401,29 +426,45 @@ describe('ProcessDocumentsPanel — (j) resumo e contador', () => {
 
 // (k) aria-label especifico dos botoes-icone.
 describe('ProcessDocumentsPanel — (k) aria-label dos botoes-icone', () => {
-  it('Baixar/Substituir/Excluir/Atualizar tem aria-label especifico', async () => {
+  it('Baixar (direto), Ações, Substituir/Excluir (no menu) e Atualizar tem aria-label especifico', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([docBl()])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl.pdf')).toBeInTheDocument())
 
-    expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Substituir BL/AWB' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Excluir bl.pdf' })).toBeInTheDocument()
+    const row = docRowOf('BL/AWB')
+    expect(within(row).getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Ações de BL/AWB' })).toHaveAttribute('aria-haspopup', 'dialog')
+    expect(screen.queryByRole('button', { name: 'Substituir BL/AWB' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Excluir bl.pdf' })).not.toBeInTheDocument()
+
+    const sheet = await openActions(user, row)
+    expect(sheet.getByRole('button', { name: 'Substituir BL/AWB' })).toBeInTheDocument()
+    expect(sheet.getByRole('button', { name: 'Excluir bl.pdf' })).toBeInTheDocument()
+    expect(sheet.queryByRole('button', { name: 'Baixar bl.pdf' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
     expect(screen.getByRole('button', { name: 'Atualizar lista de documentos' })).toBeInTheDocument()
   })
 })
 
 // (l) "Versão anterior" com botao Baixar.
 describe('ProcessDocumentsPanel — (l) versão anterior', () => {
-  it('exibe principal + "Versão anterior" quando ha 2 documentos no slot', async () => {
+  it('S7: a versão anterior sai do corpo do cartão e vira o item "Baixar versão anterior" do menu, com tamanho e data', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([
-      docBl({ id: 'd1', name: 'bl-v1.pdf', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      docBl({ id: 'd1', name: 'bl-v1.pdf', size: 2048, uploadedAt: '2026-09-01T10:00:00.000Z' }),
       docBl({ id: 'd2', name: 'bl-v2.pdf', uploadedAt: '2026-09-02T10:00:00.000Z' }),
     ])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl-v2.pdf')).toBeInTheDocument())
-    expect(screen.getByText(/Versão anterior: bl-v1\.pdf/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Baixar' })).toBeInTheDocument()
+
+    expect(screen.queryByText(/Versão anterior: bl-v1\.pdf/)).not.toBeInTheDocument()
+    expect(document.querySelector('.documents-row__previous')).toBeNull()
+    const sheet = await openActions(user, docRowOf('BL/AWB'))
+    const previous = sheet.getByRole('button', { name: 'Baixar versão anterior: bl-v1.pdf' })
+    expect(previous).toHaveTextContent('Baixar versão anterior')
+    expect(previous).toHaveTextContent('2 KB')
+    expect(previous).toHaveTextContent('01/09/2026')
   })
 })
 
@@ -484,7 +525,7 @@ describe('ProcessDocumentsPanel — download autenticado (L38)', () => {
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl-v2.pdf')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'Baixar' }))
+    await pickAction(user, docRowOf('BL/AWB'), 'Baixar versão anterior: bl-v1.pdf')
 
     expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'd1')
     await waitFor(() => expect(mockSaveBlobAsFile).toHaveBeenCalledWith(blob, 'bl-v1.pdf'))
@@ -505,15 +546,18 @@ describe('ProcessDocumentsPanel — (m) estado de envio', () => {
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl.pdf')).toBeInTheDocument())
 
-    const substituteButton = screen.getByRole('button', { name: 'Substituir BL/AWB' })
-    const row = substituteButton.closest('.documents-row')
+    const row = docRowOf('BL/AWB')
     const fileInput = within(row).getByDisplayValue('')
     const file = new File(['conteudo'], 'bl-v2.pdf', { type: 'application/pdf' })
     await user.upload(fileInput, file)
 
     expect(within(row).getByRole('progressbar')).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: 'Baixar bl.pdf' })).toBeDisabled()
-    expect(within(row).getByRole('button', { name: 'Substituir BL/AWB' })).toBeDisabled()
+    // O menu "Ações" segue disponível, mas Substituir e Excluir ficam desabilitados durante o envio.
+    const sheet = await openActions(user, row)
+    expect(sheet.getByRole('button', { name: 'Substituir BL/AWB' })).toBeDisabled()
+    expect(sheet.getByRole('button', { name: 'Excluir bl.pdf' })).toBeDisabled()
+    await user.keyboard('{Escape}')
 
     resolveUpload(undefined)
     await waitFor(() => expect(within(row).queryByRole('progressbar')).not.toBeInTheDocument())
@@ -529,7 +573,7 @@ describe('ProcessDocumentsPanel — excluir', () => {
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitFor(() => expect(screen.getByText('bl.pdf')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'Excluir bl.pdf' }))
+    await pickAction(user, docRowOf('BL/AWB'), 'Excluir bl.pdf')
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument()
     expect(mockDeleteProcessDocument).not.toHaveBeenCalled()
   })
@@ -720,8 +764,9 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     }
   }
 
-  async function openRenameDialog(user) {
-    await user.click(await screen.findByRole('button', { name: 'Renomear Certificado' }))
+  async function openRenameDialog(user, label = 'Certificado') {
+    const title = await screen.findByText(label, { selector: '.documents-row__label' })
+    await pickAction(user, title.closest('.documents-row'), `Renomear ${label}`)
     const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
     return { dialog, input: within(dialog).getByLabelText('Nome do documento') }
   }
@@ -731,9 +776,18 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
   })
 
   it('(r1) admin ve "Renomear" so na linha do documento adicional', async () => {
+    const user = userEvent.setup()
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await screen.findByRole('button', { name: 'Renomear Certificado' })
-    expect(screen.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+    const certificate = (await screen.findByText('Certificado', { selector: '.documents-row__label' })).closest('.documents-row')
+    const sheet = await openActions(user, certificate)
+    expect(sheet.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+    expect(sheet.getByRole('button', { name: 'Renomear Certificado' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    // A linha do BL tem o menu "Ações", mas sem "Renomear".
+    const blSheet = await openActions(user, docRowOf('BL/AWB'))
+    expect(blSheet.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
+    expect(blSheet.getByRole('button', { name: 'Excluir bl.pdf' })).toBeInTheDocument()
   })
 
   it('(r2) clicar abre o dialogo com o nome atual, maxlength 80 e foco no campo', async () => {
@@ -775,7 +829,7 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     expect(screen.getByRole('dialog', { name: 'Renomear documento' })).toBeInTheDocument()
   })
 
-  it('(r5) Esc cancela sem salvar e devolve o foco ao botao Renomear', async () => {
+  it('(r5) Esc cancela sem salvar e devolve o foco ao botao "Ações" da linha (de onde o Renomear saiu)', async () => {
     const user = userEvent.setup()
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
     await openRenameDialog(user)
@@ -784,7 +838,7 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(mockRenameAdditionalDocument).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Renomear Certificado' })).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ações de Certificado' })).toHaveFocus())
   })
 
   it('(r6) Cancelar fecha sem salvar', async () => {
@@ -826,16 +880,20 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     expect(mockListProcessDocuments).toHaveBeenCalledTimes(1)
   })
 
-  it('(r9) logistica ve o documento adicional mas nao ve "Renomear"', async () => {
+  it('(r9) logistica ve o documento adicional mas nao ve "Renomear" (nem o menu "Ações", sem nenhuma ação a oferecer)', async () => {
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={LOGISTICS_PROFILE} />)
-    await screen.findByText('Certificado', { selector: '.documents-row__label' })
+    const certificate = (await screen.findByText('Certificado', { selector: '.documents-row__label' })).closest('.documents-row')
+    expect(within(certificate).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
   })
 
   it('(r10) CONSOLIDADO: admin tambem ve "Renomear" no documento adicional', async () => {
+    const user = userEvent.setup()
     render(<ProcessDocumentsPanel process={CONSOLIDATED} profile={ADMIN_PROFILE} />)
-    await screen.findByRole('button', { name: 'Renomear Certificado' })
-    expect(screen.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+    const certificate = (await screen.findByText('Certificado', { selector: '.documents-row__label' })).closest('.documents-row')
+    const sheet = await openActions(user, certificate)
+    expect(sheet.getAllByRole('button', { name: /^Renomear/ })).toHaveLength(1)
+    expect(sheet.getByRole('button', { name: 'Renomear Certificado' })).toBeInTheDocument()
   })
 
   it('(r11) salvando: botoes desabilitados e Esc nao fecha ate concluir', async () => {
@@ -891,6 +949,7 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.queryByText('Certificado', { selector: '.documents-row__label' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Renomear/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ações de Certificado' })).not.toBeInTheDocument()
     expect(document.querySelector('.documents-live')).toHaveTextContent('O documento foi removido.')
   })
 
@@ -903,9 +962,7 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     expect(LONG_NAME.length).toBe(100)
     mockListProcessDocuments.mockResolvedValue([docBl(), docOther({ description: LONG_NAME })])
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await user.click(await screen.findByRole('button', { name: `Renomear ${LONG_NAME}` }))
-    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
-    const input = within(dialog).getByLabelText('Nome do documento')
+    const { dialog, input } = await openRenameDialog(user, LONG_NAME)
     expect(input).toHaveValue(LONG_NAME)
 
     await user.type(input, '{Enter}')
@@ -918,9 +975,7 @@ describe('ProcessDocumentsPanel — renomear documento adicional', () => {
     const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([docBl(), docOther({ description: LONG_NAME })])
     render(<ProcessDocumentsPanel process={OTHER_PROCESS} profile={ADMIN_PROFILE} />)
-    await user.click(await screen.findByRole('button', { name: `Renomear ${LONG_NAME}` }))
-    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
-    const input = within(dialog).getByLabelText('Nome do documento')
+    const { dialog, input } = await openRenameDialog(user, LONG_NAME)
 
     await user.type(input, '{Backspace}')
     await user.click(within(dialog).getByRole('button', { name: 'Salvar' }))
@@ -1203,7 +1258,7 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    await user.click(screen.getByRole('button', { name: 'Excluir new.pdf' }))
+    await pickAction(user, docRowOf('Invoice'), 'Excluir new.pdf')
     const dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
 
@@ -1222,7 +1277,7 @@ describe('ProcessDocumentsPanel — Invoice contém Packing List', () => {
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    await user.click(screen.getByRole('button', { name: 'Excluir inv.pdf' }))
+    await pickAction(user, docRowOf('Invoice'), 'Excluir inv.pdf')
     const dialog = await screen.findByRole('alertdialog')
     expect(within(dialog).getByText(/volta a ficar sem arquivo/)).toBeInTheDocument()
   })
@@ -1279,26 +1334,31 @@ describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () =
     return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
   }
 
-  it('aparece no Relatório de carga com xlsx anexado, antes do Baixar', async () => {
+  it('S7: aparece no menu "Ações" do Relatório de carga com xlsx anexado, antes do Baixar (que também está no menu)', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([docCargo()])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
     const row = rowOf('Relatório de carga')
-    const view = within(row).getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })
-    const download = within(row).getByRole('button', { name: 'Baixar FR.CMX.001.xlsx' })
-    expect(view).toHaveClass('documents-icon-button', 'ghost-button', 'ghost-button--outline')
+    expect(within(row).queryByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Baixar FR.CMX.001.xlsx' })).not.toBeInTheDocument()
+    const sheet = await openActions(user, row)
+    const view = sheet.getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })
+    const download = sheet.getByRole('button', { name: 'Baixar FR.CMX.001.xlsx' })
     expect(view.compareDocumentPosition(download) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('logística também vê o botão', async () => {
+  it('logística também vê o item', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([docCargo()])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    expect(
-      within(rowOf('Relatório de carga')).getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })
-    ).toBeInTheDocument()
+    const sheet = await openActions(user, rowOf('Relatório de carga'))
+    expect(sheet.getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' })).toBeInTheDocument()
+    // A logística não substitui nem exclui o relatório (versão oficial): só Visualizar e Baixar.
+    expect(sheet.queryByRole('button', { name: /Substituir|Excluir/ })).not.toBeInTheDocument()
   })
 
   it('NÃO aparece no BL nem na Invoice, mesmo com arquivo', async () => {
@@ -1310,6 +1370,9 @@ describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () =
     await waitForDocumentsLoaded()
 
     expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+    // BL e Invoice: Baixar direto e menu só com Substituir e Excluir (sem Visualizar).
+    expect(screen.getByRole('button', { name: 'Baixar bl.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar inv.pdf' })).toBeInTheDocument()
   })
 
   it('NÃO aparece no Relatório de carga sem arquivo', async () => {
@@ -1320,7 +1383,8 @@ describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () =
     expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
   })
 
-  it('NÃO aparece para .docx', async () => {
+  it('NÃO aparece para .docx (o menu tem Baixar, mas não Visualizar)', async () => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([
       docCargo({
         name: 'rel.docx',
@@ -1330,8 +1394,9 @@ describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () =
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    expect(screen.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Baixar rel.docx' })).toBeInTheDocument()
+    const sheet = await openActions(user, rowOf('Relatório de carga'))
+    expect(sheet.queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument()
+    expect(sheet.getByRole('button', { name: 'Baixar rel.docx' })).toBeInTheDocument()
   })
 
   it('clicar abre o diálogo e baixa o blob com (processId, docId), sem salvar arquivo', async () => {
@@ -1341,7 +1406,7 @@ describe('ProcessDocumentsPanel — Visualizar o Relatório de carga (S1)', () =
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    await user.click(screen.getByRole('button', { name: 'Visualizar FR.CMX.001.xlsx' }))
+    await pickAction(user, rowOf('Relatório de carga'), 'Visualizar FR.CMX.001.xlsx')
 
     const dialog = await screen.findByRole('dialog', { name: 'Relatório de carga' })
     expect(dialog).toBeInTheDocument()
@@ -1366,12 +1431,14 @@ describe('ProcessDocumentsPanel — Visualizar: PDF e imagem (S1)', () => {
     ['foto.jpg', 'image/jpeg'],
     ['rel.csv', 'text/csv'],
     ['rel.xls', 'application/vnd.ms-excel'],
-  ])('aparece no Relatório de carga para %s', async (name, mimeType) => {
+  ])('aparece no menu "Ações" do Relatório de carga para %s', async (name, mimeType) => {
+    const user = userEvent.setup()
     mockListProcessDocuments.mockResolvedValue([docCargoOf(name, mimeType)])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
-    expect(within(rowOf('Relatório de carga')).getByRole('button', { name: `Visualizar ${name}` })).toBeInTheDocument()
+    const sheet = await openActions(user, rowOf('Relatório de carga'))
+    expect(sheet.getByRole('button', { name: `Visualizar ${name}` })).toBeInTheDocument()
   })
 
   it('NÃO aparece em BL e Invoice, mesmo com PDF/imagem/xlsx, nem para .docx no Relatório de carga', async () => {
@@ -1458,10 +1525,16 @@ describe.each(READER_ROLES)('ProcessDocumentsPanel — modo leitura (%s)', (role
     expect(mockListProcessDocuments).toHaveBeenCalledWith('p1', { types: ['cargoReport', 'coaOriginal'] })
     const labels = Array.from(document.querySelectorAll('.documents-row__label')).map((node) => node.textContent)
     expect(labels).toEqual(['Relatório de carga', 'COA Original'])
-    expect(screen.getByRole('button', { name: 'Baixar carga.pdf' })).toBeInTheDocument()
+    // COA Original: Baixar direto. Relatório de carga: Baixar e Visualizar (S1) no menu "Ações".
     expect(screen.getByRole('button', { name: 'Baixar coa.pdf' })).toBeInTheDocument()
-    // Visualizar (S1) continua disponivel no Relatorio de carga
-    expect(screen.getByRole('button', { name: 'Visualizar carga.pdf' })).toBeInTheDocument()
+    const user = userEvent.setup()
+    const sheet = await openActions(user, docRowOf('Relatório de carga'))
+    expect(sheet.getByRole('button', { name: 'Baixar carga.pdf' })).toBeInTheDocument()
+    expect(sheet.getByRole('button', { name: 'Visualizar carga.pdf' })).toBeInTheDocument()
+    expect(sheet.queryByRole('button', { name: /Substituir|Excluir|Renomear/ })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    // COA Original sem nenhuma outra ação: sem menu "Ações".
+    expect(within(docRowOf('COA Original')).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
   })
 
   it('sem Enviar/Substituir/Excluir/Renomear, sem adicionar outro e sem resumo/badge de pendente', async () => {

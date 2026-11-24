@@ -35,6 +35,29 @@ const LABEL_FIELDS = [
 
 const NUMERIC_FIELDS = new Set(['quantityKg', 'packageWeightKg'])
 
+// S7: etiqueta WMS/SQ sempre em MAIÚSCULAS (o estado é a verdade; sem `text-transform` em CSS). Escreve o valor
+// convertido no próprio campo ANTES de o React ver o novo estado e restaura a seleção: com o DOM já igual ao
+// estado, o React não mexe no valor e o cursor não pula para o fim ao editar no meio do texto. Durante a
+// composição (IME, acento morto) repassa o valor cru; `onCompositionEnd` e `onBlur` reaplicam a conversão.
+function handleUpperChange(event, commit) {
+  const input = event.target
+  const value = input.value
+  if (event.nativeEvent?.isComposing) {
+    commit(value)
+    return
+  }
+  const upper = value.toLocaleUpperCase('pt-BR')
+  if (upper !== value) {
+    const start = input.selectionStart
+    const end = input.selectionEnd
+    input.value = upper
+    if (typeof start === 'number' && typeof end === 'number') {
+      input.setSelectionRange(Math.min(start, upper.length), Math.min(end, upper.length))
+    }
+  }
+  commit(upper)
+}
+
 const DESKTOP_COLUMNS = [
   { key: 'po', label: 'PO / PROCESSO', width: 96 },
   { key: 'dbcorpCode', label: 'CÓD. DBCORP', width: 92 },
@@ -172,10 +195,12 @@ function DesktopTable({
             value={value}
             maxLength={CARGO_REPORT_LIMITS.text}
             aria-label={`${field.label} da linha ${index + 1}`}
-            onChange={(event) => onChangeLabel(row.id, field.key, event.target.value)}
+            onChange={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, field.key, next))}
+            onCompositionEnd={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, field.key, next))}
+            onBlur={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, field.key, next))}
           />
         ) : (
-          <span className="crf-text">{value || '—'}</span>
+          <span className="crf-text">{value.toLocaleUpperCase('pt-BR') || '—'}</span>
         )}
       </td>
     )
@@ -353,14 +378,16 @@ function MobileCard({
 
   function renderLabelField({ key, label }) {
     const value = labels?.[key] ?? ''
-    if (!isConfer) return <span className="crf-text">{value || '—'}</span>
+    if (!isConfer) return <span className="crf-text">{value.toLocaleUpperCase('pt-BR') || '—'}</span>
     return (
       <input
         type="text"
         value={value}
         maxLength={CARGO_REPORT_LIMITS.text}
         aria-label={`${label} da linha ${rowNumber}`}
-        onChange={(event) => onChangeLabel(row.id, key, event.target.value)}
+        onChange={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, key, next))}
+        onCompositionEnd={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, key, next))}
+        onBlur={(event) => handleUpperChange(event, (next) => onChangeLabel(row.id, key, next))}
       />
     )
   }

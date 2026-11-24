@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import Icon from './Icon'
 
 // C12 (auditoria mobile F14): bottom sheet com lista de opções, estilo iOS.
-// Genérico — recebe `options` [{ value, label, disabled? }], a `value`
+// Genérico — recebe `options` [{ value, label, disabled?, ariaLabel?, icon?, hint?, destructive?,
+// separatorBefore? }] (os 5 últimos são opcionais: ícone à esquerda, linha de apoio, ação destrutiva em
+// vermelho e separador antes da opção; usados pelo menu "Ações" dos documentos), a `value`
 // selecionada e callbacks. Não é acoplado a <select>; o SelectField é quem
 // liga isso ao form. Fecha por: tocar numa opção, tocar no backdrop, botão
 // "Cancelar" ou tecla Esc. Foco vai pra opção ativa ao abrir (a11y).
@@ -59,20 +62,34 @@ export default function ActionSheet({
           {options.map((option) => {
             const isActive = String(option.value) === String(value)
             return (
-              <li key={String(option.value)}>
-                <button
-                  ref={isActive ? activeRef : null}
-                  type="button"
-                  className={`action-sheet__option${isActive ? ' action-sheet__option--active' : ''}`}
-                  disabled={option.disabled}
-                  onClick={() => onSelect(option.value)}
-                >
-                  <span>{option.label}</span>
-                  {isActive ? (
-                    <span className="action-sheet__check" aria-hidden="true">✓</span>
-                  ) : null}
-                </button>
-              </li>
+              <Fragment key={String(option.value)}>
+                {option.separatorBefore ? <li className="action-sheet__sep" role="separator" /> : null}
+                <li>
+                  <button
+                    ref={isActive ? activeRef : null}
+                    type="button"
+                    className={`action-sheet__option${isActive ? ' action-sheet__option--active' : ''}${option.destructive ? ' action-sheet__option--danger' : ''}`}
+                    disabled={option.disabled}
+                    aria-label={option.ariaLabel}
+                    onClick={() => onSelect(option.value)}
+                  >
+                    {option.icon || option.hint ? (
+                      <span className="as-opt">
+                        {option.icon ? <Icon name={option.icon} size={20} /> : null}
+                        <span>
+                          {option.label}
+                          {option.hint ? <small>{option.hint}</small> : null}
+                        </span>
+                      </span>
+                    ) : (
+                      <span>{option.label}</span>
+                    )}
+                    {isActive ? (
+                      <span className="action-sheet__check" aria-hidden="true">✓</span>
+                    ) : null}
+                  </button>
+                </li>
+              </Fragment>
             )
           })}
         </ul>
