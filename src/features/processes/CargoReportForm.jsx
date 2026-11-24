@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import EmptyState from '../../components/EmptyState'
 import Icon from '../../components/Icon'
@@ -11,6 +11,7 @@ import {
 } from '../../services/cargoReportRepository'
 import { formatDateTime } from '../../utils/dateFormat'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
+import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
 import {
   CARGO_REPORT_CONFLICT_CODE,
@@ -31,7 +32,9 @@ import {
   formatCargoReportTitle,
   fromCargoReportDoc,
   fromConferenceDoc,
+  isCargoReportRowEmpty,
 } from './cargoReportFormModel'
+import { applyCargoReportImport } from './cargoReportImport'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
 // COMEX (admin) preenche e salva rascunho; a logística só marca o OK? de cada linha e informa
@@ -148,6 +151,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const [feedback, setFeedback] = useState(null)
   const [fieldErrors, setFieldErrors] = useState({})
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  const importInputRef = useRef(null)
 
   useEffect(() => {
     if (!processId || !canOpen) return undefined
@@ -219,6 +225,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const isDirty = canEdit ? draftDirty || conferenceDirty : conferenceDirty
   const canSave = canEdit ? isDirty || isNew : isDirty
   const isLimitReached = rows.length >= CARGO_REPORT_MAX_ROWS
+  const canImport = canEdit && form?.status !== 'concluido'
 
   function patchForm(patch) {
     setForm((current) => ({ ...current, ...patch }))
@@ -255,6 +262,25 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       okByRowId: { ...current.okByRowId, [rowId]: current.okByRowId?.[rowId] !== true },
     }))
     setFeedback(null)
+  }
+
+  function handleImportFileChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setImportFile(file)
+    setIsImportOpen(true)
+  }
+
+  // Só troca as linhas (e o tipo de carga) na tela: gravar continua sendo o "Salvar rascunho".
+  function handleApplyImport(result) {
+    setForm((current) => applyCargoReportImport(current, result))
+    setFieldErrors({})
+    setIsImportOpen(false)
+    setFeedback({
+      kind: 'success',
+      text: `Planilha importada: ${plural(result.rows.length, 'linha', 'linhas')}. Confira e clique em "Salvar rascunho" para gravar.`,
+    })
   }
 
   function describeSaveError(error, kind) {
@@ -667,6 +693,26 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
               Você marca o OK? e informa quem conferiu. As demais colunas são só do COMEX.
             </span>
           ) : null}
+          {canImport ? (
+            <>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                hidden
+                aria-label="Planilha .xlsx do Relatório de Carga"
+                onChange={handleImportFileChange}
+              />
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isSaving}
+                onClick={() => importInputRef.current?.click()}
+              >
+                Importar de planilha
+              </button>
+            </>
+          ) : null}
         </div>
         <div className="r">
           {canEdit ? (
@@ -695,6 +741,18 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           )}
         </div>
       </div>
+
+      {canImport ? (
+        <CargoReportImportDialog
+          open={isImportOpen}
+          file={importFile}
+          catalog={catalog}
+          currentRowCount={rows.filter((row) => !isCargoReportRowEmpty(row)).length}
+          onChooseAnother={() => importInputRef.current?.click()}
+          onClose={() => setIsImportOpen(false)}
+          onApply={handleApplyImport}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={isLeaveOpen}

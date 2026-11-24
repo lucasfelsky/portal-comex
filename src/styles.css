@@ -24324,3 +24324,112 @@ table.crf {
 .crf-wrap .success-banner {
   margin-bottom: 0;
 }
+
+/* S5 do Relatório de Carga: diálogo Importar de planilha (cri-) */
+.cri-dialog {
+  max-width: 860px;
+}
+
+.cri-intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+}
+
+.cri-drop {
+  padding: 18px 20px;
+  border: 2px dashed var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.cri-drop b {
+  color: var(--ink);
+}
+
+.cri-drop--error {
+  border-color: var(--danger);
+  background: var(--danger-50);
+}
+
+.cri-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cri-mini {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.cri-mini table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-caption);
+}
+
+.cri-mini th {
+  position: sticky;
+  top: 0;
+  padding: 7px 9px;
+  background: var(--navy);
+  color: var(--sidebar-ink);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cri-mini td {
+  padding: 6px 9px;
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.cri-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--warning-50);
+  color: var(--warning-700);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+}
+
+.cri-callout {
+  padding: 10px 14px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-50);
+  color: var(--warning-700);
+  font-size: var(--fs-footnote);
+  line-height: 1.45;
+}
+
+.cri-warnings {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.cri-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
