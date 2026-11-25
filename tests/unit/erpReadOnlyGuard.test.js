@@ -466,9 +466,13 @@ describe('erpReadOnlyGuard - escrita da referencia (PR 3)', () => {
     expect(sources['ErpReconcileModal.jsx']).not.toMatch(/erpReferenceRepository/)
   })
 
-  it('o servico exporta exatamente saveErpReferenceSnapshot e loadErpReference (e a guarda os enxerga)', () => {
+  it('o servico exporta exatamente saveErpReferenceSnapshot, loadErpReference e loadErpProcessReference (S9; a guarda os enxerga)', () => {
     expect(readServiceExports()).toEqual(expect.arrayContaining(['saveErpReferenceSnapshot', 'loadErpReference']))
-    expect(readExportsOf(serviceFile)).toEqual(['loadErpReference', 'saveErpReferenceSnapshot'])
+    expect(readExportsOf(serviceFile)).toEqual([
+      'loadErpProcessReference',
+      'loadErpReference',
+      'saveErpReferenceSnapshot',
+    ])
   })
 })
 

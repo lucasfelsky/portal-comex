@@ -1186,8 +1186,18 @@ const referenceList = (value) => (Array.isArray(value) ? value : [])
 const referenceTexts = (value) => referenceList(value).filter((entry) => typeof entry === 'string')
 const referenceNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
 
+// Tetos de texto dos campos de item que o Relatorio de Carga (S9) le do recorte.
+const REFERENCE_ITEM_SQ_CODE_MAX = 32
+const REFERENCE_ITEM_SUPPLIER_REF_MAX = 200
+const REFERENCE_ITEM_ID_MAX = 40
+
+// Texto de item: so' string (numero/objeto vira ''), espacos limpos, cortado no
+// teto e limpo de novo (o corte pode deixar espaco no fim: assim e' idempotente).
+const referenceItemText = (value, max) => cleanCell(cleanCell(referenceText(value)).slice(0, max))
+
 // Recorte do embarque que a referencia guarda: SO' o que `compareProcess` le
-// (nada de linha da planilha, item/NCM/codigo SQ, rastreio nem financeiro).
+// mais, por item, codigo SQ, ref. do fornecedor e ItemPedCpId para o Relatorio
+// de Carga (S9); continua sem linha da planilha, NCM, rastreio nem financeiro.
 // Defensivo e idempotente: aceita o embarque agrupado E o recorte vindo do
 // Firestore; campo ausente ou de tipo errado vira '', [] ou null, nunca
 // `undefined`. E' o unico normalizador (o diff ao vivo tambem passa por ele).
@@ -1218,6 +1228,9 @@ export function toErpReferenceShipment(shipment) {
         commercialName: referenceText(item.commercialName),
         pedido: referenceText(item.pedido),
         quantityKg: referenceNumber(item.quantityKg),
+        sqCode: referenceItemText(item.sqCode, REFERENCE_ITEM_SQ_CODE_MAX),
+        supplierRef: referenceItemText(item.supplierRef, REFERENCE_ITEM_SUPPLIER_REF_MAX),
+        itemId: referenceItemText(item.itemId, REFERENCE_ITEM_ID_MAX),
       })),
     transport: {
       etd: referenceText(transport.etd),

@@ -15,6 +15,7 @@ import {
   estimateErpHintBytes,
   planErpReferenceBatches,
 } from '../features/erp/erpReference'
+import { toErpReferenceShipment } from '../features/erp/reconcileErp'
 import { auth, firestore, isFirebaseConfigured } from '../lib/firebase'
 import { createAuditEvent } from './auditRepository'
 
@@ -194,4 +195,37 @@ export async function loadErpReference() {
     hintsByProcessId[item.id] = { snapshotId: data.snapshotId, matchRule: data.matchRule, shipment: data.shipment }
   }
   return { snapshot, hintsByProcessId }
+}
+
+// Referencia de UM processo (Relatorio de Carga, S9): `latest` + o hint do proprio
+// processo (2 leituras, sem varrer os demais hints). So' admin chama (rules).
+// -> { snapshot: { snapshotId, updatedAtMs }, hint: { snapshotId, matchRule, shipment } | null, stale } | null
+// `null` sem Firebase ou sem `latest`. `hint = null` quando o processo nao tem
+// hint (nao casou com o ERP) ou quando ele e' de OUTRO snapshot (`stale = true`:
+// importacao interrompida ou concorrente; o hint velho nao serve de fonte).
+// `shipment` passa por `toErpReferenceShipment` (hint antigo vira '' nos campos novos).
+export async function loadErpProcessReference(processId) {
+  if (!isFirebaseConfigured || !firestore) return null
+  const id = typeof processId === 'string' ? processId.trim() : ''
+  if (id === '') return null
+
+  const latestSnapshot = await getDoc(doc(firestore, ERP_SNAPSHOTS_COLLECTION, ERP_REFERENCE_LATEST_ID))
+  if (!latestSnapshot.exists()) return null
+  const latest = latestSnapshot.data()
+  const snapshotId = typeof latest?.snapshotId === 'string' ? latest.snapshotId : ''
+  if (snapshotId === '') return null
+  const snapshot = {
+    snapshotId,
+    updatedAtMs: typeof latest.updatedAt?.toMillis === 'function' ? latest.updatedAt.toMillis() : null,
+  }
+
+  const hintSnapshot = await getDoc(doc(firestore, ERP_PROCESS_HINTS_COLLECTION, id))
+  if (!hintSnapshot.exists()) return { snapshot, hint: null, stale: false }
+  const data = hintSnapshot.data()
+  if (data?.snapshotId !== snapshotId) return { snapshot, hint: null, stale: true }
+  return {
+    snapshot,
+    hint: { snapshotId, matchRule: data.matchRule, shipment: toErpReferenceShipment(data.shipment) },
+    stale: false,
+  }
 }

@@ -107,14 +107,16 @@ const RECORTE_KEYS = [
 ]
 
 describe('toErpReferenceShipment - recorte do embarque', () => {
-  it('chaves exatas em todos os niveis (12 no topo, 4 por pedido, 3 por item, 8 no transporte, 3 no navio)', () => {
+  it('chaves exatas em todos os niveis (12 no topo, 4 por pedido, 6 por item, 8 no transporte, 3 no navio)', () => {
     const result = runScenario()
     expect(result.matched.length).toBeGreaterThanOrEqual(3)
     for (const entry of result.matched) {
       const recorte = entry.referenceShipment
       expect(Object.keys(recorte).sort()).toEqual(RECORTE_KEYS)
       for (const order of recorte.orders) expect(Object.keys(order).sort()).toEqual(['exporter', 'pedido', 'poBase', 'poRef'])
-      for (const item of recorte.items) expect(Object.keys(item).sort()).toEqual(['commercialName', 'pedido', 'quantityKg'])
+      for (const item of recorte.items) expect(Object.keys(item).sort()).toEqual([
+        'commercialName', 'itemId', 'pedido', 'quantityKg', 'sqCode', 'supplierRef',
+      ])
       expect(Object.keys(recorte.transport).sort()).toEqual([
         'blAwb', 'destination', 'diDate', 'diNumber', 'eta', 'etd', 'origin', 'vessel',
       ])
@@ -129,7 +131,7 @@ describe('toErpReferenceShipment - recorte do embarque', () => {
   it('sem dado financeiro, sem campos de origem da planilha e sem undefined (varredura recursiva)', () => {
     const result = runScenario()
     const FORBIDDEN_KEYS = [
-      'rowNumbers', 'itemId', 'sqCode', 'ncm', 'tracking', 'etaFinal', 'active', 'concludedByNf', 'nfDate',
+      'rowNumbers', 'ncm', 'tracking', 'etaFinal', 'active', 'concludedByNf', 'nfDate',
     ]
     for (const entry of result.matched) {
       const json = JSON.stringify(entry.referenceShipment)
@@ -187,12 +189,96 @@ describe('toErpReferenceShipment - recorte do embarque', () => {
     expect(messy.kind).toBe('')
     expect(messy.stage).toBeNull()
     expect(messy.orders).toEqual([])
-    expect(messy.items).toEqual([{ commercialName: 'RESINA', pedido: '', quantityKg: null }])
+    expect(messy.items).toEqual([
+      { commercialName: 'RESINA', pedido: '', quantityKg: null, sqCode: '', supplierRef: '', itemId: '' },
+    ])
     expect(messy.statuses).toEqual(['EMBARCOU'])
     expect(messy.transport.eta).toBe('')
     expect(messy.transport.vessel).toEqual({ name: '', raw: '', voyage: '' })
     expect(messy.conflicts).toEqual([{ field: 'eta', values: ['2026-10-06'] }])
     walk(messy, (value, pathParts) => expect(value, pathParts.join('.')).not.toBeUndefined())
+  })
+
+  it('S9: o item do recorte leva Cod. SQ, Ref. fornecedor e ItemPedCpId vindos da planilha', () => {
+    const rows = [
+      makeLooseRow({
+        itemId: 'IT-9001', pedido: 9036, poRef: 'BETA SEA 904-26', commercialName: 'RESINA OMEGA',
+        sqCode: 'SQ-0042', supplierRef: 'OMEGA RESIN 25KG', quantityKg: 4500,
+      }),
+      makeLooseRow({
+        itemId: 'IT-9002', pedido: 9036, poRef: 'BETA SEA 904-26', commercialName: 'ACIDO PSI',
+        sqCode: 'SQ-0077', supplierRef: 'PSI ACID', quantityKg: 800,
+      }),
+    ]
+    const recorte = entryOf(run({ rows, processes: [portal()] }), 'p-1').referenceShipment
+    expect(recorte.items).toEqual([
+      { commercialName: 'ACIDO PSI', pedido: '9036', quantityKg: 800, sqCode: 'SQ-0077', supplierRef: 'PSI ACID', itemId: 'IT-9002' },
+      { commercialName: 'RESINA OMEGA', pedido: '9036', quantityKg: 4500, sqCode: 'SQ-0042', supplierRef: 'OMEGA RESIN 25KG', itemId: 'IT-9001' },
+    ])
+    expect(toErpReferenceShipment(recorte)).toEqual(recorte)
+    expect(toErpReferenceShipment(toErpReferenceShipment(recorte))).toEqual(recorte)
+  })
+
+  it('S9: os 3 campos novos sao cortados em 32 / 200 / 40 caracteres e o corte e idempotente', () => {
+    const clipped = toErpReferenceShipment({
+      items: [{ commercialName: 'RESINA', sqCode: 'S'.repeat(40), supplierRef: 'R'.repeat(260), itemId: 'I'.repeat(60) }],
+    }).items[0]
+    expect(clipped.sqCode).toBe('S'.repeat(32))
+    expect(clipped.supplierRef).toBe('R'.repeat(200))
+    expect(clipped.itemId).toBe('I'.repeat(40))
+    // Corte que cai logo depois de um espaco: sem espaco no fim, e idempotente.
+    const edge = toErpReferenceShipment({ items: [{ sqCode: `${'A'.repeat(31)} BBB` }] }).items[0]
+    expect(edge.sqCode).toBe('A'.repeat(31))
+    expect(toErpReferenceShipment({ items: [edge] }).items[0]).toEqual(edge)
+    // Espacos sobrando e NBSP sao limpos.
+    expect(toErpReferenceShipment({ items: [{ supplierRef: '  OMEGA    RESIN ' }] }).items[0].supplierRef).toBe('OMEGA RESIN')
+  })
+
+  it('S9: numero, objeto, lista e null no lugar do texto viram "" (nunca viram texto)', () => {
+    const item = toErpReferenceShipment({
+      items: [
+        { sqCode: 4200, supplierRef: { a: 1 }, itemId: 9001 },
+        { sqCode: null, supplierRef: ['x'], itemId: true },
+      ],
+    }).items
+    for (const entry of item) expect(entry).toMatchObject({ sqCode: '', supplierRef: '', itemId: '' })
+  })
+
+  it('S9: recorte antigo (sem os campos novos) continua legivel e devolve "" nos 3', () => {
+    const old = toErpReferenceShipment({ items: [{ commercialName: 'RESINA', pedido: '9000', quantityKg: 10 }] })
+    expect(old.items).toEqual([
+      { commercialName: 'RESINA', pedido: '9000', quantityKg: 10, sqCode: '', supplierRef: '', itemId: '' },
+    ])
+  })
+
+  it('S9: pedido em 2 embarques: cada recorte leva so os itens do proprio embarque', () => {
+    const rows = [
+      makeLooseRow({ itemId: 'E1-1', pedido: 9500, poRef: 'BETA SEA 904-26', refEmbarque: 'FCL - CFR HAMBURG', sqCode: 'SQ-1' }),
+      makeLooseRow({ itemId: 'E2-1', pedido: 9500, poRef: 'BETA SEA 904-26', refEmbarque: 'AIR - EXW SHANGHAI', sqCode: 'SQ-2', commercialName: 'ACIDO PSI' }),
+    ]
+    const result = run({ rows, processes: [portal({ processNumber: '9500' })] })
+    const ids = result.matched.flatMap((entry) => entry.referenceShipment.items.map((item) => item.itemId))
+    // Nenhum item aparece em dois recortes.
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const entry of result.matched) {
+      for (const item of entry.referenceShipment.items) expect(['E1-1', 'E2-1']).toContain(item.itemId)
+    }
+  })
+
+  it('S9: com os campos novos preenchidos, o recorte segue sem nenhuma sentinela financeira', () => {
+    const rows = buildScenarioLooseRows().map((row, index) => ({
+      ...row,
+      sqCode: `SQ-${index}`,
+      supplierRef: `REF FORNECEDOR ${index}`,
+    }))
+    const result = run({ rows, processes: buildScenarioPortalProcesses() })
+    expect(result.matched.length).toBeGreaterThanOrEqual(3)
+    for (const entry of result.matched) {
+      const json = JSON.stringify(entry.referenceShipment)
+      for (const sentinel of FINANCIAL_SENTINEL_STRINGS) expect(json).not.toContain(sentinel)
+    }
+    const scanned = result.matched.flatMap((entry) => entry.referenceShipment.items)
+    expect(scanned.some((item) => item.sqCode !== '')).toBe(true)
   })
 })
 
@@ -507,6 +593,23 @@ describe('buildErpReferencePayload', () => {
       expect(payload.skipped, reason).toEqual([{ processId: 'p-1', reason }])
       expect(payload.counts.hintsSkipped).toBe(1)
     }
+  })
+
+  it('S9: 300 itens com Cod. SQ (32), Ref. fornecedor (200) e ItemPedCpId (40) no teto cabem em maxHintBytes', () => {
+    const full = (index) => ({
+      commercialName: `RESINA ${'N'.repeat(60)} ${index}`,
+      pedido: '9000',
+      quantityKg: 1000.5,
+      sqCode: 'S'.repeat(32),
+      supplierRef: 'R'.repeat(200),
+      itemId: 'I'.repeat(40),
+    })
+    const payload = buildErpReferencePayload(resultWith([matchedEntry('p-1', shipment({ items: many(300, full) }))]))
+    expect(payload.skipped).toEqual([])
+    expect(payload.hints).toHaveLength(1)
+    expect(payload.hints[0].shipment.items).toHaveLength(300)
+    expect(JSON.stringify(payload.hints[0].shipment).length).toBeLessThan(ERP_HINT_LIMITS.maxHintBytes)
+    expect(estimateErpHintBytes(payload.hints[0])).toBeLessThan(ERP_HINT_LIMITS.maxHintBytes * 2)
   })
 
   it('hint acima de 200.000 bytes pula por "tamanho" (sem truncar) e o limite exato passa', () => {
