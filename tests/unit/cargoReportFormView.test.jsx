@@ -2564,6 +2564,8 @@ describe('S9-B: menu ⋯ por linha (admin, rascunho aberto)', () => {
     expect(dialog).toHaveTextContent(/total 12\.500 kg\./)
     expect(within(dialog).getByRole('status')).toHaveTextContent('Soma dos lotes: 12.500 kg de 12.500 kg. Fecha certinho.')
 
+    // o Modal foca o "Lote 1" com um pequeno atraso (setTimeout); digitar antes disso deixava o foco pular no meio da digitação (instável no CI)
+    await waitFor(() => expect(within(dialog).getByLabelText('Lote 1')).toHaveFocus())
     // soma errada bloqueia
     const lastQty = within(dialog).getByLabelText('Quantidade do lote 3')
     await user.clear(lastQty)
