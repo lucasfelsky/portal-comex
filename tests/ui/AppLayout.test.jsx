@@ -266,8 +266,8 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       return within(container.querySelector('.mobile-bottom-nav'))
     }
 
-    it('tem os 5 itens novos: Início, Chegadas, Notícias, Avisos e Menu', () => {
-      const { container } = renderWithRole('user')
+    it.each(['user', 'admin'])('%s: tem os 5 itens: Início, Chegadas, Notícias, Avisos e Menu', (role) => {
+      const { container } = renderWithRole(role)
       const nav = bottomNav(container)
 
       expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
@@ -275,6 +275,27 @@ describe('AppLayout (IntelliQuote admin-only)', () => {
       expect(nav.getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
       expect(nav.getByRole('link', { name: 'Avisos' })).toHaveAttribute('href', '/notifications')
       expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
+      expect(nav.queryByRole('link', { name: /Conferência/ })).not.toBeInTheDocument()
+    })
+
+    // S11-H: pra logística a Conferência entra no lugar de Notícias (mesma posição, 3ª); Notícias vai pro Menu.
+    it('logística: Início, Chegadas, Conferência, Avisos e Menu (sem Notícias na barra)', () => {
+      const { container } = renderWithRole('logistica')
+      const nav = bottomNav(container)
+
+      expect(nav.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+        '/',
+        '/processos',
+        '/conferencia',
+        '/notifications',
+        '/menu',
+      ])
+      expect(nav.getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/')
+      expect(nav.getByRole('link', { name: 'Chegadas' })).toHaveAttribute('href', '/processos')
+      expect(nav.getByRole('link', { name: 'Conferência' })).toHaveAttribute('href', '/conferencia')
+      expect(nav.getByRole('link', { name: 'Avisos' })).toHaveAttribute('href', '/notifications')
+      expect(nav.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/menu')
+      expect(nav.queryByRole('link', { name: 'Notícias' })).not.toBeInTheDocument()
     })
 
     it('não tem mais Suporte nem toggle de drawer (migraram pra tela Menu)', () => {
@@ -1628,10 +1649,10 @@ describe('AppLayout (aba Conferência no celular)', () => {
     expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Relatório de Carga')
   })
 
-  it.each(['logistica', 'admin'])('%s no celular: o contador liga e o "Menu" mostra o número no badge', (role) => {
+  it('admin no celular: o contador liga e o "Menu" mostra o número no badge (Notícias segue na barra)', () => {
     stubViewport(720)
     mockConferenceCount.mockImplementation(() => 3)
-    const { container } = renderAt('/', role)
+    const { container } = renderAt('/', 'admin')
     expect(mockConferenceCount).toHaveBeenCalledWith({ enabled: true })
     const nav = container.querySelector('.mobile-bottom-nav')
     const link = within(nav).getByRole('link', { name: 'Menu, 3 conferências para conferir' })
@@ -1639,12 +1660,29 @@ describe('AppLayout (aba Conferência no celular)', () => {
     const badge = link.querySelector('.mobile-bottom-nav__badge')
     expect(badge).toHaveTextContent('3')
     expect(badge).toHaveAttribute('aria-hidden', 'true')
+    expect(within(nav).getByRole('link', { name: 'Notícias' })).toHaveAttribute('href', '/news')
+    expect(within(nav).queryByRole('link', { name: /^Conferência/ })).not.toBeInTheDocument()
   })
 
-  it('1 conferência: nome acessível no singular', () => {
+  it('logística no celular: o contador liga e a aba "Conferência" mostra o número; o "Menu" fica sem badge', () => {
+    stubViewport(720)
+    mockConferenceCount.mockImplementation(() => 3)
+    const { container } = renderAt('/', 'logistica')
+    expect(mockConferenceCount).toHaveBeenCalledWith({ enabled: true })
+    const nav = container.querySelector('.mobile-bottom-nav')
+    const tab = within(nav).getByRole('link', { name: 'Conferência, 3 para conferir' })
+    expect(tab).toHaveAttribute('href', '/conferencia')
+    const badge = tab.querySelector('.mobile-bottom-nav__badge')
+    expect(badge).toHaveTextContent('3')
+    expect(badge).toHaveAttribute('aria-hidden', 'true')
+    const menu = within(nav).getByRole('link', { name: 'Menu' })
+    expect(menu.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+  })
+
+  it('1 conferência (admin): nome acessível do "Menu" no singular', () => {
     stubViewport(720)
     mockConferenceCount.mockImplementation(() => 1)
-    const { container } = renderAt('/', 'logistica')
+    const { container } = renderAt('/', 'admin')
     expect(
       within(container.querySelector('.mobile-bottom-nav')).getByRole('link', {
         name: 'Menu, 1 conferência para conferir',
@@ -1652,12 +1690,17 @@ describe('AppLayout (aba Conferência no celular)', () => {
     ).toBeInTheDocument()
   })
 
-  it('sem número (carregando, erro ou zero): "Menu" sem badge e sem contagem no nome', () => {
+  it.each([0, null])('sem número (%s: carregando, erro ou zero): "Menu" sem badge e sem contagem no nome', (value) => {
     stubViewport(720)
-    mockConferenceCount.mockImplementation(() => 0)
-    const { container } = renderAt('/', 'logistica')
-    const link = within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Menu' })
-    expect(link.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+    mockConferenceCount.mockImplementation(() => value)
+    for (const role of ['admin', 'logistica']) {
+      const { container, unmount } = renderAt('/', role)
+      const nav = container.querySelector('.mobile-bottom-nav')
+      const link = within(nav).getByRole('link', { name: 'Menu' })
+      expect(link.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+      expect(nav.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+      unmount()
+    }
   })
 
   it.each(['user', 'tecnico', 'faturamento', 'compras', 'viewer'])('%s: o contador não liga', (role) => {

@@ -1,4 +1,5 @@
-// S9-F do Relatório de Carga: entrada "Conferência" na tela Menu (celular), só para logística e admin, com o contador.
+// S9-F/S11-H do Relatório de Carga: no Menu (celular) o admin tem a linha "Conferência" com o contador; a logística tem a
+// Conferência na barra de baixo e, no Menu, a linha "Notícias".
 // O contador (cache da lista) é espiado; a carga dele tem testes próprios.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
@@ -61,11 +62,11 @@ afterEach(() => {
   window.matchMedia = originalMatchMedia
 })
 
-describe('Menu: entrada Conferência', () => {
-  it('logística no celular: linha com subtítulo, contador e nome acessível com o número', () => {
+describe('Menu: entrada Conferência (admin) e Notícias (logística)', () => {
+  it('admin no celular: linha com subtítulo, contador e nome acessível com o número', () => {
     stubViewport(390)
     mockCount.mockImplementation(() => 4)
-    const { container } = renderMenu('logistica')
+    const { container } = renderMenu('admin')
     expect(mockCount).toHaveBeenCalledWith({ enabled: true })
     const row = screen.getByRole('button', { name: 'Conferência, 4 para conferir' })
     expect(row).toHaveClass('m-rowi')
@@ -78,11 +79,11 @@ describe('Menu: entrada Conferência', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/conferencia')
   })
 
-  it('sem número (carregando, erro ou zero): sem contador e sem aria-label', () => {
+  it('admin sem número (carregando, erro ou zero): sem contador e sem aria-label', () => {
     stubViewport(390)
     for (const value of [null, 0]) {
       mockCount.mockImplementation(() => value)
-      const { container, unmount } = renderMenu('logistica')
+      const { container, unmount } = renderMenu('admin')
       const row = screen.getByRole('button', { name: /^Conferência/ })
       expect(row).not.toHaveAttribute('aria-label')
       expect(row.querySelector('.m-rowi__count')).toBeNull()
@@ -91,7 +92,7 @@ describe('Menu: entrada Conferência', () => {
     }
   })
 
-  it('admin: a linha vem antes do grupo "Administração"', () => {
+  it('admin: a linha vem antes do grupo "Administração" e Notícias não está no Menu (fica na barra)', () => {
     stubViewport(390)
     mockCount.mockImplementation(() => 2)
     const { container } = renderMenu('admin')
@@ -101,20 +102,46 @@ describe('Menu: entrada Conferência', () => {
     expect(row.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // As 7 seções do admin continuam no grupo que segue o título.
     expect(within(container.querySelector('.m-gh + .m-group')).getAllByRole('button')).toHaveLength(7)
+    expect(screen.queryByRole('button', { name: /^Notícias/ })).not.toBeInTheDocument()
   })
 
-  it.each(['user', 'tecnico', 'faturamento', 'compras', 'viewer'])('%s: sem linha e sem contador', (role) => {
+  it('logística no celular: linha "Notícias" (comunicados da operação) que navega para /news', () => {
     stubViewport(390)
-    renderMenu(role)
+    const { container } = renderMenu('logistica')
+    const row = screen.getByRole('button', { name: /^Notícias/ })
+    expect(row).toHaveClass('m-rowi')
+    expect(within(row).getByText('Comunicados da operação')).toBeInTheDocument()
+    expect(row.querySelector('.m-rowi__count')).toBeNull()
+    expect(container.querySelector('.m-rowi__chev')).not.toBeNull()
+    fireEvent.click(row)
+    expect(mockNavigate).toHaveBeenCalledWith('/news')
+  })
+
+  it('logística: sem linha "Conferência" (já está na barra de baixo) e o Menu não carrega o contador', () => {
+    stubViewport(390)
+    mockCount.mockImplementation(() => 4)
+    const { container } = renderMenu('logistica')
     expect(screen.queryByRole('button', { name: /Conferência/ })).not.toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/para conferir/)
+    expect(container.querySelector('.m-rowi__count')).toBeNull()
     expect(mockCount).toHaveBeenCalledWith({ enabled: false })
     expect(mockCount).not.toHaveBeenCalledWith({ enabled: true })
   })
 
-  it('computador (largura > 720): a linha não existe nem para a logística', () => {
-    stubViewport(1440)
-    renderMenu('logistica')
+  it.each(['user', 'tecnico', 'faturamento', 'compras', 'viewer'])('%s: sem linha, sem Notícias e sem contador', (role) => {
+    stubViewport(390)
+    renderMenu(role)
     expect(screen.queryByRole('button', { name: /Conferência/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Notícias/ })).not.toBeInTheDocument()
+    expect(mockCount).toHaveBeenCalledWith({ enabled: false })
+    expect(mockCount).not.toHaveBeenCalledWith({ enabled: true })
+  })
+
+  it.each(['logistica', 'admin'])('computador (largura > 720): %s sem linha de Conferência nem de Notícias', (role) => {
+    stubViewport(1440)
+    renderMenu(role)
+    expect(screen.queryByRole('button', { name: /Conferência/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Notícias/ })).not.toBeInTheDocument()
     expect(mockCount).not.toHaveBeenCalledWith({ enabled: true })
   })
 })
