@@ -10,6 +10,7 @@ import {
   resolveCargoRowPurchaseOrder,
   sumCargoRowsKg,
 } from './cargoReportGroups'
+import CargoReportPackagingNote from './CargoReportPackagingNote'
 import CargoReportRowMenu from './CargoReportRowMenu'
 import { readCargoRowQuantity } from './cargoReportRowOps'
 import { MarkedField, SourceLegend, SourceMark } from './CargoReportSourceMarks'
@@ -23,6 +24,8 @@ import { MarkedField, SourceLegend, SourceMark } from './CargoReportSourceMarks'
 // ficam agrupadas por PO, com cabeçalho, subtotal e "Linha nesta PO".
 // S9-C: em `edit` as células preenchidas do processo e do FUP levam a marca de origem (P, F) ou ✎ quando editadas
 // (`autofillRows`), e a Qtd que difere do item do processo mostra "Processo: X kg" (`quantityMismatch`).
+// S9-D: sob o PESO LÍQ. o tipo da embalagem (deste fornecedor / padrão do item) e, sem cadastro, "Cadastrar para
+// <fornecedor>" (`onQuickPackaging`); sair do Cód. DBCorp chama `onCodeBlur`.
 const MAX_FREE_ROWS = 3
 
 // Coluna LOTE SQ (calculada): o `<col>` acompanha o maior lote da tela; com `table-layout: fixed` uma
@@ -261,6 +264,9 @@ function DesktopTable({
   newRowIds,
   autofillRows,
   quantityMismatch,
+  supplierNameByRowId,
+  onQuickPackaging,
+  onCodeBlur,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
@@ -287,6 +293,7 @@ function DesktopTable({
       inputMode: NUMERIC_FIELDS.has(field) ? 'decimal' : undefined,
       'aria-label': `${FIELD_LABELS[field]} da linha ${index + 1}`,
       'aria-invalid': errorMessage ? true : undefined,
+      onBlur: field === 'dbcorpCode' && onCodeBlur ? () => onCodeBlur(row.id) : undefined,
     }
     if (grouped && field === 'po') {
       return marked(
@@ -392,7 +399,14 @@ function DesktopTable({
       return (
         <td key={column.key} className={`calc${info.netWeightKg === null ? ' empty' : ''}`}>
           {info.netWeightKg === null ? '—' : formatNetWeight(info.netWeightKg)}
-          {alerts.noPackaging ? <span className="hint r">Sem embalagem cadastrada</span> : null}
+          <CargoReportPackagingNote
+            packaging={info.packaging}
+            noPackaging={alerts.noPackaging}
+            code={row.dbcorpCode}
+            supplierName={supplierNameByRowId?.[row.id]}
+            showType={isEdit}
+            onRegister={isEdit && onQuickPackaging ? () => onQuickPackaging(row.id) : undefined}
+          />
         </td>
       )
     }
@@ -540,6 +554,9 @@ function MobileCard({
   isNew,
   autofillEntry,
   mismatchKg,
+  supplierName,
+  onQuickPackaging,
+  onCodeBlur,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
@@ -573,6 +590,7 @@ function MobileCard({
       inputMode: NUMERIC_FIELDS.has(field) ? 'decimal' : undefined,
       'aria-label': `${FIELD_LABELS[field]} da linha ${rowNumber}`,
       'aria-invalid': errorMessage ? true : undefined,
+      onBlur: field === 'dbcorpCode' && onCodeBlur ? () => onCodeBlur(row.id) : undefined,
     }
     return (
       <>
@@ -671,6 +689,15 @@ function MobileCard({
           <span className="crf-calc">
             {info.netWeightKg === null ? '—' : `${formatNetWeight(info.netWeightKg)} kg`}
           </span>
+          <CargoReportPackagingNote
+            packaging={info.packaging}
+            noPackaging={alerts.noPackaging}
+            code={row.dbcorpCode}
+            supplierName={supplierName}
+            showType={isEdit}
+            hideWarning
+            onRegister={isEdit && onQuickPackaging ? () => onQuickPackaging(row.id) : undefined}
+          />
         </div>
         <div className={`crf-pair${alerts.missingPackageWeight ? ' warn' : ''}`}>
           {renderLabel('packageWeightKg', 'Peso da emb.')}
@@ -726,6 +753,9 @@ export default function CargoReportItems({
   focusRequest,
   autofillRows,
   quantityMismatch,
+  supplierNameByRowId,
+  onQuickPackaging,
+  onCodeBlur,
 }) {
   const containerRef = useRef(null)
   const pendingFocusRef = useRef(false)
@@ -778,6 +808,9 @@ export default function CargoReportItems({
           newRowIds={newRowIds}
           autofillRows={autofillRows}
           quantityMismatch={quantityMismatch}
+          supplierNameByRowId={supplierNameByRowId}
+          onQuickPackaging={onQuickPackaging}
+          onCodeBlur={onCodeBlur}
         />
       </div>
     )
@@ -822,6 +855,9 @@ export default function CargoReportItems({
           <MobileCard
             autofillEntry={autofillRows?.[row.id]}
             mismatchKg={quantityMismatch?.[row.id]}
+            supplierName={supplierNameByRowId?.[row.id]}
+            onQuickPackaging={onQuickPackaging}
+            onCodeBlur={onCodeBlur}
             key={row.id}
             row={row}
             index={number - 1}

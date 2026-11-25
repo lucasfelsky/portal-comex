@@ -4511,6 +4511,131 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  // S9-D do Relatorio de Carga: embalagens por item + fornecedor (doc unico cargoReportCatalog/supplierPackaging).
+  // Admin grava (create version 1; update version atual + 1 = trava otimista); admin e logistica leem.
+  // Rules nao iteram listas: so' o shape, as contagens e o 1o elemento sao validados aqui.
+  describe('cargoReportCatalog/supplierPackaging (S9)', () => {
+    const PATH = 'cargoReportCatalog/supplierPackaging'
+    const ADMIN_UID = 'admin-1'
+    const entry = (index = 0) => ({
+      code: `AA${String(index).padStart(4, '0')}`,
+      supplierKey: 'GOOYER CHEMICALS LTD',
+      supplierName: 'Gooyer Chemicals Ltd',
+      packagingType: 'TAMBOR',
+      netWeightKg: 200,
+      packageWeightKg: index % 2 === 0 ? 9.2 : null,
+    })
+    const entries = (count) => Array.from({ length: count }, (_, index) => entry(index))
+    const valid = (overrides = {}) => {
+      const list = overrides.entries ?? entries(3)
+      return {
+        schemaVersion: 1,
+        version: 1,
+        entries: list,
+        entryCount: list.length,
+        aliases: [{ fromKey: 'GOOYER CHEMICAL CO', toKey: 'GOOYER CHEMICALS LTD' }],
+        updatedAt: serverTimestamp(),
+        updatedById: ADMIN_UID,
+        updatedByName: 'Admin',
+        ...overrides,
+      }
+    }
+    const seedDoc = (version = 1) =>
+      seed((db) => setDoc(doc(db, PATH), { ...valid({ version }), updatedAt: new Date('2026-11-01T10:00:00Z') }))
+    const roleDb = (role) =>
+      testEnv
+        .authenticatedContext(`${role}-1`, { email: `${role}@sqquimica.com`, role, status: 'Ativo', name: role })
+        .firestore()
+
+    it('admin le com o doc ausente e presente; logistica le o doc presente', async () => {
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+      await seedDoc()
+      await assertSucceeds(getDoc(doc(admin(), PATH)))
+      await assertSucceeds(getDoc(doc(logistics(), PATH)))
+    })
+
+    it('tecnico, faturamento, user aprovado e anonimo nao leem', async () => {
+      await seedDoc()
+      for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+        await assertFails(getDoc(doc(db, PATH)))
+      }
+    })
+
+    it('logistica, tecnico, faturamento, user aprovado e anonimo nao gravam', async () => {
+      const others = () => [logistics(), roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]
+      for (const db of others()) await assertFails(setDoc(doc(db, PATH), valid()))
+      await seedDoc()
+      for (const db of others()) await assertFails(setDoc(doc(db, PATH), valid({ version: 2 })))
+    })
+
+    it('admin cria com version 1 e atualiza para a versao 2; versao repetida ou pulada falha', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 2 })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid()))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 1 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ version: 3 })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ version: 2 })))
+    })
+
+    it('admin Pendente e admin com e-mail nao corporativo nao leem nem gravam', async () => {
+      await seedDoc()
+      for (const db of [admin('admin-p', { status: 'Pendente' }), admin('admin-x', { email: 'admin@gmail.com' })]) {
+        await assertFails(getDoc(doc(db, PATH)))
+        await assertFails(setDoc(doc(db, PATH), valid({ version: 2, updatedById: 'admin-p' })))
+      }
+    })
+
+    it('falham: campo extra, chave faltando, entryCount divergente e schemaVersion 2', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), { ...valid(), extra: 'x' }))
+      const missing = valid()
+      delete missing.aliases
+      await assertFails(setDoc(doc(admin(), PATH), missing))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entryCount: 4 })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ schemaVersion: 2 })))
+    })
+
+    it('lista de entradas vazia passa; 5001 entradas falha; 5000 entradas pequenas passam', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: entries(5001) })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ entries: [] })))
+      await seed((db) => deleteDoc(doc(db, PATH)))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ entries: entries(5000) })))
+    })
+
+    it('falham: entrada 0 com 5 ou 7 chaves, sem code string, com supplierKey nao-string ou nao-mapa', async () => {
+      const fiveKeys = { ...entry(0) }
+      delete fiveKeys.packageWeightKg
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: [fiveKeys, entry(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: [{ ...entry(0), extra: 1 }, entry(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: [{ ...entry(0), code: 42 }, entry(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: [{ ...entry(0), supplierKey: null }, entry(1)] })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ entries: ['AA0001'] })))
+    })
+
+    it('aliases: lista com 1000 passa; 1001 e nao-lista falham', async () => {
+      const aliases = (count) => Array.from({ length: count }, (_, index) => ({ fromKey: `A${index}`, toKey: 'B' }))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ aliases: aliases(1001) })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ aliases: 'x' })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ aliases: aliases(1000) })))
+    })
+
+    it('falham: updatedById de outro uid, updatedAt literal e updatedByName com 121 chars', async () => {
+      await assertFails(setDoc(doc(admin(), PATH), valid({ updatedById: 'outro-uid' })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ updatedAt: new Date('2026-11-01T10:00:00Z') })))
+      await assertFails(setDoc(doc(admin(), PATH), valid({ updatedByName: 'x'.repeat(121) })))
+      await assertSucceeds(setDoc(doc(admin(), PATH), valid({ updatedByName: 'x'.repeat(120) })))
+    })
+
+    it('admin NAO deleta', async () => {
+      await seedDoc()
+      await assertFails(deleteDoc(doc(admin(), PATH)))
+    })
+
+    it('itemPackaging (S2) continua igual: admin e logistica leem; outro doc de cargoReportCatalog segue negado', async () => {
+      await assertSucceeds(getDoc(doc(admin(), 'cargoReportCatalog/itemPackaging')))
+      await assertSucceeds(getDoc(doc(logistics(), 'cargoReportCatalog/itemPackaging')))
+      await assertFails(getDoc(doc(admin(), 'cargoReportCatalog/outroDoc')))
+    })
+  })
+
   // S3 do Relatorio de Carga: formulario FR.CMX.001 em 2 docs nomeados por processo.
   // `current` so' admin grava (revision = anterior + 1, trava otimista); `conference` admin e logistica
   // (coluna OK? + "Conferido por"); Tecnico/Faturamento nao leem; outros ids caem no catch-all.

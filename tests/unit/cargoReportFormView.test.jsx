@@ -39,6 +39,11 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 vi.mock('../../src/services/itemPackagingCatalogRepository', () => ({
   getItemPackagingCatalog: (...args) => mockGetCatalog(...args),
 }))
+// S9-D: cadastro por fornecedor (doc `supplierPackaging`); aqui vazio, vale o padrão do item.
+vi.mock('../../src/services/supplierPackagingCatalogRepository', () => ({
+  getSupplierPackagingCatalog: vi.fn().mockResolvedValue({ exists: false, version: 0, entries: [], entryCount: 0, aliases: [] }),
+  upsertSupplierPackagingEntry: vi.fn(),
+}))
 // S9-C: o formulário lê o FUP do processo (admin, estágio 1); aqui sem FUP, como um processo não casado com o ERP.
 vi.mock('../../src/services/erpReferenceRepository', () => ({
   loadErpProcessReference: vi.fn().mockResolvedValue(null),

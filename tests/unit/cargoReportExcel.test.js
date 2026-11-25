@@ -428,6 +428,59 @@ describe('S9-C: PO / PROCESSO = referência', () => {
   })
 })
 
+// S9-D: o peso líquido (M) sai do fornecedor da linha e o peso da emb. (N) vem do cadastro (marca C, gravado na
+// linha); só mudam VALORES de células que já existiam: nenhuma célula nova, layout e partes do modelo intactos.
+describe('S9-D: peso líquido do fornecedor e peso da embalagem do cadastro', () => {
+  const SUPPLIERS = {
+    exists: true,
+    version: 1,
+    aliases: [],
+    entries: [
+      { code: 'AD5240', supplierKey: 'ORION CHEM CO', supplierName: 'Orion Chem Co', packagingType: 'IBC', netWeightKg: 1000, packageWeightKg: 62 },
+      { code: 'ZZ9999', supplierKey: 'ORION CHEM CO', supplierName: 'Orion Chem Co', packagingType: 'BALDE', netWeightKg: 20, packageWeightKg: 0.9 },
+    ],
+  }
+  const packaging = {
+    supplierCatalog: SUPPLIERS,
+    supplierNameByRowId: { a: 'ORION CHEM CO', b: 'ORION CHEM CO', c: 'ORION CHEM CO', d: 'OUTRO', e: 'OUTRO' },
+  }
+  const withSupplier = () => {
+    const form = mockScenarioForm()
+    form.rows[0].packageWeightKg = 62 // a tara do cadastro foi gravada na linha (marca C)
+    return buildCargoReportSheet(form, { process: PROCESS, conference: MOCK_CONFERENCE, catalog: CATALOG, packaging })
+  }
+
+  it('M9 e O9 saem do fornecedor (1.000 kg, 12,5 emb.), N9 traz a tara gravada e o item só do fornecedor ganha embalagem', () => {
+    const { book } = generate(withSupplier())
+    const ws = book.Sheets['SQ QUIMICA']
+    expect(ws.M9.v).toBe(1000)
+    expect(ws.N9.v).toBe(62)
+    expect(ws.O9.f).toBe('K9/M9')
+    expect(ws.O9.v).toBe(12.5)
+    // ZZ9999 não existia na tabela Item x Emb.: com a linha do fornecedor passa a ter M e O
+    expect(ws.M11.v).toBe(20)
+    expect(ws.O11.v).toBe(40)
+    // linhas de outro fornecedor seguem o padrão do item
+    expect(ws.M12.v).toBe(5)
+  })
+
+  it('o alerta "sem embalagem" da folha segue o fornecedor da linha', () => {
+    expect(withSupplier().alerts.some((alert) => alert.code === 'ZZ9999' && alert.kind === 'noPackaging')).toBe(false)
+    expect(buildSheet().alerts.some((alert) => alert.code === 'ZZ9999' && alert.kind === 'noPackaging')).toBe(true)
+  })
+
+  it('nenhuma célula nova e nenhuma parte do modelo alterada', () => {
+    const filled = (files) =>
+      [...sheetXml(files).matchAll(/<c r="([A-Z]+\d+)"[^>/]*>(?:(?!<\/c>)[\s\S])*?<(?:v|f)>/g)].map((match) => match[1])
+    const baseline = generate(buildSheet())
+    const supplier = generate(withSupplier())
+    // M11/O11 passam a existir só porque ZZ9999 ganhou embalagem; o resto do conjunto é o mesmo
+    const extra = filled(supplier.files).filter((ref) => !filled(baseline.files).includes(ref))
+    expect(extra.sort()).toEqual(['M11', 'O11'])
+    for (const name of UNTOUCHED) expect(supplier.files[name]).toEqual(baseline.files[name])
+  })
+})
+
 describe('tipo de carga', () => {
   it('AÉREO: as 3 caixas desmarcadas, G6 = AÉREO e G7 = X', () => {
     const { book, files } = generate(buildSheet(mockScenarioForm({ cargoType: 'AEREO' })))

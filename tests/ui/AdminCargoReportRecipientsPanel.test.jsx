@@ -28,6 +28,11 @@ vi.mock('../../src/features/admin/ItemPackagingCatalogCard', () => ({
   default: () => <div data-testid="item-packaging-card" />,
 }))
 
+// Card das embalagens por item + fornecedor (S9-D) tem teste proprio (tests/unit/supplierPackagingCatalogCard.test.jsx).
+vi.mock('../../src/features/admin/SupplierPackagingCatalogCard', () => ({
+  default: () => <div data-testid="supplier-packaging-card" />,
+}))
+
 import AdminCargoReportRecipientsPanel from '../../src/features/admin/AdminCargoReportRecipientsPanel'
 
 const PROFILE = { uid: 'admin-1', name: 'Admin', email: 'admin@sqquimica.com', role: 'admin' }

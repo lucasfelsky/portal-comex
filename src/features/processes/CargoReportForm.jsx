@@ -12,6 +12,7 @@ import {
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import {
   buildAutofilledCargoReport,
+  buildCargoRegistry,
   buildCargoSources,
   describeCargoAutofillNote,
   quantityMismatchByRowId,
@@ -20,6 +21,7 @@ import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportHeaderCard from './CargoReportHeaderCard'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
+import CargoReportQuickPackagingDialog from './CargoReportQuickPackagingDialog'
 import CargoReportReceiptSection from './CargoReportReceiptSection'
 import CargoReportRefreshPanel, { CargoInfoIcon } from './CargoReportRefreshPanel'
 import CargoReportSplitDialog from './CargoReportSplitDialog'
@@ -48,7 +50,12 @@ import {
 import { orderCargoFormByPurchaseOrder, getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { applyCargoReportImport } from './cargoReportImport'
 import { formatCargoDateBr } from './cargoReportSheet'
+import { cargoPackagingContext } from './cargoSupplierPackaging'
 import useCargoReportAutofill, { fetchCargoReference } from './useCargoReportAutofill'
+import useCargoReportPackaging, {
+  SUPPLIER_CATALOG_ERROR_MESSAGE,
+  loadSupplierCatalogCached,
+} from './useCargoReportPackaging'
 import useCargoReportRowActions from './useCargoReportRowActions'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
@@ -179,6 +186,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const [savedConference, setSavedConference] = useState(EMPTY_CONFERENCE)
   const [catalog, setCatalog] = useState(null)
   const [catalogError, setCatalogError] = useState('')
+  const [supplierCatalog, setSupplierCatalog] = useState(null)
+  const [supplierCatalogFailed, setSupplierCatalogFailed] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [fieldErrors, setFieldErrors] = useState({})
@@ -189,7 +198,16 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   // S9-B/C: POs do consolidado (vazio nos demais tipos) e preenchimento automático (processo + FUP).
   const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
   const clearFeedback = useCallback(() => setFeedback(null), [])
-  const autofill = useCargoReportAutofill({ process, form, setForm, purchaseOrders, onApplied: clearFeedback })
+  const autofill = useCargoReportAutofill({
+    process,
+    form,
+    setForm,
+    purchaseOrders,
+    onApplied: clearFeedback,
+    itemCatalog: catalog,
+    supplierCatalog,
+    onSupplierCatalog: setSupplierCatalog,
+  })
   const refreshButtonRef = useRef(null)
   const wasPanelOpenRef = useRef(false)
   const isDraftNow = Boolean(canEdit && form && getCargoReportStage(form.status, savedConference.status) === CARGO_STAGE.draft)
@@ -219,18 +237,21 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       setFeedback(null)
       setFieldErrors({})
       try {
-        const [report, catalogResult] = await Promise.all([
+        const [report, catalogResult, supplierResult] = await Promise.all([
           getCargoReport(processId),
           loadCatalogCached().then(
             (data) => ({ data, error: null }),
             (error) => ({ data: null, error })
           ),
+          loadSupplierCatalogCached(),
         ])
         if (!isMounted) return
 
         // Conferência legada: etiquetas (S6) e rodapé do recebimento (S7) pré-preenchem a tela a partir do `current`.
         const savedConferenceData = fromConferenceDoc(report.conference, report.current?.rows, report.current)
         setCatalog(catalogResult.data)
+        setSupplierCatalog(supplierResult.data)
+        setSupplierCatalogFailed(Boolean(supplierResult.error))
         setCatalogError(
           catalogResult.error ? buildActionErrorMessage(CATALOG_ERROR_PREFIX, catalogResult.error) : ''
         )
@@ -255,8 +276,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           })
         } else {
           // Relatório novo: preenchido do processo e do FUP (itens só de um lado ficam na prévia, desmarcados).
+          const registry = buildCargoRegistry({
+            itemCatalog: catalogResult.data,
+            supplierCatalog: supplierResult.data,
+            process,
+            reference: referenceResult?.reference,
+          })
           const built = referenceResult
-            ? buildAutofilledCargoReport(process, buildCargoSources(process, referenceResult.reference))
+            ? buildAutofilledCargoReport(process, buildCargoSources(process, referenceResult.reference), registry)
             : { form: buildInitialCargoReport(process), pending: [] }
           const initial = orderCargoFormByPurchaseOrder(built.form, process)
           setForm(initial)
@@ -287,8 +314,23 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }, [processId, canOpen, reloadToken])
 
   const rows = useMemo(() => form?.rows ?? [], [form])
-  const derived = useMemo(() => rows.map((row) => deriveCargoReportRow(row, catalog)), [rows, catalog])
-  const alertCount = useMemo(() => countCargoReportAlerts(rows, catalog), [rows, catalog])
+  // S9-D: embalagens por item + fornecedor (peso líquido por fornecedor, tara do cadastro, cadastro rápido).
+  const packagingTools = useCargoReportPackaging({
+    process,
+    profile,
+    registry: autofill.registry,
+    rows,
+    setForm,
+    setSupplierCatalog,
+    canEdit: isDraftNow,
+    onChanged: clearFeedback,
+  })
+  const { packaging } = packagingTools
+  const derived = useMemo(
+    () => rows.map((row) => deriveCargoReportRow(row, catalog, cargoPackagingContext(packaging, row.id))),
+    [rows, catalog, packaging]
+  )
+  const alertCount = useMemo(() => countCargoReportAlerts(rows, catalog, packaging), [rows, catalog, packaging])
   // S9-B: operações por linha do menu ⋯ (levam a origem das células, `autofill`, junto).
   const rowActions = useCargoReportRowActions({
     rows,
@@ -615,6 +657,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         </div>
       ) : null}
       {catalog && !catalog.exists ? <div className="crf-note crf-note--info">{MESSAGES.catalogMissing}</div> : null}
+      {supplierCatalogFailed ? <div className="crf-note crf-note--info">{SUPPLIER_CATALOG_ERROR_MESSAGE}</div> : null}
       {versionMismatch ? (
         <div className="crf-note crf-note--warn">
           {`Tabela Item x Emb. versão ${catalog.version} em uso. Este relatório foi calculado com a versão ${form.catalogVersion}; salvar recalcula o peso líquido e o nº de embalagens.`}
@@ -718,6 +761,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           focusRequest={rowActions.focusRequest}
           autofillRows={form.autofill?.rows}
           quantityMismatch={quantityMismatch}
+          supplierNameByRowId={packagingTools.supplierNameByRowId}
+          onQuickPackaging={canEditFields ? packagingTools.openQuick : undefined}
+          onCodeBlur={canEditFields ? packagingTools.handleCodeBlur : undefined}
         />
 
         {isDesktop ? (
@@ -750,6 +796,10 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         />
       ) : null}
 
+      {canEditFields && packagingTools.quick ? (
+        <CargoReportQuickPackagingDialog key={packagingTools.quick.code} mobile={!isDesktop} {...packagingTools.quick} />
+      ) : null}
+
       <CargoReportReceiptSection
         conference={conference}
         onChange={patchConference}
@@ -769,6 +819,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         conference={conference}
         savedConference={savedConference}
         catalog={catalog}
+        packaging={packaging}
         stage={stage}
         isDesktop={isDesktop}
         isSaving={isSaving}

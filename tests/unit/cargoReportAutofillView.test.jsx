@@ -8,6 +8,8 @@ const mockGetCargoReport = vi.fn()
 const mockSaveDraft = vi.fn()
 const mockGetCatalog = vi.fn()
 const mockLoadReference = vi.fn()
+const mockGetSuppliers = vi.fn()
+const mockUpsertSupplier = vi.fn()
 
 vi.mock('../../src/services/cargoReportRepository', () => ({
   getCargoReport: (...args) => mockGetCargoReport(...args),
@@ -25,6 +27,11 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({ saveBlobAsFile
 vi.mock('../../src/services/itemPackagingCatalogRepository', () => ({
   getItemPackagingCatalog: (...args) => mockGetCatalog(...args),
 }))
+// S9-D: cadastro de embalagens por item + fornecedor.
+vi.mock('../../src/services/supplierPackagingCatalogRepository', () => ({
+  getSupplierPackagingCatalog: (...args) => mockGetSuppliers(...args),
+  upsertSupplierPackagingEntry: (...args) => mockUpsertSupplier(...args),
+}))
 vi.mock('../../src/services/erpReferenceRepository', () => ({
   loadErpProcessReference: (...args) => mockLoadReference(...args),
 }))
@@ -32,6 +39,7 @@ vi.mock('../../src/services/auditRepository', () => ({ createAuditEvent: vi.fn()
 
 import { ToastProvider } from '../../src/components/Toast'
 import CargoReportForm from '../../src/features/processes/CargoReportForm'
+import { resetSupplierCatalogCache } from '../../src/features/processes/useCargoReportPackaging'
 
 const render = (ui, options) => rtlRender(ui, { wrapper: ToastProvider, ...options })
 
@@ -60,6 +68,8 @@ const CATALOG = {
     { code: 'BA5033', description: 'CATALISADOR', packagingType: 'BOMBONA', netWeightKg: 25 },
   ],
 }
+
+const NO_SUPPLIERS = { exists: false, version: 0, entries: [], entryCount: 0, aliases: [] }
 
 const fupItem = (overrides = {}) => ({
   commercialName: 'POLIOL PE-3000',
@@ -132,6 +142,8 @@ beforeEach(() => {
   clock += 10 * 60 * 1000
   vi.setSystemTime(new Date(2026, 10, 24, 14, 5).getTime() + clock)
   mockGetCatalog.mockResolvedValue(CATALOG)
+  resetSupplierCatalogCache()
+  mockGetSuppliers.mockResolvedValue(NO_SUPPLIERS)
   mockGetCargoReport.mockResolvedValue({ current: null, conference: null })
   mockLoadReference.mockResolvedValue(reference())
   mockSaveDraft.mockResolvedValue({ revision: 1 })
@@ -563,4 +575,285 @@ describe('menu ⋯ no consolidado (autofill)', () => {
   function markOf(label, title) {
     return screen.getByLabelText(label).parentElement.querySelector(`[title="${title}"]`)
   }
+})
+
+// ---------- S9-D: embalagens por item + fornecedor ----------
+
+describe('S9-D: embalagens por item + fornecedor', () => {
+  const GOOYER = 'GOOYER CHEMICALS LTD'
+  const supplierEntry = (code, supplierName, tare, net = 180) => ({
+    code,
+    supplierKey: supplierName.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim(),
+    supplierName,
+    packagingType: supplierName ? 'TAMBOR' : '',
+    netWeightKg: supplierName ? net : null,
+    packageWeightKg: tare,
+  })
+  const suppliers = (entries, aliases = []) => ({ exists: true, version: 2, entries, entryCount: entries.length, aliases })
+  // BA5012: GOOYER (9,2 kg, 180 kg líquidos); BA5033: padrão do item (1,1 kg).
+  const REGISTRY = suppliers([supplierEntry('BA5012', GOOYER, 9.2), supplierEntry('BA5033', '', 1.1)])
+
+  // Processo com um 3º item (BA5190) que não está na tabela Item x Emb. nem no cadastro.
+  const PROCESS_3 = { ...PROCESS, items: [...PROCESS.items, { id: 'i3', commercialName: 'RESINA ACRÍLICA RA-55', quantity: 20000 }] }
+  const FUP_3 = [
+    ...FUP,
+    fupItem({ commercialName: 'RESINA ACRÍLICA RA-55', quantityKg: 20000, sqCode: 'BA5190', supplierRef: 'ACRYLIC RESIN RA-55', itemId: '1003' }),
+  ]
+  const markOf = (label, title) => screen.getByLabelText(label).parentElement.querySelector(`[title="${title}"]`)
+
+  beforeEach(() => {
+    mockGetSuppliers.mockResolvedValue(REGISTRY)
+    mockUpsertSupplier.mockImplementation(async (entry) => suppliers([...REGISTRY.entries, entry]))
+  })
+
+  it('relatório novo: a tara do cadastro entra na linha com a marca C e o tipo aparece sob o PESO LÍQ.', async () => {
+    await renderForm()
+
+    expect(screen.getByLabelText('Peso da emb. da linha 1')).toHaveValue('9,2') // item + fornecedor
+    expect(screen.getByLabelText('Peso da emb. da linha 2')).toHaveValue('1,1') // padrão do item
+    expect(markOf('Peso da emb. da linha 1', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+    expect(markOf('Peso da emb. da linha 2', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+    expect(screen.getByText('TAMBOR · deste fornecedor')).toBeInTheDocument()
+    expect(screen.getByText('BOMBONA · padrão do item')).toBeInTheDocument()
+    // peso líquido do fornecedor (180), não o da tabela Item x Emb. (200): 40.000 / 180 = 222,22 embalagens
+    const row = screen.getByLabelText('Peso da emb. da linha 1').closest('tr')
+    expect(within(row).getByText('180,0')).toBeInTheDocument()
+    expect(within(row).getByText('222,22')).toBeInTheDocument()
+    expect(screen.getByLabelText('Legenda das marcas de origem')).toHaveTextContent('cadastro de embalagens')
+  })
+
+  it('editar a tara troca a marca C por ✎ e o rascunho grava a base C da tara', async () => {
+    const { user } = await renderForm()
+    const tare = screen.getByLabelText('Peso da emb. da linha 1')
+    await user.clear(tare)
+    await user.type(tare, '8')
+    expect(markOf('Peso da emb. da linha 1', 'Editado por você')).toHaveTextContent('✎')
+
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    const { rows, autofill } = mockSaveDraft.mock.calls[0][1]
+    expect(rows[0].packageWeightKg).toBe(8)
+    expect(autofill.rows[rows[0].id].base.packageWeightKg).toBe(9.2)
+    expect(rows[1].packageWeightKg).toBe(1.1)
+  })
+
+  it('sem embalagem cadastrada: "Cadastrar para GOOYER" grava no cadastro e preenche as linhas do mesmo código + fornecedor', async () => {
+    mockLoadReference.mockResolvedValue(reference(FUP_3))
+    const { user } = await renderForm({ process: PROCESS_3 })
+    expect(screen.getAllByText('Sem embalagem cadastrada').length).toBeGreaterThan(0)
+
+    // 2ª linha do mesmo código (duplicar): as duas ficam sem tara
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 3' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Duplicar (outro lote)' }))
+    expect(screen.getAllByRole('button', { name: `Cadastrar embalagem de BA5190 para ${GOOYER}` })).toHaveLength(2)
+    expect(screen.getAllByText('Cadastrar para GOOYER')).toHaveLength(2)
+
+    await user.click(screen.getAllByRole('button', { name: `Cadastrar embalagem de BA5190 para ${GOOYER}` })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Cadastrar embalagem' })
+    expect(dialog).toHaveTextContent(`Item BA5190 · fornecedor ${GOOYER}. Vale só para este fornecedor; fica salvo no cadastro de embalagens.`)
+    const net = within(dialog).getByLabelText('Peso líquido (kg)')
+    await waitFor(() => expect(net).toHaveFocus())
+    await user.type(net, '200')
+    await user.type(within(dialog).getByLabelText('Peso da emb. (kg)'), '9,5')
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar no cadastro' }))
+
+    await waitFor(() => expect(mockUpsertSupplier).toHaveBeenCalledTimes(1))
+    expect(mockUpsertSupplier.mock.calls[0][0]).toEqual({
+      code: 'BA5190',
+      supplierKey: GOOYER,
+      supplierName: GOOYER,
+      packagingType: 'TAMBOR',
+      netWeightKg: 200,
+      packageWeightKg: 9.5,
+    })
+    expect(mockUpsertSupplier.mock.calls[0][1]).toMatchObject({ uid: 'admin-1' })
+    expect(await screen.findByText(`Embalagem de BA5190 cadastrada para ${GOOYER}`)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Cadastrar embalagem' })).not.toBeInTheDocument()
+
+    // as duas linhas do código foram preenchidas na hora (marca C) e o aviso saiu
+    expect(screen.getByLabelText('Peso da emb. da linha 3')).toHaveValue('9,5')
+    expect(screen.getByLabelText('Peso da emb. da linha 4')).toHaveValue('9,5')
+    expect(markOf('Peso da emb. da linha 4', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+    expect(screen.queryByText('Sem embalagem cadastrada')).not.toBeInTheDocument()
+    expect(screen.getAllByText('TAMBOR · deste fornecedor')).toHaveLength(3)
+
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    const { rows, autofill } = mockSaveDraft.mock.calls[0][1]
+    expect(rows.filter((row) => row.dbcorpCode === 'BA5190').map((row) => row.packageWeightKg)).toEqual([9.5, 9.5])
+    expect(autofill.rows[rows[2].id].base.packageWeightKg).toBe(9.5)
+  })
+
+  it('o cadastro rápido valida (peso líquido obrigatório) e mostra o erro de gravação sem fechar', async () => {
+    mockLoadReference.mockResolvedValue(reference(FUP_3))
+    mockUpsertSupplier.mockRejectedValue(Object.assign(new Error('negado'), { code: 'permission-denied' }))
+    const { user } = await renderForm({ process: PROCESS_3 })
+    await user.click(screen.getByRole('button', { name: `Cadastrar embalagem de BA5190 para ${GOOYER}` }))
+    const dialog = screen.getByRole('dialog', { name: 'Cadastrar embalagem' })
+    await waitFor(() => expect(within(dialog).getByLabelText('Peso líquido (kg)')).toHaveFocus())
+
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar no cadastro' }))
+    expect(within(dialog).getByText('Informe o peso líquido.')).toBeInTheDocument()
+    expect(mockUpsertSupplier).not.toHaveBeenCalled()
+
+    await user.type(within(dialog).getByLabelText('Peso líquido (kg)'), '200')
+    await user.click(within(dialog).getByRole('button', { name: 'Salvar no cadastro' }))
+    expect(await within(dialog).findByText(/Sem permissão para gravar o cadastro/)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Cadastrar embalagem' })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('dialog', { name: 'Cadastrar embalagem' })).not.toBeInTheDocument()
+  })
+
+  it('digitar o código (ao sair do campo) preenche a tara e a Descrição SQ vazias', async () => {
+    const { user } = await renderForm()
+    await user.click(screen.getByRole('button', { name: 'Adicionar linha no fim' }))
+    const code = screen.getByLabelText('Cód. DBCorp da linha 3')
+    await user.type(code, 'ba5012')
+    expect(screen.getByLabelText('Peso da emb. da linha 3')).toHaveValue('') // ainda digitando: nada preenchido
+    await user.tab()
+
+    expect(screen.getByLabelText('Peso da emb. da linha 3')).toHaveValue('9,2')
+    expect(screen.getByLabelText('Descrição SQ da linha 3')).toHaveValue('POLIOL')
+    expect(markOf('Peso da emb. da linha 3', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+    // tara e descrição já digitadas não são sobrescritas
+    const second = screen.getByLabelText('Cód. DBCorp da linha 2')
+    await user.click(second)
+    await user.tab()
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('CATALISADOR ZN-12')
+  })
+
+  it('falha ao ler o cadastro por fornecedor: aviso, vale o padrão do item e o relatório abre', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockGetSuppliers.mockRejectedValue(Object.assign(new Error('negado'), { code: 'permission-denied' }))
+    await renderForm()
+
+    expect(screen.getByText('Não foi possível carregar o cadastro por fornecedor; vale o padrão do item.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Peso da emb. da linha 1')).toHaveValue('')
+    expect(screen.getByText('TAMBOR · padrão do item')).toBeInTheDocument()
+    expect(screen.getByLabelText('PO / processo da linha 1')).toHaveValue('GOOYER SEA 001-26')
+    warn.mockRestore()
+  })
+
+  it('"Atualizar" traz a tara do cadastro que mudou, marcada; o que foi editado vem desmarcado', async () => {
+    const { user } = await renderForm()
+    const changed = suppliers([supplierEntry('BA5012', GOOYER, 10), supplierEntry('BA5033', '', 1.3)])
+    mockGetSuppliers.mockResolvedValue(changed)
+    const tare2 = screen.getByLabelText('Peso da emb. da linha 2')
+    await user.clear(tare2)
+    await user.type(tare2, '1,2')
+
+    await user.click(screen.getByRole('button', { name: 'Atualizar do processo e do FUP' }))
+    const panel = await screen.findByRole('region', { name: 'Diferenças do processo e do FUP' })
+    expect(within(panel).getAllByText('peso da emb.')).toHaveLength(2)
+    expect(within(panel).getByText('Linha 1: 9,2 kg → 10 kg (cadastro)')).toBeInTheDocument()
+    expect(within(panel).getByText('Linha 2: 1,2 kg → 1,3 kg (cadastro) (você editou esta célula)')).toBeInTheDocument()
+    const [first, second] = within(panel).getAllByRole('checkbox')
+    expect(first).toBeChecked()
+    expect(second).not.toBeChecked()
+
+    await user.click(within(panel).getByRole('button', { name: 'Aplicar selecionadas' }))
+    expect(screen.getByLabelText('Peso da emb. da linha 1')).toHaveValue('10')
+    expect(screen.getByLabelText('Peso da emb. da linha 2')).toHaveValue('1,2')
+    expect(markOf('Peso da emb. da linha 1', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+  })
+
+  it('logística: sem o atalho de cadastro, sem tipo sob o peso e sem marca C (o cadastro só entra no cálculo)', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: currentDoc({ rows: [savedRow('s-1', { dbcorpCode: 'BA5190' }), savedRow('s-2')] }),
+      conference: null,
+    })
+    await renderForm({ profile: LOGISTICA })
+
+    expect(mockGetSuppliers).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /Cadastrar embalagem de/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/deste fornecedor|padrão do item/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Sem embalagem cadastrada')).toHaveLength(1)
+    expect(document.querySelector('.crf-src--c')).toBeNull()
+  })
+
+  it('celular: o atalho "Cadastrar para" fica no cartão e o diálogo usa a variante de 44 px', async () => {
+    mockLoadReference.mockResolvedValue(reference(FUP_3))
+    const { user } = await renderForm({ variant: 'mobile', process: PROCESS_3 })
+    const button = screen.getByRole('button', { name: `Cadastrar embalagem de BA5190 para ${GOOYER}` })
+    expect(button.closest('.crf-rc')).not.toBeNull()
+    expect(button.closest('.crf-wrap--mobile')).not.toBeNull()
+    await user.click(button)
+    const dialog = screen.getByRole('dialog', { name: 'Cadastrar embalagem' })
+    expect(document.querySelector('.crf-split--mobile')).not.toBeNull()
+    await waitFor(() => expect(within(dialog).getByLabelText('Peso líquido (kg)')).toHaveFocus())
+    // o cartão mostra o tipo e a origem sob o peso líquido da 1ª linha
+    expect(screen.getByText('TAMBOR · deste fornecedor')).toBeInTheDocument()
+  })
+
+  describe('consolidado: o fornecedor vem da PO de cada linha', () => {
+    const CONSOLIDATED = {
+      id: 'p2',
+      name: 'CON DG 009-26',
+      processNumber: '9009',
+      category: 'CONSOLIDADO',
+      purchaseOrders: [
+        { po: '4500901', reference: 'ACME SEA 011-26', supplierName: 'ACME RESINS CO' },
+        { po: '4500902', reference: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS' },
+      ],
+      items: [
+        { id: 'c1', commercialName: 'POLIOL PE-3000', quantity: 8000, poNumber: '4500901' },
+        { id: 'c2', commercialName: 'POLIOL PE-3000', quantity: 5000, poNumber: '4500902' },
+      ],
+    }
+    const consFup = [
+      fupItem({ pedido: '4500901', quantityKg: 8000, itemId: '3001' }),
+      fupItem({ pedido: '4500902', quantityKg: 5000, itemId: '3002' }),
+    ]
+    const consRegistry = suppliers([
+      supplierEntry('BA5012', 'ACME RESINS CO', 8, 150),
+      supplierEntry('BA5012', 'NOVA POLYMERS', 12, 170),
+    ])
+
+    async function openConsolidated() {
+      mockLoadReference.mockResolvedValue(reference(consFup))
+      mockGetSuppliers.mockResolvedValue(consRegistry)
+      return renderForm({ process: CONSOLIDATED })
+    }
+    async function moveFirstRowToNova(user) {
+      await user.click(screen.getByRole('button', { name: 'Ações da linha 1' }))
+      await user.click(screen.getByRole('menuitem', { name: /Mover para outra PO/ }))
+      const sub = screen.getByRole('menu', { name: 'POs desta consolidada' })
+      await user.click(within(sub).getByRole('menuitem', { name: /NOVA SEA 034-26/ }))
+    }
+
+    it('cada linha abre com a tara e o peso líquido do fornecedor da PO dela', async () => {
+      await openConsolidated()
+      expect(screen.getByLabelText('Peso da emb. da linha 1')).toHaveValue('8')
+      expect(screen.getByLabelText('Peso da emb. da linha 2')).toHaveValue('12')
+      const rowOf = (n) => screen.getByLabelText(`Peso da emb. da linha ${n}`).closest('tr')
+      expect(within(rowOf(1)).getByText('150,0')).toBeInTheDocument()
+      expect(within(rowOf(2)).getByText('170,0')).toBeInTheDocument()
+    })
+
+    it('mover a linha de PO troca o fornecedor: o peso líquido muda e a tara não editada acompanha', async () => {
+      const { user } = await openConsolidated()
+      await moveFirstRowToNova(user)
+
+      // a linha movida vai para o fim do grupo da NOVA (linha 2) e a antiga linha 2 sobe
+      const moved = screen.getByLabelText('PO / processo da linha 2')
+      expect(moved).toHaveValue('NOVA SEA 034-26')
+      const row = screen.getByLabelText('Peso da emb. da linha 2').closest('tr')
+      expect(within(row).getByText('170,0')).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByLabelText('Peso da emb. da linha 2')).toHaveValue('12'))
+      expect(markOf('Peso da emb. da linha 2', 'Veio do cadastro de embalagens')).toHaveTextContent('C')
+    })
+
+    it('mover a linha não sobrescreve a tara que o usuário editou (o peso líquido muda)', async () => {
+      const { user } = await openConsolidated()
+      const tare = screen.getByLabelText('Peso da emb. da linha 1')
+      await user.clear(tare)
+      await user.type(tare, '7')
+      await moveFirstRowToNova(user)
+
+      const row = screen.getByLabelText('Peso da emb. da linha 2').closest('tr')
+      expect(within(row).getByText('170,0')).toBeInTheDocument()
+      expect(screen.getByLabelText('Peso da emb. da linha 2')).toHaveValue('7')
+      expect(markOf('Peso da emb. da linha 2', 'Editado por você')).toHaveTextContent('✎')
+    })
+  })
 })

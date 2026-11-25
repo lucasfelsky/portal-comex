@@ -3,11 +3,13 @@ import { useToast } from '../../components/Toast'
 import { loadErpProcessReference } from '../../services/erpReferenceRepository'
 import {
   applyCargoDiff,
+  buildCargoRegistry,
   buildCargoSources,
   diffCargoReportAgainstSources,
   resolveCargoSupplierName,
 } from './cargoReportAutofill'
 import { CARGO_REPORT_ROWS_LIMIT_MESSAGE } from './cargoReportFormModel'
+import { reloadSupplierCatalog } from './useCargoReportPackaging'
 
 // S9-C do Relatório de Carga: liga o preenchimento automático (processo + FUP) à tela. Só o admin com o relatório
 // no estágio 1 (rascunho do COMEX) lê o FUP (as rules negam os demais). Guarda a referência lida, abre a prévia do
@@ -28,8 +30,19 @@ export async function fetchCargoReference(processId) {
 }
 
 // `form`/`setForm`: estado do formulário; `purchaseOrders`: POs do consolidado (reordena ao aplicar);
-// `onApplied`: chamado depois de aplicar (o formulário limpa o aviso de salvamento).
-export default function useCargoReportAutofill({ process, form, setForm, purchaseOrders, onApplied }) {
+// `onApplied`: chamado depois de aplicar (o formulário limpa o aviso de salvamento). S9-D: `itemCatalog` e
+// `supplierCatalog` (embalagens) alimentam a tara do cadastro (marca C) na prévia e ao aplicar; o "Atualizar" relê o
+// cadastro por fornecedor e o devolve por `onSupplierCatalog`.
+export default function useCargoReportAutofill({
+  process,
+  form,
+  setForm,
+  purchaseOrders,
+  onApplied,
+  itemCatalog = null,
+  supplierCatalog = null,
+  onSupplierCatalog,
+}) {
   const toast = useToast()
   const formRef = useRef(form)
   const isMountedRef = useRef(true)
@@ -51,6 +64,10 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
 
   const sources = useMemo(() => buildCargoSources(process, state.reference), [process, state.reference])
   const supplier = useMemo(() => resolveCargoSupplierName(process, state.reference), [process, state.reference])
+  const registry = useMemo(
+    () => buildCargoRegistry({ itemCatalog, supplierCatalog, process, reference: state.reference }),
+    [itemCatalog, supplierCatalog, process, state.reference]
+  )
 
   // Depois da carga: guarda a referência lida e, em relatório novo, abre a prévia com o que ficou de fora.
   const initialize = useCallback(({ reference = null, error = null, pending = [], fetched = false } = {}) => {
@@ -72,7 +89,7 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
     if (!current || busy) return
     setBusy(true)
     setRefreshError('')
-    const result = await fetchCargoReference(process?.id)
+    const [result, reloaded] = await Promise.all([fetchCargoReference(process?.id), reloadSupplierCatalog()])
     if (!isMountedRef.current) return
     setBusy(false)
     if (result.error) {
@@ -80,14 +97,17 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
       return
     }
     setState({ reference: result.reference, error: null, fetched: true })
+    const freshCatalog = reloaded?.data ?? supplierCatalog
+    if (reloaded?.data) onSupplierCatalog?.(reloaded.data)
     const latest = formRef.current ?? current
-    const items = diffCargoReportAgainstSources(latest, latest.autofill, buildCargoSources(process, result.reference))
+    const packaging = buildCargoRegistry({ itemCatalog, supplierCatalog: freshCatalog, process, reference: result.reference })
+    const items = diffCargoReportAgainstSources(latest, latest.autofill, buildCargoSources(process, result.reference), packaging)
     setPanel({
       mode: 'refresh',
       items,
       selected: items.filter((item) => item.applicable && item.defaultOn).map((item) => item.id),
     })
-  }, [busy, process])
+  }, [busy, itemCatalog, onSupplierCatalog, process, supplierCatalog])
 
   const toggleItem = useCallback((id) => {
     setPanel((current) => {
@@ -103,7 +123,11 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
     const current = formRef.current
     if (!panel || !current) return
     const snapshotId = sources.fupInfo.hasFup ? sources.fupInfo.snapshotId : undefined
-    const result = applyCargoDiff(current, current.autofill, panel.items, panel.selected, { purchaseOrders, snapshotId })
+    const result = applyCargoDiff(current, current.autofill, panel.items, panel.selected, {
+      purchaseOrders,
+      snapshotId,
+      packaging: registry,
+    })
     if (result.error === 'limit') {
       toast.error(CARGO_REPORT_ROWS_LIMIT_MESSAGE)
       return
@@ -112,7 +136,7 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
     setPanel(null)
     toast.success(APPLIED_MESSAGE)
     onApplied?.()
-  }, [onApplied, panel, purchaseOrders, setForm, sources, toast])
+  }, [onApplied, panel, purchaseOrders, registry, setForm, sources, toast])
 
   const dismiss = useCallback(() => setPanel(null), [])
 
@@ -120,6 +144,7 @@ export default function useCargoReportAutofill({ process, form, setForm, purchas
     sources,
     fupInfo: sources.fupInfo,
     supplier,
+    registry,
     readError: Boolean(state.error),
     fetched: state.fetched,
     refetch,

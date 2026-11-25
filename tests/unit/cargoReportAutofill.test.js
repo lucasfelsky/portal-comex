@@ -10,14 +10,19 @@ import {
   autofillForCopies,
   autofillForPurchaseOrder,
   buildAutofilledCargoReport,
+  buildCargoRegistry,
   buildCargoSources,
   cellOrigin,
   describeCargoAutofillNote,
   diffCargoReportAgainstSources,
+  fillCargoRowFromRegistry,
+  matchCargoRowsForSupplier,
   quantityMismatchByRowId,
+  refillCargoTares,
   resolveCargoProcessReference,
   resolveCargoSupplierName,
   restoreAutofillEntry,
+  supplierNameForRow,
   takeAutofillEntry,
 } from '../../src/features/processes/cargoReportAutofill'
 import {
@@ -31,6 +36,7 @@ import {
 } from '../../src/features/processes/cargoReportFormModel'
 import { groupCargoRowsByPurchaseOrder } from '../../src/features/processes/cargoReportGroups'
 import { splitCargoRow } from '../../src/features/processes/cargoReportRowOps'
+import { normalizeSupplierKey } from '../../src/features/processes/cargoSupplierPackaging'
 
 const FCL = {
   id: 'p-fcl',
@@ -638,5 +644,283 @@ describe('autofill acompanha as operações por linha', () => {
     expect(taken.entries).not.toHaveProperty('a')
     expect(restoreAutofillEntry(taken.entries, 'a', taken.entry)).toEqual(entries)
     expect(restoreAutofillEntry(taken.entries, 'a', null)).toEqual(taken.entries)
+  })
+})
+
+// ---------- S9-D: peso da embalagem do cadastro (marca C) ----------
+
+describe('S9-D: tara do cadastro de embalagens (marca C)', () => {
+  const ITEMS = {
+    items: [
+      { code: 'BA5012', description: 'POLIOL PE-3000', packagingType: 'TAMBOR', netWeightKg: 200 },
+      { code: 'BA5033', description: 'CATALISADOR ZN-12', packagingType: 'BOMBONA', netWeightKg: 25 },
+    ],
+  }
+  const entryOf = (code, supplierName, tare) => ({
+    code,
+    supplierKey: normalizeSupplierKey(supplierName),
+    supplierName,
+    packagingType: supplierName ? 'TAMBOR' : '',
+    netWeightKg: supplierName ? 200 : null,
+    packageWeightKg: tare,
+  })
+  const suppliers = (entries, aliases = []) => ({ exists: true, version: 1, entries, entryCount: entries.length, aliases })
+  // FUP do consolidado: o mesmo polial em duas POs (cada uma com o seu fornecedor).
+  const CONS_FUP = [
+    fupItem({ pedido: '4500903', quantityKg: 8000, itemId: '2001' }),
+    fupItem({ pedido: '4500901', quantityKg: 5000, itemId: '2002' }),
+  ]
+  const REGISTRY = suppliers([
+    entryOf('BA5012', 'GOOYER CHEMICALS LTD', 9.2),
+    entryOf('BA5012', 'ORION CHEM CO', 11.5),
+    entryOf('BA5033', '', 1.1),
+  ])
+  const packagingFor = (process, supplierCatalog = REGISTRY, reference) =>
+    buildCargoRegistry({ itemCatalog: ITEMS, supplierCatalog, process, reference })
+  const fillWithRegistry = (process, ref, supplierCatalog = REGISTRY) => {
+    const sources = buildCargoSources(process, ref)
+    return { sources, ...buildAutofilledCargoReport(process, sources, packagingFor(process, supplierCatalog, ref)) }
+  }
+
+  it('FCL: a tara entra gravada na linha, com a base C, pelo fornecedor do processo; sem cadastro a tara fica vazia', () => {
+    const { form } = fillWithRegistry(FCL, reference(FCL_FUP))
+    expect(form.rows[0]).toMatchObject({ dbcorpCode: 'BA5012', packageWeightKg: 9.2 }) // item + fornecedor
+    expect(form.rows[1]).toMatchObject({ dbcorpCode: 'BA5033', packageWeightKg: 1.1 }) // padrão do item
+    expect(form.rows[2]).toMatchObject({ dbcorpCode: 'BA5190', packageWeightKg: null }) // sem cadastro
+    expect(form.autofill.rows[form.rows[0].id].base.packageWeightKg).toBe(9.2)
+    expect(form.autofill.rows[form.rows[2].id].base).not.toHaveProperty('packageWeightKg')
+    expect(cellOrigin(form.rows[0], form.autofill.rows[form.rows[0].id], 'packageWeightKg')).toBe('C')
+    expect(cellOrigin(form.rows[2], form.autofill.rows[form.rows[2].id], 'packageWeightKg')).toBe('')
+  })
+
+  it('FCL sem fornecedor no processo usa o EXPORTADOR do FUP', () => {
+    const process = { ...FCL, supplierName: '' }
+    const ref = reference(FCL_FUP, { exporters: ['Orion Chem, Co.'] })
+    const { form } = fillWithRegistry(process, ref)
+    expect(form.rows[0].packageWeightKg).toBe(11.5)
+  })
+
+  it('consolidado: cada linha usa o fornecedor da PO dela (PO sem fornecedor cai no padrão)', () => {
+    const process = {
+      ...CONS,
+      purchaseOrders: [
+        { po: '4500901', reference: 'GOO SEA 001-26', supplierName: 'GOOYER CHEMICALS LTD' },
+        { po: '4500903', reference: 'ORION SEA 007-26', supplierName: 'ORION CHEM CO' },
+      ],
+      items: [
+        { id: 'c1', commercialName: 'POLIOL PE-3000', quantity: 8000, poNumber: '4500903' },
+        { id: 'c2', commercialName: 'POLIOL PE-3000', quantity: 5000, poNumber: '4500901' },
+      ],
+    }
+    const { form } = fillWithRegistry(process, reference(CONS_FUP))
+    const byPo = Object.fromEntries(form.rows.map((row) => [row.po, row.packageWeightKg]))
+    expect(byPo).toEqual({ 'GOO SEA 001-26': 9.2, 'ORION SEA 007-26': 11.5 })
+  })
+
+  it('supplierNameForRow: processo, EXPORTADOR do FUP e PO do consolidado (não é gravado na linha)', () => {
+    expect(supplierNameForRow({ po: 'qualquer' }, FCL, null)).toBe('GOOYER CHEMICALS LTD')
+    const exporters = reference(FCL_FUP, { exporters: ['ZETA CO', 'ALFA CO'] })
+    expect(supplierNameForRow({}, { ...FCL, supplierName: '' }, exporters)).toBe('ALFA CO')
+    expect(supplierNameForRow({ po: 'ACME SEA 011-26' }, CONS, null)).toBe('ACME RESINS CO')
+    expect(supplierNameForRow({ po: '4500902' }, CONS, null)).toBe('NOVA POLYMERS') // legado: número da PO
+    expect(supplierNameForRow({ po: 'sem casamento' }, CONS, null)).toBe('')
+    const { form } = fillWithRegistry(FCL, reference(FCL_FUP))
+    expect(Object.keys(form.rows[0])).toHaveLength(13)
+  })
+
+  it('sem cadastro por fornecedor (null): tara vazia, nada quebra', () => {
+    const { form } = fillWithRegistry(FCL, reference(FCL_FUP), null)
+    expect(form.rows.map((row) => row.packageWeightKg)).toEqual([null, null, null])
+  })
+
+  it('digitar o código (ao sair do campo): tara vazia e Descrição SQ vazia vêm do cadastro', () => {
+    const registry = packagingFor(FCL)
+    const row = { ...createEmptyCargoReportRow('r1'), dbcorpCode: 'ba5012' }
+    const form = { rows: [row], autofill: { schemaVersion: 1, snapshotId: '', rows: {} } }
+    const next = fillCargoRowFromRegistry(form, 'r1', registry)
+    expect(next.rows[0]).toMatchObject({ packageWeightKg: 9.2, sqDescription: 'POLIOL PE-3000' })
+    expect(next.autofill.rows.r1.base.packageWeightKg).toBe(9.2)
+    expect(cellOrigin(next.rows[0], next.autofill.rows.r1, 'packageWeightKg')).toBe('C')
+    // Descrição SQ preenchida do catálogo não ganha marca (só a tara é do cadastro, com base C)
+    expect(next.autofill.rows.r1.base).not.toHaveProperty('sqDescription')
+  })
+
+  it('digitar o código não sobrescreve tara nem descrição já preenchidas e não suja o form à toa', () => {
+    const registry = packagingFor(FCL)
+    const filled = { ...createEmptyCargoReportRow('r1'), dbcorpCode: 'BA5012', packageWeightKg: '8', sqDescription: 'MINHA DESCRIÇÃO' }
+    const form = { rows: [filled], autofill: { schemaVersion: 1, snapshotId: '', rows: {} } }
+    expect(fillCargoRowFromRegistry(form, 'r1', registry)).toBe(form)
+    const unknown = { rows: [{ ...createEmptyCargoReportRow('r2'), dbcorpCode: 'ZZ9999' }], autofill: form.autofill }
+    expect(fillCargoRowFromRegistry(unknown, 'r2', registry)).toBe(unknown)
+    const noCode = { rows: [createEmptyCargoReportRow('r3')], autofill: form.autofill }
+    expect(fillCargoRowFromRegistry(noCode, 'r3', registry)).toBe(noCode)
+  })
+
+  describe('refillCargoTares ("Cadastrar para" e troca de fornecedor)', () => {
+    const base = (id, overrides) => ({ ...createEmptyCargoReportRow(id), dbcorpCode: 'BA5190', ...overrides })
+    const NEW_REGISTRY = suppliers([entryOf('BA5190', 'GOOYER CHEMICALS LTD', 9.5)])
+    const formOf = (rows, entries = {}) => ({ rows, autofill: { schemaVersion: 1, snapshotId: '', rows: entries } })
+
+    it('preenche as linhas do mesmo código + fornecedor com tara vazia ou ainda igual à base C; tara editada fica', () => {
+      const oldBase = { key: '', base: { packageWeightKg: 8 } }
+      const form = formOf(
+        [
+          base('empty'),
+          base('stillBase', { packageWeightKg: 8 }),
+          base('edited', { packageWeightKg: 7 }),
+          base('typedNoBase', { packageWeightKg: '3,5' }),
+          base('otherCode', { dbcorpCode: 'BA5012' }),
+        ],
+        { stillBase: oldBase, edited: oldBase }
+      )
+      const registry = packagingFor(FCL, NEW_REGISTRY)
+      const match = matchCargoRowsForSupplier('BA5190', 'Gooyer Chemicals Ltd', registry)
+      const result = refillCargoTares(form, registry, match)
+      expect(result.rowIds).toEqual(['empty', 'stillBase'])
+      const byId = Object.fromEntries(result.form.rows.map((row) => [row.id, row.packageWeightKg]))
+      expect(byId).toEqual({ empty: 9.5, stillBase: 9.5, edited: 7, typedNoBase: '3,5', otherCode: null })
+      expect(result.form.autofill.rows.empty.base.packageWeightKg).toBe(9.5)
+      expect(result.form.autofill.rows.stillBase.base.packageWeightKg).toBe(9.5)
+      expect(result.form.autofill.rows.edited.base.packageWeightKg).toBe(8)
+      expect(form.rows[0].packageWeightKg).toBeNull() // não muta o que recebeu
+    })
+
+    it('outro fornecedor ou nada a mudar devolve o mesmo form', () => {
+      const form = formOf([base('a')])
+      const registry = packagingFor({ ...FCL, supplierName: 'ORION CHEM CO' }, NEW_REGISTRY)
+      expect(refillCargoTares(form, registry).form).toBe(form)
+      const done = formOf([base('a', { packageWeightKg: 9.5 })], { a: { key: '', base: { packageWeightKg: 9.5 } } })
+      expect(refillCargoTares(done, packagingFor(FCL, NEW_REGISTRY)).form).toBe(done)
+    })
+
+    it('matchCargoRowsForSupplier respeita os aliases (nome parecido do processo acha o cadastro)', () => {
+      const aliases = [{ fromKey: 'GOOYER CHEMICAL CO', toKey: 'GOOYER CHEMICALS LTD' }]
+      const aliased = suppliers([entryOf('BA5190', 'GOOYER CHEMICALS LTD', 9.5)], aliases)
+      const registry = packagingFor({ ...FCL, supplierName: 'Gooyer Chemical Co.' }, aliased)
+      const match = matchCargoRowsForSupplier('ba5190', 'GOOYER CHEMICALS LTD', registry)
+      expect(refillCargoTares(formOf([base('a')]), registry, match).rowIds).toEqual(['a'])
+    })
+  })
+
+  describe('prévia do Atualizar: item "peso da emb."', () => {
+    const SOURCES = (process = FCL) => buildCargoSources(process, reference(FCL_FUP))
+    const tareItems = (items) => items.filter((item) => item.kind === CARGO_DIFF_KINDS.tare)
+    const editFirstTare = (form, value) => ({
+      ...form,
+      rows: form.rows.map((row, index) => (index === 0 ? { ...row, packageWeightKg: value } : row)),
+    })
+
+    it('cadastro igual ao que foi gravado: nenhum item de peso da emb.', () => {
+      const registry = packagingFor(FCL)
+      const sources = SOURCES()
+      const { form } = buildAutofilledCargoReport(FCL, sources, registry)
+      expect(tareItems(diffCargoReportAgainstSources(form, form.autofill, sources, registry))).toEqual([])
+    })
+
+    it('cadastro mudou: linha com a base C vira item marcado (defaultOn) e aplicar troca a tara e a base', () => {
+      const sources = SOURCES()
+      const { form } = buildAutofilledCargoReport(FCL, sources, packagingFor(FCL))
+      const changed = packagingFor(FCL, suppliers([entryOf('BA5012', 'GOOYER CHEMICALS LTD', 10), entryOf('BA5033', '', 1.1)]))
+      const items = tareItems(diffCargoReportAgainstSources(form, form.autofill, sources, changed))
+      expect(items).toHaveLength(1)
+      expect(items[0]).toMatchObject({
+        kind: 'peso da emb.',
+        source: 'C',
+        edited: false,
+        defaultOn: true,
+        applicable: true,
+        rowIds: [form.rows[0].id],
+      })
+      expect(items[0].title).toBe('BA5012 · GOOYER CHEMICALS LTD: peso da embalagem')
+      expect(items[0].detail).toBe('Linha 1: 9,2 kg → 10 kg (cadastro)')
+
+      const applied = applyCargoDiff(form, form.autofill, items, [items[0].id])
+      expect(applied.form.rows[0].packageWeightKg).toBe(10)
+      expect(applied.form.autofill.rows[form.rows[0].id].base.packageWeightKg).toBe(10)
+      expect(cellOrigin(applied.form.rows[0], applied.form.autofill.rows[form.rows[0].id], 'packageWeightKg')).toBe('C')
+    })
+
+    it('tara editada não é sobrescrita sem aparecer: item desmarcado "(você editou esta célula)"', () => {
+      const sources = SOURCES()
+      const { form } = buildAutofilledCargoReport(FCL, sources, packagingFor(FCL))
+      const edited = editFirstTare(form, '8,8')
+      const changed = packagingFor(FCL, suppliers([entryOf('BA5012', 'GOOYER CHEMICALS LTD', 10)]))
+      const [item] = tareItems(diffCargoReportAgainstSources(edited, edited.autofill, sources, changed))
+      expect(item).toMatchObject({ edited: true, defaultOn: false, applicable: true })
+      expect(item.detail).toBe('Linha 1: 8,8 kg → 10 kg (cadastro) (você editou esta célula)')
+      // sem escolher, nada muda
+      expect(applyCargoDiff(edited, edited.autofill, [item], []).form).toBe(edited)
+    })
+
+    it('cadastro igual à base com tara editada não propõe nada (o usuário já decidiu)', () => {
+      const sources = SOURCES()
+      const registry = packagingFor(FCL)
+      const { form } = buildAutofilledCargoReport(FCL, sources, registry)
+      const edited = editFirstTare(form, '8,8')
+      expect(tareItems(diffCargoReportAgainstSources(edited, edited.autofill, sources, registry))).toEqual([])
+    })
+
+    it('tara digitada sem base C não entra; linha sem tara e sem base recebe a proposta marcada', () => {
+      const sources = SOURCES()
+      const registry = packagingFor(FCL)
+      const common = { po: 'GOOYER SEA 001-26', dbcorpCode: 'BA5012', sqDescription: 'POLIOL PE-3000' }
+      const typed = { ...createEmptyCargoReportRow('t'), ...common, packageWeightKg: 7 }
+      const blank = { ...createEmptyCargoReportRow('b'), ...common }
+      const none = { schemaVersion: 1, snapshotId: '', rows: {} }
+      expect(tareItems(diffCargoReportAgainstSources({ rows: [typed] }, none, sources, registry))).toEqual([])
+      const [item] = tareItems(diffCargoReportAgainstSources({ rows: [blank] }, none, sources, registry))
+      expect(item).toMatchObject({ edited: false, defaultOn: true, rowIds: ['b'] })
+      const applied = applyCargoDiff({ rows: [blank] }, none, [item], [item.id])
+      expect(applied.form.rows[0].packageWeightKg).toBe(9.2)
+      expect(applied.form.autofill.rows.b.base.packageWeightKg).toBe(9.2)
+    })
+
+    it('várias linhas do mesmo código + fornecedor viram um item só', () => {
+      const registry = packagingFor(FCL, suppliers([entryOf('BA5012', 'GOOYER CHEMICALS LTD', 9.2)]))
+      const sources = SOURCES()
+      const row = (id) => ({
+        ...createEmptyCargoReportRow(id),
+        po: 'GOOYER SEA 001-26',
+        dbcorpCode: 'BA5012',
+        sqDescription: 'POLIOL PE-3000',
+      })
+      const form = { rows: [row('x'), row('y')], autofill: { schemaVersion: 1, snapshotId: '', rows: {} } }
+      const items = tareItems(diffCargoReportAgainstSources(form, form.autofill, sources, registry))
+      expect(items).toHaveLength(1)
+      expect(items[0].rowIds).toEqual(['x', 'y'])
+      expect(items[0].detail).toBe('Linhas 1, 2: (vazio) → 9,2 kg (cadastro)')
+    })
+
+    it('"só no FUP" aplicado já entra com a tara do cadastro', () => {
+      const process = { ...FCL, items: FCL.items.slice(1) } // POLIOL fica só no FUP
+      const registry = packagingFor(process)
+      const sources = buildCargoSources(process, reference(FCL_FUP))
+      const { form } = buildAutofilledCargoReport(process, sources, registry)
+      const items = diffCargoReportAgainstSources(form, form.autofill, sources, registry)
+      const add = items.find((item) => item.kind === CARGO_DIFF_KINDS.onlyFup)
+      expect(add).toBeDefined()
+      const applied = applyCargoDiff(form, form.autofill, [add], [add.id], { packaging: registry })
+      const added = applied.form.rows.at(-1)
+      expect(added).toMatchObject({ dbcorpCode: 'BA5012', packageWeightKg: 9.2 })
+      expect(applied.form.autofill.rows[added.id].base.packageWeightKg).toBe(9.2)
+    })
+
+    it('mover a linha de PO no consolidado troca o fornecedor e, portanto, a tara proposta', () => {
+      const process = {
+        ...CONS,
+        purchaseOrders: [
+          { po: '4500901', reference: 'GOO SEA 001-26', supplierName: 'GOOYER CHEMICALS LTD' },
+          { po: '4500903', reference: 'ORION SEA 007-26', supplierName: 'ORION CHEM CO' },
+        ],
+        items: [{ id: 'c1', commercialName: 'POLIOL PE-3000', quantity: 8000, poNumber: '4500903' }],
+      }
+      const registry = packagingFor(process)
+      const { form, sources } = fillWithRegistry(process, reference(CONS_FUP))
+      expect(form.rows[0].packageWeightKg).toBe(11.5)
+      const moved = { ...form, rows: [{ ...form.rows[0], po: 'GOO SEA 001-26' }] }
+      const items = diffCargoReportAgainstSources(moved, moved.autofill, sources, registry)
+      const [item] = tareItems(items)
+      expect(item.detail).toBe('Linha 1: 11,5 kg → 9,2 kg (cadastro)')
+    })
   })
 })

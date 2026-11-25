@@ -57,7 +57,7 @@
     "count": 12
   },
   "srcServices": {
-    "count": 23,
+    "count": 24,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -80,6 +80,7 @@
       "processEventsRepository.js",
       "processMessagesRepository.js",
       "processesRepository.js",
+      "supplierPackagingCatalogRepository.js",
       "supportTicketsRepository.js",
       "usersRepository.js"
     ]
@@ -362,6 +363,16 @@
       "sourceFileName",
       "sourceSha256",
       "sourceSheetName",
+      "version"
+    ],
+    "isValidSupplierPackagingCatalog": [
+      "aliases",
+      "entries",
+      "entryCount",
+      "schemaVersion",
+      "updatedAt",
+      "updatedById",
+      "updatedByName",
       "version"
     ],
     "isValidCargoReportCurrent": [

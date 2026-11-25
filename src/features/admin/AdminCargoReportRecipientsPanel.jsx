@@ -8,6 +8,7 @@ import {
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import CargoReportRecipientListCard from './CargoReportRecipientListCard'
 import ItemPackagingCatalogCard from './ItemPackagingCatalogCard'
+import SupplierPackagingCatalogCard from './SupplierPackagingCatalogCard'
 import {
   CARGO_REPORT_RECIPIENT_LISTS,
   isValidCargoReportRecipientEmail,
@@ -24,7 +25,8 @@ function areListsEqual(first, second) {
 }
 
 // Tela /admin/relatorio-carga: destinatários do aviso por e-mail quando um Relatório de Carga é
-// anexado (`config/cargoReportRecipients`), mais a tabela mestra Item x Emb. (ItemPackagingCatalogCard).
+// anexado (`config/cargoReportRecipients`), mais a tabela mestra Item x Emb. (ItemPackagingCatalogCard) e as
+// embalagens por item + fornecedor (SupplierPackagingCatalogCard, S9-D).
 export default function AdminCargoReportRecipientsPanel() {
   const { profile } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
@@ -197,6 +199,7 @@ export default function AdminCargoReportRecipientsPanel() {
       <div className="admin-panel-stack">
         {recipientsSection}
         <ItemPackagingCatalogCard />
+        <SupplierPackagingCatalogCard />
       </div>
     </div>
   )

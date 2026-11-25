@@ -1,4 +1,5 @@
 import { cleanCell, foldText } from '../erp/erpText'
+import { getItemPackaging, normalizeItemCode } from './cargoReportCatalog'
 import {
   CARGO_AUTOFILL_KEY_MAX,
   CARGO_REPORT_LIMITS,
@@ -19,6 +20,7 @@ import {
   orderCargoRowsByPurchaseOrder,
   resolveCargoRowPurchaseOrder,
 } from './cargoReportGroups'
+import { canonicalSupplierKey, resolveCargoPackaging } from './cargoSupplierPackaging'
 
 // S9-C do Relatório de Carga: preenchimento automático (processo + FUP) e prévia do "Atualizar". Módulo puro, sem
 // React nem firebase. A fonte é o processo (`items`, `purchaseOrders`) mais o recorte do FUP guardado em
@@ -41,6 +43,7 @@ export const CARGO_DIFF_KINDS = {
   onlyFup: 'só no FUP',
   onlyProcess: 'só no processo',
   gone: 'fora do FUP',
+  tare: 'peso da emb.',
 }
 
 export const CARGO_DIFF_SUFFIX = {
@@ -240,6 +243,32 @@ export function resolveCargoSupplierName(process, reference) {
   return { name: exporters[0], via: 'fup', multiple: exporters.length > 1 }
 }
 
+// Fornecedor de cada linha (S9-D): FCL/LCL/AÉREO = o do processo (`processSupplierName`, de
+// `resolveCargoSupplierName`); CONSOLIDADO = `supplierName` da PO da linha (pelo PO / PROCESSO dela). NÃO é gravado:
+// sai da PO ou do processo a cada vez, então mover a linha de PO troca o fornecedor. -> (row) => nome ('' = sem).
+export function createCargoSupplierResolver(process, processSupplierName = '') {
+  const isConsolidated = process?.category === 'CONSOLIDADO'
+  const purchaseOrders = getCargoReportPurchaseOrders(process)
+  return (row) => {
+    if (!isConsolidated) return cleanCell(processSupplierName)
+    const index = resolveCargoRowPurchaseOrder(row?.po, purchaseOrders)
+    return index < 0 ? '' : cleanCell(purchaseOrders[index]?.supplierName)
+  }
+}
+
+export function supplierNameForRow(row, process, reference) {
+  return createCargoSupplierResolver(process, resolveCargoSupplierName(process, reference).name)(row)
+}
+
+// Contexto de embalagem das funções de tara abaixo: { itemCatalog, supplierCatalog, supplierNameOf(row) }.
+export function buildCargoRegistry({ itemCatalog = null, supplierCatalog = null, process, reference = null }) {
+  return {
+    itemCatalog,
+    supplierCatalog,
+    supplierNameOf: createCargoSupplierResolver(process, resolveCargoSupplierName(process, reference).name),
+  }
+}
+
 // ---------- marcas de origem ----------
 
 function fieldSource(field, entry) {
@@ -339,9 +368,95 @@ function buildAddItem(candidate) {
   }
 }
 
+// ---------- peso da embalagem do cadastro (marca C, S9-D) ----------
+// O peso da emb. (tara) do cadastro de embalagens entra GRAVADO na linha, com a base C no autofill; uma mudança
+// posterior do cadastro só chega pelo "Atualizar" (prévia), nunca sozinha sobre uma célula.
+
+// `packaging` = { itemCatalog, supplierCatalog, supplierNameOf(row) }. -> tara do cadastro (kg, > 0) para a linha ou
+// null (sem código, sem cadastro ou sem tara). Fornecedor primeiro, depois o padrão do item.
+export function cargoRegistryTare(row, packaging) {
+  if (!packaging || !row) return null
+  const resolved = resolveCargoPackaging(row.dbcorpCode, packaging.supplierNameOf?.(row) ?? '', packaging)
+  const tare = resolved?.packageWeightKg
+  return typeof tare === 'number' && Number.isFinite(tare) && tare > 0 ? tare : null
+}
+
+// Põe a tara do cadastro na linha (valor gravado) e na base C do autofill. Muta `row` e `entry` (cópias do chamador).
+function putRegistryTare(row, entry, tare) {
+  row.packageWeightKg = tare
+  entry.base = { ...entry.base, packageWeightKg: tare }
+}
+
+function hasTareBase(entry) {
+  return Boolean(entry?.base) && Object.prototype.hasOwnProperty.call(entry.base, 'packageWeightKg')
+}
+
+// Tara que o usuário não mexeu: vazia ou ainda igual à base C.
+function isTareUntouched(row, entry) {
+  return isBlank(row.packageWeightKg) || (hasTareBase(entry) && sameQuantity(row.packageWeightKg, entry.base.packageWeightKg))
+}
+
+// Preenche do cadastro o que a linha tem vazio depois de digitar o código (ao sair do campo): tara vazia recebe a do
+// cadastro (marca C) e Descrição SQ vazia recebe a descrição da tabela Item x Emb. -> o mesmo `form` se nada mudou.
+export function fillCargoRowFromRegistry(form, rowId, packaging) {
+  const row = form?.rows?.find((candidate) => candidate.id === rowId)
+  if (!row || normalizeItemCode(row.dbcorpCode) === '') return form
+
+  const next = { ...row }
+  const entry = { ...(form.autofill?.rows?.[rowId] ?? { key: '', base: {} }) }
+
+  const tare = isBlank(row.packageWeightKg) ? cargoRegistryTare(row, packaging) : null
+  if (tare !== null) putRegistryTare(next, entry, tare)
+  const description = isBlank(row.sqDescription) ? cleanCell(getItemPackaging(packaging?.itemCatalog, row.dbcorpCode)?.description) : ''
+  if (description) next.sqDescription = description.slice(0, TEXT_LIMITS.sqDescription)
+  if (tare === null && !description) return form
+
+  const autofill = form.autofill ?? createEmptyCargoAutofill()
+  return {
+    ...form,
+    rows: form.rows.map((candidate) => (candidate.id === rowId ? next : candidate)),
+    autofill: tare === null ? autofill : { ...autofill, rows: { ...autofill.rows, [rowId]: entry } },
+  }
+}
+
+// Cadastro novo ou troca de fornecedor da linha: as linhas escolhidas por `shouldRefill(row)` cuja tara está vazia ou
+// ainda igual à base C recebem a tara do cadastro (e a base). Tara digitada ou editada nunca é tocada.
+// -> { form, rowIds } (o mesmo `form` e `rowIds` vazio se nada mudou).
+export function refillCargoTares(form, packaging, shouldRefill = () => true) {
+  const entries = { ...(form?.autofill?.rows ?? {}) }
+  const rowIds = []
+  const rows = (form?.rows ?? []).map((row) => {
+    if (normalizeItemCode(row.dbcorpCode) === '' || !shouldRefill(row)) return row
+    const tare = cargoRegistryTare(row, packaging)
+    const entry = entries[row.id] ?? { key: '', base: {} }
+    if (tare === null || !isTareUntouched(row, entry)) return row
+    if (sameQuantity(row.packageWeightKg, tare) && hasTareBase(entry) && sameQuantity(entry.base.packageWeightKg, tare)) return row
+    const next = { ...row }
+    const nextEntry = { ...entry }
+    putRegistryTare(next, nextEntry, tare)
+    entries[row.id] = nextEntry
+    rowIds.push(row.id)
+    return next
+  })
+  if (rowIds.length === 0) return { form, rowIds }
+  const autofill = form.autofill ?? createEmptyCargoAutofill()
+  return { form: { ...form, rows, autofill: { ...autofill, rows: entries } }, rowIds }
+}
+
+// Linhas do mesmo código + fornecedor (nome que vale, com os aliases) de um cadastro que acabou de ser gravado.
+export function matchCargoRowsForSupplier(code, supplierName, packaging) {
+  const wantedCode = normalizeItemCode(code)
+  const aliases = packaging?.supplierCatalog?.aliases
+  const wantedKey = canonicalSupplierKey(supplierName, aliases)
+  return (row) =>
+    normalizeItemCode(row.dbcorpCode) === wantedCode &&
+    canonicalSupplierKey(packaging?.supplierNameOf?.(row) ?? '', aliases) === wantedKey
+}
+
 // -> { form, autofill, pending }. As linhas vêm dos itens `match`; `fupOnly` e `processOnly` ficam em `pending`
 // (prévia, desmarcados) e não entram sozinhos. Consolidado: ordem do array = ordem da tela (por PO).
-export function buildAutofilledCargoReport(process, sources) {
+// `packaging` (S9-D, opcional): a tara do cadastro entra gravada na linha, com a base C.
+export function buildAutofilledCargoReport(process, sources, packaging = null) {
   const initial = buildInitialCargoReport(process)
   const candidates = sources?.candidates ?? []
   const filled = candidates.filter((candidate) => candidate.origin === 'match').slice(0, CARGO_REPORT_MAX_ROWS)
@@ -350,7 +465,10 @@ export function buildAutofilledCargoReport(process, sources) {
   const autofill = createEmptyCargoAutofill(sources?.fupInfo?.hasFup ? sources.fupInfo.snapshotId : '')
   const rows = filled.map((candidate) => {
     const row = valuesToRow(candidate.values)
-    autofill.rows[row.id] = entryFromCandidate(candidate)
+    const entry = entryFromCandidate(candidate)
+    const tare = cargoRegistryTare(row, packaging)
+    if (tare !== null) putRegistryTare(row, entry, tare)
+    autofill.rows[row.id] = entry
     return row
   })
 
@@ -459,7 +577,8 @@ function buildFieldItems(form, pair, sourceInfo) {
 //   apply = { type: 'field', rowIds, field, value, key } | { type: 'addRow', candidate } | null (só informativo)
 // Linha ligada pela `key` do autofill; sem `key` (relatório antigo) ou com `key` que não existe mais, pelo nome da
 // Descrição SQ (e PO, no consolidado). Em relatório antigo toda diferença vem desmarcada ("origem não registrada").
-export function diffCargoReportAgainstSources(form, autofill, sources) {
+// `packaging` (S9-D, opcional): o cadastro de embalagens também propõe o peso da emb. (kind 'peso da emb.').
+export function diffCargoReportAgainstSources(form, autofill, sources, packaging = null) {
   const rows = Array.isArray(form?.rows) ? form.rows : []
   const candidates = Array.isArray(sources?.candidates) ? sources.candidates : []
   const context = sources?.context ?? { isConsolidated: false, purchaseOrders: [], processReference: '' }
@@ -563,12 +682,60 @@ export function diffCargoReportAgainstSources(form, autofill, sources) {
       apply: null,
     })
   }
+  items.push(...buildTareItems(form, entries, packaging))
   return items
+}
+
+function formatTare(value) {
+  const number = toNumberOrNull(value)
+  return number === null ? '(vazio)' : formatCargoKgText(number)
+}
+
+// Itens "peso da emb." da prévia (S9-D): o cadastro de embalagens mudou desde que a linha foi preenchida (base C
+// diferente da tara do cadastro de hoje) ou a linha está sem tara e o cadastro tem uma. Tara digitada sem base C não
+// entra; tara editada entra desmarcada ("você editou esta célula"). Uma linha de prévia por código + fornecedor + tara.
+function buildTareItems(form, entries, packaging) {
+  if (!packaging) return []
+  const groups = new Map()
+  for (const row of form.rows) {
+    if (isCargoReportRowEmpty(row) || normalizeItemCode(row.dbcorpCode) === '') continue
+    const tare = cargoRegistryTare(row, packaging)
+    if (tare === null || sameQuantity(row.packageWeightKg, tare)) continue
+    const entry = entries[row.id]
+    let edited = false
+    if (hasTareBase(entry)) {
+      if (sameQuantity(entry.base.packageWeightKg, tare)) continue
+      edited = !sameQuantity(row.packageWeightKg, entry.base.packageWeightKg)
+    } else if (!isBlank(row.packageWeightKg)) {
+      continue
+    }
+    const supplier = packaging.supplierNameOf?.(row) ?? ''
+    const id = `tare|${normalizeItemCode(row.dbcorpCode)}|${canonicalSupplierKey(supplier, packaging.supplierCatalog?.aliases)}|${tare}|${edited}`
+    if (!groups.has(id)) groups.set(id, { id, code: normalizeItemCode(row.dbcorpCode), supplier, tare, edited, rows: [] })
+    groups.get(id).rows.push(row)
+  }
+  return [...groups.values()].map((group) => {
+    const rowIds = group.rows.map((row) => row.id)
+    const supplierText = group.supplier ? ` · ${group.supplier}` : ''
+    return {
+      id: group.id,
+      kind: CARGO_DIFF_KINDS.tare,
+      source: 'C',
+      title: `${group.code}${supplierText}: peso da embalagem`,
+      detail: `${rowNumbers(form, rowIds)}: ${formatTare(group.rows[0].packageWeightKg)} → ${formatCargoKgText(group.tare)} (cadastro)${group.edited ? CARGO_DIFF_SUFFIX.edited : ''}`,
+      edited: group.edited,
+      defaultOn: !group.edited,
+      applicable: true,
+      rowIds,
+      apply: { type: 'field', rowIds, field: 'packageWeightKg', value: group.tare, key: '' },
+    }
+  })
 }
 
 // Aplica só os itens marcados e `applicable`; atualiza a base do campo aplicado (a célula volta a ter a marca de
 // origem). Atômico: passaria de 200 linhas -> { form, autofill, error: 'limit' } sem aplicar nada.
-// `options`: { purchaseOrders } (reordena o consolidado), { snapshotId } (guarda o FUP usado).
+// `options`: { purchaseOrders } (reordena o consolidado), { snapshotId } (guarda o FUP usado), { packaging } (S9-D: a
+// linha nova já vem com a tara do cadastro).
 export function applyCargoDiff(form, autofill, items, selectedIds, options = {}) {
   const selected = new Set(selectedIds ?? [])
   const chosen = (Array.isArray(items) ? items : []).filter((item) => item.applicable && selected.has(item.id) && item.apply)
@@ -591,8 +758,11 @@ export function applyCargoDiff(form, autofill, items, selectedIds, options = {})
       }
     } else if (apply.type === 'addRow') {
       const row = valuesToRow(apply.candidate.values)
+      const entry = entryFromCandidate(apply.candidate)
+      const tare = cargoRegistryTare(row, options.packaging)
+      if (tare !== null) putRegistryTare(row, entry, tare)
       rows.push(row)
-      entries[row.id] = entryFromCandidate(apply.candidate)
+      entries[row.id] = entry
     }
   }
 

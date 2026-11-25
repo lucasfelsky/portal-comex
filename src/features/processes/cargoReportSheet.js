@@ -15,6 +15,7 @@ import {
   readDateTimeKey,
   resolveCargoReceivedDate,
 } from './cargoReportFormModel'
+import { cargoPackagingContext } from './cargoSupplierPackaging'
 
 export const CARGO_REPORT_FILE_PREFIX = 'FR.CMX.001 - RELATORIO DE CARGA - '
 export const CARGO_REPORT_FILE_EXTENSION = '.xlsx'
@@ -102,7 +103,8 @@ const RECEIPT_STATUS_VALUES = RECEIPT_STATUS_OPTIONS.map((option) => option.valu
 // quem conferiu e o rodapé do recebimento (S6/S7: tudo da logística; `wmsLabel/sqLabel/count` e
 // `notes/receiptStatus/receivedDate/nfNumber` do `current` não valem). S8: descarga, tempo total e etiquetagem OK. DATA CONCLUSÃO = dia em que a
 // logística fechou (`closedDate`) quando a conferência está fechada; senão, a do COMEX (`completedDate`).
-export function buildCargoReportSheet(form, { process, conference, catalog } = {}) {
+// S9-D: `packaging` = { supplierCatalog, supplierNameByRowId } faz o peso líquido sair do fornecedor da linha.
+export function buildCargoReportSheet(form, { process, conference, catalog, packaging } = {}) {
   // O payload normaliza texto e números (a tela guarda número como texto) e descarta linhas vazias.
   const { payload } = buildCargoReportPayload(form, {})
   const okByRowId = conference?.okByRowId ?? {}
@@ -111,7 +113,7 @@ export function buildCargoReportSheet(form, { process, conference, catalog } = {
   const alerts = []
 
   const rows = payload.rows.slice(0, CARGO_REPORT_MAX_ROWS).map((row) => {
-    const derived = deriveCargoReportRow(row, catalog)
+    const derived = deriveCargoReportRow(row, catalog, cargoPackagingContext(packaging, row.id))
     if (row.dbcorpCode) {
       for (const kind of ['missingLot', 'missingPackageWeight', 'noPackaging']) {
         if (derived.alerts[kind]) alerts.push({ rowId: row.id, code: row.dbcorpCode, kind })
