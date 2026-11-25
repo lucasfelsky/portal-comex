@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
 import Skeleton from '../components/Skeleton'
-import { useToast } from '../components/Toast'
 import CargoConferenceListView from '../features/processes/CargoConferenceListView'
 import CargoConferenceScreen from '../features/processes/CargoConferenceScreen'
 import { canOpenCargoReport } from '../features/processes/cargoReportFormModel'
@@ -21,7 +20,6 @@ export default function ConferencePage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const toast = useToast()
   const [searchParams] = useSearchParams()
   const isMobileNow = useMediaQuery('(max-width: 720px)')
   const [isMobileAtEntry] = useState(isMobileNow)
@@ -62,13 +60,6 @@ export default function ConferencePage() {
   function backToList() {
     if (location.state?.fromList) navigate(-1)
     else navigate('/conferencia', { replace: true })
-  }
-
-  // Sem entrada duplicada no histórico: volta à lista como o botão de voltar.
-  function handleClosed() {
-    setFilter('fechadas')
-    toast.success('Conferência fechada. Excel anexado e aviso enviado.')
-    backToList()
   }
 
   if (!processId) {
@@ -143,7 +134,6 @@ export default function ConferencePage() {
         profile={profile}
         canSeeName={canSeeName}
         onBack={backToList}
-        onClosed={handleClosed}
       />
     </div>
   )

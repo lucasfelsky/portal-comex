@@ -5,19 +5,14 @@ import { getCargoReport, saveCargoReportConference } from '../../services/cargoR
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import {
   CARGO_CONFERENCE_MESSAGES,
-  closeCargoConference,
-  describeCargoCloseError,
   describeCargoReopenError,
-  describeCargoRetryError,
   describeCargoSaveError,
   isCargoOffline,
   reopenCargoConference,
-  retryCargoConferenceClose,
 } from './cargoConferenceActions'
 import {
   EMPTY_CARGO_CONFERENCE,
   cargoConferenceKey,
-  listCargoConferencePendings,
   markAllCargoRowsOk,
   setCargoConferenceLabel,
   summarizeCargoConferenceProgress,
@@ -26,7 +21,6 @@ import {
 import { buildCargoRegistry } from './cargoReportAutofill'
 import {
   buildConferencePayload,
-  canCloseCargoConference,
   canReopenCargoConference,
   canSaveCargoConference,
   deriveCargoReportRow,
@@ -55,8 +49,9 @@ function formatClock(date) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-// `onClosed()`: a conferência foi fechada (a tela volta à lista em "Fechadas").
-export default function useCargoConferenceScreen({ process, profile, onClosed }) {
+// S9-H: no celular a logística só SALVA; fechar a conferência (Excel, aviso e trava) fica no computador. O admin só
+// acompanha e reabre.
+export default function useCargoConferenceScreen({ process, profile }) {
   const processId = process?.id
   const role = profile?.role
   const actorName = String(profile?.name ?? profile?.email ?? '').trim()
@@ -71,12 +66,7 @@ export default function useCargoConferenceScreen({ process, profile, onClosed })
   const [supplierCatalog, setSupplierCatalog] = useState(null)
   const [feedback, setFeedback] = useState(null)
   const [isBusy, setIsBusy] = useState(false)
-  const [isCloseOpen, setIsCloseOpen] = useState(false)
   const busyRef = useRef(false)
-  const onClosedRef = useRef(onClosed)
-  useEffect(() => {
-    onClosedRef.current = onClosed
-  }, [onClosed])
 
   useEffect(() => {
     if (!processId) return undefined
@@ -139,13 +129,11 @@ export default function useCargoConferenceScreen({ process, profile, onClosed })
 
   const stage = getCargoReportStage(form?.status, saved.status)
   const canSave = canSaveCargoConference(role, stage)
-  const canClose = canCloseCargoConference(role, stage)
   const canReopen = canReopenCargoConference(role, stage)
   const dirty = form ? cargoConferenceKey(conference, rows) !== cargoConferenceKey(saved, rows) : false
   const unloadErrors = canSave ? validateCargoUnload(conference) : { start: '', end: '' }
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
   const progress = useMemo(() => summarizeCargoConferenceProgress(rows, conference), [rows, conference])
-  const pendings = useMemo(() => listCargoConferencePendings(rows, conference), [rows, conference])
 
   // Sair com alteração não salva pede confirmação (como no resto do app).
   useUnsavedChangesGuard(dirty)
@@ -221,64 +209,6 @@ export default function useCargoConferenceScreen({ process, profile, onClosed })
     })
   }
 
-  function openClose() {
-    if (!canClose || busyRef.current) return
-    setFeedback(null)
-    // S8: descarga inválida (fim sem início, fim antes do início, mais de 24 h) bloqueia: a folha nem abre.
-    if (hasUnloadError) {
-      setFeedback({ kind: 'error', text: CARGO_CONFERENCE_MESSAGES.invalidUnload })
-      return
-    }
-    setIsCloseOpen(true)
-  }
-
-  function finishClosed(payload, documentId) {
-    applyPersisted({ ...payload, closedDocumentId: documentId, updatedAt: new Date(), updatedByName: actorName })
-    invalidateCargoConference(processId)
-    onClosedRef.current?.()
-  }
-
-  async function retryClose(payload, documentId) {
-    await runWork(async () => {
-      setFeedback(null)
-      try {
-        await retryCargoConferenceClose({ processId, payload, documentId, profile })
-        finishClosed(payload, documentId)
-      } catch (error) {
-        setFeedback(describeCargoRetryError(error, payload, documentId, { onRetry: retryClose }))
-      }
-    })
-  }
-
-  async function confirmClose() {
-    if (!canClose || busyRef.current) return
-    if (isCargoOffline()) {
-      setIsCloseOpen(false)
-      failOffline(CARGO_CONFERENCE_MESSAGES.offlineClose)
-      return
-    }
-    await runWork(async () => {
-      setFeedback(null)
-      try {
-        const { payload, documentId } = await closeCargoConference({
-          processId,
-          process,
-          profile,
-          form,
-          conference,
-          savedRevision: saved.revision,
-          catalog,
-          packaging,
-        })
-        setIsCloseOpen(false)
-        finishClosed(payload, documentId)
-      } catch (error) {
-        setIsCloseOpen(false)
-        setFeedback(describeCargoCloseError(error, error?.closePayload ?? null, { onRetry: retryClose }))
-      }
-    })
-  }
-
   function reopen() {
     if (!canReopen || busyRef.current) return
     if (isCargoOffline()) {
@@ -309,15 +239,12 @@ export default function useCargoConferenceScreen({ process, profile, onClosed })
     saved,
     stage,
     canSave,
-    canClose,
     canReopen,
     dirty,
     unloadErrors,
     progress,
-    pendings,
     feedback,
     isBusy,
-    isCloseOpen,
     actorName,
     toggleOk,
     toggleCount,
@@ -325,9 +252,6 @@ export default function useCargoConferenceScreen({ process, profile, onClosed })
     patch,
     markAllOk,
     save,
-    openClose,
-    cancelClose: () => setIsCloseOpen(false),
-    confirmClose,
     reopen,
     reload,
   }

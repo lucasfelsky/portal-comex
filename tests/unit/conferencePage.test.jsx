@@ -262,24 +262,10 @@ describe('detalhe por ?processo= e largura travada', () => {
     expect(screen.getByText('GOOYER SEA 001-26')).toBeInTheDocument()
   })
 
-  it('fechar a conferência volta para a lista no filtro "Fechadas" com o aviso de sucesso', async () => {
-    stubViewport(390)
-    const user = userEvent.setup()
-    renderPage({ path: '/conferencia?processo=p1' })
-    await screen.findByRole('tablist')
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Salvar e fechar conferência' })
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-
-    expect(await screen.findByText('Conferência fechada. Excel anexado e aviso enviado.')).toBeInTheDocument()
-    expect(await screen.findByRole('searchbox')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Fechadas/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(mockClose).toHaveBeenCalledTimes(1)
-  })
 })
 
-// Depois de salvar, fechar ou reabrir, a lista (cartão, chips e filtro) relê só o processo afetado.
-describe('lista atualizada depois de salvar, fechar e reabrir', () => {
+// Depois de salvar ou reabrir, a lista (cartão, chips e filtro) relê só o processo afetado.
+describe('lista atualizada depois de salvar e reabrir', () => {
   const NOVA = {
     id: 'p3',
     name: 'NOVA SEA 034-26',
@@ -356,27 +342,6 @@ describe('lista atualizada depois de salvar, fechar e reabrir', () => {
     )
   })
 
-  it('fechar: o processo aparece em "Fechadas" e os chips mudam (2/1 para 1/2)', async () => {
-    stubViewport(390)
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByRole('button', { name: /NOVA SEA 034-26/ })
-    await waitFor(() => expect(chip(/Para conferir/)).toHaveTextContent('Para conferir2'))
-    expect(chip(/Fechadas/)).toHaveTextContent('Fechadas1')
-
-    await user.click(screen.getByRole('button', { name: /NOVA SEA 034-26/ }))
-    await screen.findByRole('tablist')
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Salvar e fechar conferência' })
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-
-    await screen.findByRole('searchbox')
-    expect(chip(/Fechadas/)).toHaveAttribute('aria-pressed', 'true')
-    await waitFor(() => expect(entryTitles().sort()).toEqual(['NOVA SEA 034-26', 'ORION SEA 007-26']))
-    expect(chip(/Fechadas/)).toHaveTextContent('Fechadas2')
-    expect(chip(/Para conferir/)).toHaveTextContent('Para conferir1')
-  })
-
   it('reabrir (admin): o processo volta para "Para conferir"', async () => {
     stubViewport(390)
     const user = userEvent.setup()
@@ -393,19 +358,6 @@ describe('lista atualizada depois de salvar, fechar e reabrir', () => {
     expect(chip(/Para conferir/)).toHaveTextContent('Para conferir3')
     await user.click(chip(/Para conferir/))
     expect(entryTitles()).toContain('ORION SEA 007-26')
-  })
-
-  it('fechar volta à lista pelo histórico (sem entrada duplicada): a rota fica só /conferencia', async () => {
-    stubViewport(390)
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(await screen.findByRole('button', { name: /GOOYER SEA 001-26/ }))
-    await screen.findByRole('tablist')
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-    await screen.findByRole('searchbox')
-    expect(screen.getByTestId('location')).toHaveTextContent(/^\/conferencia$/)
   })
 
   it('?processo= com a lista em erro: mostra o erro de carga e "Tentar novamente" recarrega', async () => {
