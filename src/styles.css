@@ -25215,3 +25215,213 @@ tr.crf-gsum td {
   min-height: 44px;
   margin-block: -12px;
 }
+
+/* S9-C do Relatório de Carga: preenchimento automático (processo + FUP). Marcas de origem (P processo, F FUP,
+   E editado) no canto da célula, borda âmbar em célula editada, legenda, campo "Fonte dos itens" e a prévia do
+   "Atualizar" dentro do card Itens (sem position: fixed). Sem media query: a variante do celular vem do JS
+   (.crf-wrap--mobile). */
+.crf-src {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.crf-src--p {
+  background: var(--info-50);
+  color: var(--info-700);
+}
+
+.crf-src--f {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.crf-src--c {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.crf-src--e {
+  border-color: var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+}
+
+.crf-cellwrap {
+  position: relative;
+}
+
+.crf-cellwrap.has-mark input {
+  padding-right: 24px;
+}
+
+.crf-cellwrap > .crf-src {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.crf td.is-edited input.c,
+.crf-pair.is-edited input {
+  border-color: var(--warning);
+}
+
+.crf-pair__label .crf-src {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.crf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.crf-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crf-grid--source {
+  margin-top: 12px;
+}
+
+.crf-field__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg-tint-1);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.crf-refresh {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.crf-refresh > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.crf-refresh__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.crf-refresh__body p {
+  margin: 0;
+}
+
+.crf-refresh__close {
+  flex: none;
+}
+
+.crf-diff {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.crf-diffrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.crf-diffrow.is-info {
+  cursor: default;
+}
+
+.crf-diffrow input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.crf-diffrow__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.crf-diffrow__text small {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.crf-diffrow__kind {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--info-50);
+  color: var(--info-700);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.crf-refresh__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.crf-wrap--mobile .crf-diffrow,
+.crf-wrap--mobile .crf-refresh__actions button,
+.crf-wrap--mobile .crf-refresh__close {
+  min-height: 44px;
+}
+
+.crf-legend {
+  margin-block: 10px 6px;
+}
+
+.crf-field__value,
+.crf-diffrow {
+  font-size: var(--fs-footnote);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.crf-diffrow__text b {
+  font-weight: 700;
+}
+
+.crf-diffrow__text small {
+  font-weight: 400;
+  text-transform: none;
+}
+
+/* Alvo de toque de 44 px no celular (variante vinda do JS, sem media query): botao "Atualizar do processo e do FUP". */
+.crf-wrap--mobile .crf-refresh-btn {
+  min-height: 44px;
+}

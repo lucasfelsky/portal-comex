@@ -4720,6 +4720,56 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(admin(), CUR), current({ rows: [], revision: 2 })))
       })
 
+      // S9: `autofill` e' opcional (19 chaves no hasOnly, 18 no hasAll); o cliente valida cada entrada.
+      describe('autofill (S9)', () => {
+        const autofill = (overrides = {}) => ({
+          schemaVersion: 1,
+          snapshotId: 'snap-20261124',
+          rows: {
+            'r-0': { key: 'fup:12345', base: { po: 'ACME SEA 021-26', dbcorpCode: 'AD5240', quantityKg: 1000 } },
+          },
+          ...overrides,
+        })
+        const manyRows = (count) =>
+          Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, { key: '', base: {} }]))
+
+        it('admin grava rascunho com autofill valido; sem autofill (relatorio e bundle antigos) tambem passa', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ autofill: autofill() })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 3, autofill: autofill({ snapshotId: '' }) })))
+        })
+
+        it('autofill com chave extra, schemaVersion 2, snapshotId de 41, rows de 201 entradas ou nao-mapa falha', async () => {
+          await seedProcess()
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: autofill({ extra: 1 }) })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: autofill({ schemaVersion: 2 }) })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: autofill({ snapshotId: 'x'.repeat(41) }) })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: autofill({ rows: manyRows(201) }) })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: autofill({ rows: [] }) })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: 'x' })))
+          const { rows: _rows, ...semRows } = autofill()
+          await assertFails(setDoc(doc(admin(), CUR), current({ autofill: semRows })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ autofill: autofill({ rows: manyRows(200) }) })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, autofill: autofill({ snapshotId: 'x'.repeat(40) }) })))
+        })
+
+        it('logistica NAO grava current com autofill', async () => {
+          await seedCurrent()
+          await assertFails(
+            setDoc(
+              doc(logistics('log-1'), CUR),
+              current({ revision: 2, autofill: autofill(), updatedById: 'log-1', updatedByName: 'Logistica' })
+            )
+          )
+        })
+
+        it('COMEX fechado (concluir) grava com autofill', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ status: 'concluido', autofill: autofill() })))
+        })
+      })
+
       it('datas, status do recebimento e limites de texto', async () => {
         await seedProcess()
         await assertFails(setDoc(doc(admin(), CUR), current({ receivedDate: '22/11/2026' })))

@@ -1,6 +1,6 @@
 // S9-B do Relatorio de Carga: dialogo "Dividir em lotes" (sugestao, soma ao vivo, Dividir so com a soma certa).
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CargoReportSplitDialog from '../../src/features/processes/CargoReportSplitDialog'
 import { createEmptyCargoReportRow } from '../../src/features/processes/cargoReportFormModel'
@@ -21,6 +21,8 @@ function renderDialog(props = {}) {
 
 const qty = (index) => screen.getByLabelText(`Quantidade do lote ${index}`)
 const lot = (index) => screen.getByLabelText(`Lote ${index}`)
+// O Modal foca o "Lote 1" com um pequeno atraso (setTimeout); digitar antes disso deixava o foco pular no meio da digitação (instável no CI).
+const ready = () => waitFor(() => expect(lot(1)).toHaveFocus())
 const note = () => screen.getByRole('status')
 const countOptions = () => [...screen.getByLabelText('Quantos lotes?').options].map((option) => option.textContent)
 
@@ -46,6 +48,7 @@ describe('CargoReportSplitDialog', () => {
   it('soma errada: texto exato do aviso e "Dividir" desabilitado; corrigir reabilita', async () => {
     const user = userEvent.setup()
     renderDialog()
+    await ready()
     await user.clear(qty(3))
     await user.type(qty(3), '300')
 
@@ -65,6 +68,7 @@ describe('CargoReportSplitDialog', () => {
   it('quantidade zero bloqueia o Dividir mesmo com soma igual', async () => {
     const user = userEvent.setup()
     renderDialog()
+    await ready()
     await user.selectOptions(screen.getByLabelText('Quantos lotes?'), '2')
     await user.clear(qty(1))
     await user.type(qty(1), '0')
@@ -77,6 +81,7 @@ describe('CargoReportSplitDialog', () => {
   it('trocar o numero de lotes refaz a sugestao e as linhas de lote', async () => {
     const user = userEvent.setup()
     renderDialog()
+    await ready()
     await user.type(lot(1), 'ABC')
     await user.selectOptions(screen.getByLabelText('Quantos lotes?'), '4')
 
@@ -93,6 +98,7 @@ describe('CargoReportSplitDialog', () => {
   it('Dividir chama onApply com lote e quantidade (numero) de cada linha', async () => {
     const user = userEvent.setup()
     const { onApply } = renderDialog()
+    await ready()
     await user.type(lot(1), 'L-01')
     await user.type(lot(3), 'L-03')
     await user.click(screen.getByRole('button', { name: 'Dividir' }))

@@ -808,12 +808,16 @@ service cloud.firestore {
           && !isCargoConferenceClosedNow(processId));
     }
 
+    // S9: `autofill` = origem e valor de base de cada celula preenchida do processo/FUP (marca P/F/C e
+    // "editado"); opcional (fora do hasAll: relatorio e bundle antigos continuam gravando); o cliente valida
+    // cada entrada.
     function isValidCargoReportCurrent(processId) {
       return request.resource.data.keys().hasOnly([
         'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
         'cargoType', 'titleSuffix', 'rows', 'notes',
         'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
         'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
+        'autofill',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
@@ -861,6 +865,14 @@ service cloud.firestore {
           || (request.resource.data.lastGenerated is map
             && request.resource.data.lastGenerated.keys().hasAll(['documentId', 'revision', 'at', 'byId'])
             && request.resource.data.lastGenerated.keys().size() == 4))
+        && (!('autofill' in request.resource.data)
+          || (request.resource.data.autofill is map
+            && request.resource.data.autofill.keys().hasOnly(['schemaVersion', 'snapshotId', 'rows'])
+            && request.resource.data.autofill.schemaVersion == 1
+            && request.resource.data.autofill.snapshotId is string
+            && request.resource.data.autofill.snapshotId.size() <= 40
+            && request.resource.data.autofill.rows is map
+            && request.resource.data.autofill.rows.size() <= 200))
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedById == request.auth.uid
         && request.resource.data.updatedByName == myName();

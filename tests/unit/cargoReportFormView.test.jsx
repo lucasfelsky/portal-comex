@@ -39,6 +39,10 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 vi.mock('../../src/services/itemPackagingCatalogRepository', () => ({
   getItemPackagingCatalog: (...args) => mockGetCatalog(...args),
 }))
+// S9-C: o formulário lê o FUP do processo (admin, estágio 1); aqui sem FUP, como um processo não casado com o ERP.
+vi.mock('../../src/services/erpReferenceRepository', () => ({
+  loadErpProcessReference: vi.fn().mockResolvedValue(null),
+}))
 vi.mock('../../src/services/auditRepository', () => ({
   createAuditEvent: vi.fn().mockResolvedValue(undefined),
 }))
@@ -244,7 +248,7 @@ describe('admin: formulario novo (sem doc salvo)', () => {
     const duimp = screen.getByLabelText('Nº da DUIMP')
     expect(duimp).toBeDisabled()
     expect(duimp).toHaveValue('25BR00001234567')
-    expect(screen.getByText(/Fixo: vem do processo/)).toBeInTheDocument()
+    expect(duimp).toHaveAccessibleDescription(/Fixo: vem do processo/)
     expect(screen.queryByText('Nº da DI')).not.toBeInTheDocument()
 
     const group = screen.getByRole('radiogroup', { name: 'Tipo de carga' })
@@ -1855,7 +1859,7 @@ describe('S6: coluna LOTE SQ sem corte (largura do <col> pelo maior lote)', () =
     const { container } = await renderForm()
     const widths = [...container.querySelectorAll('colgroup col')].map((col) => col.style.width)
     expect(widths[6]).toBe('112px')
-    expect(widths[1]).toBe('96px')
+    expect(widths[1]).toBe('172px') // S9-C: PO / PROCESSO traz a referência do processo (mais larga que o número)
     expect(widths[0]).toBe('36px')
     expect(widths[15]).toBe('52px')
     expect(widths).toHaveLength(16)

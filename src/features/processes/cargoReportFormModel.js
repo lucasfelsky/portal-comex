@@ -5,7 +5,9 @@
 // As colunas calculadas (lote SQ, peso líquido, nº de embalagens) NUNCA são gravadas.
 // S7: "Salvar e fechar" por área. COMEX fecha o `current` (`status: 'concluido'`); a logística grava e
 // fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
+import { digitsOnly, foldText } from '../erp/erpText'
 import { getItemPackaging, normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
+import { getProcessPurchaseOrders } from './purchaseOrders'
 
 export const CARGO_REPORT_FORM_CODE = 'FR.CMX.001'
 export const CARGO_REPORT_FORM_REVISION = '005'
@@ -258,12 +260,15 @@ export function fromCargoReportDoc(data) {
   const doc = data && typeof data === 'object' ? data : {}
   const rows = Array.isArray(doc.rows) ? doc.rows.slice(0, CARGO_REPORT_MAX_ROWS) : []
 
+  const normalizedRows = rows.map(normalizeRowFromDoc)
+
   return {
     revision: Number.isInteger(doc.revision) && doc.revision >= 0 ? doc.revision : 0,
     status: STATUS_VALUES.includes(doc.status) ? doc.status : 'rascunho',
     cargoType: sanitizeEnum(doc.cargoType, CARGO_TYPE_VALUES),
     titleSuffix: readText(doc.titleSuffix, CARGO_REPORT_LIMITS.text),
-    rows: rows.map(normalizeRowFromDoc),
+    rows: normalizedRows,
+    autofill: readCargoAutofill(doc.autofill, normalizedRows),
     // `notes`, `receiptStatus`, `receivedDate` e `nfNumber` são legado do `current` (S7: quem edita é a logística,
     // no doc `conference`); o valor lido volta intacto no próximo salvar para não apagar dado.
     notes: readText(doc.notes, CARGO_REPORT_LIMITS.notes),
@@ -278,15 +283,16 @@ export function fromCargoReportDoc(data) {
   }
 }
 
-// Form NÃO salvo (revision 0), pré-preenchido com os dados do processo.
+// Form NÃO salvo (revision 0), pré-preenchido com os dados do processo. S9-C: PO / PROCESSO = referência do
+// processo (FCL, LCL, AÉREO) ou a referência da PO do item (CONSOLIDADO), não mais o número do pedido.
 export function buildInitialCargoReport(process) {
   const category = typeof process?.category === 'string' ? process.category : ''
-  const processNumber = clip(process?.processNumber, CARGO_REPORT_LIMITS.text)
+  const reference = resolveCargoProcessReference(process)
   const items = Array.isArray(process?.items) ? process.items.slice(0, CARGO_REPORT_MAX_ROWS) : []
 
   const rows = items.map((item) => {
     const row = createEmptyCargoReportRow()
-    row.po = clip(category === 'CONSOLIDADO' ? item?.poNumber : process?.processNumber, CARGO_REPORT_LIMITS.text)
+    row.po = category === 'CONSOLIDADO' ? resolveCargoPurchaseOrderReference(process, item?.poNumber) : reference
     row.sqDescription = clip(item?.commercialName, CARGO_REPORT_LIMITS.description)
     const quantity = Number(item?.quantity)
     row.quantityKg = Number.isFinite(quantity) && quantity > 0 ? quantity : null
@@ -297,8 +303,9 @@ export function buildInitialCargoReport(process) {
     revision: 0,
     status: 'rascunho',
     cargoType: CARGO_TYPE_VALUES.includes(category) ? category : '',
-    titleSuffix: clip(process?.name, CARGO_REPORT_LIMITS.text) || processNumber,
+    titleSuffix: reference,
     rows,
+    autofill: createEmptyCargoAutofill(),
     notes: '',
     nfNumber: '',
     receiptStatus: '',
@@ -309,6 +316,90 @@ export function buildInitialCargoReport(process) {
     updatedAt: null,
     updatedByName: '',
   }
+}
+
+// ---------- S9-C: PO / PROCESSO = referência e autofill ----------
+
+// PO / PROCESSO de FCL, LCL e AÉREO: a referência do processo (`name`, ex.: "GOOYER SEA 001-26"); sem ela, o número.
+export function resolveCargoProcessReference(process) {
+  return clip(process?.name, CARGO_REPORT_LIMITS.text) || clip(process?.processNumber, CARGO_REPORT_LIMITS.text)
+}
+
+// Chave de comparação de pedido/PO (a mesma expressão de `erpOrderKey`): os dígitos sem zero à esquerda; sem
+// dígitos, o texto dobrado (sem acento, maiúsculas).
+export function cargoOrderKey(value) {
+  return digitsOnly(value) || foldText(value)
+}
+
+// PO / PROCESSO de uma linha do CONSOLIDADO: a `reference` da PO do pedido (sem referência, o número da PO); pedido
+// que não é PO do processo fica como veio.
+export function resolveCargoPurchaseOrderReference(process, orderNumber) {
+  const key = cargoOrderKey(orderNumber)
+  if (key === '') return ''
+  const order = getProcessPurchaseOrders(process).find((item) => cargoOrderKey(item.po) === key)
+  const text = order ? String(order.reference ?? '').trim() || order.po : String(orderNumber ?? '').trim()
+  return clip(text, CARGO_REPORT_LIMITS.text)
+}
+
+// `autofill` (doc `current`, opcional): de onde veio cada célula preenchida do processo e do FUP e o valor de
+// BASE dela. Célula igual à base = marca de origem (P processo, F FUP, C cadastro); diferente = "editado por
+// você". `rows[rowId] = { key, base, fupOnly? }`; `key` liga a linha ao item da fonte ('fup:<ItemPedCpId>',
+// 'proc:<id do item>' ou '' sem ligação).
+export const CARGO_AUTOFILL_SCHEMA_VERSION = 1
+export const CARGO_AUTOFILL_FIELDS = [
+  'po',
+  'dbcorpCode',
+  'supplierDescription',
+  'sqDescription',
+  'quantityKg',
+  'packageWeightKg',
+]
+const AUTOFILL_NUMBER_FIELDS = ['quantityKg', 'packageWeightKg']
+const AUTOFILL_TEXT_LIMITS = {
+  po: CARGO_REPORT_LIMITS.text,
+  dbcorpCode: CARGO_REPORT_LIMITS.text,
+  supplierDescription: CARGO_REPORT_LIMITS.description,
+  sqDescription: CARGO_REPORT_LIMITS.description,
+}
+export const CARGO_AUTOFILL_KEY_MAX = 140
+const AUTOFILL_SNAPSHOT_ID_MAX = 40
+
+export function createEmptyCargoAutofill(snapshotId = '') {
+  return {
+    schemaVersion: CARGO_AUTOFILL_SCHEMA_VERSION,
+    snapshotId: readText(snapshotId, AUTOFILL_SNAPSHOT_ID_MAX),
+    rows: {},
+  }
+}
+
+function readAutofillBase(raw) {
+  const base = {}
+  if (!isPlainObject(raw)) return base
+  for (const field of CARGO_AUTOFILL_FIELDS) {
+    if (!hasOwn(raw, field)) continue
+    if (AUTOFILL_NUMBER_FIELDS.includes(field)) {
+      const value = readNumber(raw[field])
+      if (value !== null) base[field] = value
+    } else if (typeof raw[field] === 'string') {
+      base[field] = readText(raw[field], AUTOFILL_TEXT_LIMITS[field])
+    }
+  }
+  return base
+}
+
+// Leitura tolerante: só entram as linhas cujo id existe em `rows`; `base` só com os 6 campos e tipos certos;
+// ausente ou de tipo errado vira o mapa vazio. As rules só validam o topo (schemaVersion, snapshotId, rows).
+export function readCargoAutofill(raw, rows) {
+  const result = createEmptyCargoAutofill(isPlainObject(raw) ? raw.snapshotId : '')
+  if (!isPlainObject(raw) || !isPlainObject(raw.rows)) return result
+  const ids = new Set((Array.isArray(rows) ? rows : []).map((row) => row?.id))
+  for (const [rowId, entry] of Object.entries(raw.rows)) {
+    if (!ids.has(rowId) || !isPlainObject(entry)) continue
+    const parsed = { key: readText(entry.key, CARGO_AUTOFILL_KEY_MAX), base: readAutofillBase(entry.base) }
+    if (entry.fupOnly === true) parsed.fupOnly = true
+    result.rows[rowId] = parsed
+  }
+  return result
 }
 
 // ---------- números ----------
@@ -466,6 +557,11 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
     catalogVersion: Number.isInteger(catalogVersion) && catalogVersion >= 0 ? catalogVersion : 0,
     lastGenerated: readLastGenerated(form?.lastGenerated),
   }
+
+  // S9: `autofill` só vai quando alguma linha gravada tem entrada (a chave é opcional nas rules); entrada de linha
+  // descartada (vazia) ou removida sai do mapa.
+  const autofill = readCargoAutofill(form?.autofill, rows)
+  if (Object.keys(autofill.rows).length > 0) payload.autofill = autofill
 
   return { payload, errors }
 }
