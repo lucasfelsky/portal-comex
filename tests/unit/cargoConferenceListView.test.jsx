@@ -125,7 +125,7 @@ describe('lista da aba Conferência', () => {
     render(<Harness />)
     expect(screen.getByText('Logística')).toBeInTheDocument()
     expect(
-      screen.getByText('Previsão de chegada nesta semana, mais conferências abertas de semanas anteriores.')
+      screen.getByText('Previsão de chegada nesta semana, mais conferências abertas das últimas 4 semanas.')
     ).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Buscar processo, fornecedor ou tipo' })).toHaveAttribute(
       'placeholder',

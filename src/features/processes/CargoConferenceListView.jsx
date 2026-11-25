@@ -163,7 +163,7 @@ export default function CargoConferenceListView({
         ))}
       </div>
 
-      <p className="ccf-sub">Previsão de chegada nesta semana, mais conferências abertas de semanas anteriores.</p>
+      <p className="ccf-sub">Previsão de chegada nesta semana, mais conferências abertas das últimas 4 semanas.</p>
 
       {status === 'error' && entries.length === 0 ? (
         <div className="error-banner error-banner--retry" role="alert">
