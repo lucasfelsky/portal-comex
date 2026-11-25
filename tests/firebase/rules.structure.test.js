@@ -162,6 +162,9 @@ describe('firestore.rules structure', () => {
       const fn = rules.match(/function\s+isValidCargoReportCurrent\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
+      // S9-E: o nfNumber LEGADO do current segue em 40 (so a conferencia aceita a lista de 1000).
+      expect(body).toMatch(/nfNumber\.size\(\)\s*<=\s*40/)
+      expect(body).not.toMatch(/nfNumber\.size\(\)\s*<=\s*1000/)
       const keys = [
         'schemaVersion', 'formCode', 'formRevision', 'revision', 'status', 'cargoType', 'titleSuffix',
         'rows', 'notes', 'receiptStatus', 'receivedDate', 'completedDate',
@@ -239,7 +242,9 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/checkedByName\.size\(\)\s*<=\s*120/)
       expect(body).toMatch(/status\s+in\s+\[\s*'aberta',\s*'fechada'\s*\]/)
       expect(body).toMatch(/receiptStatus\s+in\s+\[\s*'',\s*'com_ressalva',\s*'sem_ressalva'\s*\]/)
-      expect(body).toMatch(/nfNumber\.size\(\)\s*<=\s*40/)
+      // S10 (S9-E): na conferencia o nfNumber e uma lista de NFs ("NF1; NF2") de ate 1000 caracteres.
+      expect(body).toMatch(/nfNumber\.size\(\)\s*<=\s*1000/)
+      expect(body).not.toMatch(/nfNumber\.size\(\)\s*<=\s*40/)
       expect(body).toMatch(/notes\.size\(\)\s*<=\s*2000/)
       expect(body).toMatch(/closedByName\.size\(\)\s*<=\s*120/)
       expect(body).toMatch(/closedDocumentId\.size\(\)\s*<=\s*128/)

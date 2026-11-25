@@ -419,6 +419,7 @@ export function CargoReportActionBar({
       conference.unloadStartAt ? '' : 'Início da descarga não informado',
       conference.unloadStartAt && !conference.unloadEndAt ? 'Fim da descarga não informado' : '',
       conference.labelingOk ? '' : 'Etiquetagem sem OK',
+      String(conference.nfNumber ?? '').trim() ? '' : 'Nº da NF não informado',
     ]
       .filter(Boolean)
       .join(', ')

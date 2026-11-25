@@ -157,7 +157,8 @@ export function buildCargoReportSheet(form, { process, conference, catalog, pack
     completedDateBr: formatCargoDateBr(
       conference?.status === CARGO_CONFERENCE_STATUS.closed ? conference.closedDate : payload.completedDate
     ),
-    nfNumber: String(conference?.nfNumber ?? '').trim().slice(0, CARGO_REPORT_LIMITS.nf),
+    // S9-E: lista de NFs "NF1; NF2" (até 1.000 caracteres); o Excel e a impressão escrevem a lista inteira.
+    nfNumber: String(conference?.nfNumber ?? '').trim().slice(0, CARGO_REPORT_LIMITS.nfList),
     alerts,
   }
 }

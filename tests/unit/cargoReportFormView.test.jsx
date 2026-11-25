@@ -405,7 +405,6 @@ describe('admin: salvar rascunho', () => {
     for (const label of [
       'Status do recebimento',
       'Data de recebimento',
-      'Nº da NF',
       'Observações',
       'Início da descarga',
       'Fim da descarga',
@@ -413,6 +412,11 @@ describe('admin: salvar rascunho', () => {
     ]) {
       expect(screen.getByLabelText(label)).toBeDisabled()
     }
+    // S9-E: "Nº da NF" é uma lista; somente leitura mostra só os chips (aqui sem NF: traço), sem campo nem botão.
+    const nfField = screen.getByText('Nº da NF').closest('.crf-field')
+    expect(nfField).toHaveTextContent('—')
+    expect(within(nfField).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(nfField).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('conflito de revisao mostra o texto do mock e "Recarregar"', async () => {
@@ -677,6 +681,56 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     expect(save).toBeDisabled()
   })
 
+  it('S9-E: a logística adiciona 2 NFs (Enter e colar), remove uma, e a conferência grava "000.123; 000.124"', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Nº da NF'), '000.999{Enter}')
+    // Adicionar uma NF suja a tela (habilita Salvar).
+    expect(save).toBeEnabled()
+    await user.click(screen.getByLabelText('Nº da NF'))
+    await user.paste('000.123; 000.124')
+    await user.click(screen.getByRole('button', { name: 'Remover NF 000.999' }))
+    expect(
+      within(screen.getByRole('list', { name: 'NFs adicionadas' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent)
+    ).toEqual(['000.123', '000.124'])
+
+    await user.click(save)
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1]).toMatchObject({ nfNumber: '000.123; 000.124' })
+    expect(save).toBeDisabled()
+  })
+
+  it('S9-E: formulário limpo + NF só digitada (sem Adicionar): Salvar habilita, clique grava a NF e sair do campo não muda o layout', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const save = screen.getByRole('button', { name: 'Salvar conferência' })
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Nº da NF'), '777')
+    // A NF digitada já suja o formulário (não depende de sair do campo).
+    expect(save).toBeEnabled()
+
+    // Sair do campo NÃO cria a lista de chips (nenhum bloco novo empurraria a barra de ações no meio do clique).
+    await user.tab()
+    expect(screen.queryByRole('list', { name: 'NFs adicionadas' })).not.toBeInTheDocument()
+
+    await user.click(save)
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1]).toMatchObject({ nfNumber: '777' })
+    expect(save).toBeDisabled()
+  })
+
+  it('S9-E: NF digitada junto com outras (chips + texto) grava todas ao Salvar', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await user.type(screen.getByLabelText('Nº da NF'), '111{Enter}222')
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1]).toMatchObject({ nfNumber: '111; 222' })
+  })
+
   it('S7: conferencia anterior a S7 (sem receiptStatus) pre-preenche o recebimento pelo current sem sujar a tela', async () => {
     const { receiptStatus: _s, receivedDate: _d, nfNumber: _n, notes: _o, ...legacyConference } = conferenceDoc()
     mockGetCargoReport.mockResolvedValue({
@@ -688,7 +742,10 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     expect(screen.getByLabelText('Observações')).toHaveValue('Obs do COMEX')
     expect(screen.getByLabelText('Status do recebimento')).toHaveValue('sem_ressalva')
     expect(screen.getByLabelText('Data de recebimento')).toHaveValue('20/11/2026')
-    expect(screen.getByLabelText('Nº da NF')).toHaveValue('NF-9')
+    // S9-E: o legado do rodapé do current vira UM chip e não suja a tela.
+    expect(within(screen.getByRole('list', { name: 'NFs adicionadas' })).getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Remover NF NF-9' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Nº da NF')).toHaveValue('')
     expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
   })
 })
@@ -1425,7 +1482,6 @@ describe('S7: logística nos estados 2 e 3', () => {
     for (const label of [
       'Status do recebimento',
       'Data de recebimento',
-      'Nº da NF',
       'Observações',
       'Início da descarga',
       'Fim da descarga',
@@ -1433,6 +1489,9 @@ describe('S7: logística nos estados 2 e 3', () => {
     ]) {
       expect(screen.getByLabelText(label)).toBeDisabled()
     }
+    const closedNfField = screen.getByText('Nº da NF').closest('.crf-field')
+    expect(within(closedNfField).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(closedNfField).queryByRole('button')).not.toBeInTheDocument()
     for (const label of [
       'Salvar e fechar',
       'Salvar e fechar conferência',
@@ -1930,7 +1989,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     expect(dialog).toHaveTextContent('Envia o aviso da conferência por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório.')
     expect(dialog).toHaveTextContent('A conferência fica fechada. Para corrigir, peça ao COMEX para reabrir.')
     expect(within(dialog).getByRole('note')).toHaveTextContent(
-      'Pendências: 2 linhas sem OK?, 4 linhas sem contagem, Status do recebimento não informado, Início da descarga não informado, Etiquetagem sem OK. Dá para fechar assim.'
+      'Pendências: 2 linhas sem OK?, 4 linhas sem contagem, Status do recebimento não informado, Início da descarga não informado, Etiquetagem sem OK, Nº da NF não informado. Dá para fechar assim.'
     )
     expect(within(dialog).getByRole('button', { name: 'Salvar e fechar conferência' })).toHaveClass('primary-button')
   })
@@ -1945,10 +2004,35 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
         unloadEndAt: '2026-11-24T10:40',
         receivedDate: '2026-11-24',
         labelingOk: true,
+        nfNumber: '000.123; 000.124',
       }),
     })
     const { user } = await renderForm({ profile: LOGISTICA })
     const dialog = await openCloseDialog(user)
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('S9-E: só a NF faltando vira a pendência "Nº da NF não informado" (e some com a NF adicionada)', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc({ rows: [CONCLUDED_ROWS[0]] }),
+      conference: conferenceDoc({
+        receiptStatus: 'sem_ressalva',
+        countOkByRowId: { 'r-1': true },
+        unloadStartAt: '2026-11-24T08:15',
+        unloadEndAt: '2026-11-24T10:40',
+        receivedDate: '2026-11-24',
+        labelingOk: true,
+      }),
+    })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    let dialog = await openCloseDialog(user)
+    expect(within(dialog).getByRole('note')).toHaveTextContent('Pendências: Nº da NF não informado. Dá para fechar assim.')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitDialogClosed(CLOSE_DIALOG)
+
+    // A NF só digitada (sem Enter nem Adicionar) já conta: a pendência some.
+    await user.type(screen.getByLabelText('Nº da NF'), '48213')
+    dialog = await openCloseDialog(user)
     expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
   })
 
@@ -2021,6 +2105,12 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     expect(screen.queryByRole('button', { name: 'Salvar e fechar conferência' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Salvar conferência' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Observações')).toBeDisabled()
+    // S9-E: a NF que só estava digitada (sem Enter) aparece na conferência fechada, na mesma sessão.
+    expect(
+      within(screen.getByRole('list', { name: 'NFs adicionadas' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent)
+    ).toEqual(['000.123.456'])
   })
 
   it('o COMEX alterou ou reabriu o relatório (conflito de current): texto próprio, "Recarregar" e nada gravado', async () => {
@@ -2275,6 +2365,19 @@ describe('S8: descarga, data de recebimento fixa e etiquetagem', () => {
     expect(Object.keys(mockSaveConference.mock.calls[0][1])).not.toContain('unloadMinutes')
     expect(await screen.findByText(/Conferência salva às \d{2}:\d{2}\./)).toBeInTheDocument()
     expect(save).toBeDisabled()
+  })
+
+  it('S9-E: NF só digitada (sem Enter) + "Descartar": o campo, o rodapé e o botão Salvar voltam ao salvo', async () => {
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const nf = screen.getByLabelText('Nº da NF')
+    await user.type(nf, '888')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+
+    expect(screen.getByLabelText('Nº da NF')).toHaveValue('')
+    expect(screen.getByText(/Fica salvo como:/)).toHaveTextContent('Fica salvo como: —')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
   })
 
   it('só marcar a Etiquetagem já suja a conferência; "Descartar" desfaz', async () => {

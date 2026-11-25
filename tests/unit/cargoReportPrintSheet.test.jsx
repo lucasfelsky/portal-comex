@@ -113,6 +113,25 @@ describe('CargoReportPrintView: larguras e linhas', () => {
     expect(container.querySelectorAll('tbody span.crf-print__lot')).toHaveLength(2)
   })
 
+  it('S9-E: a lista longa de NFs vai inteira no HTML do rodapé (o texto não é cortado antes do CSS)', () => {
+    const list = Array.from({ length: 100 }, (_, index) => String(10000000 + index)).join('; ')
+    const { container } = render(<CargoReportPrintView sheet={{ ...makeSheet(1), nfNumber: list }} />)
+    expect(container.textContent).toContain(`Nº DA NF: ${list}`)
+  })
+
+  it('S9-E: na folha impressa o "Nº DA NF" fica em UMA linha com reticências (o rodapé tem teto de 32 mm); o dado completo é do HTML/Excel', () => {
+    // LIMITE ACEITO PELO LUCAS (S9-E): na impressão o "Nº DA NF" mostra só a 1ª linha (≈ 6 NFs de 8 dígitos, ≈ 12 de
+    // 5) com reticências; no Excel a célula I40 mostra ≈ 50 caracteres e corta na borda da mescla. A lista INTEIRA
+    // (até 1.000 caracteres) fica guardada na conferência, no HTML e no valor da célula do Excel.
+    // Medido em A4 paisagem: com as 7 linhas do recebimento o rodapé (max-height 32 mm) só tem espaço para 1 linha
+    // de NF; o grid espreme o <p> até caber. Quebrar a linha não mostraria mais NFs sem aumentar o rodapé (o que
+    // mudaria o layout) e tiraria as reticências que avisam do corte. Este teste trava o comportamento atual.
+    const general = ruleBody(printCss(), '.crf-print__foot > div:not(:last-child) p')
+    expect(general).toContain('white-space: nowrap')
+    expect(general).toContain('text-overflow: ellipsis')
+    expect(ruleBody(printCss(), '.crf-print__foot > div')).toContain('max-height: 32mm')
+  })
+
   it('a tabela tem sempre 28 linhas: as vazias completam as preenchidas', () => {
     for (const filled of [0, 5, 28]) {
       const { container, unmount } = render(<CargoReportPrintView sheet={makeSheet(filled)} />)

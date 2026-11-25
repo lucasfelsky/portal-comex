@@ -5106,7 +5106,8 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertFails(setDoc(doc(logistics(), CONF), conference({ status: 'x' })))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ receiptStatus: 'x' })))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ receivedDate: '24/11/2026' })))
-        await assertFails(setDoc(doc(logistics(), CONF), conference({ nfNumber: 'x'.repeat(41) })))
+        // S10 (S9-E): nfNumber da conferencia e uma lista de NFs de ate 1000 caracteres (o limite de 40 e do current).
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ nfNumber: 'x'.repeat(1001) })))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ notes: 'x'.repeat(2001) })))
         await assertFails(setDoc(doc(logistics(), CONF), conference({ closedByName: 'x'.repeat(121) })))
         await assertSucceeds(
@@ -5120,6 +5121,19 @@ describeEmulator('firestore.rules (emulador)', () => {
             })
           )
         )
+      })
+
+      it('S10: lista de NFs: 1000 caracteres passa, 1001 falha, 41 caracteres passa', async () => {
+        await seedCurrent()
+        const list = (size) =>
+          Array.from({ length: Math.ceil(size / 10) }, (_, index) => String(1000000000 + index))
+            .join('; ')
+            .slice(0, size)
+        expect(list(1000)).toHaveLength(1000)
+        await assertFails(setDoc(doc(logistics(), CONF), conference({ nfNumber: list(1001) })))
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ nfNumber: list(1000) })))
+        await seedConference(1)
+        await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2, nfNumber: 'x'.repeat(41) })))
       })
 
       it('S7: payload sem status ou sem notes (bundle antigo) falha; revisao errada falha', async () => {
@@ -5234,6 +5248,19 @@ describeEmulator('firestore.rules (emulador)', () => {
           expect(snapshot.data().status).toBe('aberta')
           expect(snapshot.data().closedDocumentId).toBe('')
           expect(snapshot.data().checkedByName).toBe('Logistica')
+        })
+
+        it('S10: admin reabre conferencia fechada com a lista de NFs de 1000 caracteres (copia o texto do servidor)', async () => {
+          const nfNumber = Array.from({ length: 100 }, (_, index) => String(10000000 + index))
+            .join('; ')
+            .padEnd(1000, '0')
+          expect(nfNumber).toHaveLength(1000)
+          await seedCurrent(1, 'concluido')
+          await seed((db) =>
+            setDoc(doc(db, CONF), { ...closedConference({ revision: 1, nfNumber }), updatedAt: new Date('2026-11-01T11:00:00Z') })
+          )
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ nfNumber: nfNumber.slice(0, 999) })))
+          await assertSucceeds(setDoc(doc(admin(), CONF), reopened({ nfNumber })))
         })
 
         it('reabrir mudando okByRowId, labelsByRowId, notes ou checkedByName falha', async () => {
