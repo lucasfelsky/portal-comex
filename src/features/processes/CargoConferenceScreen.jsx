@@ -6,12 +6,14 @@ import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext'
 import useMediaQuery from '../../hooks/useMediaQuery'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
 import {
+  CARGO_PHOTOS_PER_CONFERENCE,
   cargoRowPallets,
   formatCargoPalletsSummary,
   hasCargoRowIssue,
   listCargoIssueRows,
   readCargoRowIssue,
 } from './cargoConferenceIssues'
+import { countCargoPhotos } from './cargoConferencePhotos'
 import { describeCargoRow, isCargoRowConferred } from './cargoConferenceModel'
 import CargoConferenceItemCard from './CargoConferenceItemCard'
 import CargoConferenceReceiptPanel from './CargoConferenceReceiptPanel'
@@ -59,7 +61,7 @@ const PALLETS_BADGES = {
   semTotal: { className: 'ccf-badge', label: 'Sem total' },
 }
 
-function ProgressLine({ done, total, process, pallets }) {
+function ProgressLine({ done, total, process, pallets, photoCount }) {
   const percent = total > 0 ? Math.round((done * 100) / total) : 0
   const badge = PALLETS_BADGES[pallets.state]
   return (
@@ -74,6 +76,7 @@ function ProgressLine({ done, total, process, pallets }) {
       <p className="ccf-pallets">
         <span>{formatCargoPalletsSummary(pallets, { withState: false })}</span>
         <span className={badge.className}>{badge.label}</span>
+        {photoCount > 0 ? <span>{`${photoCount} de ${CARGO_PHOTOS_PER_CONFERENCE} fotos de avaria`}</span> : null}
       </p>
     </>
   )
@@ -119,6 +122,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
           total={screen.progress.total}
           process={process}
           pallets={screen.pallets}
+          photoCount={countCargoPhotos(conference)}
         />
       ) : null}
     </div>
@@ -199,6 +203,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         hasIssue={hasCargoRowIssue(conference, row.id)}
         labels={conference.labelsByRowId?.[row.id]}
         editable={screen.canSave}
+        photoTools={screen.photoTools}
         idPrefix={`${baseId}-r${rowIndex}`}
         onToggleOk={screen.toggleOk}
         onStepPallets={screen.stepPallets}
@@ -215,6 +220,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
       number: rowIndex + 1,
       title: describeCargoRow(row, rowIndex + 1),
       note: readCargoRowIssue(conference, row.id).note.trim(),
+      photoCount: readCargoRowIssue(conference, row.id).photos.length,
     }
   })
   const isPending = (row) => !isCargoRowConferred(conference, row.id)
@@ -254,11 +260,16 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
     itemsContent = rows.map((row, rowIndex) => (showOnlyPending && !isPending(row) ? null : renderCard(row, rowIndex)))
   }
 
-  const saveDisabled = screen.isBusy || !screen.dirty
+  const saveDisabled = screen.isBusy || !screen.dirty || screen.isUploading
   let actions
   if (screen.canSave) {
     actions = (
       <>
+        {screen.isUploading ? (
+          <p className="ccf-actionbar__hint" role="status">
+            Aguarde o envio das fotos.
+          </p>
+        ) : null}
         <button type="button" className="primary-button" disabled={saveDisabled} onClick={screen.save}>
           Salvar
         </button>

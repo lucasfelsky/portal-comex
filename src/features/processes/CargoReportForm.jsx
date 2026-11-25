@@ -288,7 +288,15 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const stage = getCargoReportStage(form?.status, savedConference.status)
   const canConferNow = canSaveCargoConference(role, stage)
   // S6/S10-I: OK?, pallets, etiquetas e observações são da logística; o admin só vê.
-  const edit = useCargoConferenceEdit({ canConferNow, conference, setConference, setFeedback })
+  const edit = useCargoConferenceEdit({
+    processId,
+    uid: profile?.uid,
+    canConferNow,
+    conference,
+    savedConference,
+    setConference,
+    setFeedback,
+  })
 
   if (!processId || !canOpen) return null
 
@@ -437,6 +445,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }
 
   function handleDiscardConference() {
+    edit.discardPhotos()
     setConference(savedConference)
     setFeedback(null)
     edit.clearSuggestion()
@@ -711,6 +720,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         summary={palletsSummary}
         canEdit={canConferNow}
         isDesktop={isDesktop}
+        photoTools={edit.photoTools}
         onIssueChange={edit.setIssue}
       />
 
@@ -740,6 +750,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         isSaving={isSaving}
         canSave={canSave}
         conferenceDirty={conferenceDirty}
+        photosBusy={edit.isUploading}
         onSaveDraft={handleSaveDraft}
         onSaveConference={handleSaveConference}
         onDiscardConference={handleDiscardConference}

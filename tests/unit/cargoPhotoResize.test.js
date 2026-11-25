@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  CARGO_PHOTO_HUGE_MESSAGE,
   CARGO_PHOTO_NOT_IMAGE_CODE,
   CARGO_PHOTO_TOO_LARGE_CODE,
   CARGO_PHOTO_UNREADABLE_CODE,
@@ -91,7 +92,7 @@ describe('resizeCargoPhoto', () => {
     expect(canvases[0].toBlob).toHaveBeenCalledTimes(1)
   })
 
-  it('PNG com transparência: fundo branco antes de desenhar', async () => {
+  it('PNG com transparência: fundo branco pintado por baixo do desenho', async () => {
     installBitmap(100, 100)
     await resizeCargoPhoto({ name: 'a.png', type: 'image/png' })
     const { context } = canvases[0]
@@ -244,5 +245,155 @@ describe('isCargoPhotoFile', () => {
     [null, false],
   ])('%j -> %s', (file, expected) => {
     expect(isCargoPhotoFile(file)).toBe(expected)
+  })
+})
+
+describe('aparelho real: o que a redução recusa ou preserva (S10-J1b)', () => {
+  // Contexto que "desenha" de verdade só quando `drawn` é verdadeiro; senão o canvas segue transparente (aparelho sem
+  // memória), como o Safari faz sem avisar.
+  function installCanvasWithPixels({ alpha }) {
+    const calls = []
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => {
+        const context = {
+          fillStyle: '',
+          globalCompositeOperation: 'source-over',
+          imageSmoothingQuality: 'low',
+          drawImage: vi.fn(() => calls.push('draw')),
+          fillRect: vi.fn(() => calls.push(`fill:${context.globalCompositeOperation}`)),
+          getImageData: vi.fn(() => ({ data: [0, 0, 0, alpha] })),
+        }
+        const canvas = {
+          width: 0,
+          height: 0,
+          getContext: () => context,
+          toBlob: (callback, type) => callback({ size: 1000, type }),
+        }
+        return canvas
+      }),
+    })
+    return calls
+  }
+
+  it('canvas que ficou transparente (nada desenhado) é recusado como foto ilegível, sem enviar JPEG em branco', async () => {
+    installCanvasWithPixels({ alpha: 0 })
+    installBitmap(4000, 3000)
+    await expect(resizeCargoPhoto(jpeg)).rejects.toMatchObject({
+      code: CARGO_PHOTO_UNREADABLE_CODE,
+      message: CARGO_PHOTO_UNREADABLE_MESSAGE,
+    })
+  })
+
+  it('canvas desenhado (alfa 255) passa; o fundo branco é pintado POR BAIXO depois do desenho', async () => {
+    const calls = installCanvasWithPixels({ alpha: 255 })
+    installBitmap(4000, 3000)
+    const result = await resizeCargoPhoto(jpeg)
+    expect(result.blob.type).toBe('image/jpeg')
+    expect(calls).toEqual(['draw', 'fill:destination-over'])
+  })
+
+  it('a amostra é uma grade 5 x 5 de pontos dentro do canvas', async () => {
+    installCanvasWithPixels({ alpha: 0 })
+    installBitmap(11, 7)
+    await expect(resizeCargoPhoto(jpeg)).rejects.toMatchObject({ code: CARGO_PHOTO_UNREADABLE_CODE })
+    const context = document.createElement.mock.results[0].value.getContext()
+    expect(context.getImageData).toHaveBeenCalledTimes(25)
+    for (const [x, y] of context.getImageData.mock.calls) {
+      expect(x).toBeGreaterThanOrEqual(0)
+      expect(x).toBeLessThanOrEqual(10)
+      expect(y).toBeGreaterThanOrEqual(0)
+      expect(y).toBeLessThanOrEqual(6)
+    }
+  })
+
+  it('PNG com transparência só nas bordas e centro opaco: não é confundido com canvas vazio', async () => {
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => {
+        const context = {
+          fillStyle: '',
+          drawImage: vi.fn(),
+          fillRect: vi.fn(),
+          // Transparente em tudo, menos no ponto central da grade (2, 2).
+          getImageData: vi.fn((x, y) => ({ data: [0, 0, 0, x === 5 && y === 5 ? 255 : 0] })),
+        }
+        return { width: 0, height: 0, getContext: () => context, toBlob: (cb, type) => cb({ size: 1000, type }) }
+      }),
+    })
+    installBitmap(11, 11)
+    await expect(resizeCargoPhoto({ name: 'logo.png', type: 'image/png' })).resolves.toMatchObject({ width: 11 })
+  })
+
+  it('imagem de origem acima de 150 megapixels não é decodificada: erro cargoPhoto/too-large e bitmap liberado', async () => {
+    const { bitmap } = installBitmap(16000, 12000)
+    await expect(resizeCargoPhoto(jpeg)).rejects.toMatchObject({
+      code: CARGO_PHOTO_TOO_LARGE_CODE,
+      message: CARGO_PHOTO_HUGE_MESSAGE,
+    })
+    expect(bitmap.close).toHaveBeenCalled()
+    expect(canvases).toHaveLength(0)
+  })
+
+  it('foto de 48 MP (iPhone Pro) está dentro do teto e vira 1.600 px', async () => {
+    installBitmap(8064, 6048)
+    const result = await resizeCargoPhoto(jpeg)
+    expect([result.width, result.height]).toEqual([1600, 1200])
+  })
+
+  it('orientação: pede o EXIF ao navegador e, sem a opção (Safari antigo), usa o <img>, que já vem girado', async () => {
+    const { createImageBitmap } = installBitmap(4000, 3000)
+    await resizeCargoPhoto(jpeg)
+    expect(createImageBitmap).toHaveBeenCalledWith(jpeg, { imageOrientation: 'from-image' })
+
+    vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new TypeError('Invalid imageOrientation')))
+    class FakeImage {
+      constructor() {
+        this.naturalWidth = 3000
+        this.naturalHeight = 4000
+      }
+
+      decode() {
+        return Promise.resolve()
+      }
+    }
+    vi.stubGlobal('Image', FakeImage)
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:foto')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const result = await resizeCargoPhoto(jpeg)
+    expect([result.width, result.height]).toEqual([1200, 1600])
+    vi.restoreAllMocks()
+  })
+})
+
+describe('isCargoPhotoFile: octet-stream com extensão de imagem (S10-J1b)', () => {
+  it.each([
+    [{ type: 'application/octet-stream', name: 'IMG_1.jpg' }, true],
+    [{ type: 'application/octet-stream', name: 'foto.HEIC' }, true],
+    [{ type: 'binary/octet-stream', name: 'a.png' }, true],
+    [{ type: 'application/octet-stream', name: 'dados.bin' }, false],
+    [{ type: 'application/octet-stream', name: 'planilha.xlsx' }, false],
+    [{ type: 'text/plain', name: 'foto.jpg' }, false],
+    [{ type: 'application/pdf', name: 'foto.jpg' }, false],
+  ])('%j -> %s', (file, expected) => {
+    expect(isCargoPhotoFile(file)).toBe(expected)
+  })
+
+  it('octet-stream com .jpg segue para a decodificação (o conteúdo é validado ali)', async () => {
+    installBitmap(100, 100)
+    await expect(resizeCargoPhoto({ name: 'IMG_1.jpg', type: 'application/octet-stream' })).resolves.toMatchObject({
+      width: 100,
+    })
+    vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new Error('x')))
+    vi.stubGlobal('Image', undefined)
+    await expect(resizeCargoPhoto({ name: 'falso.jpg', type: 'application/octet-stream' })).rejects.toMatchObject({
+      code: CARGO_PHOTO_UNREADABLE_CODE,
+    })
+  })
+
+  it('octet-stream sem extensão de imagem é recusado como não-imagem, sem decodificar', async () => {
+    const { createImageBitmap } = installBitmap(100, 100)
+    await expect(resizeCargoPhoto({ name: 'dados.bin', type: 'application/octet-stream' })).rejects.toMatchObject({
+      code: CARGO_PHOTO_NOT_IMAGE_CODE,
+    })
+    expect(createImageBitmap).not.toHaveBeenCalled()
   })
 })

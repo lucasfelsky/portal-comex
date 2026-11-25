@@ -238,6 +238,7 @@ export function CargoReportActionBar({
   isSaving,
   canSave,
   conferenceDirty,
+  photosBusy = false,
   onSaveDraft,
   onSaveConference,
   onDiscardConference,
@@ -266,7 +267,8 @@ export function CargoReportActionBar({
   const [isPrinting, setIsPrinting] = useState(false)
   const [printToken, setPrintToken] = useState(0)
   const workingRef = useRef(false)
-  const isBusy = isSaving || isWorking
+  // S10-J1b: foto ainda subindo trava salvar, descartar e fechar (a foto só vale depois do envio).
+  const isBusy = isSaving || isWorking || photosBusy
 
   const buildSheet = (source, sheetConference = conference) =>
     buildCargoReportSheet(source, { process, conference: sheetConference, catalog, packaging })
@@ -560,6 +562,11 @@ export function CargoReportActionBar({
             {isSaving ? (
               <span className="field-hint" role="status">
                 {canEdit ? 'Salvando rascunho…' : 'Salvando conferência…'}
+              </span>
+            ) : null}
+            {photosBusy ? (
+              <span className="field-hint" role="status">
+                Aguarde o envio das fotos.
               </span>
             ) : null}
             {isLogisticsView && !isSaving ? (

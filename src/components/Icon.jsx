@@ -402,6 +402,14 @@ const ICONS = {
   ),
   // S9-F: aba Conferência (traço do mock aprovado).
   'clipboard-check': <path d="M9 11l3 3 7-8M5 5h9M5 10h2M5 15h7M5 20h14" />,
+  // S10-J1b: fotos de avaria por item (traços do mock aprovado).
+  camera: (
+    <>
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
+  paperclip: <path d="M20 11l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />,
   print: (
     <>
       <path d="M7 9V4h10v5" />

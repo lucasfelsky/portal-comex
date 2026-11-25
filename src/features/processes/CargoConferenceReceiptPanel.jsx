@@ -170,6 +170,12 @@ export default function CargoConferenceReceiptPanel({
                 <b>{`Item ${item.number} · ${item.title}`}</b>
                 <br />
                 {item.note || '(sem observação)'}
+                {item.photoCount > 0 ? (
+                  <>
+                    <br />
+                    <span className="ccf-sub">{item.photoCount === 1 ? '1 foto' : `${item.photoCount} fotos`}</span>
+                  </>
+                ) : null}
               </div>
             ))}
             <p className="ccf-sub">As observações ficam no item.</p>
