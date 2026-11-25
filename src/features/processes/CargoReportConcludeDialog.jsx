@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import ActionSheet from '../../components/ActionSheet'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Icon from '../../components/Icon'
@@ -21,7 +21,8 @@ import {
   reopenCargoConference,
   retryCargoConferenceClose,
 } from './cargoConferenceActions'
-import { listCargoConferencePendings } from './cargoConferenceModel'
+import { hasAnyCargoIssue } from './cargoConferenceIssues'
+import { evaluateCargoConferenceClose } from './cargoConferenceModel'
 import CargoReportPrintSheet from './CargoReportPrintSheet'
 import {
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
@@ -59,10 +60,10 @@ const MESSAGES = {
   attachedConflict:
     'O Excel foi anexado e o aviso enviado, mas outra pessoa salvou o relatório antes. Recarregue e confira.',
   conferHint:
-    'Você marca o OK? e a contagem, preenche as etiquetas e os dados do recebimento. As demais colunas são só do COMEX.',
+    'Você marca o OK?, conta os pallets, registra avarias, preenche as etiquetas e os dados do recebimento. As demais colunas são só do COMEX.',
   conferWaiting: 'Disponível depois que o COMEX fechar: "Salvar e fechar conferência".',
   conferenceChanged:
-    'A logística salvou a conferência depois que você abriu o relatório. Recarregue para ver o OK?, as etiquetas e a contagem antes de fechar.',
+    'A logística salvou a conferência depois que você abriu o relatório. Recarregue para ver o OK?, as etiquetas e a contagem de pallets antes de fechar.',
   catalogMissing:
     'A tabela Item x Emb. não está disponível: peso líquido e nº de embalagens vão vazios no relatório fechado, e ao reabrir a tabela volta a calcular.',
   reopenComexTitle: 'Reabrir parte do COMEX?',
@@ -139,9 +140,20 @@ export default function CargoReportConcludeDialog({
   )
 }
 
-// S7: fechamento da conferência pela logística. `pendingText` = pendências (não bloqueiam).
-export function CargoReportCloseConferenceDialog({ open, processName, pendingText = '', busy = false, onConfirm, onCancel }) {
+// S7: fechamento da conferência pela logística. `pendingText` = pendências (não bloqueiam). S10-I: `blocking` = motivo
+// que impede o fechar (divergência de pallets sem observação escrita em item algum); `hasIssues` = há avaria registrada.
+export function CargoReportCloseConferenceDialog({
+  open,
+  processName,
+  pendingText = '',
+  blocking = '',
+  hasIssues = false,
+  busy = false,
+  onConfirm,
+  onCancel,
+}) {
   const cancelRef = useRef(null)
+  const blockingId = useId()
 
   return (
     <Modal
@@ -159,7 +171,7 @@ export function CargoReportCloseConferenceDialog({ open, processName, pendingTex
         </p>
         <ul className="crf-dlg__list">
           <li>
-            {'Gera o Excel do FR.CMX.001 com OK?, contagem, etiquetas e recebimento e anexa como '}
+            {'Gera o Excel do FR.CMX.001 com OK?, pallets contados, etiquetas e recebimento e anexa como '}
             <b>nova versão</b>
             {' do Relatório de carga.'}
           </li>
@@ -171,7 +183,7 @@ export function CargoReportCloseConferenceDialog({ open, processName, pendingTex
           <li>
             {'Envia o '}
             <b>aviso da conferência</b>
-            {' por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório.'}
+            {` por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório${hasIssues ? ', incluindo as avarias registradas' : ''}.`}
           </li>
           <li>
             {'A conferência fica '}
@@ -179,16 +191,27 @@ export function CargoReportCloseConferenceDialog({ open, processName, pendingTex
             {'. Para corrigir, peça ao COMEX para reabrir.'}
           </li>
         </ul>
+        {blocking ? (
+          <div className="crf-dlg__warn crf-dlg__block" role="alert" id={blockingId}>
+            {blocking}
+          </div>
+        ) : null}
         {pendingText ? (
           <div className="crf-dlg__warn" role="note">
-            {`Pendências: ${pendingText}. Dá para fechar assim.`}
+            {`Pendências: ${pendingText}. ${blocking ? 'Resolva o bloqueio acima para fechar.' : 'Dá para fechar assim.'}`}
           </div>
         ) : null}
         <div className="crf-dlg__actions">
           <button type="button" className="secondary-button" ref={cancelRef} onClick={onCancel} disabled={busy}>
             Cancelar
           </button>
-          <button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={onConfirm}
+            disabled={busy || Boolean(blocking)}
+            aria-describedby={blocking ? blockingId : undefined}
+          >
             {busy ? 'Fechando…' : 'Salvar e fechar conferência'}
           </button>
         </div>
@@ -221,6 +244,7 @@ export function CargoReportActionBar({
   onErrors,
   onPersisted,
   onConferencePersisted,
+  onSuggestStatus,
   onFeedback,
   renderImport,
 }) {
@@ -395,8 +419,9 @@ export function CargoReportActionBar({
 
   // ---------- Logística: salvar e fechar conferência ----------
 
-  function buildPendingText() {
-    return listCargoConferencePendings(form.rows, conference).join(', ')
+  // S10-I: bloqueio (divergência de pallets sem observação) e pendências do fechamento; só o computador fecha.
+  function evaluateClose() {
+    return evaluateCargoConferenceClose(form.rows, conference, { expectedPallets: form.expectedPallets })
   }
 
   function finishClosedConference(payload, documentId) {
@@ -418,13 +443,15 @@ export function CargoReportActionBar({
       onFeedback({ kind: 'error', text: CARGO_CONFERENCE_MESSAGES.invalidUnload })
       return
     }
+    // Avaria registrada com o status ainda vazio: o diálogo já abre com "Com ressalva" sugerido.
+    onSuggestStatus?.()
     setIsCloseOpen(true)
   }
 
   // Gera o Excel com a conferência fechada (nome, data de fechamento e recebimento) e anexa como nova
   // versão; o servidor rotaciona as versões e manda o aviso da conferência.
   async function handleConfirmClose() {
-    if (!canClose || isBusy) return
+    if (!canClose || isBusy || evaluateClose().blocking.length > 0) return
     await runWork(async () => {
       onFeedback(null)
       try {
@@ -522,6 +549,7 @@ export function CargoReportActionBar({
   )
 
   const concludeSheet = isConcludeOpen ? buildSheet(form) : null
+  const closeCheck = isCloseOpen ? evaluateClose() : { blocking: [], pendings: [] }
   const isLogisticsView = !canEdit && (stage === CARGO_STAGE.draft || stage === CARGO_STAGE.comexClosed)
 
   return (
@@ -646,7 +674,9 @@ export function CargoReportActionBar({
       <CargoReportCloseConferenceDialog
         open={isCloseOpen}
         processName={process?.name || form.titleSuffix}
-        pendingText={isCloseOpen ? buildPendingText() : ''}
+        pendingText={closeCheck.pendings.join(', ')}
+        blocking={closeCheck.blocking.join(' ')}
+        hasIssues={hasAnyCargoIssue(conference)}
         busy={isWorking}
         onConfirm={handleConfirmClose}
         onCancel={() => setIsCloseOpen(false)}

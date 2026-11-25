@@ -3,7 +3,6 @@ import Icon from '../../components/Icon'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import CargoNfListField from './CargoNfListField'
 import {
-  CARGO_REPORT_LIMITS,
   RECEIPT_STATUS_OPTIONS,
   cargoDatePart,
   computeCargoUnloadMinutes,
@@ -14,7 +13,10 @@ import { formatCargoDateBr } from './cargoReportSheet'
 // S9-F do Relatório de Carga: aba "Recebimento" da conferência no celular (mock aprovado). Os mesmos campos do card
 // "Responsáveis e recebimento" do computador, em cartões de uma coluna: Conferido por (fixo), Status do recebimento em
 // 3 botões, início e fim da descarga, Tempo total e Data de recebimento (fixos), Etiquetagem OK, Notas fiscais
-// (`CargoNfListField`, a lista em chips da S9-E) e Observações. `canEdit`: só a logística com a conferência aberta.
+// (`CargoNfListField`, a lista em chips da S9-E) e, desde a S10-I, "Ressalvas e avarias" no lugar do campo geral
+// "Observações" (as observações ficam em cada item; `conference.notes` antigo aparece só para leitura). Avaria com status
+// diferente de "Com ressalva": nota "Status sugerido" e botão "Usar Com ressalva" (o celular nunca troca sozinho).
+// `canEdit`: só a logística com a conferência aberta.
 
 function FixedValue({ label, children, locked = true }) {
   return (
@@ -60,9 +62,11 @@ export default function CargoConferenceReceiptPanel({
   checkedBy = '',
   isAdmin = false,
   unloadErrors = { start: '', end: '' },
+  issueItems = [],
+  statusSuggestion = null,
 }) {
-  const notesId = useId()
   const statusLabelId = useId()
+  const legacyNotes = String(conference.notes ?? '').trim()
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
   // Com erro (fim sem início, fim antes do início, mais de 24 h) o tempo total fica vazio.
   const totalMinutes = hasUnloadError ? null : computeCargoUnloadMinutes(conference.unloadStartAt, conference.unloadEndAt)
@@ -96,6 +100,16 @@ export default function CargoConferenceReceiptPanel({
               </button>
             ))}
           </div>
+          {statusSuggestion ? (
+            <div className="ccf-note ccf-note--warn" role="status">
+              {statusSuggestion.text}
+              {canEdit ? (
+                <button type="button" className="secondary-button ccf-suggest" onClick={statusSuggestion.onApply}>
+                  Usar Com ressalva
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <DateTimeField
@@ -147,16 +161,31 @@ export default function CargoConferenceReceiptPanel({
         />
       </section>
 
-      <section className="ccf-card" aria-labelledby={notesId}>
-        <h3 id={notesId}>Observações</h3>
-        <textarea
-          aria-labelledby={notesId}
-          value={conference.notes}
-          maxLength={CARGO_REPORT_LIMITS.notes}
-          disabled={!canEdit}
-          placeholder="Avarias, divergências, o que mais a Qualidade precisa saber"
-          onChange={(event) => onChange({ notes: event.target.value })}
-        />
+      <section className="ccf-card" aria-label="Ressalvas e avarias">
+        <h3>Ressalvas e avarias</h3>
+        {issueItems.length > 0 ? (
+          <>
+            {issueItems.map((item) => (
+              <div className="ccf-note ccf-note--warn" key={item.id}>
+                <b>{`Item ${item.number} · ${item.title}`}</b>
+                <br />
+                {item.note || '(sem observação)'}
+              </div>
+            ))}
+            <p className="ccf-sub">As observações ficam no item.</p>
+          </>
+        ) : (
+          <p className="ccf-sub">
+            Nenhuma avaria registrada. Para registrar, volte à aba Itens, escolha o item e use &quot;Registrar avaria /
+            ressalva&quot;.
+          </p>
+        )}
+        {legacyNotes ? (
+          <div className="ccf-field">
+            <span className="ccf-label">Observações (registro antigo)</span>
+            <p className="ccf-legacy">{legacyNotes}</p>
+          </div>
+        ) : null}
       </section>
     </div>
   )

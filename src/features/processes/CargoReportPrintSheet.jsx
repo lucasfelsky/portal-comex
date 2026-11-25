@@ -42,7 +42,8 @@ function box(checked) {
 
 function cellText(row, key) {
   if (key === 'ok') return box(row.ok)
-  if (key === 'countOk') return box(row.countOk)
+  // S10-I: CONTAGEM = nº de pallets (vazio sem contagem; "OK" no relatório antigo).
+  if (key === 'countOk') return row.countText ?? (row.countOk ? 'OK' : '')
   if (key === 'netWeightKg') return formatCargoNumber(row.netWeightKg, { decimals: 1 })
   if (key === 'quantityKg' || key === 'packageWeightKg' || key === 'packages') return formatCargoNumber(row[key])
   // Lotes longos quebram em até 2 linhas (nunca viram reticências); ver `.crf-print__lot` em styles.css.

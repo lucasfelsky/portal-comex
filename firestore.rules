@@ -808,6 +808,9 @@ service cloud.firestore {
           && !isCargoConferenceClosedNow(processId));
     }
 
+    // S11: `expectedPallets` = total de pallets da carga informado pelo COMEX (int 1..9999 ou null). Opcional (fora do
+    // hasAll: relatorio e bundle antigos continuam gravando) e "pegajosa": depois de gravada a chave nao pode sumir
+    // (um bundle antigo recebe "Sem permissao" em vez de apagar o total).
     // S9: `autofill` = origem e valor de base de cada celula preenchida do processo/FUP (marca P/F/C e
     // "editado"); opcional (fora do hasAll: relatorio e bundle antigos continuam gravando); o cliente valida
     // cada entrada.
@@ -817,7 +820,7 @@ service cloud.firestore {
         'cargoType', 'titleSuffix', 'rows', 'notes',
         'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
         'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
-        'autofill',
+        'autofill', 'expectedPallets',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'formCode', 'formRevision', 'revision', 'status',
@@ -873,11 +876,19 @@ service cloud.firestore {
             && request.resource.data.autofill.snapshotId.size() <= 40
             && request.resource.data.autofill.rows is map
             && request.resource.data.autofill.rows.size() <= 200))
+        && (!('expectedPallets' in request.resource.data)
+          || request.resource.data.expectedPallets == null
+          || (request.resource.data.expectedPallets is int
+            && request.resource.data.expectedPallets >= 1
+            && request.resource.data.expectedPallets <= 9999))
+        && (resource == null || !('expectedPallets' in resource.data) || 'expectedPallets' in request.resource.data)
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedById == request.auth.uid
         && request.resource.data.updatedByName == myName();
     }
 
+    // S11: `palletsByRowId` (contador de pallets por item) e `damageByRowId` (observacao por item) sao opcionais (fora do
+    // hasAll) e "pegajosas" como `expectedPallets`; as rules so' validam o formato do mapa (o cliente valida as entradas).
     // S10: nfNumber da conferencia = lista de NFs separada por "; " (ate 1000); o legado do current segue 40.
     function isValidCargoReportConference(processId) {
       return request.resource.data.keys().hasOnly([
@@ -885,6 +896,7 @@ service cloud.firestore {
         'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
         'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
         'updatedAt', 'updatedById', 'updatedByName',
+        'palletsByRowId', 'damageByRowId',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
@@ -905,6 +917,12 @@ service cloud.firestore {
         && request.resource.data.countOkByRowId.values().hasOnly([true, false])
         && request.resource.data.labelsByRowId is map
         && request.resource.data.labelsByRowId.size() <= 200
+        && (!('palletsByRowId' in request.resource.data)
+          || (request.resource.data.palletsByRowId is map && request.resource.data.palletsByRowId.size() <= 200))
+        && (resource == null || !('palletsByRowId' in resource.data) || 'palletsByRowId' in request.resource.data)
+        && (!('damageByRowId' in request.resource.data)
+          || (request.resource.data.damageByRowId is map && request.resource.data.damageByRowId.size() <= 200))
+        && (resource == null || !('damageByRowId' in resource.data) || 'damageByRowId' in request.resource.data)
         && request.resource.data.checkedByName is string
         && request.resource.data.checkedByName.size() <= 120
         && request.resource.data.receiptStatus in ['', 'com_ressalva', 'sem_ressalva']

@@ -11,8 +11,15 @@ import {
   reopenCargoConference,
 } from './cargoConferenceActions'
 import {
+  hasAnyCargoIssue,
+  patchCargoRowIssue,
+  stepCargoRowPallets,
+  summarizeCargoPallets,
+} from './cargoConferenceIssues'
+import {
   EMPTY_CARGO_CONFERENCE,
   cargoConferenceKey,
+  evaluateCargoConferenceClose,
   markAllCargoRowsOk,
   setCargoConferenceLabel,
   summarizeCargoConferenceProgress,
@@ -51,6 +58,8 @@ function formatClock(date) {
 
 // S9-H: no celular a logística só SALVA; fechar a conferência (Excel, aviso e trava) fica no computador. O admin só
 // acompanha e reabre.
+// S10-I: contador de pallets por item, observação por item e o aviso do que o fechamento do computador vai cobrar
+// (`evaluateCargoConferenceClose`): só INFORMA (faixa de pallets, selos e aviso ao salvar), nunca bloqueia o Salvar.
 export default function useCargoConferenceScreen({ process, profile }) {
   const processId = process?.id
   const role = profile?.role
@@ -134,6 +143,13 @@ export default function useCargoConferenceScreen({ process, profile }) {
   const unloadErrors = canSave ? validateCargoUnload(conference) : { start: '', end: '' }
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
   const progress = useMemo(() => summarizeCargoConferenceProgress(rows, conference), [rows, conference])
+  const expectedPallets = form?.expectedPallets ?? null
+  const pallets = useMemo(
+    () => summarizeCargoPallets(rows, conference, expectedPallets),
+    [rows, conference, expectedPallets]
+  )
+  // Avaria registrada e status diferente de "Com ressalva": o celular sugere (botão "Usar Com ressalva"), não troca.
+  const suggestStatus = hasAnyCargoIssue(conference) && conference.receiptStatus !== 'com_ressalva'
 
   // Sair com alteração não salva pede confirmação (como no resto do app).
   useUnsavedChangesGuard(dirty)
@@ -145,15 +161,17 @@ export default function useCargoConferenceScreen({ process, profile }) {
   }
 
   const toggleOk = (rowId) => edit((current) => toggleCargoConferenceFlag(current, 'okByRowId', rowId))
-  const toggleCount = (rowId) => edit((current) => toggleCargoConferenceFlag(current, 'countOkByRowId', rowId))
+  const stepPallets = (rowId, delta) => edit((current) => stepCargoRowPallets(current, rowId, delta))
+  const setIssue = (rowId, changes) => edit((current) => patchCargoRowIssue(current, rowId, changes))
   const setLabel = (rowId, field, value) => edit((current) => setCargoConferenceLabel(current, rowId, field, value))
   const patch = (changes) => edit((current) => ({ ...current, ...changes }))
+  const applySuggestedStatus = () => patch({ receiptStatus: 'com_ressalva' })
 
   function markAllOk() {
     if (!canSave) return
     setConference((current) => markAllCargoRowsOk(current, rows))
     setFeedback(null)
-    toast.success('Todos os itens marcados com OK e Contagem')
+    toast.success('Todos os itens marcados com OK. Os pallets continuam por contar.')
   }
 
   // Estado gravado (salvar, fechar ou reabrir): tela e base de comparação ficam iguais.
@@ -202,7 +220,13 @@ export default function useCargoConferenceScreen({ process, profile }) {
         })
         applyPersisted({ ...payload, updatedAt: new Date(), updatedByName: actorName })
         invalidateCargoConference(processId)
-        setFeedback({ kind: 'success', text: `Conferência salva às ${formatClock(new Date())}.` })
+        // O que o fechamento do computador vai cobrar (nada disso trava o Salvar).
+        const { hints } = evaluateCargoConferenceClose(rows, payload, { expectedPallets })
+        setFeedback({
+          kind: 'success',
+          text: `Conferência salva às ${formatClock(new Date())}.`,
+          notice: hints.length > 0 ? `No fechamento pelo computador: ${hints.join('; ')}.` : '',
+        })
       } catch (error) {
         setFeedback(describeCargoSaveError(error, 'conference'))
       }
@@ -243,13 +267,17 @@ export default function useCargoConferenceScreen({ process, profile }) {
     dirty,
     unloadErrors,
     progress,
+    pallets,
+    suggestStatus,
     feedback,
     isBusy,
     actorName,
     toggleOk,
-    toggleCount,
+    stepPallets,
+    setIssue,
     setLabel,
     patch,
+    applySuggestedStatus,
     markAllOk,
     save,
     reopen,
