@@ -32,6 +32,39 @@ function makeForm(rows, overrides = {}) {
   }
 }
 
+describe('S9-D: buildCargoReportSheet com embalagem por fornecedor', () => {
+  const SUPPLIERS = {
+    exists: true,
+    version: 1,
+    aliases: [],
+    entries: [
+      { code: 'AD5240', supplierKey: 'ORION CHEM CO', supplierName: 'Orion Chem Co', packagingType: 'IBC', netWeightKg: 1000, packageWeightKg: 62 },
+    ],
+  }
+  const form = makeForm([
+    makeRow({ id: 'a', dbcorpCode: 'AD5240', supplierLot: 'L1', quantityKg: '2.000', packageWeightKg: '62' }),
+    makeRow({ id: 'b', dbcorpCode: 'AD5240', supplierLot: 'L2', quantityKg: '2.000', packageWeightKg: '1,2' }),
+  ])
+
+  it('o peso líquido e o nº de embalagens de cada linha saem do fornecedor dela; sem o contexto vale o padrão', () => {
+    const packaging = { supplierCatalog: SUPPLIERS, supplierNameByRowId: { a: 'Orion Chem, Co.', b: 'GOOYER CHEMICALS LTD' } }
+    const sheet = buildCargoReportSheet(form, { process: PROCESS, catalog: CATALOG, packaging })
+    expect(sheet.rows.map((row) => [row.netWeightKg, row.packages, row.packageWeightKg])).toEqual([
+      [1000, 2, 62],
+      [25, 80, 1.2],
+    ])
+    const plain = buildCargoReportSheet(form, { process: PROCESS, catalog: CATALOG })
+    expect(plain.rows.map((row) => row.netWeightKg)).toEqual([25, 25])
+  })
+
+  it('o valor congelado ao concluir continua valendo sobre o fornecedor', () => {
+    const frozen = makeForm([makeRow({ id: 'a', dbcorpCode: 'AD5240', quantityKg: '2.000', frozenNetWeightKg: 20, frozenPackages: 100 })])
+    const packaging = { supplierCatalog: SUPPLIERS, supplierNameByRowId: { a: 'ORION CHEM CO' } }
+    const [row] = buildCargoReportSheet(frozen, { process: PROCESS, catalog: CATALOG, packaging }).rows
+    expect([row.netWeightKg, row.packages]).toEqual([20, 100])
+  })
+})
+
 describe('buildCargoReportSheet', () => {
   it('monta cabeçalho, linhas calculadas, OK da conferência e rodapé vindo da conferência (S7)', () => {
     // O rodapé do `current` (legado) NÃO vale: a folha lê tudo da conferência da logística.

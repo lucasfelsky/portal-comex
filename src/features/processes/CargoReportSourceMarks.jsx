@@ -40,6 +40,12 @@ export function SourceLegend() {
         FUP do DBCorp
       </span>
       <span>
+        <i className="crf-src crf-src--c" aria-hidden="true">
+          C
+        </i>{' '}
+        cadastro de embalagens
+      </span>
+      <span>
         <i className="crf-src crf-src--e" aria-hidden="true">
           ✎
         </i>{' '}

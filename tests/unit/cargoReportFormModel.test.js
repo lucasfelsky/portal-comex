@@ -1038,3 +1038,80 @@ describe('S8: fromConferenceDoc com as chaves novas', () => {
     })
   })
 })
+
+describe('S9-D: embalagem por item + fornecedor (peso líquido por fornecedor)', () => {
+  const SUPPLIERS = {
+    exists: true,
+    version: 1,
+    aliases: [{ fromKey: 'GOOYER CHEMICAL CO', toKey: 'GOOYER CHEMICALS LTD' }],
+    entries: [
+      { code: 'AD5240', supplierKey: 'GOOYER CHEMICALS LTD', supplierName: 'Gooyer Chemicals Ltd', packagingType: 'TAMBOR', netWeightKg: 200, packageWeightKg: 9.2 },
+      { code: 'AD5240', supplierKey: 'ORION CHEM CO', supplierName: 'Orion Chem Co', packagingType: 'IBC', netWeightKg: 1000, packageWeightKg: 62 },
+      { code: 'ZZ9999', supplierKey: 'GOOYER CHEMICALS LTD', supplierName: 'Gooyer Chemicals Ltd', packagingType: 'BALDE', netWeightKg: 20, packageWeightKg: null },
+    ],
+  }
+  const context = (supplierName) => ({ supplierName, supplierCatalog: SUPPLIERS })
+
+  it('sem contexto vale só a tabela Item x Emb., como antes (e o tipo vem como "padrão do item")', () => {
+    const derived = deriveCargoReportRow(makeRow({ dbcorpCode: 'AD5240', quantityKg: 1000 }), CATALOG)
+    expect(derived).toMatchObject({ netWeightKg: 25, packages: 40, packaging: { packagingType: 'BOMBONA', via: 'default' } })
+    expect(derived.alerts.noPackaging).toBe(false)
+  })
+
+  it('o peso líquido e o nº de embalagens saem do fornecedor da linha (deste fornecedor)', () => {
+    const row = makeRow({ dbcorpCode: 'AD5240', quantityKg: 4000 })
+    expect(deriveCargoReportRow(row, CATALOG, context('GOOYER CHEMICALS LTD'))).toMatchObject({
+      netWeightKg: 200,
+      packages: 20,
+      packaging: { packagingType: 'TAMBOR', via: 'supplier' },
+    })
+    expect(deriveCargoReportRow(row, CATALOG, context('Orion Chem, Co.'))).toMatchObject({ netWeightKg: 1000, packages: 4 })
+  })
+
+  it('fornecedor sem linha cai no padrão do item; nome parecido chega pelo alias', () => {
+    const row = makeRow({ dbcorpCode: 'AD5240', quantityKg: 1000 })
+    expect(deriveCargoReportRow(row, CATALOG, context('OUTRA EMPRESA'))).toMatchObject({ netWeightKg: 25, packaging: { via: 'default' } })
+    expect(deriveCargoReportRow(row, CATALOG, context('Gooyer Chemical Co.'))).toMatchObject({ netWeightKg: 200 })
+  })
+
+  it('item só no cadastro do fornecedor (fora da tabela Item x Emb.) tem embalagem para aquele fornecedor, não para os outros', () => {
+    const row = makeRow({ dbcorpCode: 'ZZ9999', quantityKg: 100 })
+    expect(deriveCargoReportRow(row, CATALOG, context('GOOYER CHEMICALS LTD')).alerts.noPackaging).toBe(false)
+    expect(deriveCargoReportRow(row, CATALOG, context('ORION CHEM CO')).alerts.noPackaging).toBe(true)
+    expect(deriveCargoReportRow(row, CATALOG, context('ORION CHEM CO')).packaging).toBeNull()
+  })
+
+  it('resolveNetWeightKg: o congelado continua com precedência e o fornecedor vale sem congelado', () => {
+    expect(resolveNetWeightKg(makeRow({ dbcorpCode: 'AD5240' }), CATALOG, context('GOOYER CHEMICALS LTD'))).toBe(200)
+    expect(resolveNetWeightKg(makeRow({ dbcorpCode: 'AD5240', frozenNetWeightKg: 20 }), CATALOG, context('GOOYER CHEMICALS LTD'))).toBe(20)
+  })
+
+  it('countCargoReportAlerts usa o fornecedor de cada linha', () => {
+    const rows = [
+      makeRow({ id: 'a', dbcorpCode: 'ZZ9999', supplierLot: 'L', packageWeightKg: 1 }),
+      makeRow({ id: 'b', dbcorpCode: 'ZZ9999', supplierLot: 'L', packageWeightKg: 1 }),
+    ]
+    const packaging = { supplierCatalog: SUPPLIERS, supplierNameByRowId: { a: 'GOOYER CHEMICALS LTD', b: 'ORION CHEM CO' } }
+    expect(countCargoReportAlerts(rows, CATALOG)).toBe(2)
+    expect(countCargoReportAlerts(rows, CATALOG, packaging)).toBe(1)
+  })
+
+  it('freezeCargoReportRows e buildConcludedCargoReportPayload congelam o peso líquido do fornecedor da linha', () => {
+    const rows = [
+      makeRow({ id: 'a', dbcorpCode: 'AD5240', quantityKg: 4000 }),
+      makeRow({ id: 'b', dbcorpCode: 'AD5240', quantityKg: 4000 }),
+    ]
+    const packaging = { supplierCatalog: SUPPLIERS, supplierNameByRowId: { a: 'GOOYER CHEMICALS LTD', b: 'ORION CHEM CO' } }
+    const frozen = freezeCargoReportRows(rows, CATALOG, packaging)
+    expect(frozen.map((row) => [row.frozenNetWeightKg, row.frozenPackages])).toEqual([
+      [200, 20],
+      [1000, 4],
+    ])
+
+    const form = { ...fromCargoReportDoc({ revision: 1, status: 'rascunho', cargoType: 'FCL', titleSuffix: 'ACME' }), rows }
+    const { payload } = buildConcludedCargoReportPayload(form, { catalog: CATALOG, packaging, today: '2026-11-25' })
+    expect(payload.rows.map((row) => row.frozenNetWeightKg)).toEqual([200, 1000])
+    // sem o contexto, o congelamento é o de sempre (padrão do item)
+    expect(buildConcludedCargoReportPayload(form, { catalog: CATALOG, today: '2026-11-25' }).payload.rows.map((row) => row.frozenNetWeightKg)).toEqual([25, 25])
+  })
+})

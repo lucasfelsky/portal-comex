@@ -1256,6 +1256,51 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // S9-D do Relatorio de Carga: embalagens por item + fornecedor, doc UNICO
+    // `cargoReportCatalog/supplierPackaging` (nao mexe no itemPackaging). Admin grava;
+    // admin e logistica leem. `entries`: { code, supplierKey, supplierName, packagingType,
+    // netWeightKg, packageWeightKg } (`supplierKey` vazio = padrao do item); `aliases`:
+    // { fromKey, toKey } ("juntar nomes", um nivel). Rules nao iteram listas: aqui so' o
+    // shape do doc, as contagens, o 1o elemento, a autoria e a versao. LIMITACAO CONHECIDA
+    // (igual ao S2): entradas 2..N e aliases sao validados so' no cliente
+    // (src/features/processes/cargoSupplierPackaging.js). `version` e' trava otimista.
+    function isValidSupplierPackagingCatalog() {
+      return request.resource.data.keys().hasOnly([
+        'schemaVersion', 'version', 'entries', 'entryCount', 'aliases',
+        'updatedAt', 'updatedById', 'updatedByName',
+      ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion', 'version', 'entries', 'entryCount', 'aliases',
+          'updatedAt', 'updatedById', 'updatedByName',
+        ])
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.version is int
+        && request.resource.data.version == (resource == null ? 1 : resource.data.version + 1)
+        && request.resource.data.entries is list
+        && request.resource.data.entries.size() <= 5000
+        && request.resource.data.entryCount == request.resource.data.entries.size()
+        && (request.resource.data.entries.size() == 0
+          || (request.resource.data.entries[0] is map
+            && request.resource.data.entries[0].keys().hasAll([
+              'code', 'supplierKey', 'supplierName', 'packagingType', 'netWeightKg', 'packageWeightKg',
+            ])
+            && request.resource.data.entries[0].keys().size() == 6
+            && request.resource.data.entries[0].code is string
+            && request.resource.data.entries[0].supplierKey is string))
+        && request.resource.data.aliases is list
+        && request.resource.data.aliases.size() <= 1000
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedById == request.auth.uid
+        && request.resource.data.updatedByName is string
+        && request.resource.data.updatedByName.size() < 121;
+    }
+
+    match /cargoReportCatalog/supplierPackaging {
+      allow read: if isAdmin() || isLogistics();
+      allow create, update: if isAdmin() && isValidSupplierPackagingCatalog();
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -84,6 +84,39 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/sourceSha256\.matches\('\^\[0-9a-f\]\{64\}\$'\)/)
     })
 
+    // S9-D do Relatorio de Carga: embalagens por item + fornecedor em doc nomeado novo. Admin grava,
+    // admin e logistica leem; o itemPackaging (S2) continua como esta.
+    it('declara match /cargoReportCatalog/supplierPackaging com leitura admin/logistica e escrita admin validada', () => {
+      const block = rules.match(/match\s+\/cargoReportCatalog\/supplierPackaging\s*\{[^}]*\}/)
+      expect(block).not.toBeNull()
+      expect(block[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*;/)
+      expect(block[0]).toMatch(
+        /allow\s+create,\s*update:\s*if\s+isAdmin\(\)\s*&&\s*isValidSupplierPackagingCatalog\(\)\s*;/
+      )
+      expect(block[0]).toMatch(/allow\s+delete:\s*if\s+false\s*;/)
+    })
+
+    it('isValidSupplierPackagingCatalog: hasOnly + hasAll das 8 chaves, tetos, 6 chaves por entrada, autoria e versao', () => {
+      const fn = rules.match(/function\s+isValidSupplierPackagingCatalog\s*\(\s*\)\s*\{[\s\S]*?\n\s{4}\}/)
+      expect(fn).not.toBeNull()
+      const body = fn[0]
+      const keys = ['schemaVersion', 'version', 'entries', 'entryCount', 'aliases', 'updatedAt', 'updatedById', 'updatedByName']
+      const only = body.match(/keys\(\)\.hasOnly\(\[([^\]]*)\]\)/)
+      const all = body.match(/keys\(\)\.hasAll\(\[([^\]]*)\]\)/)
+      expect(only).not.toBeNull()
+      expect(all).not.toBeNull()
+      const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
+      expect(parse(only)).toEqual([...keys].sort())
+      expect(parse(all)).toEqual([...keys].sort())
+      expect(body).toMatch(/entries\.size\(\)\s*<=\s*5000/)
+      expect(body).toMatch(/aliases\.size\(\)\s*<=\s*1000/)
+      expect(body).toMatch(/entryCount\s*==\s*request\.resource\.data\.entries\.size\(\)/)
+      expect(body).toMatch(/entries\[0\]\.keys\(\)\.size\(\)\s*==\s*6/)
+      expect(body).toMatch(/updatedAt\s*==\s*request\.time/)
+      expect(body).toMatch(/updatedById\s*==\s*request\.auth\.uid/)
+      expect(body).toMatch(/resource\.data\.version\s*\+\s*1/)
+    })
+
     // S3 do Relatorio de Carga: formulario FR.CMX.001 em 2 docs nomeados por processo.
     // `current` so' admin grava; `conference` so' a logistica grava/fecha e o admin so' reabre (S7);
     // Tecnico/Faturamento nao leem.

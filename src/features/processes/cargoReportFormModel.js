@@ -6,7 +6,8 @@
 // S7: "Salvar e fechar" por área. COMEX fecha o `current` (`status: 'concluido'`); a logística grava e
 // fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
 import { digitsOnly, foldText } from '../erp/erpText'
-import { getItemPackaging, normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
+import { normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
+import { cargoPackagingContext, resolveCargoPackaging } from './cargoSupplierPackaging'
 import { getProcessPurchaseOrders } from './purchaseOrders'
 
 export const CARGO_REPORT_FORM_CODE = 'FR.CMX.001'
@@ -448,12 +449,21 @@ export function computeLotSq(supplierLot, po) {
   return lot + String(po ?? '').trim().slice(0, 3)
 }
 
-// `M = VLOOKUP(C, 'Item x Emb.'!A:D, 4, 0)`. O valor congelado (S4) tem precedência.
-export function resolveNetWeightKg(row, catalog) {
+// Embalagem da linha em 3 níveis (S9-D): item + fornecedor; padrão do item (tabela Item x Emb.); nada.
+// `context` = { supplierName, supplierCatalog } (opcional): sem ele vale só a tabela Item x Emb., como antes.
+function lookupRowPackaging(row, catalog, context) {
+  return resolveCargoPackaging(row?.dbcorpCode, context?.supplierName ?? '', {
+    itemCatalog: catalog,
+    supplierCatalog: context?.supplierCatalog ?? null,
+  })
+}
+
+// `M = VLOOKUP(C, 'Item x Emb.'!A:D, 4, 0)`, agora também por fornecedor. O valor congelado (S4) tem precedência.
+export function resolveNetWeightKg(row, catalog, context) {
   if (typeof row?.frozenNetWeightKg === 'number' && Number.isFinite(row.frozenNetWeightKg)) {
     return row.frozenNetWeightKg
   }
-  return getItemPackaging(catalog, row?.dbcorpCode)?.netWeightKg ?? null
+  return lookupRowPackaging(row, catalog, context)?.netWeightKg ?? null
 }
 
 // `O = K/M`, sem arredondar no dado.
@@ -465,8 +475,9 @@ export function computePackages(quantityKg, netWeightKg) {
   return Number.isFinite(result) ? result : null
 }
 
-export function deriveCargoReportRow(row, catalog) {
-  const netWeightKg = resolveNetWeightKg(row, catalog)
+export function deriveCargoReportRow(row, catalog, context) {
+  const packaging = lookupRowPackaging(row, catalog, context)
+  const netWeightKg = resolveNetWeightKg(row, catalog, context)
   const frozenPackages =
     typeof row?.frozenPackages === 'number' && Number.isFinite(row.frozenPackages) ? row.frozenPackages : null
   const packages = frozenPackages ?? computePackages(row?.quantityKg, netWeightKg)
@@ -476,18 +487,20 @@ export function deriveCargoReportRow(row, catalog) {
     lotSq: computeLotSq(row?.supplierLot, row?.po),
     netWeightKg,
     packages,
+    packaging: packaging ? { packagingType: packaging.packagingType, via: packaging.via } : null,
     alerts: {
       missingLot: hasCode && String(row?.supplierLot ?? '').trim() === '',
       missingPackageWeight: hasCode && numericOrNull(row?.packageWeightKg) === null,
-      noPackaging: hasCode && (getItemPackaging(catalog, row?.dbcorpCode) === null || netWeightKg === null),
+      noPackaging: hasCode && (packaging === null || netWeightKg === null),
     },
   }
 }
 
-export function countCargoReportAlerts(rows, catalog) {
+// `packaging` (S9-D, opcional): { supplierCatalog, supplierNameByRowId }.
+export function countCargoReportAlerts(rows, catalog, packaging) {
   let total = 0
   for (const row of Array.isArray(rows) ? rows : []) {
-    const { alerts } = deriveCargoReportRow(row, catalog)
+    const { alerts } = deriveCargoReportRow(row, catalog, cargoPackagingContext(packaging, row?.id))
     total += Object.values(alerts).filter(Boolean).length
   }
   return total
@@ -741,10 +754,11 @@ export function toCargoDateKey(date) {
 }
 
 // Congela o peso líquido e o nº de embalagens de cada linha com a tabela vigente. Valor já
-// congelado é mantido. `null` quando o item não tem embalagem cadastrada ou falta quantidade.
-export function freezeCargoReportRows(rows, catalog) {
+// congelado é mantido. `null` quando o item não tem embalagem cadastrada ou falta quantidade. `packaging`
+// (S9-D, opcional) = { supplierCatalog, supplierNameByRowId }: o peso líquido do fornecedor entra no congelamento.
+export function freezeCargoReportRows(rows, catalog, packaging) {
   return (Array.isArray(rows) ? rows : []).map((row) => {
-    const frozenNetWeightKg = resolveNetWeightKg(row, catalog)
+    const frozenNetWeightKg = resolveNetWeightKg(row, catalog, cargoPackagingContext(packaging, row?.id))
     const keptPackages = readNumber(row?.frozenPackages)
     return {
       ...row,
@@ -756,12 +770,15 @@ export function freezeCargoReportRows(rows, catalog) {
 
 // -> { payload, errors }. Mesma validação do rascunho; `lastGenerated` fica como veio (o
 // repositório o substitui depois do anexo).
-export function buildConcludedCargoReportPayload(form, { catalogVersion = 0, catalog = null, today = '' } = {}) {
+export function buildConcludedCargoReportPayload(
+  form,
+  { catalogVersion = 0, catalog = null, today = '', packaging = null } = {}
+) {
   const { payload, errors } = buildCargoReportPayload(
     { ...form, status: 'concluido', completedDate: today },
     { catalogVersion }
   )
-  return { payload: { ...payload, rows: freezeCargoReportRows(payload.rows, catalog) }, errors }
+  return { payload: { ...payload, rows: freezeCargoReportRows(payload.rows, catalog, packaging) }, errors }
 }
 
 // Reabrir volta a calcular pela tabela atual: zera os valores congelados e a data de conclusão.

@@ -219,6 +219,7 @@ export function CargoReportActionBar({
   conference,
   savedConference,
   catalog,
+  packaging,
   stage,
   isDesktop,
   isSaving,
@@ -255,7 +256,7 @@ export function CargoReportActionBar({
   const isBusy = isSaving || isWorking
 
   const buildSheet = (source, sheetConference = conference) =>
-    buildCargoReportSheet(source, { process, conference: sheetConference, catalog })
+    buildCargoReportSheet(source, { process, conference: sheetConference, catalog, packaging })
 
   // Uma tarefa por vez (exportar, fechar, gravar de novo, reabrir).
   async function runWork(task) {
@@ -350,6 +351,7 @@ export function CargoReportActionBar({
         const built = buildConcludedCargoReportPayload(form, {
           catalogVersion: catalog?.exists ? catalog.version : 0,
           catalog,
+          packaging,
           today: toCargoDateKey(new Date()),
         })
         if (built.errors.length > 0) {
