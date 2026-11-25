@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
+import Icon from '../../components/Icon'
 import { CARGO_REPORT_LIMITS, CARGO_REPORT_MAX_ROWS, formatCargoNumber } from './cargoReportFormModel'
+import { GroupHeaderCard, GroupHeaderRow, GroupSummaryNote, GroupSummaryRow } from './CargoReportGroupRows'
+import {
+  formatCargoKgText,
+  groupCargoRowsByPurchaseOrder,
+  pluralCargoLines,
+  resolveCargoRowPurchaseOrder,
+  sumCargoRowsKg,
+} from './cargoReportGroups'
+import CargoReportRowMenu from './CargoReportRowMenu'
+import { readCargoRowQuantity } from './cargoReportRowOps'
 
 // S3 do Relatório de Carga: itens do FR.CMX.001. Desktop = tabela de 14 colunas (modelo R5);
 // demais variantes = 1 cartão por linha (sem rolagem horizontal). Componente de apresentação:
 // quem calcula (`derived`), valida (`errorsByCell`) e grava é o `CargoReportForm`.
 // Modos: `edit` (COMEX digita), `confer` (logística marca OK? e contagem e digita as etiquetas WMS/SQ),
 // `view` (somente leitura).
+// S9-B: em `edit` cada linha ganha `#` e o menu ⋯ (`onRowAction`); no CONSOLIDADO (`purchaseOrders`) as linhas
+// ficam agrupadas por PO, com cabeçalho, subtotal e "Linha nesta PO".
 const MAX_FREE_ROWS = 3
 
 // Coluna LOTE SQ (calculada): o `<col>` acompanha o maior lote da tela; com `table-layout: fixed` uma
@@ -115,6 +128,68 @@ function lotSqColumnWidth(derived) {
   return `calc(${(chars * LOT_SQ_CH_PER_CHAR).toFixed(1)}ch + ${LOT_SQ_PADDING_PX}px)`
 }
 
+// Linhas na ordem da tela, com `number` (posição exibida: "linha N") e `rowIndex` (posição em `rows`, que indexa
+// `derived`). Agrupado (CONSOLIDADO em edição): cabeçalho, linhas e subtotal de cada PO.
+function buildSegments(rows, purchaseOrders, grouped) {
+  if (!grouped) {
+    return rows.map((row, rowIndex) => ({ type: 'row', row, rowIndex, number: rowIndex + 1 }))
+  }
+  const segments = []
+  let number = 0
+  groupCargoRowsByPurchaseOrder(rows, purchaseOrders).forEach((group) => {
+    segments.push({ type: 'group', group })
+    group.rows.forEach(({ row, rowIndex }) => {
+      number += 1
+      segments.push({ type: 'row', row, rowIndex, number })
+    })
+    segments.push({ type: 'summary', group })
+  })
+  return segments
+}
+
+// Menu ⋯ da linha: vizinhos do mesmo grupo (no consolidado "mover" não cruza a PO), PO atual e limite de linhas.
+function createRowMenuRenderer({ rows, purchaseOrders, grouped, mobile, onRowAction }) {
+  const groupOf = (row) => (grouped ? resolveCargoRowPurchaseOrder(row?.po, purchaseOrders) : 0)
+  const limitReached = rows.length >= CARGO_REPORT_MAX_ROWS
+  return function renderRowMenu({ row, rowIndex, number }) {
+    const quantity = readCargoRowQuantity(row)
+    return (
+      <CargoReportRowMenu
+        rowId={row.id}
+        rowNumber={number}
+        mobile={mobile}
+        purchaseOrders={grouped ? purchaseOrders : []}
+        currentPurchaseOrderIndex={grouped ? groupOf(row) : -1}
+        canMoveUp={rowIndex > 0 && groupOf(rows[rowIndex - 1]) === groupOf(row)}
+        canMoveDown={rowIndex < rows.length - 1 && groupOf(rows[rowIndex + 1]) === groupOf(row)}
+        limitReached={limitReached}
+        hasQuantity={quantity !== null && quantity > 0}
+        onAction={onRowAction}
+      />
+    )
+  }
+}
+
+// PO / PROCESSO no consolidado só vale ao sair do campo: digitar mexeria a linha de grupo a cada tecla.
+function CommitOnBlurInput({ value, onCommit, ...props }) {
+  const [draft, setDraft] = useState(null)
+  return (
+    <input
+      {...props}
+      value={draft ?? value}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft === null) return
+        setDraft(null)
+        if (draft !== value) onCommit(draft)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+      }}
+    />
+  )
+}
+
 // Mesma caixinha para OK? e Contagem; `label` já vem pronto ("OK? da linha N" / "Contagem da linha N").
 function OkMark({ label, checked, interactive, onToggle }) {
   return (
@@ -176,11 +251,21 @@ function DesktopTable({
   canAddRow,
   errorsByCell,
   onRequestFocus,
+  grouped,
+  purchaseOrders,
+  onRowAction,
+  newRowIds,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
+  const hasTools = isEdit && typeof onRowAction === 'function'
   const lotSqWidth = lotSqColumnWidth(derived)
-  const freeRows = canAddRow ? Math.min(MAX_FREE_ROWS, CARGO_REPORT_MAX_ROWS - rows.length) : 0
+  const freeRows = canAddRow && !grouped ? Math.min(MAX_FREE_ROWS, CARGO_REPORT_MAX_ROWS - rows.length) : 0
+  const columns = hasTools
+    ? [{ key: 'index', label: '#', width: 36 }, ...DESKTOP_COLUMNS, { key: 'actions', label: 'Ações', width: 52, hidden: true }]
+    : DESKTOP_COLUMNS
+  const segments = buildSegments(rows, purchaseOrders, grouped)
+  const renderRowMenu = createRowMenuRenderer({ rows, purchaseOrders, grouped, mobile: false, onRowAction })
 
   function renderInput(row, index, field) {
     const errorMessage = errorsByCell?.[`${row.id}:${field}`]
@@ -188,15 +273,21 @@ function DesktopTable({
       const text = fieldValue(row, field)
       return <span className="crf-text">{text || '—'}</span>
     }
+    const inputProps = {
+      className: 'c',
+      type: 'text',
+      maxLength: maxLengthFor(field),
+      inputMode: NUMERIC_FIELDS.has(field) ? 'decimal' : undefined,
+      'aria-label': `${FIELD_LABELS[field]} da linha ${index + 1}`,
+      'aria-invalid': errorMessage ? true : undefined,
+    }
+    if (grouped && field === 'po') {
+      return <CommitOnBlurInput {...inputProps} value={fieldValue(row, field)} onCommit={(value) => onChangeRow(row.id, field, value)} />
+    }
     return (
       <input
-        className="c"
-        type="text"
+        {...inputProps}
         value={fieldValue(row, field)}
-        maxLength={maxLengthFor(field)}
-        inputMode={NUMERIC_FIELDS.has(field) ? 'decimal' : undefined}
-        aria-label={`${FIELD_LABELS[field]} da linha ${index + 1}`}
-        aria-invalid={errorMessage ? true : undefined}
         onChange={(event) => onChangeRow(row.id, field, event.target.value)}
       />
     )
@@ -225,10 +316,28 @@ function DesktopTable({
     )
   }
 
-  function renderCell(row, index, column) {
-    const info = derived[index] ?? { lotSq: '', netWeightKg: null, packages: null, alerts: {} }
+  function renderCell(entry, column) {
+    const { row, rowIndex, number } = entry
+    const index = number - 1
+    const info = derived[rowIndex] ?? { lotSq: '', netWeightKg: null, packages: null, alerts: {} }
     const { alerts } = info
     const errorMessage = errorsByCell?.[`${row.id}:${column.key}`]
+
+    if (column.key === 'index') {
+      return (
+        <td key={column.key} className="crf-idx">
+          {number}
+        </td>
+      )
+    }
+
+    if (column.key === 'actions') {
+      return (
+        <td key={column.key} className="crf-act">
+          {renderRowMenu(entry)}
+        </td>
+      )
+    }
 
     if (column.key === 'ok') {
       return (
@@ -306,47 +415,95 @@ function DesktopTable({
   }
 
   return (
-    <div className="crf-tw">
-      <table className="crf">
-        <colgroup>
-          {DESKTOP_COLUMNS.map((column) => (
-            <col key={column.key} style={{ width: column.key === 'lotSq' ? lotSqWidth : `${column.width}px` }} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            {DESKTOP_COLUMNS.map((column) => (
-              <th key={column.key} scope="col" className={column.calc ? 'calc' : undefined}>
-                {column.label}
-              </th>
+    <>
+      <div className="crf-tw">
+        <table className="crf">
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.key === 'lotSq' ? lotSqWidth : `${column.width}px` }} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.id} data-row-index={index}>
-              {DESKTOP_COLUMNS.map((column) => renderCell(row, index, column))}
+          </colgroup>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key} scope="col" className={column.calc ? 'calc' : undefined}>
+                  {column.hidden ? <span className="documents-visually-hidden">{column.label}</span> : column.label}
+                </th>
+              ))}
             </tr>
-          ))}
-          {Array.from({ length: freeRows }, (_, offset) => (
-            <tr key={`free-${offset}`} className="free">
-              <td colSpan={DESKTOP_COLUMNS.length}>
-                <button
-                  type="button"
-                  className="crf-free"
-                  onClick={() => {
-                    onRequestFocus()
-                    onAddRow()
-                  }}
+          </thead>
+          <tbody>
+            {segments.map((segment) => {
+              if (segment.type === 'group') {
+                return (
+                  <GroupHeaderRow
+                    key={`group-${segment.group.index}`}
+                    group={segment.group}
+                    colSpan={columns.length}
+                    canAdd={canAddRow}
+                    onAdd={(purchaseOrder) => onRowAction('addInPo', null, { purchaseOrder })}
+                  />
+                )
+              }
+              if (segment.type === 'summary') {
+                return <GroupSummaryRow key={`summary-${segment.group.index}`} group={segment.group} colSpan={columns.length} />
+              }
+              return (
+                <tr
+                  key={segment.row.id}
+                  data-row-index={segment.rowIndex}
+                  data-row-id={segment.row.id}
+                  className={newRowIds?.has(segment.row.id) ? 'is-new' : undefined}
                 >
-                  {`Linha ${rows.length + offset + 1} livre · clique para preencher`}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  {columns.map((column) => renderCell(segment, column))}
+                </tr>
+              )
+            })}
+            {Array.from({ length: freeRows }, (_, offset) => (
+              <tr key={`free-${offset}`} className="free">
+                <td colSpan={columns.length}>
+                  <button
+                    type="button"
+                    className="crf-free"
+                    onClick={() => {
+                      onRequestFocus()
+                      onAddRow()
+                    }}
+                  >
+                    {`Linha ${rows.length + offset + 1} livre · clique para preencher`}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {hasTools && grouped ? (
+        <p className="crf-total">
+          Qtd total do consolidado: <b>{formatCargoKgText(sumCargoRowsKg(rows))}</b> em {pluralCargoLines(rows.length)}
+        </p>
+      ) : null}
+      {hasTools && !grouped ? (
+        <div className="crf-addbar">
+          {canAddRow ? (
+            <button
+              type="button"
+              className="secondary-button crf-addbar__btn"
+              onClick={() => {
+                onRequestFocus()
+                onAddRow()
+              }}
+            >
+              <Icon name="plus" size={16} />
+              Adicionar linha no fim
+            </button>
+          ) : null}
+          <span className="crf-total">
+            Qtd total: <b>{formatCargoKgText(sumCargoRowsKg(rows))}</b>
+          </span>
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -363,6 +520,10 @@ function MobileCard({
   onToggleOk,
   onToggleCountOk,
   errorsByCell,
+  rowIndex,
+  menu,
+  grouped,
+  isNew,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
@@ -377,19 +538,26 @@ function MobileCard({
   function renderField(field, { className = '', placeholder } = {}) {
     const errorMessage = errorsByCell?.[`${row.id}:${field}`]
     if (!isEdit) return <span className="crf-text">{fieldValue(row, field) || '—'}</span>
+    const inputProps = {
+      className: `${className}${errorMessage ? ' err' : ''}`.trim(),
+      type: 'text',
+      maxLength: maxLengthFor(field),
+      placeholder,
+      inputMode: NUMERIC_FIELDS.has(field) ? 'decimal' : undefined,
+      'aria-label': `${FIELD_LABELS[field]} da linha ${rowNumber}`,
+      'aria-invalid': errorMessage ? true : undefined,
+    }
     return (
       <>
-        <input
-          className={`${className}${errorMessage ? ' err' : ''}`.trim()}
-          type="text"
-          value={fieldValue(row, field)}
-          maxLength={maxLengthFor(field)}
-          placeholder={placeholder}
-          inputMode={NUMERIC_FIELDS.has(field) ? 'decimal' : undefined}
-          aria-label={`${FIELD_LABELS[field]} da linha ${rowNumber}`}
-          aria-invalid={errorMessage ? true : undefined}
-          onChange={(event) => onChangeRow(row.id, field, event.target.value)}
-        />
+        {grouped && field === 'po' ? (
+          <CommitOnBlurInput {...inputProps} value={fieldValue(row, field)} onCommit={(value) => onChangeRow(row.id, field, value)} />
+        ) : (
+          <input
+            {...inputProps}
+            value={fieldValue(row, field)}
+            onChange={(event) => onChangeRow(row.id, field, event.target.value)}
+          />
+        )}
         {errorMessage ? <span className="hint r">{errorMessage}</span> : null}
       </>
     )
@@ -417,13 +585,20 @@ function MobileCard({
   }
 
   return (
-    <div className={`crf-rc${hasAnyAlert(alerts) ? ' warn' : ''}`} data-row-index={index}>
+    <div
+      className={`crf-rc${hasAnyAlert(alerts) ? ' warn' : ''}${isNew ? ' is-new' : ''}`}
+      data-row-index={rowIndex}
+      data-row-id={row.id}
+    >
       <div className="crf-rc__top">
         <div>
           <b>{title}</b>
           {reference ? <small>{reference}</small> : null}
         </div>
-        {renderOkBadge(ok, `OK? da linha ${rowNumber}`, () => onToggleOk(row.id))}
+        <div className="crf-rc__tools">
+          {renderOkBadge(ok, `OK? da linha ${rowNumber}`, () => onToggleOk(row.id))}
+          {menu}
+        </div>
       </div>
 
       <details className="crf-rc__id" open={identificationOpen}>
@@ -483,6 +658,22 @@ function MobileCard({
   )
 }
 
+// Foco depois de uma operação por linha: 1º campo da linha ('input') ou o botão ⋯ ('menu'). No cartão do
+// celular o campo pode estar numa área recolhida; sem foco possível, cai no botão ⋯.
+function focusRowTarget(container, request) {
+  if (!container || !request) return
+  const rowNode = [...container.querySelectorAll('[data-row-id]')].find((node) => node.dataset.rowId === request.rowId)
+  if (!rowNode) return
+  const menuButton = rowNode.querySelector('.crf-rowbtn')
+  if (request.target === 'menu') {
+    menuButton?.focus()
+    return
+  }
+  const input = rowNode.querySelector('input:not([disabled])')
+  input?.focus()
+  if (document.activeElement !== input) menuButton?.focus()
+}
+
 export default function CargoReportItems({
   rows,
   derived,
@@ -498,12 +689,19 @@ export default function CargoReportItems({
   onAddRow,
   canAddRow = false,
   errorsByCell,
+  purchaseOrders = [],
+  isConsolidated = false,
+  onRowAction,
+  newRowIds,
+  focusRequest,
 }) {
   const containerRef = useRef(null)
   const pendingFocusRef = useRef(false)
   const rowCount = rows.length
   const isEdit = mode === 'edit'
   const addAllowed = isEdit && canAddRow
+  // Agrupar por PO só no CONSOLIDADO em edição (a logística e as telas só de leitura ficam como antes).
+  const grouped = isEdit && isConsolidated && purchaseOrders.length > 0
 
   // Depois de adicionar uma linha, o foco vai para o 1º campo dela.
   useEffect(() => {
@@ -514,6 +712,11 @@ export default function CargoReportItems({
     )
     target?.focus()
   }, [rowCount])
+
+  // Foco da linha mexida pelo menu ⋯ (inserir, duplicar, dividir, mover, remover, desfazer).
+  useEffect(() => {
+    focusRowTarget(containerRef.current, focusRequest)
+  }, [focusRequest])
 
   const requestFocus = () => {
     pendingFocusRef.current = true
@@ -537,16 +740,24 @@ export default function CargoReportItems({
           canAddRow={addAllowed}
           errorsByCell={errorsByCell}
           onRequestFocus={requestFocus}
+          grouped={grouped}
+          purchaseOrders={purchaseOrders}
+          onRowAction={onRowAction}
+          newRowIds={newRowIds}
         />
       </div>
     )
   }
 
+  const hasTools = isEdit && typeof onRowAction === 'function'
+  const renderRowMenu = createRowMenuRenderer({ rows, purchaseOrders, grouped, mobile: true, onRowAction })
+  const segments = buildSegments(rows, purchaseOrders, grouped)
+
   return (
     <div ref={containerRef} className="crf-mobile">
       <div className="crf-mobile__head">
         <h4>{`Itens (${rowCount} de ${CARGO_REPORT_MAX_ROWS})`}</h4>
-        {addAllowed ? (
+        {addAllowed && !grouped ? (
           <button
             type="button"
             className="secondary-button"
@@ -559,23 +770,46 @@ export default function CargoReportItems({
           </button>
         ) : null}
       </div>
-      {rows.map((row, index) => (
-        <MobileCard
-          key={row.id}
-          row={row}
-          index={index}
-          info={derived[index] ?? { lotSq: '', netWeightKg: null, packages: null, alerts: {} }}
-          ok={okByRowId?.[row.id] === true}
-          countOk={countOkByRowId?.[row.id] === true}
-          labels={labelsByRowId?.[row.id]}
-          mode={mode}
-          onChangeRow={onChangeRow}
-          onChangeLabel={onChangeLabel}
-          onToggleOk={onToggleOk}
-          onToggleCountOk={onToggleCountOk}
-          errorsByCell={errorsByCell}
-        />
-      ))}
+      {segments.map((segment) => {
+        if (segment.type === 'group') {
+          return (
+            <GroupHeaderCard
+              key={`group-${segment.group.index}`}
+              group={segment.group}
+              canAdd={addAllowed}
+              onAdd={(purchaseOrder) => onRowAction('addInPo', null, { purchaseOrder })}
+            />
+          )
+        }
+        if (segment.type === 'summary') return <GroupSummaryNote key={`summary-${segment.group.index}`} group={segment.group} />
+        const { row, rowIndex, number } = segment
+        return (
+          <MobileCard
+            key={row.id}
+            row={row}
+            index={number - 1}
+            rowIndex={rowIndex}
+            info={derived[rowIndex] ?? { lotSq: '', netWeightKg: null, packages: null, alerts: {} }}
+            ok={okByRowId?.[row.id] === true}
+            countOk={countOkByRowId?.[row.id] === true}
+            labels={labelsByRowId?.[row.id]}
+            mode={mode}
+            onChangeRow={onChangeRow}
+            onChangeLabel={onChangeLabel}
+            onToggleOk={onToggleOk}
+            onToggleCountOk={onToggleCountOk}
+            errorsByCell={errorsByCell}
+            menu={hasTools ? renderRowMenu(segment) : null}
+            grouped={grouped}
+            isNew={newRowIds?.has(row.id)}
+          />
+        )
+      })}
+      {grouped ? (
+        <p className="crf-total">
+          Qtd total do consolidado: <b>{formatCargoKgText(sumCargoRowsKg(rows))}</b> em {pluralCargoLines(rows.length)}
+        </p>
+      ) : null}
     </div>
   )
 }
