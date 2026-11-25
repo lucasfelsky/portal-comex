@@ -49,6 +49,7 @@ const CONS = {
   category: 'CONSOLIDADO',
   archived: false,
   collectionStatus: 'Carga a caminho do CD',
+  collectionWindows: [{ id: 'w', scheduledAt: iso(2026, 10, 24, 9, 0) }],
   purchaseOrders: [
     { po: '1', reference: 'ACME SEA 011-26', supplierName: 'ACME RESINS CO' },
     { po: '2', reference: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS' },
@@ -71,6 +72,7 @@ const ORION = {
   supplierName: 'ORION CHEM CO',
   archived: false,
   collectionStatus: 'Veículo no CD para descarga',
+  cargoReceivedAt: iso(2026, 10, 24, 10, 0),
 }
 const KRONOS = {
   id: 'kronos',
@@ -122,9 +124,9 @@ describe('lista da aba Conferência', () => {
   it('selo do papel, texto de apoio, busca e filtros com a contagem', () => {
     render(<Harness />)
     expect(screen.getByText('Logística')).toBeInTheDocument()
-    expect(screen.getByText(/Processos a partir de/).textContent).toBe(
-      'Processos a partir de Coleta agendada que têm Relatório de Carga.'
-    )
+    expect(
+      screen.getByText('Previsão de chegada nesta semana, mais conferências abertas de semanas anteriores.')
+    ).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Buscar processo, fornecedor ou tipo' })).toHaveAttribute(
       'placeholder',
       'Buscar processo, fornecedor ou tipo'
@@ -173,7 +175,7 @@ describe('lista da aba Conferência', () => {
     expect(air).toHaveTextContent('0 de 2 itens conferidos')
 
     const cons = cards()[2]
-    expect(cons).toHaveTextContent('CONSOLIDADO · 3 POs · A caminho do CD')
+    expect(cons).toHaveTextContent('CONSOLIDADO · 3 POs · Coleta feita 24/11')
     expect(cons).toHaveTextContent('1 de 5 itens conferidos')
     expect(cards()[3]).toHaveTextContent('LCL · NOVA POLYMERS · Recebida ontem')
   })
@@ -203,9 +205,7 @@ describe('lista da aba Conferência', () => {
 
   it('sem nenhum processo: "Quando uma coleta for agendada, o processo aparece nesta lista."', () => {
     render(<Harness entries={[]} />)
-    expect(
-      screen.getByText('Nada por aqui. Quando uma coleta for agendada, o processo aparece nesta lista.')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Nenhum processo com previsão de chegada nesta semana.')).toBeInTheDocument()
   })
 
   it('o nome do processo vem de getProcessTitle (quem não vê o nome de FCL/LCL/AÉREO vê "PO: …")', () => {
@@ -295,5 +295,53 @@ describe('carga, atualizar e erro', () => {
     expect(alert).toHaveTextContent('Não foi possível carregar os processos.')
     await user.click(within(alert).getByRole('button', { name: 'Tentar novamente' }))
     expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('previsão de chegada e semana anterior (S9-G)', () => {
+  const OLD = {
+    id: 'antigo',
+    name: 'ANTIGO SEA 003-26',
+    category: 'FCL',
+    supplierName: 'ANTIGO LTDA',
+    archived: false,
+    collectionStatus: 'Veículo no CD para descarga',
+    cargoReceivedAt: iso(2026, 10, 20, 15, 0),
+  }
+  const withOld = [
+    entry(OLD, { current: current(2), conference: { receiptStatus: 'sem_ressalva' } }),
+    ENTRIES[0],
+  ]
+
+  it('o cartão mostra a previsão de chegada em formato curto (dia da semana e dd/mm)', () => {
+    render(<Harness />)
+    expect(cards()[0]).toHaveTextContent('Chegada prevista qua 25/11')
+    expect(cards()[1]).toHaveTextContent('Chegada prevista qui 26/11')
+    // Carga já recebida mostra a data real.
+    expect(cards().find((card) => card.textContent.includes('NOVA SEA'))).toHaveTextContent('Chegada ter 24/11')
+  })
+
+  it('pendência de semana anterior vem primeiro, com o selo discreto "Semana anterior" (aviso)', () => {
+    render(<Harness entries={withOld} />)
+    expect(titles()).toEqual(['ANTIGO SEA 003-26', 'GOOYER SEA 001-26'])
+    const old = cards()[0]
+    expect(old).toHaveTextContent('Chegada sex 20/11')
+    const badge = within(old).getByText('Semana anterior')
+    expect(badge).toHaveClass('ccf-badge', 'ccf-badge--warn')
+    expect(within(cards()[1]).queryByText('Semana anterior')).not.toBeInTheDocument()
+    // O resto do cartão segue: progresso e selo do COMEX.
+    expect(old).toHaveTextContent('0 de 2 itens conferidos')
+    expect(old).toHaveTextContent('COMEX fechado')
+  })
+
+  it('conferência fechada de semana anterior não aparece em nenhum filtro; os chips contam só o visível', async () => {
+    const user = userEvent.setup()
+    const closedOld = entry(OLD, { current: current(1), conference: { status: 'fechada', receiptStatus: 'sem_ressalva' } })
+    render(<Harness entries={[closedOld, ...withOld]} />)
+    expect(screen.getByRole('button', { name: /Para conferir/ })).toHaveTextContent('Para conferir2')
+    expect(screen.getByRole('button', { name: /Fechadas/ })).toHaveTextContent('Fechadas0')
+    await user.click(screen.getByRole('button', { name: /Fechadas/ }))
+    expect(cards()).toHaveLength(0)
+    expect(screen.getByText('Nenhum processo com previsão de chegada nesta semana.')).toBeInTheDocument()
   })
 })

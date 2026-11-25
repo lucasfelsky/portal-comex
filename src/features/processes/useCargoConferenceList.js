@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 export const CARGO_CONFERENCE_CACHE_TTL_MS = 2 * 60 * 1000
 export const CARGO_CONFERENCE_CONCURRENCY = 4
 
-// { at, processes, reports: Map<processId, { report } | { error: true }> }
+// { at, weekKey, processes, reports: Map<processId, { report } | { error: true }> }
 let snapshot = null
 // { promise, listeners: Set<(entries) => void> }
 let loading = null
@@ -74,9 +74,11 @@ async function run({ force, now, onProgress }) {
     import('./cargoConferenceList'),
   ])
 
-  if (force || !snapshot || Date.now() - snapshot.at >= CARGO_CONFERENCE_CACHE_TTL_MS) {
+  // A semana vigente faz parte do que a lista mostra: virou a semana, o cache de 2 min não vale (relê tudo).
+  const weekKey = list.getCargoConferenceWeekKey(now)
+  if (force || !snapshot || snapshot.weekKey !== weekKey || Date.now() - snapshot.at >= CARGO_CONFERENCE_CACHE_TTL_MS) {
     const processes = await listProcesses()
-    snapshot = { at: Date.now(), processes, reports: new Map() }
+    snapshot = { at: Date.now(), weekKey, processes, reports: new Map() }
   }
   const current = snapshot
   const candidates = current.processes.filter((process) => list.isCargoConferenceCandidate(process, now))

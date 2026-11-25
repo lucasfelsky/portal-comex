@@ -26531,3 +26531,8 @@ tr.crf-gsum td {
 .m-rowi__count + .m-rowi__chev {
   margin-left: 0;
 }
+
+/* S9-G: linha da previsao de chegada no cartao da lista de Conferencia (previsao + selo "Semana anterior"). */
+.ccf-entry__row--start {
+  justify-content: flex-start;
+}

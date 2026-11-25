@@ -48,7 +48,7 @@ const GOOYER = {
   category: 'FCL',
   supplierName: 'GOOYER CHEMICALS LTD',
   archived: false,
-  collectionWindows: [{ id: 'w', scheduledAt: new Date(2099, 0, 5, 10, 0).toISOString() }],
+  collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 10, 26, 10, 0).toISOString() }],
 }
 const EMBARCADO = { id: 'p2', name: 'FORA SEA 002-26', category: 'FCL', archived: false, processStatus: 'Embarcou' }
 const REPORT = {
@@ -136,6 +136,9 @@ function renderPage({ role = 'logistica', path = '/conferencia', profile } = {})
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // S9-G: a lista depende da semana vigente; relógio (só `Date`) em quarta 25/11/2026, semana de 23/11 a 29/11.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 10, 25, 10, 0))
   resetCargoConferenceCache()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   mockListProcesses.mockResolvedValue([GOOYER, EMBARCADO])
@@ -144,6 +147,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   window.matchMedia = originalMatchMedia
   console.error.mockRestore?.()
 })
@@ -159,6 +163,40 @@ describe('papéis', () => {
     expect(mockGetCargoReport).toHaveBeenCalledWith('p1')
     expect(mockListProcesses).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('FORA SEA 002-26')).not.toBeInTheDocument()
+  })
+
+  it('semana vigente + pendências antigas: a semana seguinte fica fora e a pendência da semana anterior aparece', async () => {
+    stubViewport(390)
+    const old = {
+      id: 'p9',
+      name: 'ANTIGO SEA 003-26',
+      category: 'FCL',
+      archived: false,
+      collectionStatus: 'Veículo no CD para descarga',
+      cargoReceivedAt: new Date(2026, 10, 20, 15, 0).toISOString(),
+    }
+    const oldClosed = { ...old, id: 'p10', name: 'ANTIGO FECHADO SEA 004-26' }
+    const next = {
+      id: 'p11',
+      name: 'FUTURO SEA 005-26',
+      category: 'FCL',
+      archived: false,
+      collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 10, 30, 9, 0).toISOString() }],
+    }
+    mockListProcesses.mockResolvedValue([GOOYER, old, oldClosed, next])
+    mockGetCargoReport.mockImplementation(async (id) =>
+      id === 'p10' ? { ...REPORT, conference: { ...REPORT.conference, status: 'fechada' } } : REPORT
+    )
+    renderPage()
+    expect(await screen.findByText('GOOYER SEA 001-26')).toBeInTheDocument()
+    expect(await screen.findByText('ANTIGO SEA 003-26')).toBeInTheDocument()
+    expect(screen.getByText('Semana anterior')).toBeInTheDocument()
+    expect(screen.queryByText('ANTIGO FECHADO SEA 004-26')).not.toBeInTheDocument()
+    expect(screen.queryByText('FUTURO SEA 005-26')).not.toBeInTheDocument()
+    // A semana seguinte nem é lida.
+    expect(mockGetCargoReport).not.toHaveBeenCalledWith('p11')
+    expect(screen.getByRole('button', { name: /Para conferir/ })).toHaveTextContent('Para conferir2')
+    expect(screen.getByRole('button', { name: /Fechadas/ })).toHaveTextContent('Fechadas0')
   })
 
   it.each(['user', 'tecnico', 'faturamento', 'compras', 'viewer'])(
@@ -287,6 +325,7 @@ describe('lista atualizada depois de salvar, fechar e reabrir', () => {
     supplierName: 'NOVA POLYMERS',
     archived: false,
     collectionStatus: 'Veículo no CD para descarga',
+    cargoReceivedAt: new Date(2026, 10, 24, 15, 0).toISOString(),
   }
   const ORION = {
     id: 'p4',
@@ -295,6 +334,7 @@ describe('lista atualizada depois de salvar, fechar e reabrir', () => {
     supplierName: 'ORION CHEM CO',
     archived: false,
     collectionStatus: 'Carga disponível em estoque',
+    cargoReceivedAt: new Date(2026, 10, 23, 15, 0).toISOString(),
   }
   let store
 
