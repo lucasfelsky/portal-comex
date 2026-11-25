@@ -174,6 +174,18 @@ describe('semana vigente no cache', () => {
     expect(second.entries[0].week).toBe('anterior')
   })
 
+  it('pendência fora do limite de 4 semanas nem é lida (e a janela anda com a semana)', async () => {
+    const at = (month, day) => ({ ...candidate('x'), collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, month, day, 9, 0).toISOString() }] })
+    // NOW = 25/11: limite 26/10. Coleta de 26/10 entra; a de 25/10 não é lida.
+    const inside = { ...at(9, 26), id: 'dentro' }
+    const outside = { ...at(9, 25), id: 'fora' }
+    mockListProcesses.mockResolvedValue([candidate('c1'), inside, outside])
+    const result = await loadCargoConferenceEntries({ now: NOW })
+    expect(mockGetCargoReport.mock.calls.map(([id]) => id).sort()).toEqual(['c1', 'dentro'])
+    expect(result.entries).toHaveLength(2)
+    expect(result.todo).toBe(2)
+  })
+
   it('processo com chegada em semana futura nem é lido', async () => {
     const future = { ...candidate('futuro'), collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 11, 3, 9, 0).toISOString() }] }
     mockListProcesses.mockResolvedValue([candidate('c1'), future])

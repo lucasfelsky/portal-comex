@@ -8,12 +8,15 @@ import { normalizeComparableText } from './processStatus'
 import { getProcessPurchaseOrders } from './purchaseOrders'
 import { getWeekRange, toDateKeyLocal } from './WeeklyArrivalsCard'
 
-// S9-F do Relatório de Carga: lista e contador da aba Conferência (celular). Módulo puro, sem React e sem Firebase:
+// S9-F do Relatório de Carga: lista e contador da aba Conferência (celular). Sem estado de React e sem Firebase (só importa
+// `getWeekRange` e `toDateKeyLocal` do card do Dashboard, para usar a mesma definição de semana e de data local):
 // quem lê os dados (processos e relatórios) é `useCargoConferenceList`; aqui ficam as regras de quem entra na lista,
 // o estado de cada cartão, o texto de "quando", a busca, a ordem e a contagem do que falta conferir.
 // S9-G: além da fase, o processo só entra se a previsão de chegada no armazém cai na semana vigente (ou numa semana
 // anterior, enquanto a conferência não estiver fechada). A previsão é a do card "Chegadas da semana" do Dashboard
 // (`getEstimatedDeliveryDate`, com os padrões de previsão, sem ler configuração).
+// S9-G (limite): a pendência de semana anterior só vale nas 4 semanas imediatamente anteriores à vigente; chegada mais
+// antiga fica fora da lista, do contador e da leitura de relatórios.
 
 // Fases em que existe carga para conferir (Atrasado só existe antes de haver coleta datada; Concluído entra enquanto o
 // processo não é arquivado, porque "Carga disponível em estoque" vira Concluído antes de Recebida no CD).
@@ -29,13 +32,20 @@ export const CARGO_CONFERENCE_WEEKS = {
   previous: 'anterior',
   future: 'futura',
   none: 'sem_previsao',
+  // Anterior ao limite de 4 semanas: fora da lista, do contador e da leitura.
+  expired: 'fora_do_limite',
 }
+
+// Quantas semanas anteriores à vigente ainda mostram pendência.
+export const CARGO_CONFERENCE_PENDING_WEEKS = 4
 
 // Semana vigente: segunda a domingo (fuso do aparelho). O domingo é o mesmo fim de semana do card do Dashboard
 // (`getWeekRange`); o card começa em "hoje", aqui o início é a segunda para a pendência da sexta não virar "antiga" na terça.
+// `limitKey`: a segunda-feira de 4 semanas antes da vigente (a primeira chegada que ainda vale como pendência).
 export function getCargoConferenceWeek(now = new Date()) {
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
-  return { startKey: toDateKeyLocal(monday), endKey: toDateKeyLocal(getWeekRange(now).end) }
+  const limit = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7 * CARGO_CONFERENCE_PENDING_WEEKS)
+  return { startKey: toDateKeyLocal(monday), endKey: toDateKeyLocal(getWeekRange(now).end), limitKey: toDateKeyLocal(limit) }
 }
 
 // Chave da semana (a segunda-feira): o cache da carga não pode servir uma semana velha.
@@ -77,7 +87,8 @@ export function resolveCargoConferenceArrival(process, phase, now = new Date()) 
 
 export function classifyCargoConferenceWeek(arrivalKey, now = new Date()) {
   if (!arrivalKey) return CARGO_CONFERENCE_WEEKS.none
-  const { startKey, endKey } = getCargoConferenceWeek(now)
+  const { startKey, endKey, limitKey } = getCargoConferenceWeek(now)
+  if (arrivalKey < limitKey) return CARGO_CONFERENCE_WEEKS.expired
   if (arrivalKey < startKey) return CARGO_CONFERENCE_WEEKS.previous
   if (arrivalKey > endKey) return CARGO_CONFERENCE_WEEKS.future
   return CARGO_CONFERENCE_WEEKS.current

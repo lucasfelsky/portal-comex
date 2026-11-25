@@ -56,14 +56,14 @@ describe('semana vigente (segunda a domingo)', () => {
   it('de segunda a domingo, em qualquer dia da semana', () => {
     for (const day of [23, 24, 25, 26, 27, 28, 29]) {
       const now = at(new Date(2026, 10, day, 12, 0))
-      expect(getCargoConferenceWeek(now), String(day)).toEqual({ startKey: '2026-11-23', endKey: '2026-11-29' })
+      expect(getCargoConferenceWeek(now), String(day)).toMatchObject({ startKey: '2026-11-23', endKey: '2026-11-29' })
     }
     expect(getCargoConferenceWeekKey(at(new Date(2026, 10, 30, 0, 5)))).toBe('2026-11-30')
-    expect(getCargoConferenceWeek(new Date(2026, 10, 30, 0, 5))).toEqual({ startKey: '2026-11-30', endKey: '2026-12-06' })
+    expect(getCargoConferenceWeek(new Date(2026, 10, 30, 0, 5))).toMatchObject({ startKey: '2026-11-30', endKey: '2026-12-06' })
   })
 
   it('o domingo termina a semana (o fim é o mesmo do card do Dashboard)', () => {
-    expect(getCargoConferenceWeek(new Date(2026, 10, 29, 23, 59))).toEqual({ startKey: '2026-11-23', endKey: '2026-11-29' })
+    expect(getCargoConferenceWeek(new Date(2026, 10, 29, 23, 59))).toMatchObject({ startKey: '2026-11-23', endKey: '2026-11-29' })
   })
 
   it('inclui segunda e domingo; exclui o domingo anterior e a segunda seguinte', () => {
@@ -237,5 +237,70 @@ describe('virada da semana', () => {
     const process = received('proxima', 30, { collectionStatus: 'Veículo no CD para descarga' })
     expect(isCargoConferenceCandidate(process, new Date(2026, 10, 29, 12, 0))).toBe(false)
     expect(isCargoConferenceCandidate(process, at(new Date(2026, 10, 30, 12, 0)))).toBe(true)
+  })
+})
+
+describe('limite de 4 semanas para pendências antigas (S9-G)', () => {
+  // Quarta 25/11/2026: semana vigente 23/11 a 29/11; o limite é a segunda 26/10 (4 semanas antes).
+  const receivedOn = (id, month, day, extra = {}) => received(id, day, { cargoReceivedAt: iso(2026, month, day, 15, 0), ...extra })
+
+  it('o limite é a segunda-feira de 4 semanas antes da vigente (fuso local)', () => {
+    expect(getCargoConferenceWeek(WED).limitKey).toBe('2026-10-26')
+    expect(getCargoConferenceWeek(new Date(2026, 10, 23, 0, 1)).limitKey).toBe('2026-10-26')
+    expect(getCargoConferenceWeek(new Date(2026, 10, 29, 23, 59)).limitKey).toBe('2026-10-26')
+    // Virou a semana: a janela anda 7 dias.
+    expect(getCargoConferenceWeek(new Date(2026, 10, 30, 0, 30)).limitKey).toBe('2026-11-02')
+  })
+
+  it('fronteira exata: chegada na segunda de 4 semanas atrás entra; no domingo anterior sai', () => {
+    expect(classifyCargoConferenceWeek('2026-10-26', WED)).toBe(CARGO_CONFERENCE_WEEKS.previous)
+    expect(classifyCargoConferenceWeek('2026-10-25', WED)).toBe(CARGO_CONFERENCE_WEEKS.expired)
+    expect(classifyCargoConferenceWeek('2026-11-22', WED)).toBe(CARGO_CONFERENCE_WEEKS.previous)
+    expect(classifyCargoConferenceWeek('2026-11-23', WED)).toBe(CARGO_CONFERENCE_WEEKS.current)
+
+    expect(isCargoConferenceCandidate(receivedOn('limite', 9, 26), WED)).toBe(true)
+    expect(isCargoConferenceCandidate(receivedOn('fora', 9, 25), WED)).toBe(false)
+    expect(isCargoConferenceCandidate(receivedOn('muito-antiga', 8, 1), WED)).toBe(false)
+  })
+
+  it('pendência de 3 semanas atrás aparece; a de 5 semanas atrás não (nem aberta, nem bloqueada)', () => {
+    const threeWeeks = entry(receivedOn('tres', 10, 3), REPORT)
+    const fiveWeeks = entry(receivedOn('cinco', 9, 21), REPORT)
+    expect(threeWeeks.week).toBe(CARGO_CONFERENCE_WEEKS.previous)
+    expect(fiveWeeks.week).toBe(CARGO_CONFERENCE_WEEKS.expired)
+    expect(isCargoConferenceEntryVisible(threeWeeks, 'pendentes')).toBe(true)
+    expect(isCargoConferenceEntryVisible(fiveWeeks, 'pendentes')).toBe(false)
+    expect(isCargoConferenceEntryVisible(fiveWeeks, 'fechadas')).toBe(false)
+  })
+
+  it('contador, chips e lista concordam: o que passou do limite não conta', () => {
+    const entries = [
+      entry(receivedOn('atual', 10, 24), REPORT),
+      entry(receivedOn('limite', 9, 26), STARTED),
+      entry(receivedOn('fora', 9, 25), REPORT),
+      entry(receivedOn('fora-andamento', 8, 15), STARTED),
+    ]
+    const pendentes = filterCargoConferenceEntries(entries, { filter: 'pendentes', canSeeName: true, now: WED })
+    expect(pendentes.map((item) => item.processId)).toEqual(['limite', 'atual'])
+    expect(countCargoConferenceFilters(entries)).toEqual({ pendentes: 2, fechadas: 0 })
+    expect(countCargoConferencesToDo(entries)).toBe(2)
+  })
+
+  it('virada de semana empurra a janela: a mesma pendência sai quando passa de 4 semanas', () => {
+    const process = receivedOn('empurrada', 10, 2)
+    const wed = at(new Date(2026, 10, 25, 10, 0))
+    expect(isCargoConferenceCandidate(process, wed)).toBe(true)
+    // Segunda 30/11: o limite passa a ser 02/11 e a chegada de 02/11 ainda entra.
+    expect(isCargoConferenceCandidate(process, at(new Date(2026, 10, 30, 0, 30)))).toBe(true)
+    // Segunda 07/12: o limite é 09/11; a de 02/11 sai.
+    const nextMonday = at(new Date(2026, 11, 7, 0, 30))
+    expect(isCargoConferenceCandidate(process, nextMonday)).toBe(false)
+    const out = entry(process, REPORT, nextMonday)
+    expect(out.week).toBe(CARGO_CONFERENCE_WEEKS.expired)
+    expect(isCargoConferenceEntryVisible(out, 'pendentes')).toBe(false)
+    // O domingo 01/11 sai já na segunda 30/11.
+    const sunday = receivedOn('domingo', 10, 1)
+    expect(isCargoConferenceCandidate(sunday, wed)).toBe(true)
+    expect(isCargoConferenceCandidate(sunday, at(new Date(2026, 10, 30, 0, 30)))).toBe(false)
   })
 })
