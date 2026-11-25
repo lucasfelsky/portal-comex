@@ -284,10 +284,13 @@ export default function AppLayout() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
-  // S9-F: contador da aba Conferência (badge do item "Menu"): só celular e só logística/admin; sem número enquanto carrega.
+  // S9-F/S11-H: contador da aba Conferência: só celular e só logística/admin; sem número enquanto carrega.
+  // Logística: aba "Conferência" da barra de baixo (no lugar de Notícias). Admin: badge do item "Menu".
   const conferenceCount = useCargoConferenceCount({
     enabled: isMobileLayout && ['logistica', 'admin'].includes(profile?.role),
   })
+  const isLogisticsTabBar = profile?.role === 'logistica'
+  const menuConferenceCount = profile?.role === 'admin' ? conferenceCount : null
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
@@ -1264,7 +1267,8 @@ export default function AppLayout() {
 
           {/* F16.2 (redesign iOS): tab bar nova — Início/Chegadas/Notícias/
               Avisos/Menu. Suporte migrou pra tela Menu; o drawer não é mais
-              alcançável no mobile. */}
+              alcançável no mobile. S11-H: pra logística o 3º item é
+              Conferência (com o contador) e Notícias mora na tela Menu. */}
           <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
             <NavLink
               to="/"
@@ -1285,14 +1289,30 @@ export default function AppLayout() {
               <span className="mobile-bottom-nav__label">Chegadas</span>
             </NavLink>
 
-            <NavLink
-              to="/news"
-              className={navItemClass}
-              aria-label="Notícias"
-            >
-              <Icon name="news" size={22} aria-hidden="true" />
-              <span className="mobile-bottom-nav__label">Notícias</span>
-            </NavLink>
+            {isLogisticsTabBar ? (
+              <NavLink
+                to="/conferencia"
+                className={navItemClass}
+                aria-label={conferenceCount > 0 ? `Conferência, ${conferenceCount} para conferir` : 'Conferência'}
+              >
+                <Icon name="clipboard-check" size={22} aria-hidden="true" />
+                <span className="mobile-bottom-nav__label">Conferência</span>
+                {conferenceCount > 0 ? (
+                  <span className="mobile-bottom-nav__badge" aria-hidden="true">
+                    {conferenceCount}
+                  </span>
+                ) : null}
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/news"
+                className={navItemClass}
+                aria-label="Notícias"
+              >
+                <Icon name="news" size={22} aria-hidden="true" />
+                <span className="mobile-bottom-nav__label">Notícias</span>
+              </NavLink>
+            )}
 
             <NavLink
               to="/notifications"
@@ -1325,16 +1345,16 @@ export default function AppLayout() {
               to="/menu"
               className={navItemClass}
               aria-label={
-                conferenceCount > 0
-                  ? `Menu, ${conferenceCount} ${conferenceCount === 1 ? 'conferência' : 'conferências'} para conferir`
+                menuConferenceCount > 0
+                  ? `Menu, ${menuConferenceCount} ${menuConferenceCount === 1 ? 'conferência' : 'conferências'} para conferir`
                   : 'Menu'
               }
             >
               <Icon name="person" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Menu</span>
-              {conferenceCount > 0 ? (
+              {menuConferenceCount > 0 ? (
                 <span className="mobile-bottom-nav__badge" aria-hidden="true">
-                  {conferenceCount}
+                  {menuConferenceCount}
                 </span>
               ) : null}
             </NavLink>

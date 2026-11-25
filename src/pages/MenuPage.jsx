@@ -79,8 +79,10 @@ export default function MenuPage() {
   const themeLabelId = useId()
   const isAdmin = profile?.role === 'admin'
   const canQuote = canRequestQuote(profile)
-  // S9-F: aba Conferência (Relatório de Carga) só no celular e só para logística e admin; o contador é o do cache da lista.
-  const canConfer = isMobile && (isAdmin || profile?.role === 'logistica')
+  // S9-F/S11-H: Conferência (Relatório de Carga) só no celular. Admin: linha aqui, com o contador do cache da lista.
+  // Logística: a Conferência fica na barra de baixo (que já carrega o contador) e Notícias vem para cá.
+  const canConfer = isMobile && isAdmin
+  const showNewsRow = isMobile && profile?.role === 'logistica'
   const conferenceCount = useCargoConferenceCount({ enabled: canConfer })
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const platform = detectPlatform()
@@ -121,6 +123,21 @@ export default function MenuPage() {
                     {conferenceCount}
                   </span>
                 ) : null}
+                <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
+          {showNewsRow ? (
+            <div className="m-group m-rise" style={{ '--d': '60ms' }}>
+              <button type="button" className="m-rowi" onClick={() => navigate('/news')}>
+                <span className="m-rowi__lead" aria-hidden="true">
+                  <Icon name="news" size={18} />
+                </span>
+                <span className="m-rowi__body">
+                  <span className="m-rowi__label">Notícias</span>
+                  <small className="m-rowi__sub">Comunicados da operação</small>
+                </span>
                 <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
               </button>
             </div>
