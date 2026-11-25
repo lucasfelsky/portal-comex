@@ -13,7 +13,7 @@ export const CARGO_ISSUE_NOTE_MAX = 1000
 export const CARGO_PHOTOS_PER_ROW = 5
 export const CARGO_PHOTOS_PER_CONFERENCE = 30
 const PHOTO_PATH_MAX = 300
-const PHOTO_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
+export const CARGO_PHOTO_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -58,7 +58,7 @@ export function normalizeCargoPhoto(raw) {
   const thumbPath = readPhotoText(raw.thumbPath)
   const byId = typeof raw.byId === 'string' ? raw.byId.trim().slice(0, 128) : ''
   const isPositive = (value) => Number.isInteger(value) && value > 0
-  if (!PHOTO_ID_PATTERN.test(id) || !path || !thumbPath) return null
+  if (!CARGO_PHOTO_ID_PATTERN.test(id) || !path || !thumbPath) return null
   if (!isPositive(raw.width) || !isPositive(raw.height)) return null
   if (!Number.isInteger(raw.size) || raw.size < 0 || !Number.isInteger(raw.uploadedAt) || raw.uploadedAt < 0) return null
   return { id, path, thumbPath, width: raw.width, height: raw.height, size: raw.size, uploadedAt: raw.uploadedAt, byId }

@@ -57,12 +57,13 @@
     "count": 13
   },
   "srcServices": {
-    "count": 24,
+    "count": 25,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
       "authRepository.js",
       "barStatusRepository.js",
+      "cargoConferencePhotosRepository.js",
       "cargoReportRecipientsRepository.js",
       "cargoReportRepository.js",
       "erpReferenceRepository.js",

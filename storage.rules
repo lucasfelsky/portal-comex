@@ -211,6 +211,47 @@ service firebase.storage {
         && (myRole() == 'admin' || (myRole() == 'logistica' && isOwnUploadFileName(fileName)));
     }
 
+    // S11 (J1): fotos de avaria por item da Conferencia do Relatorio de Carga.
+    // Caminho: processes/{processId}/cargo-conference/{rowId}/{ts}-{uid}-{photoId}.jpg
+    // (1.600 px) e ...-{photoId}-t.jpg (miniatura 400 px). So' a logistica envia
+    // (o app sempre recodifica para JPEG e reduz; sem imagem original), so' JPEG
+    // < 3 MB, nome com o proprio uid, metadata vazia, sem `update` (nao
+    // sobrescreve) e delete so' do proprio envio (desfazer). Storage nao le o
+    // Firestore: o vinculo foto <-> processo/linha e' conferido pela function
+    // `downloadCargoConferencePhoto` (a foto precisa estar listada no doc da
+    // conferencia). O delete "de verdade" da foto removida e' do trigger
+    // `syncCargoConferenceDamage` (Admin SDK).
+    function canManageCargoConferencePhotos() {
+      return isApprovedUser() && myRole() == 'logistica';
+    }
+
+    function isCargoPhotoContentType() {
+      return request.resource.contentType is string && request.resource.contentType == 'image/jpeg';
+    }
+
+    function isWithinCargoPhotoSizeLimit() {
+      return request.resource.size < 3 * 1024 * 1024;
+    }
+
+    match /processes/{processId}/cargo-conference/{rowId}/{fileName} {
+      // L38: leitura so' pela function (Admin SDK); ninguem gera URL permanente.
+      allow read: if false;
+      // `resource == null`: so' cria objeto novo (o emulador trata o reenvio no mesmo caminho como `create`;
+      // sem esta guarda a foto ja' enviada poderia ser sobrescrita).
+      allow create: if resource == null
+        && canManageCargoConferencePhotos()
+        && isCargoPhotoContentType()
+        && isWithinCargoPhotoSizeLimit()
+        && isOwnUploadFileName(fileName)
+        && isSafeFileName(fileName)
+        && isSafeFileName(rowId)
+        && rowId.size() <= 64
+        && !rowId.matches('^\\.+$')
+        && hasEmptyMetadata();
+      allow delete: if canManageCargoConferencePhotos()
+        && isOwnUploadFileName(fileName);
+    }
+
     match /news/{newsId}/{folderName}/{fileName} {
       allow read: if isApprovedUser();
       // PR #4: news/cover so' permite imagem; news/attachments

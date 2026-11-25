@@ -486,6 +486,131 @@ describeEmulator('storage.rules (emulador)', () => {
     })
   })
 
+  // S11 (J1): fotos de avaria por item da Conferencia do Relatorio de Carga. Leitura so' pela function
+  // `downloadCargoConferencePhoto` (Admin SDK); so' a logistica envia JPEG < 3 MB com o proprio uid no nome.
+  describe('cargo-conference (processes/{pid}/cargo-conference/{rowId}/{file}) - fotos de avaria', () => {
+    const OWN = 'processes/p1/cargo-conference/r-1/1700000000000-log-1-photo1.jpg'
+    const OWN_THUMB = 'processes/p1/cargo-conference/r-1/1700000000000-log-1-photo1-t.jpg'
+    const LOG = ['log-1', 'log@sqquimica.com', 'logistica', 'Ativo']
+
+    const uploadPhoto = (who, path, { contentType = 'image/jpeg', bytes = 8, metadata } = {}) =>
+      uploadBytes(
+        ref(storageAs(...who), path),
+        new Blob([new Uint8Array(bytes)], { type: contentType }),
+        { contentType, ...(metadata ? { customMetadata: metadata } : {}) }
+      )
+
+    it('logistica sobe JPEG proprio < 3 MB (foto e miniatura)', async () => {
+      await assertSucceeds(uploadPhoto(LOG, OWN))
+      await assertSucceeds(uploadPhoto(LOG, OWN_THUMB))
+    })
+
+    it('rowId com 64 caracteres passa; com 65 falha', async () => {
+      await assertSucceeds(uploadPhoto(LOG, `processes/p1/cargo-conference/${'a'.repeat(64)}/1-log-1-p.jpg`))
+      await assertFails(uploadPhoto(LOG, `processes/p1/cargo-conference/${'a'.repeat(65)}/1-log-1-p.jpg`))
+    })
+
+    // Guardas do rowId (isSafeFileName + so' pontos): cada caso e' barrado pelas rules, nao pelo SDK.
+    it.each([
+      ['espaco', 'a b'],
+      ['acento', 'ça'],
+      ['dois pontos', '..'],
+      ['um ponto', '.'],
+      ['ponto no meio', 'a.b/c'],
+      ['barra codificada', 'a%2Fb'],
+      ['ponto codificado', '%2e%2e'],
+      ['vazio', ''],
+    ])('rowId invalido (%s) falha', async (_label, rowId) => {
+      await assertFails(uploadPhoto(LOG, `processes/p1/cargo-conference/${rowId}/1-log-1-p.jpg`))
+    })
+
+    it('PNG falha (o app sempre recodifica em JPEG)', async () => {
+      await assertFails(uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1-log-1-png.jpg', { contentType: 'image/png' }))
+    })
+
+    it('arquivo que nao e imagem falha', async () => {
+      await assertFails(
+        uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1-log-1-doc.jpg', { contentType: 'application/pdf' })
+      )
+    })
+
+    it('3 MB falha; logo abaixo de 3 MB passa', async () => {
+      await assertFails(uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1-log-1-big.jpg', { bytes: 3 * 1024 * 1024 }))
+      await assertSucceeds(
+        uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1-log-1-ok.jpg', { bytes: 3 * 1024 * 1024 - 1 })
+      )
+    })
+
+    it('nome com o uid de outro falha', async () => {
+      await assertFails(uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1700000000000-admin-1-photo1.jpg'))
+    })
+
+    it('nome fora do formato {ts}-{uid}-{id} falha', async () => {
+      await assertFails(uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/foto.jpg'))
+    })
+
+    it('metadata customizada falha', async () => {
+      await assertFails(uploadPhoto(LOG, 'processes/p1/cargo-conference/r-1/1-log-1-meta.jpg', { metadata: { a: 'b' } }))
+    })
+
+    it.each([
+      ['admin', ['admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'], '1-admin-1-a.jpg'],
+      ['tecnico', ['tec-1', 'tec@sqquimica.com', 'tecnico', 'Ativo'], '1-tec-1-a.jpg'],
+      ['faturamento', ['fat-1', 'fat@sqquimica.com', 'faturamento', 'Ativo'], '1-fat-1-a.jpg'],
+      ['usuario comum', ['user-1', 'user@sqquimica.com', 'user', 'Ativo'], '1-user-1-a.jpg'],
+      ['logistica pendente', ['log-1', 'log@sqquimica.com', 'logistica', 'Pendente'], '1-log-1-a.jpg'],
+      ['logistica com e-mail externo', ['log-1', 'log@gmail.com', 'logistica', 'Ativo'], '1-log-1-a.jpg'],
+    ])('%s NAO sobe', async (_label, who, fileName) => {
+      await assertFails(uploadPhoto(who, `processes/p1/cargo-conference/r-1/${fileName}`))
+    })
+
+    it('anonimo NAO sobe', async () => {
+      await assertFails(
+        uploadBytes(ref(anonStorage(), OWN), new Blob(['x'], { type: 'image/jpeg' }), { contentType: 'image/jpeg' })
+      )
+    })
+
+    it('sobrescrever (update) falha', async () => {
+      // Caminho proprio do teste: o emulador nao limpa o Storage entre os testes e esta pasta nao aceita reenvio.
+      const path = 'processes/p1/cargo-conference/r-1/1700000000001-log-1-overwrite.jpg'
+      await assertSucceeds(uploadPhoto(LOG, path))
+      await assertFails(uploadPhoto(LOG, path))
+    })
+
+    it('NINGUEM le via SDK cliente (a leitura e so pela function)', async () => {
+      await seedObject(OWN)
+      for (const who of [
+        LOG,
+        ['admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'],
+        ['tec-1', 'tec@sqquimica.com', 'tecnico', 'Ativo'],
+        ['user-1', 'user@sqquimica.com', 'user', 'Ativo'],
+      ]) {
+        await assertFails(getMetadata(ref(storageAs(...who), OWN)))
+      }
+      await assertFails(getMetadata(ref(anonStorage(), OWN)))
+    })
+
+    it('delete: logistica apaga o proprio envio', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      await seedObject(OWN)
+      await assertSucceeds(deleteObject(ref(storageAs(...LOG), OWN)))
+    })
+
+    it('delete: logistica NAO apaga o envio de outro uid', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      const other = 'processes/p1/cargo-conference/r-1/1700000000000-admin-1-photo2.jpg'
+      await seedObject(other)
+      await assertFails(deleteObject(ref(storageAs(...LOG), other)))
+    })
+
+    it('delete: admin e tecnico nao apagam (a limpeza e do trigger com Admin SDK)', async () => {
+      const { deleteObject } = await import('firebase/storage')
+      await seedObject(OWN)
+      await assertFails(deleteObject(ref(storageAs('admin-1', 'admin@sqquimica.com', 'admin', 'Ativo'), OWN)))
+      await assertFails(deleteObject(ref(storageAs('tec-1', 'tec@sqquimica.com', 'tecnico', 'Ativo'), OWN)))
+    })
+  })
+
   describe('supportTickets ({uid}/{file}) — aba de suporte (backlog 2026-07-10)', () => {
     const uploadTo = (uid, email, role, status, path, contentType = 'image/png') =>
       uploadBytes(
