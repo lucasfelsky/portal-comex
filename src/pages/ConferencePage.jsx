@@ -127,7 +127,7 @@ export default function ConferencePage() {
   }
 
   return (
-    <div className="ccf-page ccf-page--detail">
+    <div className={`ccf-page ccf-page--detail${isMobileNow ? ' ccf-page--nav' : ''}`}>
       <CargoConferenceScreen
         key={process.id}
         process={process}
