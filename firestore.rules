@@ -878,6 +878,7 @@ service cloud.firestore {
         && request.resource.data.updatedByName == myName();
     }
 
+    // S10: nfNumber da conferencia = lista de NFs separada por "; " (ate 1000); o legado do current segue 40.
     function isValidCargoReportConference(processId) {
       return request.resource.data.keys().hasOnly([
         'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
@@ -911,7 +912,7 @@ service cloud.firestore {
         && (request.resource.data.receivedDate == ''
           || request.resource.data.receivedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
         && request.resource.data.nfNumber is string
-        && request.resource.data.nfNumber.size() <= 40
+        && request.resource.data.nfNumber.size() <= 1000
         && request.resource.data.notes is string
         && request.resource.data.notes.size() <= 2000
         && request.resource.data.unloadStartAt is string

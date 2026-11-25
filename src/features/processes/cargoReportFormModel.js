@@ -6,6 +6,7 @@
 // S7: "Salvar e fechar" por área. COMEX fecha o `current` (`status: 'concluido'`); a logística grava e
 // fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
 import { digitsOnly, foldText } from '../erp/erpText'
+import { CARGO_NF_LIST_MAX_CHARS, canonicalCargoNfText } from './cargoNfList'
 import { normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
 import { cargoPackagingContext, resolveCargoPackaging } from './cargoSupplierPackaging'
 import { getProcessPurchaseOrders } from './purchaseOrders'
@@ -18,7 +19,15 @@ export const CARGO_REPORT_SCHEMA_VERSION = 1
 export const CARGO_REPORT_MAX_ROWS = 200
 export const CARGO_REPORT_TEMPLATE_ROWS = 28
 export const CARGO_REPORT_TITLE_PREFIX = 'RELATÓRIO DE CARGA - '
-export const CARGO_REPORT_LIMITS = { text: 120, description: 200, notes: 2000, nf: 40, rowId: 64 }
+// `nf` (40) segue valendo para o `current.nfNumber` legado; `nfList` (1.000) é a lista de NFs da conferência (S9-E).
+export const CARGO_REPORT_LIMITS = {
+  text: 120,
+  description: 200,
+  notes: 2000,
+  nf: 40,
+  nfList: CARGO_NF_LIST_MAX_CHARS,
+  rowId: 64,
+}
 export const CARGO_REPORT_CONFLICT_CODE = 'cargoReport/revision-conflict'
 export const CARGO_REPORT_ATTACHED_NOT_SAVED_CODE = 'cargoReport/attached-not-saved'
 export const CARGO_REPORT_ROWS_LIMIT_MESSAGE =
@@ -595,7 +604,7 @@ function hasOwn(object, key) {
 
 // Conferência da logística (18 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
 // linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
-// recebimento normalizado. S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
+// recebimento normalizado (S9-E: `nfNumber` é a lista de NFs "NF1; NF2", até 1.000 caracteres). S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
 // do dia do início (sem início, o valor carregado/legado). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
 // a rule exige `checkedByName == myName()`. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
 export function buildConferencePayload(
@@ -643,7 +652,7 @@ export function buildConferencePayload(
     checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(receiptStatus, RECEIPT_STATUS_VALUES),
     receivedDate: resolveCargoReceivedDate({ unloadStartAt, receivedDate }),
-    nfNumber: clip(nfNumber, CARGO_REPORT_LIMITS.nf),
+    nfNumber: canonicalCargoNfText(nfNumber),
     notes: clip(notes, CARGO_REPORT_LIMITS.notes),
     unloadStartAt: readDateTimeKey(unloadStartAt),
     unloadEndAt: readDateTimeKey(unloadEndAt),
@@ -724,7 +733,7 @@ export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
     checkedByName: readText(doc.checkedByName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(footerSource.receiptStatus, RECEIPT_STATUS_VALUES),
     receivedDate: readDateKey(footerSource.receivedDate),
-    nfNumber: readText(footerSource.nfNumber, CARGO_REPORT_LIMITS.nf),
+    nfNumber: canonicalCargoNfText(footerSource.nfNumber),
     notes: readText(footerSource.notes, CARGO_REPORT_LIMITS.notes),
     // S8: doc anterior (sem as chaves) lê como vazio / sem OK.
     unloadStartAt: readDateTimeKey(doc.unloadStartAt),

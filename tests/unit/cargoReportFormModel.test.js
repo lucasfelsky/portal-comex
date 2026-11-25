@@ -5,6 +5,7 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CARGO_REPORT_CONFLICT_CODE,
+  CARGO_REPORT_LIMITS,
   CARGO_REPORT_MAX_ROWS,
   CARGO_TYPE_OPTIONS,
   RECEIPT_STATUS_OPTIONS,
@@ -530,7 +531,8 @@ describe('buildConferencePayload', () => {
       { actorName: 'Op' }
     )
     expect(invalid).toMatchObject({ receiptStatus: '', receivedDate: '', notes: 'obs' })
-    expect(invalid.nfNumber).toBe('n'.repeat(40))
+    // S9-E: o limite de 40 por NF vale ao ADICIONAR na tela; ao gravar só o TOTAL (1.000) é limitado.
+    expect(invalid.nfNumber).toBe('n'.repeat(41))
 
     const valid = buildConferencePayload(
       { receiptStatus: 'com_ressalva', receivedDate: '2026-11-22', nfNumber: ' 000.123 ', notes: 'x'.repeat(2500), revision: 0 },
@@ -657,6 +659,38 @@ describe('fromConferenceDoc (S6/S7)', () => {
       closedDate: '',
       closedById: '',
     })
+  })
+
+  it('S9-E: nfNumber é a lista "NF1; NF2": normaliza espaços, vazias e duplicadas e limita o TOTAL a 1.000 por NF inteira', () => {
+    const build = (nfNumber) => buildConferencePayload({ nfNumber, revision: 0 }, [], { actorName: 'Op' }).nfNumber
+    expect(build('a ;b;; a')).toBe('a; b')
+    expect(build('  000.123.456 ')).toBe('000.123.456')
+    expect(build('123, 124')).toBe('123, 124')
+    expect(build(undefined)).toBe('')
+
+    const nfs = Array.from({ length: 23 }, (_, index) => String(index).padStart(2, '0').padEnd(40, 'x'))
+    const tooMuch = [...nfs, 'y'.repeat(40)].join('; ')
+    expect(tooMuch.length).toBeGreaterThan(1000)
+    expect(build(tooMuch)).toBe(nfs.join('; '))
+    expect(CARGO_REPORT_LIMITS.nfList).toBe(1000)
+    expect(CARGO_REPORT_LIMITS.nf).toBe(40)
+  })
+
+  it('S9-E: fromConferenceDoc lê a lista; o legado do current (40 caracteres, sem ";") é UMA NF', () => {
+    expect(fromConferenceDoc({ receiptStatus: '', nfNumber: ' 1;2 ; 1 ' }).nfNumber).toBe('1; 2')
+    expect(fromConferenceDoc({ revision: 1 }, [], { nfNumber: 'NF 12/1' }).nfNumber).toBe('NF 12/1')
+    expect(fromConferenceDoc({ revision: 1 }, [], { nfNumber: '123, 124' }).nfNumber).toBe('123, 124')
+    const nfs = Array.from({ length: 30 }, (_, index) => String(index).padStart(2, '0').padEnd(40, 'x'))
+    expect(fromConferenceDoc({ receiptStatus: '', nfNumber: nfs.join('; ') }).nfNumber.length).toBeLessThanOrEqual(1000)
+  })
+
+  it('S9-E: o current continua em 40 (nfNumber legado), só a conferência aceita a lista', () => {
+    const { payload } = buildCargoReportPayload({
+      ...fromCargoReportDoc({ revision: 1, status: 'rascunho', cargoType: 'FCL' }),
+      rows: [makeRow({ id: 'a', po: '1' })],
+      nfNumber: 'x'.repeat(60),
+    })
+    expect(payload.nfNumber).toBe('x'.repeat(40))
   })
 
   it('S7: doc sem receiptStatus (anterior à S7) pré-preenche o rodapé pelo current legado; com a chave, não', () => {

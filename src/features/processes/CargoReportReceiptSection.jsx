@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import Icon from '../../components/Icon'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
+import CargoNfListField from './CargoNfListField'
 import { CargoOkBadge } from './CargoReportItems'
 import {
   CARGO_REPORT_LIMITS,
@@ -12,7 +13,7 @@ import {
 import { formatCargoDateBr } from './cargoReportSheet'
 
 // S7 do Relatório de Carga: card "Responsáveis e recebimento". Quem preenche é a logística (doc `conference`):
-// Status do recebimento, Nº da NF, Observações e (S8) início/fim da descarga e Etiquetagem OK. "Conferido por" é
+// Status do recebimento, Nº da NF (S9-E: lista de NFs, `CargoNfListField`), Observações e (S8) início/fim da descarga e Etiquetagem OK. "Conferido por" é
 // automático e travado (nome de quem salva ou fecha a conferência); para a logística com a conferência aberta
 // mostra o próprio nome (prévia), para os demais o nome gravado. S8: "Data de recebimento" é fixa (o dia do
 // início da descarga) e "Tempo total da descarga" é calculado; os dois são somente leitura.
@@ -99,12 +100,10 @@ export default function CargoReportReceiptSection({
             ))}
           </select>
         </div>
-        <TextField
-          label="Nº da NF"
+        <CargoNfListField
           value={conference.nfNumber}
-          maxLength={CARGO_REPORT_LIMITS.nf}
           disabled={!canEdit}
-          onChange={(value) => onChange({ nfNumber: value })}
+          onChange={(next) => onChange({ nfNumber: next })}
         />
         <TextField
           label="Data de recebimento"

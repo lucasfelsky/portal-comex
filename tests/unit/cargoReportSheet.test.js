@@ -217,6 +217,17 @@ describe('buildCargoReportSheet', () => {
     expect(sheet.rows[1]).toMatchObject({ netWeightKg: null, packages: null })
   })
 
+  it('S9-E: a lista de NFs chega inteira à folha (até 1.000 caracteres, não mais 40)', () => {
+    const list = Array.from({ length: 30 }, (_, index) => String(40000000 + index)).join('; ')
+    expect(list.length).toBeGreaterThan(40)
+    const build = (nfNumber) =>
+      buildCargoReportSheet(makeForm([]), { process: PROCESS, conference: { nfNumber }, catalog: null }).nfNumber
+    expect(build(list)).toBe(list)
+    expect(build(` ${list} `)).toBe(list)
+    expect(build('x'.repeat(300))).toBe('x'.repeat(300))
+    expect(build('x'.repeat(1200))).toBe('x'.repeat(1000))
+  })
+
   it('sem DUIMP ou conferência devolve strings vazias', () => {
     const sheet = buildCargoReportSheet(makeForm([]), { process: {}, conference: undefined, catalog: null })
     expect(sheet).toMatchObject({

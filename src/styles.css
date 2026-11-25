@@ -25728,3 +25728,134 @@ tr.crf-gsum td {
 .spc-card--mobile .spc-join__bar select {
   min-height: 44px;
 }
+/* S9-E do Relatório de Carga: lista de NFs da conferência (campo + Adicionar, chips removíveis, "Fica salvo como").
+   Só tokens do tema, sem media query: o celular vem do JS (.crf-wrap--mobile e .crf-nfs--mobile). */
+.crf-nfs {
+  position: relative;
+}
+
+.crf-nfs__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.crf-nfs__row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.crf-nfs__add {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.crf-nfs__label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.crf-nfs__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* Teto de altura: 100 NFs rolam dentro da lista em vez de virar um card de 2.000 px. */
+  max-height: 9.5rem;
+  margin: -4px;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.crf-nf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.crf-nf-chip__text {
+  overflow-wrap: anywhere;
+}
+
+.crf-nf-chip__x {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-right: -8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.crf-nf-chip__x:hover {
+  background: var(--surface);
+}
+
+.crf-nf-chip__x:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.crf-nfs .crf-nfs__saved {
+  display: block;
+  /* Lista longa: 4 linhas visíveis e o resto rola (o valor inteiro continua salvo). */
+  max-height: 5.6em;
+  overflow-y: auto;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.crf-nfs__empty {
+  color: var(--text-muted);
+  font-size: var(--fs-subhead);
+  font-weight: 500;
+}
+
+.crf-nfs__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Alvos de toque de 44 px no celular (variante vinda do JS). A área do × cresce por um pseudo-elemento. */
+.crf-wrap--mobile .crf-nfs__row input,
+.crf-wrap--mobile .crf-nfs__add,
+.crf-nfs--mobile .crf-nfs__row input,
+.crf-nfs--mobile .crf-nfs__add {
+  min-height: 44px;
+}
+
+.crf-wrap--mobile .crf-nfs__list,
+.crf-nfs--mobile .crf-nfs__list {
+  gap: 10px;
+}
+
+.crf-wrap--mobile .crf-nf-chip__x::after,
+.crf-nfs--mobile .crf-nf-chip__x::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}

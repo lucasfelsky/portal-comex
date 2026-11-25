@@ -610,15 +610,55 @@ describe('S8: descarga, tempo total e etiquetagem no Excel', () => {
   })
 })
 
+// S9-E: lista de NFs ("48213; 48214; ...", até 1.000 caracteres) na MESMA célula do rodapé (I40, ou I40 + extra), sem mexer
+// no layout: a célula mesclada I40:O40 corta a exibição na borda, mas o valor inteiro fica na célula.
+const NF_LIST_1000 = Array.from({ length: 100 }, (_, index) => String(10000000 + index)).join('; ')
+
+describe('S9-E: lista de NFs em I40', () => {
+  const templateXml = sheetXml(unzipSync(TEMPLATE))
+  const cellRefs = (xml) => [...xml.matchAll(/<c r="([A-Z]+\d+)"/g)].map((match) => match[1])
+  const styleOf = (xml, ref) => cellXml(xml, ref).match(/ s="(\d+)"/)[1]
+
+  it('a lista de 1.000 caracteres chega inteira à célula, com o estilo e a mescla do modelo', () => {
+    expect(NF_LIST_1000).toHaveLength(998)
+    const baseline = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, nfNumber: '1' }))
+    const { files, book } = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, nfNumber: NF_LIST_1000 }))
+    const xml = sheetXml(files)
+    const ws = book.Sheets['SQ QUIMICA']
+
+    expect(ws.I40.v).toBe(`Nº DA NF: ${NF_LIST_1000}`)
+    expect(styleOf(xml, 'I40')).toBe('50')
+    expect(styleOf(xml, 'I40')).toBe(styleOf(templateXml, 'I40'))
+    expect(xml).toContain('<mergeCell ref="I40:O40"/>')
+    expect(cellRefs(xml)).toEqual(cellRefs(sheetXml(baseline.files)))
+    expect(xml).not.toContain('wrapText')
+  })
+
+  it('com 40 linhas (extra 12) a lista cai em I52', () => {
+    const extra = 40 - 28
+    const conference = { ...manyRowsConference(40), nfNumber: NF_LIST_1000 }
+    const { files, book } = generate(buildSheet(manyRowsForm(40), conference))
+    const ws = book.Sheets['SQ QUIMICA']
+
+    expect(ws[`I${40 + extra}`].v).toBe(`Nº DA NF: ${NF_LIST_1000}`)
+    expect(ws.I52.v).toBe(`Nº DA NF: ${NF_LIST_1000}`)
+    expect(sheetXml(files)).toContain('<mergeCell ref="I52:O52"/>')
+    expect(ws.I40.v).not.toContain('Nº DA NF')
+  })
+})
+
 describe('amostra para o Lucas', () => {
   it('grava o xlsx do cenário do mock quando CARGO_REPORT_SAMPLE_OUT existe', () => {
     const out = process.env.CARGO_REPORT_SAMPLE_OUT
     if (!out) return
     // S7: a amostra é o Excel que a LOGÍSTICA gera ao fechar a conferência (conferência fechada).
     // S8: com descarga (início, fim e tempo total em B38 + Observações), data de recebimento derivada e Etiquetagem OK.
-    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), S8_CONFERENCE))
+    // S9-E: a amostra principal leva a lista longa de NFs (1.000 caracteres); a segunda ("(3 NFs)") leva 3 NFs.
+    const bytes = buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), { ...S8_CONFERENCE, nfNumber: NF_LIST_1000 }))
     fs.writeFileSync(out, bytes)
     expect(fs.statSync(out).size).toBeGreaterThan(10000)
+    const threeNfs = { ...S8_CONFERENCE, nfNumber: '48213; 48214; 48215' }
+    fs.writeFileSync(out.replace(/\.xlsx$/i, ' (3 NFs).xlsx'), buildCargoReportXlsx(TEMPLATE, buildSheet(mockScenarioForm(), threeNfs)))
   })
 })
 
