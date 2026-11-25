@@ -1,6 +1,5 @@
 import SelectField from '../../components/SelectField'
 import CollectionWindowsEditor from './CollectionWindowsEditor'
-import PostReceiptImagesField from './PostReceiptImagesField'
 import ReceiptDivergenceFields from './ReceiptDivergenceFields'
 import {
   CD_EN_ROUTE_STATUS,
@@ -18,25 +17,21 @@ import { getProcessTitle } from './processLabels'
 // estado e os handlers continuam na página. Zero mudança visual/comportamental.
 // F17.4b (B-4): + editor de divergencia no recebimento (logistica E admin),
 // visivel so' quando o status escolhido e' pos-recebimento.
-// F17.4b-fix (D3/D5): + uploader de fotos do recebimento (`PostReceiptImagesField`,
-// mesmo componente da tela "Observações pós-recebimento"), visivel na MESMA
-// condicao do editor de divergencia (status escolhido pos-recebimento) - nao
-// exige o checkbox marcado, evita estado oculto.
-// Ordem: Processo -> Status -> Janelas (leitura) -> Divergencia -> Fotos -> Salvar.
+// S11 (K): sem uploader de fotos do recebimento (as fotos e avarias passam a
+// ser registradas por item na Conferência do Relatório de Carga); as fotos já
+// gravadas no processo seguem visíveis no detalhe e não são apagadas aqui.
+// Ordem: Processo -> Status -> Janelas (leitura) -> Divergencia -> Salvar.
 export default function CollectionStatusEditView({
   process,
   collectionStatus,
   canSeeName,
   isSaving,
   receiptDivergenceFields,
-  draftPostReceiptImages,
   isUploadingPostReceiptImages,
   onStatusChange,
   onDivergenceChange,
   onSave,
   onClose,
-  onImagesUpload,
-  onRemoveImage,
 }) {
   return (
     <article className="list-card" style={{ marginTop: '16px' }}>
@@ -91,22 +86,11 @@ export default function CollectionStatusEditView({
           disabled
         />
         {postCollectionStatusOptions.includes(collectionStatus) ? (
-          <>
-            <ReceiptDivergenceFields
-              value={receiptDivergenceFields}
-              imagesCount={draftPostReceiptImages.length}
-              onChange={onDivergenceChange}
-              disabled={isSaving}
-            />
-            <PostReceiptImagesField
-              images={draftPostReceiptImages}
-              isUploading={isUploadingPostReceiptImages}
-              disabled={isSaving}
-              label="Fotos do recebimento"
-              onUpload={onImagesUpload}
-              onRemove={onRemoveImage}
-            />
-          </>
+          <ReceiptDivergenceFields
+            value={receiptDivergenceFields}
+            onChange={onDivergenceChange}
+            disabled={isSaving}
+          />
         ) : null}
       </div>
 

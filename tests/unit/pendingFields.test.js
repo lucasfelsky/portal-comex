@@ -728,20 +728,26 @@ describe('getPendingFields - divergencia no recebimento / devolucao de vazio (F1
     expect(getPendingFields(process).map((f) => f.id)).toContain('receiptDivergenceNotes')
   })
 
-  it('divergencia true sem postReceiptImages -> pendencia receiptDivergencePhoto', () => {
+  // S11 (K): a foto da divergencia nao e mais cobrada (nenhuma tela anexa foto ao processo).
+  it('divergencia true sem postReceiptImages -> NAO ha pendencia de foto (regra saiu)', () => {
     const process = receivedFclProcess({ receiptDivergence: true, postReceiptImages: [] })
-    expect(getPendingFields(process).map((f) => f.id)).toContain('receiptDivergencePhoto')
+    const ids = getPendingFields(process).map((f) => f.id)
+    expect(ids).not.toContain('receiptDivergencePhoto')
+    expect(PENDING_FIELD_RULES.some((rule) => rule.id === 'receiptDivergencePhoto')).toBe(false)
   })
 
-  it('divergencia true com notas e foto -> nenhuma das duas pendencias', () => {
-    const process = receivedFclProcess({
-      receiptDivergence: true,
-      receiptDivergenceNotes: 'caixa amassada',
+  it('divergencia true com notas -> sem pendencia, com ou sem foto legada', () => {
+    const base = { receiptDivergence: true, receiptDivergenceNotes: 'caixa amassada' }
+    const withPhoto = receivedFclProcess({
+      ...base,
       postReceiptImages: [{ id: 'IMG-1', url: 'https://x' }],
     })
-    const ids = getPendingFields(process).map((f) => f.id)
-    expect(ids).not.toContain('receiptDivergenceNotes')
-    expect(ids).not.toContain('receiptDivergencePhoto')
+    const withoutPhoto = receivedFclProcess({ ...base, postReceiptImages: [] })
+    for (const process of [withPhoto, withoutPhoto]) {
+      const ids = getPendingFields(process).map((f) => f.id)
+      expect(ids).not.toContain('receiptDivergenceNotes')
+      expect(ids).not.toContain('receiptDivergencePhoto')
+    }
   })
 
   it('flag false -> nenhuma das duas pendencias de divergencia', () => {

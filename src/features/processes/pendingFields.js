@@ -458,14 +458,6 @@ export const PENDING_FIELD_RULES = [
     when: (p) => p?.receiptDivergence === true,
     isMissing: (p) => !hasText(p?.receiptDivergenceNotes),
   },
-  {
-    id: 'receiptDivergencePhoto',
-    field: 'postReceiptImages',
-    label: 'Foto da divergência (mín. 1)',
-    stage: 4,
-    when: (p) => p?.receiptDivergence === true,
-    isMissing: (p) => !(Array.isArray(p?.postReceiptImages) && p.postReceiptImages.length > 0),
-  },
   // F17.4b (B-7, D6): devolucao de vazio - so' cobra apos "Carga recebida"
   // (FCL/CONSOLIDADO).
   {
