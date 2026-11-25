@@ -13,6 +13,7 @@ import Modal from '../components/Modal'
 import { SqQuimicaLogo } from '../components/BrandMark'
 import { OPEN_SUPPORT_MODAL_EVENT } from '../components/SupportButton'
 import { INTELLIQUOTE_WEB_URL, INTELLIQUOTE_REQUESTS_URL, canRequestQuote } from '../lib/intelliquote'
+import { useCargoConferenceCount } from '../features/processes/useCargoConferenceList'
 
 // Detecção de plataforma pro guia "Instalar como app". Inline (sem util novo —
 // audit:vault trava a contagem de src/utils). iPadOS 13+ se disfarça de Mac,
@@ -78,6 +79,9 @@ export default function MenuPage() {
   const themeLabelId = useId()
   const isAdmin = profile?.role === 'admin'
   const canQuote = canRequestQuote(profile)
+  // S9-F: aba Conferência (Relatório de Carga) só no celular e só para logística e admin; o contador é o do cache da lista.
+  const canConfer = isMobile && (isAdmin || profile?.role === 'logistica')
+  const conferenceCount = useCargoConferenceCount({ enabled: canConfer })
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const platform = detectPlatform()
   const alreadyInstalled = isStandalone()
@@ -96,6 +100,31 @@ export default function MenuPage() {
             </div>
             {profile?.role ? <span className="m-tag">{ROLE_LABELS[profile.role] ?? profile.role}</span> : null}
           </div>
+
+          {canConfer ? (
+            <div className="m-group m-rise" style={{ '--d': '60ms' }}>
+              <button
+                type="button"
+                className="m-rowi"
+                aria-label={conferenceCount > 0 ? `Conferência, ${conferenceCount} para conferir` : undefined}
+                onClick={() => navigate('/conferencia')}
+              >
+                <span className="m-rowi__lead" aria-hidden="true">
+                  <Icon name="clipboard-check" size={18} />
+                </span>
+                <span className="m-rowi__body">
+                  <span className="m-rowi__label">Conferência</span>
+                  <small className="m-rowi__sub">Relatório de Carga no celular</small>
+                </span>
+                {conferenceCount > 0 ? (
+                  <span className="m-rowi__count" aria-hidden="true">
+                    {conferenceCount}
+                  </span>
+                ) : null}
+                <Icon name="chevron" size={16} className="m-rowi__chev" aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
 
           {isAdmin ? (
             <>

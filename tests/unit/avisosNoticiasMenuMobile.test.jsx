@@ -589,7 +589,8 @@ describe('F6 Menu (mobile)', () => {
       'Chamados de suporte Chamados abertos pelos usuários': '/admin/suporte',
       'Relatório de Carga Aviso por e-mail e tabela Item x Emb.': '/admin/relatorio-carga',
     }
-    const groupEl = container.querySelector('.m-group')
+    // S9-F: o grupo "Conferência" vem antes; o das 7 seções é o que segue o título "Administração".
+    const groupEl = container.querySelector('.m-gh + .m-group')
     expect(within(groupEl).getAllByRole('button')).toHaveLength(7)
     for (const [label, route] of Object.entries(routes)) {
       mockNavigate.mockClear()

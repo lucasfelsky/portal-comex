@@ -54,7 +54,7 @@
     ]
   },
   "srcPages": {
-    "count": 12
+    "count": 13
   },
   "srcServices": {
     "count": 24,
@@ -440,6 +440,7 @@
       "*",
       "/admin",
       "/aguardando-aprovacao",
+      "/conferencia",
       "/debug/claims",
       "/login",
       "/menu",

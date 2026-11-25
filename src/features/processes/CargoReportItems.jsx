@@ -59,7 +59,7 @@ const NUMERIC_FIELDS = new Set(['quantityKg', 'packageWeightKg'])
 // convertido no próprio campo ANTES de o React ver o novo estado e restaura a seleção: com o DOM já igual ao
 // estado, o React não mexe no valor e o cursor não pula para o fim ao editar no meio do texto. Durante a
 // composição (IME, acento morto) repassa o valor cru; `onCompositionEnd` e `onBlur` reaplicam a conversão.
-function handleUpperChange(event, commit) {
+export function handleUpperChange(event, commit) {
   const input = event.target
   const value = input.value
   if (event.nativeEvent?.isComposing) {
