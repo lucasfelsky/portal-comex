@@ -5,7 +5,6 @@ import Skeleton from '../../components/Skeleton'
 import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
 import { isCargoRowConferred } from './cargoConferenceModel'
-import CargoConferenceCloseSheet from './CargoConferenceCloseSheet'
 import CargoConferenceItemCard from './CargoConferenceItemCard'
 import CargoConferenceReceiptPanel from './CargoConferenceReceiptPanel'
 import { CARGO_STAGE } from './cargoReportFormModel'
@@ -29,7 +28,8 @@ const NOTES = {
   admin: 'Admin só acompanha no celular. Quem preenche e fecha a conferência é a logística',
   adminClosed: '; você pode reabrir esta.',
   closed: 'Conferência fechada. Para corrigir, peça ao COMEX para reabrir.',
-  comexDraft: 'O COMEX ainda não fechou a parte dele. Você já pode conferir e salvar; fechar só depois que ele fechar.',
+  // S9-H: no celular a logística só salva; o fechamento é no computador.
+  useComputer: 'Para fechar a conferência, use o computador.',
 }
 
 // Barra inferior fixa por portal no body: `position: fixed` não pode ficar dentro do `.page-fade` (transform).
@@ -57,8 +57,8 @@ function ProgressLine({ done, total, process }) {
   )
 }
 
-export default function CargoConferenceScreen({ process, profile, canSeeName, onBack, onClosed }) {
-  const screen = useCargoConferenceScreen({ process, profile, onClosed })
+export default function CargoConferenceScreen({ process, profile, canSeeName, onBack }) {
+  const screen = useCargoConferenceScreen({ process, profile })
   const { requestLeave } = useUnsavedChanges()
   const [tab, setTab] = useState('itens')
   const [onlyPending, setOnlyPending] = useState(false)
@@ -70,7 +70,6 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
   const { rows, conference, stage } = screen
   const isClosed = stage === CARGO_STAGE.done
-  const comexDraft = stage === CARGO_STAGE.draft
 
   const groups = useMemo(
     () => (purchaseOrders.length > 0 ? groupCargoRowsByPurchaseOrder(rows, purchaseOrders) : []),
@@ -150,8 +149,8 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   let note = null
   if (isAdmin) note = `${NOTES.admin}${isClosed ? NOTES.adminClosed : '.'}`
   else if (isClosed) note = NOTES.closed
-  else if (comexDraft) note = NOTES.comexDraft
-  const noteClass = isClosed && !isAdmin ? 'ccf-note ccf-note--ok' : comexDraft && !isAdmin ? 'ccf-note ccf-note--warn' : 'ccf-note'
+  else if (screen.canSave) note = NOTES.useComputer
+  const noteClass = isClosed && !isAdmin ? 'ccf-note ccf-note--ok' : 'ccf-note'
 
   const feedback = screen.feedback
   const feedbackAction =
@@ -214,22 +213,12 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   }
 
   const saveDisabled = screen.isBusy || !screen.dirty
-  const closeDisabled = screen.isBusy || !screen.canClose
   let actions
   if (screen.canSave) {
     actions = (
       <>
-        <button type="button" className="secondary-button" disabled={saveDisabled} onClick={screen.save}>
+        <button type="button" className="primary-button" disabled={saveDisabled} onClick={screen.save}>
           Salvar
-        </button>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={closeDisabled}
-          aria-describedby={comexDraft ? noteId : undefined}
-          onClick={screen.openClose}
-        >
-          Salvar e fechar
         </button>
       </>
     )
@@ -273,7 +262,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
       </div>
 
       {note ? (
-        <div className={noteClass} id={noteId}>
+        <div className={noteClass} id={noteId} role="note">
           {note}
         </div>
       ) : null}
@@ -325,14 +314,6 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
       </div>
 
       {renderActionBar(actions)}
-
-      <CargoConferenceCloseSheet
-        open={screen.isCloseOpen}
-        pendings={screen.pendings}
-        busy={screen.isBusy}
-        onConfirm={screen.confirmClose}
-        onCancel={screen.cancelClose}
-      />
     </div>
   )
 }

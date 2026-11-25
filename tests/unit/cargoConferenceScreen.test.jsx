@@ -366,113 +366,47 @@ describe('salvar e falhas', () => {
   })
 })
 
-describe('Salvar e fechar', () => {
-  it('abre a folha com as pendências (inclui "Nº da NF não informado"); "Fechar conferência" anexa o Excel e volta', async () => {
-    const { user, onClosed } = await renderScreen()
-    await user.click(okButton(1))
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-
-    const dialog = await screen.findByRole('dialog', { name: 'Salvar e fechar conferência' })
-    const cancel = within(dialog).getByRole('button', { name: 'Cancelar' })
-    await waitFor(() => expect(cancel).toHaveFocus())
-    const pendings = within(within(dialog).getByRole('list', { name: 'Pendências' })).getAllByRole('listitem')
-    expect(pendings.map((item) => item.textContent)).toEqual([
-      '2 linhas sem OK?',
-      '3 linhas sem contagem',
-      'Status do recebimento não informado',
-      'Início da descarga não informado',
-      'Etiquetagem sem OK',
-      'Nº da NF não informado',
-    ])
-    expect(within(dialog).getByText('Dá para fechar assim.')).toBeInTheDocument()
-    expect(within(dialog).getByText(/Isso gera o Excel da conferência, anexa ao processo como nova versão/)).toBeInTheDocument()
-
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-    await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(1))
-    const [processId, args] = mockClose.mock.calls[0]
-    expect(processId).toBe('p1')
-    expect(args).toMatchObject({ category: 'FCL', actor: LOGISTICA, currentRevision: 4 })
-    expect(args.file).toBeInstanceOf(File)
-    expect(args.payload).toMatchObject({ status: 'fechada', revision: 3, checkedByName: 'Operador Logística' })
-    expect(args.payload.okByRowId).toEqual({ 'r-1': true })
-    expect(mockGenerate).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(onClosed).toHaveBeenCalledTimes(1))
-    expect(mockInvalidate).toHaveBeenCalledWith('p1')
-  })
-
-  it('"Nada pendente." quando tudo está preenchido', async () => {
-    const { user } = await renderScreen({
-      conference: conferenceDoc({
-        okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
-        countOkByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
-        receiptStatus: 'sem_ressalva',
-        unloadStartAt: '2026-11-24T08:00',
-        unloadEndAt: '2026-11-24T09:00',
-        labelingOk: true,
-        nfNumber: '48213',
-      }),
-    })
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Nada pendente.')).toBeInTheDocument()
-    expect(within(dialog).queryByText('Dá para fechar assim.')).not.toBeInTheDocument()
-  })
-
-  it('descarga inválida: a folha nem abre e o aviso aparece', async () => {
-    const { user } = await renderScreen({
-      conference: conferenceDoc({ unloadStartAt: '2026-11-24T10:00', unloadEndAt: '2026-11-24T09:00' }),
-    })
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
+// S9-H: no celular a logística só SALVA; o fechamento da conferência fica no computador.
+describe('só salvar no celular (fechar fica no computador)', () => {
+  it.each([
+    ['COMEX fechado', {}],
+    ['COMEX ainda em rascunho', { status: 'rascunho' }],
+  ])('%s: a barra tem só "Salvar" (largura toda) e a orientação "use o computador"', async (_name, currentOverrides) => {
+    const { user } = await renderScreen({ current: currentDoc(currentOverrides) })
+    const bar = screen.getByRole('group', { name: 'Ações da conferência' })
+    const buttons = within(bar).getAllByRole('button')
+    expect(buttons.map((button) => button.textContent)).toEqual(['Salvar'])
+    expect(buttons[0]).toHaveClass('primary-button')
+    expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(await screen.findByText('Corrija o horário da descarga antes de salvar.')).toBeInTheDocument()
+    const note = screen.getByText('Para fechar a conferência, use o computador.')
+    expect(note).toHaveAttribute('role', 'note')
+    expect(screen.queryByText(/O COMEX ainda não fechou a parte dele/)).not.toBeInTheDocument()
+    // A nota vale para as duas abas.
+    await openReceipt(user)
+    expect(screen.getByText('Para fechar a conferência, use o computador.')).toBeInTheDocument()
     expect(mockClose).not.toHaveBeenCalled()
   })
 
-  it('anexou mas não gravou: "Gravar de novo" grava só a conferência, sem anexar outra vez', async () => {
-    mockClose.mockRejectedValue(
-      Object.assign(new Error('x'), { code: 'cargoReport/attached-not-saved', documentId: 'doc-5' })
-    )
-    mockRetryClose.mockResolvedValue({ revision: 3, documentId: 'doc-5' })
-    const { user, onClosed } = await renderScreen()
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('O Excel foi anexado e o aviso enviado, mas a conferência não foi marcada como fechada.')
-    expect(onClosed).not.toHaveBeenCalled()
-    await user.click(within(alert).getByRole('button', { name: 'Gravar de novo' }))
-    await waitFor(() => expect(mockRetryClose).toHaveBeenCalledTimes(1))
-    expect(mockRetryClose.mock.calls[0][1]).toMatchObject({ documentId: 'doc-5', payload: { status: 'fechada' } })
-    expect(mockClose).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(onClosed).toHaveBeenCalledTimes(1))
-  })
-
-  it('sem conexão ao confirmar: nada é enviado e o aviso fica', async () => {
-    const { user, onClosed } = await renderScreen()
-    await user.click(screen.getByRole('button', { name: 'Salvar e fechar' }))
-    const dialog = await screen.findByRole('dialog')
-    setOnline(false)
-    await user.click(within(dialog).getByRole('button', { name: 'Fechar conferência' }))
-    expect(mockClose).not.toHaveBeenCalled()
-    expect(onClosed).not.toHaveBeenCalled()
-    expect((await screen.findAllByText(/^Sem conexão\. A conferência não foi fechada/)).length).toBeGreaterThan(0)
-  })
-})
-
-describe('COMEX ainda em rascunho', () => {
-  it('"Salvar" ativo, "Salvar e fechar" desabilitado e explicado pela nota (aria-describedby)', async () => {
+  it('"Salvar" começa desabilitado, habilita ao conferir e grava (sem fechar nada)', async () => {
     const { user } = await renderScreen({ current: currentDoc({ status: 'rascunho' }) })
-    const note = screen.getByText(
-      'O COMEX ainda não fechou a parte dele. Você já pode conferir e salvar; fechar só depois que ele fechar.'
-    )
-    const close = screen.getByRole('button', { name: 'Salvar e fechar' })
-    expect(close).toBeDisabled()
-    expect(close).toHaveAttribute('aria-describedby', note.id)
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
     await user.click(okButton(1))
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].status).toBe('aberta')
+    expect(mockClose).not.toHaveBeenCalled()
+    expect(mockGenerate).not.toHaveBeenCalled()
+  })
+
+  it('conferência fechada e admin não mostram a orientação (nada a fechar aqui)', async () => {
+    const closed = conferenceDoc({ status: 'fechada', closedDocumentId: 'd' })
+    const { unmount } = await renderScreen({ conference: closed })
+    expect(screen.queryByText('Para fechar a conferência, use o computador.')).not.toBeInTheDocument()
+    unmount()
+    await renderScreen({ profile: ADMIN })
+    expect(screen.queryByText('Para fechar a conferência, use o computador.')).not.toBeInTheDocument()
   })
 })
 
@@ -673,8 +607,8 @@ describe('abas, barra inferior e saída', () => {
     expect(bar).toHaveClass('ccf-actionbar')
     expect(bar.parentElement).toBe(document.body)
     expect(container.contains(bar)).toBe(false)
-    expect(within(bar).getByRole('button', { name: 'Salvar' })).toHaveClass('secondary-button')
-    expect(within(bar).getByRole('button', { name: 'Salvar e fechar' })).toHaveClass('primary-button')
+    expect(within(bar).getByRole('button', { name: 'Salvar' })).toHaveClass('primary-button')
+    expect(within(bar).queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Voltar para a lista' })).toHaveClass('ccf-iconbtn')
   })
 

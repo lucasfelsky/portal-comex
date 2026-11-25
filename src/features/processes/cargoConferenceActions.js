@@ -15,7 +15,8 @@ import { buildCargoReportSheet } from './cargoReportSheet'
 
 // S9-F do Relatório de Carga: ações da conferência (gravar, fechar, gravar de novo, reabrir) e o mapeamento dos erros
 // delas para texto, compartilhados entre a barra de ações do computador (CargoReportActionBar / CargoReportForm) e a
-// aba Conferência do celular. Funções, não hooks: quem chama guarda o estado. Os textos foram MOVIDOS do formulário e
+// aba Conferência do celular (S9-H: no celular só salvar e reabrir; fechar e gravar de novo são do computador).
+// Funções, não hooks: quem chama guarda o estado. Os textos foram MOVIDOS do formulário e
 // da barra sem alteração; só o ramo de "sem conexão" é novo.
 
 export const CLOSE_ERROR_PREFIX = 'Não foi possível salvar e fechar a conferência.'

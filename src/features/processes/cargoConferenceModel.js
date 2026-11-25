@@ -89,7 +89,7 @@ function pluralLines(count, text) {
   return `${count} ${count === 1 ? 'linha' : 'linhas'} ${text}`
 }
 
-// Pendências do fechamento (não bloqueiam). O computador junta com ", "; o celular mostra uma por linha.
+// Pendências do fechamento (não bloqueiam). O computador junta com ", " (o celular não fecha mais a conferência).
 export function listCargoConferencePendings(rows, conference) {
   const filledRows = (Array.isArray(rows) ? rows : []).filter((row) => !isCargoReportRowEmpty(row))
   const withoutOk = filledRows.filter((row) => conference.okByRowId?.[row.id] !== true).length
