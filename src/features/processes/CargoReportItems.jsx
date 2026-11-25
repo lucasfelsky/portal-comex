@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from '../../components/Icon'
+import { CargoRowPalletCounter } from './CargoPalletCounter'
 import { SOURCE_MARK_FIELDS, cellOrigin } from './cargoReportAutofill'
 import { CARGO_REPORT_LIMITS, CARGO_REPORT_MAX_ROWS, formatCargoNumber } from './cargoReportFormModel'
 import { GroupHeaderCard, GroupHeaderRow, GroupSummaryNote, GroupSummaryRow } from './CargoReportGroupRows'
@@ -18,7 +19,7 @@ import { MarkedField, SourceLegend, SourceMark } from './CargoReportSourceMarks'
 // S3 do Relatório de Carga: itens do FR.CMX.001. Desktop = tabela de 14 colunas (modelo R5);
 // demais variantes = 1 cartão por linha (sem rolagem horizontal). Componente de apresentação:
 // quem calcula (`derived`), valida (`errorsByCell`) e grava é o `CargoReportForm`.
-// Modos: `edit` (COMEX digita), `confer` (logística marca OK? e contagem e digita as etiquetas WMS/SQ),
+// Modos: `edit` (COMEX digita), `confer` (logística marca OK?, conta os pallets e digita as etiquetas WMS/SQ),
 // `view` (somente leitura).
 // S9-B: em `edit` cada linha ganha `#` e o menu ⋯ (`onRowAction`); no CONSOLIDADO (`purchaseOrders`) as linhas
 // ficam agrupadas por PO, com cabeçalho, subtotal e "Linha nesta PO".
@@ -89,7 +90,7 @@ const DESKTOP_COLUMNS = [
   { key: 'wmsLabel', label: 'ETIQUETA WMS', width: 106 },
   { key: 'sqLabel', label: 'ETIQUETA SQ', width: 106 },
   { key: 'quantityKg', label: 'QTD (KG)', width: 86 },
-  { key: 'countOk', label: 'CONTAGEM', width: 86 },
+  { key: 'countOk', label: 'CONTAGEM', width: 132 },
   { key: 'netWeightKg', label: 'PESO LÍQ. POR EMB.', width: 112, calc: true },
   { key: 'packageWeightKg', label: 'PESO DA EMB.', width: 92 },
   { key: 'packages', label: 'Nº DE EMB.', width: 82, calc: true },
@@ -197,7 +198,7 @@ function CommitOnBlurInput({ value, onCommit, ...props }) {
   )
 }
 
-// Mesma caixinha para OK? e Contagem; `label` já vem pronto ("OK? da linha N" / "Contagem da linha N").
+// Caixinha do OK?; `label` já vem pronto ("OK? da linha N").
 function OkMark({ label, checked, interactive, onToggle }) {
   return (
     <span
@@ -224,7 +225,7 @@ function OkMark({ label, checked, interactive, onToggle }) {
   )
 }
 
-// Selo "OK" / "Sem OK" (OK? e Contagem dos cartões mobile; S8: também a Etiquetagem do card de recebimento).
+// Selo "OK" / "Sem OK" (OK? dos cartões mobile; S8: também a Etiquetagem do card de recebimento).
 // Botão com `role="checkbox"` só quando interativo; senão um `span` sem botão. `label` é o nome acessível.
 export function CargoOkBadge({ checked, label, interactive, onToggle }) {
   const badgeClass = checked ? 'inline-badge inline-badge--ok' : 'inline-badge documents-badge--neutral'
@@ -247,13 +248,13 @@ function DesktopTable({
   rows,
   derived,
   okByRowId,
-  countOkByRowId,
+  countMaps,
   labelsByRowId,
   mode,
   onChangeRow,
   onChangeLabel,
   onToggleOk,
-  onToggleCountOk,
+  onStepPallets,
   onAddRow,
   canAddRow,
   errorsByCell,
@@ -370,13 +371,8 @@ function DesktopTable({
 
     if (column.key === 'countOk') {
       return (
-        <td key={column.key} className={`okcol${isConfer ? ' okcol-edit' : ''}`}>
-          <OkMark
-            label={`Contagem da linha ${index + 1}`}
-            checked={countOkByRowId?.[row.id] === true}
-            interactive={isConfer}
-            onToggle={() => onToggleCountOk(row.id)}
-          />
+        <td key={column.key} className="okcol crf-palcol">
+          <CargoRowPalletCounter rowId={row.id} number={number} editable={isConfer} onStep={onStepPallets} {...countMaps} />
         </td>
       )
     }
@@ -540,13 +536,13 @@ function MobileCard({
   index,
   info,
   ok,
-  countOk,
+  countMaps,
   labels,
   mode,
   onChangeRow,
   onChangeLabel,
   onToggleOk,
-  onToggleCountOk,
+  onStepPallets,
   errorsByCell,
   rowIndex,
   menu,
@@ -624,7 +620,7 @@ function MobileCard({
     )
   }
 
-  // Mesmo selo "OK" / "Sem OK" para OK? e Contagem; botão só na conferência da logística.
+  // Selo "OK" / "Sem OK" do OK?; botão só na conferência da logística.
   function renderOkBadge(checked, label, onToggle) {
     return <CargoOkBadge checked={checked} label={label} interactive={isConfer} onToggle={onToggle} />
   }
@@ -681,8 +677,8 @@ function MobileCard({
           ) : null}
         </div>
         <div className="crf-pair">
-          <span className="crf-pair__label">Contagem</span>
-          {renderOkBadge(countOk, `Contagem da linha ${rowNumber}`, () => onToggleCountOk(row.id))}
+          <span className="crf-pair__label">Pallets contados</span>
+          <CargoRowPalletCounter rowId={row.id} number={rowNumber} editable={isConfer} onStep={onStepPallets} {...countMaps} />
         </div>
         <div className="crf-pair">
           <span className="crf-pair__label">Peso líq. por emb.</span>
@@ -736,13 +732,14 @@ export default function CargoReportItems({
   derived,
   okByRowId,
   countOkByRowId,
+  palletsByRowId,
   labelsByRowId,
   mode = 'view',
   variant,
   onChangeRow,
   onChangeLabel,
   onToggleOk,
-  onToggleCountOk,
+  onStepPallets,
   onAddRow,
   canAddRow = false,
   errorsByCell,
@@ -759,6 +756,7 @@ export default function CargoReportItems({
 }) {
   const containerRef = useRef(null)
   const pendingFocusRef = useRef(false)
+  const countMaps = { pallets: palletsByRowId, legacy: countOkByRowId }
   const rowCount = rows.length
   const isEdit = mode === 'edit'
   const addAllowed = isEdit && canAddRow
@@ -791,13 +789,13 @@ export default function CargoReportItems({
           rows={rows}
           derived={derived}
           okByRowId={okByRowId}
-          countOkByRowId={countOkByRowId}
+          countMaps={countMaps}
           labelsByRowId={labelsByRowId}
           mode={mode}
           onChangeRow={onChangeRow}
           onChangeLabel={onChangeLabel}
           onToggleOk={onToggleOk}
-          onToggleCountOk={onToggleCountOk}
+          onStepPallets={onStepPallets}
           onAddRow={onAddRow}
           canAddRow={addAllowed}
           errorsByCell={errorsByCell}
@@ -864,13 +862,13 @@ export default function CargoReportItems({
             rowIndex={rowIndex}
             info={derived[rowIndex] ?? { lotSq: '', netWeightKg: null, packages: null, alerts: {} }}
             ok={okByRowId?.[row.id] === true}
-            countOk={countOkByRowId?.[row.id] === true}
+            countMaps={countMaps}
             labels={labelsByRowId?.[row.id]}
             mode={mode}
             onChangeRow={onChangeRow}
             onChangeLabel={onChangeLabel}
             onToggleOk={onToggleOk}
-            onToggleCountOk={onToggleCountOk}
+            onStepPallets={onStepPallets}
             errorsByCell={errorsByCell}
             menu={hasTools ? renderRowMenu(segment) : null}
             grouped={grouped}

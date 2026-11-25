@@ -17,6 +17,8 @@ import {
   quantityMismatchByRowId,
 } from './cargoReportAutofill'
 import { CARGO_CONFERENCE_MESSAGES, describeCargoSaveError } from './cargoConferenceActions'
+import { summarizeCargoPallets } from './cargoConferenceIssues'
+import CargoConferenceIssuesCard from './CargoConferenceIssuesCard'
 import { EMPTY_CARGO_CONFERENCE, cargoConferenceKey } from './cargoConferenceModel'
 import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportHeaderCard from './CargoReportHeaderCard'
@@ -44,12 +46,14 @@ import {
   fromConferenceDoc,
   getCargoReportStage,
   isCargoReportRowEmpty,
+  resolveCargoExpectedPallets,
   validateCargoUnload,
 } from './cargoReportFormModel'
 import { orderCargoFormByPurchaseOrder, getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { applyCargoReportImport } from './cargoReportImport'
 import { formatCargoDateBr } from './cargoReportSheet'
 import { cargoPackagingContext } from './cargoSupplierPackaging'
+import useCargoConferenceEdit from './useCargoConferenceEdit'
 import useCargoReportAutofill, { fetchCargoReference } from './useCargoReportAutofill'
 import useCargoReportPackaging, {
   SUPPLIER_CATALOG_ERROR_MESSAGE,
@@ -60,7 +64,7 @@ import useCargoReportRowActions from './useCargoReportRowActions'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
 // COMEX (admin) preenche, salva rascunho e fecha a parte dele ("Salvar e fechar"); a logística marca o OK?
-// e a contagem de cada linha, preenche as etiquetas WMS/SQ e o recebimento, e fecha a conferência dela
+// e conta os pallets de cada linha, preenche as etiquetas WMS/SQ e o recebimento, e fecha a conferência dela
 // (S6/S7; doc `conference`, separado para não conflitar com quem está editando). "Conferido por" é
 // automático (quem salva a conferência). Estados: ver `getCargoReportStage`.
 // Padrões replicados (não são util compartilhado): guard `isMounted` na carga assíncrona.
@@ -71,7 +75,7 @@ const CATALOG_ERROR_PREFIX = 'Não foi possível carregar a tabela Item x Emb.'
 const MESSAGES = {
   invalidNumbers: 'Corrija os números destacados antes de salvar.',
   conferBanner:
-    'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e os dados do recebimento. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando. O fechamento da conferência fica disponível quando o COMEX fechar a parte dele.',
+    'Marque o OK? e conte os pallets de cada linha conferida, registre as avarias, preencha as etiquetas WMS e SQ e os dados do recebimento. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando. O fechamento da conferência fica disponível quando o COMEX fechar a parte dele.',
   conferBannerComexClosed:
     'O COMEX fechou a parte dele. Confira os itens, preencha o recebimento e use "Salvar e fechar conferência".',
   adminBannerComexClosed:
@@ -265,6 +269,12 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     [rows, catalog, packaging]
   )
   const alertCount = useMemo(() => countCargoReportAlerts(rows, catalog, packaging), [rows, catalog, packaging])
+  // S10-I: soma dos pallets contados x total do COMEX (o total em edição ainda é texto).
+  const expectedPallets = resolveCargoExpectedPallets(form?.expectedPallets)
+  const palletsSummary = useMemo(
+    () => summarizeCargoPallets(rows, conference, expectedPallets),
+    [rows, conference, expectedPallets]
+  )
   // S9-B: operações por linha do menu ⋯ (levam a origem das células, `autofill`, junto).
   const rowActions = useCargoReportRowActions({
     rows,
@@ -273,6 +283,12 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     onChanged: () => setFeedback(null),
     autofillRows: form?.autofill?.rows,
   })
+
+  // COMEX fechado trava o preenchimento até o admin reabrir; a logística confere nos estados 1 e 2.
+  const stage = getCargoReportStage(form?.status, savedConference.status)
+  const canConferNow = canSaveCargoConference(role, stage)
+  // S6/S10-I: OK?, pallets, etiquetas e observações são da logística; o admin só vê.
+  const edit = useCargoConferenceEdit({ canConferNow, conference, setConference, setFeedback })
 
   if (!processId || !canOpen) return null
 
@@ -283,10 +299,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const isDirty = canEdit ? draftDirty : conferenceDirty
   const canSave = canEdit ? isDirty || isNew : isDirty
   const isLimitReached = rows.length >= CARGO_REPORT_MAX_ROWS
-  const stage = getCargoReportStage(form?.status, savedConference.status)
-  // COMEX fechado trava o preenchimento até o admin reabrir; a logística confere nos estados 1 e 2.
   const canEditFields = canEdit && stage === CARGO_STAGE.draft
-  const canConferNow = canSaveCargoConference(role, stage)
   // S8: erros da descarga (fim sem início, fim antes do início, mais de 24 h) só aparecem para quem edita.
   const unloadErrors = canConferNow ? validateCargoUnload(conference) : { start: '', end: '' }
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
@@ -323,43 +336,6 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     )
   }
 
-  function toggleOk(rowId) {
-    if (!canConferNow) return
-    setConference((current) => ({
-      ...current,
-      okByRowId: { ...current.okByRowId, [rowId]: current.okByRowId?.[rowId] !== true },
-    }))
-    setFeedback(null)
-  }
-
-  // S6: contagem e etiquetas são da logística; o admin só vê.
-  function toggleCountOk(rowId) {
-    if (!canConferNow) return
-    setConference((current) => ({
-      ...current,
-      countOkByRowId: { ...current.countOkByRowId, [rowId]: current.countOkByRowId?.[rowId] !== true },
-    }))
-    setFeedback(null)
-  }
-
-  function patchConference(patch) {
-    if (!canConferNow) return
-    setConference((current) => ({ ...current, ...patch }))
-    setFeedback(null)
-  }
-
-  function changeLabel(rowId, field, value) {
-    if (!canConferNow) return
-    setConference((current) => ({
-      ...current,
-      labelsByRowId: {
-        ...current.labelsByRowId,
-        [rowId]: { wms: '', sq: '', ...current.labelsByRowId?.[rowId], [field]: value },
-      },
-    }))
-    setFeedback(null)
-  }
-
   function handleImportFileChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -394,6 +370,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     const persisted = { ...EMPTY_CARGO_CONFERENCE, ...next }
     setSavedConference(persisted)
     setConference(persisted)
+    edit.clearSuggestion()
   }
 
   // Marca as células inválidas e mostra a mensagem (número inválido ou limite de linhas).
@@ -401,6 +378,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     const cells = {}
     for (const error of errors) {
       if (error.rowId) cells[`${error.rowId}:${error.field}`] = error.message
+      else if (error.field === 'expectedPallets') cells.expectedPallets = error.message
     }
     setFieldErrors(cells)
     const limitError = errors.find((error) => error.field === 'rows')
@@ -461,6 +439,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   function handleDiscardConference() {
     setConference(savedConference)
     setFeedback(null)
+    edit.clearSuggestion()
   }
 
   // O formulário passa a refletir o que foi gravado (concluir e reabrir, feitos pela barra de ações).
@@ -602,6 +581,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         isDesktop={isDesktop}
         canEditFields={canEditFields}
         onPatch={patchForm}
+        palletsSummary={palletsSummary}
+        expectedError={fieldErrors.expectedPallets}
         source={
           canEditFields
             ? {
@@ -667,13 +648,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           derived={derived}
           okByRowId={conference.okByRowId}
           countOkByRowId={conference.countOkByRowId}
+          palletsByRowId={conference.palletsByRowId}
           labelsByRowId={conference.labelsByRowId}
           mode={editMode}
           variant={variant}
           onChangeRow={changeRow}
-          onChangeLabel={changeLabel}
-          onToggleOk={toggleOk}
-          onToggleCountOk={toggleCountOk}
+          onChangeLabel={edit.changeLabel}
+          onToggleOk={edit.toggleOk}
+          onStepPallets={edit.stepPallets}
           onAddRow={addRow}
           canAddRow={canEditFields && !isLimitReached}
           errorsByCell={fieldErrors}
@@ -701,7 +683,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             </span>
             <span>
               <b className="crf-leg__ok" />
-              OK?, contagem e etiquetas são da logística
+              OK?, pallets contados e etiquetas são da logística
             </span>
             <span>{`Limite do Portal: ${CARGO_REPORT_MAX_ROWS} linhas (${rows.length} usadas)`}</span>
           </p>
@@ -723,13 +705,23 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         <CargoReportQuickPackagingDialog key={packagingTools.quick.code} mobile={!isDesktop} {...packagingTools.quick} />
       ) : null}
 
+      <CargoConferenceIssuesCard
+        rows={rows}
+        conference={conference}
+        summary={palletsSummary}
+        canEdit={canConferNow}
+        isDesktop={isDesktop}
+        onIssueChange={edit.setIssue}
+      />
+
       <CargoReportReceiptSection
         conference={conference}
-        onChange={patchConference}
+        onChange={edit.patchConference}
         canEdit={canConferNow}
         checkedByPreview={canConferNow ? actorName : ''}
         radioName={radioName}
         unloadErrors={unloadErrors}
+        statusSuggested={edit.statusSuggested}
       />
 
       {feedbackNode}
@@ -754,6 +746,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         onErrors={showPayloadErrors}
         onPersisted={applyPersistedForm}
         onConferencePersisted={applyPersistedConference}
+        onSuggestStatus={edit.suggestStatusForClose}
         onFeedback={setFeedback}
         renderImport={(busy) =>
           canImport ? (

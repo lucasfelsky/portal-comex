@@ -1,6 +1,7 @@
 // S9-F do Relatório de Carga: tela de conferência de um processo no celular (CargoConferenceScreen). Repositórios
 // mockados; catálogos sintéticos. Cobre a logística (conferir, salvar, falha de rede, fechar), COMEX em rascunho,
 // conferência fechada, admin (só acompanha e reabre), consolidado em grupos e o relatório antigo com NF de 40 caracteres.
+// S10-I: contador de pallets por item, total do COMEX, observação por item e o aviso do fechamento do computador.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -111,6 +112,8 @@ const conferenceDoc = (overrides = {}) => ({
   status: 'aberta',
   okByRowId: {},
   countOkByRowId: {},
+  palletsByRowId: {},
+  damageByRowId: {},
   labelsByRowId: {},
   checkedByName: '',
   receiptStatus: '',
@@ -145,7 +148,10 @@ async function renderScreen({ profile = LOGISTICA, process = PROCESS, current, c
 }
 
 const okButton = (n) => screen.getByRole('button', { name: `OK? da linha ${n}` })
-const countButton = (n) => screen.getByRole('button', { name: `Contagem da linha ${n}` })
+const plusButton = (n) => screen.getByRole('button', { name: `Adicionar um pallet à contagem do item ${n}` })
+const minusButton = (n) => screen.getByRole('button', { name: `Tirar um pallet da contagem do item ${n}` })
+const progressText = () => screen.getByText(/de \d+ itens conferidos/)
+const palletsStrip = () => screen.getByText(/^Pallets da carga:/).closest('p')
 const openReceipt = (user) => user.click(screen.getByRole('tab', { name: 'Recebimento' }))
 
 function setOnline(value) {
@@ -179,7 +185,7 @@ describe('logística, COMEX fechado: conferir itens', () => {
   it('mostra a faixa, os cartões com Cód. DBCorp, lote, Qtd e Nº de emb. e o progresso', async () => {
     await renderScreen()
     expect(screen.getByRole('heading', { level: 2, name: 'ACME SEA 021-26' })).toBeInTheDocument()
-    expect(screen.getByText('0', { selector: 'b' })).toBeInTheDocument()
+    expect(progressText().querySelector('b')).toHaveTextContent('0')
     expect(screen.getByText(/de 3 itens conferidos · FCL · ACME CHEMICALS/)).toBeInTheDocument()
     const first = screen.getByRole('article', { name: 'Item 1' })
     expect(within(first).getByText('DEA FOAM14339 - BB 25KG')).toBeInTheDocument()
@@ -194,38 +200,77 @@ describe('logística, COMEX fechado: conferir itens', () => {
     expect(within(third).getAllByText('—', { selector: 'dd' })).toHaveLength(2)
   })
 
-  it('OK? e Contagem alternam aria-pressed; o item só vira "Conferido" com os dois', async () => {
+  it('contador: "+ Pallet" 3 vezes = 3 (anunciado), "−" volta e fica desabilitado em 0', async () => {
     const { user } = await renderScreen()
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(within(first).getByText('Pallets contados')).toBeInTheDocument()
+    expect(minusButton(1)).toBeDisabled()
+    expect(plusButton(1)).toHaveTextContent('+ Pallet')
+    for (let index = 0; index < 3; index += 1) await user.click(plusButton(1))
+    const status = within(first).getByRole('status')
+    expect(status).toHaveTextContent('3 pallets contados no item 1')
+    expect(minusButton(1)).toBeEnabled()
+    await user.click(minusButton(1))
+    expect(within(first).getByRole('status')).toHaveTextContent('2 pallets contados no item 1')
+    await user.click(minusButton(1))
+    await user.click(minusButton(1))
+    expect(within(first).getByRole('status')).toHaveTextContent('0 pallets contados no item 1')
+    expect(minusButton(1)).toBeDisabled()
+    // Os outros itens não mexem.
+    expect(within(screen.getByRole('article', { name: 'Item 2' })).getByRole('status')).toHaveTextContent('0 pallets contados no item 2')
+  })
+
+  it('o contador alvos de toque de 56 px: botões grandes com classe própria', async () => {
+    await renderScreen()
+    expect(plusButton(1)).toHaveClass('ccf-pal__btn', 'ccf-pal__btn--plus')
+    expect(minusButton(1)).toHaveClass('ccf-pal__btn')
+  })
+
+  it('item "Sem contagem" até contar; só vira "Conferido" com OK? e pelo menos 1 pallet', async () => {
+    const { user } = await renderScreen()
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(within(first).getByText('Sem contagem')).toBeInTheDocument()
     await user.click(okButton(1))
     expect(okButton(1)).toHaveAttribute('aria-pressed', 'true')
+    // OK? sem pallets não conclui (0 gravado ou nunca contado).
     expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
-    await user.click(countButton(1))
+    await user.click(plusButton(1))
     expect(screen.getByText('Conferido')).toBeInTheDocument()
-    expect(screen.getByText('1', { selector: 'b' })).toBeInTheDocument()
+    expect(within(first).queryByText('Sem contagem')).not.toBeInTheDocument()
+    expect(progressText().querySelector('b')).toHaveTextContent('1')
+    await user.click(minusButton(1))
+    expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
+    expect(within(first).getByText('Sem contagem')).toBeInTheDocument()
+    await user.click(plusButton(1))
     await user.click(okButton(1))
     expect(okButton(1)).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
   })
 
-  it('"Marcar todos OK" marca tudo, avisa por toast e o progresso vai a 3 de 3', async () => {
+  it('"Marcar todos OK" marca SÓ o OK? (os pallets continuam por contar) e avisa por toast', async () => {
     const { user } = await renderScreen()
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
-    expect(await screen.findByText('Todos os itens marcados com OK e Contagem')).toBeInTheDocument()
+    expect(await screen.findByText('Todos os itens marcados com OK. Os pallets continuam por contar.')).toBeInTheDocument()
     for (const n of [1, 2, 3]) {
       expect(okButton(n)).toHaveAttribute('aria-pressed', 'true')
-      expect(countButton(n)).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('article', { name: `Item ${n}` })).toHaveTextContent('Sem contagem')
     }
-    expect(screen.getByText(/de 3 itens conferidos/).textContent).toMatch(/^3 de 3/)
+    expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
+    expect(progressText().textContent).toMatch(/^0 de 3/)
+    await user.click(plusButton(2))
+    expect(progressText().textContent).toMatch(/^1 de 3/)
   })
 
   it('"Só pendentes" esconde os conferidos e avisa quando não sobra nenhum', async () => {
     const { user } = await renderScreen()
     await user.click(okButton(1))
-    await user.click(countButton(1))
+    await user.click(plusButton(1))
     await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
     expect(screen.queryByRole('article', { name: 'Item 1' })).not.toBeInTheDocument()
     expect(screen.getByRole('article', { name: 'Item 2' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
+    await user.click(plusButton(2))
+    await user.click(plusButton(3))
     expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
     expect(screen.queryByRole('article')).not.toBeInTheDocument()
   })
@@ -244,7 +289,7 @@ describe('logística, COMEX fechado: conferir itens', () => {
 })
 
 describe('logística: aba Recebimento', () => {
-  it('status por botões, descarga, tempo total, data fixa, etiquetagem, NFs em chips e observações', async () => {
+  it('status por botões, descarga, tempo total, data fixa, etiquetagem e NFs em chips (sem o campo geral Observações)', async () => {
     const { user } = await renderScreen()
     await openReceipt(user)
     expect(screen.getByRole('tab', { name: 'Recebimento' })).toHaveAttribute('aria-selected', 'true')
@@ -255,6 +300,10 @@ describe('logística: aba Recebimento', () => {
     await user.click(within(group).getByRole('button', { name: 'Com ressalva' }))
     expect(within(group).getByRole('button', { name: 'Com ressalva' })).toHaveAttribute('aria-pressed', 'true')
     expect(within(group).getByRole('button', { name: 'Não informado' })).toHaveAttribute('aria-pressed', 'false')
+    // S10-I: sai o campo geral "Observações"; entra o cartão "Ressalvas e avarias".
+    expect(screen.queryByRole('textbox', { name: 'Observações' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Observações', { selector: 'h3' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Ressalvas e avarias' })).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value: '2026-11-24T08:10' } })
     fireEvent.change(screen.getByLabelText('Fim da descarga'), { target: { value: '2026-11-24T09:40' } })
@@ -270,7 +319,6 @@ describe('logística: aba Recebimento', () => {
     expect(chips.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['48213', '48214'])
     expect(screen.getByText(/48213; 48214/)).toBeInTheDocument()
 
-    await user.type(screen.getByRole('textbox', { name: 'Observações' }), '1 tambor amassado')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
 
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
@@ -288,7 +336,7 @@ describe('logística: aba Recebimento', () => {
       unloadEndAt: '2026-11-24T09:40',
       labelingOk: true,
       nfNumber: '48213; 48214',
-      notes: '1 tambor amassado',
+      notes: '',
     })
   })
 
@@ -430,7 +478,10 @@ describe('conferência já fechada (logística)', () => {
     const { user, onBack } = await renderScreen({ conference: closed() })
     expect(screen.getByText('Conferência fechada. Para corrigir, peça ao COMEX para reabrir.')).toBeInTheDocument()
     expect(okButton(1)).toBeDisabled()
-    expect(countButton(2)).toBeDisabled()
+    // Conferência fechada: contador e observação só leitura; o registro antigo (Contagem OK) aparece como "OK".
+    expect(screen.queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Observação da avaria/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('article', { name: 'Item 1' })).toHaveTextContent('OK')
     expect(screen.queryByLabelText('Etiqueta WMS da linha 1')).not.toBeInTheDocument()
     expect(screen.getByText('W1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Marcar todos OK' })).not.toBeInTheDocument()
@@ -442,7 +493,10 @@ describe('conferência já fechada (logística)', () => {
     await openReceipt(user)
     expect(screen.getByRole('button', { name: 'Sem ressalva' })).toBeDisabled()
     expect(screen.getByLabelText('Início da descarga')).toBeDisabled()
-    expect(screen.getByRole('textbox', { name: 'Observações' })).toBeDisabled()
+    // `conference.notes` antigo: só leitura, num bloco "Observações (registro antigo)".
+    expect(screen.queryByRole('textbox', { name: 'Observações' })).not.toBeInTheDocument()
+    expect(screen.getByText('Observações (registro antigo)')).toBeInTheDocument()
+    expect(screen.getByText('ok', { selector: 'p' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Nº da NF')).not.toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: 'NFs adicionadas' })).getAllByRole('listitem')).toHaveLength(2)
 
@@ -535,7 +589,7 @@ describe('consolidado com grupos por PO', () => {
 
     // A numeração dos itens é a da lista inteira (a linha 3 está no 2º grupo).
     await user.click(within(nova).getByRole('button', { name: 'OK? da linha 3' }))
-    await user.click(within(nova).getByRole('button', { name: 'Contagem da linha 3' }))
+    await user.click(within(nova).getByRole('button', { name: 'Adicionar um pallet à contagem do item 3' }))
     expect(within(nova).getByText(/NOVA POLYMERS · 1 de 1 conferidos/)).toBeInTheDocument()
     expect(within(acme).getByText(/0 de 2 conferidos/)).toBeInTheDocument()
   })
@@ -574,6 +628,260 @@ describe('relatório antigo com NF de 40 caracteres', () => {
     })
     await openReceipt(user)
     expect(within(screen.getByRole('list', { name: 'NFs adicionadas' })).getByText('NF-9')).toBeInTheDocument()
+  })
+})
+
+// S10-I: total de pallets do COMEX x soma contada (só INFORMA no celular; nunca bloqueia o Salvar).
+describe('pallets da carga: faixa e selo', () => {
+  const withTotal = (expectedPallets) => currentDoc({ expectedPallets })
+
+  it('divergente: "3 contados de 5 informados pelo COMEX" com o selo Divergente', async () => {
+    const { user } = await renderScreen({ current: withTotal(5) })
+    // Nada contado ainda: 0 de 5 já é divergência.
+    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 0 contados de 5 informados pelo COMEX.')
+    expect(within(palletsStrip()).getByText('Divergente')).toHaveClass('ccf-badge--warn')
+    for (let index = 0; index < 2; index += 1) await user.click(plusButton(1))
+    await user.click(plusButton(2))
+    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 3 contados de 5 informados pelo COMEX.')
+    expect(within(palletsStrip()).getByText('Divergente')).toBeInTheDocument()
+  })
+
+  it('confere: selo "Confere" quando a soma bate com o total', async () => {
+    const { user } = await renderScreen({ current: withTotal(2) })
+    await user.click(plusButton(1))
+    await user.click(plusButton(3))
+    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 2 contados de 2 informados pelo COMEX.')
+    expect(within(palletsStrip()).getByText('Confere')).toHaveClass('ccf-badge--ok')
+    expect(within(palletsStrip()).queryByText('Divergente')).not.toBeInTheDocument()
+  })
+
+  it('sem total do COMEX (relatório antigo): sem comparação, selo "Sem total"', async () => {
+    const { user } = await renderScreen()
+    await user.click(plusButton(1))
+    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 1 contado. Total não informado pelo COMEX.')
+    expect(within(palletsStrip()).getByText('Sem total')).toBeInTheDocument()
+  })
+
+  it('a soma ignora a contagem de linhas que o COMEX já removeu', async () => {
+    await renderScreen({
+      current: withTotal(4),
+      conference: conferenceDoc({ palletsByRowId: { 'r-1': 4, 'r-removida': 30 } }),
+    })
+    expect(within(palletsStrip()).getByText('Confere')).toBeInTheDocument()
+  })
+})
+
+describe('observação (avaria / ressalva) por item e status sugerido', () => {
+  const flagButton = (n) => screen.getByRole('button', { name: `Registrar avaria / ressalva neste item ${n}` })
+  const noteBox = (n) => screen.getByRole('textbox', { name: `Observação da avaria ou ressalva do item ${n}` })
+
+  it('registrar avaria marca o item, mantém o status vazio e a aba Recebimento sugere "Com ressalva"', async () => {
+    const { user } = await renderScreen()
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(flagButton(1)).toHaveAttribute('aria-pressed', 'false')
+    await user.click(flagButton(1))
+    expect(flagButton(1)).toHaveAttribute('aria-pressed', 'true')
+    expect(within(first).getByText('Avaria registrada')).toHaveClass('ccf-badge--danger')
+
+    await openReceipt(user)
+    const group = screen.getByRole('group', { name: 'Status do recebimento' })
+    // O celular NÃO troca sozinho.
+    expect(within(group).getByRole('button', { name: 'Não informado' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Há item com avaria. Status sugerido: Com ressalva.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Usar Com ressalva' }))
+    expect(within(group).getByRole('button', { name: 'Com ressalva' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText(/Status sugerido/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Usar Com ressalva' })).not.toBeInTheDocument()
+  })
+
+  it('com "Sem ressalva" escolhido a sugestão aparece e nada muda sozinho', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'sem_ressalva' }) })
+    await user.click(flagButton(2))
+    await openReceipt(user)
+    const group = screen.getByRole('group', { name: 'Status do recebimento' })
+    expect(within(group).getByRole('button', { name: 'Sem ressalva' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Há item com avaria. Status sugerido: Com ressalva.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Usar Com ressalva' })).toBeEnabled()
+  })
+
+  it('"Com ressalva" já escolhido: sem sugestão', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'com_ressalva' }) })
+    await user.click(flagButton(1))
+    await openReceipt(user)
+    expect(screen.queryByText(/Status sugerido/)).not.toBeInTheDocument()
+  })
+
+  it('a observação escrita conta como avaria, aparece em "Ressalvas e avarias" e vai no payload', async () => {
+    const { user } = await renderScreen()
+    await user.type(noteBox(2), '  Caixas molhadas no pallet 2  ')
+    const second = screen.getByRole('article', { name: 'Item 2' })
+    expect(within(second).getByText('31 de 1.000')).toBeInTheDocument()
+    expect(within(second).getByText('Avaria registrada')).toBeInTheDocument()
+    await openReceipt(user)
+    const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
+    expect(within(card).getByText('Item 2 · DEGALAN 64/12 N - CX 25KG')).toBeInTheDocument()
+    expect(within(card).getByText(/Caixas molhadas no pallet 2/)).toBeInTheDocument()
+    expect(within(card).getByText('As observações ficam no item.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const payload = mockSaveConference.mock.calls[0][1]
+    expect(payload.damageByRowId).toEqual({ 'r-2': { flagged: false, note: 'Caixas molhadas no pallet 2', photos: [] } })
+    expect(payload.palletsByRowId).toEqual({})
+  })
+
+  it('sem avaria: o cartão explica como registrar', async () => {
+    const { user } = await renderScreen()
+    await openReceipt(user)
+    const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
+    expect(card).toHaveTextContent('Nenhuma avaria registrada. Para registrar, volte à aba Itens')
+    expect(screen.queryByRole('button', { name: 'Usar Com ressalva' })).not.toBeInTheDocument()
+  })
+
+  it('item com avaria sem texto aparece como "(sem observação)"', async () => {
+    const { user } = await renderScreen()
+    await user.click(flagButton(1))
+    await openReceipt(user)
+    expect(screen.getByText('(sem observação)')).toBeInTheDocument()
+  })
+
+  it('o legado `notes` aparece só para leitura e é repassado no payload', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc({ notes: 'Palete 3 avariado (registro antigo)' }) })
+    await user.click(okButton(1))
+    await openReceipt(user)
+    expect(screen.getByText('Observações (registro antigo)')).toBeInTheDocument()
+    expect(screen.getByText('Palete 3 avariado (registro antigo)')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Observações' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].notes).toBe('Palete 3 avariado (registro antigo)')
+  })
+})
+
+describe('salvar com divergência: só avisa, nunca bloqueia', () => {
+  it('divergência SEM observação grava normalmente e o banner traz "No fechamento pelo computador: ..."', async () => {
+    const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    await user.click(okButton(1))
+    await user.click(plusButton(1))
+    await user.click(plusButton(1))
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].palletsByRowId).toEqual({ 'r-1': 2 })
+    expect(await screen.findByText(/^Conferência salva às \d{2}:\d{2}\.$/)).toBeInTheDocument()
+    const notice = screen.getByText(/^No fechamento pelo computador:/)
+    expect(notice).toHaveAttribute('role', 'status')
+    expect(notice).toHaveTextContent(
+      'pallets divergentes (2 de 5) sem observação em nenhum item — escreva uma observação no item'
+    )
+    expect(notice).toHaveTextContent('2 itens sem OK? ou sem pallets')
+    expect(notice.textContent.endsWith('.')).toBe(true)
+    expect(mockClose).not.toHaveBeenCalled()
+  })
+
+  it('com observação em algum item o aviso vira a pendência informativa (e o status sugerido entra)', async () => {
+    const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    await user.click(plusButton(1))
+    await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Faltou 1 pallet')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    const notice = await screen.findByText(/^No fechamento pelo computador:/)
+    expect(notice).toHaveTextContent('pallets divergentes (1 de 5), com observação')
+    expect(notice).not.toHaveTextContent('sem observação em nenhum item')
+    expect(notice).toHaveTextContent('1 item com avaria e status diferente de "Com ressalva"')
+  })
+
+  it('sem nada pendente, o texto de hoje (sem aviso)', async () => {
+    const complete = conferenceDoc({
+      okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
+      palletsByRowId: { 'r-1': 1, 'r-2': 1, 'r-3': 1 },
+      receiptStatus: 'sem_ressalva',
+      unloadStartAt: '2026-11-24T08:00',
+      unloadEndAt: '2026-11-24T09:00',
+      labelingOk: true,
+      nfNumber: '48213',
+      receivedDate: '2026-11-24',
+    })
+    const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 3 }), conference: complete })
+    await user.type(screen.getByLabelText('Etiqueta WMS da linha 1'), 'w1')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect(await screen.findByText(/^Conferência salva às \d{2}:\d{2}\.$/)).toBeInTheDocument()
+    expect(screen.queryByText(/No fechamento pelo computador/)).not.toBeInTheDocument()
+  })
+
+  it('"Salvar" nunca fica bloqueado pela divergência; a única trava é a descarga inválida', async () => {
+    const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 50 }) })
+    await user.click(plusButton(1))
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('relatório antigo (Contagem OK sem número) no celular', () => {
+  it('lê "OK (registro antigo)" e já conta como conferido; tocar no contador troca o legado pelo número', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-1': true, 'r-2': true }, countOkByRowId: { 'r-1': true } }),
+    })
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(within(first).getByRole('status')).toHaveTextContent('Contagem OK (registro antigo) no item 1')
+    expect(within(first).getByText('Conferido')).toBeInTheDocument()
+    expect(within(first).queryByText('Sem contagem')).not.toBeInTheDocument()
+    expect(progressText().querySelector('b')).toHaveTextContent('1')
+    // Sem número falso: a soma não conta o legado.
+    expect(screen.getByText(/^Pallets da carga: 0 contados/)).toBeInTheDocument()
+    await user.click(plusButton(1))
+    expect(within(first).getByRole('status')).toHaveTextContent('1 pallet contado no item 1')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const payload = mockSaveConference.mock.calls[0][1]
+    expect(payload.palletsByRowId).toEqual({ 'r-1': 1 })
+    expect(payload.countOkByRowId).toEqual({})
+  })
+
+  it('o legado de uma linha que não foi tocada segue gravado como estava', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-1': true }, countOkByRowId: { 'r-1': true, 'r-2': true } }),
+    })
+    await user.click(plusButton(1))
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].countOkByRowId).toEqual({ 'r-2': true })
+  })
+})
+
+describe('somente leitura (admin e conferência fechada) com pallets e avaria', () => {
+  const filled = {
+    okByRowId: { 'r-1': true },
+    palletsByRowId: { 'r-1': 4, 'r-2': 0 },
+    damageByRowId: { 'r-1': { flagged: true, note: 'Tambor amassado na lateral', photos: [] } },
+  }
+
+  it('conferência fechada: contador e observação só texto; admin só lê', async () => {
+    for (const profile of [LOGISTICA, ADMIN]) {
+      const { unmount } = await renderScreen({
+        profile,
+        conference: conferenceDoc({ ...filled, status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' }),
+      })
+      const first = screen.getByRole('article', { name: 'Item 1' })
+      expect(within(first).queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
+      expect(within(first).queryByRole('textbox')).not.toBeInTheDocument()
+      expect(within(first).getByText('4')).toBeInTheDocument()
+      expect(within(first).getByText('Tambor amassado na lateral')).toBeInTheDocument()
+      expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
+      expect(within(screen.getByRole('article', { name: 'Item 2' })).getByText('0')).toBeInTheDocument()
+      // Item nunca contado: traço no lugar do número.
+      expect(screen.getByRole('article', { name: 'Item 3' }).querySelector('.ccf-pal--ro')).toHaveTextContent('—')
+      unmount()
+    }
+  })
+
+  it('reabrir mantém a contagem e a observação', async () => {
+    const { user } = await renderScreen({
+      profile: ADMIN,
+      conference: conferenceDoc({ ...filled, status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' }),
+    })
+    await user.click(screen.getByRole('button', { name: 'Reabrir conferência' }))
+    await waitFor(() => expect(mockReopen).toHaveBeenCalledWith('p1', ADMIN))
+    const first = await screen.findByRole('article', { name: 'Item 1' })
+    expect(within(first).getByText('4')).toBeInTheDocument()
+    expect(within(first).getByText('Tambor amassado na lateral')).toBeInTheDocument()
   })
 })
 

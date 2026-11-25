@@ -4,7 +4,6 @@ import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import CargoNfListField from './CargoNfListField'
 import { CargoOkBadge } from './CargoReportItems'
 import {
-  CARGO_REPORT_LIMITS,
   RECEIPT_STATUS_OPTIONS,
   cargoDatePart,
   computeCargoUnloadMinutes,
@@ -13,7 +12,10 @@ import {
 import { formatCargoDateBr } from './cargoReportSheet'
 
 // S7 do Relatório de Carga: card "Responsáveis e recebimento". Quem preenche é a logística (doc `conference`):
-// Status do recebimento, Nº da NF (S9-E: lista de NFs, `CargoNfListField`), Observações e (S8) início/fim da descarga e Etiquetagem OK. "Conferido por" é
+// Status do recebimento, Nº da NF (S9-E: lista de NFs, `CargoNfListField`) e (S8) início/fim da descarga e Etiquetagem OK.
+// S10-I: o campo geral "Observações" saiu (as observações são por item, no cartão "Pallets e avarias"); `conference.notes`
+// antigo aparece só para leitura ("Observações (registro antigo)") e a nota "Sugerido pela avaria registrada." fica sob o
+// status quando o Portal o trocou para "Com ressalva". "Conferido por" é
 // automático e travado (nome de quem salva ou fecha a conferência); para a logística com a conferência aberta
 // mostra o próprio nome (prévia), para os demais o nome gravado. S8: "Data de recebimento" é fixa (o dia do
 // início da descarga) e "Tempo total da descarga" é calculado; os dois são somente leitura.
@@ -60,11 +62,13 @@ export default function CargoReportReceiptSection({
   checkedByPreview = '',
   radioName,
   unloadErrors = { start: '', end: '' },
+  statusSuggested = false,
 }) {
   const checkedBy = checkedByPreview || conference.checkedByName || ''
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
   // Com erro (fim sem início, fim antes do início, mais de 24 h) o tempo total fica vazio.
   const totalMinutes = hasUnloadError ? null : computeCargoUnloadMinutes(conference.unloadStartAt, conference.unloadEndAt)
+  const legacyNotes = String(conference.notes ?? '').trim()
 
   return (
     <section className="crf-card" aria-label="Responsáveis e recebimento">
@@ -99,6 +103,9 @@ export default function CargoReportReceiptSection({
               </option>
             ))}
           </select>
+          {statusSuggested && conference.receiptStatus === 'com_ressalva' ? (
+            <span className="auto">Sugerido pela avaria registrada.</span>
+          ) : null}
         </div>
         <CargoNfListField
           value={conference.nfNumber}
@@ -160,16 +167,12 @@ export default function CargoReportReceiptSection({
           <span className="auto">Marque quando as etiquetas estiverem coladas.</span>
         </div>
       </div>
-      <div className="crf-field crf-field--notes">
-        <label htmlFor={`${radioName}-notes`}>Observações</label>
-        <textarea
-          id={`${radioName}-notes`}
-          value={conference.notes}
-          maxLength={CARGO_REPORT_LIMITS.notes}
-          disabled={!canEdit}
-          onChange={(event) => onChange({ notes: event.target.value })}
-        />
-      </div>
+      {legacyNotes ? (
+        <div className="crf-field crf-field--notes">
+          <span>Observações (registro antigo)</span>
+          <p className="crf-legacy">{legacyNotes}</p>
+        </div>
+      ) : null}
     </section>
   )
 }

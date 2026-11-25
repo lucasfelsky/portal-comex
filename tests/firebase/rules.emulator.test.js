@@ -4895,6 +4895,69 @@ describeEmulator('firestore.rules (emulador)', () => {
         })
       })
 
+      // S11-I: `expectedPallets` (total de pallets informado pelo COMEX) e' opcional (20 chaves no hasOnly, 18 no
+      // hasAll), int 1..9999 ou null, e "pegajosa": depois de gravada a chave nao pode sumir.
+      describe('expectedPallets (S11-I)', () => {
+        it('25 e null passam', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ expectedPallets: 25 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, expectedPallets: null })))
+        })
+
+        it('sem a chave (relatorio e bundle antigos) passa enquanto o doc nao a tem', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current()))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+          // Depois que o bundle novo grava a chave, ela passa a ser obrigatoria.
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 3, expectedPallets: 25 })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ revision: 4 })))
+        })
+
+        it('limites: 1 e 9999 passam; 0, 10000, 2.5 e "7" (texto) falham', async () => {
+          await seedProcess()
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: 0 })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: 10000 })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: 2.5 })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: '7' })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: -1 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ expectedPallets: 1 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, expectedPallets: 9999 })))
+        })
+
+        it('REMOVER a chave depois de gravada falha (bundle antigo recebe "Sem permissao" em vez de apagar o total)', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ expectedPallets: 25 })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+          // Mudar o valor, ou voltar para null, continua permitido (a chave segue presente).
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, expectedPallets: 30 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 3, expectedPallets: null })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ revision: 4 })))
+        })
+
+        it('doc gravado com null tambem e pegajoso; fechar e reabrir a parte do COMEX levam a chave', async () => {
+          await seedProcess()
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ expectedPallets: null })))
+          await assertFails(setDoc(doc(admin(), CUR), current({ revision: 2 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 2, status: 'concluido', expectedPallets: 12 })))
+          await assertSucceeds(setDoc(doc(admin(), CUR), current({ revision: 3, status: 'rascunho', expectedPallets: 12 })))
+        })
+
+        it('a logistica NAO grava o current (nem com expectedPallets)', async () => {
+          await seedCurrent()
+          await assertFails(
+            setDoc(
+              doc(logistics('log-1'), CUR),
+              current({ revision: 2, expectedPallets: 25, updatedById: 'log-1', updatedByName: 'Logistica' })
+            )
+          )
+        })
+
+        it('campo extra continua falhando junto com a chave nova', async () => {
+          await seedProcess()
+          await assertFails(setDoc(doc(admin(), CUR), current({ expectedPallets: 25, extra: 1 })))
+        })
+      })
+
       it('datas, status do recebimento e limites de texto', async () => {
         await seedProcess()
         await assertFails(setDoc(doc(admin(), CUR), current({ receivedDate: '22/11/2026' })))
@@ -5151,6 +5214,100 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
       })
 
+      // S11-I: `palletsByRowId` (contador por item) e `damageByRowId` (observacao por item) sao opcionais (23 chaves no
+      // hasOnly, 21 no hasAll), so' o formato do mapa e' validado (<= 200 entradas) e as duas chaves sao "pegajosas".
+      describe('palletsByRowId e damageByRowId (S11-I)', () => {
+        const pallets = (count) => Object.fromEntries(Array.from({ length: count }, (_, index) => [`r-${index}`, 3]))
+        const damage = (count) =>
+          Object.fromEntries(
+            Array.from({ length: count }, (_, index) => [`r-${index}`, { flagged: true, note: 'amassado', photos: [] }])
+          )
+        const FILLED_MAPS = {
+          palletsByRowId: { 'r-0': 3, 'r-1': 0 },
+          damageByRowId: { 'r-0': { flagged: true, note: 'Tambor amassado', photos: [] } },
+        }
+
+        it('logistica grava os dois mapas e a admin/logistica leem o conteudo', async () => {
+          await seedCurrent()
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference(FILLED_MAPS)))
+          const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+          expect(snapshot.data().palletsByRowId).toEqual({ 'r-0': 3, 'r-1': 0 })
+          expect(snapshot.data().damageByRowId['r-0'].note).toBe('Tambor amassado')
+          await assertSucceeds(getDoc(doc(logistics(), CONF)))
+        })
+
+        it('mapas vazios passam; sem as chaves (doc e bundle antigos) tambem passam', async () => {
+          await seedCurrent()
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ palletsByRowId: {}, damageByRowId: {} })))
+          await seedConference(1)
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+        })
+
+        it('mapa com 201 entradas falha; com 200 passa', async () => {
+          await seedCurrent()
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ palletsByRowId: pallets(201) })))
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ damageByRowId: damage(201) })))
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ palletsByRowId: pallets(200) })))
+          // A chave de pallets ja gravada e' pegajosa: o 2o write leva as duas.
+          await assertSucceeds(
+            setDoc(
+              doc(logistics(), CONF),
+              conference({ revision: 2, palletsByRowId: pallets(200), damageByRowId: damage(200) })
+            )
+          )
+        })
+
+        it('tipo errado (texto, lista, numero, null) falha nos dois mapas', async () => {
+          await seedCurrent()
+          for (const key of ['palletsByRowId', 'damageByRowId']) {
+            for (const wrong of ['x', [1], 5, null]) {
+              await assertFails(setDoc(doc(logistics(), CONF), conference({ [key]: wrong })))
+            }
+          }
+        })
+
+        it('REMOVER os mapas depois de gravados falha: bundle antigo (sem as chaves) nao apaga contagem nem avaria', async () => {
+          await seedCurrent()
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference(FILLED_MAPS)))
+          // Bundle antigo: payload de 21 chaves, sem os mapas.
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+          // So' uma das chaves some: tambem falha.
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2, palletsByRowId: { 'r-0': 1 } })))
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 2, damageByRowId: {} })))
+          // Bundle novo: as duas chaves presentes (podem ficar vazias).
+          await assertSucceeds(
+            setDoc(doc(logistics(), CONF), conference({ revision: 2, palletsByRowId: {}, damageByRowId: {} }))
+          )
+        })
+
+        it('doc antigo sem as chaves: o bundle antigo continua gravando; o novo passa a gravar as chaves', async () => {
+          await seedCurrent()
+          await seedConference(1)
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2 })))
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 3, ...FILLED_MAPS })))
+          await assertFails(setDoc(doc(logistics(), CONF), conference({ revision: 4 })))
+        })
+
+        it('`notes` legado continua aceito (nao e travado): conferencia pre-S7 copia o `notes` do current', async () => {
+          await seedCurrent()
+          await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ ...FILLED_MAPS, notes: 'registro antigo' })))
+        })
+
+        it('tecnico, faturamento, usuario aprovado e anonimo nao gravam os mapas', async () => {
+          await seedCurrent()
+          for (const db of [roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+            await assertFails(setDoc(doc(db, CONF), conference({ ...FILLED_MAPS })))
+          }
+        })
+
+        it('logistica fecha a conferencia levando os mapas (estado 2, com documento cargoReport proprio)', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1)
+          await seedCargoDoc('log-1')
+          await assertSucceeds(setDoc(doc(logistics(), CONF), closedConference({ revision: 2, ...FILLED_MAPS })))
+        })
+      })
+
       describe('fechar (logistica)', () => {
         it('estado 2 com documento cargoReport proprio: fecha', async () => {
           await seedCurrent(1, 'concluido')
@@ -5261,6 +5418,37 @@ describeEmulator('firestore.rules (emulador)', () => {
           )
           await assertFails(setDoc(doc(admin(), CONF), reopened({ nfNumber: nfNumber.slice(0, 999) })))
           await assertSucceeds(setDoc(doc(admin(), CONF), reopened({ nfNumber })))
+        })
+
+        it('S11-I: reabre conferencia fechada COM os mapas (copia exata passa); mudar ou remover os mapas falha', async () => {
+          const maps = {
+            palletsByRowId: { 'r-0': 3 },
+            damageByRowId: { 'r-0': { flagged: true, note: 'Tambor amassado', photos: [] } },
+          }
+          const seedClosedWithMaps = async () => {
+            await seedCurrent(1, 'concluido')
+            await seed((db) =>
+              setDoc(doc(db, CONF), { ...closedConference({ revision: 1, ...maps }), updatedAt: new Date('2026-11-01T11:00:00Z') })
+            )
+          }
+          await seedClosedWithMaps()
+          // Admin mexe no conteudo dos mapas: a reabertura so' aceita mudar os carimbos e o fechamento.
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ ...maps, palletsByRowId: { 'r-0': 4 } })))
+          await assertFails(setDoc(doc(admin(), CONF), reopened({ ...maps, damageByRowId: {} })))
+          // Admin com o bundle antigo (sem as chaves) tambem nao apaga: a chave e' pegajosa.
+          await assertFails(setDoc(doc(admin(), CONF), reopened()))
+          await assertSucceeds(setDoc(doc(admin(), CONF), reopened({ ...maps })))
+          const snapshot = await assertSucceeds(getDoc(doc(logistics(), CONF)))
+          expect(snapshot.data()).toMatchObject({ status: 'aberta', ...maps })
+        })
+
+        it('S11-I: reabre conferencia fechada ANTES dos mapas (sem as chaves): a copia sem as chaves passa e nao as cria', async () => {
+          await seedCurrent(1, 'concluido')
+          await seedConference(1, 'fechada')
+          await assertSucceeds(setDoc(doc(admin(), CONF), reopened()))
+          const snapshot = await assertSucceeds(getDoc(doc(logistics(), CONF)))
+          expect(snapshot.data()).not.toHaveProperty('palletsByRowId')
+          expect(snapshot.data()).not.toHaveProperty('damageByRowId')
         })
 
         it('reabrir mudando okByRowId, labelsByRowId, notes ou checkedByName falha', async () => {

@@ -89,7 +89,7 @@ describe('CargoReportPrintView: larguras e linhas', () => {
     expect(firstRowCells[9]).toHaveClass('is-number')
   })
 
-  it('S6: CONTAGEM mostra ☑/☐ como o OK?, centralizada, e a soma das larguras segue 100%', () => {
+  it('S6: CONTAGEM centralizada e a soma das larguras segue 100%; S10-I: mostra o nº de pallets, não a caixinha', () => {
     const countColumn = PRINT_COLUMNS.find((column) => column.key === 'countOk')
     expect(countColumn).toMatchObject({ label: 'CONTAGEM', center: true })
     expect(PRINT_COLUMNS.some((column) => column.key === 'count')).toBe(false)
@@ -98,10 +98,30 @@ describe('CargoReportPrintView: larguras e linhas', () => {
     const { container } = render(<CargoReportPrintView sheet={makeSheet(2)} />)
     const [first, second] = [...container.querySelectorAll('tbody tr')].map((tr) => [...tr.children])
     expect(first[4]).toHaveTextContent('☑')
-    expect(first[10]).toHaveTextContent('☐')
     expect(second[4]).toHaveTextContent('☐')
-    expect(second[10]).toHaveTextContent('☑')
+    // Folha sem `countText` (relatório antigo montado à mão): "OK" onde havia contagem, vazio onde não havia.
+    expect(first[10]).toHaveTextContent(/^$/)
+    expect(second[10]).toHaveTextContent(/^OK$/)
     expect(first[10]).toHaveClass('is-center')
+  })
+
+  it('S10-I: CONTAGEM = nº de pallets ("7"), "OK" no relatório antigo e vazio sem contagem', () => {
+    const rows = [
+      { ...row(0), countText: '7', pallets: 7 },
+      { ...row(1), countText: 'OK', pallets: null },
+      { ...row(2), countText: '', pallets: null },
+    ]
+    const { container } = render(<CargoReportPrintView sheet={{ ...makeSheet(3), rows }} />)
+    const cells = [...container.querySelectorAll('tbody tr')].slice(0, 3).map((tr) => tr.children[10])
+    expect(cells[0]).toHaveTextContent(/^7$/)
+    expect(cells[1]).toHaveTextContent(/^OK$/)
+    expect(cells[2]).toHaveTextContent(/^$/)
+    expect(container.querySelector('tbody')).not.toHaveTextContent('☑ ☐')
+  })
+
+  it('S10-I: o rodapé continua com "OBSERVAÇÕES:" (registro antigo)', () => {
+    const { container } = render(<CargoReportPrintView sheet={makeSheet(1)} />)
+    expect(container.querySelector('.crf-print__foot')).toHaveTextContent('OBSERVAÇÕES: obs')
   })
 
   it('S6: LOTE FORNEC. e LOTE SQ vão em span.crf-print__lot com o texto completo (sem reticências)', () => {

@@ -864,3 +864,65 @@ describe('amostra com 45 linhas para o Lucas', () => {
     expect(fs.statSync(out).size).toBeGreaterThan(10000)
   })
 })
+
+describe('S10-I: coluna CONTAGEM (L) do Excel = nº de pallets', () => {
+  // Linhas a..e do cenário do mock; só o conteúdo da coluna L muda (nenhuma célula nova, B38 igual).
+  const pallets = { a: 7, b: 0, d: 12 }
+  const conference = { ...MOCK_CONFERENCE, countOkByRowId: {}, palletsByRowId: pallets }
+  const { files, book } = generate(buildSheet(mockScenarioForm(), conference))
+  const xml = sheetXml(files)
+  const ws = book.Sheets['SQ QUIMICA']
+
+  it('número > 0 vira célula NUMÉRICA com o estilo do modelo; 0 e sem contagem ficam como no modelo', () => {
+    expect(ws.L9).toMatchObject({ t: 'n', v: 7 })
+    expect(ws.L12).toMatchObject({ t: 'n', v: 12 })
+    expect(ws.L10?.v).toBeUndefined()
+    expect(ws.L11?.v).toBeUndefined()
+    const template = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, countOkByRowId: {} })).files
+    const styleOf = (source, ref) => /s="(\d+)"/.exec(cellXml(sheetXml(source), ref))?.[1]
+    expect(styleOf(files, 'L9')).toBeTruthy()
+    expect(styleOf(files, 'L9')).toBe(styleOf(template, 'L9'))
+    expect(cellXml(xml, 'L9')).toMatch(/^<c r="L9" s="\d+"><v>7<\/v><\/c>$/)
+  })
+
+  it('relatório antigo (Contagem OK sem número) continua "OK" no Excel', () => {
+    const legacy = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, palletsByRowId: undefined })).book.Sheets['SQ QUIMICA']
+    expect(legacy.L9.v).toBe('OK')
+    expect(legacy.L12.v).toBe('OK')
+    expect(legacy.L10?.v).toBeUndefined()
+  })
+
+  it('misto: a linha com número mostra o número e a linha só com legado mostra "OK"', () => {
+    const mixed = generate(
+      buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, countOkByRowId: { a: true, d: true }, palletsByRowId: { a: 4 } })
+    ).book.Sheets['SQ QUIMICA']
+    expect(mixed.L9).toMatchObject({ t: 'n', v: 4 })
+    expect(mixed.L12.v).toBe('OK')
+  })
+
+  it('B38 e o rodapé continuam iguais (DESCARGA + observações legadas); nenhuma célula nova', () => {
+    expect(ws.B38.v).toBe('Palete 3 com avaria na embalagem externa, conteúdo íntegro.')
+    const before = generate(buildSheet(mockScenarioForm(), { ...MOCK_CONFERENCE, countOkByRowId: {} })).book.Sheets['SQ QUIMICA']
+    // Fora da coluna L (CONTAGEM das linhas de dados) o conjunto de células e os valores são idênticos.
+    const outsideCountColumn = (sheet) =>
+      Object.entries(sheet)
+        .filter(([ref]) => !ref.startsWith('!') && !/^L(9|1\d|2\d|3[0-4])$/.test(ref))
+        .map(([ref, cell]) => [ref, cell.v])
+        .sort()
+    expect(outsideCountColumn(ws)).toEqual(outsideCountColumn(before))
+  })
+
+  it('com 40 linhas (linhas extras) o número cai na linha certa da coluna L', () => {
+    const count = 40
+    const ids = Array.from({ length: count }, (_, index) => `m-${index}`)
+    const sheet = generate(
+      buildSheet(manyRowsForm(count), {
+        ...manyRowsConference(count),
+        palletsByRowId: { [ids[0]]: 3, [ids[count - 1]]: 25 },
+      })
+    ).book.Sheets['SQ QUIMICA']
+    expect(sheet.L9).toMatchObject({ t: 'n', v: 3 })
+    expect(sheet[`L${8 + count}`]).toMatchObject({ t: 'n', v: 25 })
+    expect(sheet[`L${8 + count - 1}`]?.v).toBeUndefined()
+  })
+})

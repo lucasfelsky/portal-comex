@@ -1,14 +1,22 @@
+import {
+  cargoRowPallets,
+  hasCargoRowIssue,
+  hasCargoRowIssueNote,
+  summarizeCargoPallets,
+} from './cargoConferenceIssues'
 import { CARGO_CONFERENCE_STATUS, isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S9-F do Relatório de Carga: regras da conferência da logística compartilhadas entre o formulário do computador
 // (CargoReportForm) e a aba Conferência do celular. Módulo puro (sem React e sem Firebase): estado vazio, chave
-// de "sujo", marcas por linha, progresso e a lista de pendências do fechamento.
+// de "sujo", marcas por linha, progresso e as regras do fechamento (S10-I: pallets, divergência e avaria).
 
 export const EMPTY_CARGO_CONFERENCE = {
   revision: 0,
   status: CARGO_CONFERENCE_STATUS.open,
   okByRowId: {},
   countOkByRowId: {},
+  palletsByRowId: {},
+  damageByRowId: {},
   labelsByRowId: {},
   checkedByName: '',
   receiptStatus: '',
@@ -26,12 +34,21 @@ export const EMPTY_CARGO_CONFERENCE = {
   updatedByName: '',
 }
 
+// Nome do item na tela: descrição SQ, senão a do fornecedor, senão "Item N".
+export function describeCargoRow(row, number) {
+  return String(row?.sqDescription ?? '').trim() || String(row?.supplierDescription ?? '').trim() || `Item ${number}`
+}
+
 // Chave de comparação do que a logística pode ter alterado (ignora metadados de leitura).
 export function cargoConferenceKey(conference, rows) {
   const marks = rows.map((row) => [
     row.id,
     conference.okByRowId?.[row.id] === true,
     conference.countOkByRowId?.[row.id] === true,
+    cargoRowPallets(conference, row.id).count,
+    conference.damageByRowId?.[row.id]?.flagged === true,
+    String(conference.damageByRowId?.[row.id]?.note ?? '').trim(),
+    (conference.damageByRowId?.[row.id]?.photos ?? []).map((photo) => photo?.id),
     String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),
     String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
   ])
@@ -48,7 +65,7 @@ export function cargoConferenceKey(conference, rows) {
   })
 }
 
-// `mapName`: 'okByRowId' (OK?) ou 'countOkByRowId' (Contagem). Alterna só a linha pedida.
+// `mapName`: 'okByRowId' (OK?). Alterna só a linha pedida. A contagem é o contador de pallets (`cargoConferenceIssues`).
 export function toggleCargoConferenceFlag(conference, mapName, rowId) {
   return { ...conference, [mapName]: { ...conference[mapName], [rowId]: conference[mapName]?.[rowId] !== true } }
 }
@@ -64,20 +81,19 @@ export function setCargoConferenceLabel(conference, rowId, field, value) {
   }
 }
 
-// OK? e Contagem em todas as linhas; as etiquetas ficam como estão.
+// OK? em todas as linhas; os pallets não são marcáveis em lote e as etiquetas ficam como estão.
 export function markAllCargoRowsOk(conference, rows) {
   const okByRowId = { ...conference.okByRowId }
-  const countOkByRowId = { ...conference.countOkByRowId }
-  for (const row of rows) {
-    okByRowId[row.id] = true
-    countOkByRowId[row.id] = true
-  }
-  return { ...conference, okByRowId, countOkByRowId }
+  for (const row of rows) okByRowId[row.id] = true
+  return { ...conference, okByRowId }
 }
 
-// Linha conferida = OK? e Contagem marcados.
+// Linha conferida = OK? marcado e pelo menos 1 pallet contado. Relatório antigo (Contagem OK, sem número) conta como
+// contado enquanto a linha não ganha um número.
 export function isCargoRowConferred(conference, rowId) {
-  return conference?.okByRowId?.[rowId] === true && conference?.countOkByRowId?.[rowId] === true
+  if (conference?.okByRowId?.[rowId] !== true) return false
+  const { count, legacyOk } = cargoRowPallets(conference, rowId)
+  return count !== null ? count >= 1 : legacyOk
 }
 
 export function summarizeCargoConferenceProgress(rows, conference) {
@@ -85,23 +101,75 @@ export function summarizeCargoConferenceProgress(rows, conference) {
   return { done: list.filter((row) => isCargoRowConferred(conference, row.id)).length, total: list.length }
 }
 
-function pluralLines(count, text) {
-  return `${count} ${count === 1 ? 'linha' : 'linhas'} ${text}`
+function plural(count, singular, pluralForm) {
+  return `${count} ${count === 1 ? singular : pluralForm}`
 }
 
-// Pendências do fechamento (não bloqueiam). O computador junta com ", " (o celular não fecha mais a conferência).
-export function listCargoConferencePendings(rows, conference) {
-  const filledRows = (Array.isArray(rows) ? rows : []).filter((row) => !isCargoReportRowEmpty(row))
-  const withoutOk = filledRows.filter((row) => conference.okByRowId?.[row.id] !== true).length
-  const withoutCount = filledRows.filter((row) => conference.countOkByRowId?.[row.id] !== true).length
-  return [
-    withoutOk > 0 ? pluralLines(withoutOk, 'sem OK?') : '',
-    withoutCount > 0 ? pluralLines(withoutCount, 'sem contagem') : '',
-    conference.receiptStatus ? '' : 'Status do recebimento não informado',
-    // S8: pendências (não bloqueiam). Não existe pendência separada de "Data de recebimento": ela é o dia do início.
-    conference.unloadStartAt ? '' : 'Início da descarga não informado',
-    conference.unloadStartAt && !conference.unloadEndAt ? 'Fim da descarga não informado' : '',
-    conference.labelingOk ? '' : 'Etiquetagem sem OK',
-    String(conference.nfNumber ?? '').trim() ? '' : 'Nº da NF não informado',
-  ].filter(Boolean)
+function lowerFirst(text) {
+  return text.charAt(0).toLocaleLowerCase('pt-BR') + text.slice(1)
 }
+
+// Regras do fechamento da conferência. Só o computador fecha; o celular usa a mesma função para MOSTRAR o que falta.
+//   blocking: impede o fechar (divergência de pallets sem observação escrita em nenhum item);
+//   pendings: avisos que não bloqueiam ("Dá para fechar assim");
+//   hints: os mesmos pontos em frase curta, para o aviso do celular ao salvar (bloqueio primeiro).
+export function evaluateCargoConferenceClose(rows, conference, { expectedPallets = null } = {}) {
+  const filled = (Array.isArray(rows) ? rows : []).filter((row) => !isCargoReportRowEmpty(row))
+  const summary = summarizeCargoPallets(filled, conference, expectedPallets)
+  const withoutMark = filled.filter((row) => !isCargoRowConferred(conference, row.id)).length
+  const issueCount = filled.filter((row) => hasCargoRowIssue(conference, row.id)).length
+  const hasNote = filled.some((row) => hasCargoRowIssueNote(conference, row.id))
+  const palletsText = `${summary.counted} contados de ${summary.expected} informados pelo COMEX`
+
+  const blocking = []
+  const pendings = []
+  const hints = []
+  if (summary.state === 'divergente' && !hasNote) {
+    blocking.push(
+      `Pallets divergentes: ${palletsText}. Para fechar, escreva uma observação em pelo menos um item explicando a diferença ou a avaria.`
+    )
+    hints.push(
+      `pallets divergentes (${summary.counted} de ${summary.expected}) sem observação em nenhum item — escreva uma observação no item`
+    )
+  }
+
+  const entries = [
+    withoutMark > 0
+      ? [
+          `${plural(withoutMark, 'item', 'itens')} sem OK? ou sem pallets contados`,
+          `${plural(withoutMark, 'item', 'itens')} sem OK? ou sem pallets`,
+        ]
+      : null,
+    summary.state === 'divergente' && hasNote
+      ? [
+          `Pallets divergentes: ${palletsText} (com observação)`,
+          `pallets divergentes (${summary.counted} de ${summary.expected}), com observação`,
+        ]
+      : null,
+    summary.state === 'semTotal' ? ['Total de pallets não informado pelo COMEX'] : null,
+    issueCount > 0 && conference.receiptStatus !== 'com_ressalva'
+      ? [
+          `${plural(issueCount, 'item', 'itens')} com avaria registrada, mas o status do recebimento não é "Com ressalva"`,
+          `${plural(issueCount, 'item', 'itens')} com avaria e status diferente de "Com ressalva"`,
+        ]
+      : null,
+    conference.receiptStatus ? null : ['Status do recebimento não informado'],
+    // S8: pendências (não bloqueiam). Não existe pendência separada de "Data de recebimento": ela é o dia do início.
+    conference.unloadStartAt ? null : ['Início da descarga não informado'],
+    conference.unloadStartAt && !conference.unloadEndAt ? ['Fim da descarga não informado'] : null,
+    conference.labelingOk ? null : ['Etiquetagem sem OK'],
+    String(conference.nfNumber ?? '').trim() ? null : ['Nº da NF não informado'],
+  ]
+  for (const entry of entries) {
+    if (!entry) continue
+    pendings.push(entry[0])
+    hints.push(entry[1] ?? lowerFirst(entry[0]))
+  }
+  return { blocking, pendings, hints }
+}
+
+// Pendências do fechamento (não bloqueiam); o bloqueio vem de `evaluateCargoConferenceClose`.
+export function listCargoConferencePendings(rows, conference, options) {
+  return evaluateCargoConferenceClose(rows, conference, options).pendings
+}
+

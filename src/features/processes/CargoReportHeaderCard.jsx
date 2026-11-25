@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import Icon from '../../components/Icon'
 import { formatDateTime } from '../../utils/dateFormat'
+import { getFieldErrorId } from '../../utils/fieldErrors'
 import { formatErpReferenceStamp } from '../erp/erpReference'
 import { CargoInfoIcon } from './CargoReportRefreshPanel'
 import { SourceMark } from './CargoReportSourceMarks'
@@ -11,8 +12,9 @@ import {
   formatCargoReportTitle,
 } from './cargoReportFormModel'
 
-// Cabeçalho do Relatório de Carga (DUIMP, tipo de carga, título e badges de estado), extraído do formulário na
-// S9-C. Em edição (COMEX, estágio 1) mostra também de onde vêm os itens (processo e FUP) e o fornecedor usado nas
+// Cabeçalho do Relatório de Carga (DUIMP, tipo de carga, título, total de pallets da carga e badges de estado),
+// extraído do formulário na S9-C. S10-I: "Total de pallets da carga" (só o COMEX em rascunho edita) e, com o COMEX
+// fechado, o selo "Pallets: 23 de 25" (· divergente) com a soma da conferência x o total. Em edição (COMEX, estágio 1) mostra também de onde vêm os itens (processo e FUP) e o fornecedor usado nas
 // embalagens (somente leitura; só passa a valer na fatia das embalagens por fornecedor).
 
 function pad(value) {
@@ -36,8 +38,9 @@ function joinParts(...parts) {
 const closedLabel = (area, word, stamp) => (stamp ? `${area}: ${word} em ${stamp}` : `${area}: ${word}`)
 
 // Rótulo e dica ficam fora um do outro: o nome acessível do campo é só o rótulo.
-function TextField({ label, value, onChange, disabled, maxLength, hint }) {
+function TextField({ label, value, onChange, disabled, maxLength, hint, inputMode, placeholder, error }) {
   const id = useId()
+  const describedBy = [error ? getFieldErrorId(id) : '', hint ? `${id}-hint` : ''].filter(Boolean).join(' ')
   return (
     <div className="crf-field">
       <label htmlFor={id}>{label}</label>
@@ -46,10 +49,18 @@ function TextField({ label, value, onChange, disabled, maxLength, hint }) {
         type="text"
         value={value}
         maxLength={maxLength}
+        inputMode={inputMode}
+        placeholder={placeholder}
         disabled={disabled}
-        aria-describedby={hint ? `${id}-hint` : undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy || undefined}
         onChange={(event) => onChange(event.target.value)}
       />
+      {error ? (
+        <small className="field-error" id={getFieldErrorId(id)}>
+          {error}
+        </small>
+      ) : null}
       {hint ? (
         <span id={`${id}-hint`} className="auto">
           {hint}
@@ -79,6 +90,8 @@ export default function CargoReportHeaderCard({
   canEditFields,
   onPatch,
   source,
+  palletsSummary = null,
+  expectedError = '',
 }) {
   const radioName = useId()
   const cargoTypeHint = form.cargoType ? '' : 'Escolha um tipo'
@@ -87,6 +100,9 @@ export default function CargoReportHeaderCard({
     formatStamp(savedConference.updatedAt),
     savedConference.closedByName ? `por ${savedConference.closedByName}` : ''
   )
+  // Selo da soma x total (só quando o COMEX já fechou a parte dele e informou o total).
+  const showPallets = stage !== CARGO_STAGE.draft && palletsSummary && palletsSummary.state !== 'semTotal'
+  const palletsDiverges = palletsSummary?.state === 'divergente'
   const subtitle = isNew
     ? 'FR.CMX.001 · revisão 005 · Ainda não salvo'
     : `FR.CMX.001 · revisão 005 · salvo em ${formatDateTime(form.updatedAt)}${
@@ -118,6 +134,11 @@ export default function CargoReportHeaderCard({
               )}
             </>
           )}
+          {showPallets ? (
+            <span className={`inline-badge${palletsDiverges ? ' inline-badge--warn' : ' inline-badge--ok'}`}>
+              {`Pallets: ${palletsSummary.counted} de ${palletsSummary.expected}${palletsDiverges ? ' · divergente' : ''}`}
+            </span>
+          ) : null}
           <span className="inline-badge">FR.CMX.001 R5</span>
         </div>
       </div>
@@ -171,6 +192,18 @@ export default function CargoReportHeaderCard({
           disabled={!canEditFields}
           hint="PO / referência do processo"
           onChange={(value) => onPatch({ titleSuffix: value })}
+        />
+
+        <TextField
+          label="Total de pallets da carga"
+          value={form.expectedPallets === null || form.expectedPallets === undefined ? '' : String(form.expectedPallets)}
+          maxLength={6}
+          inputMode="numeric"
+          disabled={!canEditFields}
+          placeholder={canEditFields ? '' : 'Não informado'}
+          error={expectedError}
+          hint={canEditFields ? 'Do romaneio ou packing list. A logística conta por item e o Portal compara a soma.' : ''}
+          onChange={(value) => onPatch({ expectedPallets: value })}
         />
       </div>
 

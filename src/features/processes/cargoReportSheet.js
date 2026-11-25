@@ -109,6 +109,7 @@ export function buildCargoReportSheet(form, { process, conference, catalog, pack
   const { payload } = buildCargoReportPayload(form, {})
   const okByRowId = conference?.okByRowId ?? {}
   const countOkByRowId = conference?.countOkByRowId ?? {}
+  const palletsByRowId = conference?.palletsByRowId ?? {}
   const labelsByRowId = conference?.labelsByRowId ?? {}
   const alerts = []
 
@@ -119,6 +120,9 @@ export function buildCargoReportSheet(form, { process, conference, catalog, pack
         if (derived.alerts[kind]) alerts.push({ rowId: row.id, code: row.dbcorpCode, kind })
       }
     }
+    // S10-I: CONTAGEM = nº de pallets do item (vazio sem contagem ou com 0); relatório antigo (Contagem OK sem número) = "OK".
+    const pallets = Number.isInteger(palletsByRowId[row.id]) ? palletsByRowId[row.id] : null
+    const legacyCount = pallets === null && countOkByRowId[row.id] === true
     return {
       id: row.id,
       po: row.po,
@@ -131,7 +135,9 @@ export function buildCargoReportSheet(form, { process, conference, catalog, pack
       wmsLabel: normalizeCargoLabel(labelsByRowId[row.id]?.wms),
       sqLabel: normalizeCargoLabel(labelsByRowId[row.id]?.sq),
       quantityKg: row.quantityKg,
-      countOk: countOkByRowId[row.id] === true,
+      pallets,
+      countText: pallets > 0 ? String(pallets) : legacyCount ? 'OK' : '',
+      countOk: pallets > 0 || legacyCount,
       netWeightKg: derived.netWeightKg,
       packageWeightKg: row.packageWeightKg,
       packages: derived.packages,

@@ -655,6 +655,55 @@ describe('S7: retryCloseConferenceWrite', () => {
   })
 })
 
+describe('S10-I: pallets por item e observação por item no repositório', () => {
+  const withMaps = {
+    palletsByRowId: { 'r-1': 3, 'r-2': 0 },
+    damageByRowId: { 'r-1': { flagged: true, note: 'Tambor amassado', photos: [] } },
+  }
+
+  it('salvar a conferência grava os 2 mapas novos intactos (sem merge) junto com as chaves de sempre', async () => {
+    await saveCargoReportConference('P1', { ...conferencePayload(2), ...withMaps }, LOGISTICS)
+    const [, data, options] = mockSetDoc.mock.calls[0]
+    expect(options).toBeUndefined()
+    expect(data.palletsByRowId).toEqual(withMaps.palletsByRowId)
+    expect(data.damageByRowId).toEqual(withMaps.damageByRowId)
+    expect(data.countOkByRowId).toEqual({ 'r-1': true, 'r-2': false })
+  })
+
+  it('salvar o rascunho do COMEX grava `expectedPallets` (inclusive null)', async () => {
+    await saveCargoReportDraft('P1', { ...draftPayload(2), expectedPallets: 25 }, ADMIN)
+    expect(mockSetDoc.mock.calls[0][1].expectedPallets).toBe(25)
+    await saveCargoReportDraft('P1', { ...draftPayload(3), expectedPallets: null }, ADMIN)
+    expect(mockSetDoc.mock.calls[1][1]).toHaveProperty('expectedPallets', null)
+  })
+
+  it('reabrir copia os mapas do servidor (a cópia exata); o doc fechado antes dos mapas não ganha as chaves', async () => {
+    const server = {
+      ...closedConferencePayload(3),
+      ...withMaps,
+      closedDocumentId: 'doc-77',
+      updatedAt: { toDate: () => new Date('2026-11-24T16:05:00Z') },
+      updatedById: 'uid-log',
+      updatedByName: 'Operador Logística',
+    }
+    mockGetDoc.mockResolvedValue(snapshot(server))
+    await reopenCargoReportConference('P1', ADMIN)
+    const [, copied] = mockSetDoc.mock.calls[0]
+    expect(copied.palletsByRowId).toEqual(withMaps.palletsByRowId)
+    expect(copied.damageByRowId).toEqual(withMaps.damageByRowId)
+    expect(Object.keys(copied)).toHaveLength(23)
+
+    mockSetDoc.mockClear()
+    const { palletsByRowId: _p, damageByRowId: _d, ...legacy } = server
+    mockGetDoc.mockResolvedValue(snapshot(legacy))
+    await reopenCargoReportConference('P1', ADMIN)
+    const [, plain] = mockSetDoc.mock.calls[0]
+    expect(plain).not.toHaveProperty('palletsByRowId')
+    expect(plain).not.toHaveProperty('damageByRowId')
+    expect(Object.keys(plain)).toHaveLength(21)
+  })
+})
+
 describe('S7: reopenCargoReportConference', () => {
   const serverClosed = {
     ...closedConferencePayload(3),

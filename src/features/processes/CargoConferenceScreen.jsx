@@ -4,7 +4,14 @@ import Icon from '../../components/Icon'
 import Skeleton from '../../components/Skeleton'
 import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
-import { isCargoRowConferred } from './cargoConferenceModel'
+import {
+  cargoRowPallets,
+  formatCargoPalletsSummary,
+  hasCargoRowIssue,
+  listCargoIssueRows,
+  readCargoRowIssue,
+} from './cargoConferenceIssues'
+import { describeCargoRow, isCargoRowConferred } from './cargoConferenceModel'
 import CargoConferenceItemCard from './CargoConferenceItemCard'
 import CargoConferenceReceiptPanel from './CargoConferenceReceiptPanel'
 import { CARGO_STAGE } from './cargoReportFormModel'
@@ -15,9 +22,10 @@ import { getProcessTitle } from './processLabels'
 import useCargoConferenceScreen from './useCargoConferenceScreen'
 
 // S9-F do Relatório de Carga: tela de conferência de um processo no celular (mock aprovado). Faixa com voltar, nome,
-// fase e progresso; abas Itens | Recebimento; barra inferior (por portal no body, fora do `.page-fade`) com Salvar |
-// Salvar e fechar, Voltar à lista ou Reabrir conferência; folha de fechamento com as pendências. A logística confere;
-// o admin só acompanha e reabre. Estados somente leitura: conferência fechada e papel admin.
+// fase, progresso e (S10-I) os pallets contados x o total do COMEX; abas Itens | Recebimento; barra inferior (por portal
+// no body, fora do `.page-fade`) com Salvar, Voltar à lista ou Reabrir conferência. S9-H: o celular só salva; fechar a
+// conferência é do computador. A logística confere; o admin só acompanha e reabre. Estados somente leitura:
+// conferência fechada e papel admin.
 
 const TABS = [
   { value: 'itens', label: 'Itens' },
@@ -42,8 +50,15 @@ function renderActionBar(children) {
   )
 }
 
-function ProgressLine({ done, total, process }) {
+const PALLETS_BADGES = {
+  divergente: { className: 'ccf-badge ccf-badge--warn', label: 'Divergente' },
+  confere: { className: 'ccf-badge ccf-badge--ok', label: 'Confere' },
+  semTotal: { className: 'ccf-badge', label: 'Sem total' },
+}
+
+function ProgressLine({ done, total, process, pallets }) {
   const percent = total > 0 ? Math.round((done * 100) / total) : 0
+  const badge = PALLETS_BADGES[pallets.state]
   return (
     <>
       <span className="ccf-bar" aria-hidden="true">
@@ -52,6 +67,10 @@ function ProgressLine({ done, total, process }) {
       <p className="ccf-sub">
         <b>{done}</b> de {total} itens conferidos · {describeCargoConferenceCategory(process?.category)} ·{' '}
         {describeCargoConferenceSupplier(process)}
+      </p>
+      <p className="ccf-pallets">
+        <span>{formatCargoPalletsSummary(pallets, { withState: false })}</span>
+        <span className={badge.className}>{badge.label}</span>
       </p>
     </>
   )
@@ -91,7 +110,12 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         <span className={getDerivedStatusToneClass(phase)}>{phase.label}</span>
       </div>
       {screen.loadState === 'ready' ? (
-        <ProgressLine done={screen.progress.done} total={screen.progress.total} process={process} />
+        <ProgressLine
+          done={screen.progress.done}
+          total={screen.progress.total}
+          process={process}
+          pallets={screen.pallets}
+        />
       ) : null}
     </div>
   )
@@ -164,17 +188,30 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         number={rowIndex + 1}
         derived={screen.derived[rowIndex]}
         ok={conference.okByRowId?.[row.id]}
-        countOk={conference.countOkByRowId?.[row.id]}
+        conferred={isCargoRowConferred(conference, row.id)}
+        pallets={cargoRowPallets(conference, row.id)}
+        issue={readCargoRowIssue(conference, row.id)}
+        hasIssue={hasCargoRowIssue(conference, row.id)}
         labels={conference.labelsByRowId?.[row.id]}
         editable={screen.canSave}
         idPrefix={`${baseId}-r${rowIndex}`}
         onToggleOk={screen.toggleOk}
-        onToggleCount={screen.toggleCount}
+        onStepPallets={screen.stepPallets}
+        onIssueChange={screen.setIssue}
         onLabelChange={screen.setLabel}
       />
     )
   }
 
+  const issueItems = listCargoIssueRows(rows, conference).map((row) => {
+    const rowIndex = rows.indexOf(row)
+    return {
+      id: row.id,
+      number: rowIndex + 1,
+      title: describeCargoRow(row, rowIndex + 1),
+      note: readCargoRowIssue(conference, row.id).note.trim(),
+    }
+  })
   const isPending = (row) => !isCargoRowConferred(conference, row.id)
   const showOnlyPending = screen.canSave && onlyPending
   let itemsContent
@@ -269,9 +306,16 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
 
       {feedback ? (
         feedback.kind === 'success' ? (
-          <div className="success-banner" role="status">
-            {feedback.text}
-          </div>
+          <>
+            <div className="success-banner" role="status">
+              {feedback.text}
+            </div>
+            {feedback.notice ? (
+              <div className="ccf-note ccf-note--warn" role="status">
+                {feedback.notice}
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className={`error-banner${feedbackAction ? ' error-banner--retry' : ''}`} role="alert">
             <span>{feedback.text}</span>
@@ -309,6 +353,12 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
             checkedBy={screen.canSave ? screen.actorName : ''}
             isAdmin={isAdmin}
             unloadErrors={screen.unloadErrors}
+            issueItems={issueItems}
+            statusSuggestion={
+              screen.suggestStatus
+                ? { text: 'Há item com avaria. Status sugerido: Com ressalva.', onApply: screen.applySuggestedStatus }
+                : null
+            }
           />
         )}
       </div>

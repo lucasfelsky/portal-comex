@@ -374,6 +374,9 @@ describe('lista atualizada depois de salvar e reabrir', () => {
     await user.click(card)
     await screen.findByRole('tablist')
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
+    // S10-I: "Marcar todos OK" marca só o OK?; o item só conta como conferido com pelo menos 1 pallet.
+    await user.click(screen.getByRole('button', { name: 'Adicionar um pallet à contagem do item 1' }))
+    await user.click(screen.getByRole('button', { name: 'Adicionar um pallet à contagem do item 2' }))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await screen.findByText(/^Conferência salva às/)
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))

@@ -398,3 +398,41 @@ describe('describeCargoReportAlerts', () => {
     expect(describeCargoReportAlerts(undefined)).toBe('')
   })
 })
+
+describe('S10-I: CONTAGEM da folha = nº de pallets do item', () => {
+  const build = (conference) =>
+    buildCargoReportSheet(
+      makeForm([
+        makeRow({ id: 'a', po: '1', dbcorpCode: 'AD5240', quantityKg: 100 }),
+        makeRow({ id: 'b', po: '1', dbcorpCode: 'AD5240', quantityKg: 100 }),
+        makeRow({ id: 'c', po: '1', dbcorpCode: 'AD5240', quantityKg: 100 }),
+        makeRow({ id: 'd', po: '1', dbcorpCode: 'AD5240', quantityKg: 100 }),
+      ]),
+      { process: PROCESS, conference, catalog: CATALOG }
+    )
+
+  it('número > 0 vira o texto do número; 0 gravado e sem contagem ficam vazios', () => {
+    const sheet = build({ palletsByRowId: { a: 7, b: 0 }, okByRowId: {} })
+    expect(sheet.rows.map((row) => row.countText)).toEqual(['7', '', '', ''])
+    expect(sheet.rows.map((row) => row.pallets)).toEqual([7, 0, null, null])
+    expect(sheet.rows.map((row) => row.countOk)).toEqual([true, false, false, false])
+  })
+
+  it('relatório antigo (Contagem OK sem número) continua "OK" e não vira número falso', () => {
+    const sheet = build({ countOkByRowId: { a: true, b: true, c: false } })
+    expect(sheet.rows.map((row) => row.countText)).toEqual(['OK', 'OK', '', ''])
+    expect(sheet.rows.map((row) => row.pallets)).toEqual([null, null, null, null])
+    expect(sheet.rows[0].countOk).toBe(true)
+  })
+
+  it('o número vence o legado da mesma linha; 0 gravado apaga o "OK" antigo', () => {
+    const sheet = build({ countOkByRowId: { a: true, b: true }, palletsByRowId: { a: 3, b: 0 } })
+    expect(sheet.rows.map((row) => row.countText)).toEqual(['3', '', '', ''])
+  })
+
+  it('o rodapé não ganha nada: as observações legadas seguem em `notes`', () => {
+    const sheet = build({ notes: ' registro antigo ', damageByRowId: { a: { flagged: true, note: 'x', photos: [] } } })
+    expect(sheet.notes).toBe('registro antigo')
+    expect(sheet).not.toHaveProperty('damageByRowId')
+  })
+})

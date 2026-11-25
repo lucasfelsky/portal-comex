@@ -26536,3 +26536,343 @@ tr.crf-gsum td {
 .ccf-entry__row--start {
   justify-content: flex-start;
 }
+
+/* S10-I: contador de pallets por item, observacao de avaria por item, faixa de pallets e cartao "Pallets e avarias". */
+.ccf-badge--danger {
+  border-color: transparent;
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+
+.ccf-item__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ccf-pallets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.ccf-pal {
+  display: grid;
+  gap: 6px;
+}
+
+.ccf-pal__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ccf-pal__btn {
+  min-height: 56px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-title);
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ccf-pal__btn--plus {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: var(--fs-subhead);
+}
+
+.ccf-pal__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ccf-pal__num,
+.ccf-pal--ro {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 56px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.ccf-pal__num--on {
+  border-color: var(--primary);
+  background: var(--primary-50);
+}
+
+.ccf-pal__num b {
+  font-family: var(--font-heading);
+  font-size: var(--fs-title);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ccf-pal__num small {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.ccf-pal__sr,
+.crf-pal__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ccf-pal--ro {
+  font-weight: 800;
+}
+
+.crf-pal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crf-pal__btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Area de toque de 44 px sem aumentar o botao visual. */
+.crf-pal__btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.crf-pal__btn--plus {
+  border-color: var(--primary-700);
+  background: var(--primary-700);
+  color: var(--on-primary);
+}
+
+.crf-pal__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.crf-pal__num {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  font-weight: 800;
+}
+
+.crf-pal--ro {
+  display: inline-block;
+  font-weight: 700;
+}
+
+.crf-palcol {
+  min-width: 132px;
+  white-space: nowrap;
+}
+
+.ccf-issue,
+.crf-issue {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ccf-issue {
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.ccf-issue__flag,
+.crf-issue__flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 700;
+}
+
+.ccf-issue__flag[aria-pressed='true'],
+.crf-issue__flag[aria-pressed='true'] {
+  border-color: var(--danger-700);
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+
+.ccf-issue__label,
+.crf-issue__label {
+  color: var(--ink-soft);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.ccf-issue textarea,
+.crf-issue textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-subhead);
+  font-weight: 500;
+  resize: vertical;
+}
+
+.crf-issue textarea {
+  min-height: 64px;
+}
+
+.ccf-issue__count,
+.crf-issue__count {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  text-align: right;
+}
+
+.ccf-issue__text,
+.crf-issue__text {
+  margin: 0;
+  font-size: var(--fs-subhead);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ccf-suggest {
+  display: flex;
+  margin-top: 8px;
+  min-height: 44px;
+}
+
+.ccf-legacy,
+.crf-legacy {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-subhead);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.crf-issues {
+  display: grid;
+  gap: 10px;
+}
+
+.crf-issues__scroll {
+  overflow-x: auto;
+}
+
+.crf-issues__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-footnote);
+}
+
+.crf-issues__table th {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.crf-issues__table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.crf-issues__table td:nth-child(5) {
+  min-width: 260px;
+}
+
+.crf-issues__table td .inline-badge {
+  margin-left: 6px;
+}
+
+.crf-dlg__block {
+  border-color: var(--danger-700);
+  background: var(--danger-50);
+  color: var(--danger-700);
+  font-weight: 700;
+}
+
+.crf-issues__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crf-issues__item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--fs-footnote);
+}
+
+.crf-issues__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.crf-issues__pallets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}

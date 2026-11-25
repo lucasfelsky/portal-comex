@@ -41,6 +41,7 @@ import {
   parseCargoCount,
   parseCargoNumber,
   readDateTimeKey,
+  resolveCargoExpectedPallets,
   resolveCargoReceivedDate,
   resolveNetWeightKg,
   toCargoDateKey,
@@ -68,6 +69,7 @@ const RULE_ALLOWLIST = [
   'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
   'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
   'autofill', // S9-C: opcional (fora do hasAll das rules)
+  'expectedPallets', // S10-I: total de pallets do COMEX, opcional e pegajosa (fora do hasAll das rules)
 ]
 
 describe('papeis', () => {
@@ -386,8 +388,10 @@ describe('buildCargoReportPayload', () => {
     for (const key of Object.keys(payload)) expect(RULE_ALLOWLIST).toContain(key)
     // S7: 18 chaves no `current` (sem labeledBy/labelMadeBy); o repositório acrescenta updatedAt/ById/ByName.
     // S9-C: + `autofill` opcional na allowlist (19); sem ele o payload segue com 15 chaves.
-    expect(RULE_ALLOWLIST).toHaveLength(19)
+    // S10-I: + `expectedPallets` (20): o payload SEMPRE a leva (null = não informado), então fica com 16 chaves.
+    expect(RULE_ALLOWLIST).toHaveLength(20)
     expect(Object.keys(payload)).toHaveLength(RULE_ALLOWLIST.length - 4)
+    expect(payload).toHaveProperty('expectedPallets', null)
     expect(payload).not.toHaveProperty('autofill')
     expect(payload).not.toHaveProperty('labeledBy')
     expect(payload).not.toHaveProperty('labelMadeBy')
@@ -436,13 +440,14 @@ describe('buildCargoReportPayload', () => {
 })
 
 const CONFERENCE_KEYS = [
-  'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
+  'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'palletsByRowId', 'damageByRowId',
+  'labelsByRowId', 'checkedByName',
   'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
   'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
 ]
 
 describe('buildConferencePayload', () => {
-  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 18 chaves (S8)', () => {
+  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 20 chaves (S8 + S10-I)', () => {
     const payload = buildConferencePayload(
       { okByRowId: { a: true, b: 0, orfa: true }, revision: 2 },
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
@@ -454,6 +459,8 @@ describe('buildConferencePayload', () => {
       status: 'aberta',
       okByRowId: { a: true, b: false },
       countOkByRowId: {},
+      palletsByRowId: {},
+      damageByRowId: {},
       labelsByRowId: {},
       checkedByName: 'Operador',
       receiptStatus: '',
@@ -469,11 +476,11 @@ describe('buildConferencePayload', () => {
       closedDocumentId: '',
     })
     expect(Object.keys(payload)).toEqual(CONFERENCE_KEYS)
-    // O repositório acrescenta updatedAt/updatedById/updatedByName: 18 + 3 = 21 chaves nas rules.
-    expect(CONFERENCE_KEYS).toHaveLength(18)
+    // O repositório acrescenta updatedAt/updatedById/updatedByName: 20 + 3 = 23 chaves nas rules.
+    expect(CONFERENCE_KEYS).toHaveLength(20)
   })
 
-  it('S6: poda id orfao nos 3 mapas e força booleano na contagem', () => {
+  it('S6: poda id orfao nos mapas e força booleano no OK?; o legado "Contagem OK" só passa como true', () => {
     const payload = buildConferencePayload(
       {
         okByRowId: { a: true, orfa: true },
@@ -485,8 +492,50 @@ describe('buildConferencePayload', () => {
       { actorName: 'Op' }
     )
     expect(payload.okByRowId).toEqual({ a: true })
-    expect(payload.countOkByRowId).toEqual({ a: true, b: false })
+    // S10-I (⚑I3): o legado só passa adiante quando era `true` de verdade; 1 e false não viram nada.
+    expect(payload.countOkByRowId).toEqual({})
     expect(payload.labelsByRowId).toEqual({ a: { wms: 'W1', sq: 'S1' } })
+    const legacy = buildConferencePayload(
+      { countOkByRowId: { a: true, b: true, orfa: true }, revision: 0 },
+      [{ id: 'a' }, { id: 'b' }],
+      {}
+    )
+    expect(legacy.countOkByRowId).toEqual({ a: true, b: true })
+  })
+
+  it('S10-I: palletsByRowId só com linhas que existem; o legado sai da linha que ganhou número (inclusive 0)', () => {
+    const payload = buildConferencePayload(
+      {
+        okByRowId: { a: true },
+        countOkByRowId: { a: true, b: true, c: true },
+        palletsByRowId: { a: 3, b: 0, orfa: 5, c: 1000, d: 2.5 },
+        revision: 1,
+      },
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+      { actorName: 'Op' }
+    )
+    expect(payload.palletsByRowId).toEqual({ a: 3, b: 0 })
+    expect(payload.countOkByRowId).toEqual({ c: true })
+  })
+
+  it('S10-I: damageByRowId normalizado (nota aparada, entrada vazia some, linha removida some)', () => {
+    const payload = buildConferencePayload(
+      {
+        damageByRowId: {
+          a: { flagged: true, note: '  tambor amassado  ', photos: [] },
+          b: { flagged: false, note: '   ', photos: [] },
+          orfa: { flagged: true, note: 'x', photos: [] },
+        },
+        notes: 'legado preservado',
+        revision: 0,
+      },
+      [{ id: 'a' }, { id: 'b' }],
+      { actorName: 'Op' }
+    )
+    expect(payload.damageByRowId).toEqual({ a: { flagged: true, note: 'tambor amassado', photos: [] } })
+    // ⚑I6: `notes` (legado) é repassado como veio; nenhuma tela o edita.
+    expect(payload.notes).toBe('legado preservado')
+    expect(buildConferencePayload({ revision: 0 }, [{ id: 'a' }], {}).damageByRowId).toEqual({})
   })
 
   it('S7: etiqueta vira MAIÚSCULAS (pt-BR), com trim; corte em 120 vale DEPOIS das maiúsculas; entrada vazia some', () => {
@@ -1028,7 +1077,7 @@ describe('S8: buildConferencePayload com descarga, etiquetagem e data derivada',
       receivedDate: '2026-11-24',
       labelingOk: true,
     })
-    expect(Object.keys(payload)).toHaveLength(18)
+    expect(Object.keys(payload)).toHaveLength(20)
     // O tempo total é derivado: nenhuma chave de minutos entra no payload.
     expect(Object.keys(payload).some((key) => /minutes/i.test(key))).toBe(false)
   })
@@ -1147,5 +1196,90 @@ describe('S9-D: embalagem por item + fornecedor (peso líquido por fornecedor)',
     expect(payload.rows.map((row) => row.frozenNetWeightKg)).toEqual([200, 1000])
     // sem o contexto, o congelamento é o de sempre (padrão do item)
     expect(buildConcludedCargoReportPayload(form, { catalog: CATALOG, today: '2026-11-25' }).payload.rows.map((row) => row.frozenNetWeightKg)).toEqual([25, 25])
+  })
+})
+
+describe('S10-I: total de pallets do COMEX (expectedPallets)', () => {
+  const baseForm = () => ({
+    ...fromCargoReportDoc({ revision: 3, status: 'rascunho', cargoType: 'FCL', titleSuffix: 'ACME' }),
+    rows: [makeRow({ id: 'a', po: '4500123', dbcorpCode: 'AD5240', quantityKg: 100 })],
+  })
+
+  it('fromCargoReportDoc lê o inteiro 1..9999; doc antigo sem a chave e valor inválido leem null', () => {
+    expect(fromCargoReportDoc({ expectedPallets: 25 }).expectedPallets).toBe(25)
+    expect(fromCargoReportDoc({ expectedPallets: 9999 }).expectedPallets).toBe(9999)
+    expect(fromCargoReportDoc({ revision: 1 }).expectedPallets).toBeNull()
+    for (const invalid of [0, 10000, 2.5, '7', null, -3]) {
+      expect(fromCargoReportDoc({ expectedPallets: invalid }).expectedPallets).toBeNull()
+    }
+    expect(buildInitialCargoReport({ name: 'X', items: [] }).expectedPallets).toBeNull()
+  })
+
+  it('buildCargoReportPayload SEMPRE grava a chave: null quando vazio, o número quando válido', () => {
+    expect(buildCargoReportPayload(baseForm()).payload.expectedPallets).toBeNull()
+    for (const blank of [null, undefined, '', '  ']) {
+      const { payload, errors } = buildCargoReportPayload({ ...baseForm(), expectedPallets: blank })
+      expect(payload).toHaveProperty('expectedPallets', null)
+      expect(errors).toEqual([])
+    }
+    for (const [typed, expected] of [['25', 25], [25, 25], [' 7 ', 7], ['1', 1], ['9999', 9999], ['1.500', 1500]]) {
+      const { payload, errors } = buildCargoReportPayload({ ...baseForm(), expectedPallets: typed })
+      expect(payload.expectedPallets).toBe(expected)
+      expect(errors).toEqual([])
+    }
+  })
+
+  it('0, decimal, negativo, acima de 9999 e texto viram "Número inválido" no salvar', () => {
+    for (const invalid of ['0', '2,5', '-3', '10000', 'abc', 0, 2.5]) {
+      const { payload, errors } = buildCargoReportPayload({ ...baseForm(), expectedPallets: invalid })
+      expect(errors).toEqual([{ field: 'expectedPallets', message: 'Número inválido' }])
+      expect(payload.expectedPallets).toBeNull()
+    }
+  })
+
+  it('o fechar e o reabrir também levam a chave', () => {
+    const form = { ...baseForm(), expectedPallets: 12 }
+    expect(buildConcludedCargoReportPayload(form, { today: '2026-11-24' }).payload.expectedPallets).toBe(12)
+    expect(buildReopenedCargoReportPayload(form).payload.expectedPallets).toBe(12)
+  })
+
+  it('resolveCargoExpectedPallets aceita número ou texto digitado e devolve null no resto', () => {
+    expect(resolveCargoExpectedPallets('25')).toBe(25)
+    expect(resolveCargoExpectedPallets(25)).toBe(25)
+    expect(resolveCargoExpectedPallets('')).toBeNull()
+    expect(resolveCargoExpectedPallets('0')).toBeNull()
+    expect(resolveCargoExpectedPallets('x')).toBeNull()
+    expect(resolveCargoExpectedPallets(undefined)).toBeNull()
+  })
+})
+
+describe('S10-I: fromConferenceDoc com pallets e observação por item', () => {
+  it('doc antigo (sem as chaves) lê sem contagem e sem observação; o legado countOkByRowId continua lido', () => {
+    const conference = fromConferenceDoc({ revision: 2, receiptStatus: '', countOkByRowId: { a: true } })
+    expect(conference.palletsByRowId).toEqual({})
+    expect(conference.damageByRowId).toEqual({})
+    expect(conference.countOkByRowId).toEqual({ a: true })
+  })
+
+  it('lê pallets (inteiro 0..999) e observação normalizada; entrada inválida ou vazia sai', () => {
+    const conference = fromConferenceDoc({
+      revision: 3,
+      receiptStatus: '',
+      palletsByRowId: { a: 4, b: 0, c: 1000, d: 'x' },
+      damageByRowId: {
+        a: { flagged: true, note: '  molhado ', photos: [] },
+        b: { flagged: false, note: '', photos: [] },
+        c: 'texto',
+      },
+    })
+    expect(conference.palletsByRowId).toEqual({ a: 4, b: 0 })
+    expect(conference.damageByRowId).toEqual({ a: { flagged: true, note: 'molhado', photos: [] } })
+  })
+
+  it('`notes` legado continua lido (só leitura) e o payload o repassa', () => {
+    const conference = fromConferenceDoc({ revision: 1, receiptStatus: '', notes: ' Palete 3 avariado ' })
+    expect(conference.notes).toBe('Palete 3 avariado')
+    const payload = buildConferencePayload({ ...conference, revision: 1 }, [], { actorName: 'Op' })
+    expect(payload.notes).toBe('Palete 3 avariado')
   })
 })

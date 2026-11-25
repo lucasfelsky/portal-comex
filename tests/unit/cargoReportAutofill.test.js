@@ -357,11 +357,12 @@ describe('autofill gravado e lido', () => {
     withEmpty.autofill = { ...form.autofill, rows: { ...form.autofill.rows, vazia: { key: '', base: { po: 'X' } } } }
     const { payload } = buildCargoReportPayload(withEmpty)
     expect(Object.keys(payload.autofill.rows)).toEqual([kept.id])
-    expect(Object.keys(payload)).toHaveLength(16)
+    // S10-I: + `expectedPallets` (sempre gravado).
+    expect(Object.keys(payload)).toHaveLength(17)
 
     const semEntradas = buildCargoReportPayload({ ...form, rows: [kept], autofill: { ...form.autofill, rows: {} } }).payload
     expect(semEntradas).not.toHaveProperty('autofill')
-    expect(Object.keys(semEntradas)).toHaveLength(15)
+    expect(Object.keys(semEntradas)).toHaveLength(16)
   })
 
   it('o que foi gravado volta igual ao ler o doc', () => {

@@ -6,6 +6,7 @@
 // S7: "Salvar e fechar" por área. COMEX fecha o `current` (`status: 'concluido'`); a logística grava e
 // fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
 import { digitsOnly, foldText } from '../erp/erpText'
+import { readDamageMap, readExpectedPallets, readPalletsMap } from './cargoConferenceIssues'
 import { CARGO_NF_LIST_MAX_CHARS, canonicalCargoNfText } from './cargoNfList'
 import { normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
 import { cargoPackagingContext, resolveCargoPackaging } from './cargoSupplierPackaging'
@@ -167,6 +168,11 @@ function readCount(value) {
   return Number.isInteger(value) && value >= 0 ? value : null
 }
 
+// Total de pallets da carga (S10-I): número ou texto digitado -> int 1..9999 | null (vazio ou inválido).
+export function resolveCargoExpectedPallets(value) {
+  return readExpectedPallets(typeof value === 'number' ? value : parseCargoCount(value))
+}
+
 function readDateKey(value) {
   return typeof value === 'string' && DATE_KEY_PATTERN.test(value) ? value : ''
 }
@@ -279,6 +285,8 @@ export function fromCargoReportDoc(data) {
     titleSuffix: readText(doc.titleSuffix, CARGO_REPORT_LIMITS.text),
     rows: normalizedRows,
     autofill: readCargoAutofill(doc.autofill, normalizedRows),
+    // S10-I: total de pallets da carga informado pelo COMEX (int 1..9999; doc antigo sem a chave = não informado).
+    expectedPallets: readExpectedPallets(doc.expectedPallets),
     // `notes`, `receiptStatus`, `receivedDate` e `nfNumber` são legado do `current` (S7: quem edita é a logística,
     // no doc `conference`); o valor lido volta intacto no próximo salvar para não apagar dado.
     notes: readText(doc.notes, CARGO_REPORT_LIMITS.notes),
@@ -316,6 +324,7 @@ export function buildInitialCargoReport(process) {
     titleSuffix: reference,
     rows,
     autofill: createEmptyCargoAutofill(),
+    expectedPallets: null,
     notes: '',
     nfNumber: '',
     receiptStatus: '',
@@ -560,6 +569,11 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
   }
 
   const rows = filledRows.slice(0, CARGO_REPORT_MAX_ROWS).map((row) => buildPayloadRow(row, errors))
+  // S10-I: `expectedPallets` vai SEMPRE (null = não informado); a chave não pode sumir depois de gravada (rules).
+  const expectedPallets = resolveCargoExpectedPallets(form?.expectedPallets)
+  if (expectedPallets === null && !isBlankNumeric(form?.expectedPallets)) {
+    errors.push({ field: 'expectedPallets', message: CARGO_REPORT_INVALID_NUMBER_MESSAGE })
+  }
   const revision = Number.isInteger(form?.revision) && form.revision >= 0 ? form.revision : 0
 
   const payload = {
@@ -571,6 +585,7 @@ export function buildCargoReportPayload(form, { catalogVersion = 0 } = {}) {
     cargoType: sanitizeEnum(form?.cargoType, CARGO_TYPE_VALUES),
     titleSuffix: clip(form?.titleSuffix, CARGO_REPORT_LIMITS.text),
     rows,
+    expectedPallets,
     notes: clip(form?.notes, CARGO_REPORT_LIMITS.notes),
     receiptStatus: sanitizeEnum(form?.receiptStatus, RECEIPT_STATUS_VALUES),
     receivedDate: readDateKey(form?.receivedDate),
@@ -602,7 +617,7 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-// Conferência da logística (18 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
+// Conferência da logística (20 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
 // linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
 // recebimento normalizado (S9-E: `nfNumber` é a lista de NFs "NF1; NF2", até 1.000 caracteres). S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
 // do dia do início (sem início, o valor carregado/legado). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
@@ -611,6 +626,8 @@ export function buildConferencePayload(
   {
     okByRowId,
     countOkByRowId,
+    palletsByRowId,
+    damageByRowId,
     labelsByRowId,
     receiptStatus,
     receivedDate,
@@ -628,13 +645,18 @@ export function buildConferencePayload(
   const maps = Object.fromEntries(CONFERENCE_FLAG_MAPS.map((name) => [name, {}]))
   const labels = {}
   const labelSource = isPlainObject(labelsByRowId) ? labelsByRowId : {}
+  const rowIds = (Array.isArray(rows) ? rows : []).map((row) => row?.id).filter((id) => typeof id === 'string')
+  // S10-I: contador por item e observação por item (só linhas que existem). O legado "Contagem OK" passa adiante só
+  // quando a linha ainda não tem número e só como `true`: nunca se cria legado novo.
+  const pallets = readPalletsMap(palletsByRowId, rowIds)
+  const damage = readDamageMap(damageByRowId, rowIds)
 
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const id = row?.id
-    if (typeof id !== 'string') continue
+  for (const id of rowIds) {
     for (const name of CONFERENCE_FLAG_MAPS) {
       const source = isPlainObject(sources[name]) ? sources[name] : {}
-      if (hasOwn(source, id)) maps[name][id] = Boolean(source[id])
+      if (name === 'countOkByRowId') {
+        if (source[id] === true && !hasOwn(pallets, id)) maps[name][id] = true
+      } else if (hasOwn(source, id)) maps[name][id] = Boolean(source[id])
     }
     const entry = isPlainObject(labelSource[id]) ? labelSource[id] : null
     if (!entry) continue
@@ -648,6 +670,8 @@ export function buildConferencePayload(
     status: CARGO_CONFERENCE_STATUS.open,
     okByRowId: maps.okByRowId,
     countOkByRowId: maps.countOkByRowId,
+    palletsByRowId: pallets,
+    damageByRowId: damage,
     labelsByRowId: labels,
     checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(receiptStatus, RECEIPT_STATUS_VALUES),
@@ -729,6 +753,9 @@ export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
     status: isClosed ? CARGO_CONFERENCE_STATUS.closed : CARGO_CONFERENCE_STATUS.open,
     okByRowId: readFlagMap(doc.okByRowId),
     countOkByRowId: readFlagMap(doc.countOkByRowId),
+    // S10-I: doc antigo (sem as chaves) lê como sem contagem e sem observação.
+    palletsByRowId: readPalletsMap(doc.palletsByRowId),
+    damageByRowId: readDamageMap(doc.damageByRowId),
     labelsByRowId: hasOwn(doc, 'labelsByRowId') ? readLabelsMap(doc.labelsByRowId) : labelsFromLegacyRows(legacyRows),
     checkedByName: readText(doc.checkedByName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(footerSource.receiptStatus, RECEIPT_STATUS_VALUES),

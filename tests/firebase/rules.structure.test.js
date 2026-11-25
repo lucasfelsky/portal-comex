@@ -158,7 +158,7 @@ describe('firestore.rules structure', () => {
       }
     })
 
-    it('isValidCargoReportCurrent: hasOnly de 19 chaves e hasAll de 18 (autofill opcional, S9), sem labeledBy/labelMadeBy, limites, revisao e autoria', () => {
+    it('isValidCargoReportCurrent: hasOnly de 20 chaves e hasAll de 18 (autofill S9 e expectedPallets S11 opcionais), sem labeledBy/labelMadeBy, limites, revisao e autoria', () => {
       const fn = rules.match(/function\s+isValidCargoReportCurrent\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
@@ -175,12 +175,22 @@ describe('firestore.rules structure', () => {
       expect(only).not.toBeNull()
       expect(all).not.toBeNull()
       const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
-      // S9: `autofill` entra no hasOnly (19) e fica FORA do hasAll (18): relatorio e bundle antigos continuam gravando.
-      expect(parse(only)).toEqual([...keys, 'autofill'].sort())
+      // S9: `autofill` entra no hasOnly e fica FORA do hasAll: relatorio e bundle antigos continuam gravando.
+      // S11: idem `expectedPallets` (hasOnly 20, hasAll 18).
+      expect(parse(only)).toEqual([...keys, 'autofill', 'expectedPallets'].sort())
       expect(parse(all)).toEqual([...keys].sort())
-      expect(parse(only)).toHaveLength(19)
+      expect(parse(only)).toHaveLength(20)
       expect(parse(all)).toHaveLength(18)
       expect(body).toMatch(/!\('autofill' in request\.resource\.data\)/)
+      // S11: `expectedPallets` = int 1..9999 ou null, opcional e "pegajosa" (a chave gravada nao pode sumir).
+      expect(body).toMatch(/!\('expectedPallets' in request\.resource\.data\)/)
+      expect(body).toMatch(/request\.resource\.data\.expectedPallets\s*==\s*null/)
+      expect(body).toMatch(/expectedPallets is int/)
+      expect(body).toMatch(/expectedPallets\s*>=\s*1/)
+      expect(body).toMatch(/expectedPallets\s*<=\s*9999/)
+      expect(body).toContain(
+        "(resource == null || !('expectedPallets' in resource.data) || 'expectedPallets' in request.resource.data)"
+      )
       expect(body).toMatch(/autofill\.keys\(\)\.hasOnly\(\['schemaVersion', 'snapshotId', 'rows'\]\)/)
       expect(body).toMatch(/autofill\.schemaVersion\s*==\s*1/)
       expect(body).toMatch(/autofill\.snapshotId\.size\(\)\s*<=\s*40/)
@@ -198,7 +208,7 @@ describe('firestore.rules structure', () => {
       expect(body).not.toMatch(/labeledBy|labelMadeBy/)
     })
 
-    it('isValidCargoReportConference: hasOnly + hasAll das 21 chaves, mapas, recebimento, descarga (S8), fechamento e current existente', () => {
+    it('isValidCargoReportConference: hasOnly de 23 chaves e hasAll de 21 (palletsByRowId e damageByRowId S11 opcionais), mapas, recebimento, descarga (S8), fechamento e current existente', () => {
       const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
@@ -230,8 +240,20 @@ describe('firestore.rules structure', () => {
       expect(only).not.toBeNull()
       expect(all).not.toBeNull()
       const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
-      expect(parse(only)).toEqual([...keys].sort())
+      // S11: os 2 mapas novos entram no hasOnly (23) e ficam FORA do hasAll (21): bundle e conferencia antigos continuam gravando.
+      expect(parse(only)).toEqual([...keys, 'palletsByRowId', 'damageByRowId'].sort())
       expect(parse(all)).toEqual([...keys].sort())
+      expect(parse(only)).toHaveLength(23)
+      expect(parse(all)).toHaveLength(21)
+      for (const map of ['palletsByRowId', 'damageByRowId']) {
+        expect(body).toContain(`!('${map}' in request.resource.data)`)
+        expect(body).toMatch(new RegExp(`request\\.resource\\.data\\.${map} is map`))
+        expect(body).toMatch(new RegExp(`request\\.resource\\.data\\.${map}\\.size\\(\\)\\s*<=\\s*200`))
+        // "Pegajosa": depois de gravada, a chave nao pode sumir (bundle antigo recebe "Sem permissao" em vez de apagar dados).
+        expect(body).toContain(`(resource == null || !('${map}' in resource.data) || '${map}' in request.resource.data)`)
+      }
+      // `countOkByRowId` segue igual (legado) e `notes` nao e travado (o legado pre-S7 copia `notes` do current).
+      expect(body).toMatch(/notes\.size\(\)\s*<=\s*2000/)
       expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\/cargoReport\/current\)/)
       expect(body).toMatch(/okByRowId\.size\(\)\s*<=\s*200/)
       expect(body).toMatch(/okByRowId\.values\(\)\.hasOnly\(\[\s*true,\s*false\s*\]\)/)
