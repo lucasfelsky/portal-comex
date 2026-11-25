@@ -399,6 +399,35 @@ describe('fidelidade ao modelo', () => {
   })
 })
 
+// S9-C: PO / PROCESSO passa a trazer a referência do processo; só o conteúdo de B e o cache de H mudam.
+describe('S9-C: PO / PROCESSO = referência', () => {
+  const withReference = () =>
+    mockScenarioForm({
+      rows: mockScenarioForm().rows.map((row) => ({ ...row, po: 'GOOYER SEA 001-26' })),
+    })
+
+  it('B9 sai como texto com a referência e o cache de H usa as 3 primeiras letras (L1GOO)', () => {
+    const form = withReference()
+    form.rows[0].supplierLot = 'L1'
+    const { book, files } = generate(buildSheet(form))
+    const ws = book.Sheets['SQ QUIMICA']
+    expect(ws.B9).toMatchObject({ t: 's', v: 'GOOYER SEA 001-26' })
+    expect(ws.H9.f).toBe('G9&(LEFT(B9,3))')
+    expect(ws.H9.v).toBe('L1GOO')
+    expect(cellXml(sheetXml(files), 'B9')).toContain('t="inlineStr"')
+  })
+
+  it('nenhuma célula nova: o conjunto de células preenchidas é o mesmo do PO numérico', () => {
+    // Refs das células `<c>` que carregam valor (`<v>`) ou fórmula (`<f>`).
+    const filled = (files) =>
+      [...sheetXml(files).matchAll(/<c r="([A-Z]+\d+)"[^>/]*>(?:(?!<\/c>)[\s\S])*?<(?:v|f)>/g)].map((match) => match[1])
+    const numeric = generate(buildSheet())
+    const reference = generate(buildSheet(withReference()))
+    expect(filled(reference.files)).toEqual(filled(numeric.files))
+    for (const name of UNTOUCHED) expect(reference.files[name]).toEqual(numeric.files[name])
+  })
+})
+
 describe('tipo de carga', () => {
   it('AÉREO: as 3 caixas desmarcadas, G6 = AÉREO e G7 = X', () => {
     const { book, files } = generate(buildSheet(mockScenarioForm({ cargoType: 'AEREO' })))

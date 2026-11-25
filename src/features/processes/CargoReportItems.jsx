@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from '../../components/Icon'
+import { SOURCE_MARK_FIELDS, cellOrigin } from './cargoReportAutofill'
 import { CARGO_REPORT_LIMITS, CARGO_REPORT_MAX_ROWS, formatCargoNumber } from './cargoReportFormModel'
 import { GroupHeaderCard, GroupHeaderRow, GroupSummaryNote, GroupSummaryRow } from './CargoReportGroupRows'
 import {
@@ -11,6 +12,7 @@ import {
 } from './cargoReportGroups'
 import CargoReportRowMenu from './CargoReportRowMenu'
 import { readCargoRowQuantity } from './cargoReportRowOps'
+import { MarkedField, SourceLegend, SourceMark } from './CargoReportSourceMarks'
 
 // S3 do Relatório de Carga: itens do FR.CMX.001. Desktop = tabela de 14 colunas (modelo R5);
 // demais variantes = 1 cartão por linha (sem rolagem horizontal). Componente de apresentação:
@@ -19,6 +21,8 @@ import { readCargoRowQuantity } from './cargoReportRowOps'
 // `view` (somente leitura).
 // S9-B: em `edit` cada linha ganha `#` e o menu ⋯ (`onRowAction`); no CONSOLIDADO (`purchaseOrders`) as linhas
 // ficam agrupadas por PO, com cabeçalho, subtotal e "Linha nesta PO".
+// S9-C: em `edit` as células preenchidas do processo e do FUP levam a marca de origem (P, F) ou ✎ quando editadas
+// (`autofillRows`), e a Qtd que difere do item do processo mostra "Processo: X kg" (`quantityMismatch`).
 const MAX_FREE_ROWS = 3
 
 // Coluna LOTE SQ (calculada): o `<col>` acompanha o maior lote da tela; com `table-layout: fixed` uma
@@ -72,7 +76,7 @@ function handleUpperChange(event, commit) {
 }
 
 const DESKTOP_COLUMNS = [
-  { key: 'po', label: 'PO / PROCESSO', width: 96 },
+  { key: 'po', label: 'PO / PROCESSO', width: 172 },
   { key: 'dbcorpCode', label: 'CÓD. DBCORP', width: 92 },
   { key: 'supplierDescription', label: 'DESCRIÇÃO FORNECEDOR', width: 200 },
   { key: 'sqDescription', label: 'DESCRIÇÃO SQ', width: 190 },
@@ -255,6 +259,8 @@ function DesktopTable({
   purchaseOrders,
   onRowAction,
   newRowIds,
+  autofillRows,
+  quantityMismatch,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
@@ -267,12 +273,13 @@ function DesktopTable({
   const segments = buildSegments(rows, purchaseOrders, grouped)
   const renderRowMenu = createRowMenuRenderer({ rows, purchaseOrders, grouped, mobile: false, onRowAction })
 
-  function renderInput(row, index, field) {
+  function renderInput(row, index, field, origin) {
     const errorMessage = errorsByCell?.[`${row.id}:${field}`]
     if (!isEdit) {
       const text = fieldValue(row, field)
       return <span className="crf-text">{text || '—'}</span>
     }
+    const marked = (input) => (SOURCE_MARK_FIELDS.has(field) ? <MarkedField origin={origin}>{input}</MarkedField> : input)
     const inputProps = {
       className: 'c',
       type: 'text',
@@ -282,9 +289,11 @@ function DesktopTable({
       'aria-invalid': errorMessage ? true : undefined,
     }
     if (grouped && field === 'po') {
-      return <CommitOnBlurInput {...inputProps} value={fieldValue(row, field)} onCommit={(value) => onChangeRow(row.id, field, value)} />
+      return marked(
+        <CommitOnBlurInput {...inputProps} value={fieldValue(row, field)} onCommit={(value) => onChangeRow(row.id, field, value)} />
+      )
     }
-    return (
+    return marked(
       <input
         {...inputProps}
         value={fieldValue(row, field)}
@@ -397,14 +406,18 @@ function DesktopTable({
     }
 
     const classes = []
+    const origin = isEdit && SOURCE_MARK_FIELDS.has(column.key) ? cellOrigin(row, autofillRows?.[row.id], column.key) : ''
+    const mismatchKg = isEdit && column.key === 'quantityKg' ? quantityMismatch?.[row.id] : undefined
     if (NUMERIC_FIELDS.has(column.key)) classes.push('num')
     if (column.key === 'supplierLot' && alerts.missingLot) classes.push('warn')
     if (column.key === 'packageWeightKg' && alerts.missingPackageWeight) classes.push('warn')
+    if (origin === 'E') classes.push('is-edited')
     if (errorMessage) classes.push('err')
 
     return (
       <td key={column.key} className={classes.join(' ')}>
-        {renderInput(row, index, column.key)}
+        {renderInput(row, index, column.key, origin)}
+        {typeof mismatchKg === 'number' ? <span className="hint">{`Processo: ${formatCargoKgText(mismatchKg)}`}</span> : null}
         {column.key === 'supplierLot' && alerts.missingLot ? <span className="hint">Falta o lote</span> : null}
         {column.key === 'packageWeightKg' && alerts.missingPackageWeight ? (
           <span className="hint">Falta o peso da emb.</span>
@@ -416,6 +429,7 @@ function DesktopTable({
 
   return (
     <>
+      {isEdit && Object.keys(autofillRows ?? {}).length > 0 ? <SourceLegend /> : null}
       <div className="crf-tw">
         <table className="crf">
           <colgroup>
@@ -524,16 +538,29 @@ function MobileCard({
   menu,
   grouped,
   isNew,
+  autofillEntry,
+  mismatchKg,
 }) {
   const isEdit = mode === 'edit'
   const isConfer = mode === 'confer'
   const rowNumber = index + 1
+  const originOf = (field) => (isEdit ? cellOrigin(row, autofillEntry, field) : '')
   const alerts = info.alerts ?? {}
   const alertText = buildAlertText(alerts)
   // Aberto só em linha nova (sem identificação); decidido uma vez para não fechar enquanto digita.
   const [identificationOpen] = useState(() => !row.po && !row.dbcorpCode && !row.sqDescription && !row.supplierDescription)
   const title = row.sqDescription || row.supplierDescription || `Item ${rowNumber}`
   const reference = [row.po ? `PO ${row.po}` : '', row.dbcorpCode].filter(Boolean).join(' · ')
+
+  // Rótulo do campo com a marca de origem ao lado (a marca não entra no nome acessível do campo).
+  function renderLabel(field, text = FIELD_LABELS[field]) {
+    return (
+      <span className="crf-pair__label">
+        {text}
+        <SourceMark origin={originOf(field)} />
+      </span>
+    )
+  }
 
   function renderField(field, { className = '', placeholder } = {}) {
     const errorMessage = errorsByCell?.[`${row.id}:${field}`]
@@ -605,8 +632,8 @@ function MobileCard({
         <summary>Identificação do item</summary>
         <div className="crf-rc__id-grid">
           {['po', 'dbcorpCode', 'supplierDescription', 'sqDescription'].map((field) => (
-            <div key={field} className="crf-pair">
-              <span className="crf-pair__label">{FIELD_LABELS[field]}</span>
+            <div key={field} className={`crf-pair${originOf(field) === 'E' ? ' is-edited' : ''}`}>
+              {renderLabel(field)}
               {renderField(field)}
             </div>
           ))}
@@ -628,9 +655,12 @@ function MobileCard({
             {renderLabelField(field)}
           </div>
         ))}
-        <div className="crf-pair">
-          <span className="crf-pair__label">Qtd (kg)</span>
+        <div className={`crf-pair${originOf('quantityKg') === 'E' ? ' is-edited' : ''}`}>
+          {renderLabel('quantityKg', 'Qtd (kg)')}
           {renderField('quantityKg')}
+          {isEdit && typeof mismatchKg === 'number' ? (
+            <span className="hint">{`Processo: ${formatCargoKgText(mismatchKg)}`}</span>
+          ) : null}
         </div>
         <div className="crf-pair">
           <span className="crf-pair__label">Contagem</span>
@@ -643,7 +673,7 @@ function MobileCard({
           </span>
         </div>
         <div className={`crf-pair${alerts.missingPackageWeight ? ' warn' : ''}`}>
-          <span className="crf-pair__label">Peso da emb.</span>
+          {renderLabel('packageWeightKg', 'Peso da emb.')}
           {renderField('packageWeightKg', { className: alerts.missingPackageWeight ? 'w' : '', placeholder: 'kg' })}
         </div>
         <div className="crf-pair crf-pair--full">
@@ -694,6 +724,8 @@ export default function CargoReportItems({
   onRowAction,
   newRowIds,
   focusRequest,
+  autofillRows,
+  quantityMismatch,
 }) {
   const containerRef = useRef(null)
   const pendingFocusRef = useRef(false)
@@ -744,6 +776,8 @@ export default function CargoReportItems({
           purchaseOrders={purchaseOrders}
           onRowAction={onRowAction}
           newRowIds={newRowIds}
+          autofillRows={autofillRows}
+          quantityMismatch={quantityMismatch}
         />
       </div>
     )
@@ -770,6 +804,7 @@ export default function CargoReportItems({
           </button>
         ) : null}
       </div>
+      {isEdit && Object.keys(autofillRows ?? {}).length > 0 ? <SourceLegend /> : null}
       {segments.map((segment) => {
         if (segment.type === 'group') {
           return (
@@ -785,6 +820,8 @@ export default function CargoReportItems({
         const { row, rowIndex, number } = segment
         return (
           <MobileCard
+            autofillEntry={autofillRows?.[row.id]}
+            mismatchKg={quantityMismatch?.[row.id]}
             key={row.id}
             row={row}
             index={number - 1}

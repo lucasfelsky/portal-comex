@@ -66,6 +66,7 @@ const RULE_ALLOWLIST = [
   'cargoType', 'titleSuffix', 'rows', 'notes',
   'receiptStatus', 'receivedDate', 'completedDate', 'nfNumber',
   'catalogVersion', 'lastGenerated', 'updatedAt', 'updatedById', 'updatedByName',
+  'autofill', // S9-C: opcional (fora do hasAll das rules)
 ]
 
 describe('papeis', () => {
@@ -270,9 +271,37 @@ describe('buildInitialCargoReport', () => {
     expect(form.status).toBe('rascunho')
     expect(form.catalogVersion).toBe(0)
     expect(form.rows).toHaveLength(2)
-    expect(form.rows[0]).toMatchObject({ po: '4500123', sqDescription: 'DEA FOAM14339 - BB 25KG', quantityKg: 12500 })
+    // S9-C: PO / PROCESSO = referência do processo (name), não mais o número do pedido.
+    expect(form.rows[0]).toMatchObject({ po: 'ACME SEA 021-26', sqDescription: 'DEA FOAM14339 - BB 25KG', quantityKg: 12500 })
+    expect(form.rows.every((row) => row.po === 'ACME SEA 021-26')).toBe(true)
     expect(form.rows[1].quantityKg).toBeNull()
     expect(new Set(form.rows.map((row) => row.id)).size).toBe(2)
+  })
+
+  it('sem referência (name vazio) o PO / PROCESSO cai no número do processo', () => {
+    const form = buildInitialCargoReport({ ...process, name: '  ' })
+    expect(form.rows.every((row) => row.po === '4500123')).toBe(true)
+  })
+
+  it('CONSOLIDADO usa a referência da PO de cada item (sem referência, o número da PO)', () => {
+    const form = buildInitialCargoReport({
+      ...process,
+      category: 'CONSOLIDADO',
+      purchaseOrders: [
+        { po: '4500901', reference: 'ACME SEA 011-26', supplierName: 'ACME' },
+        { po: '4500902', reference: '', supplierName: 'NOVA' },
+      ],
+      items: [
+        { id: 'i1', commercialName: 'A', quantity: 1, poNumber: '4500901' },
+        { id: 'i2', commercialName: 'B', quantity: 2, poNumber: '4500902' },
+        { id: 'i3', commercialName: 'C', quantity: 3, poNumber: '4500999' },
+      ],
+    })
+    expect(form.rows.map((row) => row.po)).toEqual(['ACME SEA 011-26', '4500902', '4500999'])
+  })
+
+  it('o formulário novo já tem o autofill vazio (sem marcas)', () => {
+    expect(buildInitialCargoReport(process).autofill).toEqual({ schemaVersion: 1, snapshotId: '', rows: {} })
   })
 
   it('CONSOLIDADO usa o PO de cada item', () => {
@@ -355,8 +384,10 @@ describe('buildCargoReportPayload', () => {
     const { payload } = buildCargoReportPayload(baseForm())
     for (const key of Object.keys(payload)) expect(RULE_ALLOWLIST).toContain(key)
     // S7: 18 chaves no `current` (sem labeledBy/labelMadeBy); o repositório acrescenta updatedAt/ById/ByName.
-    expect(RULE_ALLOWLIST).toHaveLength(18)
-    expect(Object.keys(payload)).toHaveLength(RULE_ALLOWLIST.length - 3)
+    // S9-C: + `autofill` opcional na allowlist (19); sem ele o payload segue com 15 chaves.
+    expect(RULE_ALLOWLIST).toHaveLength(19)
+    expect(Object.keys(payload)).toHaveLength(RULE_ALLOWLIST.length - 4)
+    expect(payload).not.toHaveProperty('autofill')
     expect(payload).not.toHaveProperty('labeledBy')
     expect(payload).not.toHaveProperty('labelMadeBy')
   })

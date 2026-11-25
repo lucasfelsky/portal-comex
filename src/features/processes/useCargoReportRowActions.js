@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useToast } from '../../components/Toast'
-import { CARGO_REPORT_ROWS_LIMIT_MESSAGE } from './cargoReportFormModel'
+import {
+  autofillForBlankRow,
+  autofillForCopies,
+  autofillForPurchaseOrder,
+  restoreAutofillEntry,
+  takeAutofillEntry,
+} from './cargoReportAutofill'
+import { CARGO_REPORT_ROWS_LIMIT_MESSAGE, createEmptyCargoAutofill } from './cargoReportFormModel'
 import { orderCargoRowsByPurchaseOrder, resolveCargoRowPurchaseOrder } from './cargoReportGroups'
 import {
   duplicateCargoRow,
@@ -30,10 +37,13 @@ function prefersReducedMotion() {
 }
 
 // `purchaseOrders`: POs do consolidado (vazio nos demais tipos). `onChanged`: chamado a cada alteração aplicada
-// (o formulário limpa o aviso de salvamento).
-export default function useCargoReportRowActions({ rows, setForm, purchaseOrders, onChanged }) {
+// (o formulário limpa o aviso de salvamento). `autofillRows`: mapa `autofill.rows` do formulário (S9-C): as
+// operações levam a origem das células junto (inserir herda o PO, duplicar e dividir copiam, remover e desfazer
+// levam e devolvem a entrada, mover de PO regrava a base do PO).
+export default function useCargoReportRowActions({ rows, setForm, purchaseOrders, onChanged, autofillRows }) {
   const toast = useToast()
   const rowsRef = useRef(rows)
+  const autofillRef = useRef(autofillRows ?? {})
   const [splitRowId, setSplitRowId] = useState(null)
   const [newRowIds, setNewRowIds] = useState(() => new Set())
   const [focusRequest, setFocusRequest] = useState(null)
@@ -44,6 +54,10 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
     rowsRef.current = rows
   }, [rows])
 
+  useEffect(() => {
+    autofillRef.current = autofillRows ?? {}
+  }, [autofillRows])
+
   useEffect(
     () => () => {
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
@@ -53,11 +67,21 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
 
   const isGrouped = purchaseOrders.length > 0
 
+  // `carry` (opcional): (mapa autofill.rows) -> mapa novo, aplicado junto com as linhas.
   const commit = useCallback(
-    (nextRows) => {
+    (nextRows, carry) => {
       const ordered = isGrouped ? orderCargoRowsByPurchaseOrder(nextRows, purchaseOrders) : nextRows
       rowsRef.current = ordered
-      setForm((current) => ({ ...current, rows: ordered }))
+      setForm((current) => {
+        const next = { ...current, rows: ordered }
+        if (carry) {
+          const autofill = current.autofill ?? createEmptyCargoAutofill()
+          const entries = carry(autofill.rows ?? {})
+          autofillRef.current = entries
+          next.autofill = { ...autofill, rows: entries }
+        }
+        return next
+      })
       onChanged?.()
     },
     [isGrouped, purchaseOrders, setForm, onChanged]
@@ -77,13 +101,13 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
   }, [])
 
   const finishInsert = useCallback(
-    (result) => {
+    (result, carry) => {
       if (result.error === 'limit') {
         toast.error(CARGO_REPORT_ROWS_LIMIT_MESSAGE)
         return
       }
       if (result.error) return
-      commit(result.rows)
+      commit(result.rows, carry)
       markNew([result.insertedId])
       requestFocus(result.insertedId)
     },
@@ -99,7 +123,7 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
         toast.error(CARGO_REPORT_ROWS_LIMIT_MESSAGE)
         return
       }
-      commit(restored)
+      commit(restored, (entries) => restoreAutofillEntry(entries, removed.row.id, removed.autofillEntry))
       markNew([removed.row.id])
       requestFocus(removed.row.id)
     },
@@ -112,24 +136,34 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
       const groupOf = isGrouped ? (row) => resolveCargoRowPurchaseOrder(row.po, purchaseOrders) : undefined
 
       if (action === 'above' || action === 'below') {
-        finishInsert(insertCargoRow(current, rowId, action))
+        const result = insertCargoRow(current, rowId, action)
+        finishInsert(result, (entries) => autofillForBlankRow(entries, rowId, result.insertedId))
       } else if (action === 'dup') {
-        finishInsert(duplicateCargoRow(current, rowId))
+        const result = duplicateCargoRow(current, rowId)
+        finishInsert(result, (entries) => autofillForCopies(entries, rowId, [result.insertedId]))
       } else if (action === 'addInPo') {
-        finishInsert(insertCargoRowInPurchaseOrder(current, payload?.purchaseOrder, purchaseOrders))
+        const result = insertCargoRowInPurchaseOrder(current, payload?.purchaseOrder, purchaseOrders)
+        const inserted = result.rows.find((row) => row.id === result.insertedId)
+        finishInsert(result, (entries) => autofillForPurchaseOrder(entries, result.insertedId, inserted?.po ?? ''))
       } else if (action === 'split') {
         if (current.some((row) => row.id === rowId)) setSplitRowId(rowId)
       } else if (action === 'up' || action === 'down') {
         commit(moveCargoRow(current, rowId, action === 'up' ? -1 : 1, groupOf))
         requestFocus(rowId, 'menu')
       } else if (action === 'toPo') {
-        commit(moveCargoRowToPurchaseOrder(current, rowId, payload?.purchaseOrder, purchaseOrders))
+        const next = moveCargoRowToPurchaseOrder(current, rowId, payload?.purchaseOrder, purchaseOrders)
+        const before = current.find((row) => row.id === rowId)
+        const moved = next.find((row) => row.id === rowId)
+        const changed = Boolean(moved) && moved.po !== before?.po
+        commit(next, changed ? (entries) => autofillForPurchaseOrder(entries, rowId, moved.po) : undefined)
         markNew([rowId])
         requestFocus(rowId, 'menu')
       } else if (action === 'remove') {
         const { rows: next, removed } = removeCargoRow(current, rowId)
         if (!removed) return
-        commit(next)
+        const taken = takeAutofillEntry(autofillRef.current, rowId)
+        removed.autofillEntry = taken.entry
+        commit(next, (entries) => takeAutofillEntry(entries, rowId).entries)
         const neighbor = next[Math.min(removed.index, next.length - 1)]
         if (neighbor) requestFocus(neighbor.id)
         toast.info(`Linha ${removed.index + 1} removida`, {
@@ -148,7 +182,9 @@ export default function useCargoReportRowActions({ rows, setForm, purchaseOrders
         toast.error(SPLIT_ERRORS[result.error] ?? SPLIT_FALLBACK_ERROR)
         return
       }
-      commit(result.rows)
+      commit(result.rows, (entries) =>
+        autofillForCopies(entries, splitRowId, result.insertedIds, { dropSource: true })
+      )
       setSplitRowId(null)
       markNew(result.insertedIds)
       requestFocus(result.insertedIds[0])

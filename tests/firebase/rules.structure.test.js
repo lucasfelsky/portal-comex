@@ -125,7 +125,7 @@ describe('firestore.rules structure', () => {
       }
     })
 
-    it('isValidCargoReportCurrent: hasOnly + hasAll das 18 chaves (sem labeledBy/labelMadeBy), limites, revisao e autoria', () => {
+    it('isValidCargoReportCurrent: hasOnly de 19 chaves e hasAll de 18 (autofill opcional, S9), sem labeledBy/labelMadeBy, limites, revisao e autoria', () => {
       const fn = rules.match(/function\s+isValidCargoReportCurrent\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
@@ -139,8 +139,16 @@ describe('firestore.rules structure', () => {
       expect(only).not.toBeNull()
       expect(all).not.toBeNull()
       const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
-      expect(parse(only)).toEqual([...keys].sort())
+      // S9: `autofill` entra no hasOnly (19) e fica FORA do hasAll (18): relatorio e bundle antigos continuam gravando.
+      expect(parse(only)).toEqual([...keys, 'autofill'].sort())
       expect(parse(all)).toEqual([...keys].sort())
+      expect(parse(only)).toHaveLength(19)
+      expect(parse(all)).toHaveLength(18)
+      expect(body).toMatch(/!\('autofill' in request\.resource\.data\)/)
+      expect(body).toMatch(/autofill\.keys\(\)\.hasOnly\(\['schemaVersion', 'snapshotId', 'rows'\]\)/)
+      expect(body).toMatch(/autofill\.schemaVersion\s*==\s*1/)
+      expect(body).toMatch(/autofill\.snapshotId\.size\(\)\s*<=\s*40/)
+      expect(body).toMatch(/autofill\.rows\.size\(\)\s*<=\s*200/)
       expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\)/)
       expect(body).toMatch(/formCode\s*==\s*'FR\.CMX\.001'/)
       expect(body).toMatch(/formRevision\s*==\s*'005'/)

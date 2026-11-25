@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import EmptyState from '../../components/EmptyState'
 import Icon from '../../components/Icon'
@@ -9,21 +9,26 @@ import {
   saveCargoReportConference,
   saveCargoReportDraft,
 } from '../../services/cargoReportRepository'
-import { formatDateTime } from '../../utils/dateFormat'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
+import {
+  buildAutofilledCargoReport,
+  buildCargoSources,
+  describeCargoAutofillNote,
+  quantityMismatchByRowId,
+} from './cargoReportAutofill'
 import { CargoReportActionBar } from './CargoReportConcludeDialog'
+import CargoReportHeaderCard from './CargoReportHeaderCard'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
 import CargoReportReceiptSection from './CargoReportReceiptSection'
+import CargoReportRefreshPanel, { CargoInfoIcon } from './CargoReportRefreshPanel'
 import CargoReportSplitDialog from './CargoReportSplitDialog'
 import {
   CARGO_CONFERENCE_STATUS,
   CARGO_REPORT_CONFLICT_CODE,
-  CARGO_REPORT_LIMITS,
   CARGO_REPORT_MAX_ROWS,
   CARGO_REPORT_ROWS_LIMIT_MESSAGE,
   CARGO_STAGE,
-  CARGO_TYPE_OPTIONS,
   buildCargoReportPayload,
   buildConferencePayload,
   buildInitialCargoReport,
@@ -34,7 +39,6 @@ import {
   createCargoReportRowId,
   createEmptyCargoReportRow,
   deriveCargoReportRow,
-  formatCargoReportTitle,
   fromCargoReportDoc,
   fromConferenceDoc,
   getCargoReportStage,
@@ -44,6 +48,7 @@ import {
 import { orderCargoFormByPurchaseOrder, getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { applyCargoReportImport } from './cargoReportImport'
 import { formatCargoDateBr } from './cargoReportSheet'
+import useCargoReportAutofill, { fetchCargoReference } from './useCargoReportAutofill'
 import useCargoReportRowActions from './useCargoReportRowActions'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
@@ -152,47 +157,8 @@ function conferenceKey(conference, rows) {
   })
 }
 
-// dd/MM HH:mm no fuso local (getters locais, sem UTC); `null` -> ''.
-function formatStamp(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${formatClock(date)}`
-}
-
-function firstName(name) {
-  return String(name ?? '').trim().split(/\s+/)[0] ?? ''
-}
-
-function joinParts(...parts) {
-  return parts.filter(Boolean).join(' ')
-}
-
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`
-}
-
-// Rótulo e dica ficam fora um do outro: o nome acessível do campo é só o rótulo.
-function TextField({ label, value, onChange, disabled, maxLength, hint, className = '', type = 'text', placeholder }) {
-  const id = useId()
-  return (
-    <div className={`crf-field ${className}`.trim()}>
-      <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        maxLength={maxLength}
-        disabled={disabled}
-        placeholder={placeholder}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      {hint ? (
-        <span id={`${id}-hint`} className="auto">
-          {hint}
-        </span>
-      ) : null}
-    </div>
-  )
 }
 
 export default function CargoReportForm({ process, profile, variant, onClose }) {
@@ -220,6 +186,28 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const [importFile, setImportFile] = useState(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const importInputRef = useRef(null)
+  // S9-B/C: POs do consolidado (vazio nos demais tipos) e preenchimento automático (processo + FUP).
+  const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
+  const clearFeedback = useCallback(() => setFeedback(null), [])
+  const autofill = useCargoReportAutofill({ process, form, setForm, purchaseOrders, onApplied: clearFeedback })
+  const refreshButtonRef = useRef(null)
+  const wasPanelOpenRef = useRef(false)
+  const isDraftNow = Boolean(canEdit && form && getCargoReportStage(form.status, savedConference.status) === CARGO_STAGE.draft)
+  const { fetched: referenceFetched, refetch: refetchReference } = autofill
+  // COMEX reaberto depois de carregar fechado: o FUP ainda não foi lido.
+  useEffect(() => {
+    if (loadState === 'ready' && isDraftNow && !referenceFetched) refetchReference()
+  }, [loadState, isDraftNow, referenceFetched, refetchReference])
+  // A prévia desmonta ao aplicar ou dispensar: o foco volta ao botão Atualizar em vez de cair no body.
+  const isPanelOpen = Boolean(autofill.panel)
+  useEffect(() => {
+    if (wasPanelOpenRef.current && !isPanelOpen) refreshButtonRef.current?.focus()
+    wasPanelOpenRef.current = isPanelOpen
+  }, [isPanelOpen])
+  const quantityMismatch = useMemo(
+    () => (canEdit && form ? quantityMismatchByRowId(form, process) : {}),
+    [canEdit, form, process]
+  )
 
   useEffect(() => {
     if (!processId || !canOpen) return undefined
@@ -249,17 +237,37 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         setSavedConference(savedConferenceData)
         setConference(savedConferenceData)
 
+        // S9-C: só o admin com o COMEX em rascunho lê o FUP (as rules negam os demais).
+        const isDraftStage = getCargoReportStage(report.current?.status, savedConferenceData.status) === CARGO_STAGE.draft
+        const referenceResult = canEdit && isDraftStage ? await fetchCargoReference(processId) : null
+        if (!isMounted) return
+
         if (report.current) {
           // Consolidado: a ordem do array vira a da tela (por PO) ANTES do baseKey, para nao sujar o formulario.
           const loaded = orderCargoFormByPurchaseOrder(fromCargoReportDoc(report.current), process)
           setForm(loaded)
           setBaseKey(formKey(loaded))
           setIsNew(false)
+          autofill.initialize({
+            reference: referenceResult?.reference,
+            error: referenceResult?.error,
+            fetched: referenceResult !== null,
+          })
         } else {
-          const initial = orderCargoFormByPurchaseOrder(buildInitialCargoReport(process), process)
+          // Relatório novo: preenchido do processo e do FUP (itens só de um lado ficam na prévia, desmarcados).
+          const built = referenceResult
+            ? buildAutofilledCargoReport(process, buildCargoSources(process, referenceResult.reference))
+            : { form: buildInitialCargoReport(process), pending: [] }
+          const initial = orderCargoFormByPurchaseOrder(built.form, process)
           setForm(initial)
           setBaseKey(formKey(initial))
           setIsNew(true)
+          autofill.initialize({
+            reference: referenceResult?.reference,
+            error: referenceResult?.error,
+            pending: built.pending,
+            fetched: referenceResult !== null,
+          })
         }
         setLoadState('ready')
       } catch (error) {
@@ -281,9 +289,14 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const rows = useMemo(() => form?.rows ?? [], [form])
   const derived = useMemo(() => rows.map((row) => deriveCargoReportRow(row, catalog)), [rows, catalog])
   const alertCount = useMemo(() => countCargoReportAlerts(rows, catalog), [rows, catalog])
-  // S9-B: POs do consolidado (vazio nos demais tipos) e operacoes por linha do menu.
-  const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
-  const rowActions = useCargoReportRowActions({ rows, setForm, purchaseOrders, onChanged: () => setFeedback(null) })
+  // S9-B: operações por linha do menu ⋯ (levam a origem das células, `autofill`, junto).
+  const rowActions = useCargoReportRowActions({
+    rows,
+    setForm,
+    purchaseOrders,
+    onChanged: () => setFeedback(null),
+    autofillRows: form?.autofill?.rows,
+  })
 
   if (!processId || !canOpen) return null
 
@@ -545,7 +558,6 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }
 
   const editMode = canEditFields ? 'edit' : canConferNow ? 'confer' : 'view'
-  const cargoTypeHint = form.cargoType ? '' : 'Escolha um tipo'
   const tableBadge = catalog?.exists
     ? `Tabela Item x Emb. v${catalog.version}`
     : catalogError
@@ -553,17 +565,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       : 'Tabela Item x Emb. não importada'
   const versionMismatch =
     catalog?.exists && form.catalogVersion > 0 && form.catalogVersion !== catalog.version
-  const comexStamp = joinParts(formatStamp(form.updatedAt), form.updatedByName ? `por ${firstName(form.updatedByName)}` : '')
-  const logisticsStamp = joinParts(
-    formatStamp(savedConference.updatedAt),
-    savedConference.closedByName ? `por ${savedConference.closedByName}` : ''
-  )
-  const closedLabel = (area, word, stamp) => (stamp ? `${area}: ${word} em ${stamp}` : `${area}: ${word}`)
-  const subtitle = isNew
-    ? 'FR.CMX.001 · revisão 005 · Ainda não salvo'
-    : `FR.CMX.001 · revisão 005 · salvo em ${formatDateTime(form.updatedAt)}${
-        form.updatedByName ? ` por ${form.updatedByName}` : ''
-      } · revisão ${form.revision}`
+  // S9-C: nota do relatório novo (o que o Portal preencheu e de onde veio) enquanto ele não é salvo.
+  const newReportNote = isNew && canEditFields ? describeCargoAutofillNote(autofill) : ''
 
   // Conflito oferece "Recarregar"; a barra de ações pode trazer a própria ação (ex.: "Gravar de novo").
   const feedbackAction =
@@ -624,86 +627,26 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         </div>
       ) : null}
 
-      <section className="crf-card" aria-label="Cabeçalho do relatório">
-        <div className="crf-head">
-          <div>
-            <h3>{formatCargoReportTitle(form.titleSuffix)}</h3>
-            <p className="sub">{subtitle}</p>
-          </div>
-          <div className="crf-badges">
-            {stage === CARGO_STAGE.draft ? (
-              <>
-                <span className="inline-badge inline-badge--warn">COMEX: Rascunho</span>
-                <span className="inline-badge documents-badge--neutral">Logística: Aguardando COMEX</span>
-              </>
-            ) : (
-              <>
-                <span className="inline-badge inline-badge--ok">{closedLabel('COMEX', 'Fechado', comexStamp)}</span>
-                {stage === CARGO_STAGE.comexClosed ? (
-                  <span className="inline-badge inline-badge--warn">Logística: Em conferência</span>
-                ) : (
-                  <span className="inline-badge inline-badge--ok">
-                    {closedLabel('Logística', 'Fechada', logisticsStamp)}
-                  </span>
-                )}
-              </>
-            )}
-            <span className="inline-badge">FR.CMX.001 R5</span>
-          </div>
-        </div>
-
-        <div className="crf-grid top">
-          <div className="crf-field">
-            <label htmlFor={`${radioName}-duimp`}>Nº da DUIMP</label>
-            <input
-              id={`${radioName}-duimp`}
-              type="text"
-              value={process.duimpNumber ?? ''}
-              placeholder="Sem DUIMP no processo"
-              aria-describedby={`${radioName}-duimp-hint`}
-              disabled
-              readOnly
-            />
-            <span id={`${radioName}-duimp-hint`} className="auto">
-              <Icon name="lock" size={12} /> Fixo: vem do processo
-            </span>
-          </div>
-
-          <div className="crf-field" role="group" aria-label="Tipo de carga">
-            <span id={`${radioName}-label`}>Tipo de carga</span>
-            <div className="crf-radios" role="radiogroup" aria-labelledby={`${radioName}-label`}>
-              {CARGO_TYPE_OPTIONS.map((option) => {
-                const selected = form.cargoType === option.value
-                return (
-                  <label key={option.value} className={`crf-radio${selected ? ' on' : ''}${canEditFields ? '' : ' is-disabled'}`}>
-                    <input
-                      type="radio"
-                      name={`${radioName}-cargo-type`}
-                      value={option.value}
-                      aria-label={option.label}
-                      checked={selected}
-                      disabled={!canEditFields}
-                      onChange={() => patchForm({ cargoType: option.value })}
-                    />
-                    <i aria-hidden="true" />
-                    <span aria-hidden="true">{isDesktop ? option.label : (option.shortLabel ?? option.label)}</span>
-                  </label>
-                )
-              })}
-            </div>
-            <span className="auto muted">{cargoTypeHint}</span>
-          </div>
-
-          <TextField
-            label="Título no relatório"
-            value={form.titleSuffix}
-            maxLength={CARGO_REPORT_LIMITS.text}
-            disabled={!canEditFields}
-            hint="PO / referência do processo"
-            onChange={(value) => patchForm({ titleSuffix: value })}
-          />
-        </div>
-      </section>
+      <CargoReportHeaderCard
+        form={form}
+        process={process}
+        stage={stage}
+        savedConference={savedConference}
+        isNew={isNew}
+        isDesktop={isDesktop}
+        canEditFields={canEditFields}
+        onPatch={patchForm}
+        source={
+          canEditFields
+            ? {
+                fupInfo: autofill.fupInfo,
+                supplier: autofill.supplier,
+                readError: autofill.readError,
+                isConsolidated: autofill.sources.context.isConsolidated,
+              }
+            : null
+        }
+      />
 
       <section className="crf-card crf-card--items" aria-label="Itens do relatório">
         <div className="crf-head">
@@ -716,8 +659,42 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
               <span className="inline-badge inline-badge--warn">{plural(alertCount, 'alerta', 'alertas')}</span>
             ) : null}
             {tableBadge ? <span className="inline-badge">{tableBadge}</span> : null}
+            {canEditFields ? (
+              <button
+                ref={refreshButtonRef}
+                type="button"
+                className="secondary-button crf-refresh-btn"
+                disabled={autofill.busy}
+                onClick={autofill.openRefresh}
+              >
+                <Icon name="refresh" size={16} />
+                Atualizar do processo e do FUP
+              </button>
+            ) : null}
           </div>
         </div>
+
+        {autofill.refreshError ? (
+          <div className="error-banner" role="alert">
+            {autofill.refreshError}
+          </div>
+        ) : null}
+        {newReportNote ? (
+          <div className="crf-note crf-note--info crf-refresh">
+            <CargoInfoIcon />
+            <div className="crf-refresh__body">
+              <b>Relatório novo.</b> {newReportNote}
+            </div>
+          </div>
+        ) : null}
+        {canEditFields ? (
+          <CargoReportRefreshPanel
+            panel={autofill.panel}
+            onToggle={autofill.toggleItem}
+            onApply={autofill.applySelected}
+            onDismiss={autofill.dismiss}
+          />
+        ) : null}
 
         <CargoReportItems
           rows={rows}
@@ -739,6 +716,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           onRowAction={canEditFields ? rowActions.handleRowAction : undefined}
           newRowIds={rowActions.newRowIds}
           focusRequest={rowActions.focusRequest}
+          autofillRows={form.autofill?.rows}
+          quantityMismatch={quantityMismatch}
         />
 
         {isDesktop ? (
