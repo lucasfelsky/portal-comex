@@ -2,7 +2,7 @@
 // Repositorios mockados; catalogo SINTETICO. O catalogo e' cacheado por 5 min no modulo do
 // formulario: cada teste avanca o relogio (so' `Date`) para nao herdar o cache do anterior.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockGetCargoReport = vi.fn()
@@ -48,9 +48,19 @@ vi.mock('../../src/features/processes/cargoReportImport', async (importOriginal)
   readCargoReportWorkbook: (...args) => mockReadImport(...args),
 }))
 
+import { ToastProvider } from '../../src/components/Toast'
 import CargoReportForm from '../../src/features/processes/CargoReportForm'
-import { toCargoDateKey } from '../../src/features/processes/cargoReportFormModel'
+import { buildConferencePayload, toCargoDateKey } from '../../src/features/processes/cargoReportFormModel'
+import {
+  duplicateCargoRow,
+  removeCargoRow,
+  restoreCargoRow,
+  splitCargoRow,
+} from '../../src/features/processes/cargoReportRowOps'
 import { buildCargoReportFileName, formatCargoDateBr } from '../../src/features/processes/cargoReportSheet'
+
+// S9-B: o formulario usa toast (Desfazer, Dividido em N lotes); no app o provider vive em main.jsx.
+const render = (ui, options) => rtlRender(ui, { wrapper: ToastProvider, ...options })
 
 const ADMIN = { uid: 'admin-1', name: 'Lucas Admin', email: 'lucas@sqquimica.com', role: 'admin' }
 const LOGISTICA = { uid: 'log-1', name: 'Operador Logística', email: 'op@sqquimica.com', role: 'logistica' }
@@ -1794,8 +1804,9 @@ describe('S6/S7: Salvar e fechar (COMEX) relê a conferência no servidor', () =
 })
 
 describe('S6: coluna LOTE SQ sem corte (largura do <col> pelo maior lote)', () => {
-  const lotSqCol = (container) => container.querySelectorAll('colgroup col')[6]
-  const lotSqCells = (container) => [...container.querySelectorAll('tbody tr[data-row-index] td:nth-child(7)')]
+  // S9-B: em edicao (admin) a tabela ganha a coluna # antes das 14 de sempre e a coluna do menu depois.
+  const lotSqCol = (container) => container.querySelectorAll('colgroup col')[7]
+  const lotSqCells = (container) => [...container.querySelectorAll('tbody tr[data-row-index] td:nth-child(8)')]
   const withLots = (lots, po = 'GOO 021-26') =>
     mockGetCargoReport.mockResolvedValue({
       current: currentDoc({ rows: lots.map((supplierLot, index) => row({ id: `r-${index + 1}`, po, supplierLot })) }),
@@ -1843,9 +1854,11 @@ describe('S6: coluna LOTE SQ sem corte (largura do <col> pelo maior lote)', () =
   it('as demais colunas continuam em px', async () => {
     const { container } = await renderForm()
     const widths = [...container.querySelectorAll('colgroup col')].map((col) => col.style.width)
-    expect(widths[5]).toBe('112px')
-    expect(widths[0]).toBe('96px')
-    expect(widths).toHaveLength(14)
+    expect(widths[6]).toBe('112px')
+    expect(widths[1]).toBe('96px')
+    expect(widths[0]).toBe('36px')
+    expect(widths[15]).toBe('52px')
+    expect(widths).toHaveLength(16)
   })
 })
 
@@ -2432,5 +2445,428 @@ describe('S8: descarga, data de recebimento fixa e etiquetagem', () => {
     expect(etiquetagem()).toHaveAttribute('aria-checked', 'true')
     // O selo dos cartões continua o mesmo componente: mesmas classes do OK? da linha.
     expect(etiquetagem().className).toBe(screen.getByRole('checkbox', { name: 'OK? da linha 3' }).className.replace('documents-badge--neutral', 'inline-badge--ok'))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// S9-B: linhas e lotes em qualquer ponto (menu ⋯), dividir, desfazer, mover entre POs, consolidado agrupado
+// ---------------------------------------------------------------------------
+describe('S9-B: menu ⋯ por linha (admin, rascunho aberto)', () => {
+  const openRowMenu = async (user, number) => {
+    await user.click(screen.getByRole('button', { name: `Ações da linha ${number}` }))
+    return screen.getByRole('menu', { name: `Ações da linha ${number}` })
+  }
+  const pick = async (user, name) => user.click(screen.getByRole('menuitem', { name }))
+  const sqValues = () => screen.getAllByLabelText(/^Descrição SQ da linha/).map((input) => input.value)
+
+  it('admin no estágio 1 (desktop) vê a coluna # e o botão ⋯ de cada linha', async () => {
+    await renderForm()
+    expect(screen.getByRole('columnheader', { name: '#' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Ações' })).toBeInTheDocument()
+    for (const number of [1, 2, 3, 4, 5]) {
+      expect(screen.getByRole('button', { name: `Ações da linha ${number}` })).toHaveAttribute('aria-haspopup', 'menu')
+    }
+    expect(screen.queryByRole('button', { name: 'Ações da linha 6' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Adicionar linha no fim' })).toBeInTheDocument()
+    expect(screen.getByText(/Qtd total:/)).toHaveTextContent('Qtd total: 21.800 kg')
+  })
+
+  it('a logística e os estágios 2 e 3 NÃO veem # nem ⋯', async () => {
+    const logistics = await renderForm({ profile: LOGISTICA })
+    expect(screen.queryByRole('columnheader', { name: '#' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Ações da linha/ })).not.toBeInTheDocument()
+    logistics.unmount()
+
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ status: 'concluido' }), conference: conferenceDoc() })
+    await renderForm()
+    expect(screen.queryByRole('columnheader', { name: '#' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Ações da linha/ })).not.toBeInTheDocument()
+  })
+
+  it('Linha abaixo insere uma linha vazia com o PO da linha, na posição certa e com o foco nela', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 1)
+    await pick(user, 'Linha abaixo')
+
+    expect(screen.getAllByLabelText(/^PO \/ processo da linha/)).toHaveLength(6)
+    expect(screen.getByLabelText('PO / processo da linha 2')).toHaveValue('4500123')
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('')
+    expect(screen.getByLabelText('Descrição SQ da linha 3')).toHaveValue('DEGALAN 64/12 N - CX 25KG')
+    expect(screen.getByLabelText('PO / processo da linha 2')).toHaveFocus()
+  })
+
+  it('Linha acima insere antes; Duplicar copia a linha sem o lote', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 1)
+    await pick(user, 'Linha acima')
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('')
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('DEA FOAM14339 - BB 25KG')
+
+    await openRowMenu(user, 2)
+    await pick(user, 'Duplicar (outro lote)')
+    expect(screen.getAllByLabelText(/^Descrição SQ da linha/)).toHaveLength(7)
+    expect(screen.getByLabelText('Descrição SQ da linha 3')).toHaveValue('DEA FOAM14339 - BB 25KG')
+    expect(screen.getByLabelText('Lote fornecedor da linha 2')).toHaveValue('DF2406A')
+    expect(screen.getByLabelText('Lote fornecedor da linha 3')).toHaveValue('')
+    expect(screen.getByLabelText('Qtd (kg) da linha 3')).toHaveValue('12.500')
+  })
+
+  it('Mover para cima/baixo troca com o vizinho, devolve o foco ao ⋯ da linha e some nas pontas', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 1)
+    expect(screen.queryByRole('menuitem', { name: 'Mover para cima' })).not.toBeInTheDocument()
+    await pick(user, 'Mover para baixo')
+    expect(sqValues().slice(0, 2)).toEqual(['DEGALAN 64/12 N - CX 25KG', 'DEA FOAM14339 - BB 25KG'])
+    expect(screen.getByRole('button', { name: 'Ações da linha 2' })).toHaveFocus()
+
+    await openRowMenu(user, 2)
+    await pick(user, 'Mover para cima')
+    expect(sqValues().slice(0, 2)).toEqual(['DEA FOAM14339 - BB 25KG', 'DEGALAN 64/12 N - CX 25KG'])
+
+    await openRowMenu(user, 5)
+    expect(screen.queryByRole('menuitem', { name: 'Mover para baixo' })).not.toBeInTheDocument()
+  })
+
+  it('remover mostra "Linha 1 removida" com Desfazer; Desfazer devolve a linha no mesmo lugar', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 1)
+    await pick(user, 'Remover linha')
+
+    expect(screen.getByText('Linha 1 removida')).toBeInTheDocument()
+    expect(sqValues()).toHaveLength(4)
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEGALAN 64/12 N - CX 25KG')
+
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }))
+    expect(sqValues()).toHaveLength(5)
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEA FOAM14339 - BB 25KG')
+    expect(screen.getByLabelText('Lote fornecedor da linha 1')).toHaveValue('DF2406A')
+    expect(screen.getByLabelText('PO / processo da linha 1')).toHaveFocus()
+    // voltou ao que estava gravado: nada a salvar
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
+  })
+
+  it('remover sem desfazer suja o formulário e o rascunho grava sem a linha', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 3)
+    await pick(user, 'Remover linha')
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    const rows = mockSaveDraft.mock.calls[0][1].rows
+    expect(rows.map((item) => item.id)).toEqual(['r-1', 'r-2', 'r-4', 'r-5'])
+  })
+
+  it('Dividir em lotes: diálogo com a soma, aplica no lugar da linha e o rascunho grava N linhas com ids distintos', async () => {
+    const { user } = await renderForm()
+    await openRowMenu(user, 1)
+    await pick(user, /Dividir em lotes/)
+
+    const dialog = screen.getByRole('dialog', { name: 'Dividir em lotes' })
+    expect(dialog).toHaveTextContent(/total 12\.500 kg\./)
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Soma dos lotes: 12.500 kg de 12.500 kg. Fecha certinho.')
+
+    // o Modal foca o "Lote 1" com um pequeno atraso (setTimeout); digitar antes disso deixava o foco pular no meio da digitação (instável no CI)
+    await waitFor(() => expect(within(dialog).getByLabelText('Lote 1')).toHaveFocus())
+    // soma errada bloqueia
+    const lastQty = within(dialog).getByLabelText('Quantidade do lote 3')
+    await user.clear(lastQty)
+    await user.type(lastQty, '100')
+    expect(within(dialog).getByRole('button', { name: 'Dividir' })).toBeDisabled()
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Falta ou sobra')
+    await user.clear(lastQty)
+    await user.type(lastQty, '4.180')
+    await user.type(within(dialog).getByLabelText('Lote 1'), 'L-A')
+    await user.click(within(dialog).getByRole('button', { name: 'Dividir' }))
+
+    expect(screen.getByText('Dividido em 3 lotes')).toBeInTheDocument()
+    expect(sqValues()).toHaveLength(7)
+    expect(screen.getByLabelText('Qtd (kg) da linha 1')).toHaveValue('4.160')
+    expect(screen.getByLabelText('Qtd (kg) da linha 3')).toHaveValue('4.180')
+    expect(screen.getByLabelText('Lote fornecedor da linha 1')).toHaveValue('L-A')
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('DEA FOAM14339 - BB 25KG')
+    expect(screen.getByLabelText('Descrição SQ da linha 4')).toHaveValue('DEGALAN 64/12 N - CX 25KG')
+
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    const rows = mockSaveDraft.mock.calls[0][1].rows
+    expect(rows).toHaveLength(7)
+    expect(new Set(rows.map((item) => item.id)).size).toBe(7)
+    expect(rows.slice(0, 3).map((item) => item.quantityKg)).toEqual([4160, 4160, 4180])
+    expect(rows.slice(0, 3).every((item) => item.sqDescription === 'DEA FOAM14339 - BB 25KG' && item.po === '4500123')).toBe(true)
+  })
+
+  it('Dividir em lotes fica desabilitado em linha sem quantidade', async () => {
+    const { user } = await renderForm()
+    await user.clear(screen.getByLabelText('Qtd (kg) da linha 1'))
+    await openRowMenu(user, 1)
+    expect(screen.getByRole('menuitem', { name: /Dividir em lotes/ })).toBeDisabled()
+  })
+
+  it('com 200 linhas os itens de inserir, duplicar e dividir ficam desabilitados com a dica do limite', async () => {
+    const full = Array.from({ length: 200 }, (_, index) => row({ id: `f-${index + 1}`, supplierLot: `L${index}` }))
+    mockGetCargoReport.mockResolvedValue({ current: currentDoc({ rows: full }), conference: conferenceDoc() })
+    const { user } = await renderForm()
+
+    const menu = await openRowMenu(user, 1)
+    for (const name of [/Linha acima/, /Linha abaixo/, /Duplicar/, /Dividir em lotes/]) {
+      expect(within(menu).getByRole('menuitem', { name })).toBeDisabled()
+    }
+    expect(within(menu).getAllByText('Limite de 200 linhas')).toHaveLength(4)
+    expect(within(menu).getByRole('menuitem', { name: 'Remover linha' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Adicionar linha no fim' })).not.toBeInTheDocument()
+  })
+
+  it('celular: o ⋯ do cartão abre o ActionSheet e Remover linha mostra o toast com Desfazer', async () => {
+    const { user } = await renderForm({ variant: 'mobile' })
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 2' }))
+    const sheet = screen.getByRole('dialog', { name: 'Linha 2' })
+    expect(within(sheet).getByRole('button', { name: 'Dividir em lotes…' })).toBeInTheDocument()
+
+    await user.click(within(sheet).getByRole('button', { name: 'Remover linha' }))
+    expect(screen.getByText('Linha 2 removida')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ações da linha 5' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }))
+    expect(screen.getByRole('button', { name: 'Ações da linha 5' })).toBeInTheDocument()
+  })
+})
+
+describe('S9-B: consolidado agrupado por PO', () => {
+  const PURCHASE_ORDERS = [
+    { po: '4500901', reference: 'ACME SEA 011-26', supplierName: 'ACME RESINS CO' },
+    { po: '4500902', reference: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS' },
+    { po: '4500903', reference: 'ORION SEA 007-26', supplierName: 'ORION CHEM CO' },
+  ]
+  const CONSOLIDATED = {
+    id: 'p2',
+    name: 'CON DG 009-26',
+    processNumber: '9009',
+    category: 'CONSOLIDADO',
+    purchaseOrders: PURCHASE_ORDERS,
+    items: [{ id: 'i1', commercialName: 'RESINA EPOXI ER-100', quantity: 6000, poNumber: '4500901' }],
+  }
+  const consRow = (id, po, sq, quantityKg) => row({ id, po, sqDescription: sq, quantityKg, dbcorpCode: '' })
+  const consDoc = (rows) => currentDoc({ cargoType: 'CONSOLIDADO', titleSuffix: 'CON DG 009-26', rows })
+  const consRows = () => [
+    consRow('c1', 'ACME SEA 011-26', 'ENDURECEDOR EH-20', 6000),
+    consRow('c2', 'NOVA SEA 034-26', 'PLASTIFICANTE DOP', 22000),
+    consRow('c3', 'NOVA SEA 034-26', 'RESINA EPOXI ER-100', 18000),
+  ]
+  const loadConsolidated = (rows = consRows()) =>
+    mockGetCargoReport.mockResolvedValue({ current: consDoc(rows), conference: conferenceDoc({ okByRowId: {}, countOkByRowId: {}, labelsByRowId: {} }) })
+  const groupRows = () => [...document.querySelectorAll('tr.crf-group')]
+
+  it('mostra cabeçalho por PO (referência, pedido, fornecedor, linhas), subtotal, PO sem itens e total', async () => {
+    loadConsolidated()
+    await renderForm({ process: CONSOLIDATED })
+
+    expect(groupRows()).toHaveLength(3)
+    expect(groupRows()[0]).toHaveTextContent('ACME SEA 011-26')
+    expect(groupRows()[0]).toHaveTextContent('Pedido DBCorp 4500901 · ACME RESINS CO · 1 linha')
+    expect(groupRows()[1]).toHaveTextContent('Pedido DBCorp 4500902 · NOVA POLYMERS · 2 linhas')
+    expect(groupRows()[2]).toHaveTextContent('Pedido DBCorp 4500903 · ORION CHEM CO · 0 linhas')
+    const summaries = [...document.querySelectorAll('tr.crf-gsum')].map((node) => node.textContent)
+    expect(summaries).toEqual([
+      'Subtotal da PO: 6.000 kg',
+      'Subtotal da PO: 40.000 kg',
+      'PO sem itens neste relatório. Use “Linha nesta PO”.',
+    ])
+    expect(screen.getByText(/Qtd total do consolidado:/)).toHaveTextContent('Qtd total do consolidado: 46.000 kg em 3 linhas')
+    expect(screen.getAllByRole('button', { name: /^Linha nesta PO/ })).toHaveLength(3)
+    // numeração corrida entre os grupos
+    expect(screen.getByLabelText('Descrição SQ da linha 3')).toHaveValue('RESINA EPOXI ER-100')
+  })
+
+  it('"Linha nesta PO" insere no fim do grupo, com a referência da PO e o foco na linha nova', async () => {
+    loadConsolidated()
+    const { user } = await renderForm({ process: CONSOLIDATED })
+
+    await user.click(screen.getByRole('button', { name: 'Linha nesta PO ORION SEA 007-26' }))
+
+    expect(screen.getByLabelText('PO / processo da linha 4')).toHaveValue('ORION SEA 007-26')
+    expect(screen.getByLabelText('PO / processo da linha 4')).toHaveFocus()
+    expect(groupRows()[2]).toHaveTextContent('1 linha')
+    expect(document.querySelectorAll('tr.crf-gsum')[2]).toHaveTextContent('Subtotal da PO: 0 kg')
+  })
+
+  it('Mover para outra PO (submenu) troca o PO pela referência e reagrupa; a PO atual vem desabilitada', async () => {
+    loadConsolidated()
+    const { user } = await renderForm({ process: CONSOLIDATED })
+
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 1' }))
+    await user.click(screen.getByRole('menuitem', { name: /Mover para outra PO/ }))
+    const sub = screen.getByRole('menu', { name: 'POs desta consolidada' })
+    expect(within(sub).getByRole('menuitem', { name: /ACME SEA 011-26/ })).toBeDisabled()
+    await user.click(within(sub).getByRole('menuitem', { name: /ORION SEA 007-26/ }))
+
+    expect(groupRows()[0]).toHaveTextContent('0 linhas')
+    expect(groupRows()[2]).toHaveTextContent('1 linha')
+    expect(screen.getByLabelText('PO / processo da linha 3')).toHaveValue('ORION SEA 007-26')
+    expect(screen.getByLabelText('Descrição SQ da linha 3')).toHaveValue('ENDURECEDOR EH-20')
+
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    expect(mockSaveDraft.mock.calls[0][1].rows.map((item) => [item.id, item.po])).toEqual([
+      ['c2', 'NOVA SEA 034-26'],
+      ['c3', 'NOVA SEA 034-26'],
+      ['c1', 'ORION SEA 007-26'],
+    ])
+  })
+
+  it('Mover para cima/baixo no consolidado não cruza a PO', async () => {
+    loadConsolidated()
+    const { user } = await renderForm({ process: CONSOLIDATED })
+
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 1' }))
+    expect(screen.queryByRole('menuitem', { name: 'Mover para baixo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Mover para cima' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 2' }))
+    expect(screen.queryByRole('menuitem', { name: 'Mover para cima' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('menuitem', { name: 'Mover para baixo' }))
+    expect(screen.getByLabelText('Descrição SQ da linha 2')).toHaveValue('RESINA EPOXI ER-100')
+  })
+
+  it('relatório antigo fora de ordem abre ordenado por PO sem sujar o formulário; linha sem PO reconhecida vai ao grupo final', async () => {
+    loadConsolidated([
+      consRow('c3', 'NOVA SEA 034-26', 'RESINA EPOXI ER-100', 18000),
+      consRow('c9', '4500903', 'SOLVENTE XIL-9', 4000),
+      consRow('c1', '4500901', 'ENDURECEDOR EH-20', 6000),
+      consRow('c0', 'TEXTO LIVRE', 'AVULSO', 100),
+    ])
+    await renderForm({ process: CONSOLIDATED })
+
+    expect(screen.getAllByLabelText(/^Descrição SQ da linha/).map((input) => input.value)).toEqual([
+      'ENDURECEDOR EH-20',
+      'RESINA EPOXI ER-100',
+      'SOLVENTE XIL-9',
+      'AVULSO',
+    ])
+    expect(groupRows()).toHaveLength(4)
+    expect(groupRows()[3]).toHaveTextContent('Linhas sem PO desta consolidada')
+    expect(screen.getByRole('button', { name: 'Salvar rascunho' })).toBeDisabled()
+  })
+
+  it('editar o PO da linha só vale ao sair do campo e a linha muda de grupo', async () => {
+    loadConsolidated()
+    const { user } = await renderForm({ process: CONSOLIDATED })
+
+    const field = screen.getByLabelText('PO / processo da linha 1')
+    await user.clear(field)
+    await user.type(field, 'ORION SEA 007-26')
+    // ainda no grupo da ACME enquanto digita
+    expect(groupRows()[0]).toHaveTextContent('1 linha')
+    await user.tab()
+    expect(groupRows()[0]).toHaveTextContent('0 linhas')
+    expect(groupRows()[2]).toHaveTextContent('1 linha')
+  })
+
+  it('a logística vê o consolidado sem grupos, sem # e sem ⋯ (como antes)', async () => {
+    loadConsolidated()
+    await renderForm({ process: CONSOLIDATED, profile: LOGISTICA })
+    expect(groupRows()).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /^Ações da linha/ })).not.toBeInTheDocument()
+  })
+
+  it('celular: cartões agrupados por PO com cabeçalho, subtotal e "Linha nesta PO"', async () => {
+    loadConsolidated()
+    const { user } = await renderForm({ process: CONSOLIDATED, variant: 'mobile' })
+
+    expect(document.querySelectorAll('.crf-group--card')).toHaveLength(3)
+    expect(document.querySelectorAll('.crf-gsum--card')[0]).toHaveTextContent('Subtotal da PO: 6.000 kg')
+    expect(screen.queryByRole('button', { name: 'Adicionar item' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ações da linha 1' }))
+    const sheet = screen.getByRole('dialog', { name: 'Linha 1' })
+    expect(within(sheet).getByRole('button', { name: /Mover para ORION SEA 007-26/ })).toBeEnabled()
+    expect(within(sheet).getByRole('button', { name: /Mover para ACME SEA 011-26/ })).toBeDisabled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// S9-B: a conferência da logística continua intacta (mapas por rowId)
+// ---------------------------------------------------------------------------
+describe('S9-B: conferência intacta ao remover, duplicar, dividir e desfazer', () => {
+  const okOf = (number) => screen.getByRole('checkbox', { name: `OK? da linha ${number}` })
+  const openAndPick = async (user, number, name) => {
+    await user.click(screen.getByRole('button', { name: `Ações da linha ${number}` }))
+    await user.click(screen.getByRole('menuitem', { name }))
+  }
+  // r-1 tem OK?, contagem e etiquetas na conferência de teste (conferenceDoc).
+  const CONFERENCE = conferenceDoc()
+  const rowsAfter = () => mockSaveDraft.mock.calls[0][1].rows
+
+  it('Desfazer devolve o mesmo id e a linha volta com o OK? que tinha', async () => {
+    const { user } = await renderForm()
+    expect(okOf(1)).toHaveAttribute('aria-checked', 'true')
+    await openAndPick(user, 1, 'Remover linha')
+    // a linha 1 agora é a antiga linha 2 (também com OK?); a r-3 nunca teve
+    expect(okOf(2)).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }))
+    expect(okOf(1)).toHaveAttribute('aria-checked', 'true')
+    expect(okOf(3)).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByLabelText('Descrição SQ da linha 1')).toHaveValue('DEA FOAM14339 - BB 25KG')
+  })
+
+  it('duplicar e dividir criam linhas sem OK?; a original duplicada mantém a marca', async () => {
+    const { user } = await renderForm()
+    await openAndPick(user, 1, 'Duplicar (outro lote)')
+    expect(okOf(1)).toHaveAttribute('aria-checked', 'true')
+    expect(okOf(2)).toHaveAttribute('aria-checked', 'false')
+
+    await openAndPick(user, 1, /Dividir em lotes/)
+    await user.click(screen.getByRole('button', { name: 'Dividir' }))
+    // linhas 1-3 são as divididas (ids novos): nenhuma herda o OK? da original
+    for (const number of [1, 2, 3]) expect(okOf(number)).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('o rascunho gravado mantém o id da linha com conferência quando nada nela muda', async () => {
+    const { user } = await renderForm()
+    await openAndPick(user, 2, 'Linha abaixo')
+    await user.click(screen.getByRole('button', { name: 'Salvar rascunho' }))
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1))
+    expect(rowsAfter().map((item) => item.id)).toContain('r-1')
+    expect(rowsAfter().map((item) => item.id)).toContain('r-2')
+  })
+
+  it('o payload da conferência poda por rowId: removida sai, nova não tem OK?, restaurada volta com a marca', () => {
+    const base = currentDoc().rows
+    const payloadFor = (rows) => buildConferencePayload({ ...CONFERENCE, revision: 2 }, rows, { actorName: 'Op' })
+
+    const initial = payloadFor(base)
+    expect(initial.okByRowId).toMatchObject({ 'r-1': true, 'r-2': true, 'r-4': true })
+    expect(initial.okByRowId).not.toHaveProperty('orfa')
+
+    const removed = removeCargoRow(base, 'r-1')
+    const afterRemove = payloadFor(removed.rows)
+    expect(afterRemove.okByRowId).not.toHaveProperty('r-1')
+    expect(afterRemove.countOkByRowId).not.toHaveProperty('r-1')
+    expect(afterRemove.labelsByRowId).not.toHaveProperty('r-1')
+    expect(afterRemove.okByRowId['r-2']).toBe(true)
+
+    const restored = restoreCargoRow(removed.rows, removed.removed)
+    expect(restored.map((item) => item.id)).toEqual(base.map((item) => item.id))
+    expect(payloadFor(restored)).toEqual(initial)
+
+    const duplicated = duplicateCargoRow(base, 'r-1')
+    const afterDup = payloadFor(duplicated.rows)
+    expect(afterDup.okByRowId['r-1']).toBe(true)
+    expect(afterDup.okByRowId).not.toHaveProperty(duplicated.insertedId)
+    expect(afterDup.labelsByRowId).not.toHaveProperty(duplicated.insertedId)
+
+    const split = splitCargoRow(base, 'r-1', [
+      { supplierLot: 'A', quantityKg: 6250 },
+      { supplierLot: 'B', quantityKg: 6250 },
+    ])
+    const afterSplit = payloadFor(split.rows)
+    expect(afterSplit.okByRowId).not.toHaveProperty('r-1')
+    expect(afterSplit.labelsByRowId).not.toHaveProperty('r-1')
+    for (const id of split.insertedIds) {
+      expect(afterSplit.okByRowId).not.toHaveProperty(id)
+      expect(afterSplit.countOkByRowId).not.toHaveProperty(id)
+    }
+    expect(afterSplit.okByRowId['r-2']).toBe(true)
   })
 })

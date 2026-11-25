@@ -383,6 +383,17 @@ const ICONS = {
       <circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none" />
     </>
   ),
+  // Menu de linha do Relatorio de Carga (S9): duplicar, dividir em lotes, subir, descer, mover de PO.
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </>
+  ),
+  split: <path d="M12 3v7M12 10 5 21M12 10l7 11" />,
+  'arrow-up': <path d="m6 15 6-6 6 6" />,
+  'arrow-down': <path d="m6 9 6 6 6-6" />,
+  move: <path d="M5 9h14M5 15h14" />,
   robot: (
     <>
       <rect x="4" y="7" width="16" height="12" rx="3" />

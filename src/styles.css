@@ -24833,3 +24833,385 @@ table.crf {
 .crf-field input[aria-invalid="true"] {
   border-color: var(--danger-700);
 }
+
+/* ============================================================
+   S9-B DO RELATORIO DE CARGA - MENU DA LINHA, DIVIDIR EM LOTES, GRUPOS POR PO, TOAST COM ACAO
+   Mock aprovado (s9.html). So tokens do tema, sem media queries (o bloco "reduce desktop" continua sendo o
+   ultimo bloco de midia do arquivo): o celular usa a classe .crf-wrap--mobile (a variante vem do JS) e a animacao de destaque da linha
+   so e aplicada pelo JS quando o usuario nao pediu movimento reduzido. Bloco APPEND-ONLY.
+   ============================================================ */
+.crf-rowbtn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.crf-rowbtn:hover,
+.crf-rowbtn[aria-expanded="true"] {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+
+.crf-rowbtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.crf-wrap--mobile .crf-rowbtn {
+  width: 44px;
+  height: 44px;
+}
+
+.crf-rc__tools {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.crf-rowmenu {
+  position: fixed;
+  z-index: 150;
+  display: grid;
+  min-width: 230px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.crf-rowmenu__sec {
+  padding: 6px 10px 2px;
+  color: var(--text-muted);
+  font-size: var(--fs-caption-2);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crf-rowmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.crf-rowmenu__item svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.crf-rowmenu__item:hover:not(:disabled),
+.crf-rowmenu__item:focus-visible,
+.crf-rowmenu__has-sub:hover > .crf-rowmenu__trigger {
+  background: var(--surface-alt);
+}
+
+.crf-rowmenu__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.crf-rowmenu__item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.crf-rowmenu__item--danger,
+.crf-rowmenu__item--danger svg {
+  color: var(--danger-700);
+}
+
+.crf-rowmenu__item--danger:hover:not(:disabled),
+.crf-rowmenu__item--danger:focus-visible {
+  background: var(--danger-50);
+}
+
+.crf-rowmenu__text {
+  display: grid;
+  gap: 1px;
+}
+
+.crf-rowmenu__text small {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+
+.crf-rowmenu__line {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.crf-rowmenu__has-sub {
+  position: relative;
+}
+
+.crf-rowmenu__chev {
+  display: inline-flex;
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.crf-rowmenu__sub {
+  position: absolute;
+  top: -6px;
+  left: calc(100% - 2px);
+  display: grid;
+  min-width: 250px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.crf-rowmenu__sub--left {
+  right: calc(100% - 2px);
+  left: auto;
+}
+
+.crf-rowmenu__sub--up {
+  top: auto;
+  bottom: -6px;
+}
+
+tr.crf-group td {
+  padding: 9px 12px;
+  border-top: 0;
+  background: var(--navy);
+  color: var(--sidebar-ink);
+}
+
+.crf-group__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* A tabela rola na horizontal: o cabecalho do grupo (referencia e "Linha nesta PO") acompanha a janela visivel. */
+.crf-tw {
+  container-type: inline-size;
+}
+
+tr.crf-group .crf-group__bar {
+  position: sticky;
+  left: 12px;
+  width: calc(100cqw - 24px);
+}
+
+.crf-group__ref {
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+}
+
+.crf-group__meta {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.crf-group__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--sidebar-ink) 60%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sidebar-ink);
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.crf-group__add:hover {
+  background: color-mix(in srgb, var(--sidebar-ink) 14%, transparent);
+}
+
+.crf-group__add:focus-visible {
+  outline: 2px solid var(--sidebar-ink);
+  outline-offset: 2px;
+}
+
+tr.crf-gsum td {
+  padding: 6px 12px;
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.crf-group--card {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--navy);
+  color: var(--sidebar-ink);
+}
+
+.crf-gsum--card {
+  padding: 4px 4px 2px;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.crf .crf-idx {
+  padding-top: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-caption);
+  text-align: left;
+  vertical-align: top;
+}
+
+.crf .crf-act {
+  text-align: center;
+}
+
+.crf-total {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-addbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.crf-addbar .crf-total {
+  margin: 0;
+}
+
+.crf-addbar__btn {
+  min-height: 36px;
+}
+
+.crf tr.is-new td {
+  background-color: var(--primary-50);
+}
+
+.crf-rc.is-new {
+  background-color: var(--primary-50);
+}
+
+.crf-split .modal__body {
+  display: grid;
+}
+
+.crf-split__sub {
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-split__lots {
+  display: grid;
+  gap: 8px;
+}
+
+.crf-split-row {
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.crf-split-row--head {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.crf-split-row__n {
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-split-row input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-subhead);
+}
+
+.crf-note--ok {
+  background: var(--success-50);
+  border-color: var(--success-700);
+  color: var(--success-700);
+}
+
+.toast__action {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.toast__action:hover {
+  background: color-mix(in srgb, var(--toast-ink) 14%, transparent);
+}
+
+.toast__action:focus-visible {
+  --focus-ring: var(--toast-ink);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Alvos de toque de 44 px no celular, sem media query: a variante vem do JS (.crf-wrap--mobile e .crf-split--mobile,
+   porque o dialogo fica num portal fora do formulario). No toast o botao tem 44 px de altura com margem negativa,
+   para nao engordar o toast; vale tambem no desktop sem mudar o tamanho visual dele. */
+.crf-wrap--mobile .crf-group__add {
+  min-height: 44px;
+}
+
+.crf-split--mobile .crf-split-row input,
+.crf-split--mobile .crf-field select,
+.crf-split--mobile .crf-dlg__actions button {
+  min-height: 44px;
+}
+
+.toast__action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -12px;
+}

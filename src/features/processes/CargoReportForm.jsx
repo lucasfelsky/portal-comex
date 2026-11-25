@@ -15,6 +15,7 @@ import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
 import CargoReportReceiptSection from './CargoReportReceiptSection'
+import CargoReportSplitDialog from './CargoReportSplitDialog'
 import {
   CARGO_CONFERENCE_STATUS,
   CARGO_REPORT_CONFLICT_CODE,
@@ -40,8 +41,10 @@ import {
   isCargoReportRowEmpty,
   validateCargoUnload,
 } from './cargoReportFormModel'
+import { orderCargoFormByPurchaseOrder, getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { applyCargoReportImport } from './cargoReportImport'
 import { formatCargoDateBr } from './cargoReportSheet'
+import useCargoReportRowActions from './useCargoReportRowActions'
 
 // S3 do Relatório de Carga: formulário FR.CMX.001 dentro da aba Documentos do processo.
 // COMEX (admin) preenche, salva rascunho e fecha a parte dele ("Salvar e fechar"); a logística marca o OK?
@@ -247,12 +250,13 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         setConference(savedConferenceData)
 
         if (report.current) {
-          const loaded = fromCargoReportDoc(report.current)
+          // Consolidado: a ordem do array vira a da tela (por PO) ANTES do baseKey, para nao sujar o formulario.
+          const loaded = orderCargoFormByPurchaseOrder(fromCargoReportDoc(report.current), process)
           setForm(loaded)
           setBaseKey(formKey(loaded))
           setIsNew(false)
         } else {
-          const initial = buildInitialCargoReport(process)
+          const initial = orderCargoFormByPurchaseOrder(buildInitialCargoReport(process), process)
           setForm(initial)
           setBaseKey(formKey(initial))
           setIsNew(true)
@@ -277,6 +281,9 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const rows = useMemo(() => form?.rows ?? [], [form])
   const derived = useMemo(() => rows.map((row) => deriveCargoReportRow(row, catalog)), [rows, catalog])
   const alertCount = useMemo(() => countCargoReportAlerts(rows, catalog), [rows, catalog])
+  // S9-B: POs do consolidado (vazio nos demais tipos) e operacoes por linha do menu.
+  const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
+  const rowActions = useCargoReportRowActions({ rows, setForm, purchaseOrders, onChanged: () => setFeedback(null) })
 
   if (!processId || !canOpen) return null
 
@@ -304,10 +311,11 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   }
 
   function changeRow(rowId, field, value) {
-    setForm((current) => ({
-      ...current,
-      rows: current.rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)),
-    }))
+    setForm((current) => {
+      const next = { ...current, rows: current.rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)) }
+      // Consolidado: trocar o PO da linha muda o grupo dela; o array acompanha a tela.
+      return field === 'po' ? orderCargoFormByPurchaseOrder(next, process) : next
+    })
     setFieldErrors((current) => {
       const key = `${rowId}:${field}`
       if (!(key in current)) return current
@@ -373,7 +381,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
 
   // Só troca as linhas (e o tipo de carga) na tela: gravar continua sendo o "Salvar rascunho".
   function handleApplyImport(result) {
-    setForm((current) => applyCargoReportImport(current, result))
+    setForm((current) => orderCargoFormByPurchaseOrder(applyCargoReportImport(current, result), process))
     setFieldErrors({})
     setIsImportOpen(false)
     setFeedback({
@@ -726,6 +734,11 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           onAddRow={addRow}
           canAddRow={canEditFields && !isLimitReached}
           errorsByCell={fieldErrors}
+          purchaseOrders={purchaseOrders}
+          isConsolidated={purchaseOrders.length > 0}
+          onRowAction={canEditFields ? rowActions.handleRowAction : undefined}
+          newRowIds={rowActions.newRowIds}
+          focusRequest={rowActions.focusRequest}
         />
 
         {isDesktop ? (
@@ -746,6 +759,17 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
           </p>
         ) : null}
       </section>
+
+      {canEditFields && rowActions.splitRow ? (
+        <CargoReportSplitDialog
+          key={rowActions.splitRow.id}
+          row={rowActions.splitRow}
+          rowCount={rows.length}
+          mobile={!isDesktop}
+          onApply={rowActions.applySplit}
+          onCancel={rowActions.cancelSplit}
+        />
+      ) : null}
 
       <CargoReportReceiptSection
         conference={conference}

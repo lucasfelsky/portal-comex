@@ -10,10 +10,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 //   // Aviso "em andamento": nao fecha sozinho e e trocado pelo resultado.
 //   const id = toast.info('Gerando planilha…', { persist: true })
 //   toast.success('Pronto', { replaces: id })   // ou toast.dismiss(id)
+//   // Toast com acao (ex.: "Desfazer"): o botao roda onSelect e fecha o toast.
+//   toast.info('Linha 3 removida', { action: { label: 'Desfazer', onSelect: undo }, durationMs: 7000 })
 //
-// Auto-dismiss padrao em 5s (Movimento.dc.html), pausado enquanto o mouse (ou o
-// foco) esta sobre o toast; erro nao fecha sozinho. Empilha ate 5 toasts
-// visiveis (FIFO).
+// Auto-dismiss padrao em 5s (Movimento.dc.html; `durationMs` troca o tempo de um
+// toast), pausado enquanto o mouse (ou o foco) esta sobre o toast; erro nao fecha
+// sozinho. Empilha ate 5 toasts visiveis (FIFO).
 
 const TOAST_TIMEOUT_MS = 5000
 const TOAST_MAX_VISIBLE = 5
@@ -115,15 +117,23 @@ export function ToastProvider({ children }) {
   //   persist: true  -> nao fecha sozinho (aviso "em andamento"); quem o criou
   //                     o remove com dismiss(id) ou o substitui via `replaces`.
   //   replaces: id   -> troca esse toast por este, na mesma posicao.
+  //   action: { label, onSelect } -> botao de acao (ex.: "Desfazer"); roda onSelect e fecha o toast.
+  //   durationMs: number -> tempo do auto-dismiss deste toast (padrao 5 s).
   // Devolve o id do toast criado.
   const push = useCallback(
     (tone, message, options) => {
       const id = `toast-${++toastIdCounter}`
       const persist = options?.persist === true
       const replaces = options?.replaces
+      const action =
+        options?.action && typeof options.action.onSelect === 'function' && options.action.label
+          ? { label: String(options.action.label), onSelect: options.action.onSelect }
+          : null
+      const durationMs =
+        Number.isFinite(options?.durationMs) && options.durationMs > 0 ? options.durationMs : TOAST_TIMEOUT_MS
       if (replaces) discard(replaces)
       setToasts((current) => {
-        const entry = { id, tone, message }
+        const entry = { id, tone, message, action }
         // Se o substituido ja saiu (o usuario fechou), o resultado entra no fim.
         const next =
           replaces && current.some((toast) => toast.id === replaces)
@@ -135,8 +145,8 @@ export function ToastProvider({ children }) {
           : next
       })
 
-      if (TOAST_TIMEOUT_MS > 0 && tone !== 'error' && !persist) {
-        startAutoDismiss(id, TOAST_TIMEOUT_MS)
+      if (durationMs > 0 && tone !== 'error' && !persist) {
+        startAutoDismiss(id, durationMs)
       }
       return id
     },
@@ -238,6 +248,18 @@ function ToastItem({ toast, onDismiss, onPause, onResume }) {
         </svg>
       </span>
       <span className="toast__message">{toast.message}</span>
+      {toast.action ? (
+        <button
+          type="button"
+          className="toast__action"
+          onClick={() => {
+            toast.action.onSelect()
+            onDismiss(toast.id)
+          }}
+        >
+          {toast.action.label}
+        </button>
+      ) : null}
       <button
         type="button"
         className="toast__close"
