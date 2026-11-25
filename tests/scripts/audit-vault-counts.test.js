@@ -64,7 +64,7 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/src\/ directories = 9/)
     expect(result.stdout).toMatch(/src\/components\/ top-level = 26/)
     expect(result.stdout).toMatch(/src\/features\/ directories = 3/)
-    expect(result.stdout).toMatch(/src\/pages\/ count = 12/)
+    expect(result.stdout).toMatch(/src\/pages\/ count = 13/)
     expect(result.stdout).toMatch(/src\/services\/ count = 24/)
     expect(result.stdout).toMatch(/src\/utils\/ count = 16/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 14/)
@@ -166,7 +166,7 @@ describe('audit-vault-counts', () => {
       expect(result.stdout).toMatch(/firestore\.rules isAllowedSelfUserUpdate\(\) = 9 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isAdminProcessFields\(\) = 81 campos/)
       expect(result.stdout).toMatch(/firestore\.rules isLogisticsCollectionStatusUpdate\(\) = 10 campos/)
-      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 17/)
+      expect(result.stdout).toMatch(/src\/App\.jsx rotas = 18/)
       expect(result.stdout).toMatch(/declaredDependencies = \d+ \(todas instaladas\)/)
       expect(result.stdout).toMatch(
         /src\/services com onSnapshot = 1 \(forecastSettingsRepository\.js\)/

@@ -4,24 +4,30 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import Icon from '../../components/Icon'
 import Modal from '../../components/Modal'
 import {
-  closeCargoReportConference,
   concludeCargoReport,
   getCargoReport,
   reopenCargoReport,
-  reopenCargoReportConference,
-  retryCloseConferenceWrite,
   retryConcludeWrite,
 } from '../../services/cargoReportRepository'
 import { saveBlobAsFile } from '../../services/processDocumentsRepository'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
+import {
+  CARGO_CONFERENCE_MESSAGES,
+  closeCargoConference,
+  describeCargoCloseError,
+  describeCargoReopenError,
+  describeCargoRetryError,
+  describeCargoSaveError,
+  reopenCargoConference,
+  retryCargoConferenceClose,
+} from './cargoConferenceActions'
+import { listCargoConferencePendings } from './cargoConferenceModel'
 import CargoReportPrintSheet from './CargoReportPrintSheet'
 import {
-  CARGO_CONFERENCE_STATUS,
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
   CARGO_REPORT_CONFLICT_CODE,
   CARGO_STAGE,
   buildCargoReportPayload,
-  buildClosedConferencePayload,
   buildConcludedCargoReportPayload,
   buildReopenedCargoReportPayload,
   canCloseCargoConference,
@@ -31,7 +37,6 @@ import {
   canReopenCargoReportComex,
   canSaveCargoConference,
   fromConferenceDoc,
-  isCargoReportRowEmpty,
   toCargoDateKey,
   validateCargoUnload,
 } from './cargoReportFormModel'
@@ -43,27 +48,16 @@ import { buildCargoReportSheet, describeCargoReportAlerts } from './cargoReportS
 // formulário por callbacks (feedback, recarregar, estado persistido).
 
 const CONCLUDE_ERROR_PREFIX = 'Não foi possível salvar e fechar o relatório.'
-const CLOSE_ERROR_PREFIX = 'Não foi possível salvar e fechar a conferência.'
-const REOPEN_ERROR_PREFIX = 'Não foi possível reabrir.'
 const EXPORT_ERROR_PREFIX = 'Não foi possível gerar o Excel.'
 const MESSAGES = {
   concluded:
     'Parte do COMEX fechada e Excel anexado. O aviso por e-mail foi enviado aos destinatários do Relatório de carga. A logística já pode fechar a conferência.',
   reopened: 'Parte do COMEX reaberta. Para gerar uma nova versão, salve e feche de novo.',
-  conferenceClosed:
-    'Conferência fechada e Excel anexado como nova versão. O aviso da conferência foi enviado aos destinatários do Relatório de carga.',
-  conferenceReopened: 'Conferência reaberta. A logística pode corrigir e fechar de novo.',
   reopenPartial:
     'A conferência foi reaberta, mas a parte do COMEX não. O relatório continua com a parte do COMEX fechada.',
   attachedNotSaved: 'O Excel foi anexado e o aviso enviado, mas a parte do COMEX não foi marcada como fechada.',
   attachedConflict:
     'O Excel foi anexado e o aviso enviado, mas outra pessoa salvou o relatório antes. Recarregue e confira.',
-  conferenceAttachedNotSaved: 'O Excel foi anexado e o aviso enviado, mas a conferência não foi marcada como fechada.',
-  conferenceAttachedConflict:
-    'O Excel foi anexado e o aviso enviado, mas o COMEX ou outra pessoa alterou o relatório antes. Recarregue e confira.',
-  currentChanged:
-    'O COMEX alterou ou reabriu o relatório depois que você abriu. Recarregue antes de fechar a conferência.',
-  invalidUnload: 'Corrija o horário da descarga antes de salvar.',
   conferHint:
     'Você marca o OK? e a contagem, preenche as etiquetas e os dados do recebimento. As demais colunas são só do COMEX.',
   conferWaiting: 'Disponível depois que o COMEX fechar: "Salvar e fechar conferência".',
@@ -74,10 +68,6 @@ const MESSAGES = {
   reopenComexTitle: 'Reabrir parte do COMEX?',
   reopenComexMessage:
     'Reabrir a parte do COMEX também reabre a conferência da logística. O conteúdo da conferência é mantido; ao fechar de novo, a logística gera uma nova versão do Excel.',
-}
-
-function pluralLines(count, text) {
-  return `${count} ${count === 1 ? 'linha' : 'linhas'} ${text}`
 }
 
 // `alertCount`/`alertsText` vêm de `buildCargoReportSheet` + `describeCargoReportAlerts`.
@@ -228,7 +218,6 @@ export function CargoReportActionBar({
   onSaveDraft,
   onSaveConference,
   onDiscardConference,
-  describeSaveError,
   onErrors,
   onPersisted,
   onConferencePersisted,
@@ -334,7 +323,7 @@ export function CargoReportActionBar({
       }
     }
     if (error?.code === CARGO_REPORT_CONFLICT_CODE || error?.code === 'permission-denied') {
-      return describeSaveError(error, 'draft')
+      return describeCargoSaveError(error, 'draft')
     }
     return { kind: 'error', text: buildActionErrorMessage(CONCLUDE_ERROR_PREFIX, error) }
   }
@@ -406,31 +395,8 @@ export function CargoReportActionBar({
 
   // ---------- Logística: salvar e fechar conferência ----------
 
-  const filledRows = (Array.isArray(form.rows) ? form.rows : []).filter((row) => !isCargoReportRowEmpty(row))
-
   function buildPendingText() {
-    const withoutOk = filledRows.filter((row) => conference.okByRowId?.[row.id] !== true).length
-    const withoutCount = filledRows.filter((row) => conference.countOkByRowId?.[row.id] !== true).length
-    return [
-      withoutOk > 0 ? pluralLines(withoutOk, 'sem OK?') : '',
-      withoutCount > 0 ? pluralLines(withoutCount, 'sem contagem') : '',
-      conference.receiptStatus ? '' : 'Status do recebimento não informado',
-      // S8: pendências (não bloqueiam). Não existe pendência separada de "Data de recebimento": ela é o dia do início.
-      conference.unloadStartAt ? '' : 'Início da descarga não informado',
-      conference.unloadStartAt && !conference.unloadEndAt ? 'Fim da descarga não informado' : '',
-      conference.labelingOk ? '' : 'Etiquetagem sem OK',
-      String(conference.nfNumber ?? '').trim() ? '' : 'Nº da NF não informado',
-    ]
-      .filter(Boolean)
-      .join(', ')
-  }
-
-  function buildClosedPayload() {
-    return buildClosedConferencePayload(
-      { ...conference, revision: savedConference.revision },
-      form.rows,
-      { actorName, actorUid: String(profile?.uid ?? ''), today: toCargoDateKey(new Date()) }
-    )
+    return listCargoConferencePendings(form.rows, conference).join(', ')
   }
 
   function finishClosedConference(payload, documentId) {
@@ -440,27 +406,7 @@ export function CargoReportActionBar({
       updatedAt: new Date(),
       updatedByName: actorName,
     })
-    onFeedback({ kind: 'success', text: MESSAGES.conferenceClosed })
-  }
-
-  function describeCloseError(error, payload) {
-    if (error?.code === CARGO_REPORT_ATTACHED_NOT_SAVED_CODE) {
-      if (error.cause?.code === CARGO_REPORT_CONFLICT_CODE) {
-        return { kind: 'conflict', text: MESSAGES.conferenceAttachedConflict }
-      }
-      return {
-        kind: 'retry',
-        text: MESSAGES.conferenceAttachedNotSaved,
-        action: { label: 'Gravar de novo', run: () => handleRetryClose(payload, error.documentId) },
-      }
-    }
-    if (error?.code === CARGO_REPORT_CONFLICT_CODE) {
-      return error.scope === 'current'
-        ? { kind: 'conflict', text: MESSAGES.currentChanged }
-        : describeSaveError(error, 'conference')
-    }
-    if (error?.code === 'permission-denied') return describeSaveError(error, 'conference')
-    return { kind: 'error', text: buildActionErrorMessage(CLOSE_ERROR_PREFIX, error) }
+    onFeedback({ kind: 'success', text: CARGO_CONFERENCE_MESSAGES.conferenceClosed })
   }
 
   function handleOpenClose() {
@@ -469,7 +415,7 @@ export function CargoReportActionBar({
     // S8: descarga inválida (fim sem início, fim antes do início, mais de 24 h) bloqueia: o diálogo nem abre.
     const unloadErrors = validateCargoUnload(conference)
     if (unloadErrors.start || unloadErrors.end) {
-      onFeedback({ kind: 'error', text: MESSAGES.invalidUnload })
+      onFeedback({ kind: 'error', text: CARGO_CONFERENCE_MESSAGES.invalidUnload })
       return
     }
     setIsCloseOpen(true)
@@ -481,21 +427,20 @@ export function CargoReportActionBar({
     if (!canClose || isBusy) return
     await runWork(async () => {
       onFeedback(null)
-      let payload = null
       try {
-        payload = buildClosedPayload()
-        const { generateCargoReportFile } = await import('./cargoReportExcel')
-        const file = await generateCargoReportFile(buildSheet(form, payload))
-        const result = await closeCargoReportConference(processId, {
-          payload,
-          file,
-          category: process?.category,
-          actor: profile,
-          currentRevision: form.revision,
+        const { payload, documentId } = await closeCargoConference({
+          processId,
+          process,
+          profile,
+          form,
+          conference,
+          savedRevision: savedConference.revision,
+          catalog,
+          packaging,
         })
-        finishClosedConference(payload, result.documentId)
+        finishClosedConference(payload, documentId)
       } catch (error) {
-        onFeedback(describeCloseError(error, payload))
+        onFeedback(describeCargoCloseError(error, error?.closePayload ?? null, { onRetry: handleRetryClose }))
       } finally {
         setIsCloseOpen(false)
       }
@@ -507,18 +452,10 @@ export function CargoReportActionBar({
     await runWork(async () => {
       onFeedback(null)
       try {
-        await retryCloseConferenceWrite(processId, { payload, documentId, actor: profile })
+        await retryCargoConferenceClose({ processId, payload, documentId, profile })
         finishClosedConference(payload, documentId)
       } catch (error) {
-        onFeedback(
-          error?.code === CARGO_REPORT_CONFLICT_CODE
-            ? { kind: 'conflict', text: MESSAGES.conferenceAttachedConflict }
-            : {
-                kind: 'retry',
-                text: buildActionErrorMessage(MESSAGES.conferenceAttachedNotSaved, error),
-                action: { label: 'Gravar de novo', run: () => handleRetryClose(payload, documentId) },
-              }
-        )
+        onFeedback(describeCargoRetryError(error, payload, documentId, { onRetry: handleRetryClose }))
       }
     })
   }
@@ -527,18 +464,7 @@ export function CargoReportActionBar({
 
   // Estado 3 -> 2: o conteúdo da conferência fica intacto; só status e fechamento voltam.
   async function reopenConferenceNow() {
-    const result = await reopenCargoReportConference(processId, profile)
-    onConferencePersisted({
-      ...savedConference,
-      revision: result.revision,
-      status: CARGO_CONFERENCE_STATUS.open,
-      closedDate: '',
-      closedById: '',
-      closedByName: '',
-      closedDocumentId: '',
-      updatedAt: new Date(),
-      updatedByName: actorName,
-    })
+    onConferencePersisted(await reopenCargoConference({ processId, profile, savedConference, actorName }))
   }
 
   function handleReopenConference() {
@@ -547,13 +473,9 @@ export function CargoReportActionBar({
       onFeedback(null)
       try {
         await reopenConferenceNow()
-        onFeedback({ kind: 'success', text: MESSAGES.conferenceReopened })
+        onFeedback({ kind: 'success', text: CARGO_CONFERENCE_MESSAGES.conferenceReopened })
       } catch (error) {
-        onFeedback(
-          error?.code === CARGO_REPORT_CONFLICT_CODE || error?.code === 'permission-denied'
-            ? describeSaveError(error, 'conference')
-            : { kind: 'error', text: buildActionErrorMessage(REOPEN_ERROR_PREFIX, error) }
-        )
+        onFeedback(describeCargoReopenError(error))
       }
     })
   }
@@ -581,7 +503,7 @@ export function CargoReportActionBar({
         onPersisted(payload, {})
         onFeedback({ kind: 'success', text: MESSAGES.reopened })
       } catch (error) {
-        const described = describeSaveError(error, isDone && !conferenceReopened ? 'conference' : 'draft')
+        const described = describeCargoSaveError(error, isDone && !conferenceReopened ? 'conference' : 'draft')
         onFeedback(conferenceReopened ? { ...described, text: `${MESSAGES.reopenPartial} ${described.text}` } : described)
       }
     })

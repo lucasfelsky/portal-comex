@@ -381,7 +381,9 @@ describe('CargoNfListField', () => {
     expect(css).toMatch(/\.crf-nfs--mobile \.crf-nf-chip__x::after \{[^}]*inset: -8px;/)
     const start = css.indexOf('/* S9-E do Relatório de Carga')
     expect(start).toBeGreaterThan(0)
-    const block = css.slice(start)
+    // O bloco da S9-E termina onde começa o da S9-F (o da S9-F tem a barra inferior fixa, por portal).
+    const end = css.indexOf('S9-F DO RELATORIO DE CARGA')
+    const block = end > start ? css.slice(start, end) : css.slice(start)
     expect(block).not.toMatch(/@media/)
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     expect(block).not.toMatch(/position:\s*fixed/)

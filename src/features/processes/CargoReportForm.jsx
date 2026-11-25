@@ -3,7 +3,6 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import EmptyState from '../../components/EmptyState'
 import Icon from '../../components/Icon'
 import Skeleton from '../../components/Skeleton'
-import { getItemPackagingCatalog } from '../../services/itemPackagingCatalogRepository'
 import {
   getCargoReport,
   saveCargoReportConference,
@@ -17,6 +16,8 @@ import {
   describeCargoAutofillNote,
   quantityMismatchByRowId,
 } from './cargoReportAutofill'
+import { CARGO_CONFERENCE_MESSAGES, describeCargoSaveError } from './cargoConferenceActions'
+import { EMPTY_CARGO_CONFERENCE, cargoConferenceKey } from './cargoConferenceModel'
 import { CargoReportActionBar } from './CargoReportConcludeDialog'
 import CargoReportHeaderCard from './CargoReportHeaderCard'
 import CargoReportImportDialog from './CargoReportImportDialog'
@@ -26,8 +27,6 @@ import CargoReportReceiptSection from './CargoReportReceiptSection'
 import CargoReportRefreshPanel, { CargoInfoIcon } from './CargoReportRefreshPanel'
 import CargoReportSplitDialog from './CargoReportSplitDialog'
 import {
-  CARGO_CONFERENCE_STATUS,
-  CARGO_REPORT_CONFLICT_CODE,
   CARGO_REPORT_MAX_ROWS,
   CARGO_REPORT_ROWS_LIMIT_MESSAGE,
   CARGO_STAGE,
@@ -54,6 +53,7 @@ import { cargoPackagingContext } from './cargoSupplierPackaging'
 import useCargoReportAutofill, { fetchCargoReference } from './useCargoReportAutofill'
 import useCargoReportPackaging, {
   SUPPLIER_CATALOG_ERROR_MESSAGE,
+  loadItemCatalogCached,
   loadSupplierCatalogCached,
 } from './useCargoReportPackaging'
 import useCargoReportRowActions from './useCargoReportRowActions'
@@ -65,41 +65,11 @@ import useCargoReportRowActions from './useCargoReportRowActions'
 // automático (quem salva a conferência). Estados: ver `getCargoReportStage`.
 // Padrões replicados (não são util compartilhado): guard `isMounted` na carga assíncrona.
 
-const CATALOG_TTL_MS = 5 * 60 * 1000
-const EMPTY_CONFERENCE = {
-  revision: 0,
-  status: CARGO_CONFERENCE_STATUS.open,
-  okByRowId: {},
-  countOkByRowId: {},
-  labelsByRowId: {},
-  checkedByName: '',
-  receiptStatus: '',
-  receivedDate: '',
-  nfNumber: '',
-  notes: '',
-  unloadStartAt: '',
-  unloadEndAt: '',
-  labelingOk: false,
-  closedDate: '',
-  closedById: '',
-  closedByName: '',
-  closedDocumentId: '',
-  updatedAt: null,
-  updatedByName: '',
-}
-
 const LOAD_ERROR_PREFIX = 'Não foi possível carregar o relatório de carga.'
 const CATALOG_ERROR_PREFIX = 'Não foi possível carregar a tabela Item x Emb.'
-const SAVE_ERROR_PREFIX = 'Não foi possível salvar o relatório de carga.'
 
 const MESSAGES = {
-  conflictDraft: 'Outra pessoa salvou este relatório. Recarregue para ver a versão atual antes de salvar de novo.',
-  conflictConference:
-    'Outra pessoa salvou a conferência. Recarregue para ver a versão atual antes de salvar de novo.',
-  permissionDenied:
-    'Sem permissão para editar. O COMEX preenche o relatório; a logística marca o OK? e a contagem, preenche as etiquetas e o recebimento e fecha a conferência.',
   invalidNumbers: 'Corrija os números destacados antes de salvar.',
-  invalidUnload: 'Corrija o horário da descarga antes de salvar.',
   conferBanner:
     'Marque o OK? e a contagem de cada linha conferida, preencha as etiquetas WMS e SQ e os dados do recebimento. A conferência é salva separada do preenchimento do COMEX, então não conflita com quem está editando. O fechamento da conferência fica disponível quando o COMEX fechar a parte dele.',
   conferBannerComexClosed:
@@ -114,21 +84,6 @@ const MESSAGES = {
     'A tabela Item x Emb. ainda não foi importada. Peso líquido e nº de embalagens ficam vazios até o admin importar em Admin › Relatório de Carga.',
 }
 
-// Cache de módulo (sessão): a tabela Item x Emb. tem ~276 KB; reaproveitada por 5 min e zerada em erro.
-let catalogCache = null
-
-function loadCatalogCached() {
-  const now = Date.now()
-  if (catalogCache && now - catalogCache.at < CATALOG_TTL_MS) return catalogCache.promise
-
-  const promise = getItemPackagingCatalog().catch((error) => {
-    if (catalogCache?.promise === promise) catalogCache = null
-    throw error
-  })
-  catalogCache = { promise, at: now }
-  return promise
-}
-
 function pad(value) {
   return String(value).padStart(2, '0')
 }
@@ -141,27 +96,6 @@ function formatClock(date) {
 // Chave de comparação do que o usuário pode ter alterado (ignora metadados de leitura).
 function formKey(form) {
   return JSON.stringify({ ...form, updatedAt: null, updatedByName: '' })
-}
-
-function conferenceKey(conference, rows) {
-  const marks = rows.map((row) => [
-    row.id,
-    conference.okByRowId?.[row.id] === true,
-    conference.countOkByRowId?.[row.id] === true,
-    String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),
-    String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
-  ])
-  // "Conferido por" é automático (não digitado): fora da chave. O rodapé do recebimento entra.
-  return JSON.stringify({
-    marks,
-    receiptStatus: conference.receiptStatus ?? '',
-    receivedDate: conference.receivedDate ?? '',
-    unloadStartAt: conference.unloadStartAt ?? '',
-    unloadEndAt: conference.unloadEndAt ?? '',
-    labelingOk: conference.labelingOk === true,
-    nfNumber: String(conference.nfNumber ?? '').trim(),
-    notes: String(conference.notes ?? '').trim(),
-  })
 }
 
 function plural(count, singular, pluralForm) {
@@ -182,8 +116,8 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const [form, setForm] = useState(null)
   const [isNew, setIsNew] = useState(false)
   const [baseKey, setBaseKey] = useState('')
-  const [conference, setConference] = useState(EMPTY_CONFERENCE)
-  const [savedConference, setSavedConference] = useState(EMPTY_CONFERENCE)
+  const [conference, setConference] = useState(EMPTY_CARGO_CONFERENCE)
+  const [savedConference, setSavedConference] = useState(EMPTY_CARGO_CONFERENCE)
   const [catalog, setCatalog] = useState(null)
   const [catalogError, setCatalogError] = useState('')
   const [supplierCatalog, setSupplierCatalog] = useState(null)
@@ -239,7 +173,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       try {
         const [report, catalogResult, supplierResult] = await Promise.all([
           getCargoReport(processId),
-          loadCatalogCached().then(
+          loadItemCatalogCached().then(
             (data) => ({ data, error: null }),
             (error) => ({ data: null, error })
           ),
@@ -344,7 +278,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
 
   const hasNoPackaging = derived.some((item) => item.alerts.noPackaging)
   const draftDirty = form ? formKey(form) !== baseKey : false
-  const conferenceDirty = form ? conferenceKey(conference, rows) !== conferenceKey(savedConference, rows) : false
+  const conferenceDirty = form ? cargoConferenceKey(conference, rows) !== cargoConferenceKey(savedConference, rows) : false
   // S7: o admin só grava o `current`; a logística só grava a conferência.
   const isDirty = canEdit ? draftDirty : conferenceDirty
   const canSave = canEdit ? isDirty || isNew : isDirty
@@ -445,17 +379,6 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     })
   }
 
-  function describeSaveError(error, kind) {
-    if (error?.code === CARGO_REPORT_CONFLICT_CODE) {
-      return {
-        kind: 'conflict',
-        text: kind === 'conference' ? MESSAGES.conflictConference : MESSAGES.conflictDraft,
-      }
-    }
-    if (error?.code === 'permission-denied') return { kind: 'error', text: MESSAGES.permissionDenied }
-    return { kind: 'error', text: buildActionErrorMessage(SAVE_ERROR_PREFIX, error) }
-  }
-
   // Grava a conferência com o nome de quem salva (`actorName`); a tela passa a refletir o que foi gravado.
   async function saveConference(revision, savedRows) {
     const payload = buildConferencePayload({ ...conference, revision }, savedRows, { actorName })
@@ -468,7 +391,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
 
   // Estado gravado da conferência (salvar, fechar ou reabrir): tela e base de comparação ficam iguais.
   function applyPersistedConference(next) {
-    const persisted = { ...EMPTY_CONFERENCE, ...next }
+    const persisted = { ...EMPTY_CARGO_CONFERENCE, ...next }
     setSavedConference(persisted)
     setConference(persisted)
   }
@@ -499,7 +422,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     try {
       await saveCargoReportDraft(processId, payload, profile)
     } catch (error) {
-      setFeedback(describeSaveError(error, 'draft'))
+      setFeedback(describeCargoSaveError(error, 'draft'))
       setIsSaving(false)
       return
     }
@@ -522,7 +445,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
     if (!canConferNow || isSaving || !canSave) return
     setFeedback(null)
     if (hasUnloadError) {
-      setFeedback({ kind: 'error', text: MESSAGES.invalidUnload })
+      setFeedback({ kind: 'error', text: CARGO_CONFERENCE_MESSAGES.invalidUnload })
       return
     }
     setIsSaving(true)
@@ -530,7 +453,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
       await saveConference(savedConference.revision, rows)
       setFeedback({ kind: 'success', text: `Conferência salva às ${formatClock(new Date())}.` })
     } catch (error) {
-      setFeedback(describeSaveError(error, 'conference'))
+      setFeedback(describeCargoSaveError(error, 'conference'))
     }
     setIsSaving(false)
   }
@@ -828,7 +751,6 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
         onSaveDraft={handleSaveDraft}
         onSaveConference={handleSaveConference}
         onDiscardConference={handleDiscardConference}
-        describeSaveError={describeSaveError}
         onErrors={showPayloadErrors}
         onPersisted={applyPersistedForm}
         onConferencePersisted={applyPersistedConference}

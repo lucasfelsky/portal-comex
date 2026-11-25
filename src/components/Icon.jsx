@@ -400,6 +400,8 @@ const ICONS = {
       <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" />
     </>
   ),
+  // S9-F: aba Conferência (traço do mock aprovado).
+  'clipboard-check': <path d="M9 11l3 3 7-8M5 5h9M5 10h2M5 15h7M5 20h14" />,
   print: (
     <>
       <path d="M7 9V4h10v5" />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../../components/Toast'
+import { getItemPackagingCatalog } from '../../services/itemPackagingCatalogRepository'
 import {
   getSupplierPackagingCatalog,
   upsertSupplierPackagingEntry,
@@ -19,6 +20,22 @@ export const SUPPLIER_CATALOG_ERROR_MESSAGE =
   'Não foi possível carregar o cadastro por fornecedor; vale o padrão do item.'
 
 let supplierCatalogCache = null
+
+// Cache de módulo (sessão): a tabela Item x Emb. tem ~276 KB; reaproveitada por 5 min e zerada em erro.
+// Movida do CargoReportForm (S9-F): o formulário do computador e a aba Conferência do celular compartilham o cache.
+let itemCatalogCache = null
+
+export function loadItemCatalogCached() {
+  const now = Date.now()
+  if (itemCatalogCache && now - itemCatalogCache.at < CACHE_TTL_MS) return itemCatalogCache.promise
+
+  const promise = getItemPackagingCatalog().catch((error) => {
+    if (itemCatalogCache?.promise === promise) itemCatalogCache = null
+    throw error
+  })
+  itemCatalogCache = { promise, at: now }
+  return promise
+}
 
 // -> { data, error }: nunca rejeita (a falha só vira o aviso na tela).
 export function loadSupplierCatalogCached() {

@@ -52,6 +52,13 @@ vi.mock('../../src/services/supportTicketsRepository', async (importOriginal) =>
   listMySupportTickets: vi.fn(async () => []),
 }))
 
+// S9-F: o contador da aba Conferência (badge do item "Menu") le a lista de processos e os relatórios; aqui é espiado
+// (sem ler o Firestore real) e devolve o número que o teste escolher.
+const mockConferenceCount = vi.fn(() => null)
+vi.mock('../../src/features/processes/useCargoConferenceList', () => ({
+  useCargoConferenceCount: (options) => mockConferenceCount(options),
+}))
+
 import AppLayout from '../../src/components/AppLayout.jsx'
 // SupportButton (aba de suporte) usa useToast; no app real o ToastProvider
 // mora no main.jsx, entao o wrapper do teste precisa dele tambem.
@@ -1565,5 +1572,105 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
         ).toHaveAttribute('href', '/notifications')
       })
     })
+  })
+})
+
+// S9-F: aba Conferência (Relatório de Carga) no celular: título "Conferência" e contador no item "Menu" da barra de baixo.
+describe('AppLayout (aba Conferência no celular)', () => {
+  const originalMatchMedia = window.matchMedia
+
+  function stubViewport(widthPx) {
+    window.matchMedia = (query) => {
+      const max = /max-width:\s*(\d+)px/.exec(query)
+      return {
+        matches: Boolean(max) && Number(max[1]) >= widthPx,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }
+    }
+  }
+
+  function renderAt(path, role) {
+    mockUseAuth.mockReturnValue({
+      profile: { uid: `${role}-1`, name: `${role} User`, email: `${role}@sq.com`, role },
+      logout: vi.fn(),
+      isEmailVerified: true,
+    })
+    return render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <NotificationsProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<div data-testid="page">Pagina</div>} />
+              </Route>
+            </Routes>
+          </NotificationsProvider>
+        </MemoryRouter>
+      </ToastProvider>
+    )
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+    mockConferenceCount.mockImplementation(() => null)
+  })
+
+  it('/conferencia: h1 "Conferência" com eyebrow "Relatório de Carga"', () => {
+    stubViewport(720)
+    const { container } = renderAt('/conferencia', 'logistica')
+    expect(container.querySelector('h1.mobile-page-header__title').textContent).toBe('Conferência')
+    expect(container.querySelector('.mobile-page-header__eyebrow').textContent).toBe('Relatório de Carga')
+  })
+
+  it.each(['logistica', 'admin'])('%s no celular: o contador liga e o "Menu" mostra o número no badge', (role) => {
+    stubViewport(720)
+    mockConferenceCount.mockImplementation(() => 3)
+    const { container } = renderAt('/', role)
+    expect(mockConferenceCount).toHaveBeenCalledWith({ enabled: true })
+    const nav = container.querySelector('.mobile-bottom-nav')
+    const link = within(nav).getByRole('link', { name: 'Menu, 3 conferências para conferir' })
+    expect(link).toHaveAttribute('href', '/menu')
+    const badge = link.querySelector('.mobile-bottom-nav__badge')
+    expect(badge).toHaveTextContent('3')
+    expect(badge).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('1 conferência: nome acessível no singular', () => {
+    stubViewport(720)
+    mockConferenceCount.mockImplementation(() => 1)
+    const { container } = renderAt('/', 'logistica')
+    expect(
+      within(container.querySelector('.mobile-bottom-nav')).getByRole('link', {
+        name: 'Menu, 1 conferência para conferir',
+      })
+    ).toBeInTheDocument()
+  })
+
+  it('sem número (carregando, erro ou zero): "Menu" sem badge e sem contagem no nome', () => {
+    stubViewport(720)
+    mockConferenceCount.mockImplementation(() => 0)
+    const { container } = renderAt('/', 'logistica')
+    const link = within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Menu' })
+    expect(link.querySelector('.mobile-bottom-nav__badge')).toBeNull()
+  })
+
+  it.each(['user', 'tecnico', 'faturamento', 'compras', 'viewer'])('%s: o contador não liga', (role) => {
+    stubViewport(720)
+    renderAt('/', role)
+    expect(mockConferenceCount).toHaveBeenCalledWith({ enabled: false })
+    expect(mockConferenceCount).not.toHaveBeenCalledWith({ enabled: true })
+  })
+
+  it('computador (largura > 720): o contador não liga nem para a logística', () => {
+    stubViewport(1440)
+    renderAt('/', 'logistica')
+    expect(mockConferenceCount).toHaveBeenCalledWith({ enabled: false })
+    expect(mockConferenceCount).not.toHaveBeenCalledWith({ enabled: true })
   })
 })

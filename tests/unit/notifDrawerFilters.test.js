@@ -9,7 +9,9 @@ const css = fs.readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'ut
 describe('gaveta de notificações: linha de abas', () => {
   const marker = '/* Gaveta de notificações (ajuste)'
   const start = css.indexOf(marker)
-  const block = start >= 0 ? css.slice(start) : ''
+  // O ajuste termina onde começa o bloco da S9-F (que traz a barra inferior fixa, por portal).
+  const end = css.indexOf('S9-F DO RELATORIO DE CARGA')
+  const block = start >= 0 ? css.slice(start, end > start ? end : undefined) : ''
 
   it('o ajuste fica no fim do arquivo, sem @media, sem hex e sem position: fixed', () => {
     expect(start).toBeGreaterThan(0)

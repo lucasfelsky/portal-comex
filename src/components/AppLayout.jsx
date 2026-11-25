@@ -14,6 +14,7 @@ import { formatRemaining } from '../hooks/useDoNotDisturb'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { canSeeProcessName, getProcessTitle } from '../features/processes/processLabels'
 import { canSeePurchaseOrderDetailsForRole } from '../features/processes/purchaseOrders'
+import { useCargoConferenceCount } from '../features/processes/useCargoConferenceList'
 import { getActiveProcess, subscribeActiveProcess } from '../utils/activeProcessContext'
 import { useTheme } from '../hooks/useTheme'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -92,6 +93,7 @@ const pageMeta = {
   '/processos': { title: 'Central de chegadas', breadcrumb: [] },
   '/notifications': { title: 'Central de Notificações', breadcrumb: [], hideTopbarTitle: true },
   '/menu': { title: 'Menu', breadcrumb: [] },
+  '/conferencia': { title: 'Conferência', breadcrumb: [] },
   '/admin': { title: 'Centro Administrativo', breadcrumb: [{ label: 'Admin' }] },
   '/admin/usuarios': {
     title: 'Centro Administrativo',
@@ -282,6 +284,10 @@ export default function AppLayout() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+  // S9-F: contador da aba Conferência (badge do item "Menu"): só celular e só logística/admin; sem número enquanto carrega.
+  const conferenceCount = useCargoConferenceCount({
+    enabled: isMobileLayout && ['logistica', 'admin'].includes(profile?.role),
+  })
 
   // Command palette (Ctrl+K / Cmd+K)
   const commandPalette = useCommandPalette()
@@ -382,12 +388,14 @@ export default function AppLayout() {
       '/processos': 'Chegadas',
       '/notifications': 'Avisos',
       '/menu': 'Menu',
+      '/conferencia': 'Conferência',
     }[location.pathname] ??
     adminSectionTitles[location.pathname] ??
     (location.pathname.startsWith('/admin') ? 'Admin' : meta.title)
   const mobileEyebrow = useMemo(() => {
     // Remake F6: Avisos, Noticias e Menu levam o eyebrow da central (mock).
     if (location.pathname === '/menu') return 'Conta e ajustes'
+    if (location.pathname === '/conferencia') return 'Relatório de Carga'
     if (location.pathname === '/news') return 'Comunicados da operação'
     if (location.pathname === '/notifications') return 'Central de notificações'
     if (adminSectionTitles[location.pathname]) return 'Admin'
@@ -1316,10 +1324,19 @@ export default function AppLayout() {
             <NavLink
               to="/menu"
               className={navItemClass}
-              aria-label="Menu"
+              aria-label={
+                conferenceCount > 0
+                  ? `Menu, ${conferenceCount} ${conferenceCount === 1 ? 'conferência' : 'conferências'} para conferir`
+                  : 'Menu'
+              }
             >
               <Icon name="person" size={22} aria-hidden="true" />
               <span className="mobile-bottom-nav__label">Menu</span>
+              {conferenceCount > 0 ? (
+                <span className="mobile-bottom-nav__badge" aria-hidden="true">
+                  {conferenceCount}
+                </span>
+              ) : null}
             </NavLink>
           </nav>
         </div>
