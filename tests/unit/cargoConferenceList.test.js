@@ -29,8 +29,16 @@ const IN_STOCK = base({ id: 'estoque', collectionStatus: 'Carga disponível em e
 
 describe('quem entra na lista', () => {
   it('Coleta agendada, Carga a caminho do CD, Recebida no CD e Concluído (não arquivado) entram', () => {
-    for (const process of [SCHEDULED, EN_ROUTE, RECEIVED, IN_STOCK]) {
+    // S9-G: além da fase, precisa de previsão de chegada na semana vigente (aqui: coleta feita, recebida em 24/11 e 23/11).
+    const enRoute = { ...EN_ROUTE, collectionWindows: [{ id: 'w', scheduledAt: iso(2026, 10, 25, 8, 0) }] }
+    const received = { ...RECEIVED, cargoReceivedAt: iso(2026, 10, 24, 15, 0) }
+    const inStock = { ...IN_STOCK, cargoReceivedAt: iso(2026, 10, 23, 15, 0) }
+    for (const process of [SCHEDULED, enRoute, received, inStock]) {
       expect(isCargoConferenceCandidate(process, NOW), process.id).toBe(true)
+    }
+    // Sem nenhuma data de chegada (sem janela, sem ETA, sem recebimento) fica fora.
+    for (const process of [EN_ROUTE, RECEIVED, IN_STOCK]) {
+      expect(isCargoConferenceCandidate(process, NOW), process.id).toBe(false)
     }
   })
 
@@ -128,7 +136,7 @@ describe('estado do cartão', () => {
 })
 
 describe('contadores', () => {
-  const entry = (state) => ({ state })
+  const entry = (state) => ({ state, week: 'atual' })
 
   it('contador = nova + andamento (sem bloqueados, fechadas, erro e carregando)', () => {
     const entries = ['nova', 'andamento', 'andamento', 'sem', 'fechada', 'erro', 'carregando'].map(entry)
@@ -219,14 +227,15 @@ describe('filtro, busca e ordem', () => {
     name: 'CON DG 009-26',
     category: 'CONSOLIDADO',
     collectionStatus: 'Carga a caminho do CD',
+    collectionWindows: [{ id: 'w', scheduledAt: iso(2026, 10, 24, 9, 0) }],
     purchaseOrders: [
       { po: '4500901', reference: 'ACME SEA 011-26', supplierName: 'ACME RESINS CO' },
       { po: '4500902', reference: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS' },
     ],
   })
-  const nova = base({ id: 'nova', name: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS', collectionStatus: 'Veículo no CD para descarga' })
+  const nova = base({ id: 'nova', name: 'NOVA SEA 034-26', supplierName: 'NOVA POLYMERS', collectionStatus: 'Veículo no CD para descarga', cargoReceivedAt: iso(2026, 10, 24, 15, 0) })
   const kronos = scheduled({ id: 'kronos', name: 'KRONOS SEA 012-26', supplierName: 'KRONOS MATERIALS' }, iso(2026, 10, 27, 10, 0))
-  const stock = base({ id: 'estoque', name: 'ZETA SEA 099-26', collectionStatus: 'Carga disponível em estoque' })
+  const stock = base({ id: 'estoque', name: 'ZETA SEA 099-26', collectionStatus: 'Carga disponível em estoque', cargoReceivedAt: iso(2026, 10, 23, 15, 0) })
 
   const all = [
     entryOf(stock, 'fechada'),

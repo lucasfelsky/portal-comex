@@ -23,12 +23,14 @@ import {
 
 const NOW = new Date(2026, 10, 25, 10, 0)
 
+// S9-G: candidato = fase da lista + chegada na semana vigente (aqui: coleta feita em 24/11, a semana de NOW é 23 a 29/11).
 const candidate = (id) => ({
   id,
   name: `PROC ${id}`,
   category: 'FCL',
   archived: false,
   collectionStatus: 'Carga a caminho do CD',
+  collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 10, 24, 9, 0).toISOString() }],
 })
 const notCandidate = (id) => ({ id, name: `PROC ${id}`, category: 'FCL', archived: false, processStatus: 'Embarcou' })
 
@@ -151,6 +153,33 @@ describe('cache de 2 minutos', () => {
     const result = await loading
     expect(mockGetCargoReport).toHaveBeenCalledTimes(2)
     expect(result.entries[0]).toMatchObject({ processId: 'c1', total: 1, state: 'nova' })
+  })
+})
+
+describe('semana vigente no cache', () => {
+  it('virou a semana: o cache de 2 min não vale (relê a lista) e a chave da semana muda o resultado', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const sunday = new Date(2026, 10, 29, 23, 59, 30)
+    vi.setSystemTime(sunday)
+    const early = { ...candidate('c0'), collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 10, 29, 9, 0).toISOString() }] }
+    mockListProcesses.mockResolvedValue([early])
+    const first = await loadCargoConferenceEntries({ now: sunday })
+    expect(first.entries).toHaveLength(1)
+    expect(first.entries[0].week).toBe('atual')
+
+    const monday = new Date(2026, 10, 30, 0, 0, 10) // 40 s depois: dentro dos 2 min do TTL, mas em outra semana
+    vi.setSystemTime(monday)
+    const second = await loadCargoConferenceEntries({ now: monday })
+    expect(mockListProcesses).toHaveBeenCalledTimes(2)
+    expect(second.entries[0].week).toBe('anterior')
+  })
+
+  it('processo com chegada em semana futura nem é lido', async () => {
+    const future = { ...candidate('futuro'), collectionWindows: [{ id: 'w', scheduledAt: new Date(2026, 11, 3, 9, 0).toISOString() }] }
+    mockListProcesses.mockResolvedValue([candidate('c1'), future])
+    const result = await loadCargoConferenceEntries({ now: NOW })
+    expect(mockGetCargoReport.mock.calls.map(([id]) => id)).toEqual(['c1'])
+    expect(result.entries).toHaveLength(1)
   })
 })
 

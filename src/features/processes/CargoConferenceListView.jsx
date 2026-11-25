@@ -4,7 +4,9 @@ import Skeleton from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import {
   CARGO_CONFERENCE_STATES,
+  CARGO_CONFERENCE_WEEKS,
   countCargoConferenceFilters,
+  describeCargoConferenceArrival,
   describeCargoConferenceCategory,
   describeCargoConferenceSupplier,
   describeCargoConferenceWhen,
@@ -61,6 +63,7 @@ function EntryCard({ entry, title, now, onOpen, onBlocked, onRetry }) {
   ]
     .filter(Boolean)
     .join(' · ')
+  const arrival = describeCargoConferenceArrival(entry)
 
   function handleClick() {
     if (blocked) onBlocked()
@@ -80,6 +83,14 @@ function EntryCard({ entry, title, now, onOpen, onBlocked, onRetry }) {
         <span className={getDerivedStatusToneClass(phase)}>{phase.label}</span>
       </span>
       <span className="ccf-sub">{meta}</span>
+      {arrival ? (
+        <span className="ccf-entry__row ccf-entry__row--start">
+          <span className="ccf-sub">{arrival}</span>
+          {entry.week === CARGO_CONFERENCE_WEEKS.previous ? (
+            <span className="ccf-badge ccf-badge--warn">Semana anterior</span>
+          ) : null}
+        </span>
+      ) : null}
       {blocked ? <span className="ccf-note ccf-note--warn">{BLOCKED_NOTE}</span> : null}
       {failed ? <span className="ccf-note ccf-note--danger">{ERROR_NOTE}</span> : null}
       {loading ? <span className="ccf-sub">Carregando…</span> : null}
@@ -152,9 +163,7 @@ export default function CargoConferenceListView({
         ))}
       </div>
 
-      <p className="ccf-sub">
-        Processos a partir de <b>Coleta agendada</b> que têm Relatório de Carga.
-      </p>
+      <p className="ccf-sub">Previsão de chegada nesta semana, mais conferências abertas de semanas anteriores.</p>
 
       {status === 'error' && entries.length === 0 ? (
         <div className="error-banner error-banner--retry" role="alert">
@@ -175,7 +184,7 @@ export default function CargoConferenceListView({
 
       {status === 'ready' && visible.length === 0 ? (
         <div className="ccf-note" role="status">
-          {query ? 'Nada por aqui. Tente outra busca.' : 'Nada por aqui. Quando uma coleta for agendada, o processo aparece nesta lista.'}
+          {query ? 'Nada por aqui. Tente outra busca.' : 'Nenhum processo com previsão de chegada nesta semana.'}
         </div>
       ) : null}
 
