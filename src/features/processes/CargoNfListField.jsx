@@ -12,8 +12,8 @@ import {
   removeCargoNfAt,
 } from './cargoNfList'
 
-// S9-E do Relatório de Carga: campo "Nº da NF" da conferência como LISTA (chips + Adicionar). A verdade é `value`
-// (o texto gravável, "NF1; NF2"). Enter e "Adicionar" transformam o que está digitado em chips; colar com
+// S9-E do Relatório de Carga: campo "Nº da NF" da conferência como LISTA (chips + botão só com o ícone +). A verdade é `value`
+// (o texto gravável, "NF1; NF2"). Enter e o botão + ("Adicionar NF") transformam o que está digitado em chips; colar com
 // `;`/`,`/quebra de linha inclui várias de uma vez. NF recusada (duplicada, longa demais, limite) NÃO entra e fica
 // no campo para corrigir.
 //
@@ -192,13 +192,14 @@ export default function CargoNfListField({
         <button
           type="button"
           className="secondary-button crf-nfs__add"
+          aria-label="Adicionar NF"
+          title="Adicionar NF"
           onClick={() => {
             commit(text)
             inputRef.current?.focus()
           }}
         >
-          <Icon name="plus" size={14} strokeWidth={2.2} />
-          Adicionar
+          <Icon name="plus" size={18} strokeWidth={2.2} />
         </button>
       </div>
       {error ? (

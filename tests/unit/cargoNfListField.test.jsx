@@ -1,4 +1,4 @@
-// S9-E do Relatório de Carga: campo "Nº da NF" como lista (chips, Adicionar, Enter, colar, blur, remover, aria-live).
+// S9-E do Relatório de Carga: campo "Nº da NF" como lista (chips, botão +, Enter, colar, blur, remover, aria-live).
 import fs from 'node:fs'
 import path from 'node:path'
 import { useState } from 'react'
@@ -49,10 +49,10 @@ describe('CargoNfListField', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('o botão Adicionar inclui a NF (secondary-button) e devolve o foco ao campo', async () => {
+  it('o botão + ("Adicionar NF") inclui a NF (secondary-button) e devolve o foco ao campo', async () => {
     const user = userEvent.setup()
     render(<Harness />)
-    const add = screen.getByRole('button', { name: 'Adicionar' })
+    const add = screen.getByRole('button', { name: 'Adicionar NF' })
     expect(add).toHaveClass('secondary-button', 'crf-nfs__add')
     expect(add).not.toHaveClass('ghost-button')
 
@@ -63,6 +63,19 @@ describe('CargoNfListField', () => {
 
     expect(stored()).toBe('1; 2')
     expect(field()).toHaveFocus()
+  })
+
+  it('o botão de adicionar é só o ícone +: sem texto visível, com nome acessível e título "Adicionar NF"', () => {
+    render(<Harness />)
+    const add = screen.getByRole('button', { name: 'Adicionar NF' })
+
+    expect(add).toHaveAttribute('type', 'button')
+    expect(add).toHaveAttribute('aria-label', 'Adicionar NF')
+    expect(add).toHaveAttribute('title', 'Adicionar NF')
+    expect(add.textContent).toBe('')
+    expect(add.querySelectorAll('svg')).toHaveLength(1)
+    expect(add.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByRole('button', { name: 'Adicionar' })).not.toBeInTheDocument()
   })
 
   it('colar com ";" e "," cria vários chips de uma vez', async () => {
@@ -344,7 +357,7 @@ describe('CargoNfListField', () => {
     expect(chips().map((chip) => chip.textContent)).toEqual(['1', '2'])
     expect(screen.queryByRole('button', { name: /Remover NF/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Adicionar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Adicionar NF' })).not.toBeInTheDocument()
     expect(screen.getByText('Nº da NF')).toBeInTheDocument()
   })
 
@@ -372,6 +385,14 @@ describe('CargoNfListField', () => {
     expect(block).not.toMatch(/@media/)
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     expect(block).not.toMatch(/position:\s*fixed/)
+  })
+
+  it('o botão + é quadrado (40 px; 44 px no celular) e a linha nunca estoura a coluna da grade', () => {
+    expect(css).toMatch(/\.crf-nfs \{\s*min-width: 0;\s*\}/)
+    expect(css).toMatch(/\.crf-nfs__row \{\s*min-width: 0;\s*\}/)
+    expect(css).toMatch(/\.crf-nfs__row input \{\s*flex: 1 1 0;\s*width: 0;\s*min-width: 0;\s*\}/)
+    expect(css).toMatch(/\.crf-nfs \.crf-nfs__add \{[^}]*width: 40px;[^}]*min-width: 40px;[^}]*padding: 0;/)
+    expect(css).toMatch(/\.crf-wrap--mobile \.crf-nfs__add,\s*\.crf-nfs--mobile \.crf-nfs__add \{\s*width: 44px;\s*min-width: 44px;/)
   })
 
   it('a lista de chips tem teto de altura com rolagem (100 NFs não viram um card gigante)', () => {
