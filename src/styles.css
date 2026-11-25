@@ -25859,3 +25859,44 @@ tr.crf-gsum td {
   position: absolute;
   inset: -8px;
 }
+
+/* S9-E (ajuste): botão de adicionar NF só com o ícone +, quadrado, e a linha nunca estoura a coluna da grade.
+   O campo é item de grade (.crf-foot): sem min-width: 0 o conteúdo mínimo do input empurrava o campo para fora
+   da coluna e o botão cobria o campo vizinho. Sem media query: o celular segue vindo do JS. */
+.crf-nfs {
+  min-width: 0;
+}
+
+.crf-nfs__row {
+  min-width: 0;
+}
+
+.crf-nfs__row input {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+}
+
+.crf-nfs .crf-nfs__add {
+  flex: 0 0 auto;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+.crf-wrap--mobile .crf-nfs__add,
+.crf-nfs--mobile .crf-nfs__add {
+  width: 44px;
+  min-width: 44px;
+}
+
+/* Gaveta de notificações (ajuste): a linha de abas não encolhe com janela baixa e lista longa. Com overflow-x: auto o
+   min-height automático do item flex vira 0, a linha encolhia (as abas ficavam cortadas) e o overflow-y: auto
+   implícito acendia uma barra vertical. Só rola na horizontal quando as abas não couberem. Sem media query: a
+   gaveta só existe no desktop e o bloco original (na faixa de desktop) segue valendo para o resto. */
+.notifications__panel--drawer .notif-drawer__filters {
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
