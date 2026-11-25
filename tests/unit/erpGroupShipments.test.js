@@ -335,6 +335,24 @@ describe('groupErpShipments - determinismo e contrato', () => {
     )
   })
 
+  it('S9: o item agrupado traz itemId, sqCode e supplierRef da linha', () => {
+    const { shipments } = group([
+      makeLooseRow({
+        itemId: 'IT-1', pedido: 9036, poRef: 'BETA SEA 904-26', refEmbarque: 'FCL - CFR HAMBURG',
+        commercialName: 'RESINA OMEGA', sqCode: 'SQ-0042', supplierRef: 'OMEGA RESIN 25KG',
+      }),
+      makeLooseRow({
+        itemId: 'IT-2', pedido: 9036, poRef: 'BETA SEA 904-26', refEmbarque: 'FCL - CFR HAMBURG',
+        commercialName: 'ACIDO PSI',
+      }),
+    ])
+    const items = find(shipments, 'BETA SEA 904-26').items
+    expect(items.map((item) => item.itemId)).toEqual(['IT-2', 'IT-1'])
+    expect(items[1]).toMatchObject({ sqCode: 'SQ-0042', supplierRef: 'OMEGA RESIN 25KG' })
+    // Sem valor na planilha, o campo existe e e' vazio (nunca undefined).
+    expect(items[0].supplierRef).toBe('')
+  })
+
   it('itens e rowNumbers saem ordenados; nfDate guarda a mais recente', () => {
     const { shipments } = group(rows())
     const fcl = find(shipments, 'BETA SEA 904-26')

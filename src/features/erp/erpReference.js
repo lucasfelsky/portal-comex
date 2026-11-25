@@ -24,7 +24,10 @@ export const ERP_REFERENCE_LATEST_ID = 'latest'
 
 // Tetos, uma unica fonte. Os de lista/tamanho espelham o `firestore.rules`
 // (teste de paridade); passar de qualquer um PULA o hint (nunca trunca: truncar
-// criaria divergencia falsa ou mudaria o `erp_conflito`).
+// criaria divergencia falsa ou mudaria o `erp_conflito`). Os campos de item do
+// S9 (`sqCode` 32, `supplierRef` 200, `itemId` 40 caracteres) cabem: 300 itens
+// x ~300 bytes ~ 90 KB < `maxHintBytes`; se um embarque estourar, o hint e'
+// PULADO por `tamanho` como antes.
 export const ERP_HINT_LIMITS = {
   maxItems: 300,
   maxOrders: 100,

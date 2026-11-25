@@ -248,6 +248,7 @@ function buildShipment(kind, key, rows, warnings) {
       commercialName: row.commercialName,
       quantityKg: row.quantityKg,
       sqCode: row.sqCode,
+      supplierRef: row.supplierRef,
       ncm: row.ncm,
     }))
     .sort(

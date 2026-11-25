@@ -191,7 +191,9 @@ describe('saveErpReferenceSnapshot - gravacao em lote', () => {
     const hints = allSetCalls().filter(([ref]) => ref.path.startsWith('erpProcessHints/')).map(([, data]) => data)
     expect(hints).toHaveLength(result.matched.length)
     for (const hint of hints) {
-      for (const item of hint.shipment.items) expect(Object.keys(item).sort()).toEqual(['commercialName', 'pedido', 'quantityKg'])
+      for (const item of hint.shipment.items) {
+        expect(Object.keys(item).sort()).toEqual(['commercialName', 'itemId', 'pedido', 'quantityKg', 'sqCode', 'supplierRef'])
+      }
       for (const order of hint.shipment.orders) expect(Object.keys(order).sort()).toEqual(['exporter', 'pedido', 'poBase', 'poRef'])
       expect(Object.keys(hint.shipment.transport.vessel).sort()).toEqual(['name', 'raw', 'voyage'])
     }
