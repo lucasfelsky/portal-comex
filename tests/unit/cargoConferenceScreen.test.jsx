@@ -286,6 +286,14 @@ describe('logística, COMEX fechado: conferir itens', () => {
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
     await user.click(plusButton(2))
     await user.click(plusButton(3))
+    // Polimento: os itens tocados nesta sessão ficam na lista (não somem sob o dedo); o aviso confirma o fim.
+    expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Item 1' })).not.toBeInTheDocument()
+    expect(screen.getByRole('article', { name: 'Item 2' })).toBeInTheDocument()
+    expect(screen.getByRole('article', { name: 'Item 3' })).toBeInTheDocument()
+    // Trocar o filtro zera os fixados: sem pendentes, sobra só o aviso.
+    await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
     expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
     expect(screen.queryByRole('article')).not.toBeInTheDocument()
   })
@@ -1257,5 +1265,136 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
     expect(onBack).not.toHaveBeenCalled()
     expect(await screen.findByRole('alertdialog', { name: 'Descartar alterações?' })).toBeInTheDocument()
+  })
+})
+
+// Polimento do contador (pós S10-I): "Só pendentes" não esconde o item em contagem; selo neutro "A contar".
+describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
+  const onlyPendingBox = () => screen.getByRole('checkbox', { name: 'Só pendentes' })
+  const item = (n) => screen.queryByRole('article', { name: `Item ${n}` })
+
+  it('contar pallets de um item pendente: ao virar conferido o cartão permanece sob o dedo', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc({ okByRowId: { 'r-1': true } }) })
+    await user.click(onlyPendingBox())
+    expect(item(1)).toBeInTheDocument()
+    await user.click(plusButton(1))
+    expect(within(item(1)).getByText('Conferido')).toBeInTheDocument()
+    expect(item(1)).toBeInTheDocument()
+    // Os contadores seguem o dado real (1 conferido), com ou sem o cartão fixado.
+    expect(progressText().querySelector('b')).toHaveTextContent('1')
+    expect(item(2)).toBeInTheDocument()
+  })
+
+  it('um item conferido que ninguém tocou continua escondido pelo filtro', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-1': true }, palletsByRowId: { 'r-1': 2 } }),
+    })
+    await user.click(onlyPendingBox())
+    expect(item(1)).not.toBeInTheDocument()
+    expect(item(2)).toBeInTheDocument()
+  })
+
+  it('tocar, focar ou editar fixa o item; trocar o filtro zera os fixados', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-2': true }, palletsByRowId: { 'r-2': 1 } }),
+    })
+    await user.click(onlyPendingBox())
+    expect(item(2)).not.toBeInTheDocument()
+    // Item 1 pendente: foco na etiqueta fixa; depois de marcar OK? e contar, o cartão fica.
+    await user.type(screen.getByLabelText('Etiqueta WMS da linha 1'), 'x')
+    await user.click(okButton(1))
+    await user.click(plusButton(1))
+    expect(item(1)).toBeInTheDocument()
+    // Trocar o filtro (desligar e ligar) zera o fixado: o item 1, já conferido, sai da lista.
+    await user.click(onlyPendingBox())
+    expect(item(2)).toBeInTheDocument()
+    await user.click(onlyPendingBox())
+    expect(item(1)).not.toBeInTheDocument()
+    expect(item(2)).not.toBeInTheDocument()
+  })
+
+  it('o fixado vale só dentro da sessão da tela: ao remontar, nada fixado', async () => {
+    const { user, unmount } = await renderScreen()
+    await user.click(onlyPendingBox())
+    await user.click(okButton(1))
+    await user.click(plusButton(1))
+    expect(item(1)).toBeInTheDocument()
+    unmount()
+    cleanup()
+    const next = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-1': true }, palletsByRowId: { 'r-1': 1 } }),
+    })
+    await next.user.click(onlyPendingBox())
+    expect(item(1)).not.toBeInTheDocument()
+  })
+
+  it('o fixado só muda a lista: o aviso de todos conferidos e o dado gravado seguem o estado real', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ okByRowId: { 'r-2': true, 'r-3': true }, palletsByRowId: { 'r-2': 1, 'r-3': 1 } }),
+    })
+    await user.click(onlyPendingBox())
+    await user.click(okButton(1))
+    await user.click(plusButton(1))
+    expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
+    expect(item(1)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const saved = mockSaveConference.mock.calls[0][1]
+    expect(saved.palletsByRowId).toEqual({ 'r-1': 1, 'r-2': 1, 'r-3': 1 })
+    expect(saved.okByRowId).toEqual({ 'r-1': true, 'r-2': true, 'r-3': true })
+  })
+})
+
+describe('selo neutro "A contar"', () => {
+  const card = (n) => screen.getByRole('article', { name: `Item ${n}` })
+
+  it('com o total do COMEX informado, o item nunca contado mostra "A contar" (neutro) e não "Sem contagem"', async () => {
+    await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    for (const n of [1, 2, 3]) {
+      expect(within(card(n)).getByText('A contar')).toHaveClass('ccf-badge')
+      expect(within(card(n)).queryByText('Sem contagem')).not.toBeInTheDocument()
+    }
+    expect(within(card(1)).getByText('A contar')).not.toHaveClass(
+      'ccf-badge--ok',
+      'ccf-badge--warn',
+      'ccf-badge--danger',
+      'ccf-badge--info'
+    )
+  })
+
+  it('some ao contar o primeiro pallet; depois de zerar volta o neutro "Sem contagem" (não "A contar")', async () => {
+    const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    await user.click(plusButton(1))
+    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(1)).queryByText('Sem contagem')).not.toBeInTheDocument()
+    expect(within(card(2)).getByText('A contar')).toBeInTheDocument()
+    await user.click(minusButton(1))
+    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
+  })
+
+  it('sem o total do COMEX não há "A contar" (segue "Sem contagem")', async () => {
+    await renderScreen()
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
+  })
+
+  it('registro antigo (Contagem OK) não é "A contar"; o selo Divergente da faixa segue', async () => {
+    await renderScreen({
+      current: currentDoc({ expectedPallets: 1 }),
+      conference: conferenceDoc({ okByRowId: { 'r-1': true }, countOkByRowId: { 'r-1': true } }),
+    })
+    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(2)).getByText('A contar')).toBeInTheDocument()
+    expect(within(palletsStrip()).getByText('Divergente')).toBeInTheDocument()
+  })
+
+  it('tudo contado e conferindo: nenhum "A contar" e a faixa mostra "Confere"', async () => {
+    await renderScreen({
+      current: currentDoc({ expectedPallets: 3 }),
+      conference: conferenceDoc({ palletsByRowId: { 'r-1': 1, 'r-2': 1, 'r-3': 1 } }),
+    })
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(palletsStrip()).getByText('Confere')).toBeInTheDocument()
   })
 })
