@@ -96,13 +96,17 @@ describe('coaAutoReadQueue - ordem e fila única', () => {
     expect(calledIds()).toEqual(['a'])
     expect(getCoaAutoReadState().progress[buildCoaAutoReadKey('p1', 'PO-1')]).toEqual({ done: 0, total: 1 })
     expect(getCoaAutoReadState().progress[buildCoaAutoReadKey('p1', 'PO-2')]).toEqual({ done: 0, total: 1 })
+    // Só o escopo do arquivo em leitura é o ativo; o outro espera a vez.
+    expect(getCoaAutoReadState().activeKey).toBe(buildCoaAutoReadKey('p1', 'PO-1'))
     first.resolve(done('a'))
     await flush()
     expect(calledIds()).toEqual(['a', 'b'])
+    expect(getCoaAutoReadState().activeKey).toBe(buildCoaAutoReadKey('p1', 'PO-2'))
     expect(getCoaAutoReadState().progress[buildCoaAutoReadKey('p1', 'PO-1')]).toBeUndefined()
     second.resolve(done('b'))
     await flush()
     expect(getCoaAutoReadState().progress).toEqual({})
+    expect(getCoaAutoReadState().activeKey).toBe('')
   })
 
   it('novo envio com a fila andando entra no fim e soma ao total do escopo', async () => {

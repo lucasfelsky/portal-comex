@@ -384,7 +384,12 @@ describe('CONSOLIDADO: células por PO na mesma fila', () => {
     const cells = container.querySelectorAll('td')
 
     await waitFor(() => expect(within(cells[0]).getByText(statusText(1, 2))).toBeInTheDocument())
-    expect(within(cells[1]).getByText(statusText(1, 1))).toBeInTheDocument()
+    // A célula que só espera a vez mostra "Na fila" (e não o progresso de quem lê).
+    const waiting = within(cells[1]).getByText('Na fila para leitura.')
+    expect(waiting).toHaveAttribute('role', 'status')
+    expect(waiting).toHaveAttribute('aria-live', 'polite')
+    expect(within(cells[1]).queryByText(/Lendo os COAs/)).not.toBeInTheDocument()
+    expect(within(cells[0]).queryByText('Na fila para leitura.')).not.toBeInTheDocument()
     await waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].documentId).toBe('new1')
     await flush()
@@ -399,6 +404,10 @@ describe('CONSOLIDADO: células por PO na mesma fila', () => {
     pending[1].resolve(readResult(read('new2')))
     await waitFor(() => expect(pending).toHaveLength(3))
     expect(pending[2].documentId).toBe('new3')
+    // A vez passou para a 2ª célula: agora ela lê e a 1ª já não mostra nada.
+    await waitFor(() => expect(within(cells[1]).getByText(statusText(1, 1))).toBeInTheDocument())
+    expect(within(cells[1]).queryByText('Na fila para leitura.')).not.toBeInTheDocument()
+    expect(within(cells[0]).queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
     pending[2].resolve(readResult(read('new3')))
     await waitFor(() => expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument())
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(3)

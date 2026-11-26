@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {
   COA_AUTO_READ_HINT,
+  COA_AUTO_READ_WAITING,
   buildCoaAutoReadKey,
   enqueueCoaAutoRead,
   getCoaAutoReadState,
@@ -32,6 +33,11 @@ export default function useCoaAutoRead({ processId, enabled, scope = '' }) {
     () => getCoaAutoReadState().progress[key],
     () => undefined
   )
+  const isReading = useSyncExternalStore(
+    subscribeCoaAutoRead,
+    () => getCoaAutoReadState().activeKey === key,
+    () => false
+  )
   const notice = useSyncExternalStore(
     subscribeCoaAutoRead,
     () => getCoaAutoReadState().notices[key] ?? '',
@@ -48,6 +54,10 @@ export default function useCoaAutoRead({ processId, enabled, scope = '' }) {
     [enabled, processId, scope]
   )
 
-  const status = enabled && progress ? `Lendo os COAs: ${progress.done + 1} de ${progress.total}. ${COA_AUTO_READ_HINT}` : ''
+  // Quem está de fato lendo mostra o progresso; quem tem arquivo na fila mas espera a vez mostra só "Na fila".
+  let status = ''
+  if (enabled && progress) {
+    status = isReading ? `Lendo os COAs: ${progress.done + 1} de ${progress.total}. ${COA_AUTO_READ_HINT}` : COA_AUTO_READ_WAITING
+  }
   return { status, notice: enabled ? notice : '', enqueue }
 }

@@ -25,9 +25,11 @@ const REPORT_CLOSED = 'report-closed'
 const KEY_SEPARATOR = '|'
 
 export const COA_AUTO_READ_HINT = 'Cada arquivo pode levar até 2 minutos.'
+export const COA_AUTO_READ_WAITING = 'Na fila para leitura.'
 
 function emptyState() {
-  return { progress: {}, notices: {}, readVersions: {} }
+  // `activeKey`: escopo do arquivo que está sendo lido agora (os demais com itens na fila só esperam a vez).
+  return { progress: {}, notices: {}, readVersions: {}, activeKey: '' }
 }
 
 let state = emptyState()
@@ -140,6 +142,7 @@ async function pump() {
     while (run === generation) {
       const item = takeNext()
       if (!item) break
+      if (state.activeKey !== itemKey(item)) emit({ activeKey: itemKey(item) })
       const code = await readOne(item)
       if (run !== generation) return
       const kind = code ? classify(code) : 'ok'
@@ -157,6 +160,7 @@ async function pump() {
   } finally {
     if (run === generation) {
       running = false
+      if (state.activeKey) emit({ activeKey: '' })
     }
   }
 }
