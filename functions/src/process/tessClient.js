@@ -5,9 +5,13 @@
 // - Todas as requisicoes: `Authorization: Bearer`, `x-workspace-id`, `redirect: 'error'`, AbortController por
 //   chamada, resposta lida ate 1 MB e PACER (>= minIntervalMs entre requisicoes: a Tess limita 1 req/s por
 //   organizacao; com `maxInstances: 1` o pacer da instancia vale para o Portal todo).
-// - So' PDF, nome generico `coa.pdf`, SEM `process` no upload (consome creditos).
+// - So' PDF, nome generico `coa.pdf`, COM `process=true` no upload: OBSERVADO em 2026-11-26 que a execucao do
+//   agente recusa (422 "File ... is not processed yet") arquivo nao processado. O upload processado devolve
+//   `completed` (~1 credito); se vier outro status, `waitFileProcessed` consulta `GET /files/{id}` ate `completed`.
 // - Ids (`agentId`, `fileId`, `responseId`) so' entram na URL como inteiros positivos validados.
 // - Erros: `TessError` com `code` fixo; a mensagem do erro e' o proprio codigo (nunca conteudo da resposta).
+//   Diagnostico: `stage` ('upload'|'process'|'execute'|'poll'|'delete') e `httpStatus` (numero) acompanham o erro;
+//   nada de corpo/mensagem da Tess.
 
 export const TESS_API_BASE = 'https://api.tess.im'
 export const TESS_CONTRACT_VERSION = 'docs.tess.im 2026-11-25'
@@ -16,19 +20,27 @@ export const TESS_MIN_INTERVAL_MS = 1100
 export const TESS_MAX_RESPONSE_BYTES = 1024 * 1024
 export const TESS_MAX_FILE_BYTES = 32 * 1024 * 1024
 
-const UPLOAD_TIMEOUT_MS = 30000
+// Orcamento (teto total de 240 s em `coaReadFunction.js`): o upload com `process=true` e' sincrono (observado
+// ~35 s com o processamento), a espera extra pelo processamento e' limitada e a execucao leva ~25 s (observado).
+const UPLOAD_TIMEOUT_MS = 90000
+const FILE_POLL_TIMEOUT_MS = 20000
+export const TESS_FILE_PROCESS_MAX_WAIT_MS = 60000
+export const TESS_FILE_POLL_WAITS_SECONDS = [3, 5, 10, 15]
 const EXECUTE_TIMEOUT_MS = 110000
 const POLL_TIMEOUT_MS = 20000
 const DELETE_TIMEOUT_MS = 15000
 const DEFAULT_RETRY_AFTER_SECONDS = 60
 const MAX_RETRY_AFTER_SECONDS = 300
 
+export const TESS_STAGES = ['upload', 'process', 'execute', 'poll', 'delete']
+
 export class TessError extends Error {
-  constructor(code, { httpStatus = null, retryAfterSeconds } = {}) {
+  constructor(code, { httpStatus = null, retryAfterSeconds, stage = null } = {}) {
     super(code)
     this.name = 'TessError'
     this.code = code
     this.httpStatus = httpStatus
+    this.stage = stage
     if (retryAfterSeconds !== undefined) this.retryAfterSeconds = retryAfterSeconds
   }
 }
@@ -153,6 +165,23 @@ export function classifyTessAgentStatus(status, outputText) {
   return typeof outputText === 'string' && outputText.trim() !== '' ? 'done' : 'pending'
 }
 
+// Estado do ARQUIVO na Tess (`status` do upload e de `GET /files/{id}`). OBSERVADO: `waiting` (upload sem process) e
+// `completed` (upload com process=true). Falha = status contendo "fail" ou "error" [INF]; o resto e' "em andamento".
+export function classifyTessFileStatus(status) {
+  const normalized = String(status ?? '').toLowerCase()
+  if (/fail|error/.test(normalized)) return 'failed'
+  if (normalized === 'completed') return 'completed'
+  return 'pending'
+}
+
+export function isTessFileCompleted(status) {
+  return classifyTessFileStatus(status) === 'completed'
+}
+
+function isTransientTessError(error) {
+  return error instanceof TessError && (error.code === 'tess-unavailable' || error.code === 'tess-timeout')
+}
+
 export function createTessClient({
   apiKey,
   agentId,
@@ -215,12 +244,14 @@ export function createTessClient({
     }
   }
 
-  return {
+  const methods = {
     async uploadFile({ bytes, deadline }) {
       const size = Number(bytes?.length)
       if (!Number.isFinite(size) || size <= 0) throw new TessError('tess-bad-response')
       const form = new FormData()
       form.append('file', new Blob([bytes], { type: 'application/pdf' }), 'coa.pdf')
+      // A execucao do agente exige arquivo PROCESSADO (OBSERVADO 2026-11-26): `process=true` (~1 credito).
+      form.append('process', 'true')
       const { body } = await request({
         method: 'POST',
         path: '/files',
@@ -232,7 +263,46 @@ export function createTessClient({
       })
       const fileId = toPositiveInteger(body?.id)
       if (fileId === null) throw new TessError('tess-bad-response')
-      return { fileId, credits: typeof body.credits === 'number' ? body.credits : 0 }
+      return {
+        fileId,
+        credits: typeof body.credits === 'number' ? body.credits : 0,
+        status: typeof body.status === 'string' ? body.status : '',
+      }
+    },
+
+    // Chamado quando o upload NAO devolveu `completed`: consulta `GET /files/{id}` (pacer + espera crescente) ate
+    // `completed`, dentro do menor entre o prazo total e TESS_FILE_PROCESS_MAX_WAIT_MS. Falha definitiva do arquivo
+    // -> tess-error; erro transitorio da consulta so' gasta a espera. `credits` e' o valor MAIS ALTO visto (o
+    // `credits` do arquivo e' o custo do proprio arquivo, nao um incremento).
+    async waitFileProcessed({ fileId, status, deadline }) {
+      const id = assertId(fileId)
+      let state = classifyTessFileStatus(status)
+      const limit = Math.min(deadline, now() + TESS_FILE_PROCESS_MAX_WAIT_MS)
+      let credits = 0
+      let pollIndex = 0
+      while (state === 'pending') {
+        const waits = TESS_FILE_POLL_WAITS_SECONDS
+        const waitMs = waits[Math.min(pollIndex, waits.length - 1)] * 1000
+        if (now() + waitMs >= limit) throw new TessError('tess-timeout')
+        await sleep(waitMs)
+        pollIndex += 1
+        try {
+          const { body } = await request({
+            method: 'GET',
+            path: `/files/${id}`,
+            deadline,
+            timeoutMs: FILE_POLL_TIMEOUT_MS,
+            context: 'process',
+          })
+          if (!body || typeof body !== 'object' || Array.isArray(body)) throw new TessError('tess-bad-response')
+          if (typeof body.credits === 'number' && body.credits > credits) credits = body.credits
+          state = classifyTessFileStatus(body.status)
+        } catch (error) {
+          if (!isTransientTessError(error)) throw error
+        }
+      }
+      if (state === 'failed') throw new TessError('tess-error')
+      return { credits }
     },
 
     async executeAgent({ fileId, deadline }) {
@@ -301,4 +371,25 @@ export function createTessClient({
       }
     },
   }
+
+  // Todo TessError sai com o ESTAGIO em que ocorreu (diagnostico sem conteudo).
+  const stageByMethod = {
+    uploadFile: 'upload',
+    waitFileProcessed: 'process',
+    executeAgent: 'execute',
+    getAgentResponse: 'poll',
+    deleteFile: 'delete',
+  }
+  const client = {}
+  for (const [name, run] of Object.entries(methods)) {
+    client[name] = async (...args) => {
+      try {
+        return await run(...args)
+      } catch (error) {
+        if (error instanceof TessError && !error.stage) error.stage = stageByMethod[name]
+        throw error
+      }
+    }
+  }
+  return client
 }
