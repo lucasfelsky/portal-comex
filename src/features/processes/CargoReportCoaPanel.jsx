@@ -36,28 +36,30 @@ function describeSum(proposal) {
 
 function LotsTable({ lots }) {
   return (
-    <table className="crf-coa__lots">
-      <thead>
-        <tr>
-          <th scope="col">Lote</th>
-          <th scope="col">Qtd (kg)</th>
-          <th scope="col">Arquivo · pág.</th>
-          <th scope="col">Confiança</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lots.map((lot, index) => (
-          <tr key={`${lot.supplierLot}-${index}`}>
-            <td>{lot.supplierLot}</td>
-            <td>{lot.quantityKg === null ? 'sem quantidade' : formatCargoNumber(lot.quantityKg, { maxDecimals: 3 })}</td>
-            <td>{`${lot.documentName}${lot.page ? ` · pág. ${lot.page}` : ''}`}</td>
-            <td>
-              <span className={`crf-coa__conf crf-coa__conf--${lot.confidence}`}>{CONFIDENCE_LABELS[lot.confidence] ?? 'baixa'}</span>
-            </td>
+    <div className="crf-coa__lots-wrap">
+      <table className="crf-coa__lots">
+        <thead>
+          <tr>
+            <th scope="col">Lote</th>
+            <th scope="col">Qtd (kg)</th>
+            <th scope="col">Arquivo · pág.</th>
+            <th scope="col">Confiança</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {lots.map((lot, index) => (
+            <tr key={`${lot.supplierLot}-${index}`}>
+              <td>{lot.supplierLot}</td>
+              <td>{lot.quantityKg === null ? 'sem quantidade' : formatCargoNumber(lot.quantityKg, { maxDecimals: 3 })}</td>
+              <td>{`${lot.documentName}${lot.page ? ` · pág. ${lot.page}` : ''}`}</td>
+              <td>
+                <span className={`crf-coa__conf crf-coa__conf--${lot.confidence}`}>{CONFIDENCE_LABELS[lot.confidence] ?? 'baixa'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

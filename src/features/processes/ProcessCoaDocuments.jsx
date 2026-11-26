@@ -15,6 +15,7 @@ import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { formatDateTime } from '../../utils/dateFormat'
 import { listCoaReads } from '../../services/coaReadsRepository'
 import { uploadProcessDocument } from '../../services/processDocumentsRepository'
+import { describeReadBadge } from './coaReadBadge'
 import DocumentActionsMenu from './DocumentActionsMenu'
 import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
@@ -36,19 +37,6 @@ const UPLOAD_ERROR_TITLE = 'Não foi possível enviar o documento.'
 
 function pluralize(count, singular, plural) {
   return count === 1 ? singular : plural
-}
-
-// S11-C (D-20): selo da leitura automática (só admin). Sem leitura, ou leitura em andamento: sem selo.
-function describeReadBadge(read) {
-  if (!read) return null
-  if (read.status === 'failed') return { text: 'Falhou: tente de novo', tone: ' inline-badge--warn' }
-  if (read.status !== 'done') return null
-  if (read.documentType === 'not_coa') return { text: 'Não é COA', tone: '' }
-  const count = read.certificates.length
-  return {
-    text: `Lido · ${count === 0 ? 'nenhum certificado' : `${count} ${pluralize(count, 'certificado', 'certificados')}`}`,
-    tone: ' inline-badge--ok',
-  }
 }
 
 function buildLimitMessage(existing, selected) {

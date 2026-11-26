@@ -702,7 +702,7 @@ describe('casamento, soma e o que o usuário editou', () => {
       await user.click(coaButton())
       const panel = await coaPanel()
       expect(panel).toHaveTextContent(
-        'A logística já marcou OK?, contagem ou etiquetas em 1 linha deste item; trocar as linhas apaga essas marcas.'
+        'A logística já marcou OK?, contagem, etiquetas, avaria ou fotos em 1 linha deste item; trocar as linhas apaga essas marcas.'
       )
       expect(within(panel).getByRole('checkbox', { name: /2 lotes/ })).not.toBeChecked()
     })

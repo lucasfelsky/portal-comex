@@ -561,7 +561,7 @@ function buildItemProposal(form, item, certs, { conference, process }) {
   if (edited) notes.push(`Linhas deste item com edição à mão serão trocadas${EDITED_SUFFIX}`)
   if (marked > 0) {
     notes.push(
-      `A logística já marcou OK?, contagem ou etiquetas em ${marked} ${marked === 1 ? 'linha' : 'linhas'} deste item; trocar as linhas apaga essas marcas.`
+      `A logística já marcou OK?, contagem, etiquetas, avaria ou fotos em ${marked} ${marked === 1 ? 'linha' : 'linhas'} deste item; trocar as linhas apaga essas marcas.`
     )
   }
   notes.push(...warningNotes(lots))

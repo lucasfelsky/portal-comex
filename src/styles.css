@@ -27383,6 +27383,10 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   cursor: default;
 }
 
+.crf-coa__item .crf-diffrow__text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .crf-coa__check {
   display: inline-grid;
   place-items: center;
@@ -27395,9 +27399,14 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   cursor: default;
 }
 
+.crf-coa__lots-wrap {
+  max-width: 100%;
+  margin-block: 6px 2px;
+  overflow-x: auto;
+}
+
 .crf-coa__lots {
   width: 100%;
-  margin-block: 6px 2px;
   border-collapse: collapse;
   font-size: var(--fs-caption);
 }
@@ -27408,7 +27417,7 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
 }
 
 .crf-coa__lots th {
@@ -27450,6 +27459,7 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 
 .crf-coa__link {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   margin-top: 6px;
   color: var(--text-muted);
@@ -27459,6 +27469,8 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 
 .crf-coa__link select {
   min-height: 44px;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -27492,4 +27504,14 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .documents-coa-badge {
   align-self: flex-start;
   margin-top: 4px;
+}
+
+/* Celular (variante vinda do JS): a linha da proposta vira 2 colunas e a pílula do tipo desce para baixo do título. */
+.crf-wrap--mobile .crf-coa__item {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.crf-wrap--mobile .crf-coa__item .crf-diffrow__kind {
+  grid-column: 2;
+  justify-self: start;
 }

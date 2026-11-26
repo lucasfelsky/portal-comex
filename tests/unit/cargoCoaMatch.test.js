@@ -615,16 +615,19 @@ describe('buildCoaProposals: divisão por lote (linhas trocadas)', () => {
       { countOkByRowId: { a: true } },
       { labelsByRowId: { a: { wms: 'W1', sq: '' } } },
       { labelsByRowId: { a: { wms: '', sq: 'S1' } } },
+      // avaria: só observação ou só foto (sem OK?, contagem nem etiqueta)
+      { damageByRowId: { a: { note: 'tambor amassado', photos: [] } } },
+      { damageByRowId: { a: { note: '', photos: [{ id: 'f1' }] } } },
     ]
     for (const mark of marks) {
       const [proposal] = propose(form, FCL, docs, { d1: threeLots([2000, 2000]) }, { conference: { ...EMPTY_CARGO_CONFERENCE, ...mark } }).proposals
       expect(proposal.defaultOn).toBe(false)
       expect(proposal.notes).toContain(
-        'A logística já marcou OK?, contagem ou etiquetas em 1 linha deste item; trocar as linhas apaga essas marcas.'
+        'A logística já marcou OK?, contagem, etiquetas, avaria ou fotos em 1 linha deste item; trocar as linhas apaga essas marcas.'
       )
     }
-    // sem marca (pallets 0, etiqueta vazia): vem marcado e sem aviso
-    const none = propose(form, FCL, docs, { d1: threeLots([2000, 2000]) }, { conference: { ...EMPTY_CARGO_CONFERENCE, palletsByRowId: { a: 0 }, labelsByRowId: { a: { wms: ' ', sq: '' } } } })
+    // sem marca (pallets 0, etiqueta vazia, avaria vazia): vem marcado e sem aviso
+    const none = propose(form, FCL, docs, { d1: threeLots([2000, 2000]) }, { conference: { ...EMPTY_CARGO_CONFERENCE, palletsByRowId: { a: 0 }, labelsByRowId: { a: { wms: ' ', sq: '' } }, damageByRowId: { a: { note: '  ', photos: [] } } } })
     expect(none.proposals[0].defaultOn).toBe(true)
     expect(none.proposals[0].notes).toEqual([])
   })
