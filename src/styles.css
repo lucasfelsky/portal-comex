@@ -28244,3 +28244,14 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .documents-po-table--mobile .documents-po-cell .documents-row__actions {
   gap: 6px;
 }
+
+/* S11-E: linha discreta da leitura automática do COA (card e célula por PO). */
+.coa-auto-read {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.coa-auto-read--notice {
+  color: var(--text-muted);
+  font-style: italic;
+}
