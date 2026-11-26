@@ -6,9 +6,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 
 const mockUploadProcessDocument = vi.fn()
+const mockListCoaReads = vi.fn()
 
 vi.mock('../../src/services/processDocumentsRepository', () => ({
   uploadProcessDocument: (...args) => mockUploadProcessDocument(...args),
+}))
+
+vi.mock('../../src/services/coaReadsRepository', () => ({
+  listCoaReads: (...args) => mockListCoaReads(...args),
 }))
 
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
@@ -66,6 +71,7 @@ let consoleErrorSpy
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockListCoaReads.mockResolvedValue({})
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -415,5 +421,66 @@ describe('ProcessCoaDocuments - ações por papel', () => {
     })
     expect(screen.getByRole('button', { name: 'Baixar coa.docx' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)', () => {
+  const read = (overrides = {}) => ({
+    status: 'done',
+    documentType: 'coa',
+    certificates: [],
+    error: null,
+    ...overrides,
+  })
+
+  it('mostra "Lido · N certificados", "Não é COA" e "Falhou: tente de novo"; sem leitura ou lendo, sem selo', async () => {
+    mockListCoaReads.mockResolvedValue({
+      c1: read({ certificates: [{}, {}, {}] }),
+      c2: read({ certificates: [{}] }),
+      c3: read({ documentType: 'not_coa' }),
+      c4: { status: 'failed', documentType: null, certificates: [], error: { code: 'tess-timeout' } },
+      c5: { status: 'reading', documentType: null, certificates: [], error: null },
+      c7: read(),
+    })
+    renderList({
+      documents: [coa('c1'), coa('c2'), coa('c3'), coa('c4'), coa('c5'), coa('c6'), coa('c7')].map((item, index) => ({
+        ...item,
+        uploadedAt: `2026-09-01T10:0${index}:00.000Z`,
+      })),
+    })
+
+    expect(await screen.findByText('Lido · 3 certificados')).toBeInTheDocument()
+    expect(mockListCoaReads).toHaveBeenCalledWith('p1')
+    expect(screen.getByText('Lido · 1 certificado')).toBeInTheDocument()
+    expect(screen.getByText('Não é COA')).toBeInTheDocument()
+    expect(screen.getByText('Falhou: tente de novo')).toBeInTheDocument()
+    expect(screen.getByText('Lido · nenhum certificado')).toBeInTheDocument()
+    const items = within(screen.getByRole('list', { name: 'Arquivos de COA' })).getAllByRole('listitem')
+    expect(items).toHaveLength(7)
+    expect(within(items[4]).queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
+    expect(within(items[5]).queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
+  })
+
+  it('falha ao ler os resultados = sem selo, sem erro na tela', async () => {
+    mockListCoaReads.mockRejectedValue(new Error('permission-denied'))
+    renderList({ documents: [coa('c1')] })
+    await waitFor(() => expect(mockListCoaReads).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('logística, técnico e faturamento nunca leem os resultados nem veem o selo', async () => {
+    mockListCoaReads.mockResolvedValue({ c1: read({ certificates: [{}] }) })
+    for (const profile of [LOGISTICA, TECNICO, FATURAMENTO]) {
+      const { unmount } = renderList({ profile, documents: [coa('c1')] })
+      expect(screen.getByRole('button', { name: 'Baixar c1.pdf' })).toBeInTheDocument()
+      unmount()
+    }
+    expect(mockListCoaReads).not.toHaveBeenCalled()
+  })
+
+  it('sem COA na lista não lê os resultados', () => {
+    renderList()
+    expect(mockListCoaReads).not.toHaveBeenCalled()
   })
 })

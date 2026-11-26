@@ -13,7 +13,9 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from '../../components/Icon'
 import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { formatDateTime } from '../../utils/dateFormat'
+import { listCoaReads } from '../../services/coaReadsRepository'
 import { uploadProcessDocument } from '../../services/processDocumentsRepository'
+import { describeReadBadge } from './coaReadBadge'
 import DocumentActionsMenu from './DocumentActionsMenu'
 import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
@@ -69,6 +71,7 @@ export default function ProcessCoaDocuments({
   const [uploadErrors, setUploadErrors] = useState([])
   const [resultMessage, setResultMessage] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
+  const [reads, setReads] = useState({})
   const inputRef = useRef(null)
   const uploadButtonRef = useRef(null)
   const wasUploadingRef = useRef(false)
@@ -83,6 +86,24 @@ export default function ProcessCoaDocuments({
   }, [])
 
   const isUploading = progress !== null
+
+  // Selo da leitura (só admin): relê quando a lista de COAs muda; falha de leitura = sem selo.
+  const isAdmin = role === 'admin'
+  const coaIds = coaDocuments.map((document_) => document_.id).join(',')
+  useEffect(() => {
+    if (!isAdmin || !processId || !coaIds) return undefined
+    let isMounted = true
+    listCoaReads(processId)
+      .then((result) => {
+        if (isMounted) setReads(result)
+      })
+      .catch(() => {
+        if (isMounted) setReads({})
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [isAdmin, processId, coaIds])
 
   // Teclado: o botão de envio fica desabilitado durante o envio; ao terminar, o foco volta a ele.
   useEffect(() => {
@@ -307,6 +328,7 @@ export default function ProcessCoaDocuments({
         <ul className="coa-docs__list" role="list" aria-label="Arquivos de COA">
           {coaDocuments.map((document_) => {
             const displayName = getCoaDisplayName(document_)
+            const badge = isAdmin ? describeReadBadge(reads[document_.id]) : null
             const metaText = [
               getDocumentFileKindLabel(document_.mimeType, document_.name),
               formatDocumentSize(document_.size),
@@ -324,6 +346,7 @@ export default function ProcessCoaDocuments({
                   <p className="coa-docs__name">{displayName}</p>
                   {displayName !== document_.name ? <p className="documents-row__file">{document_.name}</p> : null}
                   <p className="documents-row__meta field-hint">{metaText}</p>
+                  {badge ? <span className={`inline-badge documents-coa-badge${badge.tone}`}>{badge.text}</span> : null}
                 </div>
                 <div className="coa-docs__actions">
                   <button

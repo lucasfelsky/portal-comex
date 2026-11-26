@@ -120,6 +120,45 @@ export function splitCargoRow(rows, rowId, lots) {
   return { rows: next, insertedIds: created.map((row) => row.id) }
 }
 
+// S11-C (Ler COAs): troca as linhas `rowIds` (as de um item) por UMA linha por lote, no lugar da primeira delas.
+// As linhas novas copiam PO, código, descrições e tara de `template` (padrão: a primeira linha trocada), ganham id
+// novo e `frozen*` nulos; o lote é `trim` e a quantidade é `number > 0` ou `null` (a prévia decide se a soma fecha:
+// aqui NÃO se confere a soma). Erros (nada muda): 'invalid' (linhas inexistentes, 0 ou mais de 200 lotes, lote que
+// não é texto ou quantidade <= 0 / inválida) e 'limit' (passaria de 200 linhas).
+export function replaceCargoRowsWithLots(rows, rowIds, lots, { template } = {}) {
+  const ids = new Set(Array.isArray(rowIds) ? rowIds : [])
+  const list = Array.isArray(lots) ? lots : []
+  const indexes = rows.map((row, index) => (ids.has(row.id) ? index : -1)).filter((index) => index >= 0)
+  if (ids.size === 0 || indexes.length !== ids.size) return { rows: [...rows], error: 'invalid' }
+  if (list.length < 1 || list.length > CARGO_REPORT_MAX_ROWS) return { rows: [...rows], error: 'invalid' }
+
+  const quantities = list.map((lot) => {
+    const raw = lot?.quantityKg
+    if (raw === null || raw === undefined || raw === '') return null
+    const value = parseCargoNumber(raw)
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : Number.NaN
+  })
+  if (quantities.some((value) => Number.isNaN(value)) || list.some((lot) => typeof lot?.supplierLot !== 'string')) {
+    return { rows: [...rows], error: 'invalid' }
+  }
+  if (rows.length - ids.size + list.length > CARGO_REPORT_MAX_ROWS) return { rows: [...rows], error: 'limit' }
+
+  const base = template ?? rows[indexes[0]]
+  const created = list.map((lot, position) => ({
+    ...createEmptyCargoReportRow(createCargoReportRowId()),
+    po: base.po,
+    dbcorpCode: base.dbcorpCode,
+    supplierDescription: base.supplierDescription,
+    sqDescription: base.sqDescription,
+    packageWeightKg: base.packageWeightKg,
+    supplierLot: lot.supplierLot.trim(),
+    quantityKg: quantities[position],
+  }))
+  const next = rows.filter((row) => !ids.has(row.id))
+  next.splice(indexes[0], 0, ...created)
+  return { rows: next, insertedIds: created.map((row) => row.id) }
+}
+
 // Mover ±1. Com `groupOf` (consolidado) só troca com o vizinho do mesmo grupo; nas pontas é no-op.
 export function moveCargoRow(rows, rowId, delta, groupOf) {
   const index = indexOfRow(rows, rowId)

@@ -49,6 +49,7 @@ export const CARGO_DIFF_KINDS = {
 export const CARGO_DIFF_SUFFIX = {
   edited: ' (você editou esta célula)',
   unknown: ' (origem não registrada)',
+  coa: ' (veio do COA)',
 }
 
 // Campos que o processo e o FUP preenchem (ordem de exibição na prévia) e o selo de origem de cada um.
@@ -272,6 +273,8 @@ export function buildCargoRegistry({ itemCatalog = null, supplierCatalog = null,
 // ---------- marcas de origem ----------
 
 function fieldSource(field, entry) {
+  if (field === 'supplierLot') return 'L'
+  if (field === 'quantityKg' && entry?.coa === true) return 'L'
   if (field === 'packageWeightKg') return 'C'
   if (field === 'po') return 'P'
   if (field === 'sqDescription') return entry?.fupOnly ? 'F' : 'P'
@@ -284,6 +287,7 @@ export const SOURCE_MARK_TITLES = {
   P: 'Veio do processo',
   F: 'Veio do FUP do DBCorp',
   C: 'Veio do cadastro de embalagens',
+  L: 'Veio do COA',
   E: 'Editado por você',
 }
 
@@ -295,9 +299,10 @@ export const SOURCE_MARK_FIELDS = new Set([
   'sqDescription',
   'quantityKg',
   'packageWeightKg',
+  'supplierLot',
 ])
 
-// Marca da célula: 'P' (processo), 'F' (FUP), 'C' (cadastro de embalagens) quando o valor ainda é o da base; 'E'
+// Marca da célula: 'P' (processo), 'F' (FUP), 'C' (cadastro de embalagens), 'L' (COA) quando o valor ainda é o da base; 'E'
 // quando foi editado; '' quando a célula não veio do processo nem do FUP.
 export function cellOrigin(row, autofillRow, field) {
   if (!row || !autofillRow?.base || !Object.prototype.hasOwnProperty.call(autofillRow.base, field)) return ''
@@ -549,7 +554,15 @@ function buildFieldItems(form, pair, sourceInfo) {
     if (different.length === 0) continue
     const states = different.map((row) => editState(row, sourceInfo.entryOf(row.id), spec.field, sourceInfo.hasEntry(row.id)))
     const edited = states.some(Boolean)
-    const suffix = states.includes('unknown') ? CARGO_DIFF_SUFFIX.unknown : states.includes('edited') ? CARGO_DIFF_SUFFIX.edited : ''
+    // S11-C: quantidade que veio do COA (marca L) não é trocada pela do FUP sem o usuário marcar.
+    const fromCoa = spec.field === 'quantityKg' && different.some((row) => sourceInfo.entryOf(row.id).coa === true)
+    const suffix = states.includes('unknown')
+      ? CARGO_DIFF_SUFFIX.unknown
+      : states.includes('edited')
+        ? CARGO_DIFF_SUFFIX.edited
+        : fromCoa
+          ? CARGO_DIFF_SUFFIX.coa
+          : ''
     const first = different[0]
     const change =
       spec.field === 'quantityKg'
@@ -563,7 +576,7 @@ function buildFieldItems(form, pair, sourceInfo) {
       title: `${pair.label}: ${spec.label}`,
       detail: `${rowNumbers(form, differentIds)}: ${change}${suffix}`,
       edited,
-      defaultOn: !edited,
+      defaultOn: !edited && !fromCoa,
       applicable: true,
       rowIds: differentIds,
       apply: { type: 'field', rowIds: differentIds, field: spec.field, value: next, key: candidate.key },
@@ -755,6 +768,8 @@ export function applyCargoDiff(form, autofill, items, selectedIds, options = {})
         row[apply.field] = apply.value
         const current = entries[rowId] ?? { key: '', base: {} }
         entries[rowId] = { ...current, key: apply.key || current.key, base: { ...current.base, [apply.field]: apply.value } }
+        // A quantidade passa a vir do FUP: sai a marca L.
+        if (apply.field === 'quantityKg') delete entries[rowId].coa
       }
     } else if (apply.type === 'addRow') {
       const row = valuesToRow(apply.candidate.values)
@@ -816,6 +831,7 @@ export function quantityMismatchByRowId(form, process) {
 function cloneEntry(entry) {
   const copy = { key: entry.key ?? '', base: { ...(entry.base ?? {}) } }
   if (entry.fupOnly) copy.fupOnly = true
+  if (entry.coa) copy.coa = true
   return copy
 }
 
@@ -831,7 +847,11 @@ export function autofillForCopies(entries, sourceRowId, newRowIds, { dropSource 
   const next = { ...entries }
   const source = entries?.[sourceRowId]
   if (!source) return next
-  for (const id of newRowIds) next[id] = cloneEntry(source)
+  for (const id of newRowIds) {
+    next[id] = cloneEntry(source)
+    // O lote da cópia é digitado (duplicar/dividir): a base do lote do COA não vai junto.
+    delete next[id].base.supplierLot
+  }
   if (dropSource) delete next[sourceRowId]
   return next
 }

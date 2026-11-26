@@ -21,6 +21,7 @@ import { summarizeCargoPallets } from './cargoConferenceIssues'
 import CargoConferenceIssuesCard from './CargoConferenceIssuesCard'
 import { EMPTY_CARGO_CONFERENCE, cargoConferenceKey } from './cargoConferenceModel'
 import { CargoReportActionBar } from './CargoReportConcludeDialog'
+import CargoReportCoaPanel from './CargoReportCoaPanel'
 import CargoReportHeaderCard from './CargoReportHeaderCard'
 import CargoReportImportDialog from './CargoReportImportDialog'
 import CargoReportItems from './CargoReportItems'
@@ -55,6 +56,7 @@ import { formatCargoDateBr } from './cargoReportSheet'
 import { cargoPackagingContext } from './cargoSupplierPackaging'
 import useCargoConferenceEdit from './useCargoConferenceEdit'
 import useCargoReportAutofill, { fetchCargoReference } from './useCargoReportAutofill'
+import useCargoReportCoa from './useCargoReportCoa'
 import useCargoReportPackaging, {
   SUPPLIER_CATALOG_ERROR_MESSAGE,
   loadItemCatalogCached,
@@ -149,6 +151,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
   const refreshButtonRef = useRef(null)
   const wasPanelOpenRef = useRef(false)
   const isDraftNow = Boolean(canEdit && form && getCargoReportStage(form.status, savedConference.status) === CARGO_STAGE.draft)
+  const coa = useCargoReportCoa({ process, form, setForm, conference, purchaseOrders, enabled: isDraftNow, onApplied: clearFeedback })
   const { fetched: referenceFetched, refetch: refetchReference } = autofill
   // COMEX reaberto depois de carregar fechado: o FUP ainda não foi lido.
   useEffect(() => {
@@ -620,11 +623,23 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
                 ref={refreshButtonRef}
                 type="button"
                 className="secondary-button crf-refresh-btn"
-                disabled={autofill.busy}
-                onClick={autofill.openRefresh}
+                disabled={autofill.busy || coa.busy}
+                onClick={() => (coa.dismiss(), autofill.openRefresh())}
               >
                 <Icon name="refresh" size={16} />
                 Atualizar do processo e do FUP
+              </button>
+            ) : null}
+            {canEditFields ? (
+              <button
+                ref={coa.buttonRef}
+                type="button"
+                className="secondary-button crf-refresh-btn"
+                disabled={autofill.busy || coa.busy}
+                onClick={() => (autofill.dismiss(), coa.open())}
+              >
+                <Icon name="flask" size={16} />
+                Ler COAs
               </button>
             ) : null}
           </div>
@@ -651,6 +666,7 @@ export default function CargoReportForm({ process, profile, variant, onClose }) 
             onDismiss={autofill.dismiss}
           />
         ) : null}
+        {canEditFields ? <CargoReportCoaPanel coa={coa} /> : null}
 
         <CargoReportItems
           rows={rows}

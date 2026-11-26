@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { erpItemGroupKey, erpOrderKey } from '../../src/features/erp/reconcileErp'
 import {
   CARGO_DIFF_KINDS,
+  SOURCE_MARK_FIELDS,
+  SOURCE_MARK_TITLES,
   applyCargoDiff,
   autofillForBlankRow,
   autofillForCopies,
@@ -922,6 +924,80 @@ describe('S9-D: tara do cadastro de embalagens (marca C)', () => {
       const items = diffCargoReportAgainstSources(moved, moved.autofill, sources, registry)
       const [item] = tareItems(items)
       expect(item.detail).toBe('Linha 1: 11,5 kg → 9,2 kg (cadastro)')
+    })
+  })
+})
+
+// ---------- S11-C: marca L (veio do COA) ----------
+
+describe('S11-C: marca L (lote e quantidade vindos do COA)', () => {
+  const lotRow = { ...createEmptyCargoReportRow('r1'), supplierLot: 'L1', quantityKg: 1500 }
+
+  it('lote igual à base = L; lote editado = E; sem base = sem marca', () => {
+    expect(SOURCE_MARK_TITLES.L).toBe('Veio do COA')
+    expect(SOURCE_MARK_FIELDS.has('supplierLot')).toBe(true)
+    expect(cellOrigin(lotRow, { key: 'fup:1', base: { supplierLot: 'L1' } }, 'supplierLot')).toBe('L')
+    expect(cellOrigin({ ...lotRow, supplierLot: 'L9' }, { key: 'fup:1', base: { supplierLot: 'L1' } }, 'supplierLot')).toBe('E')
+    expect(cellOrigin(lotRow, { key: 'fup:1', base: { quantityKg: 1500 } }, 'supplierLot')).toBe('')
+    expect(cellOrigin(lotRow, undefined, 'supplierLot')).toBe('')
+  })
+
+  it('quantidade com entry.coa = L (mesmo com chave do FUP ou do processo); editada = E; sem coa continua F/P', () => {
+    expect(cellOrigin(lotRow, { key: 'fup:1', base: { quantityKg: 1500 }, coa: true }, 'quantityKg')).toBe('L')
+    expect(cellOrigin(lotRow, { key: 'proc:i1', base: { quantityKg: 1500 }, coa: true }, 'quantityKg')).toBe('L')
+    expect(cellOrigin({ ...lotRow, quantityKg: 1400 }, { key: 'fup:1', base: { quantityKg: 1500 }, coa: true }, 'quantityKg')).toBe('E')
+    expect(cellOrigin(lotRow, { key: 'fup:1', base: { quantityKg: 1500 } }, 'quantityKg')).toBe('F')
+    expect(cellOrigin(lotRow, { key: 'proc:i1', base: { quantityKg: 1500 } }, 'quantityKg')).toBe('P')
+  })
+
+  it('duplicar/dividir copia o coa, mas a base do lote do COA não vai (o lote da cópia é digitado)', () => {
+    const entries = { a: { key: 'fup:1', base: { quantityKg: 5, supplierLot: 'L1' }, coa: true } }
+    const copy = autofillForCopies(entries, 'a', ['n1', 'n2'], { dropSource: true })
+    expect(copy.n1).toEqual({ key: 'fup:1', base: { quantityKg: 5 }, coa: true })
+    expect(copy.n2.coa).toBe(true)
+    expect(entries.a.base.supplierLot).toBe('L1')
+    expect(copy).not.toHaveProperty('a')
+    // mover de PO mantém a base do lote (a marca L continua)
+    expect(autofillForPurchaseOrder(entries, 'a', 'P2').a).toEqual({ key: 'fup:1', base: { quantityKg: 5, supplierLot: 'L1', po: 'P2' }, coa: true })
+  })
+
+  describe('"Atualizar" não troca a quantidade que veio do COA sem o usuário marcar', () => {
+    const filled = () => {
+      const { form } = fill(FCL, reference(FCL_FUP))
+      const rows = form.rows.map((row, index) => (index === 1 ? { ...row, quantityKg: 3500 } : row))
+      const [, second] = form.rows
+      const entries = { ...form.autofill.rows, [second.id]: { ...form.autofill.rows[second.id], base: { ...form.autofill.rows[second.id].base, quantityKg: 3500 }, coa: true } }
+      return { ...form, rows, autofill: { ...form.autofill, rows: entries } }
+    }
+
+    it('diferença de quantidade do FUP numa linha com coa vem desmarcada, com o sufixo "(veio do COA)"', () => {
+      const form = filled()
+      const items = diffCargoReportAgainstSources(form, form.autofill, buildCargoSources(FCL, reference(FCL_FUP, { snapshotId: 'snap-2' })))
+      expect(items).toHaveLength(1)
+      expect(items[0]).toMatchObject({ kind: CARGO_DIFF_KINDS.quantity, defaultOn: false, applicable: true, edited: false })
+      expect(items[0].detail).toBe('Linha 2: 3.500 kg → 4.000 kg (FUP) (veio do COA)')
+    })
+
+    it('a mesma diferença numa linha SEM coa continua marcada', () => {
+      const { form } = fill(FCL, reference(FCL_FUP))
+      const rows = form.rows.map((row, index) => (index === 1 ? { ...row, quantityKg: 3500 } : row))
+      const entries = { ...form.autofill.rows }
+      const secondId = form.rows[1].id
+      entries[secondId] = { ...entries[secondId], base: { ...entries[secondId].base, quantityKg: 3500 } }
+      const same = { ...form, rows, autofill: { ...form.autofill, rows: entries } }
+      const items = diffCargoReportAgainstSources(same, same.autofill, buildCargoSources(FCL, reference(FCL_FUP, { snapshotId: 'snap-2' })))
+      expect(items[0].defaultOn).toBe(true)
+      expect(items[0].detail).not.toContain('veio do COA')
+    })
+
+    it('se o usuário marcar e aplicar, a quantidade volta a ser do FUP (F) e a marca L sai', () => {
+      const form = filled()
+      const items = diffCargoReportAgainstSources(form, form.autofill, buildCargoSources(FCL, reference(FCL_FUP, { snapshotId: 'snap-2' })))
+      const applied = applyCargoDiff(form, form.autofill, items, [items[0].id], { snapshotId: 'snap-2' })
+      const second = applied.form.rows[1]
+      expect(second.quantityKg).toBe(4000)
+      expect(applied.form.autofill.rows[second.id].coa).toBeUndefined()
+      expect(cellOrigin(second, applied.form.autofill.rows[second.id], 'quantityKg')).toBe('F')
     })
   })
 })
