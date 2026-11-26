@@ -1067,7 +1067,8 @@ service cloud.firestore {
       }
 
       // S3 do Relatorio de Carga: docs nomeados (outros ids caem no catch-all).
-      // Tecnico/Faturamento NAO leem (so' veem o arquivo anexado em documents).
+      // Tecnico/Faturamento NAO leem current/conference (veem o arquivo anexado em documents e, desde a S10-J2,
+      // so' o espelho damage abaixo).
       match /cargoReport/current {
         allow read: if isAdmin() || isLogistics();
         allow create, update: if isAdmin() && isValidCargoReportCurrent(processId)
@@ -1084,6 +1085,13 @@ service cloud.firestore {
             || (isAdmin() && isAdminCargoConferenceReopen())
           );
         allow delete: if false;
+      }
+
+      // S10-J2: espelho gravado so pelo trigger syncCargoConferenceDamage (Admin SDK) ao fechar a conferencia: avarias
+      // e fotos (id e tamanho, sem caminho de arquivo) para Tecnico/Faturamento lerem. Ninguem grava pelo cliente.
+      match /cargoReport/damage {
+        allow read: if isAdmin() || isLogistics() || isDocumentReader();
+        allow create, update, delete: if false;
       }
     }
 

@@ -52,6 +52,10 @@ const PAGE_BG = '#F4F7F7'
 const FOOTER_TEXT = '#6b7b82'
 // Fundo da celula da imagem da conferencia: com as imagens bloqueadas (Outlook) o `alt` aparece em branco sobre o navy.
 const CONFERENCE_BANNER_BG = '#144155'
+// S10-J2: cores da secao de avarias.
+const DAMAGE_TITLE = '#144155'
+const DAMAGE_TEXT = '#3d4f57'
+const DAMAGE_BORDER = '#d6e0e3'
 
 // Mesma semantica de `escapeHtml` do modulo `core` compartilhado, duplicada
 // aqui para manter este modulo puro.
@@ -174,15 +178,49 @@ E-mail automático do Portal COMEX
   return { subject, text, html, attachments }
 }
 
+// S10-J2: secao "Avarias e ressalvas" (1 <tr> do container). A 1a linha (cabecalho) vira o titulo; as demais, uma por
+// paragrafo, todas escapadas com `escapeEmailHtml`.
+function buildDamageSectionHtml(lines, tableAttrs) {
+  const [heading, ...rest] = lines
+  const paragraphs = rest
+    .map(
+      (line) =>
+        `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:14px;line-height:21px;color:${DAMAGE_TEXT};">${escapeEmailHtml(line)}</p>`
+    )
+    .join('\n')
+  return `
+<tr>
+<td align="center" style="padding:16px 0 0 0;">
+<table ${tableAttrs} width="600" class="sq-container" style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid ${DAMAGE_BORDER};border-radius:14px;">
+<tr>
+<td align="left" style="padding:18px 22px 10px 22px;font-family:${FONT};font-size:16px;font-weight:600;line-height:22px;color:${DAMAGE_TITLE};">
+Avarias e ressalvas
+<div style="margin-top:4px;font-size:13px;font-weight:400;line-height:19px;color:${DAMAGE_TEXT};">${escapeEmailHtml(heading.replace(/^Avarias e ressalvas:\s*/, ''))}</div>
+</td>
+</tr>
+<tr>
+<td align="left" style="padding:0 22px 12px 22px;">
+${paragraphs}
+</td>
+</tr>
+</table>
+</td>
+</tr>`
+}
+
 // S7: e-mail do fechamento da conferencia da logistica (`process_cargo_report_conference`). Mesma estrutura do
 // e-mail do COMEX (container 600, banner por CID, botao, rodape); mudam a arte, o `alt`, o preheader e o texto puro.
 // `subject` = assunto ja montado por `buildCargoReportConferenceSubject`.
+// S10-J2: `damageLines` (linhas da secao "Avarias e ressalvas", de `buildCargoConferenceDamageLines`). Com linhas, entram
+// uma tabela de 600 px entre o botao e o rodape e as linhas no texto puro, antes do link; SEM linhas, `html`, `text` e
+// `attachments` saem IDENTICOS aos de antes (teste de igualdade). Cada linha e' escapada; fotos nao viajam no e-mail.
 export function buildCargoReportConferenceEmail({
   subject: rawSubject,
   processId,
   recipientName = '',
   appUrl = DEFAULT_APP_URL,
   bannerSrc,
+  damageLines = [],
 } = {}) {
   const subject = sanitizeCargoReportText(rawSubject) || CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX
   const label = extractCargoReportProcessLabel(subject)
@@ -190,12 +228,17 @@ export function buildCargoReportConferenceEmail({
   const url = buildCargoReportProcessUrl(processId, appUrl)
   const greeting = name ? `Olá, ${name}.` : 'Olá.'
 
+  const damageList = (Array.isArray(damageLines) ? damageLines : [])
+    .map((line) => (typeof line === 'string' ? line.trim() : ''))
+    .filter(Boolean)
+
   const text = [
     greeting,
     '',
     CARGO_CONFERENCE_EMAIL_TEXT,
     '',
     ...(label ? [`Processo: ${label}`, ''] : []),
+    ...(damageList.length > 0 ? [...damageList, ''] : []),
     'Abra o processo no Portal COMEX (aba Documentos):',
     url,
   ].join('\n')
@@ -224,6 +267,7 @@ export function buildCargoReportConferenceEmail({
   const safeUrl = escapeEmailHtml(url)
   const safeImgSrc = escapeEmailHtml(imgSrc)
   const tableAttrs = 'role="presentation" cellpadding="0" cellspacing="0" border="0"'
+  const damageSectionHtml = damageList.length > 0 ? buildDamageSectionHtml(damageList, tableAttrs) : ''
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml">
@@ -260,7 +304,7 @@ export function buildCargoReportConferenceEmail({
 </tr>
 </table>
 </td>
-</tr>
+</tr>${damageSectionHtml}
 <tr>
 <td align="center" style="padding:20px 12px 0 12px;font-family:${FONT};font-size:12px;line-height:18px;color:${FOOTER_TEXT};text-align:center;">
 E-mail automático do Portal COMEX

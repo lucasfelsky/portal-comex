@@ -5674,6 +5674,85 @@ describeEmulator('firestore.rules (emulador)', () => {
       })
     })
 
+    // S10-J2: espelho `cargoReport/damage` (gravado so pelo trigger, Admin SDK) e trava `cargoReport/conferenceNotice` (sem match).
+    describe('damage e conferenceNotice (S10-J2)', () => {
+      const DAMAGE = `processes/${PID}/cargoReport/damage`
+      const NOTICE = `processes/${PID}/cargoReport/conferenceNotice`
+      const mirror = (overrides = {}) => ({
+        schemaVersion: 1,
+        conferenceRevision: 3,
+        closedDate: '2026-11-24',
+        closedByName: 'Logistica',
+        receiptStatus: 'com_ressalva',
+        pallets: { counted: 23, expected: 25 },
+        items: [{ rowId: 'r-0', index: 1, label: 'DEA FOAM', code: 'AD5240', note: 'Caixas molhadas', flagged: true, photos: [{ id: 'aaa', width: 1600, height: 1200 }] }],
+        itemCount: 1,
+        photoCount: 1,
+        updatedAt: new Date('2026-11-24T16:00:00Z'),
+        ...overrides,
+      })
+      const seedDamage = async () => {
+        await seedProcess()
+        await seed((db) => setDoc(doc(db, DAMAGE), mirror()))
+      }
+      const seedNotice = async () => {
+        await seedProcess()
+        await seed((db) => setDoc(doc(db, NOTICE), { documentId: CLOSED_DOC_ID, sentAt: new Date('2026-11-24T16:00:00Z') }))
+      }
+
+      it('admin, logistica, tecnico e faturamento leem o espelho', async () => {
+        await seedDamage()
+        for (const db of [admin(), logistics(), roleDb('tecnico'), roleDb('faturamento')]) {
+          await assertSucceeds(getDoc(doc(db, DAMAGE)))
+        }
+      })
+
+      it('usuario comum, compras, viewer, nao aprovado e anonimo NAO leem o espelho', async () => {
+        await seedDamage()
+        const denied = [
+          approvedUser(),
+          roleDb('compras'),
+          roleDb('viewer'),
+          testEnv.authenticatedContext('tec-pend', { email: 'tec@sqquimica.com', role: 'tecnico', status: 'Pendente', name: 'Tec' }).firestore(),
+          testEnv.authenticatedContext('tec-ext', { email: 'tec@gmail.com', role: 'tecnico', status: 'Ativo', name: 'Tec' }).firestore(),
+          anon(),
+        ]
+        for (const db of denied) await assertFails(getDoc(doc(db, DAMAGE)))
+      })
+
+      it('ninguem grava, atualiza nem apaga o espelho (nem admin nem logistica)', async () => {
+        await seedDamage()
+        for (const db of [admin(), logistics(), roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]) {
+          await assertFails(setDoc(doc(db, DAMAGE), mirror({ itemCount: 2 })))
+          await assertFails(updateDoc(doc(db, DAMAGE), { itemCount: 2 }))
+          await assertFails(deleteDoc(doc(db, DAMAGE)))
+        }
+        const fresh = `processes/${PID}-novo/cargoReport/damage`
+        await assertFails(setDoc(doc(admin(), fresh), mirror()))
+        await assertFails(setDoc(doc(logistics(), fresh), mirror()))
+      })
+
+      it('tecnico e faturamento seguem sem ler current e conference', async () => {
+        await seedCurrent()
+        await seedConference()
+        for (const role of ['tecnico', 'faturamento']) {
+          await assertFails(getDoc(doc(roleDb(role), CUR)))
+          await assertFails(getDoc(doc(roleDb(role), CONF)))
+        }
+      })
+
+      it('conferenceNotice: ninguem le nem grava (sem regra = negado)', async () => {
+        await seedNotice()
+        const everyone = [admin(), logistics(), roleDb('tecnico'), roleDb('faturamento'), approvedUser(), anon()]
+        for (const db of everyone) {
+          await assertFails(getDoc(doc(db, NOTICE)))
+          await assertFails(setDoc(doc(db, NOTICE), { documentId: 'x', sentAt: serverTimestamp() }))
+          await assertFails(updateDoc(doc(db, NOTICE), { documentId: 'x' }))
+          await assertFails(deleteDoc(doc(db, NOTICE)))
+        }
+      })
+    })
+
     describe('documents cargoReport (S7)', () => {
       const DOC_PATH = `processes/${PID}/documents/d-new`
 

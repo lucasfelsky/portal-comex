@@ -584,12 +584,50 @@ describe('notifyCargoReportUploaded', () => {
     return { id: 'evt-1', params: { processId, documentId }, data: { data: () => created } }
   }
 
+  // S10-J2: docs `processes/{id}/cargoReport/*` (conferencia, current, conferenceNotice) em memoria. O mock padrao de
+  // `firestore.doc(path)` devolve o doc do PROCESSO para qualquer caminho de subcolecao; aqui eles ganham dado proprio.
+  let cargoStore
+  function resetCargoStore() {
+    cargoStore = { docs: new Map(), failRead: new Set(), failTransaction: false, reads: [] }
+  }
+  function installCargoReportDocs() {
+    const baseDoc = mockFirestoreApi.doc.getMockImplementation()
+    mockFirestoreApi.doc.mockImplementation((path) => {
+      if (typeof path === 'string' && path.includes('/cargoReport/')) {
+        return {
+          path,
+          get: vi.fn(async () => {
+            cargoStore.reads.push(path)
+            if (cargoStore.failRead.has(path)) {
+              throw Object.assign(new Error('down segredo-da-leitura'), { code: 'unavailable' })
+            }
+            const data = cargoStore.docs.get(path)
+            return { exists: data !== undefined, data: () => data }
+          }),
+        }
+      }
+      return baseDoc(path)
+    })
+    mockFirestoreApi.runTransaction.mockImplementation(async (callback) => {
+      if (cargoStore.failTransaction) throw Object.assign(new Error('tx'), { code: 'aborted' })
+      return callback({
+        get: (ref) => ref.get(),
+        set: (ref, data) => {
+          cargoStore.docs.set(ref.path, data)
+        },
+      })
+    })
+  }
+  const defaultRunTransaction = async (callback) =>
+    callback({ get: (ref) => ref.get(), update: (ref, data) => ref.update(data) })
+
   function setupChain({ users, config, processes = [{ id: PROCESS_ID, data: PROCESS }] } = {}) {
     setupFirestoreChain({
       processes,
       users: (users ?? [ADMIN_1, ADMIN_2, LOGI_1]).map((user) => ({ id: user.id, data: user })),
       ...(config === undefined ? {} : { config: [{ id: 'cargoReportRecipients', data: config }] }),
     })
+    installCargoReportDocs()
   }
 
   function cargoNotifications() {
@@ -625,6 +663,7 @@ describe('notifyCargoReportUploaded', () => {
 
   beforeEach(() => {
     resetSecrets()
+    resetCargoStore()
     mockSendMail.mockResolvedValue({ messageId: 'msg-1' })
     mockFirestoreApi.batch.mockReturnValue(mockBatch)
     mockBatch.commit.mockResolvedValue(undefined)
@@ -632,6 +671,7 @@ describe('notifyCargoReportUploaded', () => {
 
   afterEach(() => {
     resetSecrets()
+    mockFirestoreApi.runTransaction.mockImplementation(defaultRunTransaction)
   })
 
   it('cargoReport por admin-1 -> notifica admin-1 (autor), admin-2, logistica ativa e tecnico com conta', async () => {
@@ -970,6 +1010,286 @@ describe('notifyCargoReportUploaded', () => {
     )
 
     expect(conferenceNotifications().map((data) => data.recipientUserId)).toEqual(['admin-1'])
+  })
+
+  // S10-J2: aviso da conferência com avarias + trava contra aviso duplicado.
+  describe('conferência com avarias e trava de duplicidade (S10-J2)', () => {
+    const CONF_PATH = `processes/${PROCESS_ID}/cargoReport/conference`
+    const CUR_PATH = `processes/${PROCESS_ID}/cargoReport/current`
+    const NOTICE_PATH = `processes/${PROCESS_ID}/cargoReport/conferenceNotice`
+    const photo = (id) => ({ id, path: `processes/${PROCESS_ID}/cargo-conference/r/${id}.jpg`, thumbPath: 'x', width: 1600, height: 1200 })
+    const CURRENT = {
+      expectedPallets: 25,
+      rows: [
+        { id: 'r-1', po: 'PO1', dbcorpCode: '1001', sqDescription: 'POLIOL PE-3000', quantityKg: 1000 },
+        { id: 'r-2', po: 'PO1', dbcorpCode: '1002', supplierDescription: 'ISOCIANATO MDI', quantityKg: 500 },
+      ],
+    }
+    const DAMAGE = {
+      'r-1': { flagged: true, note: 'Caixas molhadas no pallet 2.', photos: [photo('aaa'), photo('bbb')] },
+      'r-2': { flagged: false, note: 'Lacre <b>rompido</b>.', photos: [photo('ccc')] },
+    }
+    const conferenceDoc = (damageByRowId, extra = {}) => ({
+      status: 'aberta',
+      revision: 3,
+      palletsByRowId: { 'r-1': 12, 'r-2': 11 },
+      damageByRowId,
+      ...extra,
+    })
+    const SECTION_LINES = [
+      'Avarias e ressalvas: 2 itens, 3 fotos no Portal.',
+      'Pallets: 23 contados de 25 informados pelo COMEX (divergente).',
+      '• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.',
+      '• Item 2 · ISOCIANATO MDI · 1 foto: Lacre <b>rompido</b>.',
+    ]
+
+    function seed(damageByRowId = DAMAGE, extra = {}) {
+      cargoStore.docs.set(CONF_PATH, conferenceDoc(damageByRowId, extra))
+      cargoStore.docs.set(CUR_PATH, CURRENT)
+    }
+
+    const run = (documentId = 'doc-1', created = LOGISTICS_CARGO_REPORT) =>
+      getHandler(notifyCargoReportUploaded)(makeEvent(created, { documentId }))
+
+    const mailOf = (index = 0) => mockSendMail.mock.calls[index][0]
+
+    it('com avaria: o corpo do aviso do Portal = texto de hoje + linha em branco + a seção (lista inteira, todos os destinatários)', async () => {
+      setupChain({ users: [ADMIN_1, ADMIN_2, LOGI_1, TEC_1], config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] } })
+      configureSmtp()
+      seed()
+
+      await run()
+
+      const notifications = conferenceNotifications()
+      expect(notifications.map((data) => data.recipientUserId).sort()).toEqual(['admin-1', 'admin-2', 'logi-1', 'tec-1'])
+      for (const data of notifications) {
+        expect(data.body).toBe(`${CONFERENCE_BODY}\n\n${SECTION_LINES.join('\n')}`)
+        expect(data.title).toBe('Conferência do Relatório de Carga - PO 12345 - Resina Atlas')
+        expect(data.targetTab).toBe('documents')
+      }
+      expect(cargoNotifications()).toHaveLength(0)
+    })
+
+    it('com avaria: o e-mail direto (lista sem usuário) leva as linhas, escapadas, e o assunto de hoje', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+
+      await run()
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      const mail = mailOf()
+      expect(mail.to).toBe('fiscal@sqquimica.com')
+      expect(mail.subject).toBe('Conferência do Relatório de Carga - PO 12345 - Resina Atlas')
+      for (const line of SECTION_LINES) expect(mail.text).toContain(line)
+      expect(mail.html).toContain('Avarias e ressalvas')
+      expect(mail.html).toContain('• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.')
+      expect(mail.html).toContain('Lacre &lt;b&gt;rompido&lt;/b&gt;.')
+      expect(mail.html).not.toContain('<b>rompido</b>')
+      // fotos não viajam no e-mail: só o banner inline
+      expect(mail.attachments).toHaveLength(1)
+      expect(mail.attachments[0].cid).toBe('cargo-conference-banner@portal-comex')
+      expect(mail.html).toContain(`processo=${PROCESS_ID}`)
+    })
+
+    it('a conferência salva ainda aberta (front antigo anexa antes de fechar) também alimenta o aviso', async () => {
+      setupChain({ config: { tecnico: [], faturamento: [] } })
+      configureSmtp()
+      seed(DAMAGE, { status: 'aberta' })
+
+      await run()
+
+      expect(conferenceNotifications()[0].body).toContain(SECTION_LINES[0])
+    })
+
+    it('sem avaria (conferência sem nenhuma marca): aviso, e-mail e HTML IDÊNTICOS aos de quando não há conferência lida', async () => {
+      // referência: nenhuma conferência/current no servidor = aviso de hoje
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      await run()
+      const referenceBodies = conferenceNotifications().map((data) => data.body)
+      const referenceMail = mailOf()
+
+      vi.clearAllMocks()
+      resetCargoStore()
+      mockFirestoreApi.batch.mockReturnValue(mockBatch)
+      mockBatch.commit.mockResolvedValue(undefined)
+      mockSendMail.mockResolvedValue({ messageId: 'msg-1' })
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed({ 'r-1': { flagged: false, note: '   ', photos: [] }, 'r-9': { flagged: true, note: 'linha removida', photos: [photo('zzz')] } })
+
+      await run()
+
+      const bodies = conferenceNotifications().map((data) => data.body)
+      expect(bodies).toEqual(referenceBodies)
+      for (const body of bodies) expect(body).toBe(CONFERENCE_BODY)
+      const mail = mailOf()
+      expect(mail.subject).toBe(referenceMail.subject)
+      expect(mail.text).toBe(referenceMail.text)
+      expect(mail.html).toBe(referenceMail.html)
+      expect(mail.attachments).toEqual(referenceMail.attachments)
+      expect(mail.html).not.toContain('Avarias e ressalvas')
+      // o log final não ganha chaves de avaria quando não há avaria
+      const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
+      expect(Object.keys(finalCall[1])).not.toContain('damageItems')
+    })
+
+    it('falha na leitura da conferência ou do current: sai o aviso de hoje, com warn só com processId e código', async () => {
+      for (const failing of [CONF_PATH, CUR_PATH]) {
+        vi.clearAllMocks()
+        resetCargoStore()
+        mockFirestoreApi.batch.mockReturnValue(mockBatch)
+        mockBatch.commit.mockResolvedValue(undefined)
+        mockSendMail.mockResolvedValue({ messageId: 'msg-1' })
+        setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+        configureSmtp()
+        seed()
+        cargoStore.failRead.add(failing)
+
+        await run()
+
+        for (const data of conferenceNotifications()) expect(data.body).toBe(CONFERENCE_BODY)
+        expect(conferenceNotifications()).toHaveLength(3)
+        expect(mailOf().html).not.toContain('Avarias e ressalvas')
+        const warned = mockLogger.warn.mock.calls.find(([message]) => String(message).includes('conferencia para o aviso'))
+        expect(warned).toBeDefined()
+        expect(warned[1]).toEqual({ processId: PROCESS_ID, error: 'unavailable' })
+        expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('segredo-da-leitura')
+      }
+    })
+
+    it('evento repetido (mesmo documentId): zero notificações novas e zero e-mails diretos novos', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+
+      await run('doc-1')
+      const notificationsAfterFirst = conferenceNotifications().length
+      expect(notificationsAfterFirst).toBe(3)
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      expect(cargoStore.docs.get(NOTICE_PATH)).toEqual({ documentId: 'doc-1', sentAt: 'SERVER_TIMESTAMP' })
+
+      await run('doc-1')
+      await run('doc-1')
+
+      expect(conferenceNotifications()).toHaveLength(notificationsAfterFirst)
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      expect(mockBatch.commit).toHaveBeenCalledTimes(1)
+      const skipped = mockLogger.info.mock.calls.filter(([message]) => String(message).includes('ja enviado'))
+      expect(skipped).toHaveLength(2)
+      expect(skipped[0][1]).toEqual({ processId: PROCESS_ID, documentId: 'doc-1' })
+    })
+
+    it('anexo novo (outro documentId) = aviso novo completo, com o mesmo assunto e o estado atual da conferência', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+      await run('doc-1')
+      const firstMail = mailOf(0)
+
+      // reabrir, tirar a avaria do item 2 e fechar de novo
+      seed({ 'r-1': { flagged: true, note: 'Caixas molhadas no pallet 2.', photos: [photo('aaa')] } })
+      await run('doc-2')
+
+      expect(mockSendMail).toHaveBeenCalledTimes(2)
+      const secondMail = mailOf(1)
+      expect(secondMail.subject).toBe(firstMail.subject)
+      expect(secondMail.text).toContain('Avarias e ressalvas: 1 item, 1 foto no Portal.')
+      expect(secondMail.text).not.toContain('Lacre')
+      const notifications = conferenceNotifications()
+      expect(notifications).toHaveLength(6)
+      expect(notifications.slice(3).every((data) => data.body.includes('1 item, 1 foto no Portal.'))).toBe(true)
+      expect(notifications.slice(3).every((data) => data.title === notifications[0].title)).toBe(true)
+      expect(cargoStore.docs.get(NOTICE_PATH).documentId).toBe('doc-2')
+    })
+
+    it('falha na transação da trava: avisa mesmo assim (prefere avisar a calar) e registra o warn só com processId e código', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+      cargoStore.failTransaction = true
+
+      await run()
+
+      expect(conferenceNotifications()).toHaveLength(3)
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      const warned = mockLogger.warn.mock.calls.find(([message]) => String(message).includes('trava'))
+      expect(warned[1]).toEqual({ processId: PROCESS_ID, error: 'aborted' })
+    })
+
+    it('estágio COMEX: intacto (não lê a conferência nem o current e não usa a trava)', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+
+      await run('doc-1', CARGO_REPORT)
+      await run('doc-1', CARGO_REPORT)
+
+      expect(cargoStore.reads).toEqual([])
+      expect(mockFirestoreApi.runTransaction).not.toHaveBeenCalled()
+      expect(cargoStore.docs.has(NOTICE_PATH)).toBe(false)
+      expect(conferenceNotifications()).toHaveLength(0)
+      expect(cargoNotifications()).toHaveLength(6)
+      for (const data of cargoNotifications()) expect(data.body).toBe(BODY)
+      expect(mockSendMail).toHaveBeenCalledTimes(2)
+      expect(mailOf().html).not.toContain('Avarias e ressalvas')
+    })
+
+    it('vários cargoReport no slot: o anexo do COMEX não gasta a trava e só o da logística traz a seção', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+
+      await run('doc-comex', CARGO_REPORT)
+      await run('doc-logi-1')
+      await run('doc-logi-1')
+
+      expect(cargoNotifications()).toHaveLength(3)
+      expect(conferenceNotifications()).toHaveLength(3)
+      expect(conferenceNotifications()[0].body).toContain(SECTION_LINES[0])
+      expect(cargoNotifications()[0].body).toBe(BODY)
+      expect(mockSendMail).toHaveBeenCalledTimes(2)
+    })
+
+    it('processo inexistente: a trava não é gasta', async () => {
+      setupChain({ processes: [] })
+      configureSmtp()
+      seed()
+      await run()
+      expect(mockFirestoreApi.runTransaction).not.toHaveBeenCalled()
+      expect(cargoStore.docs.has(NOTICE_PATH)).toBe(false)
+    })
+
+    it('os logs levam só ids e contagens: nada da observação, do item nem de arquivo', async () => {
+      setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+      configureSmtp()
+      seed()
+      cargoStore.failRead.add(CUR_PATH)
+      await run('doc-1')
+      cargoStore.failRead.clear()
+      await run('doc-2')
+
+      const finalCall = mockLogger.info.mock.calls.filter(([message]) => message === 'Relatorio de Carga notificado.').at(-1)
+      expect(finalCall[1]).toEqual({
+        processId: PROCESS_ID,
+        stage: 'conferencia',
+        inAppRecipients: 3,
+        directEmails: 1,
+        ignoredNonCorporate: 0,
+        failedDirectEmails: 0,
+        damageItems: 2,
+        damagePhotos: 3,
+      })
+      const logged = JSON.stringify([
+        mockLogger.info.mock.calls,
+        mockLogger.warn.mock.calls,
+        mockLogger.error.mock.calls,
+      ])
+      for (const secret of ['Caixas molhadas', 'POLIOL', 'ISOCIANATO', 'rompido', 'cargo-conference', 'segredo-da-leitura']) {
+        expect(logged).not.toContain(secret)
+      }
+    })
   })
 
   it('processo inexistente / sem dado criado -> nada', async () => {

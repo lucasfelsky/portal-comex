@@ -6,6 +6,13 @@
 // `src/features/processes/cargoConferenceIssues.js`). Arquivos em
 // `processes/{processId}/cargo-conference/{rowId}/{ts}-{uid}-{photoId}[-t].jpg` (rowId saneado em `[\w-]`).
 // O Storage não lê o Firestore: o vínculo foto <-> processo/linha é conferido aqui, a partir do doc da conferência.
+//
+// S10-J2 (aviso ao COMEX com avarias + espelho para técnico/faturamento): `summarizeCargoConferenceDamage` resume as
+// avarias a partir de `conference` + `current`; `buildCargoConferenceDamageLines`/`Text` montam a seção do aviso;
+// `extractCargoConferenceDamageLines` a lê de volta do `body` da notificação; `buildCargoDamageMirror` monta o espelho
+// `processes/{id}/cargoReport/damage` (SEM caminho de arquivo, `byId`, NF, etiquetas nem descarga).
+
+import { DOCUMENT_READER_ROLES } from './documentIndex.js'
 
 export const CARGO_CONFERENCE_PHOTO_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
 // Teto de caminhos apagados por gravação (5 fotos x 2 arquivos x 200 linhas é o máximo teórico das rules; o cliente
@@ -13,6 +20,18 @@ export const CARGO_CONFERENCE_PHOTO_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
 export const CARGO_CONFERENCE_MAX_REMOVED_PATHS = 200
 
 const ALLOWED_DOWNLOAD_ROLES = ['admin', 'logistica']
+
+// S10-J2: tetos do aviso e do espelho (mesmos do cliente: 5 fotos por item, 30 por conferência, nota de 1.000).
+export const CARGO_DAMAGE_PHOTOS_PER_ROW = 5
+export const CARGO_DAMAGE_PHOTOS_PER_CONFERENCE = 30
+export const CARGO_DAMAGE_NOTE_MAX = 1000
+export const CARGO_DAMAGE_NOTICE_MAX_ITEMS = 10
+export const CARGO_DAMAGE_NOTICE_NOTE_MAX = 200
+export const CARGO_DAMAGE_NOTICE_LABEL_MAX = 120
+// Início da seção no corpo do aviso: o e-mail aos usuários a procura no `body` (sem leitura extra).
+export const CARGO_DAMAGE_SECTION_MARKER = 'Avarias e ressalvas:'
+const CARGO_PALLETS_ROW_MAX = 999
+const CARGO_PALLETS_EXPECTED_MAX = 9999
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -28,13 +47,34 @@ export function cargoConferencePhotoPrefix(processId) {
   return `processes/${processId}/cargo-conference/`
 }
 
-// Perfis que baixam a foto na J1: admin e logística ativos com e-mail corporativo (técnico/faturamento entram na J2,
-// pelo espelho `cargoReport/damage`).
+function isActiveCorporateToken(token) {
+  if (!/^\s*ativo\s*$/i.test(String(token.status ?? ''))) return false
+  return String(token.email ?? '').toLowerCase().endsWith('@sqquimica.com')
+}
+
+// Perfis que baixam a foto direto da conferência: admin e logística ativos com e-mail corporativo. Técnico e
+// faturamento passam por `canDownloadCargoConferencePhotosAsReader` + o espelho `cargoReport/damage`.
 export function canDownloadCargoConferencePhotos(token) {
   if (!isPlainObject(token)) return false
   if (typeof token.role !== 'string' || !ALLOWED_DOWNLOAD_ROLES.includes(token.role)) return false
-  if (!/^\s*ativo\s*$/i.test(String(token.status ?? ''))) return false
-  return String(token.email ?? '').toLowerCase().endsWith('@sqquimica.com')
+  return isActiveCorporateToken(token)
+}
+
+// S10-J2: técnico e faturamento (`DOCUMENT_READER_ROLES`) ativos com e-mail corporativo. Só baixam foto que está no
+// espelho e ainda na conferência (o handler confere os dois).
+export function canDownloadCargoConferencePhotosAsReader(token) {
+  if (!isPlainObject(token)) return false
+  if (typeof token.role !== 'string' || !DOCUMENT_READER_ROLES.includes(token.role)) return false
+  return isActiveCorporateToken(token)
+}
+
+// A foto de `photoId` consta no espelho `cargoReport/damage` (lista de fotos dos itens, sem caminho).
+export function isPhotoInCargoDamageMirror(mirror, photoId) {
+  if (typeof photoId !== 'string' || !CARGO_CONFERENCE_PHOTO_ID_PATTERN.test(photoId)) return false
+  if (!isPlainObject(mirror) || !Array.isArray(mirror.items)) return false
+  return mirror.items.some(
+    (item) => isPlainObject(item) && Array.isArray(item.photos) && item.photos.some((photo) => photo?.id === photoId)
+  )
 }
 
 // Caminho do arquivo dentro do processo: `processes/{id}/cargo-conference/{rowId}/{arquivo}`, sem `..`, `//`, `\` ou
@@ -106,4 +146,207 @@ export function listRemovedCargoConferencePhotoPaths(before, after, processId) {
   const kept = collectPaths(after).all
   const removed = [...collectPaths(before, { processId }).owned].filter((path) => !kept.has(path))
   return removed.slice(0, CARGO_CONFERENCE_MAX_REMOVED_PATHS)
+}
+
+// ---------- S10-J2: resumo das avarias, seção do aviso e espelho ----------
+
+function readText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function readPositiveInt(value) {
+  return Number.isInteger(value) && value > 0 ? value : null
+}
+
+// Mesma regra do cliente (`isCargoReportRowEmpty`): linha sem nenhum texto nem número não conta.
+const ROW_TEXT_FIELDS = [
+  'po', 'dbcorpCode', 'supplierDescription', 'sqDescription', 'supplierLot', 'wmsLabel', 'sqLabel',
+]
+const ROW_NUMBER_FIELDS = ['quantityKg', 'count', 'packageWeightKg']
+
+function isBlankNumeric(value) {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '')
+}
+
+function isCargoRowEmpty(row) {
+  return (
+    ROW_TEXT_FIELDS.every((field) => String(row?.[field] ?? '').trim() === '')
+    && ROW_NUMBER_FIELDS.every((field) => isBlankNumeric(row?.[field]))
+  )
+}
+
+// Fotos do item: id válido e único, até 5 por item e `budget` no total da conferência.
+function readSummaryPhotos(value, budget) {
+  const photos = []
+  const seen = new Set()
+  for (const raw of Array.isArray(value) ? value : []) {
+    if (photos.length >= CARGO_DAMAGE_PHOTOS_PER_ROW || photos.length >= budget) break
+    if (!isPlainObject(raw)) continue
+    const id = raw.id
+    if (typeof id !== 'string' || !CARGO_CONFERENCE_PHOTO_ID_PATTERN.test(id) || seen.has(id)) continue
+    seen.add(id)
+    photos.push({ id, width: readPositiveInt(raw.width), height: readPositiveInt(raw.height) })
+  }
+  return photos
+}
+
+function readExpectedPallets(value) {
+  return Number.isInteger(value) && value >= 1 && value <= CARGO_PALLETS_EXPECTED_MAX ? value : null
+}
+
+// Resume as avarias da conferência fechada. Lê `current.rows` (linhas preenchidas, na ordem do relatório),
+// `current.expectedPallets`, `conference.palletsByRowId` e `conference.damageByRowId`. Item com avaria = marcado, com
+// observação escrita ou com foto (mesma regra do cliente); linha que já não existe no `current` fica de fora.
+// Rótulo = descrição SQ, senão a do fornecedor, senão "Item N". `pallets.state`: semTotal | confere | divergente.
+export function summarizeCargoConferenceDamage(conferenceData, currentData) {
+  const rows = (Array.isArray(currentData?.rows) ? currentData.rows : []).filter(
+    (row) => isPlainObject(row) && !isCargoRowEmpty(row)
+  )
+  const damageMap = isPlainObject(conferenceData?.damageByRowId) ? conferenceData.damageByRowId : {}
+  const palletsMap = isPlainObject(conferenceData?.palletsByRowId) ? conferenceData.palletsByRowId : {}
+
+  const items = []
+  let photoCount = 0
+  let counted = 0
+
+  rows.forEach((row, position) => {
+    const rowId = readText(row.id)
+    if (!rowId) return
+    const pallets = palletsMap[rowId]
+    if (Number.isInteger(pallets) && pallets >= 0 && pallets <= CARGO_PALLETS_ROW_MAX) counted += pallets
+
+    const entry = damageMap[rowId]
+    if (!isPlainObject(entry)) return
+    const note = readText(entry.note).slice(0, CARGO_DAMAGE_NOTE_MAX)
+    const flagged = entry.flagged === true
+    const photos = readSummaryPhotos(entry.photos, CARGO_DAMAGE_PHOTOS_PER_CONFERENCE - photoCount)
+    if (!flagged && !note && photos.length === 0) return
+
+    const index = position + 1
+    photoCount += photos.length
+    items.push({
+      rowId,
+      index,
+      label: readText(row.sqDescription) || readText(row.supplierDescription) || `Item ${index}`,
+      code: readText(row.dbcorpCode),
+      note,
+      flagged,
+      photoCount: photos.length,
+      photos,
+    })
+  })
+
+  const expected = readExpectedPallets(currentData?.expectedPallets)
+  const state = expected === null ? 'semTotal' : counted === expected ? 'confere' : 'divergente'
+  return { items, itemCount: items.length, photoCount, pallets: { counted, expected, state } }
+}
+
+function pluralize(count, singular, pluralForm) {
+  return `${count} ${count === 1 ? singular : pluralForm}`
+}
+
+// "Pallets: 23 contados de 25 informados pelo COMEX (divergente)." Sem total do COMEX: null (nada a dizer).
+export function formatCargoDamagePalletsLine(pallets) {
+  if (!isPlainObject(pallets) || pallets.state === 'semTotal' || pallets.expected === null || pallets.expected === undefined) {
+    return null
+  }
+  const state = pallets.state === 'confere' ? 'confere' : 'divergente'
+  return `Pallets: ${pluralize(pallets.counted, 'contado', 'contados')} de ${pluralize(pallets.expected, 'informado', 'informados')} pelo COMEX (${state}).`
+}
+
+function clipText(value, max) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
+  const chars = Array.from(text)
+  return chars.length > max ? `${chars.slice(0, max).join('').trimEnd()}…` : text
+}
+
+function buildItemLine(item) {
+  const fallbackLabel = `Item ${item.index}`
+  const cleanLabel = clipText(item.label, CARGO_DAMAGE_NOTICE_LABEL_MAX)
+  const label = cleanLabel && cleanLabel !== fallbackLabel ? ` · ${cleanLabel}` : ''
+  const photoCount = Number.isInteger(item.photoCount) ? item.photoCount : (item.photos?.length ?? 0)
+  const photos = photoCount > 0 ? ` · ${pluralize(photoCount, 'foto', 'fotos')}` : ''
+  const note = clipText(item.note, CARGO_DAMAGE_NOTICE_NOTE_MAX)
+  let detail = note
+  if (!detail) detail = photoCount > 0 ? '(sem observação)' : 'avaria registrada, sem observação'
+  return `• ${fallbackLabel}${label}${photos}: ${detail}`
+}
+
+// Linhas da seção do aviso (`[]` sem avaria): cabeçalho, pallets (se o COMEX informou o total), até 10 itens (nota
+// cortada em 200 caracteres) e o resto como "+ N itens no Portal.".
+export function buildCargoConferenceDamageLines(summary) {
+  const items = Array.isArray(summary?.items) ? summary.items : []
+  if (items.length === 0) return []
+
+  const itemsWord = pluralize(items.length, 'item', 'itens')
+  const photoCount = Number.isInteger(summary.photoCount) ? summary.photoCount : 0
+  const header = photoCount > 0
+    ? `${CARGO_DAMAGE_SECTION_MARKER} ${itemsWord}, ${pluralize(photoCount, 'foto', 'fotos')} no Portal.`
+    : `${CARGO_DAMAGE_SECTION_MARKER} ${itemsWord}.`
+
+  const lines = [header]
+  const palletsLine = formatCargoDamagePalletsLine(summary.pallets)
+  if (palletsLine) lines.push(palletsLine)
+  for (const item of items.slice(0, CARGO_DAMAGE_NOTICE_MAX_ITEMS)) lines.push(buildItemLine(item))
+  const hidden = items.length - CARGO_DAMAGE_NOTICE_MAX_ITEMS
+  if (hidden > 0) lines.push(`+ ${pluralize(hidden, 'item', 'itens')} no Portal.`)
+  return lines
+}
+
+export function buildCargoConferenceDamageText(lines) {
+  const list = (Array.isArray(lines) ? lines : []).filter((line) => typeof line === 'string' && line.trim() !== '')
+  return list.length === 0 ? '' : list.join('\n')
+}
+
+// Lê a seção de volta do `body` da notificação: do início da linha "Avarias e ressalvas:" até o fim. `body` de hoje
+// (sem a seção), vazio ou que não é texto -> `[]`.
+export function extractCargoConferenceDamageLines(body) {
+  if (typeof body !== 'string' || body === '') return []
+  const lines = body.split(/\r?\n/)
+  const start = lines.findIndex((line) => line.startsWith(CARGO_DAMAGE_SECTION_MARKER))
+  if (start < 0) return []
+  return lines.slice(start).map((line) => line.trimEnd()).filter((line) => line.trim() !== '')
+}
+
+// Espelho `processes/{id}/cargoReport/damage` (10 chaves). Só o necessário para Técnico/Faturamento: nada de caminho de
+// arquivo, `byId`, NF, etiquetas nem descarga. `updatedAt` vai `null`: o trigger troca por `serverTimestamp()`.
+export function buildCargoDamageMirror(summary, conferenceData) {
+  const items = Array.isArray(summary?.items) ? summary.items : []
+  const pallets = isPlainObject(summary?.pallets) ? summary.pallets : {}
+  const revision = conferenceData?.revision
+  return {
+    schemaVersion: 1,
+    conferenceRevision: Number.isInteger(revision) && revision >= 0 ? revision : 0,
+    closedDate: readText(conferenceData?.closedDate).slice(0, 10),
+    closedByName: readText(conferenceData?.closedByName).slice(0, 200),
+    receiptStatus: readText(conferenceData?.receiptStatus).slice(0, 40),
+    pallets: {
+      counted: Number.isInteger(pallets.counted) ? pallets.counted : 0,
+      expected: Number.isInteger(pallets.expected) ? pallets.expected : null,
+    },
+    items: items.map((item) => ({
+      rowId: item.rowId,
+      index: item.index,
+      label: String(item.label ?? '').slice(0, 200),
+      code: String(item.code ?? '').slice(0, 100),
+      note: String(item.note ?? ''),
+      flagged: item.flagged === true,
+      photos: (Array.isArray(item.photos) ? item.photos : []).map((photo) => ({
+        id: photo.id,
+        width: photo.width ?? null,
+        height: photo.height ?? null,
+      })),
+    })),
+    itemCount: items.length,
+    photoCount: Number.isInteger(summary?.photoCount) ? summary.photoCount : 0,
+    updatedAt: null,
+  }
+}
+
+// O espelho é regravado quando a conferência está `fechada` e o fechamento é novo: doc criado já fechado, vinda de
+// outro status ou com outra revisão. Fechada -> fechada na mesma revisão não regrava; reabrir não mexe.
+export function shouldWriteCargoDamageMirror(before, after) {
+  if (!isPlainObject(after) || after.status !== 'fechada') return false
+  if (!isPlainObject(before)) return true
+  return before.status !== 'fechada' || before.revision !== after.revision
 }

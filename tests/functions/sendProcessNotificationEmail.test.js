@@ -298,6 +298,77 @@ describe('sendProcessNotificationEmail', () => {
     expect(args.text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
   })
 
+  // S10-J2: o e-mail aos usuários extrai a seção "Avarias e ressalvas" do `body` da notificação (sem leitura extra).
+  describe('process_cargo_report_conference com avarias (S10-J2)', () => {
+    const FIXED =
+      'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.'
+    const TITLE = 'Conferência do Relatório de Carga - PO 12345 - Resina Atlas'
+    const SECTION = [
+      'Avarias e ressalvas: 2 itens, 3 fotos no Portal.',
+      'Pallets: 23 contados de 25 informados pelo COMEX (divergente).',
+      '• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.',
+      '• Item 2 · ISOCIANATO MDI · 1 foto: Lacre <b>rompido</b>.',
+    ]
+
+    function configureSmtp() {
+      setSecretValue('SMTP_HOST', 'smtp.test.com')
+      setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+      setSecretValue('SMTP_PASS', 'pass')
+      setupMailer()
+    }
+
+    async function sendWithBody(body) {
+      configureSmtp()
+      await handler(
+        makeEvent({
+          type: 'process_cargo_report_conference',
+          recipientUserId: RECIPIENT_UID,
+          processId: 'proc-1',
+          title: TITLE,
+          body,
+        })
+      )
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      return mockSendMail.mock.calls[0][0]
+    }
+
+    it('body com a seção -> e-mail com a lista (html escapado e texto puro), assunto e anexo iguais', async () => {
+      const args = await sendWithBody(`${FIXED}\n\n${SECTION.join('\n')}`)
+      expect(args.subject).toBe(TITLE)
+      expect(args.html).toContain('Avarias e ressalvas')
+      expect(args.html).toContain('2 itens, 3 fotos no Portal.')
+      expect(args.html).toContain('• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.')
+      expect(args.html).toContain('Lacre &lt;b&gt;rompido&lt;/b&gt;.')
+      expect(args.html).not.toContain('<b>rompido</b>')
+      for (const line of SECTION) expect(args.text).toContain(line)
+      // o corpo fixo longo do in-app não vai para o e-mail (texto curto do banner, decisão do Comex)
+      expect(args.text).not.toContain('Etiquetas, contagem')
+      expect(args.attachments).toHaveLength(1)
+      expect(args.attachments[0].cid).toBe('cargo-conference-banner@portal-comex')
+      // o log do trigger não carrega o texto da avaria
+      expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('Caixas molhadas')
+    })
+
+    it('body de hoje (sem seção) -> e-mail igual ao de hoje, sem a seção de avarias', async () => {
+      const args = await sendWithBody(FIXED)
+      expect(args.html).not.toContain('Avarias e ressalvas')
+      expect(args.text).not.toContain('Avarias e ressalvas')
+      expect(args.text).toContain('Conferência da Logística concluída no Relatório de Carga.')
+      expect(args.text).toContain('Processo: PO 12345 - Resina Atlas')
+      expect(args.text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
+      expect(args.attachments).toHaveLength(1)
+    })
+
+    it('body com a seção e body de hoje: o HTML só difere pela seção', async () => {
+      const today = await sendWithBody(FIXED)
+      vi.clearAllMocks()
+      const withSection = await sendWithBody(`${FIXED}\n\n${SECTION.join('\n')}`)
+      expect(withSection.subject).toBe(today.subject)
+      expect(withSection.html.length).toBeGreaterThan(today.html.length)
+      expect(withSection.html.startsWith(today.html.slice(0, today.html.indexOf('Abrir processo no Portal COMEX')))).toBe(true)
+    })
+  })
+
   it('outro tipo de e-mail de processo -> texto puro, sem html nem anexos', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
