@@ -26475,7 +26475,9 @@ tr.crf-gsum td {
   min-height: 46px;
 }
 
-/* Barra inferior (portal no body): acima da barra de navegacao (28), abaixo das folhas (90) e dos modais (200). */
+/* Barra inferior (portal no body), base, so vale acima de 720 px (sem barra de navegacao): cola na base,
+   z-index 29; em ate 720 px vale .ccf-actionbar--above-nav (mais abaixo, empilhada acima da navegacao). Abaixo das folhas (90)
+   e dos modais (200). */
 .ccf-actionbar {
   position: fixed;
   right: 0;
@@ -26881,7 +26883,8 @@ tr.crf-gsum td {
    CONFERENCIA NO CELULAR - BARRA DE ACOES ACIMA DA NAVEGACAO INFERIOR (sem sobreposicao)
    A navegacao de baixo (.mobile-bottom-nav, pilula flutuante) fica SEMPRE na base; a barra de acoes da conferencia
    (.ccf-actionbar, por portal) fica imediatamente acima dela. A altura e a folga da navegacao vem de variaveis
-   (:root), as MESMAS que mobile-redesign.css usa na pilula; nada de numero duplicado. A classe --above-nav vem do JS
+   (:root), as MESMAS que mobile-redesign.css usa na pilula; sem numero duplicado entre a barra de acoes e a pilula (outros
+   literais seguem: .main-content 104px, o translateY do detalhe de Chegadas e o toast base em mobile-redesign.css). A classe --above-nav vem do JS
    (largura <= 720 px, quando a navegacao existe); sem ela (paisagem/tablet) a barra de acoes cola na base.
    Teclado virtual: a navegacao e a barra sao position: fixed; no Android o viewport encolhe e as duas sobem juntas,
    empilhadas; no iOS o teclado cobre as duas (o campo em foco rola para fora da cobertura). Bloco APPEND-ONLY, sem
