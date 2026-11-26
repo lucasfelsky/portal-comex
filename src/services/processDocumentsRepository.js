@@ -169,6 +169,12 @@ export async function uploadProcessDocument(
     if ((type === 'invoice' || type === 'packingList') && category === 'CONSOLIDADO') {
       payload.poNumber = po
     }
+    // COA por PO: so' no CONSOLIDADO e com PO; storagePath e slot nao levam a PO.
+    // Fora do CONSOLIDADO a rule recusa `poNumber` no COA.
+    if (type === 'coaOriginal' && category === 'CONSOLIDADO') {
+      const coaPurchaseOrder = normalizeStringValue(po)
+      if (coaPurchaseOrder) payload.poNumber = coaPurchaseOrder
+    }
 
     await setDoc(documentRef, payload)
 
@@ -209,6 +215,19 @@ export async function setInvoicePackingListLink(processId, documentId, included,
     alsoPackingList: included === true,
     alsoPackingListUpdatedAt: serverTimestamp(),
     alsoPackingListUpdatedById: actor?.uid ?? '',
+  })
+}
+
+// Vincula o COA a uma PO do CONSOLIDADO (COA sem PO ou de PO removida). A rule so'
+// aceita estas 3 chaves, em doc `coaOriginal`, por admin; o arquivo nao se move.
+export async function setCoaPurchaseOrder(processId, documentId, poNumber, actor) {
+  if (!isFirebaseConfigured || !firestore) return
+  const value = normalizeStringValue(poNumber)
+  if (!value) throw new Error('Informe a PO do COA.')
+  await updateDoc(doc(firestore, 'processes', processId, 'documents', documentId), {
+    poNumber: value,
+    poNumberUpdatedAt: serverTimestamp(),
+    poNumberUpdatedById: actor?.uid ?? '',
   })
 }
 

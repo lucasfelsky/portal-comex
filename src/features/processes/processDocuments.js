@@ -23,6 +23,9 @@ export const MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH = 80
 // O teto de 50 por processo é só do cliente: as rules não contam documentos.
 export const MAX_COA_FILES_PER_PROCESS = 50
 
+// COA por PO (CONSOLIDADO): o teto de 50 vale por PO, tambem so' no cliente.
+export const MAX_COA_FILES_PER_PURCHASE_ORDER = 50
+
 // D-1: 7 tipos de documento de nivel-processo/item/conteiner. `scope`
 // determina que campo extra a rule/UI exige (`itemId`/`containerId`/
 // `description`/`po`); `roles` = quem pode ENVIAR (nao confundir com quem
@@ -217,6 +220,69 @@ export function listCoaDocuments(documents) {
     if (diff !== 0) return diff
     return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
   })
+}
+
+// COA por PO: so' o CONSOLIDADO guarda o COA por PO (campo `poNumber` do
+// documento; slot e storagePath nao mudam). Nas demais categorias o COA e' do processo.
+export function isCoaPurchaseOrderScoped(category) {
+  return category === 'CONSOLIDADO'
+}
+
+// PO do COA ('' quando o documento nao tem: COA antigo ou de outra categoria).
+export function getCoaPurchaseOrderNumber(document) {
+  return String(document?.poNumber ?? '').trim()
+}
+
+// COAs da PO informada (mesma ordem de `listCoaDocuments`). PO vazia -> [].
+export function listCoaDocumentsForPurchaseOrder(documents, po) {
+  const target = String(po ?? '').trim()
+  if (!target) return []
+  return listCoaDocuments(documents).filter((document) => getCoaPurchaseOrderNumber(document) === target)
+}
+
+// COAs do CONSOLIDADO que nao pertencem a nenhuma PO atual: sem `poNumber`
+// (inclusive o slot legado `coaOriginal`) ou com PO que saiu do processo.
+export function listCoaDocumentsWithoutPurchaseOrder(documents, purchaseOrders) {
+  const poNumbers = new Set(
+    (Array.isArray(purchaseOrders) ? purchaseOrders : [])
+      .map((order) => String(order?.po ?? '').trim())
+      .filter(Boolean)
+  )
+  const result = []
+  for (const document of listCoaDocuments(documents)) {
+    const po = getCoaPurchaseOrderNumber(document)
+    if (!po) result.push({ document, reason: 'Sem PO' })
+    else if (!poNumbers.has(po)) result.push({ document, reason: 'PO removida' })
+  }
+  return result
+}
+
+// Vagas restantes para envio de COA: 50 por PO no CONSOLIDADO (sem PO nao ha
+// vaga: o envio exige PO), 50 por processo nas demais categorias. Nunca < 0.
+export function getCoaUploadRoom({ documents, category, po } = {}) {
+  if (isCoaPurchaseOrderScoped(category)) {
+    if (!String(po ?? '').trim()) return 0
+    return Math.max(0, MAX_COA_FILES_PER_PURCHASE_ORDER - listCoaDocumentsForPurchaseOrder(documents, po).length)
+  }
+  return Math.max(0, MAX_COA_FILES_PER_PROCESS - listCoaDocuments(documents).length)
+}
+
+// Contador "N enviados" da aba: 1 se houver COA (demais categorias e leitores
+// do CONSOLIDADO); admin/logistica no CONSOLIDADO: +1 por PO atual com COA.
+// COA sem PO ou de PO removida nao conta.
+export function countSentCoaSlots(documents, { category, purchaseOrders, isReadOnlyViewer } = {}) {
+  const coas = listCoaDocuments(documents)
+  if (coas.length === 0) return 0
+  if (!isCoaPurchaseOrderScoped(category) || isReadOnlyViewer) return 1
+  const withCoa = new Set(coas.map(getCoaPurchaseOrderNumber).filter(Boolean))
+  const poNumbers = new Set(
+    (Array.isArray(purchaseOrders) ? purchaseOrders : [])
+      .map((order) => String(order?.po ?? '').trim())
+      .filter(Boolean)
+  )
+  let count = 0
+  for (const po of poNumbers) if (withCoa.has(po)) count += 1
+  return count
 }
 
 // Nome exibido do COA: nome proprio (`description`) ou, vazio, o nome do arquivo.
