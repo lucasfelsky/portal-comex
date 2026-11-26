@@ -15,8 +15,9 @@ const cache = new Map()
 const queue = []
 let active = 0
 
-function keyOf(photoId, size) {
-  return `${photoId}|${size}`
+// Chave por processo + foto + tamanho: o cache de módulo nunca serve a foto de um processo para outro.
+function keyOf(processId, photoId, size) {
+  return `${processId}|${photoId}|${size}`
 }
 
 function notify(entry) {
@@ -61,7 +62,7 @@ function pump() {
 }
 
 function acquire(processId, photoId, size) {
-  const key = keyOf(photoId, size)
+  const key = keyOf(processId, photoId, size)
   let entry = cache.get(key)
   // Erro antigo: tenta de novo (o "Tentar de novo" do usuário e a próxima abertura da tela).
   if (entry?.status === 'error') {
@@ -84,15 +85,15 @@ function subscribe(processId, photoId, size, listener) {
 }
 
 // Foto que acabou de ser enviada: o blob reduzido e a miniatura que já estão na memória valem como cache.
-export function registerCargoPhotoBlobs(photoId, { thumb, full } = {}) {
+export function registerCargoPhotoBlobs(processId, photoId, { thumb, full } = {}) {
   for (const [size, blob] of [
     ['thumb', thumb],
     ['full', full],
   ]) {
     if (!blob || !photoId) continue
-    const key = keyOf(photoId, size)
+    const key = keyOf(processId, photoId, size)
     if (cache.get(key)?.status === 'ready') continue
-    cache.set(key, { key, processId: '', photoId, size, status: 'ready', blob, listeners: new Set() })
+    cache.set(key, { key, processId, photoId, size, status: 'ready', blob, listeners: new Set() })
   }
   trimCache()
 }

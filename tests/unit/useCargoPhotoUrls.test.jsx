@@ -81,6 +81,22 @@ describe('useCargoPhotoUrls', () => {
     expect(mockDownload).toHaveBeenCalledTimes(1)
   })
 
+  it('o cache é por processo: o mesmo id em outro processo baixa de novo (nada é servido de outro processo)', async () => {
+    mockDownload.mockResolvedValue(new Blob(['x']))
+    const first = renderHook(() => useCargoPhotoUrls('p1', [photo('a1')]))
+    await waitFor(() => expect(first.result.current.statusOf('a1')).toBe('ready'))
+    const other = renderHook(() => useCargoPhotoUrls('p2', [photo('a1')]))
+    await waitFor(() => expect(other.result.current.statusOf('a1')).toBe('ready'))
+    expect(mockDownload.mock.calls.map((call) => call[0])).toEqual(['p1', 'p2'])
+    // E o blob local registrado para um processo não vale para o outro.
+    registerCargoPhotoBlobs('p1', 'local', { thumb: new Blob(['t']) })
+    const hit = renderHook(() => useCargoPhotoUrls('p1', [photo('local')]))
+    await waitFor(() => expect(hit.result.current.statusOf('local')).toBe('ready'))
+    expect(mockDownload).toHaveBeenCalledTimes(2)
+    renderHook(() => useCargoPhotoUrls('p2', [photo('local')]))
+    expect(mockDownload).toHaveBeenCalledTimes(3)
+  })
+
   it('no máximo 3 downloads ao mesmo tempo; terminando um, o próximo da fila começa', async () => {
     const gates = Array.from({ length: 5 }, () => deferred())
     mockDownload.mockImplementation((_process, id) => gates[Number(id.slice(1))].promise)
@@ -145,7 +161,7 @@ describe('useCargoPhotoUrls', () => {
   })
 
   it('foto recém-enviada usa o blob local (miniatura e foto cheia), sem chamar a function', async () => {
-    registerCargoPhotoBlobs('novo', { thumb: new Blob(['t']), full: new Blob(['f']) })
+    registerCargoPhotoBlobs('p1', 'novo', { thumb: new Blob(['t']), full: new Blob(['f']) })
     const thumb = renderHook(() => useCargoPhotoUrls('p1', [photo('novo')]))
     const full = renderHook(() => useCargoPhotoUrls('p1', [photo('novo')], { size: 'full' }))
     await waitFor(() => expect(thumb.result.current.statusOf('novo')).toBe('ready'))

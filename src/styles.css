@@ -26970,7 +26970,14 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 
 .ccf-photos__thumb,
 .crf-photos__thumb {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 76px;
+}
+
+.crf-photos__thumb {
+  width: 64px;
 }
 
 .ccf-photos__open,
@@ -26987,8 +26994,8 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 }
 
 .crf-photos__open {
-  width: 40px;
-  height: 40px;
+  width: 64px;
+  height: 64px;
 }
 
 .ccf-photos__open:disabled,
@@ -27011,42 +27018,23 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   height: 100%;
 }
 
+/* "Remover": botao proprio numa faixa ABAIXO da miniatura (44 px de altura, largura da miniatura). Sem posicao absoluta e
+   sem ::after: a area de toque dele nunca cobre a miniatura, entao tocar na foto sempre abre (nunca remove). */
 .ccf-photos__del,
 .crf-photos__del {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-full);
-  background: var(--ink);
-  color: var(--surface);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 1px solid var(--danger-700);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--danger-700);
   font: inherit;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.crf-photos__del {
-  width: 20px;
-  height: 20px;
   font-size: var(--fs-caption);
-}
-
-/* Area de toque de 44 px sem aumentar o botao visual. */
-.ccf-photos__del::after,
-.crf-photos__del::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 44px;
-  height: 44px;
-  transform: translate(-50%, -50%);
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
 }
 
 .ccf-photos__thumb--off,

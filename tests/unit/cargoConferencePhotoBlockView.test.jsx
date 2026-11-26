@@ -294,6 +294,17 @@ describe('miniaturas e remover', () => {
     expect(screen.getAllByRole('button', { name: /^Remover foto/ })).toHaveLength(1)
   })
 
+  it('"Remover" é um botão com texto visível, fora do botão de abrir (nunca aninhado na miniatura)', async () => {
+    render(<Harness initial={withPhotos(2)} />)
+    await screen.findByRole('img', { name: 'Foto 2 do item 1' })
+    for (const remove of screen.getAllByRole('button', { name: /^Remover foto/ })) {
+      expect(remove).toHaveTextContent('Remover')
+      expect(remove.getAttribute('aria-label')).toContain(remove.textContent.trim())
+      expect(remove.parentElement.closest('button')).toBeNull()
+      expect(remove.querySelector('img')).toBeNull()
+    }
+  })
+
   it('download que falha: "Foto indisponível" e "Tentar de novo" baixa de novo', async () => {
     const user = userEvent.setup()
     mockDownload.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'permission-denied' }))
@@ -352,6 +363,27 @@ describe('visualizador', () => {
     await waitFor(() => expect(within(again).getByRole('button', { name: 'Fechar' })).toHaveFocus())
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('ao chegar na última (ou na primeira) pelo botão, o foco vai para Fechar e as setas continuam valendo', async () => {
+    const user = userEvent.setup()
+    const { dialog } = await openViewer(user, 2)
+    const close = within(dialog).getByRole('button', { name: 'Fechar' })
+    const next = within(dialog).getByRole('button', { name: 'Próxima' })
+    await waitFor(() => expect(close).toHaveFocus())
+    await user.click(next)
+    expect(await within(dialog).findByRole('heading', { name: /^Foto 2 de 2/ })).toBeInTheDocument()
+    expect(next).toBeDisabled()
+    expect(close).toHaveFocus()
+    await user.keyboard('{ArrowLeft}')
+    expect(await within(dialog).findByRole('heading', { name: /^Foto 1 de 2/ })).toBeInTheDocument()
+    const previous = within(dialog).getByRole('button', { name: 'Anterior' })
+    expect(previous).toBeDisabled()
+    expect(close).toHaveFocus()
+    await user.click(within(dialog).getByRole('button', { name: 'Próxima' }))
+    await user.click(previous)
+    expect(await within(dialog).findByRole('heading', { name: /^Foto 1 de 2/ })).toBeInTheDocument()
+    expect(close).toHaveFocus()
   })
 
   it('foto cheia indisponível: aviso e "Tentar de novo"', async () => {

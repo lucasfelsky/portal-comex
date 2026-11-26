@@ -3523,6 +3523,22 @@ describe('S10-J1b: fotos de avaria no computador (coluna Fotos do cartão "Palle
     expect(mockDeleteOwnPhotos).not.toHaveBeenCalled()
   })
 
+  it('"Descartar" também limpa o cartão de erro de um envio que falhou (some o "Tentar de novo")', async () => {
+    load(withPhotos(2))
+    mockUploadPhoto.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await screen.findByRole('img', { name: 'Foto 2 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    await attach(user, 2, jpeg())
+    expect(await within(card()).findByRole('alert')).toHaveTextContent('Sem conexão')
+    expect(within(card()).getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(within(card()).queryByRole('alert')).not.toBeInTheDocument()
+    expect(within(card()).queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument()
+    expect(await within(card()).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    expect(within(card()).getByRole('button', { name: 'Anexar foto ao item 2' })).toBeEnabled()
+  })
+
   it('remover foto enviada agora e não salva apaga o arquivo do próprio uid; a salva só sai no Salvar', async () => {
     load(withPhotos(1))
     mockUploadPhoto.mockResolvedValue(savedPhoto('pnovo'))

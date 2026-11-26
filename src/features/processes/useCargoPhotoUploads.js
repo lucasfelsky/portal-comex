@@ -93,7 +93,7 @@ export default function useCargoPhotoUploads({ processId, uid, conference, enabl
         await deleteOwnCargoConferencePhotoFiles(currentProcessId, [photo], { uid: currentUid }).catch(() => {})
         return
       }
-      registerCargoPhotoBlobs(photo.id, { thumb: job.prepared.thumb.blob, full: job.prepared.full.blob })
+      registerCargoPhotoBlobs(currentProcessId, photo.id, { thumb: job.prepared.thumb.blob, full: job.prepared.full.blob })
       dropUpload(key)
       onUploadedRef.current?.(job.rowId, photo)
     } catch (error) {

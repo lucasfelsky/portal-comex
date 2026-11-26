@@ -6,7 +6,8 @@ import CargoPhotoViewer from './CargoPhotoViewer'
 import useCargoPhotoUrls from './useCargoPhotoUrls'
 
 // S10-J1b do Relatório de Carga: fotos de avaria de UM item (mock aprovado, "Fotos e avaria deste item"). Miniaturas
-// (abrem o visualizador; "×" remove, só para quem edita), "Tirar foto" (câmera do celular: `capture="environment"`) e
+// (abrem o visualizador; o botão "Remover" fica numa faixa PRÓPRIA abaixo da miniatura, só para quem edita, sem invadir a
+// área de toque de abrir), "Tirar foto" (câmera do celular: `capture="environment"`) e
 // "Anexar" (arquivos; várias de uma vez), progresso e erro do envio com "Tentar de novo", e o aviso do limite (5 por
 // item, 30 por conferência). Apresentação: o estado vive em `useCargoPhotoUploads` (`tools`) e no estado do item.
 // `variant`: 'mobile' (cartão do item, com "Tirar foto") ou 'desktop' (coluna Fotos do cartão do computador, sem câmera).
@@ -32,7 +33,7 @@ function Thumb({ prefix, number, itemLabel, status, url, editable, onOpen, onRem
         </button>
         {editable ? (
           <button type="button" className={`${prefix}__del`} aria-label={`Remover foto ${number} do ${itemLabel}`} onClick={onRemove}>
-            <span aria-hidden="true">×</span>
+            Remover
           </button>
         ) : null}
       </li>
@@ -52,7 +53,7 @@ function Thumb({ prefix, number, itemLabel, status, url, editable, onOpen, onRem
       </button>
       {editable ? (
         <button type="button" className={`${prefix}__del`} aria-label={`Remover foto ${number} do ${itemLabel}`} onClick={onRemove}>
-          <span aria-hidden="true">×</span>
+          Remover
         </button>
       ) : null}
     </li>

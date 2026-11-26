@@ -18,7 +18,10 @@ export default function CargoPhotoViewer({ processId, photos, index, caption, on
 
   function go(delta) {
     const next = index + delta
-    if (next >= 0 && next < total) onIndexChange(next)
+    if (next < 0 || next >= total) return
+    onIndexChange(next)
+    // Chegou na primeira/última: Anterior/Próxima vira desabilitado; o foco vai para Fechar para as setas seguirem valendo.
+    if (next === 0 || next === total - 1) closeRef.current?.focus()
   }
 
   function handleKeyDown(event) {
