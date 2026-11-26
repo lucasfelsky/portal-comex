@@ -9,6 +9,7 @@ import {
   moveCargoRow,
   moveCargoRowToPurchaseOrder,
   removeCargoRow,
+  replaceCargoRowsWithLots,
   restoreCargoRow,
   splitCargoRow,
   suggestCargoSplit,
@@ -295,5 +296,88 @@ describe('insertCargoRowInPurchaseOrder ("Linha nesta PO")', () => {
     expect(ids(result.rows)).toEqual(['a1', result.insertedId])
     expect(result.rows[1].po).toBe('4500903')
     expect(insertCargoRowInPurchaseOrder(manyRows(CARGO_REPORT_MAX_ROWS), PURCHASE_ORDERS[0], PURCHASE_ORDERS).error).toBe('limit')
+  })
+})
+
+describe('S11-C: replaceCargoRowsWithLots (Ler COAs)', () => {
+  const item = (id, overrides = {}) =>
+    row(id, { po: 'GOO SEA 185-26', dbcorpCode: 'BA5012', supplierDescription: 'FORN', sqDescription: 'POLIOL', packageWeightKg: 200, quantityKg: 4000, ...overrides })
+  const base = [row('x', { po: 'X' }), item('a'), item('b', { supplierLot: 'ANT' }), row('z', { po: 'Z' })]
+
+  it('troca as linhas do item por uma por lote, no lugar da primeira, com id novo e frozen nulos', () => {
+    const snapshot = JSON.stringify(base)
+    const result = replaceCargoRowsWithLots(base, ['a', 'b'], [
+      { supplierLot: '  L1 ', quantityKg: 1500 },
+      { supplierLot: 'L2', quantityKg: null },
+      { supplierLot: 'L3', quantityKg: '2.500' },
+    ])
+    expect(result.error).toBeUndefined()
+    expect(result.rows).toHaveLength(5)
+    expect(result.rows[0].id).toBe('x')
+    expect(result.rows[4].id).toBe('z')
+    expect(result.insertedIds).toEqual(result.rows.slice(1, 4).map((created) => created.id))
+    expect(result.insertedIds.every((id) => !['a', 'b'].includes(id))).toBe(true)
+    expect(result.rows.slice(1, 4).map((created) => [created.supplierLot, created.quantityKg])).toEqual([
+      ['L1', 1500],
+      ['L2', null],
+      ['L3', 2500],
+    ])
+    expect(result.rows[1]).toMatchObject({
+      po: 'GOO SEA 185-26',
+      dbcorpCode: 'BA5012',
+      supplierDescription: 'FORN',
+      sqDescription: 'POLIOL',
+      packageWeightKg: 200,
+      wmsLabel: '',
+      count: null,
+      frozenNetWeightKg: null,
+      frozenPackages: null,
+    })
+    expect(Object.keys(result.rows[1])).toEqual(Object.keys(createEmptyCargoReportRow('k')))
+    expect(JSON.stringify(base)).toBe(snapshot)
+  })
+
+  it('usa o template informado em vez da primeira linha', () => {
+    const result = replaceCargoRowsWithLots(base, ['a', 'b'], [{ supplierLot: 'L1', quantityKg: 10 }], {
+      template: item('t', { sqDescription: 'OUTRO' }),
+    })
+    expect(result.rows[1].sqDescription).toBe('OUTRO')
+  })
+
+  it('não confere a soma (quem decide é a prévia) e aceita 1 lote', () => {
+    const result = replaceCargoRowsWithLots(base, ['a', 'b'], [{ supplierLot: 'L1', quantityKg: 1 }])
+    expect(result.error).toBeUndefined()
+    expect(result.rows).toHaveLength(3)
+  })
+
+  it('invalid: linha inexistente, sem linhas, sem lotes, quantidade <= 0 ou inválida, lote que não é texto', () => {
+    const lots = [{ supplierLot: 'L1', quantityKg: 10 }]
+    expect(replaceCargoRowsWithLots(base, ['nope'], lots).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a', 'nope'], lots).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, [], lots).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a'], []).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a'], [{ supplierLot: 'L1', quantityKg: 0 }]).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a'], [{ supplierLot: 'L1', quantityKg: -5 }]).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a'], [{ supplierLot: 'L1', quantityKg: 'abc' }]).error).toBe('invalid')
+    expect(replaceCargoRowsWithLots(base, ['a'], [{ supplierLot: null, quantityKg: 5 }]).error).toBe('invalid')
+    expect(ids(replaceCargoRowsWithLots(base, ['nope'], lots).rows)).toEqual(ids(base))
+  })
+
+  it('teto de 200 linhas: passa de 200 = limit (nada muda); exatamente 200 cabe', () => {
+    const full = [...manyRows(CARGO_REPORT_MAX_ROWS - 1), item('a')]
+    const lots = (count) => Array.from({ length: count }, (_, index) => ({ supplierLot: `L${index}`, quantityKg: 1 }))
+    const over = replaceCargoRowsWithLots(full, ['a'], lots(2))
+    expect(over.error).toBe('limit')
+    expect(ids(over.rows)).toEqual(ids(full))
+    const exact = replaceCargoRowsWithLots(full, ['a'], lots(1))
+    expect(exact.error).toBeUndefined()
+    expect(exact.rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
+    // trocar 2 linhas por 3 estoura quando o relatório já está cheio
+    const full2 = [...manyRows(CARGO_REPORT_MAX_ROWS - 2), item('a'), item('b')]
+    expect(replaceCargoRowsWithLots(full2, ['a', 'b'], lots(3)).error).toBe('limit')
+    const same = replaceCargoRowsWithLots(full2, ['a', 'b'], lots(2))
+    expect(same.error).toBeUndefined()
+    expect(same.rows).toHaveLength(CARGO_REPORT_MAX_ROWS)
+    expect(replaceCargoRowsWithLots([item('a')], ['a'], lots(CARGO_REPORT_MAX_ROWS + 1)).error).toBe('invalid')
   })
 })

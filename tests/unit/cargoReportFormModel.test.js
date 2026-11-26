@@ -40,6 +40,7 @@ import {
   normalizeCargoLabel,
   parseCargoCount,
   parseCargoNumber,
+  readCargoAutofill,
   readDateTimeKey,
   resolveCargoExpectedPallets,
   resolveCargoReceivedDate,
@@ -1281,5 +1282,47 @@ describe('S10-I: fromConferenceDoc com pallets e observação por item', () => {
     expect(conference.notes).toBe('Palete 3 avariado')
     const payload = buildConferencePayload({ ...conference, revision: 1 }, [], { actorName: 'Op' })
     expect(payload.notes).toBe('Palete 3 avariado')
+  })
+})
+
+describe('S11-C: autofill com lote e quantidade do COA (marca L)', () => {
+  const rows = [{ ...createEmptyCargoReportRow('r1'), supplierLot: 'L1', quantityKg: 1500 }]
+
+  it('readCargoAutofill lê base.supplierLot (texto, até 120) e coa === true; descarta coa que não é true', () => {
+    const read = readCargoAutofill(
+      {
+        schemaVersion: 1,
+        snapshotId: '',
+        rows: {
+          r1: { key: 'fup:1', base: { supplierLot: `  ${'L'.repeat(150)} `, quantityKg: 1500, po: 'P' }, coa: true },
+        },
+      },
+      rows
+    )
+    expect(read.rows.r1.base.supplierLot).toHaveLength(CARGO_REPORT_LIMITS.text)
+    expect(read.rows.r1.base).toMatchObject({ quantityKg: 1500, po: 'P' })
+    expect(read.rows.r1.coa).toBe(true)
+    for (const coa of [false, 'true', 1, null, undefined]) {
+      const other = readCargoAutofill({ rows: { r1: { key: 'fup:1', base: {}, coa } } }, rows)
+      expect(other.rows.r1).not.toHaveProperty('coa')
+    }
+    // lote da base de tipo errado é descartado
+    expect(readCargoAutofill({ rows: { r1: { key: '', base: { supplierLot: 5 } } } }, rows).rows.r1.base).toEqual({})
+  })
+
+  it('o payload grava as mesmas chaves de topo e as entradas levam supplierLot e coa; volta igual ao ler', () => {
+    const form = {
+      ...fromCargoReportDoc({ revision: 3, status: 'rascunho', cargoType: 'FCL', titleSuffix: 'ACME' }),
+      rows,
+      autofill: { schemaVersion: 1, snapshotId: 'snap', rows: { r1: { key: 'fup:1', base: { supplierLot: 'L1', quantityKg: 1500 }, coa: true } } },
+    }
+    const { payload, errors } = buildCargoReportPayload(form)
+    expect(errors).toEqual([])
+    expect(Object.keys(payload)).toHaveLength(RULE_ALLOWLIST.length - 3)
+    for (const key of Object.keys(payload)) expect(RULE_ALLOWLIST).toContain(key)
+    for (const saved of payload.rows) expect(Object.keys(saved)).toHaveLength(13)
+    expect(Object.keys(payload.autofill)).toEqual(['schemaVersion', 'snapshotId', 'rows'])
+    expect(payload.autofill.rows.r1).toEqual({ key: 'fup:1', base: { supplierLot: 'L1', quantityKg: 1500 }, coa: true })
+    expect(fromCargoReportDoc(payload).autofill).toEqual(payload.autofill)
   })
 })

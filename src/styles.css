@@ -27369,3 +27369,127 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   display: inline-block;
   flex: none;
 }
+
+/* S11-C do Relatório de Carga: "Ler COAs". Marca L (veio do COA), prévia dentro do card Itens (sem camada
+   flutuante: mesmo visual da prévia do "Atualizar"), tabela de lotes, chip de confiança, seletor "Ligar ao item" e selo da
+   leitura na lista de COAs. Só tokens do tema, sem media query (o celular vem do JS: .crf-wrap--mobile). */
+.crf-src--l {
+  background: var(--success-50);
+  color: var(--success-700);
+}
+
+.crf-coa__item {
+  align-items: start;
+  cursor: default;
+}
+
+.crf-coa__check {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.crf-coa__item.is-info .crf-coa__check {
+  cursor: default;
+}
+
+.crf-coa__lots {
+  width: 100%;
+  margin-block: 6px 2px;
+  border-collapse: collapse;
+  font-size: var(--fs-caption);
+}
+
+.crf-coa__lots th,
+.crf-coa__lots td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.crf-coa__lots th {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.crf-coa__conf {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.crf-coa__conf--high {
+  background: var(--success-50);
+  color: var(--success-700);
+}
+
+.crf-coa__conf--medium {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.crf-coa__conf--low {
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+
+.crf-coa__sum {
+  font-weight: 700;
+}
+
+.crf-coa__note {
+  overflow-wrap: anywhere;
+}
+
+.crf-coa__link {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.crf-coa__link select {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.crf-coa__error {
+  margin-top: 8px;
+  color: var(--danger-700);
+  font-weight: 700;
+}
+
+.crf-coa__docnotes {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: var(--fs-footnote);
+  overflow-wrap: anywhere;
+}
+
+.crf-coa__actions button {
+  min-height: 44px;
+}
+
+.crf-coa__fail {
+  margin-top: 8px;
+}
+
+.crf-coa__fail button {
+  min-height: 44px;
+}
+
+.documents-coa-badge {
+  align-self: flex-start;
+  margin-top: 4px;
+}

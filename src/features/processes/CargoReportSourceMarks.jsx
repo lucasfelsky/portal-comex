@@ -1,5 +1,5 @@
 // S9-C do Relatório de Carga: marcas de origem das células preenchidas (P processo, F FUP do DBCorp, C cadastro de
-// embalagens) e "editado por você" (✎). A marca é irmã do campo, nunca parte do nome acessível dele.
+// embalagens, L COA lido pela Tess) e "editado por você" (✎). A marca é irmã do campo, nunca parte do nome acessível dele.
 
 import { SOURCE_MARK_TITLES } from './cargoReportAutofill'
 
@@ -44,6 +44,12 @@ export function SourceLegend() {
           C
         </i>{' '}
         cadastro de embalagens
+      </span>
+      <span>
+        <i className="crf-src crf-src--l" aria-hidden="true">
+          L
+        </i>{' '}
+        COA
       </span>
       <span>
         <i className="crf-src crf-src--e" aria-hidden="true">

@@ -363,7 +363,7 @@ export function resolveCargoPurchaseOrderReference(process, orderNumber) {
 // `autofill` (doc `current`, opcional): de onde veio cada célula preenchida do processo e do FUP e o valor de
 // BASE dela. Célula igual à base = marca de origem (P processo, F FUP, C cadastro); diferente = "editado por
 // você". `rows[rowId] = { key, base, fupOnly? }`; `key` liga a linha ao item da fonte ('fup:<ItemPedCpId>',
-// 'proc:<id do item>' ou '' sem ligação).
+// 'proc:<id do item>' ou '' sem ligação). S11-C: `base.supplierLot` e `coa: true` vêm da leitura do COA (marca L).
 export const CARGO_AUTOFILL_SCHEMA_VERSION = 1
 export const CARGO_AUTOFILL_FIELDS = [
   'po',
@@ -372,6 +372,7 @@ export const CARGO_AUTOFILL_FIELDS = [
   'sqDescription',
   'quantityKg',
   'packageWeightKg',
+  'supplierLot',
 ]
 const AUTOFILL_NUMBER_FIELDS = ['quantityKg', 'packageWeightKg']
 const AUTOFILL_TEXT_LIMITS = {
@@ -379,6 +380,7 @@ const AUTOFILL_TEXT_LIMITS = {
   dbcorpCode: CARGO_REPORT_LIMITS.text,
   supplierDescription: CARGO_REPORT_LIMITS.description,
   sqDescription: CARGO_REPORT_LIMITS.description,
+  supplierLot: CARGO_REPORT_LIMITS.text,
 }
 export const CARGO_AUTOFILL_KEY_MAX = 140
 const AUTOFILL_SNAPSHOT_ID_MAX = 40
@@ -416,6 +418,8 @@ export function readCargoAutofill(raw, rows) {
     if (!ids.has(rowId) || !isPlainObject(entry)) continue
     const parsed = { key: readText(entry.key, CARGO_AUTOFILL_KEY_MAX), base: readAutofillBase(entry.base) }
     if (entry.fupOnly === true) parsed.fupOnly = true
+    // S11-C: `coa` = a quantidade da base veio do COA (marca L).
+    if (entry.coa === true) parsed.coa = true
     result.rows[rowId] = parsed
   }
   return result
