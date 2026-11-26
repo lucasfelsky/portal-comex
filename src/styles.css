@@ -26721,23 +26721,6 @@ tr.crf-gsum td {
   border-top: 1px dashed var(--border);
 }
 
-.ccf-issue__flag,
-.crf-issue__flag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  font-weight: 700;
-}
-
-.ccf-issue__flag[aria-pressed='true'],
-.crf-issue__flag[aria-pressed='true'] {
-  border-color: var(--danger-700);
-  background: var(--danger-50);
-  color: var(--danger-700);
-}
-
 .ccf-issue__label,
 .crf-issue__label {
   color: var(--ink-soft);

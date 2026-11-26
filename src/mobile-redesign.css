@@ -2596,8 +2596,11 @@
     min-height: 0;
     padding: 0;
     border-radius: 22px;
-    font-size: 0.65625rem; /* 10.5px */
+    /* 10.5px a partir de ~375px; abaixo disso encolhe junto com a largura (9px a 320px) para o rotulo "Conferencia" caber
+       inteiro, em uma linha, no item de 56px (sem @media novo). */
+    font-size: clamp(0.5625rem, 2.8vw, 0.65625rem);
     font-weight: 700;
+    white-space: nowrap;
     transition: color 0.25s ease;
   }
 
@@ -2631,7 +2634,7 @@
     left: calc(50% + 10px);
     min-width: 17px;
     height: 17px;
-    padding: 0 4px;
+    padding: 0 3px;
     border-radius: 9px;
     background: var(--danger);
     color: var(--on-danger);

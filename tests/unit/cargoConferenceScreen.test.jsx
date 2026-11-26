@@ -1195,6 +1195,15 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     expect(mockSaveConference.mock.calls[0][1].damageByRowId).toEqual({})
   })
 
+  it('legado só com flagged verdadeiro: a conferência abre limpa (Salvar desabilitado, sem aviso de alteração pendente)', async () => {
+    await renderScreen({
+      conference: conferenceDoc({ damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }),
+    })
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    expect(within(screen.getByRole('article', { name: 'Item 1' })).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+  })
+
   it('5 fotos no item: os dois botões ficam desabilitados com o motivo; os outros itens seguem liberados', async () => {
     await renderScreen({ conference: conferenceDoc(withPhotos(5, 'Muitas')) })
     expect(screen.getByRole('button', { name: 'Tirar foto do item 1' })).toBeDisabled()

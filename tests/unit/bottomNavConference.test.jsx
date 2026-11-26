@@ -203,6 +203,37 @@ describe('barra de baixo: ícone e selo da aba Conferência', () => {
     expect(rule).not.toBeNull()
     expect(rule[1]).toMatch(/top:\s*4px;/)
     expect(rule[1]).toMatch(/left:\s*calc\(50% \+ 10px\);/)
+    // "9+" (2 caracteres) cabe no item mais estreito (56px a 320px): padding de 3px.
+    expect(rule[1]).toMatch(/padding:\s*0 3px;/)
+  })
+
+  it('o rótulo da aba não quebra: fonte acompanha a largura abaixo de ~375px (9px a 320px) e fica em uma linha', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/mobile-redesign.css'), 'utf8').replace(/\r\n/g, '\n')
+    const rule = /\.mobile-bottom-nav \.mobile-bottom-nav__item \{([^}]*)\}/.exec(css)
+    expect(rule).not.toBeNull()
+    expect(rule[1]).toMatch(/font-size:\s*clamp\(0\.5625rem, 2\.8vw, 0\.65625rem\);/)
+    expect(rule[1]).toMatch(/white-space:\s*nowrap;/)
+  })
+
+  it.each([
+    [1, '1'],
+    [9, '9'],
+    [10, '9+'],
+    [12, '9+'],
+  ])('selo da Conferência com %i: mostra "%s" e o nome acessível do link mantém o número real', (count, text) => {
+    mockCount.mockImplementation(() => count)
+    const { container } = renderAt('/', 'logistica')
+    const tab = within(bar(container)).getByRole('link', { name: `Conferência, ${count} para conferir` })
+    const badge = tab.querySelector('.mobile-bottom-nav__badge')
+    expect(badge.textContent).toBe(text)
+    expect(badge).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('selo do Menu (admin) com 12: mostra "9+" e o nome acessível diz "12 conferências"', () => {
+    mockCount.mockImplementation(() => 12)
+    const { container } = renderAt('/', 'admin')
+    const menu = within(bar(container)).getByRole('link', { name: 'Menu, 12 conferências para conferir' })
+    expect(menu.querySelector('.mobile-bottom-nav__badge')).toHaveTextContent('9+')
   })
 })
 

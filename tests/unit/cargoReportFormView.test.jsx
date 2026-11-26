@@ -3179,6 +3179,19 @@ describe('S10-I: cartão "Pallets e avarias" e o contador no computador', () => 
     expect(within(rows[2]).getByText('Observação da avaria ou ressalva (opcional)')).toBeInTheDocument()
   })
 
+  it('legado só com flagged verdadeiro: a conferência abre sem ficar suja (Salvar conferência desabilitado) e sem selo de avaria', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc({ expectedPallets: 5 }),
+      conference: conferenceDoc({
+        countOkByRowId: {},
+        damageByRowId: { 'r-2': { flagged: true, note: '', photos: [] } },
+      }),
+    })
+    await renderForm({ profile: LOGISTICA })
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+    expect(within(card()).queryByText('Avaria registrada')).not.toBeInTheDocument()
+  })
+
   it('faixa "confere" e "sem total"', async () => {
     mockGetCargoReport.mockResolvedValue({
       current: concludedDoc({ expectedPallets: 3 }),
