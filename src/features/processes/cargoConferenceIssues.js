@@ -77,8 +77,9 @@ function readPhotos(value) {
   return photos
 }
 
-// { [rowId]: { flagged, note, photos } }: nota aparada e cortada em 1.000, fotos válidas e únicas (até 5); a entrada
-// vazia (sem avaria marcada, sem nota e sem foto) some. Com `rowIds`, só as linhas que existem.
+// { [rowId]: { flagged, note, photos } }: nota aparada e cortada em 1.000, fotos válidas e únicas (até 5). `flagged` é
+// DERIVADO (nota não vazia ou pelo menos 1 foto; o servidor e as rules ainda o leem): a entrada sem nota e sem foto some,
+// inclusive a legada com `flagged: true` e nada mais. Com `rowIds`, só as linhas que existem.
 export function readDamageMap(value, rowIds) {
   const result = {}
   if (!isPlainObject(value)) return result
@@ -86,10 +87,9 @@ export function readDamageMap(value, rowIds) {
   for (const [rowId, entry] of Object.entries(value)) {
     if (allowed && !allowed.has(rowId)) continue
     if (!isPlainObject(entry)) continue
-    const flagged = entry.flagged === true
     const note = typeof entry.note === 'string' ? entry.note.trim().slice(0, CARGO_ISSUE_NOTE_MAX) : ''
     const photos = readPhotos(entry.photos)
-    if (flagged || note || photos.length > 0) result[rowId] = { flagged, note, photos }
+    if (isCargoIssueFlagged(note, photos)) result[rowId] = { flagged: true, note, photos }
   }
   return result
 }
@@ -120,30 +120,35 @@ export function stepCargoRowPallets(conference, rowId, delta) {
 
 // ---------- observação (avaria / ressalva) por item ----------
 
+// Regra ÚNICA de "item com avaria/ressalva": observação (aparada) não vazia OU pelo menos 1 foto. Não existe botão para
+// marcar: o `flagged` gravado é só o reflexo desta regra.
+export function isCargoIssueFlagged(note, photos) {
+  return String(note ?? '').trim() !== '' || (Array.isArray(photos) && photos.length > 0)
+}
+
 export function readCargoRowIssue(conference, rowId) {
   const entry = conference?.damageByRowId?.[rowId]
   if (!isPlainObject(entry)) return { flagged: false, note: '', photos: [] }
-  return {
-    flagged: entry.flagged === true,
-    note: String(entry.note ?? ''),
-    photos: Array.isArray(entry.photos) ? entry.photos : [],
-  }
+  const note = String(entry.note ?? '')
+  const photos = Array.isArray(entry.photos) ? entry.photos : []
+  return { flagged: isCargoIssueFlagged(note, photos), note, photos }
 }
 
-// Aplica uma mudança parcial (`flagged`, `note`, `photos`); a entrada que fica vazia sai do mapa. A nota entra como
-// veio (sem aparar: a pessoa está digitando); a gravação apara.
+// Aplica uma mudança parcial (`note`, `photos`); `flagged` é recalculado (nota ou foto), nunca vem do chamador, e a
+// entrada que fica vazia sai do mapa (tirar a última foto de um item sem nota derruba a avaria). A nota entra como veio
+// (sem aparar: a pessoa está digitando, e um espaço sozinho não some do campo); a gravação apara.
 export function patchCargoRowIssue(conference, rowId, patch = {}) {
-  const entry = { ...readCargoRowIssue(conference, rowId), ...patch }
+  const merged = { ...readCargoRowIssue(conference, rowId), ...patch }
+  const entry = { ...merged, flagged: isCargoIssueFlagged(merged.note, merged.photos) }
   const damageByRowId = { ...conference.damageByRowId }
-  if (!entry.flagged && entry.note === '' && entry.photos.length === 0) delete damageByRowId[rowId]
+  if (entry.note === '' && entry.photos.length === 0) delete damageByRowId[rowId]
   else damageByRowId[rowId] = entry
   return { ...conference, damageByRowId }
 }
 
-// Item "com avaria/ressalva": avaria marcada, observação escrita ou foto.
+// Item "com avaria/ressalva": observação escrita ou foto (ver `isCargoIssueFlagged`).
 export function hasCargoRowIssue(conference, rowId) {
-  const { flagged, note, photos } = readCargoRowIssue(conference, rowId)
-  return flagged || note.trim() !== '' || photos.length > 0
+  return readCargoRowIssue(conference, rowId).flagged
 }
 
 function filledRows(rows) {

@@ -37,6 +37,12 @@ function getInitials(value) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+// Selo da barra de baixo (Conferência, Avisos e Menu): de 10 em diante mostra "9+" para o selo caber no canto do ícone. Só o
+// texto visível muda: o nome acessível do link (aria-label) e o selo (aria-hidden) seguem com o número real.
+function formatNavBadgeCount(count) {
+  return count > 9 ? '9+' : String(count)
+}
+
 // Refino F2: ordem do mock (Dashboard, Chegadas, Notícias, Admin) — vale no
 // tablet também (D3). Icones com os glifos exatos do Sidebar.dc.html SO no
 // desktop (>=1041px); o drawer do tablet mantem os glifos anteriores
@@ -1299,7 +1305,7 @@ export default function AppLayout() {
                 <span className="mobile-bottom-nav__label">Conferência</span>
                 {conferenceCount > 0 ? (
                   <span className="mobile-bottom-nav__badge" aria-hidden="true">
-                    {conferenceCount}
+                    {formatNavBadgeCount(conferenceCount)}
                   </span>
                 ) : null}
               </NavLink>
@@ -1336,7 +1342,7 @@ export default function AppLayout() {
                   }`}
                   aria-hidden="true"
                 >
-                  {mobileBadgeCount}
+                  {formatNavBadgeCount(mobileBadgeCount)}
                 </span>
               ) : null}
             </NavLink>
@@ -1354,7 +1360,7 @@ export default function AppLayout() {
               <span className="mobile-bottom-nav__label">Menu</span>
               {menuConferenceCount > 0 ? (
                 <span className="mobile-bottom-nav__badge" aria-hidden="true">
-                  {menuConferenceCount}
+                  {formatNavBadgeCount(menuConferenceCount)}
                 </span>
               ) : null}
             </NavLink>

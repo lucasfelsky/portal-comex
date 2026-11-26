@@ -1795,7 +1795,7 @@ describe('S6: logística edita etiquetas e contagem (desktop)', () => {
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
     const payload = mockSaveConference.mock.calls[0][1]
     expect(payload.palletsByRowId).toEqual({ 'r-2': 3 })
-    expect(payload.damageByRowId).toEqual({ 'r-2': { flagged: false, note: 'Caixas molhadas no pallet 2', photos: [] } })
+    expect(payload.damageByRowId).toEqual({ 'r-2': { flagged: true, note: 'Caixas molhadas no pallet 2', photos: [] } })
     expect(payload.receiptStatus).toBe('com_ressalva')
     // Depois de gravar, a nota some (o status já é o gravado) e nada fica pendente.
     expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
@@ -3174,6 +3174,22 @@ describe('S10-I: cartão "Pallets e avarias" e o contador no computador', () => 
     expect(within(rows[5]).getByText('sem contagem')).toBeInTheDocument()
     // A logística pode editar a observação (campo), o admin só lê (texto).
     expect(within(rows[2]).getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 2' })).toHaveValue('Caixas molhadas')
+    // Avaria automática: sem botão para registrar; o rótulo do campo diz que a observação é opcional.
+    expect(within(card()).queryByRole('button', { name: /Registrar avaria/ })).not.toBeInTheDocument()
+    expect(within(rows[2]).getByText('Observação da avaria ou ressalva (opcional)')).toBeInTheDocument()
+  })
+
+  it('legado só com flagged verdadeiro: a conferência abre sem ficar suja (Salvar conferência desabilitado) e sem selo de avaria', async () => {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc({ expectedPallets: 5 }),
+      conference: conferenceDoc({
+        countOkByRowId: {},
+        damageByRowId: { 'r-2': { flagged: true, note: '', photos: [] } },
+      }),
+    })
+    await renderForm({ profile: LOGISTICA })
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+    expect(within(card()).queryByText('Avaria registrada')).not.toBeInTheDocument()
   })
 
   it('faixa "confere" e "sem total"', async () => {
@@ -3294,7 +3310,7 @@ describe('S10-I: fechar a conferência no computador (divergência, bloqueio e s
     const payload = mockClose.mock.calls[0][1].payload
     expect(payload.status).toBe('fechada')
     expect(payload.palletsByRowId).toEqual({ 'r-1': 2, 'r-2': 3, 'r-3': 1 })
-    expect(payload.damageByRowId).toEqual({ 'r-3': { flagged: false, note: 'Faltaram 2 pallets na carga', photos: [] } })
+    expect(payload.damageByRowId).toEqual({ 'r-3': { flagged: true, note: 'Faltaram 2 pallets na carga', photos: [] } })
     expect(Object.keys(payload)).toHaveLength(20)
     expect(mockGenerate.mock.calls[0][0].rows.map((item) => item.countText).slice(0, 3)).toEqual(['2', '3', '1'])
     await waitDialogClosed(CLOSE_DIALOG)

@@ -8,6 +8,7 @@ import {
   listCargoIssueRows,
   normalizeCargoPhoto,
   patchCargoRowIssue,
+  readCargoRowIssue,
   readDamageMap,
   readExpectedPallets,
   readPalletsMap,
@@ -117,20 +118,24 @@ describe('total de pallets do COMEX', () => {
 })
 
 describe('observação (avaria / ressalva) por item', () => {
-  it('readDamageMap: nota aparada e cortada em 1.000, entrada vazia some', () => {
+  it('readDamageMap: nota aparada e cortada em 1.000; sem nota e sem foto a entrada some (flagged é derivado)', () => {
     const map = readDamageMap({
       'r-1': { flagged: false, note: `  ${'a'.repeat(1001)}  `, photos: [] },
       'r-2': { flagged: false, note: '   ', photos: [] },
       'r-3': { flagged: true, note: '', photos: [] },
       'r-4': 'texto',
       'r-5': { note: 'x' },
+      'r-6': { flagged: false, note: '', photos: [photo('f')] },
     })
+    expect(map['r-1']).toMatchObject({ flagged: true })
     expect(map['r-1'].note).toHaveLength(1000)
     expect(map['r-2']).toBeUndefined()
-    expect(map['r-3']).toEqual({ flagged: true, note: '', photos: [] })
+    // Legado: `flagged: true` sem nota e sem foto é SEM avaria e sai do mapa.
+    expect(map['r-3']).toBeUndefined()
     expect(map['r-4']).toBeUndefined()
-    expect(map['r-5']).toEqual({ flagged: false, note: 'x', photos: [] })
-    expect(Object.keys(readDamageMap({ 'r-1': { flagged: true }, 'r-2': { flagged: true } }, ['r-2']))).toEqual(['r-2'])
+    expect(map['r-5']).toEqual({ flagged: true, note: 'x', photos: [] })
+    expect(map['r-6']).toEqual({ flagged: true, note: '', photos: [photo('f')] })
+    expect(Object.keys(readDamageMap({ 'r-1': { note: 'a' }, 'r-2': { note: 'b' } }, ['r-2']))).toEqual(['r-2'])
   })
 
   it('readDamageMap: até 5 fotos válidas e sem id repetido', () => {
@@ -143,24 +148,49 @@ describe('observação (avaria / ressalva) por item', () => {
     expect(normalizeCargoPhoto(photo('ok'))).toEqual(photo('ok'))
   })
 
-  it('hasCargoRowIssue: só flag, só nota ou só foto contam; nota em branco não', () => {
-    const flag = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { flagged: true })
-    expect(hasCargoRowIssue(flag, 'r-1')).toBe(true)
+  it('hasCargoRowIssue: só nota ou só foto contam (os dois também); nota em branco, nada e flag legado sozinho não', () => {
+    const legacy = { ...EMPTY_CARGO_CONFERENCE, damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }
+    expect(hasCargoRowIssue(legacy, 'r-1')).toBe(false)
+    expect(readCargoRowIssue(legacy, 'r-1').flagged).toBe(false)
     const note = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { note: 'amassado' })
     expect(hasCargoRowIssue(note, 'r-1')).toBe(true)
     const withPhoto = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { photos: [photo('a')] })
     expect(hasCargoRowIssue(withPhoto, 'r-1')).toBe(true)
     const blank = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { note: '   ' })
     expect(hasCargoRowIssue(blank, 'r-1')).toBe(false)
+    expect(blank.damageByRowId['r-1'].flagged).toBe(false)
+    const both = patchCargoRowIssue(note, 'r-1', { photos: [photo('a')] })
+    expect(hasCargoRowIssue(both, 'r-1')).toBe(true)
     expect(hasCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-9')).toBe(false)
+  })
+
+  it('patchCargoRowIssue deriva o flagged (nota ou foto) e ignora o que o chamador mandar', () => {
+    const forced = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { flagged: true })
+    expect(forced.damageByRowId).toEqual({})
+    const noted = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { note: 'amassado', flagged: false })
+    expect(noted.damageByRowId['r-1']).toEqual({ flagged: true, note: 'amassado', photos: [] })
+    const photoOnly = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { photos: [photo('a')] })
+    expect(photoOnly.damageByRowId['r-1'].flagged).toBe(true)
+  })
+
+  it('remover a última foto de um item sem nota derruba o flagged e tira a entrada; com nota, o flagged fica', () => {
+    const withPhoto = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { photos: [photo('a')] })
+    const removed = patchCargoRowIssue(withPhoto, 'r-1', { photos: [] })
+    expect(removed.damageByRowId).toEqual({})
+    expect(hasCargoRowIssue(removed, 'r-1')).toBe(false)
+    const withNote = patchCargoRowIssue(withPhoto, 'r-1', { note: 'molhado' })
+    const keep = patchCargoRowIssue(withNote, 'r-1', { photos: [] })
+    expect(keep.damageByRowId['r-1']).toEqual({ flagged: true, note: 'molhado', photos: [] })
+    const apagada = patchCargoRowIssue(keep, 'r-1', { note: '' })
+    expect(apagada.damageByRowId).toEqual({})
   })
 
   it('patchCargoRowIssue mescla, não muta e tira a entrada que fica vazia', () => {
     const noted = patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-1', { note: 'abc ' })
-    expect(noted.damageByRowId['r-1']).toEqual({ flagged: false, note: 'abc ', photos: [] })
-    const both = patchCargoRowIssue(noted, 'r-1', { flagged: true })
-    expect(both.damageByRowId['r-1']).toEqual({ flagged: true, note: 'abc ', photos: [] })
-    const cleared = patchCargoRowIssue(patchCargoRowIssue(both, 'r-1', { note: '' }), 'r-1', { flagged: false })
+    expect(noted.damageByRowId['r-1']).toEqual({ flagged: true, note: 'abc ', photos: [] })
+    const both = patchCargoRowIssue(noted, 'r-1', { photos: [photo('a')] })
+    expect(both.damageByRowId['r-1']).toEqual({ flagged: true, note: 'abc ', photos: [photo('a')] })
+    const cleared = patchCargoRowIssue(patchCargoRowIssue(both, 'r-1', { note: '' }), 'r-1', { photos: [] })
     expect(cleared.damageByRowId).toEqual({})
     expect(EMPTY_CARGO_CONFERENCE.damageByRowId).toEqual({})
   })
@@ -169,7 +199,7 @@ describe('observação (avaria / ressalva) por item', () => {
     const conference = patchCargoRowIssue(
       patchCargoRowIssue(EMPTY_CARGO_CONFERENCE, 'r-2', { note: 'molhado' }),
       'r-vazia',
-      { flagged: true }
+      { note: 'x' }
     )
     const list = listCargoIssueRows([...rows, createEmptyCargoReportRow('r-vazia')], conference)
     expect(list.map((row) => row.id)).toEqual(['r-2'])
@@ -177,7 +207,7 @@ describe('observação (avaria / ressalva) por item', () => {
 })
 
 describe('status sugerido pela avaria', () => {
-  const withIssue = (conference) => patchCargoRowIssue(conference, 'r-1', { flagged: true })
+  const withIssue = (conference) => patchCargoRowIssue(conference, 'r-1', { note: 'Caixa amassada' })
 
   it('status vazio + 1ª avaria -> "Com ressalva"', () => {
     const result = applyCargoIssueStatusSuggestion(EMPTY_CARGO_CONFERENCE, withIssue(EMPTY_CARGO_CONFERENCE))
@@ -196,7 +226,7 @@ describe('status sugerido pela avaria', () => {
     const base = { ...EMPTY_CARGO_CONFERENCE, receiptStatus: 'com_ressalva' }
     expect(applyCargoIssueStatusSuggestion(base, withIssue(base)).suggested).toBe(false)
     const first = withIssue(EMPTY_CARGO_CONFERENCE)
-    const second = patchCargoRowIssue(first, 'r-2', { flagged: true })
+    const second = patchCargoRowIssue(first, 'r-2', { photos: [photo('b')] })
     const result = applyCargoIssueStatusSuggestion(first, second)
     expect(result.suggested).toBe(false)
     expect(result.conference.receiptStatus).toBe('')

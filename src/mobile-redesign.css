@@ -2596,8 +2596,11 @@
     min-height: 0;
     padding: 0;
     border-radius: 22px;
-    font-size: 0.65625rem; /* 10.5px */
+    /* 10.5px a partir de ~375px; abaixo disso encolhe junto com a largura (9px a 320px) para o rotulo "Conferencia" caber
+       inteiro, em uma linha, no item de 56px (sem @media novo). */
+    font-size: clamp(0.5625rem, 2.8vw, 0.65625rem);
     font-weight: 700;
+    white-space: nowrap;
     transition: color 0.25s ease;
   }
 
@@ -2623,14 +2626,15 @@
     animation: m-bump 0.5s var(--m-spring);
   }
 
-  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). */
+  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). Canto superior direito do icone (10px do centro, 4px do
+     topo), fora do desenho: com 6px o selo cobria a ponta do glifo da Conferencia e o ombro do sino. */
   .mobile-bottom-nav .mobile-bottom-nav__badge {
-    top: 6px;
+    top: 4px;
     right: auto;
-    left: calc(50% + 6px);
+    left: calc(50% + 10px);
     min-width: 17px;
     height: 17px;
-    padding: 0 4px;
+    padding: 0 3px;
     border-radius: 9px;
     background: var(--danger);
     color: var(--on-danger);

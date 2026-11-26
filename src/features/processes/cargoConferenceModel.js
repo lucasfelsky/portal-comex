@@ -47,7 +47,7 @@ export function cargoConferenceKey(conference, rows) {
     conference.okByRowId?.[row.id] === true,
     conference.countOkByRowId?.[row.id] === true,
     cargoRowPallets(conference, row.id).count,
-    conference.damageByRowId?.[row.id]?.flagged === true,
+    hasCargoRowIssue(conference, row.id),
     String(conference.damageByRowId?.[row.id]?.note ?? '').trim(),
     (conference.damageByRowId?.[row.id]?.photos ?? []).map((photo) => photo?.id),
     String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),

@@ -1544,6 +1544,19 @@ describe('AppLayout (remake mobile F2: hero e tab bar flutuante)', () => {
       expect(container.querySelector('.mobile-bottom-nav__badge')).toBeNull()
     })
 
+    it('badge: de 10 nao lidas em diante mostra "9+" e o nome do link mantem o numero real', async () => {
+      stubViewport(720)
+      listNotifications.mockResolvedValue(Array.from({ length: 12 }, (_, index) => unread(`n${index}`)))
+      const { container } = renderAt('/')
+      await waitFor(() => {
+        expect(container.querySelector('.mobile-bottom-nav__badge')).toHaveTextContent('9+')
+      })
+      expect(container.querySelector('.mobile-bottom-nav__badge')).toHaveAttribute('aria-hidden', 'true')
+      expect(
+        within(container.querySelector('.mobile-bottom-nav')).getByRole('link', { name: 'Avisos, 12 não lidas' })
+      ).toHaveAttribute('href', '/notifications')
+    })
+
     it('badge: mostra a contagem e some (--gone + aria-hidden, com o ultimo numero) ao zerar', async () => {
       stubViewport(720)
       listNotifications.mockResolvedValue([unread('a'), unread('b')])

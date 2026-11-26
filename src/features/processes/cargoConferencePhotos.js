@@ -118,12 +118,12 @@ export function listUnsavedCargoPhotos(conference, saved) {
 // ---------- foto no estado do item (via `patchCargoRowIssue`) ----------
 
 // A foto entra no item (fica "não salva", como qualquer alteração da conferência) e o item passa a "Avaria registrada"
-// (como no mock aprovado). Id repetido, 6ª foto do item e 31ª da conferência não entram (devolve o mesmo objeto).
+// (regra nota ou foto: `patchCargoRowIssue` deriva o `flagged`). Id repetido, 6ª foto do item e 31ª da conferência não entram (devolve o mesmo objeto).
 export function addCargoPhoto(conference, rowId, photo) {
   const current = readCargoRowIssue(conference, rowId).photos
   if (!photo || current.some((item) => item?.id === photo.id)) return conference
   if (current.length >= CARGO_PHOTO_ROW_LIMIT || countCargoPhotos(conference) >= CARGO_PHOTO_CONFERENCE_LIMIT) return conference
-  return patchCargoRowIssue(conference, rowId, { flagged: true, photos: [...current, photo] })
+  return patchCargoRowIssue(conference, rowId, { photos: [...current, photo] })
 }
 
 // Tira a foto do estado; vale no Salvar (o arquivo sai do Storage pelo trigger, nunca pelo cliente).
