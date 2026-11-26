@@ -53,7 +53,7 @@ export default function ReceiptDivergenceFields({ value, onChange, disabled }) {
           </label>
 
           <small className="field-hint">
-            Fotos não são mais anexadas por esta tela; descreva a divergência acima.
+            Fotos e observações da avaria ficam no item, na Conferência do Relatório de Carga.
           </small>
         </>
       ) : null}

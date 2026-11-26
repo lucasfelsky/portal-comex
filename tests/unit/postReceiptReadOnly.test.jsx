@@ -56,11 +56,13 @@ vi.mock('../../src/services/postReceiptImagesStorage', () => ({
   deletePostReceiptImages: vi.fn().mockResolvedValue(undefined),
   getAddedPostReceiptImages: () => [],
   getRemovedPostReceiptImages: () => [],
-  resolvePostReceiptImagesForSave: vi.fn().mockResolvedValue([]),
+  // repassa as fotos do rascunho (as legadas) sem enviar nada ao Storage
+  resolvePostReceiptImagesForSave: vi.fn(async (_processId, images) => images),
 }))
 
 import ProcessesPage from '../../src/pages/ProcessesPage'
 import { getPendingFields } from '../../src/features/processes/pendingFields'
+import { saveProcessCollectionStatus } from '../../src/services/processesRepository'
 
 const ORIGINAL_MATCH_MEDIA = window.matchMedia
 
@@ -220,6 +222,33 @@ describe.each(CASES)('S11 (K) pós-recebimento só leitura - %s, desktop=%s', (r
     expect(screen.queryByText('Adicionar imagens')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Remover imagem' })).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
+  })
+
+  it('Status de coleta com divergência: dica aponta para a Conferência, sem upload; salvar mantém as fotos legadas', async () => {
+    const withDivergence = receivedProcess({
+      ...WITH_LEGACY,
+      receiptDivergence: true,
+      receiptDivergenceType: 'Avaria',
+      receiptDivergenceNotes: 'Caixas amassadas.',
+    })
+    mockListProcesses.mockResolvedValue([withDivergence])
+    saveProcessCollectionStatus.mockResolvedValue({})
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await openDetail(container, user, { desktop })
+
+    await user.click(screen.getByRole('button', { name: 'Status de coleta' }))
+    await screen.findByRole('heading', { name: 'Status de coleta' })
+    expect(
+      screen.getByText('Fotos e observações da avaria ficam no item, na Conferência do Relatório de Carga.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Anexe ao menos 1 foto/)).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /Salvar status/i }))
+    await waitFor(() => expect(saveProcessCollectionStatus).toHaveBeenCalledTimes(1))
+    const savedImages = saveProcessCollectionStatus.mock.calls[0][5]
+    expect(savedImages.map((image) => image.id)).toEqual(['img-1', 'img-2'])
   })
 })
 

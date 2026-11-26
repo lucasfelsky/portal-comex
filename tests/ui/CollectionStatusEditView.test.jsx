@@ -130,7 +130,7 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
         onClose={() => {}}
       />
     )
-    const hint = 'Fotos não são mais anexadas por esta tela; descreva a divergência acima.'
+    const hint = 'Fotos e observações da avaria ficam no item, na Conferência do Relatório de Carga.'
     expect(screen.getByText(hint)).toBeInTheDocument()
     expect(screen.queryByText(/Anexe ao menos 1 foto/)).not.toBeInTheDocument()
 
