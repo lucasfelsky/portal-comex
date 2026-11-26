@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getFriendlyErrorDetail } from '../../utils/errorMessages'
 import { uploadProcessDocument } from '../../services/processDocumentsRepository'
+import useCoaAutoRead from './useCoaAutoRead'
 import {
   MAX_COA_FILES_PER_PROCESS,
   MAX_COA_FILES_PER_PURCHASE_ORDER,
@@ -29,6 +30,8 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
   const canUpload = canUploadDocumentType(role, COA_TYPE)
   const scoped = isCoaPurchaseOrderScoped(category)
   const poNumber = String(po ?? '').trim()
+  // S11-E: leitura automática ao anexar (sempre ligada, só admin; fila única do painel).
+  const autoRead = useCoaAutoRead({ processId, enabled: canUpload && role === 'admin', scope: scoped ? poNumber : '' })
 
   const [progress, setProgress] = useState(null)
   const [errors, setErrors] = useState([])
@@ -82,6 +85,7 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     setErrors([])
     setResultMessage('')
     const failures = []
+    const uploaded = []
     let sent = 0
 
     try {
@@ -90,7 +94,7 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
         const file = files[index]
         setProgress({ current: index + 1, total: files.length })
         try {
-          await uploadProcessDocument(processId, {
+          const created = await uploadProcessDocument(processId, {
             type: COA_TYPE,
             file,
             category,
@@ -98,6 +102,7 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
             actor: { uid: profile?.uid, name: profile?.name, role },
           })
           sent += 1
+          uploaded.push(created)
         } catch (error) {
           console.error(COA_UPLOAD_ERROR_TITLE, error)
           failures.push({ name: file?.name ?? '', detail: getFriendlyErrorDetail(error) })
@@ -108,6 +113,8 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     }
 
     if (!mountedRef.current) return
+    // Só os recém-enviados com sucesso entram na fila de leitura (PDF; o resto a fila ignora).
+    autoRead.enqueue(uploaded)
     setProgress(null)
     setErrors(failures)
     if (sent > 0) {
@@ -164,5 +171,6 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     inputRef,
     dropProps,
     isDragOver: canUpload && isDragOver,
+    autoRead,
   }
 }

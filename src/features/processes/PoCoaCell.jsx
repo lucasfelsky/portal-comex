@@ -3,6 +3,7 @@
 // com Baixar/Ações e erros só dos COAs desta PO. Quem não envia e não tem COA nesta PO vê a célula vazia (L-5).
 // O COA é opcional: nunca "Pendente" e nunca entra no "faltando".
 
+import CoaAutoReadStatus from './CoaAutoReadStatus'
 import CoaFileList from './CoaFileList'
 import useCoaUpload, { COA_UPLOAD_ERROR_TITLE } from './useCoaUpload'
 import { getCoaUploadRoom, listCoaDocumentsForPurchaseOrder } from './processDocuments'
@@ -110,6 +111,7 @@ export default function PoCoaCell({
             {upload.resultMessage}
           </small>
         ) : null}
+        <CoaAutoReadStatus autoRead={upload.autoRead} />
         {upload.errors.length > 0 ? (
           <div role="alert" className="coa-errors">
             <strong>{COA_UPLOAD_ERROR_TITLE}</strong>

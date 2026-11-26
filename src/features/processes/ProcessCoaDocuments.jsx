@@ -11,6 +11,7 @@
 // excluir/renomear/visualizar são do `ProcessDocumentsPanel`; aqui mora só o card (envio em `useCoaUpload`).
 
 import Icon from '../../components/Icon'
+import CoaAutoReadStatus from './CoaAutoReadStatus'
 import CoaFileList from './CoaFileList'
 import { COA_UPLOAD_BUTTON_CLASS } from './PoCoaCell'
 import useCoaUpload, { COA_UPLOAD_ERROR_TITLE } from './useCoaUpload'
@@ -114,6 +115,7 @@ export default function ProcessCoaDocuments({
           {upload.resultMessage}
         </small>
       ) : null}
+      <CoaAutoReadStatus autoRead={upload.autoRead} />
       {upload.errors.length > 0 ? (
         <div role="alert" className="coa-errors">
           <strong>{COA_UPLOAD_ERROR_TITLE}</strong>

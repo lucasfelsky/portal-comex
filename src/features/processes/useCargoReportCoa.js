@@ -26,7 +26,7 @@ const STALE_MESSAGE =
 
 // Erros que valem só para o arquivo (a fila segue). Qualquer outro (sessão, configuração, limite do dia, serviço fora
 // do ar, "ocupado" e o erro genérico que o Cloud Run devolve num 429) INTERROMPE a fila: o resto fica "não lido".
-const FILE_ERROR_CODES = new Set([
+export const COA_READ_FILE_ERROR_CODES = new Set([
   'not-pdf',
   'too-large',
   'tess-too-large',
@@ -177,7 +177,7 @@ export default function useCargoReportCoa({ process, form, setForm, conference, 
             // Sem `force` o resultado bom anterior continua valendo; com `force` o servidor já o zerou.
             if (force || session.reads[document.id]?.status !== 'done') session.reads[document.id] = SYNTHETIC_FAILURE(failureCode)
           }
-          if (failureCode && !FILE_ERROR_CODES.has(failureCode)) {
+          if (failureCode && !COA_READ_FILE_ERROR_CODES.has(failureCode)) {
             interruption = describeCoaReadError(failureCode)
             break
           }

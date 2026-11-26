@@ -8,9 +8,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { listCoaReads } from '../../services/coaReadsRepository'
 import { describeReadBadge } from './coaReadBadge'
 import { listCoaDocuments } from './processDocuments'
+import { useCoaReadVersion } from './useCoaAutoRead'
 
 export default function useCoaReadBadges({ processId, documents, enabled }) {
   const [reads, setReads] = useState({})
+  // S11-E: a fila da leitura automática avisa a cada arquivo que termina; os selos relêem `coaReads`.
+  const readVersion = useCoaReadVersion(processId)
   const coaIds = listCoaDocuments(documents)
     .map((document_) => document_.id)
     .join(',')
@@ -28,7 +31,7 @@ export default function useCoaReadBadges({ processId, documents, enabled }) {
     return () => {
       isMounted = false
     }
-  }, [enabled, processId, coaIds])
+  }, [enabled, processId, coaIds, readVersion])
 
   return useMemo(() => {
     const badges = {}
