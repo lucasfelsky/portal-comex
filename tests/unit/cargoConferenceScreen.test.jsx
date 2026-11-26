@@ -687,15 +687,16 @@ describe('pallets da carga: faixa e selo', () => {
 })
 
 describe('observação (avaria / ressalva) por item e status sugerido', () => {
-  const flagButton = (n) => screen.getByRole('button', { name: `Registrar avaria / ressalva neste item ${n}` })
   const noteBox = (n) => screen.getByRole('textbox', { name: `Observação da avaria ou ressalva do item ${n}` })
 
-  it('registrar avaria marca o item, mantém o status vazio e a aba Recebimento sugere "Com ressalva"', async () => {
+  it('não há botão para registrar avaria: item sem nada não tem avaria, e escrever a observação marca o item', async () => {
     const { user } = await renderScreen()
     const first = screen.getByRole('article', { name: 'Item 1' })
-    expect(flagButton(1)).toHaveAttribute('aria-pressed', 'false')
-    await user.click(flagButton(1))
-    expect(flagButton(1)).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: /Registrar avaria/ })).not.toBeInTheDocument()
+    expect(within(first).getByText('Observação da avaria ou ressalva (opcional)')).toBeInTheDocument()
+    expect(within(first).getByText('0 de 1.000')).toBeInTheDocument()
+    expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    await user.type(noteBox(1), 'Caixa amassada')
     expect(within(first).getByText('Avaria registrada')).toHaveClass('ccf-badge--danger')
 
     await openReceipt(user)
@@ -711,7 +712,7 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
 
   it('com "Sem ressalva" escolhido a sugestão aparece e nada muda sozinho', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'sem_ressalva' }) })
-    await user.click(flagButton(2))
+    await user.type(noteBox(2), 'Caixa amassada')
     await openReceipt(user)
     const group = screen.getByRole('group', { name: 'Status do recebimento' })
     expect(within(group).getByRole('button', { name: 'Sem ressalva' })).toHaveAttribute('aria-pressed', 'true')
@@ -721,7 +722,7 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
 
   it('"Com ressalva" já escolhido: sem sugestão', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'com_ressalva' }) })
-    await user.click(flagButton(1))
+    await user.type(noteBox(1), 'Caixa amassada')
     await openReceipt(user)
     expect(screen.queryByText(/Status sugerido/)).not.toBeInTheDocument()
   })
@@ -740,7 +741,7 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
     const payload = mockSaveConference.mock.calls[0][1]
-    expect(payload.damageByRowId).toEqual({ 'r-2': { flagged: false, note: 'Caixas molhadas no pallet 2', photos: [] } })
+    expect(payload.damageByRowId).toEqual({ 'r-2': { flagged: true, note: 'Caixas molhadas no pallet 2', photos: [] } })
     expect(payload.palletsByRowId).toEqual({})
   })
 
@@ -750,13 +751,6 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
     const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
     expect(card).toHaveTextContent('Nenhuma avaria registrada. Para registrar, volte à aba Itens')
     expect(screen.queryByRole('button', { name: 'Usar Com ressalva' })).not.toBeInTheDocument()
-  })
-
-  it('item com avaria sem texto aparece como "(sem observação)"', async () => {
-    const { user } = await renderScreen()
-    await user.click(flagButton(1))
-    await openReceipt(user)
-    expect(screen.getByText('(sem observação)')).toBeInTheDocument()
   })
 
   it('o legado `notes` aparece só para leitura e é repassado no payload', async () => {
@@ -1042,10 +1036,7 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     const first = screen.getByRole('article', { name: 'Item 1' })
     expect(await within(first).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
     expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
-    expect(within(first).getByRole('button', { name: 'Registrar avaria / ressalva neste item 1' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
+    expect(within(first).queryByRole('button', { name: /Registrar avaria/ })).not.toBeInTheDocument()
     expect(mockSaveConference).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
   })
@@ -1120,7 +1111,6 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('avaria sem foto continua válida (nada a avisar sobre foto)', async () => {
     const { user } = await renderScreen()
-    await user.click(screen.getByRole('button', { name: 'Registrar avaria / ressalva neste item 1' }))
     await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Pallet torto')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     const notice = await screen.findByText(/^No fechamento pelo computador:/)
@@ -1153,6 +1143,56 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     await screen.findByRole('img', { name: 'Foto 1 do item 1' })
     await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
     expect(mockDeleteOwnPhotos).toHaveBeenCalledWith('p1', [saved('pnovo')], { uid: 'log-1' })
+  })
+
+  it('avaria automática: foto liga, remover a última foto sem observação desliga e a entrada sai do payload', async () => {
+    const { user } = await renderScreen()
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await within(first).findByRole('img', { name: 'Foto 1 do item 1' })
+    expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
+    await user.click(within(first).getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    await user.click(okButton(1))
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].damageByRowId).toEqual({})
+  })
+
+  it('avaria automática: com observação, remover a última foto mantém a avaria; apagar a observação (sem foto) a derruba', async () => {
+    const { user } = await renderScreen()
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await within(first).findByRole('img', { name: 'Foto 1 do item 1' })
+    await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Caixa rasgada')
+    await user.click(within(first).getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
+    await user.clear(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }))
+    expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
+  })
+
+  it('item com avaria só por foto (sem texto) aparece como "(sem observação)"', async () => {
+    const { user } = await renderScreen()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await openReceipt(user)
+    expect(screen.getByText('(sem observação)')).toBeInTheDocument()
+  })
+
+  it('legado: item com flagged verdadeiro, sem observação e sem foto, é SEM avaria e a gravação o tira do mapa', async () => {
+    const { user } = await renderScreen({
+      conference: conferenceDoc({ damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }),
+    })
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    await user.click(okButton(1))
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].damageByRowId).toEqual({})
   })
 
   it('5 fotos no item: os dois botões ficam desabilitados com o motivo; os outros itens seguem liberados', async () => {

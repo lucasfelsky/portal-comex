@@ -182,8 +182,8 @@ export default function CargoConferenceReceiptPanel({
           </>
         ) : (
           <p className="ccf-sub">
-            Nenhuma avaria registrada. Para registrar, volte à aba Itens, escolha o item e use &quot;Registrar avaria /
-            ressalva&quot;.
+            Nenhuma avaria registrada. Para registrar, volte à aba Itens e, no item, escreva uma observação ou anexe uma
+            foto.
           </p>
         )}
         {legacyNotes ? (

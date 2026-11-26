@@ -48,10 +48,13 @@ describe('estado vazio e chave de "sujo"', () => {
     // Pallets: muda com o número e 0 gravado é diferente de nunca contado.
     expect(cargoConferenceKey({ ...base, palletsByRowId: { 'r-2': 3 } }, rows)).not.toBe(key)
     expect(cargoConferenceKey({ ...base, palletsByRowId: { 'r-2': 0 } }, rows)).not.toBe(key)
+    // Avaria = nota ou foto: o `flagged` legado sozinho (sem nota e sem foto) não suja a chave.
     const flagged = { 'r-1': { flagged: true, note: '', photos: [] } }
-    const noted = { 'r-1': { flagged: false, note: 'amassado', photos: [] } }
-    expect(cargoConferenceKey({ ...base, damageByRowId: flagged }, rows)).not.toBe(key)
+    const noted = { 'r-1': { flagged: true, note: 'amassado', photos: [] } }
+    const photoOnly = { 'r-1': { flagged: true, note: '', photos: [{ id: 'p1' }] } }
+    expect(cargoConferenceKey({ ...base, damageByRowId: flagged }, rows)).toBe(key)
     expect(cargoConferenceKey({ ...base, damageByRowId: noted }, rows)).not.toBe(key)
+    expect(cargoConferenceKey({ ...base, damageByRowId: photoOnly }, rows)).not.toBe(key)
     expect(cargoConferenceKey({ ...base, labelsByRowId: { 'r-1': { wms: 'W1', sq: '' } } }, rows)).not.toBe(key)
     expect(cargoConferenceKey({ ...base, nfNumber: '48213' }, rows)).not.toBe(key)
     expect(cargoConferenceKey({ ...base, labelingOk: true }, rows)).not.toBe(key)
@@ -207,7 +210,7 @@ describe('evaluateCargoConferenceClose: pallets, divergência e avaria', () => {
     okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
     palletsByRowId: { 'r-1': 2, 'r-2': 3, 'r-3': 1 },
   }
-  const issue = (note, flagged = false) => ({ flagged, note, photos: [] })
+  const issue = (note) => ({ flagged: note.trim() !== '', note, photos: [] })
 
   it('soma igual ao total: sem bloqueio e sem pendência', () => {
     expect(evaluateCargoConferenceClose(rows, complete, { expectedPallets: 6 })).toEqual({
@@ -237,8 +240,8 @@ describe('evaluateCargoConferenceClose: pallets, divergência e avaria', () => {
     expect(result.hints).toEqual(['pallets divergentes (6 de 8), com observação'])
   })
 
-  it('só avaria marcada (sem texto) ou só foto NÃO libera a divergência', () => {
-    const onlyFlag = { ...complete, damageByRowId: { 'r-1': issue('', true) } }
+  it('só foto (ou o flag legado sem nota e sem foto) NÃO libera a divergência', () => {
+    const onlyFlag = { ...complete, damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }
     expect(evaluateCargoConferenceClose(rows, onlyFlag, { expectedPallets: 8 }).blocking).toHaveLength(1)
     const photo = { id: 'p1', path: 'a', thumbPath: 'b', width: 10, height: 10, size: 1, uploadedAt: 1, byId: 'u' }
     const onlyPhoto = { ...complete, damageByRowId: { 'r-1': { flagged: false, note: '   ', photos: [photo] } } }
@@ -261,7 +264,7 @@ describe('evaluateCargoConferenceClose: pallets, divergência e avaria', () => {
     const withIssue = {
       ...complete,
       receiptStatus: 'sem_ressalva',
-      damageByRowId: { 'r-1': issue('', true), 'r-2': issue('x') },
+      damageByRowId: { 'r-1': issue('y'), 'r-2': issue('x') },
     }
     const result = evaluateCargoConferenceClose(rows, withIssue, { expectedPallets: 6 })
     expect(result.pendings).toEqual([
