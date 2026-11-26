@@ -14,12 +14,19 @@
 //   do processo é descartado sem chamar a callable de novo).
 // - Erro só do arquivo (mesma lista do "Ler COAs", `COA_READ_FILE_ERROR_CODES`): a fila segue. Qualquer outro código
 //   (busy, unknown, tess-auth, tess-rate-limit, tess-storage-full, daily-limit...) esvazia o resto e deixa um aviso.
-// - Sem componente montado para o processo (saiu da tela / trocou de processo): a fila para DEPOIS do arquivo em
-//   andamento (a callable segue no servidor e grava o resultado). O que não foi lido fica "sem leitura".
+// - S11-F: a fila NÃO depende de componente montado. Sair da aba Documentos ou trocar de processo não descarta nada: ela
+//   segue um arquivo por vez até esvaziar enquanto o Portal estiver aberto (navegação dentro do app). Ao voltar, o
+//   componente relê o store (`useSyncExternalStore`) e mostra "Lendo os COAs: X de Y" / "Na fila" / o aviso. Fechar ou
+//   recarregar a página interrompe (a fila é só memória: nada vai para localStorage).
+// - S11-F: sair da conta (logout) ou trocar de usuário/perfil PARA e LIMPA a fila (`coaAutoReadSession`: a leitura é só
+//   admin e gasta créditos). O arquivo em andamento termina (a callable já está no servidor) e o resultado dele é
+//   ignorado pela fila (época antiga), sem mexer na fila do usuário novo.
+// - Quem pode ENFILEIRAR continua sendo um componente montado e habilitado (admin) no momento do envio (`mounts`).
 // - Nenhum timer: nada para vazar.
 
 import { describeCoaReadError, readProcessCoa } from '../../services/coaReadsRepository'
-import { COA_READ_FILE_ERROR_CODES } from './useCargoReportCoa'
+import { subscribeCoaAutoReadActor, resetCoaAutoReadActor } from './coaAutoReadSession'
+import { COA_READ_FILE_ERROR_CODES } from './coaReadErrors'
 
 const REPORT_CLOSED = 'report-closed'
 const KEY_SEPARATOR = '|'
@@ -36,6 +43,9 @@ let state = emptyState()
 let queue = []
 let running = false
 let generation = 0
+// Época da sessão: sobe quando a conta sai ou muda; o arquivo em andamento de uma época antiga não mexe na fila nova.
+let epoch = 0
+let watchingSession = false
 let attempted = new Set()
 const mounts = new Map()
 const listeners = new Set()
@@ -124,14 +134,17 @@ async function readOne(item) {
   }
 }
 
-function takeNext() {
-  while (queue.length > 0) {
-    const item = queue.shift()
-    if ((mounts.get(item.processId) ?? 0) > 0) return item
-    // Sem tela para o processo: descarta (fica "sem leitura").
-    emit({ progress: withoutKeys(state.progress, [itemKey(item)]) })
-  }
-  return null
+// Logout ou troca de usuário/perfil: esvazia a fila e os avisos. O arquivo em andamento termina sozinho.
+function stopForSessionChange() {
+  epoch += 1
+  queue = []
+  emit({ progress: {}, notices: {}, activeKey: '' })
+}
+
+function watchSession() {
+  if (watchingSession) return
+  watchingSession = true
+  subscribeCoaAutoReadActor(stopForSessionChange)
 }
 
 async function pump() {
@@ -140,11 +153,16 @@ async function pump() {
   const run = generation
   try {
     while (run === generation) {
-      const item = takeNext()
+      const item = queue.shift()
       if (!item) break
       if (state.activeKey !== itemKey(item)) emit({ activeKey: itemKey(item) })
       const code = await readOne(item)
       if (run !== generation) return
+      if (item.epoch !== epoch) {
+        // A conta mudou durante a leitura: o resultado já está gravado no servidor; só o selo é relido.
+        emit({ readVersions: bumpReadVersion(item.processId) })
+        continue
+      }
       const kind = code ? classify(code) : 'ok'
       if (kind === 'interrupt') {
         interrupt(item, code)
@@ -165,7 +183,8 @@ async function pump() {
   }
 }
 
-// Registra um componente de COA montado para o processo (habilitado = admin). Devolve o "desmontar".
+// Registra um componente de COA montado para o processo (habilitado = admin): só quem tem componente montado no
+// momento do envio pode enfileirar. Desmontar NÃO mexe na fila (S11-F). Devolve o "desmontar".
 export function registerCoaAutoReadMount(processId) {
   if (!processId) return () => {}
   mounts.set(processId, (mounts.get(processId) ?? 0) + 1)
@@ -174,14 +193,8 @@ export function registerCoaAutoReadMount(processId) {
     if (released) return
     released = true
     const left = (mounts.get(processId) ?? 1) - 1
-    if (left > 0) {
-      mounts.set(processId, left)
-      return
-    }
-    mounts.delete(processId)
-    // Para a fila do processo; o arquivo em andamento termina sozinho (a callable segue no servidor).
-    const keys = dropQueued((item) => item.processId === processId)
-    if (keys.length > 0) emit({ progress: withoutKeys(state.progress, keys) })
+    if (left > 0) mounts.set(processId, left)
+    else mounts.delete(processId)
   }
 }
 
@@ -195,9 +208,10 @@ export function enqueueCoaAutoRead(processId, documents, scope = '') {
     const attemptKey = `${processId}${KEY_SEPARATOR}${documentId}`
     if (attempted.has(attemptKey)) continue
     attempted.add(attemptKey)
-    fresh.push({ processId, documentId, scope })
+    fresh.push({ processId, documentId, scope, epoch })
   }
   if (fresh.length === 0) return 0
+  watchSession()
 
   const key = buildCoaAutoReadKey(processId, scope)
   const entry = state.progress[key]
@@ -214,6 +228,8 @@ export function enqueueCoaAutoRead(processId, documents, scope = '') {
 
 export function resetCoaAutoRead() {
   generation += 1
+  epoch = 0
+  resetCoaAutoReadActor()
   state = emptyState()
   queue = []
   running = false

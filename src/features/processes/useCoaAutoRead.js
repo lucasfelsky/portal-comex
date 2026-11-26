@@ -5,6 +5,9 @@
 //
 // Padrão replicado (não é util compartilhado): guard de montagem em efeito; aqui o registro/cancelamento fica no
 // store (sem setState depois de desmontar: o React cuida da assinatura via `useSyncExternalStore`).
+//
+// S11-F: a fila segue sem componente montado (sair da aba ou trocar de processo não descarta nada). Ao montar de novo,
+// o hook só relê o store: o status/contador e o aviso da fila atual aparecem na hora e o selo atualiza a cada arquivo.
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {

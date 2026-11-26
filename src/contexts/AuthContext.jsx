@@ -12,6 +12,7 @@ import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore/lite'
 import { auth, firestore, isFirebaseConfigured } from '../lib/firebase'
 import { getUserClaims } from '../lib/claims'
 import { getRolePermissions } from '../features/admin/rolePermissions'
+import { setCoaAutoReadActor } from '../features/processes/coaAutoReadSession'
 import {
   sendCustomPasswordResetEmail as requestCustomPasswordResetEmail,
   sendCustomVerificationEmail as requestCustomVerificationEmail,
@@ -158,6 +159,13 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState('')
+  const actorUid = profile?.uid ?? ''
+  const actorRole = profile?.role ?? ''
+
+  // S11-F: a fila da leitura automática de COA (só admin, gasta créditos) para e é limpa se a conta sai ou muda.
+  useEffect(() => {
+    setCoaAutoReadActor(actorUid ? { uid: actorUid, role: actorRole } : null)
+  }, [actorUid, actorRole])
 
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) {
