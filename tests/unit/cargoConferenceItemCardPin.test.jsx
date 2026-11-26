@@ -59,7 +59,7 @@ describe('cartão do item: onPin', () => {
 describe('cartão do item: selo "A contar"', () => {
   it('só aparece com awaitingCount e item nunca contado', () => {
     renderCard({ awaitingCount: true })
-    expect(screen.getByText('A contar')).toBeInTheDocument()
+    expect(screen.getByText('A contar').className).toBe('ccf-badge')
     expect(screen.queryByText('Sem contagem')).not.toBeInTheDocument()
   })
 

@@ -1354,12 +1354,24 @@ describe('selo neutro "A contar"', () => {
       expect(within(card(n)).getByText('A contar')).toHaveClass('ccf-badge')
       expect(within(card(n)).queryByText('Sem contagem')).not.toBeInTheDocument()
     }
-    expect(within(card(1)).getByText('A contar')).not.toHaveClass(
-      'ccf-badge--ok',
-      'ccf-badge--warn',
-      'ccf-badge--danger',
-      'ccf-badge--info'
-    )
+    // Neutro de verdade: só a classe base, sem nenhuma variante de cor (uma asserção por classe, não vácua).
+    const neutral = within(card(1)).getByText('A contar')
+    expect(neutral.className).toBe('ccf-badge')
+    for (const variant of ['ccf-badge--ok', 'ccf-badge--warn', 'ccf-badge--danger', 'ccf-badge--info']) {
+      expect(neutral).not.toHaveClass(variant)
+    }
+  })
+
+  it('conferência fechada (logística) ou só leitura (admin): item nunca contado segue "Sem contagem", sem "A contar"', async () => {
+    const closed = conferenceDoc({ status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' })
+    const { unmount } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }), conference: closed })
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
+    unmount()
+    cleanup()
+    await renderScreen({ profile: ADMIN, current: currentDoc({ expectedPallets: 5 }), conference: conferenceDoc() })
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
   })
 
   it('some ao contar o primeiro pallet; depois de zerar volta o neutro "Sem contagem" (não "A contar")', async () => {

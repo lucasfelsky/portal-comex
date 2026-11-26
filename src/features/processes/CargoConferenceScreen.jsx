@@ -202,8 +202,9 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const feedbackAction =
     feedback?.action ?? (feedback?.kind === 'conflict' ? { label: 'Recarregar', run: screen.reload } : null)
 
-  // Selo neutro "A contar": só quando o COMEX informou o total da carga (sem total não há contra o quê contar).
-  const awaitingCount = screen.pallets?.expected !== null && screen.pallets?.expected !== undefined
+  // Selo neutro "A contar": só quando o COMEX informou o total da carga (sem total não há contra o quê contar) e dá
+  // para contar (conferência editável); fechada ou só leitura, o item nunca contado segue "Sem contagem".
+  const awaitingCount = screen.canSave && screen.pallets?.expected !== null && screen.pallets?.expected !== undefined
 
   function renderCard(row, rowIndex) {
     return (
