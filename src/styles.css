@@ -27271,10 +27271,6 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 
 /* S11-A: COA Original vira lista de varios arquivos (ProcessCoaDocuments). O cartao ocupa a linha toda da grade do
    desktop; cada arquivo e' uma sublinha com o menu "Acoes" (alvos de toque de 44px). */
-.documents-section__rows > .coa-docs {
-  grid-column: 1 / -1;
-}
-
 .coa-docs__upload {
   min-height: 44px;
 }
@@ -27514,4 +27510,737 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .crf-wrap--mobile .crf-coa__item .crf-diffrow__kind {
   grid-column: 2;
   justify-self: start;
+}
+
+/* S11-D2 do Relatório de Carga: COA como card da grade (FCL/LCL/AÉREO), coluna "COA" na tabela por PO, bloco "COA sem PO"
+   e alternador do Packing List. Visual do mock aprovado; só tokens do tema, sem media query (o celular vem do JS:
+   .coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile). */
+.coa-files {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coa-file {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--row-divider);
+}
+
+.coa-files:not(.coa-files--extra) > .coa-file:first-child {
+  border-top: 0;
+}
+
+.coa-file__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.coa-file__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.coa-file .coa-file__name,
+.coa-file .coa-file__original {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: normal;
+  color: var(--ink);
+}
+
+.coa-file .coa-file__original {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.coa-file .coa-file__meta {
+  margin: 1px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.coa-file .documents-coa-badge {
+  margin-top: 4px;
+}
+
+.coa-file__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Baixar e Ações: ícones de 36 px com área de toque de 44 px (o ::after cresce só a área de toque). */
+.coa-icon-button,
+.coa-file__actions .docs-more .docs-more__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--navy);
+  cursor: pointer;
+}
+
+[data-theme='dark'] .coa-icon-button,
+[data-theme='dark'] .coa-file__actions .docs-more .docs-more__trigger {
+  color: var(--ink);
+}
+
+.coa-icon-button::after,
+.coa-file__actions .docs-more .docs-more__trigger::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.coa-icon-button svg {
+  color: var(--ink-soft);
+}
+
+.coa-icon-button:hover:not(:disabled),
+.coa-file__actions .docs-more .docs-more__trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+}
+
+.coa-icon-button:focus-visible,
+.coa-file__actions .docs-more .docs-more__trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.coa-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* O menu Ações reaproveita o DocumentActionsMenu: aqui o gatilho vira só os três pontinhos. */
+.coa-file__actions .docs-more {
+  margin-left: 0;
+}
+
+.coa-file__actions .docs-more .docs-more__trigger .documents-row__action-label,
+.coa-file__actions .docs-more .docs-more__trigger svg {
+  display: none;
+}
+
+.coa-file__actions .docs-more .docs-more__trigger::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  box-shadow:
+    -5px 0 0 var(--ink-soft),
+    5px 0 0 var(--ink-soft);
+}
+
+.coa-more {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coa-more:hover {
+  text-decoration: underline;
+}
+
+.coa-more:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.coa-more[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+/* Botão de contorno do painel de documentos: "Enviar COA", "Enviar" (Invoice/Packing List na tabela por PO),
+   "Vincular à PO" e "Confirmar". Mesma classe nos três "Enviar" (L-9). */
+.secondary-button.documents-outline-button {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 0;
+  padding: 0 12px;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+}
+
+[data-theme='dark'] .secondary-button.documents-outline-button {
+  color: var(--ink);
+}
+
+.secondary-button.documents-outline-button svg {
+  color: var(--ink-soft);
+}
+
+.secondary-button.documents-outline-button:hover:not(:disabled),
+.secondary-button.documents-outline-button:active:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+  color: var(--navy);
+}
+
+[data-theme='dark'] .secondary-button.documents-outline-button:hover:not(:disabled),
+[data-theme='dark'] .secondary-button.documents-outline-button:active:not(:disabled) {
+  color: var(--ink);
+}
+
+.secondary-button.documents-outline-button:focus-visible:not(:disabled) {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.secondary-button.documents-outline-button:disabled {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--navy);
+  opacity: 0.5;
+}
+
+[data-theme='dark'] .secondary-button.documents-outline-button:disabled {
+  color: var(--ink);
+}
+
+.secondary-button.documents-outline-button[aria-expanded='true'] {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+}
+
+/* Card do COA (grade da seção "Documentos do processo"). */
+.coa-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.coa-card .documents-lock.coa-card__lock {
+  margin: auto 0 0;
+}
+
+.coa-errors {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--danger-50);
+  color: var(--danger-700);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.coa-errors p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.coa-drop-hint {
+  display: none;
+  margin: 0;
+  padding: 10px;
+  border: 1px dashed var(--primary-700);
+  border-radius: 8px;
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.documents-drop-active > .coa-drop-hint,
+.documents-drop-active .coa-cell > .coa-drop-hint {
+  display: block;
+}
+
+/* Celular (variante vinda do JS): o card vira linha da lista; alvos de 44 px, botões em pílula. */
+.coa-card--mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.coa-card--mobile > .coa-files,
+.coa-card--mobile > .coa-more,
+.coa-card--mobile > .coa-errors,
+.coa-card--mobile > .documents-progress,
+.coa-card--mobile > .documents-row__error,
+.coa-card--mobile > .field-hint,
+.coa-card--mobile > .coa-drop-hint,
+.coa-card--mobile > .coa-card__foot,
+.coa-card--mobile > .coa-card__lock {
+  margin-inline: var(--m-inset, 16px);
+}
+
+.coa-orphans--mobile > .coa-files,
+.coa-orphans--mobile > .documents-row__error {
+  margin-inline: var(--m-inset, 16px);
+  padding-bottom: 12px;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file .coa-file__name,
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file .coa-file__original {
+  font-size: 13px;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file .coa-file__meta {
+  font-size: 13px;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-icon-button,
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file__actions .docs-more .docs-more__trigger {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-icon-button svg {
+  color: inherit;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-icon-button::after,
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file__actions .docs-more .docs-more__trigger::after {
+  display: none;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-file__actions .docs-more .docs-more__trigger::before {
+  background: var(--primary-700);
+  box-shadow:
+    -5px 0 0 var(--primary-700),
+    5px 0 0 var(--primary-700);
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .secondary-button.documents-outline-button {
+  height: auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .secondary-button.documents-outline-button svg {
+  color: inherit;
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .secondary-button.documents-outline-button:hover:not(:disabled),
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .secondary-button.documents-outline-button:active:not(:disabled) {
+  border-color: transparent;
+  background: var(--primary-50);
+  color: var(--primary-700);
+  filter: brightness(0.97);
+}
+
+:is(.coa-card--mobile, .documents-po-table--mobile, .coa-orphans--mobile) .coa-more {
+  min-height: 44px;
+  font-size: 13px;
+}
+
+/* Tabela por PO (CONSOLIDADO): colunas Processo | Invoice | Packing List | COA. */
+.documents-po-table-wrap--menus {
+  overflow: visible;
+}
+
+.documents-po-table--coa {
+  table-layout: fixed;
+}
+
+.documents-po-col--process {
+  width: 14%;
+}
+
+.documents-po-col--invoice {
+  width: 31%;
+}
+
+.documents-po-col--packing {
+  width: 24%;
+}
+
+.documents-po-col--coa {
+  width: 31%;
+}
+
+.documents-po-table--mobile .documents-po-col--process {
+  width: 20%;
+}
+
+.documents-po-table--coa:not(.documents-po-table--mobile) th,
+.documents-po-table--coa:not(.documents-po-table--mobile) td {
+  padding-inline: 10px;
+  vertical-align: top;
+}
+
+.documents-po-table--coa thead th {
+  padding-top: 12px;
+}
+
+.documents-po-table--coa tbody th[scope='row'] {
+  font-size: 14px;
+}
+
+.documents-po-table--coa .documents-po-cell__spacer {
+  display: none;
+}
+
+.documents-po-table--coa .documents-row__actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.documents-po-table--coa .documents-po-cell {
+  gap: 8px 10px;
+}
+
+.coa-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coa-cell__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.coa-cell__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.coa-cell .coa-errors {
+  margin-top: 6px;
+}
+
+.documents-po-coa .coa-file {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.documents-po-coa .coa-file__icon {
+  display: none;
+}
+
+.documents-po-coa .coa-file .coa-file__name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.documents-po-coa--mobile .coa-file {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.documents-po-coa--mobile .coa-file__icon {
+  display: inline-flex;
+}
+
+.documents-po-coa--empty.documents-po-coa--mobile {
+  display: none;
+}
+
+.documents-po-table--mobile td[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Bloco "COA sem PO" e o painel "Vincular à PO". */
+.coa-orphans .documents-row__error {
+  margin: 0;
+}
+
+.coa-file--lead .coa-file__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.coa-link {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 0 6px 42px;
+}
+
+.coa-link__field {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 360px;
+}
+
+.coa-link__field label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+}
+
+.coa-link__select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.coa-link__select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.coa-link__error {
+  flex-basis: 100%;
+}
+
+.coa-orphans--mobile .coa-file--lead {
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.coa-orphans--mobile .coa-file--lead .coa-file__actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.coa-orphans--mobile .coa-link {
+  padding-left: 0;
+}
+
+.coa-orphans--mobile .coa-link__field {
+  flex-basis: 100%;
+  max-width: none;
+}
+
+.coa-orphans--mobile .coa-link__select {
+  height: 44px;
+  font-size: 16px;
+}
+
+/* Alternador "Este arquivo também contém o Packing List" (PackingListToggle). */
+.pl-toggle {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.pl-toggle__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.pl-toggle__button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.pl-toggle__button:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.pl-toggle__button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.pl-toggle__button[aria-pressed='true'] {
+  border-color: var(--primary-700);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.pl-toggle__button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.pl-toggle__button--blocked,
+.pl-toggle__button--blocked:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pl-toggle__mark {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--primary-700);
+  color: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.pl-toggle__button[aria-pressed='true'] .pl-toggle__mark {
+  display: inline-flex;
+}
+
+.pl-toggle__tip {
+  position: absolute;
+  z-index: 40;
+  right: -8px;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ink);
+  box-shadow: var(--shadow-lg);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pl-toggle__tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 13px;
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+}
+
+.pl-toggle__button:hover + .pl-toggle__tip,
+.pl-toggle__button:focus-visible + .pl-toggle__tip,
+.pl-toggle__tip--open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pl-toggle__tip[data-dismissed] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Tabela por PO: selos compactos do mock e "Excluir" em vermelho (só cor; texto e ação não mudam). */
+.documents-po-table--coa td .inline-badge {
+  min-height: 0;
+  padding: 3px 9px;
+  font-size: 11px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.documents-po-table--coa .documents-po-cell__info .inline-badge {
+  align-self: flex-start;
+}
+
+.documents-po-table--coa .documents-row__actions [aria-label^='Excluir'] {
+  color: var(--danger-700);
+}
+
+.documents-po-table--coa .documents-po-cell .documents-row__actions {
+  flex-basis: 100%;
+}
+
+.process-detail-view .pdv-panel .documents-po-table--coa .documents-row__actions .documents-icon-button[aria-label^='Excluir'],
+.process-detail-view .pdv-panel .documents-po-table--coa .documents-row__actions .documents-icon-button[aria-label^='Excluir']:hover:not(:disabled),
+[data-theme='dark'] .process-detail-view .pdv-panel .documents-po-table--coa .documents-row__actions .documents-icon-button[aria-label^='Excluir'],
+[data-theme='dark'] .process-detail-view .pdv-panel .documents-po-table--coa .documents-row__actions .documents-icon-button[aria-label^='Excluir']:hover:not(:disabled) {
+  color: var(--danger-700);
+}
+
+/* Celular: Baixar, Substituir, Excluir e o alternador do Packing List cabem na mesma linha da célula da Invoice (a 320 px quebram). */
+.documents-po-table.documents-po-table--mobile td {
+  padding-inline: 0;
+}
+
+.documents-po-table--mobile .documents-po-cell .documents-row__actions {
+  gap: 6px;
 }

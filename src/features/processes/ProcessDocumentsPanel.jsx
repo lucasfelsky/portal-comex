@@ -18,6 +18,10 @@ import RenameDocumentDialog from './RenameDocumentDialog'
 import DocumentPreviewDialog from './DocumentPreviewDialog'
 import DocumentActionsMenu from './DocumentActionsMenu'
 import ProcessCoaDocuments from './ProcessCoaDocuments'
+import PoCoaCell, { COA_UPLOAD_BUTTON_CLASS } from './PoCoaCell'
+import CoaWithoutPurchaseOrderBlock from './CoaWithoutPurchaseOrderBlock'
+import PackingListToggle from './PackingListToggle'
+import useCoaReadBadges from './useCoaReadBadges'
 import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
   CONTAINER_WASH_CATEGORIES,
@@ -29,6 +33,7 @@ import {
   canDeleteDocument,
   canRenameDocument,
   canUploadDocumentType,
+  countSentCoaSlots,
   formatDocumentSize,
   getDocumentFileKindLabel,
   getDocumentIndexFromDocuments,
@@ -60,14 +65,17 @@ const CargoReportForm = lazy(() => import('./CargoReportForm'))
 // separados, E6 do PLAN.md).
 //
 // Secoes: "Documentos do processo" (BL/AWB, Relatorio de carga, COA Original,
-// Invoice/Packing List fora do CONSOLIDADO, "Outro"), "Invoice e Packing List por
-// PO" (so CONSOLIDADO), "FISPQ por item" (so item IMO com id), "Relatorio
+// Invoice/Packing List fora do CONSOLIDADO, "Outro"), "Invoice, Packing List e COA
+// por PO" (so CONSOLIDADO; o COA tem coluna propria e o bloco "COA sem PO"), "FISPQ por item" (so item IMO com id), "Relatorio
 // de lavacao por conteiner" (so FCL/CONSOLIDADO com conteineres) e
 // "Documentos sem vinculo atual". Perfis leitores (tecnico/faturamento) ficam em
 // MODO LEITURA: so as linhas de `getReadableDocumentTypes(role)` (Relatorio de
 // carga e COA Original), sem envio/pendencias/demais secoes.
 const PROCESS_LEVEL_TYPES = ['bl', 'cargoReport', 'coaOriginal']
 const PO_SCOPABLE_TYPES = ['invoice', 'packingList']
+
+const SUBTITLE_PROCESS = 'O COA aceita vários arquivos (até 50 por processo); os demais tipos guardam o arquivo atual e a última versão anterior.'
+const SUBTITLE_CONSOLIDATED_READER = 'No consolidado, cada arquivo de COA mostra a PO a que pertence.'
 
 function buildDocumentError(title, error) {
   console.error(title, error)
@@ -169,6 +177,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const purchaseOrders = isConsolidated ? getProcessPurchaseOrders(process) : []
 
   const [documents, setDocuments] = useState([])
+  const coaBadges = useCoaReadBadges({ processId, documents, enabled: role === 'admin' })
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [loadError, setLoadError] = useState(null)
@@ -332,7 +341,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const enviadosCount = useMemo(() => {
     let count = 0
     for (const type of processLevelTypes) {
-      if (type === 'coaOriginal' ? documents.some((document_) => document_.type === type) : findGroup(buildDocumentSlotKey(type))?.primary) count += 1
+      if (type === 'coaOriginal') count += countSentCoaSlots(documents, { category, purchaseOrders, isReadOnlyViewer })
+      else if (findGroup(buildDocumentSlotKey(type))?.primary) count += 1
     }
     if (isReadOnlyViewer) return count
     for (const type of PO_SCOPABLE_TYPES) {
@@ -357,7 +367,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
     return count
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection, processLevelTypes, isReadOnlyViewer])
+  }, [documents, groups, isConsolidated, category, purchaseOrders, otherDocuments, imoItems, washContainers, showFispqSection, showWashSection, processLevelTypes, isReadOnlyViewer])
 
   // Review #202: so' publica a contagem derivada depois da 1a carga com
   // sucesso - durante o loading (`documents` = []) ou com erro na 1a carga
@@ -533,27 +543,18 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     }
   }
 
-  // Checkbox "Este arquivo tambem contem o Packing List" (so' quem envia Invoice).
+  // S11-D2: alternador "Este arquivo tambem contem o Packing List" (botao-icone ao lado do Enviar/Baixar; so' quem envia Invoice).
   function renderCombineOption(invoiceSlotKey, packingSlotKey, po = '') {
     if (!canUploadDocumentType(role, 'invoice')) return null
     const { checked, packingHasOwnFile } = getCombineState(invoiceSlotKey, packingSlotKey)
-    const blocked = !checked && packingHasOwnFile
     const busy = uploadingKey === invoiceSlotKey || linkBusyKey === invoiceSlotKey
-    return (
-      <div className="documents-combine">
-        <label className="documents-combine__label">
-          <input
-            type="checkbox"
-            checked={checked}
-            disabled={blocked || busy}
-            aria-label={po ? `Este arquivo também contém o Packing List da PO ${po}` : undefined}
-            onChange={(event) => handleSetPackingListLink(invoiceSlotKey, event.target.checked)}
-          />
-          <span>Este arquivo também contém o Packing List</span>
-        </label>
-        {blocked ? <small className="field-hint">O Packing List já tem arquivo próprio.</small> : null}
-      </div>
-    )
+    return <PackingListToggle checked={checked} blocked={!checked && packingHasOwnFile} busy={busy} po={po} onToggle={(next) => handleSetPackingListLink(invoiceSlotKey, next)} />
+  }
+
+  // Visualizar (Relatorio de carga e COA): um unico ponto abre o dialogo de pre-visualizacao.
+  function openPreview(document_) {
+    setPreviewDocument(document_)
+    setIsPreviewOpen(true)
   }
 
   async function handleAddOtherDocument(file) {
@@ -704,6 +705,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     extraContent = null,
     includedInInvoice = null,
     primaryAction = null,
+    trailingAction = null,
   }) {
     const primary = group?.primary ?? null
     const previous = group?.previous ?? null
@@ -910,6 +912,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 Somente o COMEX envia este documento
               </span>
             ) : null}
+            {trailingAction}
             <DocumentActionsMenu
               title={title}
               mobile={!isDesktopVariant}
@@ -932,6 +935,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     const invoiceSlotKey = buildDocumentSlotKey('invoice', { category, po: order.po })
     const packingSlotKey = buildDocumentSlotKey('packingList', { category, po: order.po })
     const invoiceLink = type === 'packingList' && !primary ? getInvoicePackingListLink(groups, invoiceSlotKey) : null
+    const combineToggle = type === 'invoice' ? renderCombineOption(slotKey, packingSlotKey, order.po) : null
     const uploadFile = (file) =>
       type === 'invoice'
         ? uploadInvoiceFile(slotKey, packingSlotKey, { po: order.po }, file)
@@ -940,6 +944,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
     return (
       <td
         key={type}
+        data-label={getDocumentTypeLabel(type)}
         className={dragOverKey === slotKey ? 'documents-drop-active' : undefined}
         {...getDropTargetProps(slotKey, {
           // PL "incluido na Invoice": so' volta a aceitar arquivo depois de "Separar".
@@ -1005,6 +1010,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                     <span className="documents-row__action-label">Excluir</span>
                   </button>
                 ) : null}
+                {combineToggle}
               </div>
               {canUpload ? (
                 <input
@@ -1094,12 +1100,13 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   />
                   <button
                     type="button"
-                    className="primary-button"
+                    className={COA_UPLOAD_BUTTON_CLASS}
                     disabled={isRowUploading}
                     onClick={() => triggerFilePicker(slotKey)}
                   >
                     Enviar
                   </button>
+                  {combineToggle}
                 </>
               ) : (
                 <span className="documents-lock">
@@ -1110,7 +1117,6 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             </>
           )}
         </div>
-        {type === 'invoice' ? renderCombineOption(slotKey, packingSlotKey, order.po) : null}
         {isRowUploading ? (
           <div className="documents-progress">
             <span
@@ -1174,6 +1180,11 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
       }, 0)
     : 0
 
+  const coaProps = {
+    documents, processId, profile, category, isDesktopVariant, downloadingId, rowErrors, badges: coaBadges,
+    onDownload: handleDownload, onPreview: openPreview, onRequestDelete: setConfirmDeleteDoc, onRequestRename: openRename,
+    onChanged: () => setReloadToken((token) => token + 1),
+  }
   return (
     <div
       className="documents-panel"
@@ -1273,7 +1284,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
           <div className="documents-section documents-section--process">
             <DocumentsSectionHeader
               title="Documentos do processo"
-              subtitle="Cada COA fica na lista; os demais tipos guardam o arquivo atual e a última versão anterior."
+              subtitle={isReadOnlyViewer && isConsolidated ? SUBTITLE_CONSOLIDATED_READER : SUBTITLE_PROCESS}
               badge={
                 isDesktopVariant && showLoadedContent && !isEmptyDocuments ? (
                   <p className="documents-section__note">{visibilityNote}</p>
@@ -1283,21 +1294,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             <div className="documents-section__rows">
               {processLevelTypes.map((type) => {
                 if (type === 'coaOriginal') {
-                  return (
-                    <ProcessCoaDocuments
-                      key={type}
-                      documents={documents} processId={processId} profile={profile}
-                      isDesktopVariant={isDesktopVariant} downloadingId={downloadingId} rowErrors={rowErrors}
-                      onChanged={() => setReloadToken((token) => token + 1)}
-                      onDownload={handleDownload}
-                      onPreview={(document_) => {
-                        setPreviewDocument(document_)
-                        setIsPreviewOpen(true)
-                      }}
-                      onRequestDelete={setConfirmDeleteDoc}
-                      onRequestRename={openRename}
-                    />
-                  )
+                  if (isConsolidated && !isReadOnlyViewer) return null
+                  return <ProcessCoaDocuments key={type} {...coaProps} showPurchaseOrder={isConsolidated} />
                 }
                 const slotKey = buildDocumentSlotKey(type)
                 const group = findGroup(slotKey)
@@ -1334,13 +1332,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                   canDelete: primary ? canDeleteDocument(profile, primary) : false,
                   onUpload: (file) => handleUploadFile(type, slotKey, {}, file),
                   extraContent: type === 'cargoReport' && cargoStage ? <CargoReportStageBadges stage={cargoStage} /> : null,
-                  onPreview:
-                    type === 'cargoReport'
-                      ? (document_) => {
-                          setPreviewDocument(document_)
-                          setIsPreviewOpen(true)
-                        }
-                      : null,
+                  onPreview: type === 'cargoReport' ? openPreview : null,
                   ...(type === 'cargoReport' && !isReadOnlyViewer && canOpenCargoReport(role)
                     ? {
                         primaryAction: (
@@ -1394,7 +1386,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                         type === 'invoice'
                           ? (file) => uploadInvoiceFile(slotKey, 'packingList', {}, file)
                           : (file) => handleUploadFile(type, slotKey, {}, file),
-                      extraContent: type === 'invoice' ? renderCombineOption('invoice', 'packingList') : null,
+                      trailingAction: type === 'invoice' ? renderCombineOption('invoice', 'packingList') : null,
                       includedInInvoice: invoiceLink
                         ? {
                             invoice: invoiceLink,
@@ -1485,8 +1477,8 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
           {!isReadOnlyViewer && isConsolidated ? (
             <div className="documents-section">
               <DocumentsSectionHeader
-                title="Invoice e Packing List por PO"
-                subtitle="No consolidado, cada PO tem a sua Invoice e o seu Packing List, cada um com a versão atual e a anterior."
+                title="Invoice, Packing List e COA por PO"
+                subtitle="No consolidado, cada PO tem a sua Invoice, o seu Packing List e os seus COAs. O COA aceita vários arquivos (até 50 por PO) e é opcional."
                 badge={
                   missingConsolidatedCount > 0 ? (
                     <span className="inline-badge inline-badge--warn documents-badge--icon">
@@ -1499,14 +1491,18 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
               {purchaseOrders.length === 0 ? (
                 <p className="documents-po-empty">Nenhuma PO cadastrada no processo.</p>
               ) : (
-                <div className="documents-po-table-wrap">
-                  <table className="documents-po-table">
-                    <caption className="documents-visually-hidden">Invoice e Packing List por PO</caption>
+                <div className={`documents-po-table-wrap${isDesktopVariant ? ' documents-po-table-wrap--menus' : ''}`}>
+                  <table className={`documents-po-table documents-po-table--coa${isDesktopVariant ? '' : ' documents-po-table--mobile'}`}>
+                    <caption className="documents-visually-hidden">Invoice, Packing List e COA por PO</caption>
+                    <colgroup>
+                      {['process', 'invoice', 'packing', 'coa'].map((name) => <col key={name} className={`documents-po-col documents-po-col--${name}`} />)}
+                    </colgroup>
                     <thead>
                       <tr>
                         <th scope="col">Processo</th>
                         <th scope="col">Invoice</th>
                         <th scope="col">Packing List</th>
+                        <th scope="col">COA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1528,6 +1524,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                           </th>
                           {renderPoCell('invoice', order)}
                           {renderPoCell('packingList', order)}
+                          <PoCoaCell {...coaProps} order={order} />
                         </tr>
                       ))}
                     </tbody>
@@ -1535,6 +1532,10 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
                 </div>
               )}
             </div>
+          ) : null}
+
+          {!isReadOnlyViewer && isConsolidated ? (
+            <CoaWithoutPurchaseOrderBlock {...coaProps} purchaseOrders={purchaseOrders} canSeePoReference={canSeePoReference} onNotice={setLiveMessage} />
           ) : null}
 
           {showFispqSection ? (

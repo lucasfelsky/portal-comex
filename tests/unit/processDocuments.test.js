@@ -783,6 +783,17 @@ describe('getUnlinkedDocumentGroups', () => {
     expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([])
   })
 
+  it('S11-D2: nenhum grupo coaOriginal vira "sem vinculo" (o bloco "COA sem PO" e o card cuidam do COA)', () => {
+    const groups = [
+      { slotKey: 'coaOriginal', primary: { id: 'c0', type: 'coaOriginal' } },
+      { slotKey: 'coaOriginal:c1', primary: { id: 'c1', type: 'coaOriginal', poNumber: 'PO-9' } },
+      { slotKey: 'coaOriginal:c2', primary: { id: 'c2', type: 'coaOriginal' } },
+    ]
+    for (const process of [{ category: 'FCL' }, { category: 'LCL' }, { category: 'AEREO' }, { category: 'CONSOLIDADO' }]) {
+      expect(getUnlinkedDocumentGroups(groups, process, purchaseOrders)).toEqual([])
+    }
+  })
+
   it('coaOriginal:<id> (COA novo, 1 slot por arquivo) e vinculado, nao vira "Tipo não reconhecido"', () => {
     const groups = [
       { slotKey: 'coaOriginal:abc123', primary: { id: 'd5' } },
