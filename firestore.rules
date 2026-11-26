@@ -1070,6 +1070,13 @@ service cloud.firestore {
             && resource.data.type != 'cargoReport');
       }
 
+      // COA: resultado da leitura automatica (Tess) gravado SO pela function readProcessCoa (Admin SDK).
+      // Leitura so admin; nenhum cliente grava. Apagado junto com o documento (deleteProcessDocumentFile).
+      match /coaReads/{documentId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if false;
+      }
+
       // S3 do Relatorio de Carga: docs nomeados (outros ids caem no catch-all).
       // Tecnico/Faturamento NAO leem current/conference (veem o arquivo anexado em documents e, desde a S10-J2,
       // so' o espelho damage abaixo).

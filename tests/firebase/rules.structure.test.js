@@ -584,6 +584,16 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/request\.resource\.data\.type\s+in\s*\[[^\]]*'coaOriginal'[^\]]*\]/)
       expect(rules).toMatch(/request\.resource\.data\.type\s*==\s*'cargoReport'\s*\|\|\s*request\.resource\.data\.type\s*==\s*'coaOriginal'/)
     })
+
+    it('coaReads: leitura so admin e nenhuma escrita de cliente (resultado gravado so pela function readProcessCoa)', () => {
+      const match = rules.match(/match\s+\/coaReads\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
+      expect(match).not.toBeNull()
+      expect(match[1]).toMatch(/allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*;/)
+      expect(match[1]).toMatch(/allow\s+create,\s*update,\s*delete:\s*if\s+false\s*;/)
+      expect(match[1]).not.toMatch(/isLogistics|isDocumentReader/)
+      expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/coaReads\/\{documentId\}\s*\{/)
+      expect((rules.match(/match\s+\/coaReads\//g) ?? []).length).toBe(1)
+    })
   })
 
   describe('Sprint 5.1 — endurecimento de users/{uid}', () => {

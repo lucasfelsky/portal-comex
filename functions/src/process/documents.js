@@ -120,7 +120,10 @@ export const rotateProcessDocumentVersions = onDocumentCreated(
     if (!created) return
 
     const slotKey = String(created.slotKey ?? '')
-    if (!slotKey || slotKey.startsWith('other:')) return
+    // `other:` e `coaOriginal:` (S11): cada arquivo e' um slot proprio, sem versao anterior. Defesa: com o slot
+    // unico por documento a consulta abaixo devolveria 1 doc e nada seria apagado, mas um slot `coaOriginal:`
+    // nunca deve entrar na rotacao de 2 versoes.
+    if (!slotKey || slotKey.startsWith('other:') || slotKey.startsWith('coaOriginal:')) return
 
     const processId = event.params.processId
     const firestore = getFirestore()
@@ -153,6 +156,22 @@ export const deleteProcessDocumentFile = onDocumentDeleted(
     if (!deleted) return
 
     const processId = event.params.processId
+
+    // S11-B: o resultado da leitura automatica do COA (`coaReads/{documentId}`) morre com o documento. Bloco
+    // proprio (independe do storagePath) e sem conteudo no log. Arquivo eventualmente pendente na Tess fica para
+    // a limpeza manual (so ocorre se o DELETE da leitura falhou).
+    if (deleted.type === 'coaOriginal') {
+      try {
+        await getFirestore().doc(`processes/${processId}/coaReads/${event.params.documentId}`).delete()
+      } catch (error) {
+        logger.warn('Falha ao apagar a leitura de COA do documento excluido.', {
+          processId,
+          documentId: event.params.documentId,
+          error: error?.code ?? error?.message,
+        })
+      }
+    }
+
     const storagePath = String(deleted.storagePath ?? '')
     const expectedPrefix = `processes/${processId}/documents/`
 

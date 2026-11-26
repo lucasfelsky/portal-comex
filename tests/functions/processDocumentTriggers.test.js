@@ -135,6 +135,41 @@ describe('rotateProcessDocumentVersions', () => {
     expect(mockFirestoreApi.batch).not.toHaveBeenCalled()
   })
 
+  it('slotKey "coaOriginal:xxx" nunca rotaciona (cada COA e um slot proprio, sem versao anterior)', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      'processes/proc-1/documents': [
+        { id: 'd1', data: { slotKey: 'coaOriginal:new-doc', uploadedAt: '2026-09-01T10:00:00.000Z' } },
+        { id: 'd2', data: { slotKey: 'coaOriginal:new-doc', uploadedAt: '2026-09-02T10:00:00.000Z' } },
+        { id: 'new-doc', data: { slotKey: 'coaOriginal:new-doc', uploadedAt: '2026-09-03T10:00:00.000Z' } },
+      ],
+    })
+    const handler = getHandler(rotateProcessDocumentVersions)
+
+    await handler(makeEvent({ slotKey: 'coaOriginal:new-doc', uploadedAt: '2026-09-03T10:00:00.000Z' }))
+
+    expect(mockFirestoreApi.batch).not.toHaveBeenCalled()
+    expect(mockBatch.delete).not.toHaveBeenCalled()
+    expect(mockBatch.commit).not.toHaveBeenCalled()
+  })
+
+  it('o slot fixo legado "coaOriginal" (sem sufixo) segue rotacionando como antes', async () => {
+    setupFirestoreChain({
+      processes: [{ id: PROCESS_ID, data: {} }],
+      'processes/proc-1/documents': [
+        { id: 'd1', data: { slotKey: 'coaOriginal', uploadedAt: '2026-09-01T10:00:00.000Z' } },
+        { id: 'd2', data: { slotKey: 'coaOriginal', uploadedAt: '2026-09-02T10:00:00.000Z' } },
+        { id: 'new-doc', data: { slotKey: 'coaOriginal', uploadedAt: '2026-09-03T10:00:00.000Z' } },
+      ],
+    })
+    const handler = getHandler(rotateProcessDocumentVersions)
+
+    await handler(makeEvent({ slotKey: 'coaOriginal', uploadedAt: '2026-09-03T10:00:00.000Z' }))
+
+    expect(mockBatch.delete).toHaveBeenCalledTimes(1)
+    expect(mockBatch.commit).toHaveBeenCalledTimes(1)
+  })
+
   it('sem dado criado (delete concorrente) -> nada', async () => {
     const handler = getHandler(rotateProcessDocumentVersions)
     await handler({ params: { processId: PROCESS_ID, documentId: 'x' }, data: { data: () => undefined } })
@@ -177,6 +212,61 @@ describe('deleteProcessDocumentFile', () => {
     await expect(
       handler(makeEvent({ storagePath: 'processes/proc-1/documents/bl/123-uid-a.pdf' }))
     ).resolves.toBeUndefined()
+  })
+
+  describe('leitura automatica do COA (S11-B)', () => {
+    const coaPath = 'processes/proc-1/documents/coaOriginal/1-admin-1-coa.pdf'
+
+    it('apagar um COA apaga processes/{p}/coaReads/{documentId} e o arquivo', async () => {
+      const deleteRead = vi.fn().mockResolvedValue(undefined)
+      mockFirestoreApi.doc.mockImplementationOnce(() => ({ delete: deleteRead }))
+      const handler = getHandler(deleteProcessDocumentFile)
+
+      await handler(makeEvent({ type: 'coaOriginal', storagePath: coaPath }, { documentId: 'coa-1' }))
+
+      expect(mockFirestoreApi.doc).toHaveBeenCalledWith('processes/proc-1/coaReads/coa-1')
+      expect(deleteRead).toHaveBeenCalledTimes(1)
+      expect(mockBucket.file).toHaveBeenCalledWith(coaPath)
+      expect(mockStorageFile.delete).toHaveBeenCalledWith({ ignoreNotFound: true })
+    })
+
+    it('COA com storagePath invalido ainda apaga a leitura (nao depende do arquivo)', async () => {
+      const deleteRead = vi.fn().mockResolvedValue(undefined)
+      mockFirestoreApi.doc.mockImplementationOnce(() => ({ delete: deleteRead }))
+      const handler = getHandler(deleteProcessDocumentFile)
+
+      await handler(makeEvent({ type: 'coaOriginal', storagePath: 'processes/outro/documents/x.pdf' }, { documentId: 'coa-2' }))
+
+      expect(deleteRead).toHaveBeenCalledTimes(1)
+      expect(mockBucket.file).not.toHaveBeenCalled()
+    })
+
+    it.each(['bl', 'cargoReport', 'other', 'invoice'])('apagar documento do tipo %s NAO toca em coaReads', async (type) => {
+      mockFirestoreApi.doc.mockClear()
+      const handler = getHandler(deleteProcessDocumentFile)
+
+      await handler(makeEvent({ type, storagePath: 'processes/proc-1/documents/' + type + '/1-a.pdf' }))
+
+      expect(mockFirestoreApi.doc).not.toHaveBeenCalled()
+      expect(mockStorageFile.delete).toHaveBeenCalledWith({ ignoreNotFound: true })
+    })
+
+    it('falha ao apagar a leitura nao derruba o trigger, e logada sem conteudo e o arquivo ainda e apagado', async () => {
+      const deleteRead = vi.fn().mockRejectedValue(Object.assign(new Error('falha de rede'), { code: 'unavailable' }))
+      mockFirestoreApi.doc.mockImplementationOnce(() => ({ delete: deleteRead }))
+      mockLogger.warn.mockClear()
+      const handler = getHandler(deleteProcessDocumentFile)
+
+      await expect(
+        handler(makeEvent({ type: 'coaOriginal', storagePath: coaPath, name: 'SEGREDO.pdf' }, { documentId: 'coa-3' }))
+      ).resolves.toBeUndefined()
+
+      expect(mockLogger.warn).toHaveBeenCalledTimes(1)
+      const [, fields] = mockLogger.warn.mock.calls[0]
+      expect(fields).toEqual({ processId: PROCESS_ID, documentId: 'coa-3', error: 'unavailable' })
+      expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('SEGREDO')
+      expect(mockStorageFile.delete).toHaveBeenCalledWith({ ignoreNotFound: true })
+    })
   })
 })
 
