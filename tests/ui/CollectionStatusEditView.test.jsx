@@ -2,9 +2,8 @@
 // `processStatus` (modulo puro real). Cobre o gate do editor de divergencia
 // (so' aparece com status pos-recebimento) e o ciclo checkbox -> select +
 // textarea + dica de foto.
-// F17.4b-fix: + uploader de fotos do recebimento (`PostReceiptImagesField`)
-// na mesma tela, contagem/hint vem do `draftPostReceiptImages` (nao mais de
-// `process.postReceiptImages`), select com 4 tipos (inclui "Lote").
+// S11 (K): o uploader de fotos do recebimento saiu da tela (so leitura no detalhe);
+// select com 4 tipos (inclui "Lote").
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -96,39 +95,44 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
     expect(screen.getByText('Descrição da divergência')).toBeInTheDocument()
   })
 
-  it('uploader "Fotos do recebimento" so\' aparece com status pos-recebimento', () => {
-    renderView({ collectionStatus: '' })
+  it('S11 (K): sem uploader "Fotos do recebimento" com status pos-recebimento, mesmo com fotos no rascunho', () => {
+    renderView({
+      collectionStatus: 'Carga recebida, em conferência',
+      draftPostReceiptImages: [{ id: 'IMG-1', url: 'https://x', name: 'foto.jpg' }],
+    })
+    expect(screen.getByText('Houve divergência no recebimento?')).toBeInTheDocument()
     expect(screen.queryByText('Fotos do recebimento')).not.toBeInTheDocument()
-
-    renderView({ collectionStatus: 'Carga recebida, em conferência' })
-    expect(screen.getByText('Fotos do recebimento')).toBeInTheDocument()
-    // UX-6a (item 9, D8): uploader PT-BR (era o <input type=file> nativo em ingles).
-    expect(screen.getByText('Adicionar imagens')).toBeInTheDocument()
-    expect(document.querySelector('input[type="file"].file-picker__input')).toBeInTheDocument()
+    expect(screen.queryByText('Adicionar imagens')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remover imagem' })).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument()
   })
 
-  it('dica de foto aparece quando draftPostReceiptImages vazio e some com 1 imagem', () => {
+  it('S11 (K): sem status pos-recebimento a tela nao tem uploader nem editor de divergencia', () => {
+    renderView({ collectionStatus: '' })
+    expect(screen.queryByText('Fotos do recebimento')).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument()
+  })
+
+  it('S11 (K): dica da divergencia nao pede mais foto (com ou sem fotos no rascunho)', () => {
+    const fields = { receiptDivergence: true, receiptDivergenceType: '', receiptDivergenceNotes: '' }
     const { rerender } = render(
       <CollectionStatusEditView
         process={baseProcess()}
         collectionStatus="Carga recebida, em conferência"
         canSeeName
         isSaving={false}
-        receiptDivergenceFields={{ receiptDivergence: true, receiptDivergenceType: '', receiptDivergenceNotes: '' }}
+        receiptDivergenceFields={fields}
         draftPostReceiptImages={[]}
         isUploadingPostReceiptImages={false}
         onStatusChange={() => {}}
         onDivergenceChange={() => {}}
         onSave={() => {}}
         onClose={() => {}}
-        onImagesUpload={() => {}}
-        onRemoveImage={() => {}}
       />
     )
-
-    expect(
-      screen.getByText('Anexe ao menos 1 foto em Fotos do recebimento, abaixo.')
-    ).toBeInTheDocument()
+    const hint = 'Fotos e observações da avaria ficam no item, na Conferência do Relatório de Carga.'
+    expect(screen.getByText(hint)).toBeInTheDocument()
+    expect(screen.queryByText(/Anexe ao menos 1 foto/)).not.toBeInTheDocument()
 
     rerender(
       <CollectionStatusEditView
@@ -136,33 +140,16 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
         collectionStatus="Carga recebida, em conferência"
         canSeeName
         isSaving={false}
-        receiptDivergenceFields={{ receiptDivergence: true, receiptDivergenceType: '', receiptDivergenceNotes: '' }}
+        receiptDivergenceFields={fields}
         draftPostReceiptImages={[{ id: 'IMG-1', url: 'https://x', name: 'foto.jpg' }]}
         isUploadingPostReceiptImages={false}
         onStatusChange={() => {}}
         onDivergenceChange={() => {}}
         onSave={() => {}}
         onClose={() => {}}
-        onImagesUpload={() => {}}
-        onRemoveImage={() => {}}
       />
     )
-
-    expect(
-      screen.queryByText('Anexe ao menos 1 foto em Fotos do recebimento, abaixo.')
-    ).not.toBeInTheDocument()
-  })
-
-  it('"Remover imagem" chama onRemoveImage com o id da foto', async () => {
-    const user = userEvent.setup()
-    const { onRemoveImage } = renderView({
-      collectionStatus: 'Carga recebida, em conferência',
-      draftPostReceiptImages: [{ id: 'IMG-1', url: 'https://x', name: 'foto.jpg' }],
-    })
-
-    await user.click(screen.getByRole('button', { name: 'Remover imagem' }))
-
-    expect(onRemoveImage).toHaveBeenCalledWith('IMG-1')
+    expect(screen.queryByText(/Anexe ao menos 1 foto/)).not.toBeInTheDocument()
   })
 
   it('botao Salvar desabilitado durante isUploadingPostReceiptImages', () => {
@@ -179,9 +166,9 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
     expect(onSave).toHaveBeenCalled()
   })
 
-  // Layout telas 2026-09-29: Processo -> Status -> Janelas (leitura) ->
-  // Divergencia -> Fotos -> Salvar.
-  it('ordem: Processo -> Status -> Janelas -> Divergência -> Fotos -> Salvar', () => {
+  // Layout telas 2026-09-29 (S11/K: sem o bloco de fotos): Processo -> Status ->
+  // Janelas (leitura) -> Divergencia -> Salvar.
+  it('ordem: Processo -> Status -> Janelas -> Divergência -> Salvar', () => {
     renderView({
       collectionStatus: 'Carga recebida, em conferência',
       receiptDivergenceFields: { receiptDivergence: true, receiptDivergenceType: '', receiptDivergenceNotes: '' },
@@ -190,9 +177,8 @@ describe('CollectionStatusEditView - editor de divergencia (F17.4b)', () => {
     const status = screen.getByText('Status', { selector: 'label.field > span' })
     const janelas = screen.getByText('Janela de coleta')
     const divergencia = screen.getByText('Houve divergência no recebimento?')
-    const fotos = screen.getByText('Fotos do recebimento')
     const salvar = screen.getByRole('button', { name: 'Salvar status' })
-    const ordered = [processo, status, janelas, divergencia, fotos, salvar]
+    const ordered = [processo, status, janelas, divergencia, salvar]
     for (let i = 0; i < ordered.length - 1; i += 1) {
       expect(ordered[i].compareDocumentPosition(ordered[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }

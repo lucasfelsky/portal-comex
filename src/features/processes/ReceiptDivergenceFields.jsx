@@ -6,7 +6,7 @@ import { RECEIPT_DIVERGENCE_TYPES, MAX_RECEIPT_DIVERGENCE_NOTES } from './receip
 // prop) e chama `onChange(field, value)`. Importa SO `SelectField` e
 // `./receiptDivergence` (regra de import da suite: `ProcessesPage.test.jsx`
 // mocka `processStatus`/`pendingFields`/etc com lista fechada de exports).
-export default function ReceiptDivergenceFields({ value, imagesCount, onChange, disabled }) {
+export default function ReceiptDivergenceFields({ value, onChange, disabled }) {
   const { receiptDivergence, receiptDivergenceType, receiptDivergenceNotes } = value ?? {}
 
   return (
@@ -52,11 +52,9 @@ export default function ReceiptDivergenceFields({ value, imagesCount, onChange, 
             />
           </label>
 
-          {imagesCount === 0 ? (
-            <small className="field-hint">
-              Anexe ao menos 1 foto em Fotos do recebimento, abaixo.
-            </small>
-          ) : null}
+          <small className="field-hint">
+            Fotos e observações da avaria ficam no item, na Conferência do Relatório de Carga.
+          </small>
         </>
       ) : null}
     </div>

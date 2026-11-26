@@ -553,7 +553,8 @@ export default function ProcessesPage() {
   // que continua montada atras (`inert`). Leitura LAZY: sem piscar a arvore errada.
   const isMobileStackQuery = useMediaQuery('(max-width: 720px)')
   const isMobileStack = isMobileStackQuery && !isDesktopLayout
-  const canEditPostReceiptNotes = isAdmin || profile?.role === 'logistica'
+  // S11 (K): pós-recebimento legado só leitura; fotos e avarias ficam na Conferência do Relatório de Carga.
+  const canEditPostReceiptNotes = false
   const canEditCollectionStatus = isAdmin || profile?.role === 'logistica'
   const hasUnlimitedMessages = isAdmin
   const favoriteProcessIds = profile?.favoriteProcessIds ?? []
