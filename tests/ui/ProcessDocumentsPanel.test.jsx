@@ -1581,7 +1581,7 @@ describe('ProcessDocumentsPanel — COA Original (admin)', () => {
       if (expected) {
         expect(await screen.findByText(expected), label).toBeInTheDocument()
       } else {
-        expect(screen.queryByText(/^d+ enviados?$/), label).not.toBeInTheDocument()
+        expect(screen.queryByText(/^\d+ enviados?$/), label).not.toBeInTheDocument()
       }
       expect(screen.queryByText('2 enviados'), label).not.toBeInTheDocument()
       unmount()
