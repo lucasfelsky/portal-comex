@@ -27,6 +27,7 @@ export const CARGO_DAMAGE_PHOTOS_PER_CONFERENCE = 30
 export const CARGO_DAMAGE_NOTE_MAX = 1000
 export const CARGO_DAMAGE_NOTICE_MAX_ITEMS = 10
 export const CARGO_DAMAGE_NOTICE_NOTE_MAX = 200
+export const CARGO_DAMAGE_NOTICE_LABEL_MAX = 120
 // Início da seção no corpo do aviso: o e-mail aos usuários a procura no `body` (sem leitura extra).
 export const CARGO_DAMAGE_SECTION_MARKER = 'Avarias e ressalvas:'
 const CARGO_PALLETS_ROW_MAX = 999
@@ -253,21 +254,19 @@ export function formatCargoDamagePalletsLine(pallets) {
   return `Pallets: ${pluralize(pallets.counted, 'contado', 'contados')} de ${pluralize(pallets.expected, 'informado', 'informados')} pelo COMEX (${state}).`
 }
 
-function clipNote(note) {
-  const text = String(note ?? '').replace(/\s+/g, ' ').trim()
+function clipText(value, max) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
   const chars = Array.from(text)
-  return chars.length > CARGO_DAMAGE_NOTICE_NOTE_MAX
-    ? `${chars.slice(0, CARGO_DAMAGE_NOTICE_NOTE_MAX).join('').trimEnd()}…`
-    : text
+  return chars.length > max ? `${chars.slice(0, max).join('').trimEnd()}…` : text
 }
 
 function buildItemLine(item) {
   const fallbackLabel = `Item ${item.index}`
-  const cleanLabel = String(item.label ?? '').replace(/\s+/g, ' ').trim()
+  const cleanLabel = clipText(item.label, CARGO_DAMAGE_NOTICE_LABEL_MAX)
   const label = cleanLabel && cleanLabel !== fallbackLabel ? ` · ${cleanLabel}` : ''
   const photoCount = Number.isInteger(item.photoCount) ? item.photoCount : (item.photos?.length ?? 0)
   const photos = photoCount > 0 ? ` · ${pluralize(photoCount, 'foto', 'fotos')}` : ''
-  const note = clipNote(item.note)
+  const note = clipText(item.note, CARGO_DAMAGE_NOTICE_NOTE_MAX)
   let detail = note
   if (!detail) detail = photoCount > 0 ? '(sem observação)' : 'avaria registrada, sem observação'
   return `• ${fallbackLabel}${label}${photos}: ${detail}`

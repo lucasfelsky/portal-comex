@@ -12,6 +12,7 @@ import {
   mockBucket,
   mockFirestoreApi,
   mockLogger,
+  mockStorageApi,
   mockStorageFile,
   mocks,
 } from '../setup-triggers.js'
@@ -700,6 +701,24 @@ describe('buildCargoConferenceDamageLines / buildCargoConferenceDamageText', () 
     expect(ten.some((line) => line.startsWith('+ '))).toBe(false)
   })
 
+  it('rótulo do item: 120 caracteres passam inteiros; 121 são cortados em 120 com reticências (sem espaço sobrando)', () => {
+    const exact = damage.buildCargoConferenceDamageLines(summaryOf([item(1, { label: 'L'.repeat(120) })]))
+    expect(exact[1]).toBe(`• Item 1 · ${'L'.repeat(120)}: Caixas molhadas.`)
+    const long = damage.buildCargoConferenceDamageLines(summaryOf([item(1, { label: 'L'.repeat(300) })]))
+    expect(long[1]).toBe(`• Item 1 · ${'L'.repeat(120)}…: Caixas molhadas.`)
+    const spaced = damage.buildCargoConferenceDamageLines(summaryOf([item(1, { label: `${'M'.repeat(119)} ${'N'.repeat(50)}` })]))
+    expect(spaced[1]).toBe(`• Item 1 · ${'M'.repeat(119)}…: Caixas molhadas.`)
+  })
+
+  it('rótulo curto e o fallback "Item N" não mudam com o corte', () => {
+    const lines = damage.buildCargoConferenceDamageLines(
+      summaryOf([item(1, { label: 'POLIOL PE-3000' }), item(2, { label: 'Item 2' }), item(3, { label: 'a\n b' })])
+    )
+    expect(lines[1]).toBe('• Item 1 · POLIOL PE-3000: Caixas molhadas.')
+    expect(lines[2]).toBe('• Item 2: Caixas molhadas.')
+    expect(lines[3]).toBe('• Item 3 · a b: Caixas molhadas.')
+  })
+
   it('observação de 300 caracteres é cortada em 200 com reticências; 200 exatos não são cortados', () => {
     const long = damage.buildCargoConferenceDamageLines(summaryOf([item(1, { note: 'a'.repeat(300) })]))
     expect(long[1]).toBe(`• Item 1 · Desc 1: ${'a'.repeat(200)}…`)
@@ -1127,6 +1146,31 @@ describe('syncCargoConferenceDamage: espelho cargoReport/damage (S10-J2)', () =>
     mockStorageFile.delete.mockRejectedValue(Object.assign(new Error('boom'), { code: 403 }))
     await syncHandler(event(opened(), closed({ ...conferenceWith({ 'r-1': ['aaa'] }) })))
     expect(sets).toHaveLength(1)
+  })
+
+  it.each([
+    ['delete lança de forma síncrona (escapa do allSettled)', () => mockStorageFile.delete.mockImplementationOnce(() => {
+      throw Object.assign(new Error('x segredo-do-storage'), { code: 'internal' })
+    })],
+    ['bucket.file() lança de forma síncrona', () => mockBucket.file.mockImplementationOnce(() => {
+      throw Object.assign(new Error('x segredo-do-storage'), { code: 'internal' })
+    })],
+    ['getStorage().bucket() lança de forma síncrona (bucket padrão não configurado)', () => mockStorageApi.bucket.mockImplementationOnce(() => {
+      throw Object.assign(new Error('x segredo-do-storage'), { code: 'internal' })
+    })],
+  ])('limpeza: %s -> o espelho ainda é gravado e o warn leva só processId e código', async (_label, breakStorage) => {
+    const sets = mockDocs({ [CUR_PATH]: current })
+    breakStorage()
+    await expect(
+      syncHandler(event(opened(), closed({ ...conferenceWith({ 'r-1': ['aaa'] }) })))
+    ).resolves.toBeUndefined()
+    expect(sets).toHaveLength(1)
+    expect(sets[0].path).toBe(MIRROR_PATH)
+    expect(sets[0].data.itemCount).toBe(1)
+    const cleanupWarn = mockLogger.warn.mock.calls.find(([message]) => String(message).includes('limpar fotos'))
+    expect(cleanupWarn).toBeDefined()
+    expect(cleanupWarn[1]).toEqual({ processId: 'p1', error: 'internal' })
+    expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain('segredo-do-storage')
   })
 
   it('falha ao ler o current ou ao gravar o espelho: só log com processId e código (sem texto de avaria)', async () => {
