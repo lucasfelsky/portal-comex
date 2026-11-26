@@ -19,6 +19,10 @@ export const MAX_DOCUMENT_MB = 20
 // (envio e renome). A rule aceita ate 120; a UI e' mais restrita.
 export const MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH = 80
 
+// COA Original: lista de varios arquivos (1 slot por arquivo, sem rotacao).
+// O teto de 50 por processo é só do cliente: as rules não contam documentos.
+export const MAX_COA_FILES_PER_PROCESS = 50
+
 // D-1: 7 tipos de documento de nivel-processo/item/conteiner. `scope`
 // determina que campo extra a rule/UI exige (`itemId`/`containerId`/
 // `description`/`po`); `roles` = quem pode ENVIAR (nao confundir com quem
@@ -105,9 +109,9 @@ export function canDeleteDocument(profile, document) {
   return false
 }
 
-// Renomear o nome exibido: so admin, so documento adicional (`other`).
+// Renomear o nome exibido: so admin, so documento adicional (`other`) e COA.
 export function canRenameDocument(profile, document) {
-  return profile?.role === 'admin' && document?.type === 'other'
+  return profile?.role === 'admin' && (document?.type === 'other' || document?.type === 'coaOriginal')
 }
 
 function sanitizeSlotSegment(value) {
@@ -120,6 +124,11 @@ export function buildDocumentSlotKey(type, { itemId, containerId, documentId, ca
   if (type === 'fispq') return `fispq:${sanitizeSlotSegment(itemId)}`
   if (type === 'containerWash') return `containerWash:${sanitizeSlotSegment(containerId)}`
   if (type === 'other') return `other:${sanitizeSlotSegment(documentId)}`
+  // COA: 1 slot por arquivo. Sem `documentId` devolve o slot legado `coaOriginal`
+  // (so' para ler documentos antigos; o envio sempre passa o id).
+  if (type === 'coaOriginal' && sanitizeSlotSegment(documentId)) {
+    return `coaOriginal:${sanitizeSlotSegment(documentId)}`
+  }
   if (PO_SCOPED_TYPES.has(type) && category === 'CONSOLIDADO') {
     return `${type}:${sanitizeSlotSegment(po)}`
   }
@@ -198,6 +207,23 @@ export function getInvoicePackingListLink(groups, invoiceSlotKey) {
 
 export const DROP_MULTIPLE_FILES_MESSAGE = 'Solte apenas um arquivo por vez.'
 
+// COA Original: TODO documento `type == 'coaOriginal'`, qualquer `slotKey` (os
+// antigos tem o slot fixo `coaOriginal` e a "versao anterior" vira mais um item).
+// Ordem: envio mais antigo primeiro (`uploadedAt`), desempate por `id`.
+export function listCoaDocuments(documents) {
+  const list = (Array.isArray(documents) ? documents : []).filter((document) => document?.type === 'coaOriginal')
+  return list.sort((left, right) => {
+    const diff = toMillis(left?.uploadedAt) - toMillis(right?.uploadedAt)
+    if (diff !== 0) return diff
+    return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
+  })
+}
+
+// Nome exibido do COA: nome proprio (`description`) ou, vazio, o nome do arquivo.
+export function getCoaDisplayName(document) {
+  return String(document?.description ?? '').trim() || String(document?.name ?? '').trim() || 'COA'
+}
+
 // Arrastar e soltar: `true` quando o drag carrega arquivos (e nao texto/link).
 export function isFileDragEvent(event) {
   return Array.from(event?.dataTransfer?.types ?? []).includes('Files')
@@ -210,6 +236,15 @@ export function pickSingleDroppedFile(dataTransfer) {
   if (files.length === 0) return { file: null, error: 'empty' }
   if (files.length > 1) return { file: null, error: 'multiple' }
   return { file: files[0], error: null }
+}
+
+// Arrastar e soltar varios arquivos (COA): 0 -> 'empty'; mais que `max` ->
+// 'too-many' (recusa tudo, sem escolher arquivos arbitrarios).
+export function pickDroppedFiles(dataTransfer, max = MAX_COA_FILES_PER_PROCESS) {
+  const files = Array.from(dataTransfer?.files ?? [])
+  if (files.length === 0) return { files: [], error: 'empty' }
+  if (files.length > max) return { files: [], error: 'too-many' }
+  return { files, error: null }
 }
 
 // F18b-2 (E4): virgula decimal pt-BR ("1,2 MB", como no artboard). Unico
@@ -429,7 +464,7 @@ export function getUnlinkedDocumentGroups(groups, process, purchaseOrders) {
         const container = containers.find((candidate) => String(candidate?.id ?? '') === containerId)
         if (!container) reason = UNLINKED_REASON_CONTAINER_REMOVED
       }
-    } else if (slotKey.startsWith('other:')) {
+    } else if (slotKey.startsWith('other:') || slotKey.startsWith('coaOriginal:')) {
       reason = ''
     } else if (slotKey === 'bl' || slotKey === 'cargoReport' || slotKey === 'coaOriginal') {
       reason = ''

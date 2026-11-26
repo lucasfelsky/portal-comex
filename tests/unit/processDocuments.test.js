@@ -11,12 +11,14 @@ import {
   buildDocumentPendingFields,
   buildDocumentSlotKey,
   MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH,
+  MAX_COA_FILES_PER_PROCESS,
   canDeleteDocument,
   canRenameDocument,
   canUploadDocumentType,
   canViewProcessDocuments,
   canViewProcessHistory,
   formatDocumentSize,
+  getCoaDisplayName,
   getDocumentFileKindLabel,
   getDocumentIndexFromDocuments,
   getDocumentPendingFields,
@@ -29,7 +31,9 @@ import {
   groupDocumentsBySlot,
   isFileDragEvent,
   isProcessDocumentType,
+  listCoaDocuments,
   normalizeDocumentIndex,
+  pickDroppedFiles,
   pickSingleDroppedFile,
 } from '../../src/features/processes/processDocuments'
 import {
@@ -59,7 +63,11 @@ describe('DOCUMENT_TYPES', () => {
       scope: 'process',
       roles: ['admin'],
     })
+    // S11-A: 1 slot por arquivo (sem rotacao). Sem id so' devolve o slot legado.
+    expect(buildDocumentSlotKey('coaOriginal', { documentId: 'abc123' })).toBe('coaOriginal:abc123')
+    expect(buildDocumentSlotKey('coaOriginal', { documentId: '  abc123 ' })).toBe('coaOriginal:abc123')
     expect(buildDocumentSlotKey('coaOriginal')).toBe('coaOriginal')
+    expect(buildDocumentSlotKey('coaOriginal', { documentId: '' })).toBe('coaOriginal')
     expect(canUploadDocumentType('admin', 'coaOriginal')).toBe(true)
     expect(canUploadDocumentType('logistica', 'coaOriginal')).toBe(false)
     expect(canUploadDocumentType('tecnico', 'coaOriginal')).toBe(false)
@@ -170,6 +178,13 @@ describe('canRenameDocument', () => {
     expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'other' })).toBe(true)
     expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'bl' })).toBe(false)
     expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'invoice' })).toBe(false)
+  })
+
+  it('admin renomeia o COA (coaOriginal) igual ao documento adicional', () => {
+    expect(canRenameDocument({ role: 'admin', uid: 'admin-1' }, { type: 'coaOriginal' })).toBe(true)
+    expect(canRenameDocument({ role: 'logistica', uid: 'log-1' }, { type: 'coaOriginal' })).toBe(false)
+    expect(canRenameDocument({ role: 'tecnico', uid: 't-1' }, { type: 'coaOriginal' })).toBe(false)
+    expect(canRenameDocument({ role: 'faturamento', uid: 'f-1' }, { type: 'coaOriginal' })).toBe(false)
   })
 
   it('logistica e user nunca renomeiam, nem o proprio', () => {
@@ -761,6 +776,16 @@ describe('getUnlinkedDocumentGroups', () => {
     expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([])
   })
 
+  it('coaOriginal:<id> (COA novo, 1 slot por arquivo) e vinculado, nao vira "Tipo não reconhecido"', () => {
+    const groups = [
+      { slotKey: 'coaOriginal:abc123', primary: { id: 'd5' } },
+      { slotKey: 'coaOriginal:def456', primary: { id: 'd6' } },
+      { slotKey: 'coaOriginal', primary: { id: 'd4' }, previous: { id: 'd3' } },
+    ]
+    expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([])
+    expect(getUnlinkedDocumentGroups(groups, { category: 'CONSOLIDADO' }, [])).toEqual([])
+  })
+
   it('slotKey de tipo desconhecido -> "Tipo não reconhecido"', () => {
     const groups = [{ slotKey: 'unknown:1', primary: { id: 'd1' } }]
     expect(getUnlinkedDocumentGroups(groups, { category: 'FCL' }, [])).toEqual([
@@ -811,6 +836,73 @@ describe('pickSingleDroppedFile', () => {
     expect(pickSingleDroppedFile(undefined)).toEqual({ file: null, error: 'empty' })
     expect(pickSingleDroppedFile({ files: [a] })).toEqual({ file: a, error: null })
     expect(pickSingleDroppedFile({ files: [a, { name: 'b' }] })).toEqual({ file: null, error: 'multiple' })
+  })
+})
+
+describe('pickDroppedFiles (COA: varios arquivos)', () => {
+  it('0 -> empty; ate o maximo -> todos; acima -> too-many sem escolher nenhum', () => {
+    const a = { name: 'a' }
+    const b = { name: 'b' }
+    const c = { name: 'c' }
+    expect(pickDroppedFiles({ files: [] })).toEqual({ files: [], error: 'empty' })
+    expect(pickDroppedFiles(undefined)).toEqual({ files: [], error: 'empty' })
+    expect(pickDroppedFiles({ files: [a, b, c] })).toEqual({ files: [a, b, c], error: null })
+    expect(pickDroppedFiles({ files: [a, b, c] }, 3)).toEqual({ files: [a, b, c], error: null })
+    expect(pickDroppedFiles({ files: [a, b, c] }, 2)).toEqual({ files: [], error: 'too-many' })
+    expect(pickDroppedFiles({ files: [a] }, 0)).toEqual({ files: [], error: 'too-many' })
+  })
+
+  it('teto de 50 COAs por processo (so cliente)', () => {
+    expect(MAX_COA_FILES_PER_PROCESS).toBe(50)
+    const files = Array.from({ length: 51 }, (_, index) => ({ name: `f${index}` }))
+    expect(pickDroppedFiles({ files }).error).toBe('too-many')
+    expect(pickDroppedFiles({ files: files.slice(0, 50) }).error).toBeNull()
+  })
+})
+
+describe('listCoaDocuments / getCoaDisplayName', () => {
+  const coa = (id, uploadedAt, overrides = {}) => ({
+    id,
+    type: 'coaOriginal',
+    slotKey: `coaOriginal:${id}`,
+    name: `${id}.pdf`,
+    uploadedAt,
+    ...overrides,
+  })
+
+  it('so coaOriginal, do envio mais antigo para o mais novo, desempate por id', () => {
+    const documents = [
+      coa('c3', '2026-09-03T10:00:00.000Z'),
+      { id: 'b1', type: 'bl', slotKey: 'bl', uploadedAt: '2026-09-01T10:00:00.000Z' },
+      coa('c2', '2026-09-02T10:00:00.000Z'),
+      coa('c1b', '2026-09-01T10:00:00.000Z'),
+      coa('c1a', '2026-09-01T10:00:00.000Z'),
+    ]
+    expect(listCoaDocuments(documents).map((document) => document.id)).toEqual(['c1a', 'c1b', 'c2', 'c3'])
+  })
+
+  it('COA legado (slot fixo + versao anterior) entra na lista junto com os novos', () => {
+    const documents = [
+      coa('new1', '2026-10-05T10:00:00.000Z'),
+      coa('old-current', '2026-09-02T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+      coa('old-previous', '2026-09-01T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+    ]
+    expect(listCoaDocuments(documents).map((document) => document.id)).toEqual(['old-previous', 'old-current', 'new1'])
+  })
+
+  it('entrada invalida -> lista vazia e nao altera o array original', () => {
+    expect(listCoaDocuments(undefined)).toEqual([])
+    expect(listCoaDocuments(null)).toEqual([])
+    const original = [coa('b', '2026-09-02T10:00:00.000Z'), coa('a', '2026-09-01T10:00:00.000Z')]
+    listCoaDocuments(original)
+    expect(original.map((document) => document.id)).toEqual(['b', 'a'])
+  })
+
+  it('nome exibido: nome proprio (description) ou, vazio, o nome do arquivo', () => {
+    expect(getCoaDisplayName({ name: 'scan01.pdf', description: ' Lote 123 ' })).toBe('Lote 123')
+    expect(getCoaDisplayName({ name: 'scan01.pdf', description: '' })).toBe('scan01.pdf')
+    expect(getCoaDisplayName({ name: 'scan01.pdf' })).toBe('scan01.pdf')
+    expect(getCoaDisplayName(null)).toBe('COA')
   })
 })
 

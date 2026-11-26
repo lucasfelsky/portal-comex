@@ -1455,7 +1455,7 @@ describe('ProcessDocumentsPanel — Visualizar: PDF e imagem (S1)', () => {
   })
 })
 
-// COA Original (admin) + modo leitura dos perfis tecnico/faturamento.
+// COA Original (admin): lista de varios arquivos (S11-A), 1 slot por arquivo, sem versao anterior.
 describe('ProcessDocumentsPanel — COA Original (admin)', () => {
   const SHIPPED_FCL = { ...FCL_PROCESS, shippedAt: '2026-09-01' }
 
@@ -1463,19 +1463,36 @@ describe('ProcessDocumentsPanel — COA Original (admin)', () => {
     return screen.getByText(title, { selector: '.documents-row__label' }).closest('.documents-row')
   }
 
-  it('linha "COA Original" com Enviar e sem badge Pendente mesmo com embarque confirmado', async () => {
+  function docCoa(id, overrides = {}) {
+    return docBl({
+      id,
+      type: 'coaOriginal',
+      slotKey: `coaOriginal:${id}`,
+      name: `${id}.pdf`,
+      ...overrides,
+    })
+  }
+
+  async function coaItem(name) {
+    const label = await screen.findByText(name, { selector: '.coa-docs__name' })
+    return label.closest('.coa-docs__item')
+  }
+
+  it('linha "COA Original" com Enviar COAs e sem badge Pendente mesmo com embarque confirmado', async () => {
     render(<ProcessDocumentsPanel process={SHIPPED_FCL} profile={ADMIN_PROFILE} />)
     await waitForDocumentsLoaded()
 
     const row = rowOf('COA Original')
-    expect(within(row).getByRole('button', { name: 'Enviar' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Enviar COAs' })).toBeInTheDocument()
     expect(within(row).queryByText('Pendente')).not.toBeInTheDocument()
     expect(within(row).getByText('Não enviado')).toBeInTheDocument()
+    expect(screen.getByText('Nenhum COA enviado.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Arquivos de COA' })).not.toBeInTheDocument()
     // admin continua listando a subcolecao inteira (sem filtro por tipo)
     expect(mockListProcessDocuments).toHaveBeenCalledWith('p1')
   })
 
-  it('upload do COA usa type coaOriginal e slot unico; COA enviado nao entra nas pendencias', async () => {
+  it('upload do COA usa type coaOriginal (1 slot por arquivo); COA enviado nao entra nas pendencias', async () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
     const onPendingCountChange = vi.fn()
@@ -1485,16 +1502,184 @@ describe('ProcessDocumentsPanel — COA Original (admin)', () => {
     await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(7))
 
     const fileInput = rowOf('COA Original').querySelector('input[type="file"]')
+    expect(fileInput).toHaveAttribute('multiple')
     await user.upload(fileInput, new File(['x'], 'coa.pdf', { type: 'application/pdf' }))
     await waitFor(() =>
-      expect(mockUploadProcessDocument).toHaveBeenCalledWith('p1', expect.objectContaining({ type: 'coaOriginal' }))
+      expect(mockUploadProcessDocument).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ type: 'coaOriginal', actor: { uid: 'admin-1', name: 'Admin', role: 'admin' } })
+      )
     )
+    // Recarrega a lista depois do envio.
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalledTimes(2))
   })
 
-  it('logística vê a linha COA Original sem botão de envio', async () => {
+  it('varios arquivos de uma vez: um envio por arquivo, todos como coaOriginal', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const fileInput = rowOf('COA Original').querySelector('input[type="file"]')
+    await user.upload(fileInput, [
+      new File(['a'], 'a.pdf', { type: 'application/pdf' }),
+      new File(['b'], 'b.pdf', { type: 'application/pdf' }),
+    ])
+    await waitFor(() => expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2))
+    expect(mockUploadProcessDocument.mock.calls.map(([, input]) => [input.type, input.file.name])).toEqual([
+      ['coaOriginal', 'a.pdf'],
+      ['coaOriginal', 'b.pdf'],
+    ])
+    expect(await screen.findByText('2 COAs enviados.')).toBeInTheDocument()
+  })
+
+  it('lista COAs novos e o legado (slot fixo), do mais antigo ao mais novo, com contador de arquivos', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      docCoa('c2', { uploadedAt: '2026-09-03T10:00:00.000Z', description: 'Lote ABC' }),
+      docCoa('legado', { slotKey: 'coaOriginal', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      docCoa('c1', { uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+    await screen.findByRole('list', { name: 'Arquivos de COA' })
+
+    const names = Array.from(document.querySelectorAll('.coa-docs__name')).map((node) => node.textContent)
+    expect(names).toEqual(['legado.pdf', 'c1.pdf', 'Lote ABC'])
+    expect(within(rowOf('COA Original')).getByText('3 arquivos')).toBeInTheDocument()
+    expect(within(rowOf('COA Original')).queryByText('Não enviado')).not.toBeInTheDocument()
+    // Com nome proprio, o nome do arquivo aparece embaixo; sem nome proprio, nao repete.
+    expect(within(await coaItem('Lote ABC')).getByText('c2.pdf')).toBeInTheDocument()
+    expect(within(await coaItem('c1.pdf')).getAllByText('c1.pdf')).toHaveLength(1)
+  })
+
+  it('selo "N enviado" conta o COA uma vez (um por tipo): vários COAs novos, só o legado, e nenhum', async () => {
+    const OPEN_PROCESS = { id: 'p1', category: 'LCL' }
+    const cases = [
+      ['nenhum COA', [], null],
+      [
+        'dois COAs novos (coaOriginal:<id>)',
+        [
+          docCoa('c1', { uploadedAt: '2026-09-02T10:00:00.000Z' }),
+          docCoa('c2', { uploadedAt: '2026-09-03T10:00:00.000Z' }),
+        ],
+        '1 enviado',
+      ],
+      ['só o COA legado (slot fixo)', [docCoa('legado', { slotKey: 'coaOriginal' })], '1 enviado'],
+      [
+        'novo + legado',
+        [
+          docCoa('c1', { uploadedAt: '2026-09-02T10:00:00.000Z' }),
+          docCoa('legado', { slotKey: 'coaOriginal', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+        ],
+        '1 enviado',
+      ],
+    ]
+    for (const [label, documents, expected] of cases) {
+      mockListProcessDocuments.mockResolvedValue(documents)
+      const { unmount } = render(<ProcessDocumentsPanel process={OPEN_PROCESS} profile={ADMIN_PROFILE} />)
+      await waitForDocumentsLoaded()
+      if (expected) {
+        expect(await screen.findByText(expected), label).toBeInTheDocument()
+      } else {
+        expect(screen.queryByText(/^\d+ enviados?$/), label).not.toBeInTheDocument()
+      }
+      expect(screen.queryByText('2 enviados'), label).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('baixar um COA chama o download com (processId, docId)', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockResolvedValue(new Blob(['x']))
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1'), docCoa('c2', { uploadedAt: '2026-09-02T10:00:00.000Z' })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(await screen.findByRole('button', { name: 'Baixar c2.pdf' }))
+    await waitFor(() => expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'c2'))
+    expect(mockSaveBlobAsFile).toHaveBeenCalled()
+  })
+
+  it('erro ao baixar aparece na linha do COA', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockRejectedValue({ code: 'permission-denied' })
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1')])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await user.click(await screen.findByRole('button', { name: 'Baixar c1.pdf' }))
+    expect(await screen.findByText('Não foi possível baixar o documento.')).toBeInTheDocument()
+  })
+
+  it('admin renomeia o COA: abre o dialogo com o nome atual e grava só a description', async () => {
+    const user = userEvent.setup()
+    mockRenameAdditionalDocument.mockResolvedValue(undefined)
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1')])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await pickAction(user, await coaItem('c1.pdf'), 'Renomear c1.pdf')
+    const dialog = await screen.findByRole('dialog', { name: 'Renomear documento' })
+    const input = within(dialog).getByLabelText('Nome do documento')
+    await waitFor(() => expect(input).toHaveFocus())
+    expect(input).toHaveValue('c1.pdf')
+
+    await user.clear(input)
+    await user.type(input, 'Lote 123{Enter}')
+    await waitFor(() =>
+      expect(mockRenameAdditionalDocument).toHaveBeenCalledWith('p1', 'c1', 'Lote 123', { uid: 'admin-1' })
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('admin exclui o COA depois de confirmar; só aquele arquivo', async () => {
+    const user = userEvent.setup()
+    mockDeleteProcessDocument.mockResolvedValue(undefined)
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1'), docCoa('c2', { uploadedAt: '2026-09-02T10:00:00.000Z' })])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await pickAction(user, await coaItem('c2.pdf'), 'Excluir c2.pdf')
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }))
+    await waitFor(() => expect(mockDeleteProcessDocument).toHaveBeenCalledWith('p1', 'c2'))
+    expect(mockDeleteProcessDocument).toHaveBeenCalledTimes(1)
+  })
+
+  it('Visualizar abre o diálogo com título "COA Original" e baixa o blob do arquivo escolhido', async () => {
+    const user = userEvent.setup()
+    mockDownloadProcessDocumentBlob.mockReturnValue(new Promise(() => {}))
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1')])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={ADMIN_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    await pickAction(user, await coaItem('c1.pdf'), 'Visualizar c1.pdf')
+    const dialog = await screen.findByRole('dialog', { name: 'COA Original' })
+    expect(dialog).toBeInTheDocument()
+    expect(mockDownloadProcessDocumentBlob).toHaveBeenCalledWith('p1', 'c1')
+    expect(mockSaveBlobAsFile).not.toHaveBeenCalled()
+  })
+
+  it('logística vê a lista com Baixar e Visualizar, sem envio, Renomear nem Excluir', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([docCoa('c1')])
     render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
     await waitForDocumentsLoaded()
-    expect(within(rowOf('COA Original')).queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument()
+
+    const item = await coaItem('c1.pdf')
+    expect(within(rowOf('COA Original')).queryByRole('button', { name: /^Enviar|^Adicionar COAs/ })).not.toBeInTheDocument()
+    expect(rowOf('COA Original').querySelector('input[type="file"]')).toBeNull()
+    expect(within(item).getByRole('button', { name: 'Baixar c1.pdf' })).toBeInTheDocument()
+    const sheet = await openActions(user, item)
+    expect(sheet.getByRole('button', { name: 'Visualizar c1.pdf' })).toBeInTheDocument()
+    expect(sheet.queryByRole('button', { name: /Renomear/ })).not.toBeInTheDocument()
+    expect(sheet.queryByRole('button', { name: /Excluir/ })).not.toBeInTheDocument()
+  })
+
+  it('logística sem COA: sem botão de envio', async () => {
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={LOGISTICS_PROFILE} />)
+    await waitForDocumentsLoaded()
+    expect(within(rowOf('COA Original')).queryByRole('button', { name: /^Enviar/ })).not.toBeInTheDocument()
   })
 })
 
@@ -1533,8 +1718,27 @@ describe.each(READER_ROLES)('ProcessDocumentsPanel — modo leitura (%s)', (role
     expect(sheet.getByRole('button', { name: 'Visualizar carga.pdf' })).toBeInTheDocument()
     expect(sheet.queryByRole('button', { name: /Substituir|Excluir|Renomear/ })).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
-    // COA Original sem nenhuma outra ação: sem menu "Ações".
-    expect(within(docRowOf('COA Original')).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
+    // COA Original (S11-A): cada arquivo da lista tem Baixar direto e o menu só com Visualizar (PDF).
+    const coaItem = screen.getByText('coa.pdf', { selector: '.coa-docs__name' }).closest('.coa-docs__item')
+    const coaSheet = await openActions(user, coaItem)
+    expect(coaSheet.getByRole('button', { name: 'Visualizar coa.pdf' })).toBeInTheDocument()
+    expect(coaSheet.queryByRole('button', { name: /Renomear|Excluir|Substituir/ })).not.toBeInTheDocument()
+  })
+
+  it('vários COAs (novos e legado) aparecem todos, com Baixar em cada um', async () => {
+    mockListProcessDocuments.mockResolvedValue([
+      readerDoc('coaOriginal', { id: 'r-1', slotKey: 'coaOriginal', name: 'antigo.pdf', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+      readerDoc('coaOriginal', { id: 'r-2', slotKey: 'coaOriginal:r-2', name: 'novo.pdf', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+    ])
+    render(<ProcessDocumentsPanel process={FCL_PROCESS} profile={READER_PROFILE} />)
+    await waitForDocumentsLoaded()
+
+    const names = Array.from(document.querySelectorAll('.coa-docs__name')).map((node) => node.textContent)
+    expect(names).toEqual(['antigo.pdf', 'novo.pdf'])
+    expect(screen.getByRole('button', { name: 'Baixar antigo.pdf' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Baixar novo.pdf' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Enviar|^Adicionar COAs/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.coa-docs input[type="file"]')).toBeNull()
   })
 
   it('sem Enviar/Substituir/Excluir/Renomear, sem adicionar outro e sem resumo/badge de pendente', async () => {

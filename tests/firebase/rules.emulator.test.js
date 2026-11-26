@@ -2747,20 +2747,34 @@ describeEmulator('firestore.rules (emulador)', () => {
       })
     })
 
-    describe('coaOriginal (D-2/D-3)', () => {
+    // S11-A: o COA vira LISTA de arquivos - 1 slot por arquivo (`coaOriginal:<id>`), sem rotacao.
+    // O slot fixo legado (`coaOriginal`) deixa de ser aceito no create, mas os docs antigos
+    // continuam legiveis/apagaveis; admin renomeia (description) igual ao documento adicional.
+    describe('coaOriginal (D-1/D-2/D-3)', () => {
       const coaFields = (overrides = {}) =>
         baseFields({
           type: 'coaOriginal',
-          slotKey: 'coaOriginal',
+          slotKey: 'coaOriginal:d1',
           storagePath: 'processes/p1/documents/coaOriginal/1-admin-1-coa.pdf',
           ...overrides,
         })
+      const renameUpdate = (overrides = {}) => ({
+        description: 'Lote ABC-123',
+        descriptionUpdatedAt: serverTimestamp(),
+        descriptionUpdatedById: 'admin-1',
+        ...overrides,
+      })
+      const coaPath = 'processes/p1/documents/d1'
+      const staffDb = (role, uid = `${role}-1`) =>
+        testEnv
+          .authenticatedContext(uid, { email: `${role}@sqquimica.com`, role, status: 'Ativo', name: 'Equipe' })
+          .firestore()
 
-      it('admin cria coaOriginal', async () => {
-        await assertSucceeds(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields()))
+      it('admin cria coaOriginal (slot coaOriginal:<id>)', async () => {
+        await assertSucceeds(setDoc(doc(admin('admin-1'), coaPath), coaFields()))
       })
 
-      it('admin cria coaOriginal em processo CONSOLIDADO e LCL (1 slot por processo)', async () => {
+      it('admin cria coaOriginal em processo CONSOLIDADO e LCL', async () => {
         await assertSucceeds(
           setDoc(
             doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
@@ -2773,6 +2787,48 @@ describeEmulator('firestore.rules (emulador)', () => {
             coaFields({ storagePath: 'processes/p-lcl/documents/coaOriginal/1-admin-1-coa.pdf' })
           )
         )
+      })
+
+      it('2 COAs no mesmo processo passam (1 slot por arquivo, nada e rotacionado)', async () => {
+        await assertSucceeds(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields()))
+        await assertSucceeds(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p1/documents/d2'),
+            coaFields({
+              slotKey: 'coaOriginal:d2',
+              storagePath: 'processes/p1/documents/coaOriginal/2-admin-1-coa.pdf',
+            })
+          )
+        )
+      })
+
+      it('aceita o id do slot com 1 e com 64 caracteres alfanumericos', async () => {
+        await assertSucceeds(
+          setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey: 'coaOriginal:a' }))
+        )
+        await assertSucceeds(
+          setDoc(
+            doc(admin('admin-1'), 'processes/p1/documents/d2'),
+            coaFields({ slotKey: `coaOriginal:${'Z9'.repeat(32)}` })
+          )
+        )
+      })
+
+      it("slotKey invalido falha: 'coaOriginal' (legado), 'coaOriginal:', com barra, hifen, 65 caracteres, outro tipo", async () => {
+        const invalidSlots = [
+          'coaOriginal',
+          'coaOriginal:',
+          'coaOriginal:a/b',
+          'coaOriginal:a-b',
+          'coaOriginal:a b',
+          `coaOriginal:${'x'.repeat(65)}`,
+          'cargoReport',
+          'bl',
+          'other:d1',
+        ]
+        for (const slotKey of invalidSlots) {
+          await assertFails(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey })))
+        }
       })
 
       it('logistica NAO cria coaOriginal', async () => {
@@ -2789,15 +2845,6 @@ describeEmulator('firestore.rules (emulador)', () => {
         )
       })
 
-      it('coaOriginal com slotKey errado falha', async () => {
-        await assertFails(
-          setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey: 'coaOriginal:x' }))
-        )
-        await assertFails(
-          setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields({ slotKey: 'cargoReport' }))
-        )
-      })
-
       it('coaOriginal com storagePath de outro tipo falha', async () => {
         await assertFails(
           setDoc(
@@ -2807,11 +2854,98 @@ describeEmulator('firestore.rules (emulador)', () => {
         )
       })
 
-      it('admin e logistica leem coaOriginal; usuario comum nao', async () => {
-        await seed((db) => setDoc(doc(db, 'processes/p1/documents/coa1'), coaFields({ uploadedAt: new Date() })))
-        await assertSucceeds(getDoc(doc(admin('admin-1'), 'processes/p1/documents/coa1')))
-        await assertSucceeds(getDoc(doc(logistics('log-1'), 'processes/p1/documents/coa1')))
-        await assertFails(getDoc(doc(approvedUser('user-1'), 'processes/p1/documents/coa1')))
+      it('admin e logistica leem coaOriginal (novo e legado); usuario comum nao', async () => {
+        await seed(async (db) => {
+          await setDoc(doc(db, 'processes/p1/documents/coa1'), coaFields({ slotKey: 'coaOriginal:coa1', uploadedAt: new Date() }))
+          await setDoc(doc(db, 'processes/p1/documents/legado'), coaFields({ slotKey: 'coaOriginal', uploadedAt: new Date() }))
+        })
+        for (const id of ['coa1', 'legado']) {
+          await assertSucceeds(getDoc(doc(admin('admin-1'), `processes/p1/documents/${id}`)))
+          await assertSucceeds(getDoc(doc(logistics('log-1'), `processes/p1/documents/${id}`)))
+          await assertFails(getDoc(doc(approvedUser('user-1'), `processes/p1/documents/${id}`)))
+        }
+      })
+
+      it('tecnico e faturamento continuam lendo coaOriginal (novo e legado)', async () => {
+        await seed(async (db) => {
+          await setDoc(doc(db, 'processes/p1/documents/coa1'), coaFields({ slotKey: 'coaOriginal:coa1', uploadedAt: new Date() }))
+          await setDoc(doc(db, 'processes/p1/documents/legado'), coaFields({ slotKey: 'coaOriginal', uploadedAt: new Date() }))
+        })
+        for (const role of ['tecnico', 'faturamento']) {
+          for (const id of ['coa1', 'legado']) {
+            await assertSucceeds(getDoc(doc(staffDb(role), `processes/p1/documents/${id}`)))
+          }
+        }
+      })
+
+      describe('renomear (description + carimbos)', () => {
+        it('admin renomeia o COA novo e o legado', async () => {
+          await seed(async (db) => {
+            await setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() }))
+            await setDoc(doc(db, 'processes/p1/documents/legado'), coaFields({ slotKey: 'coaOriginal', uploadedAt: new Date() }))
+          })
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), coaPath), renameUpdate()))
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/legado'), renameUpdate()))
+        })
+
+        it('aceita description com 1 e com 120 caracteres; rejeita vazia e com 121', async () => {
+          await seed((db) => setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() })))
+          const ref = doc(admin('admin-1'), coaPath)
+          await assertSucceeds(updateDoc(ref, renameUpdate({ description: 'A' })))
+          await assertSucceeds(updateDoc(ref, renameUpdate({ description: 'x'.repeat(120) })))
+          await assertFails(updateDoc(ref, renameUpdate({ description: '' })))
+          await assertFails(updateDoc(ref, renameUpdate({ description: 'x'.repeat(121) })))
+        })
+
+        it.each(['logistica', 'tecnico', 'faturamento'])('%s NAO renomeia o COA', async (role) => {
+          await seed((db) => setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() })))
+          await assertFails(updateDoc(doc(staffDb(role), coaPath), renameUpdate({ descriptionUpdatedById: `${role}-1` })))
+        })
+
+        it('usuario comum e anonimo NAO renomeiam o COA', async () => {
+          await seed((db) => setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() })))
+          await assertFails(updateDoc(doc(approvedUser('user-1'), coaPath), renameUpdate({ descriptionUpdatedById: 'user-1' })))
+          await assertFails(updateDoc(doc(anon(), coaPath), renameUpdate()))
+        })
+
+        it('renomear junto com name, storagePath, slotKey, type ou uploadedById falha', async () => {
+          await seed((db) => setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() })))
+          const ref = doc(admin('admin-1'), coaPath)
+          await assertFails(updateDoc(ref, renameUpdate({ name: 'outro.pdf' })))
+          await assertFails(
+            updateDoc(ref, renameUpdate({ storagePath: 'processes/p1/documents/coaOriginal/9-admin-1-outro.pdf' }))
+          )
+          await assertFails(updateDoc(ref, renameUpdate({ slotKey: 'coaOriginal:outro' })))
+          await assertFails(updateDoc(ref, renameUpdate({ type: 'other' })))
+          await assertFails(updateDoc(ref, renameUpdate({ uploadedById: 'admin-2' })))
+        })
+
+        it('update sem carimbos (so description) ou com descriptionUpdatedAt fora do request.time falha', async () => {
+          await seed((db) => setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() })))
+          const ref = doc(admin('admin-1'), coaPath)
+          await assertFails(updateDoc(ref, { description: 'Lote ABC-123' }))
+          await assertFails(updateDoc(ref, renameUpdate({ descriptionUpdatedAt: new Date('2020-01-01') })))
+          await assertFails(updateDoc(ref, renameUpdate({ descriptionUpdatedById: 'admin-2' })))
+        })
+
+        it('o mesmo update continua falhando em BL (so other e coaOriginal renomeiam)', async () => {
+          await seed((db) => setDoc(doc(db, 'processes/p1/documents/b1'), baseFields({ uploadedAt: new Date() })))
+          await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/b1'), renameUpdate()))
+        })
+      })
+
+      describe('excluir', () => {
+        it('admin exclui o COA novo e o legado; logistica, tecnico e faturamento NAO', async () => {
+          await seed(async (db) => {
+            await setDoc(doc(db, coaPath), coaFields({ uploadedAt: new Date() }))
+            await setDoc(doc(db, 'processes/p1/documents/legado'), coaFields({ slotKey: 'coaOriginal', uploadedAt: new Date() }))
+          })
+          for (const role of ['logistica', 'tecnico', 'faturamento']) {
+            await assertFails(deleteDoc(doc(staffDb(role), coaPath)))
+          }
+          await assertSucceeds(deleteDoc(doc(admin('admin-1'), coaPath)))
+          await assertSucceeds(deleteDoc(doc(admin('admin-1'), 'processes/p1/documents/legado')))
+        })
       })
     })
 
