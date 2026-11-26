@@ -2049,6 +2049,52 @@ describe('ProcessDocumentsPanel — COA por PO (consolidado, S11-D2)', () => {
   })
 })
 
+// Selo da leitura do COA (D-20) e' so' do admin: o painel e' quem decide (`enabled: role === 'admin'`), entao o teste
+// precisa passar pelo painel real, com COA existente e uma leitura que MOSTRARIA o selo se fosse consultada.
+describe('ProcessDocumentsPanel — selo da leitura do COA só para admin (D-20)', () => {
+  const CONS_PROCESS = { id: 'p2', category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-1' }] }
+  const coaDoc = (overrides = {}) =>
+    docBl({ id: 'c1', type: 'coaOriginal', slotKey: 'coaOriginal:c1', name: 'c1.pdf', poNumber: 'PO-1', ...overrides })
+  const PROFILES = [
+    ['logística', LOGISTICS_PROFILE],
+    ['técnico', { uid: 'tec-1', name: 'Téc', role: 'tecnico' }],
+    ['faturamento', { uid: 'fat-1', name: 'Fat', role: 'faturamento' }],
+  ]
+
+  it.each(
+    PROFILES.flatMap(([label, profile]) => [
+      [`${label} em FCL`, profile, FCL_PROCESS, 'p1'],
+      [`${label} em consolidado`, profile, CONS_PROCESS, 'p2'],
+    ])
+  )('%s: com COA existente nao le os resultados nem mostra selo', async (_label, profile, process) => {
+    mockListCoaReads.mockResolvedValue({
+      c1: { status: 'done', documentType: 'coa', certificates: [{}], error: null },
+    })
+    mockListProcessDocuments.mockResolvedValue([coaDoc()])
+    render(<ProcessDocumentsPanel process={process} profile={profile} variant="desktop" />)
+    await waitForDocumentsLoaded()
+    expect(await screen.findByRole('button', { name: 'Baixar c1.pdf' })).toBeInTheDocument()
+    // da' tempo de o efeito (se estivesse ligado) consultar e o selo aparecer
+    await waitFor(() => expect(mockListProcessDocuments).toHaveBeenCalled())
+    expect(mockListCoaReads).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['FCL', FCL_PROCESS, 'p1'],
+    ['consolidado', CONS_PROCESS, 'p2'],
+  ])('admin em %s: le uma vez e mostra o selo', async (_label, process, processId) => {
+    mockListCoaReads.mockResolvedValue({
+      c1: { status: 'done', documentType: 'coa', certificates: [{}], error: null },
+    })
+    mockListProcessDocuments.mockResolvedValue([coaDoc()])
+    render(<ProcessDocumentsPanel process={process} profile={ADMIN_PROFILE} variant="desktop" />)
+    expect(await screen.findByText('Lido · 1 certificado')).toBeInTheDocument()
+    expect(mockListCoaReads).toHaveBeenCalledTimes(1)
+    expect(mockListCoaReads).toHaveBeenCalledWith(processId)
+  })
+})
+
 describe.each(READER_ROLES)('ProcessDocumentsPanel — modo leitura (%s)', (role) => {
   const READER_PROFILE = { uid: `${role}-1`, name: 'Leitor', role }
   const SHIPPED_CONSOLIDATED = {

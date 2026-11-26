@@ -548,7 +548,8 @@ describe('useCoaReadBadges + card - selo da leitura automática (S11-C/D-9, só 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('logística, técnico e faturamento nunca leem os resultados nem veem o selo', async () => {
+  // So' o hook: quem decide "so' admin" e' o painel (coberto em tests/ui/ProcessDocumentsPanel.test.jsx).
+  it('o hook com enabled=false (perfil que não é admin) não consulta nem mostra selo', async () => {
     mockListCoaReads.mockResolvedValue({ c1: read({ certificates: [{}] }) })
     for (const profile of [LOGISTICA, TECNICO, FATURAMENTO]) {
       const { unmount } = render(<CardWithBadges profile={profile} documents={[coa('c1')]} />)
@@ -563,9 +564,20 @@ describe('useCoaReadBadges + card - selo da leitura automática (S11-C/D-9, só 
     expect(mockListCoaReads).not.toHaveBeenCalled()
   })
 
-  it('o card nao le os resultados sozinho: sem o hook (badges vazios) nao ha consulta nem selo', () => {
+  it('o card sozinho (sem o hook do painel) nunca consulta os resultados: so mostra os selos que recebe', () => {
     renderList({ documents: [coa('c1')] })
     expect(mockListCoaReads).not.toHaveBeenCalled()
     expect(screen.queryByText(/Lido|Falhou/)).not.toBeInTheDocument()
+  })
+
+  it('o card mostra o selo que recebe por prop, no arquivo certo, sem consultar nada', () => {
+    renderList({
+      documents: [coa('c1'), coa('c2', { uploadedAt: '2026-09-02T10:00:00.000Z' })],
+      badges: { c2: { text: 'Lido · 1 certificado', tone: ' inline-badge--ok' } },
+    })
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[1]).getByText('Lido · 1 certificado')).toBeInTheDocument()
+    expect(within(items[0]).queryByText(/Lido/)).not.toBeInTheDocument()
+    expect(mockListCoaReads).not.toHaveBeenCalled()
   })
 })
