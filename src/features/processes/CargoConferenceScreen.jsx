@@ -88,6 +88,9 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const aboveNav = useMediaQuery('(max-width: 720px)')
   const [tab, setTab] = useState('itens')
   const [onlyPending, setOnlyPending] = useState(false)
+  // Itens "fixados" no filtro "Só pendentes": o que a pessoa tocou/editou nesta sessão de tela fica visível mesmo depois
+  // de deixar de ser pendente (o cartão não some sob o dedo). Zera ao trocar o filtro e ao sair da tela; só afeta a lista.
+  const [pinnedIds, setPinnedIds] = useState(() => new Set())
   const tabRefs = useRef({})
   const baseId = useId()
   const noteId = `${baseId}-note`
@@ -96,6 +99,11 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
   const { rows, conference, stage } = screen
   const isClosed = stage === CARGO_STAGE.done
+  const pinRow = (rowId) => setPinnedIds((current) => (current.has(rowId) ? current : new Set(current).add(rowId)))
+  const withPin = (action) => (rowId, ...args) => {
+    pinRow(rowId)
+    return action(rowId, ...args)
+  }
 
   const groups = useMemo(
     () => (purchaseOrders.length > 0 ? groupCargoRowsByPurchaseOrder(rows, purchaseOrders) : []),
@@ -166,6 +174,11 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
     )
   }
 
+  function handleOnlyPendingChange(event) {
+    setOnlyPending(event.target.checked)
+    setPinnedIds(new Set())
+  }
+
   function handleTabKeyDown(event) {
     const index = TABS.findIndex((item) => item.value === tab)
     let next = -1
@@ -189,6 +202,10 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const feedbackAction =
     feedback?.action ?? (feedback?.kind === 'conflict' ? { label: 'Recarregar', run: screen.reload } : null)
 
+  // Selo neutro "A contar": só quando o COMEX informou o total da carga (sem total não há contra o quê contar) e dá
+  // para contar (conferência editável); fechada ou só leitura, o item nunca contado segue "Sem contagem".
+  const awaitingCount = screen.canSave && screen.pallets?.expected !== null && screen.pallets?.expected !== undefined
+
   function renderCard(row, rowIndex) {
     return (
       <CargoConferenceItemCard
@@ -202,13 +219,15 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         issue={readCargoRowIssue(conference, row.id)}
         hasIssue={hasCargoRowIssue(conference, row.id)}
         labels={conference.labelsByRowId?.[row.id]}
+        awaitingCount={awaitingCount}
         editable={screen.canSave}
         photoTools={screen.photoTools}
         idPrefix={`${baseId}-r${rowIndex}`}
-        onToggleOk={screen.toggleOk}
-        onStepPallets={screen.stepPallets}
-        onIssueChange={screen.setIssue}
-        onLabelChange={screen.setLabel}
+        onToggleOk={withPin(screen.toggleOk)}
+        onStepPallets={withPin(screen.stepPallets)}
+        onIssueChange={withPin(screen.setIssue)}
+        onLabelChange={withPin(screen.setLabel)}
+        onPin={pinRow}
       />
     )
   }
@@ -225,10 +244,13 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   })
   const isPending = (row) => !isCargoRowConferred(conference, row.id)
   const showOnlyPending = screen.canSave && onlyPending
+  // Com o filtro ativo, o item fixado (tocado nesta sessão) continua na lista; os contadores seguem o dado real.
+  const isVisible = (row) => !showOnlyPending || isPending(row) || pinnedIds.has(row.id)
+  const allConferred = showOnlyPending && rows.length > 0 && !rows.some(isPending)
   let itemsContent
   if (rows.length === 0) {
     itemsContent = <div className="ccf-note">Este relatório não tem itens.</div>
-  } else if (showOnlyPending && !rows.some(isPending)) {
+  } else if (allConferred && !rows.some(isVisible)) {
     itemsContent = (
       <div className="ccf-note ccf-note--ok" role="status">
         Todos os itens estão conferidos.
@@ -251,13 +273,13 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
               </small>
             </div>
             {group.rows
-              .filter(({ row }) => !showOnlyPending || isPending(row))
+              .filter(({ row }) => isVisible(row))
               .map(({ row, rowIndex }) => renderCard(row, rowIndex))}
           </section>
         )
       })
   } else {
-    itemsContent = rows.map((row, rowIndex) => (showOnlyPending && !isPending(row) ? null : renderCard(row, rowIndex)))
+    itemsContent = rows.map((row, rowIndex) => (isVisible(row) ? renderCard(row, rowIndex) : null))
   }
 
   const saveDisabled = screen.isBusy || !screen.dirty || screen.isUploading
@@ -354,9 +376,14 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
                   Marcar todos OK
                 </button>
                 <label className="ccf-check">
-                  <input type="checkbox" checked={onlyPending} onChange={(event) => setOnlyPending(event.target.checked)} />
+                  <input type="checkbox" checked={onlyPending} onChange={handleOnlyPendingChange} />
                   Só pendentes
                 </label>
+              </div>
+            ) : null}
+            {allConferred && rows.some(isVisible) ? (
+              <div className="ccf-note ccf-note--ok" role="status">
+                Todos os itens estão conferidos.
               </div>
             ) : null}
             {itemsContent}

@@ -27260,3 +27260,11 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .cdc .secondary-button {
   min-height: 44px;
 }
+
+/* S10-I (polimento): contador de pallets sem zoom por toque duplo e sem atraso de toque no celular (botoes e numero). */
+.ccf-pal__btn,
+.ccf-pal__num,
+.crf-pal__btn,
+.crf-pal__num {
+  touch-action: manipulation;
+}
