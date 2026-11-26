@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Icon from '../../components/Icon'
 import Skeleton from '../../components/Skeleton'
 import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext'
+import useMediaQuery from '../../hooks/useMediaQuery'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
 import {
   cargoRowPallets,
@@ -41,9 +42,11 @@ const NOTES = {
 }
 
 // Barra inferior fixa por portal no body: `position: fixed` não pode ficar dentro do `.page-fade` (transform).
-function renderActionBar(children) {
+// `aboveNav` (celular, <= 720 px): a barra de navegação de baixo existe e a barra de ações fica EM CIMA dela, sem
+// sobreposição; acima de 720 px (paisagem, tablet) não há barra de navegação e a barra de ações cola na base.
+function renderActionBar(children, aboveNav) {
   return createPortal(
-    <div className="ccf-actionbar" role="group" aria-label="Ações da conferência">
+    <div className={`ccf-actionbar${aboveNav ? ' ccf-actionbar--above-nav' : ''}`} role="group" aria-label="Ações da conferência">
       {children}
     </div>,
     document.body
@@ -79,6 +82,7 @@ function ProgressLine({ done, total, process, pallets }) {
 export default function CargoConferenceScreen({ process, profile, canSeeName, onBack }) {
   const screen = useCargoConferenceScreen({ process, profile })
   const { requestLeave } = useUnsavedChanges()
+  const aboveNav = useMediaQuery('(max-width: 720px)')
   const [tab, setTab] = useState('itens')
   const [onlyPending, setOnlyPending] = useState(false)
   const tabRefs = useRef({})
@@ -151,7 +155,8 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         {renderActionBar(
           <button type="button" className="secondary-button" onClick={onBack}>
             Voltar à lista
-          </button>
+          </button>,
+          aboveNav
         )}
       </div>
     )
@@ -363,7 +368,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         )}
       </div>
 
-      {renderActionBar(actions)}
+      {renderActionBar(actions, aboveNav)}
     </div>
   )
 }
