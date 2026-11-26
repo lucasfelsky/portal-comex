@@ -180,6 +180,32 @@ describe('barra de baixo: logística (Conferência no lugar de Notícias)', () =
   })
 })
 
+describe('barra de baixo: ícone e selo da aba Conferência', () => {
+  it('o ícone é a prancheta com check, na mesma grade e no mesmo traço dos outros itens', () => {
+    mockCount.mockImplementation(() => 3)
+    const { container } = renderAt('/', 'logistica')
+    const svgs = [...bar(container).querySelectorAll('.mobile-bottom-nav__item > svg')]
+    expect(svgs).toHaveLength(5)
+    const conference = svgs[2]
+    for (const svg of svgs) {
+      expect(svg).toHaveAttribute('viewBox', '0 0 24 24')
+      expect(svg).toHaveAttribute('stroke-width', conference.getAttribute('stroke-width'))
+      expect(svg).toHaveAttribute('stroke-linecap', 'round')
+    }
+    // Prancheta: presilha (rect), corpo e visto (2 paths); o glifo antigo (visto solto + 4 traços) era 1 path só.
+    expect(conference.querySelectorAll('rect')).toHaveLength(1)
+    expect(conference.querySelectorAll('path')).toHaveLength(2)
+  })
+
+  it('o selo fica no canto superior direito do ícone, fora do desenho (mesma regra para Conferência, Avisos e Menu)', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/mobile-redesign.css'), 'utf8').replace(/\r\n/g, '\n')
+    const rule = /\.mobile-bottom-nav \.mobile-bottom-nav__badge \{([^}]*)\}/.exec(css)
+    expect(rule).not.toBeNull()
+    expect(rule[1]).toMatch(/top:\s*4px;/)
+    expect(rule[1]).toMatch(/left:\s*calc\(50% \+ 10px\);/)
+  })
+})
+
 describe('barra de baixo: admin e demais papéis (sem mudança)', () => {
   it('admin: Notícias na barra, Menu com o badge e o número no nome, sem aba Conferência', () => {
     mockCount.mockImplementation(() => 3)

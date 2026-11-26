@@ -2623,11 +2623,12 @@
     animation: m-bump 0.5s var(--m-spring);
   }
 
-  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). */
+  /* Badge: fica montado e sai por escala (0 nao lidas = --gone). Canto superior direito do icone (10px do centro, 4px do
+     topo), fora do desenho: com 6px o selo cobria a ponta do glifo da Conferencia e o ombro do sino. */
   .mobile-bottom-nav .mobile-bottom-nav__badge {
-    top: 6px;
+    top: 4px;
     right: auto;
-    left: calc(50% + 6px);
+    left: calc(50% + 10px);
     min-width: 17px;
     height: 17px;
     padding: 0 4px;

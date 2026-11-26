@@ -400,8 +400,15 @@ const ICONS = {
       <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" />
     </>
   ),
-  // S9-F: aba Conferência (traço do mock aprovado).
-  'clipboard-check': <path d="M9 11l3 3 7-8M5 5h9M5 10h2M5 15h7M5 20h14" />,
+  // S9-F: aba Conferência. Prancheta com check, fechada (corpo + presilha + visto) e centrada na grade de 24: o glifo antigo
+  // (visto solto + 4 traços) ficava desbalanceado e o selo do contador cobria a ponta do visto.
+  'clipboard-check': (
+    <>
+      <rect x="8.5" y="2.5" width="7" height="3.5" rx="1" />
+      <path d="M15.5 4.5H18a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h2.5" />
+      <path d="m8.8 13.4 2.4 2.4 4-4.4" />
+    </>
+  ),
   // S10-J1b: fotos de avaria por item (traços do mock aprovado).
   camera: (
     <>
