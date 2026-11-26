@@ -26,7 +26,10 @@
 //   conferencia fechada, aviso proprio; demais = fechamento do COMEX, aviso de
 //   hoje). Trigger SEPARADO: declara os secrets SMTP
 //   e sua falha nao derruba os demais. Logica pura em
-//   `./cargoReportNotification.js`.
+//   `./cargoReportNotification.js`. S10-J2: no estagio da conferencia, (1) trava contra aviso duplicado
+//   (transacao em `cargoReport/conferenceNotice`, por `documentId`), (2) quando ha avaria registrada, o aviso
+//   ganha a secao "Avarias e ressalvas" (itens, observacao, nº de fotos; lida de `cargoReport/conference` +
+//   `current`; falha de leitura = aviso de hoje). Estagio COMEX: intacto.
 //
 // Este arquivo pode importar `firebase-admin`/`firebase-functions` (ao
 // contrario de `milestones.js`, que fica puro por causa do teste sem
@@ -58,6 +61,11 @@ import {
   resolveCargoReportUploadStage,
 } from './cargoReportNotification.js';
 import { buildCargoReportConferenceEmail, buildCargoReportEmail } from './cargoReportEmail.js';
+import {
+  buildCargoConferenceDamageLines,
+  buildCargoConferenceDamageText,
+  summarizeCargoConferenceDamage,
+} from './cargoConferenceDamage.js';
 import {
   APP_URL,
   SMTP_HOST,
@@ -332,6 +340,48 @@ async function loadUsersByEmail(firestore, emails) {
   return usersByEmail
 }
 
+// S10-J2: trava contra aviso duplicado da conferencia. Transacao no doc `cargoReport/conferenceNotice`
+// (`{ documentId, sentAt }`, so Admin SDK; sem regra = cliente nao le nem grava): se o `documentId` ja e' o do
+// evento, a entrega e' repetida e nao avisa de novo; senao grava a marca e segue (reabrir e fechar de novo = anexo novo
+// = aviso novo). Semantica "no maximo uma vez" por anexo. Falha da transacao: avisa mesmo assim (prefere avisar a calar).
+async function claimCargoConferenceNotice(firestore, processId, documentId) {
+  if (!documentId) return true
+  try {
+    const ref = firestore.doc(`processes/${processId}/cargoReport/conferenceNotice`)
+    return await firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref)
+      if (snapshot.exists && snapshot.data()?.documentId === documentId) return false
+      transaction.set(ref, { documentId, sentAt: FieldValue.serverTimestamp() })
+      return true
+    })
+  } catch (error) {
+    logger.warn('Falha na trava de aviso duplicado da conferencia; seguindo sem a trava.', {
+      processId,
+      error: error?.code,
+    })
+    return true
+  }
+}
+
+// S10-J2: resumo das avarias da conferencia para o aviso (le `conference` + `current`: 2 leituras). Qualquer falha ou doc
+// ausente = `null` (aviso de hoje, sem a secao); o log leva so' o id do processo e o codigo do erro.
+async function readCargoConferenceDamageSummary(firestore, processId) {
+  try {
+    const [conferenceSnapshot, currentSnapshot] = await Promise.all([
+      firestore.doc(`processes/${processId}/cargoReport/conference`).get(),
+      firestore.doc(`processes/${processId}/cargoReport/current`).get(),
+    ])
+    if (!conferenceSnapshot.exists || !currentSnapshot.exists) return null
+    return summarizeCargoConferenceDamage(conferenceSnapshot.data() ?? {}, currentSnapshot.data() ?? {})
+  } catch (error) {
+    logger.warn('Falha ao ler a conferencia para o aviso; seguindo sem a secao de avarias.', {
+      processId,
+      error: error?.code,
+    })
+    return null
+  }
+}
+
 export const notifyCargoReportUploaded = onDocumentCreated(
   {
     document: 'processes/{processId}/documents/{documentId}',
@@ -401,10 +451,27 @@ export const notifyCargoReportUploaded = onDocumentCreated(
     const notificationType = isConferenceStage
       ? CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE
       : CARGO_REPORT_NOTIFICATION_TYPE
-    const notificationBody = isConferenceStage
-      ? CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY
-      : CARGO_REPORT_NOTIFICATION_BODY
     const buildDirectEmail = isConferenceStage ? buildCargoReportConferenceEmail : buildCargoReportEmail
+
+    // S10-J2 (so' a conferencia): trava de duplicidade e secao de avarias.
+    let damageSummary = null
+    let damageLines = []
+    if (isConferenceStage) {
+      const shouldSend = await claimCargoConferenceNotice(firestore, processId, String(event.params.documentId ?? ''))
+      if (!shouldSend) {
+        logger.info('Aviso da conferencia ja enviado para este anexo (entrega repetida do evento).', {
+          processId,
+          documentId: event.params.documentId,
+        })
+        return
+      }
+      damageSummary = await readCargoConferenceDamageSummary(firestore, processId)
+      damageLines = buildCargoConferenceDamageLines(damageSummary)
+    }
+    const damageText = buildCargoConferenceDamageText(damageLines)
+    const notificationBody = isConferenceStage
+      ? `${CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY}${damageText ? `\n\n${damageText}` : ''}`
+      : CARGO_REPORT_NOTIFICATION_BODY
 
     // Bloco A: in-app/push (+ e-mail via sendProcessNotificationEmail).
     try {
@@ -443,6 +510,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
             processId,
             recipientName: '',
             appUrl: APP_URL,
+            ...(isConferenceStage ? { damageLines } : {}),
           })
 
           for (const to of directEmails) {
@@ -479,6 +547,9 @@ export const notifyCargoReportUploaded = onDocumentCreated(
       directEmails: directEmails.length,
       ignoredNonCorporate,
       failedDirectEmails,
+      ...(damageSummary && damageSummary.itemCount > 0
+        ? { damageItems: damageSummary.itemCount, damagePhotos: damageSummary.photoCount }
+        : {}),
     })
   }
 )

@@ -1,6 +1,7 @@
 // E-mail HTML do Relatorio de Carga (layout imagem + botao): modulo PURO
 // (`functions/src/process/cargoReportEmail.js`, sem mocks).
 
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -294,5 +295,131 @@ describe('buildCargoReportConferenceEmail (S7)', () => {
     const { html, attachments } = buildCargoReportEmail(BASE)
     expect(attachments[0].cid).toBe(CARGO_REPORT_EMAIL_BANNER_CID)
     expect(html).not.toContain('#144155')
+  })
+})
+
+// S10-J2: seção "Avarias e ressalvas" do e-mail da conferência. Sem linhas, o e-mail sai IDÊNTICO ao de antes da J2.
+describe('buildCargoReportConferenceEmail: avarias (S10-J2)', () => {
+  const CONFERENCE_SUBJECT = 'Conferência do Relatório de Carga - PO 123 - Resina Atlas'
+  const CONF = { subject: CONFERENCE_SUBJECT, processId: 'proc-1', recipientName: 'Maria' }
+  const LINES = [
+    'Avarias e ressalvas: 2 itens, 3 fotos no Portal.',
+    'Pallets: 23 contados de 25 informados pelo COMEX (divergente).',
+    '• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.',
+    '• Item 2 · ISOCIANATO MDI · 1 foto: Lacre rompido.',
+  ]
+  const sha = (value) => createHash('sha256').update(value).digest('hex')
+  const withoutPath = (attachments) =>
+    attachments.map((attachment) => {
+      const copy = { ...attachment }
+      delete copy.path
+      return copy
+    })
+
+  // sha256 do `html` e do `text` gerados pela implementação de `origin/main` (181e4cb, antes da J2) para as mesmas entradas.
+  const GOLDEN = {
+    cid: {
+      input: CONF,
+      html: '2505dc7cc99a2aa28ea0dd0cbbd1b0c1e49e80d2d593b6a57dea40a8c7f8528e',
+      text: '3c16988ee0775834301e3732cfb3a2695667656b5fc6bbbaeb218fe8e45dbcd0',
+    },
+    inline: {
+      input: { ...CONF, bannerSrc: 'data:image/jpeg;base64,AAA' },
+      html: 'beebde1dff57b81ff94bec5fabdeb787073b281a537de32d989df2697a9ea18e',
+      text: '3c16988ee0775834301e3732cfb3a2695667656b5fc6bbbaeb218fe8e45dbcd0',
+    },
+    anon: {
+      input: { processId: 'p' },
+      html: '396ce327f685a7a1b523057680b213b748757874d355f90e6e3c0c3fe4e0d65d',
+      text: '47c5f07d6633c1a5b83f28832333c493c0f38447d5f1cdc84ef2c603465a226f',
+    },
+  }
+
+  it.each(Object.entries(GOLDEN))('sem linhas, html e text são byte a byte os de antes da J2 (%s)', (_name, golden) => {
+    for (const extra of [{}, { damageLines: [] }, { damageLines: undefined }, { damageLines: ['', '   '] }, { damageLines: null }]) {
+      const result = buildCargoReportConferenceEmail({ ...golden.input, ...extra })
+      expect(sha(result.html)).toBe(golden.html)
+      expect(sha(result.text)).toBe(golden.text)
+    }
+  })
+
+  it('sem linhas, a chamada com damageLines vazio é igual à chamada sem o parâmetro (html, text, attachments e assunto)', () => {
+    const plain = buildCargoReportConferenceEmail(CONF)
+    const empty = buildCargoReportConferenceEmail({ ...CONF, damageLines: [] })
+    expect(empty.html).toBe(plain.html)
+    expect(empty.text).toBe(plain.text)
+    expect(empty.attachments).toEqual(plain.attachments)
+    expect(empty.subject).toBe(plain.subject)
+    expect(plain.html).not.toContain('Avarias e ressalvas')
+    expect(plain.attachments).toHaveLength(1)
+    expect(withoutPath(plain.attachments)).toEqual([
+      {
+        filename: 'cargo-conference-banner.jpg',
+        cid: 'cargo-conference-banner@portal-comex',
+        contentType: 'image/jpeg',
+        contentDisposition: 'inline',
+      },
+    ])
+  })
+
+  it('com linhas: seção entre o botão e o rodapé, título, cada linha em um parágrafo', () => {
+    const { html } = buildCargoReportConferenceEmail({ ...CONF, damageLines: LINES })
+    const button = html.indexOf('Abrir processo no Portal COMEX</a>')
+    const section = html.indexOf('Avarias e ressalvas')
+    const footer = html.indexOf('E-mail automático do Portal COMEX')
+    expect(button).toBeGreaterThan(-1)
+    expect(section).toBeGreaterThan(button)
+    expect(footer).toBeGreaterThan(section)
+    expect(html).toContain('2 itens, 3 fotos no Portal.')
+    expect(html).toContain('Pallets: 23 contados de 25 informados pelo COMEX (divergente).')
+    expect(html).toContain('• Item 1 · POLIOL PE-3000 · 2 fotos: Caixas molhadas no pallet 2.')
+    expect(html).toContain('• Item 2 · ISOCIANATO MDI · 1 foto: Lacre rompido.')
+    expect(html).toContain('width="600" class="sq-container"')
+    expect(html.match(/<p style=/g)).toHaveLength(3)
+  })
+
+  it('com linhas: assunto, banner, anexos, botão, link e preheader iguais aos de hoje', () => {
+    const plain = buildCargoReportConferenceEmail(CONF)
+    const withDamage = buildCargoReportConferenceEmail({ ...CONF, damageLines: LINES })
+    expect(withDamage.subject).toBe(plain.subject)
+    expect(withDamage.attachments).toEqual(plain.attachments)
+    expect(withDamage.html).toContain('cid:cargo-conference-banner@portal-comex')
+    expect(withDamage.html).toContain('processo=proc-1&amp;aba=documents')
+    expect(withDamage.html).toContain('<title>Conferência do Relatório de Carga - PO 123 - Resina Atlas</title>')
+    const preheader = (html) => html.match(/color:#F4F7F7;">([^<]*)<\/div>/)[1]
+    expect(preheader(withDamage.html)).toBe(preheader(plain.html))
+    // tudo que não é a seção é igual: tirando a seção, o HTML é o de hoje
+    const stripped = withDamage.html.replace(/\n<tr>\n<td align="center" style="padding:16px 0 0 0;">[\s\S]*?<\/table>\n<\/td>\n<\/tr>(?=\n<tr>\n<td align="center" style="padding:20px)/, '')
+    expect(stripped).toBe(plain.html)
+  })
+
+  it('com linhas: texto puro leva as linhas antes do link', () => {
+    const { text } = buildCargoReportConferenceEmail({ ...CONF, damageLines: LINES })
+    const lines = text.split('\n')
+    expect(lines.slice(lines.indexOf(LINES[0]), lines.indexOf(LINES[0]) + LINES.length)).toEqual(LINES)
+    expect(text.indexOf(LINES[0])).toBeLessThan(text.indexOf('Abra o processo no Portal COMEX'))
+    expect(text.indexOf('Processo: PO 123 - Resina Atlas')).toBeLessThan(text.indexOf(LINES[0]))
+    expect(text).toContain('https://portal-comex.com/processos?processo=proc-1&aba=documents')
+  })
+
+  it('escapa HTML de cada linha (observação com <script>, aspas e &)', () => {
+    const evil = [
+      'Avarias e ressalvas: 1 item.',
+      '• Item 1 · <img src=x onerror=alert(1)> · 1 foto: <script>alert("x")</script> & \'aspas\'',
+    ]
+    const { html, text } = buildCargoReportConferenceEmail({ ...CONF, damageLines: evil })
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<img src=x')
+    expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;aspas&#39;')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    // o texto puro não é HTML: a linha segue como veio
+    expect(text).toContain('<script>alert("x")</script>')
+  })
+
+  it('o e-mail do COMEX ignora damageLines (estágio COMEX intacto)', () => {
+    const plain = buildCargoReportEmail(BASE)
+    const withLines = buildCargoReportEmail({ ...BASE, damageLines: LINES })
+    expect(withLines.html).toBe(plain.html)
+    expect(withLines.text).toBe(plain.text)
   })
 })

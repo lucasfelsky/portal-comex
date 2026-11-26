@@ -3,14 +3,20 @@
 //   (as storage.rules negam a leitura pelo SDK cliente: ninguém gera URL permanente, L38). Modelo:
 //   `documentDownload.js`. Valida token + claims (admin/logística) e que a foto está listada em
 //   `processes/{id}/cargoReport/conference.damageByRowId` e que o caminho pertence ao processo e à linha.
-// - `syncCargoConferenceDamage` (trigger): apaga do Storage a foto que saiu do doc da conferência. Só age quando o doc
-//   novo TEM `damageByRowId`, só em caminhos do próprio processo, não grava no Firestore (sem laço) e é idempotente
-//   (`ignoreNotFound`). Falha só vira log.
-// Logs: ids do processo/foto e uid; nunca o caminho do arquivo nem o conteúdo.
+//   S10-J2: técnico e faturamento (ativos, @sqquimica.com) também baixam, mas só a foto que consta no espelho
+//   `processes/{id}/cargoReport/damage` E ainda está em `conference.damageByRowId` (o espelho não guarda caminho:
+//   o caminho sai sempre da conferência). Fora do espelho ou removida da conferência -> 404.
+// - `syncCargoConferenceDamage` (trigger), dois trabalhos independentes (falha de um não impede o outro):
+//   1. limpeza: apaga do Storage a foto que saiu do doc da conferência. Só age quando há `before` e `after`, só
+//      quando o doc novo TEM `damageByRowId`, só em caminhos do próprio processo, e é idempotente (`ignoreNotFound`);
+//   2. espelho (S10-J2): ao fechar, grava `cargoReport/damage` (`set` sem merge, sem caminho de arquivo) a partir da
+//      conferência + `cargoReport/current`, para técnico/faturamento lerem avarias e fotos. Não grava na conferência
+//      (sem laço: o espelho é outro doc e não dispara este trigger).
+// Logs: ids do processo/foto e uid; nunca o caminho do arquivo, a observação nem o conteúdo.
 
 import { pipeline } from 'node:stream/promises'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { onRequest } from 'firebase-functions/v2/https'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
@@ -18,10 +24,15 @@ import { logger } from 'firebase-functions/logger'
 import {
   CARGO_CONFERENCE_MAX_REMOVED_PATHS,
   CARGO_CONFERENCE_PHOTO_ID_PATTERN,
+  buildCargoDamageMirror,
   canDownloadCargoConferencePhotos,
+  canDownloadCargoConferencePhotosAsReader,
   findCargoConferencePhoto,
+  isPhotoInCargoDamageMirror,
   listRemovedCargoConferencePhotoPaths,
   resolveCargoConferencePhotoFile,
+  shouldWriteCargoDamageMirror,
+  summarizeCargoConferenceDamage,
 } from './cargoConferenceDamage.js'
 
 const PROCESS_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
@@ -51,7 +62,8 @@ export async function handleCargoConferencePhotoDownload(req, res) {
     return
   }
 
-  if (!canDownloadCargoConferencePhotos(decoded)) {
+  const isOperator = canDownloadCargoConferencePhotos(decoded)
+  if (!isOperator && !canDownloadCargoConferencePhotosAsReader(decoded)) {
     sendError(res, 403, 'permission-denied')
     return
   }
@@ -66,6 +78,21 @@ export async function handleCargoConferencePhotoDownload(req, res) {
   ) {
     sendError(res, 400, 'invalid-argument')
     return
+  }
+
+  // S10-J2: técnico/faturamento só baixam foto do espelho; sem espelho ou foto fora dele -> 404.
+  if (!isOperator) {
+    try {
+      const mirrorSnapshot = await getFirestore().doc(`processes/${processId}/cargoReport/damage`).get()
+      if (!mirrorSnapshot.exists || !isPhotoInCargoDamageMirror(mirrorSnapshot.data() ?? {}, photoId)) {
+        sendError(res, 404, 'not-found')
+        return
+      }
+    } catch (error) {
+      logger.error('Falha ao ler o espelho de avarias do Relatório de Carga.', { processId, photoId, error: error?.code })
+      sendError(res, 500, 'internal')
+      return
+    }
   }
 
   let data
@@ -176,18 +203,45 @@ export async function deleteRemovedCargoConferencePhotos(processId, before, afte
   return results.length - failed.length
 }
 
+// Espelho `cargoReport/damage`: lê o `current` (linhas e total de pallets), resume e grava (`set`, sem merge). Falha só
+// vira log com o id do processo e o código do erro. `current` ausente: não grava (não apaga o espelho anterior).
+export async function writeCargoDamageMirror(processId, after) {
+  const firestore = getFirestore()
+  const currentSnapshot = await firestore.doc(`processes/${processId}/cargoReport/current`).get()
+  if (!currentSnapshot.exists) {
+    logger.warn('Relatório de Carga sem o doc current: espelho de avarias não gravado.', { processId })
+    return false
+  }
+  const summary = summarizeCargoConferenceDamage(after, currentSnapshot.data() ?? {})
+  const mirror = { ...buildCargoDamageMirror(summary, after), updatedAt: FieldValue.serverTimestamp() }
+  await firestore.doc(`processes/${processId}/cargoReport/damage`).set(mirror)
+  return true
+}
+
 export const syncCargoConferenceDamage = onDocumentWritten(
   { document: 'processes/{processId}/cargoReport/conference' },
   async (event) => {
     const processId = event.params.processId
     const before = readSnapshotData(event.data?.before)
     const after = readSnapshotData(event.data?.after)
-    if (!processId || !before || !after) return
+    if (!processId || !after) return
 
-    try {
-      await deleteRemovedCargoConferencePhotos(processId, before, after)
-    } catch (error) {
-      logger.warn('Falha ao limpar fotos removidas da conferência.', { processId, error: error?.code })
+    // 1. Limpeza das fotos removidas (só com `before` e `after`, como antes da J2).
+    if (before) {
+      try {
+        await deleteRemovedCargoConferencePhotos(processId, before, after)
+      } catch (error) {
+        logger.warn('Falha ao limpar fotos removidas da conferência.', { processId, error: error?.code })
+      }
+    }
+
+    // 2. Espelho para técnico/faturamento (S10-J2): só no fechamento novo.
+    if (shouldWriteCargoDamageMirror(before, after)) {
+      try {
+        await writeCargoDamageMirror(processId, after)
+      } catch (error) {
+        logger.warn('Falha ao gravar o espelho de avarias da conferência.', { processId, error: error?.code })
+      }
     }
   }
 )

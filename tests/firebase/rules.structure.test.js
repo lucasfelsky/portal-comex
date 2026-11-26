@@ -150,12 +150,28 @@ describe('firestore.rules structure', () => {
       expect(rules).not.toMatch(/match\s+\/cargoReport\/\{/)
     })
 
-    it('Tecnico e Faturamento nao leem cargoReport (leitura so admin/logistica)', () => {
+    it('Tecnico e Faturamento nao leem cargoReport/current nem conference (leitura so admin/logistica)', () => {
       const blocks = rules.match(/match\s+\/cargoReport\/(?:current|conference)\s*\{[^}]*\}/g)
       expect(blocks).toHaveLength(2)
       for (const block of blocks) {
         expect(block).not.toMatch(/isDocumentReader|tecnico|faturamento/)
       }
+    })
+
+    // S10-J2: espelho das avarias, gravado so pelo trigger (Admin SDK); Tecnico/Faturamento leem so ele.
+    it('declara match /cargoReport/damage (admin, logistica e leitor leem; ninguem grava) dentro de processes', () => {
+      const processes = rules.match(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*?\n {4}\}/)
+      expect(processes).not.toBeNull()
+      const blocks = processes[0].match(/match\s+\/cargoReport\/damage\s*\{[^}]*\}/g)
+      expect(blocks).toHaveLength(1)
+      expect(blocks[0]).toMatch(/allow\s+read:\s*if\s+isAdmin\(\)\s*\|\|\s*isLogistics\(\)\s*\|\|\s*isDocumentReader\(\)\s*;/)
+      expect(blocks[0]).toMatch(/allow\s+create,\s*update,\s*delete:\s*if\s+false\s*;/)
+      expect(blocks[0]).not.toMatch(/allow\s+(?:write|create|update|delete)[^;]*:\s*if\s+(?!false)/)
+      expect((rules.match(/match\s+\/cargoReport\/damage\b/g) ?? []).length).toBe(1)
+    })
+
+    it('a trava conferenceNotice nao tem match (so Admin SDK; negado ao cliente)', () => {
+      expect(rules).not.toMatch(/conferenceNotice/)
     })
 
     it('isValidCargoReportCurrent: hasOnly de 20 chaves e hasAll de 18 (autofill S9 e expectedPallets S11 opcionais), sem labeledBy/labelMadeBy, limites, revisao e autoria', () => {

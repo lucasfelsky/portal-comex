@@ -17,6 +17,7 @@ import {
   CARGO_REPORT_NOTIFICATION_TYPE,
 } from './cargoReportNotification.js';
 import { buildCargoReportConferenceEmail, buildCargoReportEmail } from './cargoReportEmail.js';
+import { extractCargoConferenceDamageLines } from './cargoConferenceDamage.js';
 import { buildMilestoneEvents, buildMilestoneSummaryPhrases, detectMilestones } from './milestones.js';
 import { runDailyProcessAlerts } from './dailyAlerts.js';
 import { getSaoPauloDateKey } from './operationalAlerts.js';
@@ -464,6 +465,8 @@ export const sendProcessNotificationEmail = onDocumentCreated(
         processId: normalizeString(notification.processId),
         recipientName: repairTextEncoding(normalizeString(recipient?.name)),
         appUrl: APP_URL,
+        // S10-J2: a secao "Avarias e ressalvas" vem do proprio `body` (sem leitura extra); `body` de hoje = sem secao.
+        damageLines: extractCargoConferenceDamageLines(notification.body),
       })
 
       await mailer.sendMail({
