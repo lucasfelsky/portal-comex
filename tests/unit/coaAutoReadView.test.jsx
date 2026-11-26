@@ -1,9 +1,9 @@
-// S11-E: leitura automática do COA ao anexar na aba Documentos (card em FCL e células por PO do CONSOLIDADO). Upload e
+// S11-E/S11-F: leitura automática do COA ao anexar na aba Documentos (card em FCL e células por PO do CONSOLIDADO). Upload e
 // callable `readProcessCoa` mockados (nunca chama a Tess); mensagens de erro reais (describeCoaReadError). Dados
 // inventados. A fila é um store de módulo: `resetCoaAutoRead()` isola cada teste.
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockUploadProcessDocument = vi.fn()
@@ -26,6 +26,7 @@ vi.mock('../../src/services/coaReadsRepository', async (importOriginal) => {
 import PoCoaCell from '../../src/features/processes/PoCoaCell'
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
 import { resetCoaAutoRead } from '../../src/features/processes/coaAutoReadQueue'
+import { setCoaAutoReadActor } from '../../src/features/processes/coaAutoReadSession'
 import useCoaAutoRead from '../../src/features/processes/useCoaAutoRead'
 import useCoaReadBadges from '../../src/features/processes/useCoaReadBadges'
 
@@ -329,7 +330,7 @@ describe('card do COA (FCL): admin anexa vários arquivos', () => {
     expect(screen.getByRole('button', { name: 'Enviar COA' })).toBeEnabled()
   })
 
-  it('desmontar a tela para a fila depois do arquivo em andamento, sem setState nem aviso do React', async () => {
+  it('desmontar a tela NÃO descarta a fila: a 2ª e a 3ª leitura continuam depois do unmount, sem setState nem aviso do React', async () => {
     const pending = pendingReads()
     const user = userEvent.setup()
     const { container, unmount } = render(<Panel />)
@@ -337,25 +338,129 @@ describe('card do COA (FCL): admin anexa vários arquivos', () => {
     await waitFor(() => expect(pending).toHaveLength(1))
     unmount()
     pending[0].resolve(readResult(read('new1')))
+    await waitFor(() => expect(pending).toHaveLength(2))
+    expect(pending[1].documentId).toBe('new2')
+    pending[1].resolve(readResult(read('new2')))
+    await waitFor(() => expect(pending).toHaveLength(3))
+    expect(pending[2].documentId).toBe('new3')
+    pending[2].resolve(readResult(read('new3')))
     await flush()
     await flush()
-    expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(3)
     const reactWarnings = console.error.mock.calls.filter((call) => /unmounted|not wrapped in act/i.test(String(call[0])))
     expect(reactWarnings).toEqual([])
   })
 
-  it('trocar de processo (mesmo componente) para a fila do anterior', async () => {
+  it('trocar de processo (mesmo componente) não para a fila do anterior; ao voltar, o contador reaparece', async () => {
     const pending = pendingReads()
     const user = userEvent.setup()
     const { container, rerender } = render(<Panel processId="p1" />)
     await user.upload(inputs(container)[0], [pdf('a.pdf'), pdf('b.pdf')])
     await waitFor(() => expect(pending).toHaveLength(1))
     rerender(<Panel processId="p2" />)
+    // O outro processo não mostra a leitura do primeiro.
+    expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
+    pending[0].resolve(readResult(read('new1')))
+    await waitFor(() => expect(pending).toHaveLength(2))
+    expect(pending[1]).toMatchObject({ processId: 'p1', documentId: 'new2' })
+    expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
+
+    rerender(<Panel processId="p1" />)
+    expect(await screen.findByText(statusText(2, 2))).toBeInTheDocument()
+    pending[1].resolve(readResult(read('new2')))
+    await waitFor(() => expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument())
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(2)
+  })
+
+  it('sair da aba e voltar: o componente reassume o contador da fila, e o selo atualiza quando cada arquivo termina', async () => {
+    const reads = {}
+    mockListCoaReads.mockImplementation(async () => ({ ...reads }))
+    const pending = pendingReads()
+    const user = userEvent.setup()
+    const first = render(<Panel />)
+    await user.upload(inputs(first.container)[0], [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')])
+    expect(await screen.findByText(statusText(1, 3))).toBeInTheDocument()
+    first.unmount()
+
+    // Volta para a aba com os 3 COAs já na lista (o painel recarrega os documentos).
+    const back = [coaDocument('new1'), coaDocument('new2'), coaDocument('new3')]
+    render(<Panel initial={back} />)
+    expect(await screen.findByText(statusText(1, 3))).toBeInTheDocument()
+    expect(screen.queryByText(/Lido ·/)).not.toBeInTheDocument()
+
+    reads.new1 = read('new1')
+    pending[0].resolve(readResult(reads.new1))
+    expect(await screen.findByText(statusText(2, 3))).toBeInTheDocument()
+    expect(await screen.findByText('Lido · 2 certificados')).toBeInTheDocument()
+    await waitFor(() => expect(pending).toHaveLength(2))
+    reads.new2 = read('new2', { documentType: 'not_coa', certificates: [] })
+    pending[1].resolve(readResult(reads.new2))
+    expect(await screen.findByText('Não é COA')).toBeInTheDocument()
+    await waitFor(() => expect(pending).toHaveLength(3))
+    pending[2].resolve(readResult(read('new3')))
+    await waitFor(() => expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument())
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(3)
+  })
+
+  it('sair, voltar e anexar mais com o arquivo antigo ainda lendo: o contador soma no mesmo lote (sem incremento trocado)', async () => {
+    const pending = pendingReads()
+    const user = userEvent.setup()
+    const first = render(<Panel />)
+    await user.upload(inputs(first.container)[0], [pdf('a.pdf'), pdf('b.pdf')])
+    expect(await screen.findByText(statusText(1, 2))).toBeInTheDocument()
+    first.unmount()
+
+    const second = render(<Panel initial={[coaDocument('new1'), coaDocument('new2')]} />)
+    expect(await screen.findByText(statusText(1, 2))).toBeInTheDocument()
+    await user.upload(inputs(second.container)[0], pdf('c.pdf'))
+    expect(await screen.findByText(statusText(1, 3))).toBeInTheDocument()
+
+    pending[0].resolve(readResult(read('new1')))
+    expect(await screen.findByText(statusText(2, 3))).toBeInTheDocument()
+    await waitFor(() => expect(pending).toHaveLength(2))
+    pending[1].resolve(readResult(read('new2')))
+    expect(await screen.findByText(statusText(3, 3))).toBeInTheDocument()
+    await waitFor(() => expect(pending).toHaveLength(3))
+    pending[2].resolve(readResult(read('new3')))
+    await waitFor(() => expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument())
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(3)
+  })
+
+  it('erro de serviço enquanto a tela estava fechada: ao voltar, o aviso aparece e nada mais é lido', async () => {
+    const first = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(first.promise)
+    const user = userEvent.setup()
+    const one = render(<Panel />)
+    await user.upload(inputs(one.container)[0], [pdf('a.pdf'), pdf('b.pdf')])
+    await waitFor(() => expect(mockReadProcessCoa).toHaveBeenCalledTimes(1))
+    one.unmount()
+    first.reject(callError('busy'))
+    await flush()
+    await flush()
+
+    render(<Panel initial={[coaDocument('new1'), coaDocument('new2')]} />)
+    const notice = await screen.findByText(/Leitura automática interrompida: Outra leitura de COA está em andamento/)
+    expect(notice).toHaveAttribute('role', 'status')
+    expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+  })
+
+  it('logout: some a linha de leitura, o resto não é lido e o arquivo em andamento termina sem setState', async () => {
+    setCoaAutoReadActor({ uid: ADMIN.uid, role: 'admin' })
+    const pending = pendingReads()
+    const user = userEvent.setup()
+    const { container } = render(<Panel />)
+    await user.upload(inputs(container)[0], [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')])
+    expect(await screen.findByText(statusText(1, 3))).toBeInTheDocument()
+
+    act(() => setCoaAutoReadActor(null))
+    await waitFor(() => expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument())
     pending[0].resolve(readResult(read('new1')))
     await flush()
     await flush()
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument()
+    const reactWarnings = console.error.mock.calls.filter((call) => /unmounted|not wrapped in act/i.test(String(call[0])))
+    expect(reactWarnings).toEqual([])
   })
 
   it('uma tentativa por documento: falha só do arquivo não repete e um novo envio não relê o anterior', async () => {

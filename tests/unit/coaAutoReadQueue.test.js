@@ -1,5 +1,5 @@
-// S11-E: fila única da leitura automática do COA (coaAutoReadQueue). A callable `readProcessCoa` é mockada (nunca chama
-// a Tess); as mensagens de erro (describeCoaReadError) são as reais. Dados inventados.
+// S11-E/S11-F: fila única da leitura automática do COA (coaAutoReadQueue). A callable `readProcessCoa` é mockada (nunca
+// chama a Tess); as mensagens de erro (describeCoaReadError) são as reais. Dados inventados.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockReadProcessCoa = vi.fn()
@@ -16,6 +16,7 @@ import {
   registerCoaAutoReadMount,
   resetCoaAutoRead,
 } from '../../src/features/processes/coaAutoReadQueue'
+import { setCoaAutoReadActor } from '../../src/features/processes/coaAutoReadSession'
 
 const doc = (id, overrides = {}) => ({ id, type: 'coaOriginal', name: `${id}.pdf`, mimeType: 'application/pdf', ...overrides })
 const done = (id) => ({ status: 'done', cached: false, read: { documentId: id, status: 'done', documentType: 'coa', certificates: [] } })
@@ -228,43 +229,130 @@ describe('coaAutoReadQueue - erros', () => {
 })
 
 describe('coaAutoReadQueue - ciclo de vida e selo', () => {
-  it('desmontar a tela para a fila DEPOIS do arquivo em andamento', async () => {
+  it('desmontar a tela NÃO descarta a fila: a 2ª e a 3ª leitura continuam depois do unmount', async () => {
     const first = deferred()
-    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
+    const second = deferred()
+    const third = deferred()
+    mockReadProcessCoa
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise)
     enqueueCoaAutoRead('p1', [doc('a'), doc('b'), doc('c')])
     await flush()
     unmount()
     unmount = undefined
+    // A fila segue sem componente: o progresso continua no store.
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 3 })
+
     first.resolve(done('a'))
     await flush()
+    expect(calledIds()).toEqual(['a', 'b'])
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 1, total: 3 })
+
+    second.resolve(done('b'))
     await flush()
-    expect(calledIds()).toEqual(['a'])
+    expect(calledIds()).toEqual(['a', 'b', 'c'])
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 2, total: 3 })
+
+    third.resolve(done('c'))
+    await flush()
     expect(getCoaAutoReadState().progress).toEqual({})
+    expect(getCoaAutoReadState().activeKey).toBe('')
+    expect(getCoaAutoReadState().readVersions.p1).toBe(3)
   })
 
-  it('dois componentes montados: sair de um não para a fila; sair do último para', async () => {
+  it('componentes montando e desmontando (um, dois, nenhum) nunca mexem na fila em andamento', async () => {
     const second = registerCoaAutoReadMount('p1')
     const first = deferred()
     mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
     enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
     await flush()
     second()
+    unmount()
+    unmount = undefined
     first.resolve(done('a'))
     await flush()
     await flush()
     expect(calledIds()).toEqual(['a', 'b'])
   })
 
-  it('trocar de processo (outro processo sem tela) não lê o que ficou do anterior', async () => {
+  it('trocar de processo não para a fila: o que ficou do anterior continua a ser lido', async () => {
     const first = deferred()
-    mockReadProcessCoa.mockReturnValueOnce(first.promise)
+    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
     enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
     await flush()
     unmount()
     unmount = registerCoaAutoReadMount('p2')
     first.resolve(done('a'))
     await flush()
-    expect(calledIds()).toEqual(['a'])
+    await flush()
+    expect(calledIds()).toEqual(['a', 'b'])
+    expect(getCoaAutoReadState().progress).toEqual({})
+  })
+
+  it('processos diferentes entram na MESMA fila: nunca duas leituras em paralelo, mesmo sem componente montado', async () => {
+    const other = registerCoaAutoReadMount('p2')
+    let running = 0
+    let peak = 0
+    mockReadProcessCoa.mockImplementation(async (_processId, documentId) => {
+      running += 1
+      peak = Math.max(peak, running)
+      await flush()
+      running -= 1
+      return done(documentId)
+    })
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
+    enqueueCoaAutoRead('p2', [doc('c'), doc('d')])
+    unmount()
+    unmount = undefined
+    other()
+    for (let index = 0; index < 8; index += 1) await flush()
+    expect(calledIds()).toEqual(['a', 'b', 'c', 'd'])
+    expect(peak).toBe(1)
+    expect(getCoaAutoReadState().progress).toEqual({})
+  })
+
+  it('uma tentativa por documento: desmontar, remontar e reenfileirar o mesmo id não lê de novo', async () => {
+    mockReadProcessCoa.mockResolvedValue(done('a'))
+    expect(enqueueCoaAutoRead('p1', [doc('a')])).toBe(1)
+    await flush()
+    unmount()
+    unmount = registerCoaAutoReadMount('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')])).toBe(0)
+    expect(enqueueCoaAutoRead('p1', [doc('a')], 'PO-1')).toBe(0)
+    await flush()
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+  })
+
+  it('sem componente montado no momento do envio, não enfileira (mesmo com a fila andando)', async () => {
+    mockReadProcessCoa.mockReturnValue(deferred().promise)
+    enqueueCoaAutoRead('p1', [doc('a')])
+    await flush()
+    unmount()
+    unmount = undefined
+    expect(enqueueCoaAutoRead('p1', [doc('b')])).toBe(0)
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 1 })
+  })
+
+  it('o contador é do lote do escopo: o arquivo antigo que termina depois do unmount e de um novo envio soma na mesma entrada', async () => {
+    const first = deferred()
+    const second = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
+    await flush()
+    // Sai da aba, volta e anexa mais um arquivo enquanto o primeiro ainda lê.
+    unmount()
+    unmount = registerCoaAutoReadMount('p1')
+    enqueueCoaAutoRead('p1', [doc('c')])
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 3 })
+    first.resolve(done('a'))
+    await flush()
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 1, total: 3 })
+    second.resolve(done('b'))
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a', 'b', 'c'])
+    expect(getCoaAutoReadState().progress).toEqual({})
   })
 
   it('cada arquivo que termina (lido, falha só do arquivo ou silencioso) avança a versão de leitura do processo', async () => {
@@ -303,5 +391,124 @@ describe('coaAutoReadQueue - ciclo de vida e selo', () => {
     await flush()
     expect(calledIds()).toEqual(['a'])
     expect(getCoaAutoReadState().readVersions).toEqual({})
+  })
+})
+
+describe('coaAutoReadQueue - erros entre processos, sem componente montado', () => {
+  it('report-closed descarta só o resto do PROCESSO: o outro processo segue na fila', async () => {
+    const other = registerCoaAutoReadMount('p2')
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('report-closed')).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
+    enqueueCoaAutoRead('p2', [doc('c'), doc('d')])
+    unmount()
+    unmount = undefined
+    other()
+    for (let index = 0; index < 6; index += 1) await flush()
+    expect(calledIds()).toEqual(['a', 'c', 'd'])
+    expect(getCoaAutoReadState().notices).toEqual({})
+    expect(getCoaAutoReadState().progress).toEqual({})
+  })
+
+  it('erro de serviço esvazia TODA a fila (todos os processos) e o aviso fica no store para quando a tela voltar', async () => {
+    const other = registerCoaAutoReadMount('p2')
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('tess-auth')).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a')])
+    enqueueCoaAutoRead('p2', [doc('b')])
+    unmount()
+    unmount = undefined
+    other()
+    for (let index = 0; index < 4; index += 1) await flush()
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().progress).toEqual({})
+    const message = 'Leitura automática interrompida: A Tess recusou as credenciais do Portal. Confira a chave e o workspace no servidor. Use Ler COAs no formulário.'
+    expect(getCoaAutoReadState().notices[KEY]).toBe(message)
+    expect(getCoaAutoReadState().notices[buildCoaAutoReadKey('p2', '')]).toBe(message)
+    // Voltar à tela (montar de novo) não apaga o aviso nem repete a leitura.
+    unmount = registerCoaAutoReadMount('p1')
+    await flush()
+    expect(getCoaAutoReadState().notices[KEY]).toBe(message)
+    expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('coaAutoReadQueue - logout e troca de usuário', () => {
+  const ADMIN_A = { uid: 'admin-a', role: 'admin' }
+
+  it('logout esvazia a fila e o progresso: o arquivo em andamento termina e nada mais é lido', async () => {
+    setCoaAutoReadActor(ADMIN_A)
+    const first = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b'), doc('c')])
+    await flush()
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 3 })
+
+    setCoaAutoReadActor(null)
+    expect(getCoaAutoReadState().progress).toEqual({})
+    expect(getCoaAutoReadState().activeKey).toBe('')
+    first.resolve(done('a'))
+    for (let index = 0; index < 3; index += 1) await flush()
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().progress).toEqual({})
+  })
+
+  it('logout apaga o aviso de interrupção que ficou no store', async () => {
+    setCoaAutoReadActor(ADMIN_A)
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('busy'))
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
+    await flush()
+    await flush()
+    expect(getCoaAutoReadState().notices[KEY]).toBeTruthy()
+    setCoaAutoReadActor(null)
+    expect(getCoaAutoReadState().notices).toEqual({})
+  })
+
+  it('trocar de usuário ou de perfil também esvazia a fila; reaplicar o mesmo usuário não mexe nela', async () => {
+    setCoaAutoReadActor(ADMIN_A)
+    const first = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a'), doc('b')])
+    await flush()
+    setCoaAutoReadActor({ ...ADMIN_A })
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 2 })
+
+    setCoaAutoReadActor({ uid: 'admin-b', role: 'admin' })
+    expect(getCoaAutoReadState().progress).toEqual({})
+    first.resolve(done('a'))
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a'])
+
+    // Mesmo uid com outro perfil (perdeu o admin): idem.
+    const second = deferred()
+    mockReadProcessCoa.mockReset().mockReturnValueOnce(second.promise).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('c'), doc('d')])
+    await flush()
+    setCoaAutoReadActor({ uid: 'admin-b', role: 'logistica' })
+    expect(getCoaAutoReadState().progress).toEqual({})
+    second.resolve(done('c'))
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['c'])
+  })
+
+  it('depois do logout um novo admin enfileira normalmente, e o resultado do arquivo antigo não interrompe a fila nova', async () => {
+    setCoaAutoReadActor(ADMIN_A)
+    const old = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(old.promise).mockResolvedValue(done('x'))
+    enqueueCoaAutoRead('p1', [doc('a')])
+    await flush()
+    setCoaAutoReadActor(null)
+    setCoaAutoReadActor({ uid: 'admin-b', role: 'admin' })
+    expect(enqueueCoaAutoRead('p1', [doc('n1'), doc('n2')], 'PO-9')).toBe(2)
+    await flush()
+    // Ainda uma leitura por vez: a do usuário novo espera a antiga terminar.
+    expect(calledIds()).toEqual(['a'])
+
+    // A antiga falha com erro de SERVIÇO: não esvazia a fila do usuário novo nem deixa aviso.
+    old.reject(rejectWith('tess-auth'))
+    for (let index = 0; index < 4; index += 1) await flush()
+    expect(calledIds()).toEqual(['a', 'n1', 'n2'])
+    expect(getCoaAutoReadState().notices).toEqual({})
+    expect(getCoaAutoReadState().progress).toEqual({})
   })
 })

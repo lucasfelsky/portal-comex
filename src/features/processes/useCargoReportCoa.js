@@ -12,6 +12,7 @@ import {
   matchCoaCertificates,
 } from './cargoCoaMatch'
 import { CARGO_REPORT_ROWS_LIMIT_MESSAGE } from './cargoReportFormModel'
+import { COA_READ_FILE_ERROR_CODES } from './coaReadErrors'
 import { listCoaDocuments } from './processDocuments'
 
 // S11-C do Relatório de Carga: liga a leitura dos COAs (Tess, via function `readProcessCoa`) à tela. Só o admin com o
@@ -24,19 +25,9 @@ const APPLIED_MESSAGE = 'Lotes do COA aplicados'
 const STALE_MESSAGE =
   'O relatório mudou depois da leitura dos COAs. A prévia foi atualizada: confira e aplique de novo.'
 
-// Erros que valem só para o arquivo (a fila segue). Qualquer outro (sessão, configuração, limite do dia, serviço fora
-// do ar, "ocupado" e o erro genérico que o Cloud Run devolve num 429) INTERROMPE a fila: o resto fica "não lido".
-export const COA_READ_FILE_ERROR_CODES = new Set([
-  'not-pdf',
-  'too-large',
-  'tess-too-large',
-  'attempts',
-  'invalid-response',
-  'tess-bad-response',
-  'tess-timeout',
-  'invalid-file',
-  'not-found',
-])
+// Erros que valem só para o arquivo (a fila segue): lista em `coaReadErrors.js` (módulo mínimo, para a fila da leitura
+// automática não importar este hook); reexportada aqui por compatibilidade.
+export { COA_READ_FILE_ERROR_CODES }
 
 const SYNTHETIC_FAILURE = (code) => ({ status: 'failed', documentType: null, certificates: [], error: { code } })
 
