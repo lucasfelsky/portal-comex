@@ -12,6 +12,11 @@
 // - Erros: `TessError` com `code` fixo; a mensagem do erro e' o proprio codigo (nunca conteudo da resposta).
 //   Diagnostico: `stage` ('upload'|'process'|'execute'|'poll'|'delete') e `httpStatus` (numero) acompanham o erro;
 //   nada de corpo/mensagem da Tess.
+// - Modelo: todo `execute` leva `model` (padrao `COA_TESS_MODEL`, ~8 a 19 creditos por leitura contra 56 a 112 do
+//   modelo padrao do agente; OBSERVADO 2026-11-26). Se a resposta ecoar outro modelo em `answers.model`, o
+//   resultado e' usado normalmente e `executeAgent` devolve `modelMismatch: true` (a function so' loga a flag).
+
+import { COA_TESS_MODEL } from './coaRead.js'
 
 export const TESS_API_BASE = 'https://api.tess.im'
 export const TESS_CONTRACT_VERSION = 'docs.tess.im 2026-11-25'
@@ -186,6 +191,7 @@ export function createTessClient({
   apiKey,
   agentId,
   workspaceId,
+  model = COA_TESS_MODEL,
   fetchImpl = globalThis.fetch,
   sleep = defaultSleep,
   now = Date.now,
@@ -197,6 +203,7 @@ export function createTessClient({
   const workspace = String(workspaceId ?? '')
   const key = String(apiKey ?? '')
   if (!key || !/^[0-9]{1,12}$/.test(workspace)) throw new TessError('tess-auth')
+  const requestedModel = typeof model === 'string' && model.trim() !== '' ? model.trim() : COA_TESS_MODEL
   const gate = pacer ?? createPacer({ now, sleep, minIntervalMs })
 
   async function request({ method, path, body, json, deadline, timeoutMs, context, fileBytes = 0 }) {
@@ -314,6 +321,7 @@ export function createTessClient({
           messages: [{ role: 'user', content: TESS_USER_MESSAGE }],
           file_ids: [Number(id)],
           waitExecution: true,
+          model: requestedModel,
         },
         deadline,
         timeoutMs: EXECUTE_TIMEOUT_MS,
@@ -327,11 +335,14 @@ export function createTessClient({
       if (responseId === null && classifyTessAgentStatus(status, outputText) === 'pending') {
         throw new TessError('tess-bad-response')
       }
+      // Diagnostico: a Tess ecoa o modelo aceito em `answers.model`. Diferente do pedido = so' a flag (o valor nunca sai).
+      const answeredModel = response.answers && typeof response.answers === 'object' ? response.answers.model : undefined
       return {
         responseId,
         status,
         outputText,
         credits: typeof response.credits === 'number' ? response.credits : 0,
+        modelMismatch: typeof answeredModel === 'string' && answeredModel !== requestedModel,
       }
     },
 

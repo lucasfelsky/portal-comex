@@ -344,7 +344,11 @@ export const REAL_FORMAT_OUTPUT_TEXT = `{
   "warnings": []
 }`
 
-export const TESS_REAL_FORMAT_EXECUTE_CREDITS = 40.668
+// Custo da execucao com o modelo `claude-sonnet-5-5-low` (valor INVENTADO na faixa observada de ~8 a 19 creditos).
+export const TESS_REAL_FORMAT_EXECUTE_CREDITS = 9.25
+
+// Modelo aceito, ecoado pela Tess em `responses[0].answers.model`.
+export const TESS_REAL_FORMAT_MODEL = 'claude-sonnet-5-5-low'
 
 export const TESS_REAL_FORMAT_SAMPLE = {
   template_id: 99001,
@@ -358,7 +362,7 @@ export const TESS_REAL_FORMAT_SAMPLE = {
       root_id: 5550001,
       created_at: '2026-11-26T12:00:00.000000Z',
       updated_at: '2026-11-26T12:00:25.000000Z',
-      answers: { synthetic: true },
+      answers: { model: TESS_REAL_FORMAT_MODEL },
       template_id: 99001,
       generated_files: [],
       workspace_files: [],

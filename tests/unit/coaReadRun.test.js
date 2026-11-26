@@ -10,10 +10,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { HttpsError } from 'firebase-functions/v2/https'
 import { COA_TESS_BUDGET_MS, runCoaRead } from '../../functions/src/process/coaReadFunction.js'
 import { COA_LIMITS, COA_PROMPT_VERSION } from '../../functions/src/process/coaRead.js'
-import { TESS_MIN_INTERVAL_MS, TessError } from '../../functions/src/process/tessClient.js'
+import { TESS_MIN_INTERVAL_MS, TessError, createTessClient } from '../../functions/src/process/tessClient.js'
 import {
   REAL_FORMAT_OUTPUT_TEXT,
   TESS_POLL_FINAL,
+  TESS_REAL_FORMAT_EXECUTE_CREDITS,
   TESS_REAL_FORMAT_SAMPLE,
   TESS_REAL_FORMAT_UPLOAD,
   TESS_SAMPLES,
@@ -1247,27 +1248,27 @@ describe('arquivo processado antes do execute (B2: a Tess recusa arquivo nao pro
 })
 
 describe('creditos da leitura no formato observado', () => {
-  it('upload processado (1) + execute (40,668) = 41,668; a consulta com o mesmo total nao duplica', async () => {
+  it('upload processado (1) + execute (9,25) = 10,25; a consulta com o mesmo total nao duplica', async () => {
     const env = makeEnv({
       tess: {
         uploadFile: async () => ({ fileId: TESS_REAL_FORMAT_UPLOAD.id, credits: TESS_REAL_FORMAT_UPLOAD.credits, status: 'completed' }),
-        executeAgent: async () => ({ responseId: 5550001, status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: 40.668 }),
+        executeAgent: async () => ({ responseId: 5550001, status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: TESS_REAL_FORMAT_EXECUTE_CREDITS }),
       },
     })
     const result = await runCoaRead(adminRequest(), env.deps)
     expect(result.status).toBe('done')
-    expect(readDoc(env).tessCredits).toBeCloseTo(41.668, 6)
+    expect(readDoc(env).tessCredits).toBeCloseTo(10.25, 6)
 
     // execute devolve a resposta em andamento com custo parcial; a consulta devolve o TOTAL do mesmo objeto
     const polled = makeEnv({
       tess: {
         uploadFile: async () => ({ fileId: 501, credits: 1, status: 'completed' }),
         executeAgent: async () => ({ responseId: 5, status: 'starting', outputText: '', credits: 0.5 }),
-        getAgentResponse: async () => ({ status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: 40.668 }),
+        getAgentResponse: async () => ({ status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: TESS_REAL_FORMAT_EXECUTE_CREDITS }),
       },
     })
     await runCoaRead(adminRequest(), polled.deps)
-    expect(readDoc(polled).tessCredits).toBeCloseTo(41.668, 6)
+    expect(readDoc(polled).tessCredits).toBeCloseTo(10.25, 6)
   })
 
   it('creditos do arquivo: o maior entre upload e consulta do arquivo (nao soma os dois)', async () => {
@@ -1405,6 +1406,129 @@ describe('logs de diagnostico: so estagio, status HTTP e codigo (nunca corpo, me
       expect(call[1]).not.toHaveProperty('stage')
       expect(call[1]).not.toHaveProperty('httpStatus')
     }
+  })
+})
+
+describe('modelo da Tess (claude-sonnet-5-5-low) na leitura', () => {
+  const LEAKS = ['MODELO-SECRETO-DA-TESS', 'PRODUTO SECRETO', 'ACX2610', 'ARQUIVO-SECRETO', 'KEY-SECRET-ZZZ', '8675309', '3141592']
+  const allLogs = (env) =>
+    JSON.stringify([env.logger.info.mock.calls, env.logger.warn.mock.calls, env.logger.error.mock.calls, env.logger.debug.mock.calls])
+
+  function fileResponses(executeResponse, executeStatus = 200) {
+    return [
+      new Response(JSON.stringify({ id: 501, object: 'file', credits: 1, status: 'completed' }), { status: 201 }),
+      new Response(JSON.stringify(executeResponse), { status: executeStatus }),
+      new Response(JSON.stringify({ id: '501', object: 'file', deleted: true }), { status: 200 }),
+    ]
+  }
+
+  // Cliente REAL da Tess com fetch falso: prova o corpo do execute e o aviso de ponta a ponta.
+  function withRealClient(env, executeResponse, executeStatus = 200) {
+    const fetchCalls = []
+    const queue = fileResponses(executeResponse, executeStatus)
+    const fetchImpl = async (url, init) => {
+      fetchCalls.push({ url, init })
+      const next = queue.shift()
+      if (!next) throw new Error('fetch inesperado')
+      return next
+    }
+    const createClient = (config) => createTessClient({ ...config, fetchImpl, now: env.deps.now, sleep: env.deps.sleep })
+    return { deps: { ...env.deps, createClient }, fetchCalls }
+  }
+
+  const executeBody = (fetchCalls) => JSON.parse(fetchCalls.find((call) => call.url.endsWith('/execute')).init.body)
+
+  function tessReply(answers) {
+    const response = { ...TESS_REAL_FORMAT_SAMPLE.responses[0], input: 'PRODUTO SECRETO ACX2610 ARQUIVO-SECRETO' }
+    if (answers === undefined) delete response.answers
+    else response.answers = answers
+    return { template_id: 99001, responses: [response] }
+  }
+
+  it('callable com o cliente real: o execute leva model claude-sonnet-5-5-low e, com o mesmo modelo no answers, nao ha aviso', async () => {
+    const env = makeEnv()
+    const { deps, fetchCalls } = withRealClient(env, tessReply({ model: 'claude-sonnet-5-5-low' }))
+    const result = await runCoaRead(adminRequest(), deps)
+    expect(result.status).toBe('done')
+    expect(executeBody(fetchCalls).model).toBe('claude-sonnet-5-5-low')
+    expect(result.read.tessCredits).toBeCloseTo(1 + TESS_REAL_FORMAT_EXECUTE_CREDITS, 6)
+    expect(env.logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('answers.model DIFERENTE: aviso so com stage e flag (sem o texto da resposta), a leitura continua done e o resultado vale', async () => {
+    const env = makeEnv()
+    const { deps, fetchCalls } = withRealClient(env, tessReply({ model: 'MODELO-SECRETO-DA-TESS PRODUTO SECRETO' }))
+    const result = await runCoaRead(adminRequest(), deps)
+    expect(result.status).toBe('done')
+    expect(result.read.certificates).toHaveLength(2)
+    expect(readDoc(env).status).toBe('done')
+    expect(fetchCalls.filter((call) => call.init.method === 'DELETE')).toHaveLength(1)
+
+    expect(env.logger.warn).toHaveBeenCalledTimes(1)
+    expect(env.logger.warn.mock.calls[0][1]).toEqual({
+      processId: 'p1',
+      documentId: 'd1',
+      uid: 'admin-1',
+      status: 'model-mismatch',
+      stage: 'execute',
+      modelMismatch: true,
+    })
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+    // o log final da leitura segue sem a flag
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({ status: 'done' })
+    expect(env.logger.info.mock.calls.at(-1)[1]).not.toHaveProperty('modelMismatch')
+  })
+
+  it('answers ausente: sem aviso, leitura done', async () => {
+    const env = makeEnv()
+    const { deps } = withRealClient(env, tessReply(undefined))
+    expect((await runCoaRead(adminRequest(), deps)).status).toBe('done')
+    expect(env.logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('cliente que sinaliza modelMismatch: UM aviso por execucao; sem a flag, nenhum', async () => {
+    const mismatch = makeEnv({
+      tess: { executeAgent: async () => ({ responseId: 601, status: 'succeeded', outputText: GOOD_OUTPUT, credits: 0.25, modelMismatch: true }) },
+    })
+    expect((await runCoaRead(adminRequest(), mismatch.deps)).status).toBe('done')
+    expect(mismatch.logger.warn).toHaveBeenCalledTimes(1)
+    expect(mismatch.logger.warn.mock.calls[0][1]).toMatchObject({ status: 'model-mismatch', stage: 'execute', modelMismatch: true })
+
+    const fine = makeEnv({
+      tess: { executeAgent: async () => ({ responseId: 601, status: 'succeeded', outputText: GOOD_OUTPUT, credits: 0.25, modelMismatch: false }) },
+    })
+    await runCoaRead(adminRequest(), fine.deps)
+    expect(fine.logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('422 do execute com o cliente real (modelo recusado): failed tess-error, estagio execute, httpStatus 422, UMA chamada de execute, delete, sem texto da Tess no log', async () => {
+    const env = makeEnv()
+    const { deps, fetchCalls } = withRealClient(
+      env,
+      { message: 'MODELO-SECRETO-DA-TESS recusado', errors: { model: ['MODELO-SECRETO-DA-TESS'] } },
+      422
+    )
+    const result = await runCoaRead(adminRequest(), deps)
+    expect(result.status).toBe('failed')
+    expect(result.read.error).toEqual({ code: 'tess-error' })
+    expect(fetchCalls.filter((call) => call.url.endsWith('/execute'))).toHaveLength(1)
+    expect(fetchCalls.filter((call) => call.init.method === 'DELETE')).toHaveLength(1)
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({ status: 'failed', errorCode: 'tess-error', stage: 'execute', httpStatus: 422 })
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+  })
+
+  it('o cache nao muda: versao do prompt segue a mesma e o modelo nao entra no documento gravado', async () => {
+    expect(COA_PROMPT_VERSION).toBe('coa-tess-2026-11-25')
+    const env = makeEnv()
+    const { deps } = withRealClient(env, tessReply({ model: 'claude-sonnet-5-5-low' }))
+    await runCoaRead(adminRequest(), deps)
+    expect(readDoc(env).promptVersion).toBe('coa-tess-2026-11-25')
+    expect(JSON.stringify(readDoc(env))).not.toContain('claude-sonnet')
+  })
+
+  it('o modelo nao e escolhido na callable: nenhuma referencia a modelo fixo em coaReadFunction.js', () => {
+    const source = readFileSync(new URL('../../functions/src/process/coaReadFunction.js', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/claude-sonnet-5-5-(low|medium|high)[^-a-z]/)
   })
 })
 

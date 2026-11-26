@@ -17,9 +17,11 @@ import {
   createTessClient,
   isTessFileCompleted,
 } from '../../functions/src/process/tessClient.js'
+import { COA_TESS_MODEL } from '../../functions/src/process/coaRead.js'
 import {
   REAL_FORMAT_OUTPUT_TEXT,
   TESS_REAL_FORMAT_EXECUTE_CREDITS,
+  TESS_REAL_FORMAT_MODEL,
   TESS_REAL_FORMAT_SAMPLE,
   TESS_REAL_FORMAT_UPLOAD,
 } from '../fixtures/coa/tessSamples.js'
@@ -28,7 +30,7 @@ const KEY = 'chave-sintetica-123'
 const WORKSPACE = '4242'
 const AGENT = 9001
 
-function createHarness({ minIntervalMs = 1100 } = {}) {
+function createHarness({ minIntervalMs = 1100, model } = {}) {
   const clock = { t: 1_000_000 }
   const calls = []
   const queue = []
@@ -57,6 +59,7 @@ function createHarness({ minIntervalMs = 1100 } = {}) {
     apiKey: KEY,
     agentId: AGENT,
     workspaceId: WORKSPACE,
+    ...(model === undefined ? {} : { model }),
     fetchImpl,
     sleep,
     now,
@@ -87,6 +90,12 @@ describe('constantes do contrato', () => {
     expect(TESS_API_BASE).toBe('https://api.tess.im')
     expect(TESS_CONTRACT_VERSION).toBe('docs.tess.im 2026-11-25')
     expect(TESS_USER_MESSAGE).toBe('Extraia os dados do COA anexado.')
+  })
+
+  it('modelo da leitura: claude-sonnet-5-5-low, definido num unico lugar (coaRead.js)', () => {
+    expect(COA_TESS_MODEL).toBe('claude-sonnet-5-5-low')
+    const client = readFileSync(new URL('../../functions/src/process/tessClient.js', import.meta.url), 'utf8')
+    expect(client).not.toMatch(/claude-sonnet/)
   })
 
   it('o codigo do cliente envia process=true no upload (a Tess exige arquivo processado; OBSERVADO 2026-11-26)', () => {
@@ -199,11 +208,11 @@ describe('uploadFile', () => {
 })
 
 describe('executeAgent', () => {
-  it('corpo exato: mensagem user fixa, file_ids inteiros e waitExecution camelCase; nada mais', async () => {
+  it('corpo exato: mensagem user fixa, file_ids inteiros, waitExecution camelCase e model; nada mais', async () => {
     const h = createHarness()
     h.queue.push(json({ template_id: 't', responses: [{ id: 4773337, status: 'succeeded', output: 'texto', credits: 0.000337 }] }))
     const result = await h.client.executeAgent({ fileId: 73325, deadline: farDeadline(h) })
-    expect(result).toEqual({ responseId: 4773337, status: 'succeeded', outputText: 'texto', credits: 0.000337 })
+    expect(result).toEqual({ responseId: 4773337, status: 'succeeded', outputText: 'texto', credits: 0.000337, modelMismatch: false })
 
     const call = h.calls[0]
     expect(call.init.headers['Content-Type']).toBe('application/json')
@@ -211,8 +220,71 @@ describe('executeAgent', () => {
       messages: [{ role: 'user', content: 'Extraia os dados do COA anexado.' }],
       file_ids: [73325],
       waitExecution: true,
+      model: 'claude-sonnet-5-5-low',
     })
-    expect(Object.keys(JSON.parse(call.init.body)).sort()).toEqual(['file_ids', 'messages', 'waitExecution'])
+    expect(Object.keys(JSON.parse(call.init.body)).sort()).toEqual(['file_ids', 'messages', 'model', 'waitExecution'])
+    expect(typeof JSON.parse(call.init.body).model).toBe('string')
+  })
+
+  it('createTessClient com outro modelo envia o outro modelo; sem modelo (ou vazio) usa o padrao low', async () => {
+    const medium = createHarness({ model: 'claude-sonnet-5-5-medium' })
+    medium.queue.push(json({ responses: [{ id: 1, status: 'succeeded', output: 'x', credits: 1, answers: { model: 'claude-sonnet-5-5-medium' } }] }))
+    const result = await medium.client.executeAgent({ fileId: 1, deadline: farDeadline(medium) })
+    expect(JSON.parse(medium.calls[0].init.body).model).toBe('claude-sonnet-5-5-medium')
+    expect(result.modelMismatch).toBe(false)
+
+    for (const model of [undefined, '', '   ', null, 42]) {
+      const h = createHarness({ model })
+      h.queue.push(json({ responses: [{ id: 1, status: 'succeeded', output: 'x', credits: 1 }] }))
+      await h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) })
+      expect(JSON.parse(h.calls[0].init.body).model).toBe('claude-sonnet-5-5-low')
+    }
+  })
+
+  it('o modelo vai em toda execucao do mesmo cliente (nao so na primeira)', async () => {
+    const h = createHarness()
+    h.queue.push(
+      json({ responses: [{ id: 1, status: 'succeeded', output: 'x', credits: 1 }] }),
+      json({ responses: [{ id: 2, status: 'succeeded', output: 'y', credits: 1 }] })
+    )
+    await h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) })
+    await h.client.executeAgent({ fileId: 2, deadline: farDeadline(h) })
+    expect(h.calls.map((call) => JSON.parse(call.init.body).model)).toEqual(['claude-sonnet-5-5-low', 'claude-sonnet-5-5-low'])
+  })
+
+  it('answers.model igual ao pedido: sem divergencia; ausente ou nao textual: tambem sem divergencia', async () => {
+    const answers = [{ model: 'claude-sonnet-5-5-low' }, undefined, null, {}, { model: 5 }, 'texto', []]
+    for (const value of answers) {
+      const h = createHarness()
+      const response = { id: 1, status: 'succeeded', output: 'x', credits: 1 }
+      if (value !== undefined) response.answers = value
+      h.queue.push(json({ responses: [response] }))
+      const result = await h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) })
+      expect(result.modelMismatch, JSON.stringify(value)).toBe(false)
+    }
+  })
+
+  it('answers.model DIFERENTE do pedido: resultado usado normalmente, com modelMismatch true e sem expor o valor', async () => {
+    const h = createHarness()
+    h.queue.push(json({ responses: [{ id: 9, status: 'succeeded', output: 'texto-ok', credits: 3, answers: { model: 'MODELO-ESTRANHO-ZZZ' } }] }))
+    const result = await h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) })
+    expect(result).toEqual({ responseId: 9, status: 'succeeded', outputText: 'texto-ok', credits: 3, modelMismatch: true })
+    expect(JSON.stringify(result)).not.toContain('MODELO-ESTRANHO')
+
+    // pediu medium, a Tess respondeu low: tambem e divergencia
+    const other = createHarness({ model: 'claude-sonnet-5-5-medium' })
+    other.queue.push(json({ responses: [{ id: 1, status: 'succeeded', output: 'x', credits: 1, answers: { model: 'claude-sonnet-5-5-low' } }] }))
+    expect((await other.client.executeAgent({ fileId: 1, deadline: farDeadline(other) })).modelMismatch).toBe(true)
+  })
+
+  it('execute 422 por causa do modelo continua tess-error, estagio execute, httpStatus 422, e NAO ha nova tentativa sem modelo', async () => {
+    const h = createHarness()
+    h.queue.push(() => json({ message: 'The selected model is invalid', errors: { model: ['MODELO-RECUSADO-ZZZ'] } }, { status: 422 }))
+    const error = await catchError(h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) }))
+    expect(error).toMatchObject({ code: 'tess-error', httpStatus: 422, stage: 'execute' })
+    expect(JSON.stringify({ ...error, message: error.message })).not.toContain('MODELO-RECUSADO')
+    expect(h.calls).toHaveLength(1)
+    expect(JSON.parse(h.calls[0].init.body).model).toBe('claude-sonnet-5-5-low')
   })
 
   it('em andamento: status starting com output vazio devolve texto vazio e o id da resposta', async () => {
@@ -747,14 +819,17 @@ describe('formato REAL observado (2026-11-26) com dados inventados', () => {
       status: 'succeeded',
       outputText: REAL_FORMAT_OUTPUT_TEXT,
       credits: TESS_REAL_FORMAT_EXECUTE_CREDITS,
+      modelMismatch: false,
     })
+    expect(TESS_REAL_FORMAT_SAMPLE.responses[0].answers).toEqual({ model: TESS_REAL_FORMAT_MODEL })
+    expect(JSON.parse(h.calls[0].init.body).model).toBe(TESS_REAL_FORMAT_MODEL)
     expect(classifyTessAgentStatus(result.status, result.outputText)).toBe('done')
     // o texto tem numeros com zeros a direita (JSON valido) que o JSON.stringify nunca geraria
     expect(result.outputText).toContain('"value": 3750.00')
     expect(result.outputText).toContain('"value": 1875.50')
   })
 
-  it('fluxo observado: upload processado (completed, 1 credito) -> execute (~40,7) -> delete', async () => {
+  it('fluxo observado: upload processado (completed, 1 credito) -> execute (~9,25 com o modelo low) -> delete', async () => {
     const h = createHarness()
     h.queue.push(
       json(TESS_REAL_FORMAT_UPLOAD, { status: 201 }),
@@ -765,7 +840,7 @@ describe('formato REAL observado (2026-11-26) com dados inventados', () => {
     expect(isTessFileCompleted(uploaded.status)).toBe(true)
     const executed = await h.client.executeAgent({ fileId: uploaded.fileId, deadline: farDeadline(h) })
     expect(await h.client.deleteFile(uploaded.fileId)).toEqual({ deleted: true })
-    expect(uploaded.credits + executed.credits).toBeCloseTo(41.668, 6)
+    expect(uploaded.credits + executed.credits).toBeCloseTo(10.25, 6)
     expect(h.calls.map((call) => call.init.method)).toEqual(['POST', 'POST', 'DELETE'])
   })
 })
