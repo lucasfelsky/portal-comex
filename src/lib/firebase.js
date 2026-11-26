@@ -44,13 +44,14 @@ if (isConfigured) {
 // null quando o Firebase nao esta configurado (dev/local sem backend), no mesmo
 // espirito do antigo guard `if (!functions)`.
 let functionsSingleton = null
-export async function getCallable(name) {
+export async function getCallable(name, options) {
   if (!isConfigured || !app) return null
   const { getFunctions, httpsCallable } = await import('firebase/functions')
   if (!functionsSingleton) {
     functionsSingleton = getFunctions(app)
   }
-  return httpsCallable(functionsSingleton, name)
+  // `options` (ex.: `{ timeout }` da leitura de COA, que leva minutos) so' vai ao SDK quando informado.
+  return options ? httpsCallable(functionsSingleton, name, options) : httpsCallable(functionsSingleton, name)
 }
 
 export { app, auth, firestore, storage, firebaseConfig, isConfigured as isFirebaseConfigured }

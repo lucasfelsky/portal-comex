@@ -65,10 +65,10 @@ describe('audit-vault-counts', () => {
     expect(result.stdout).toMatch(/src\/components\/ top-level = 26/)
     expect(result.stdout).toMatch(/src\/features\/ directories = 3/)
     expect(result.stdout).toMatch(/src\/pages\/ count = 13/)
-    expect(result.stdout).toMatch(/src\/services\/ count = 25/)
+    expect(result.stdout).toMatch(/src\/services\/ count = 26/)
     expect(result.stdout).toMatch(/src\/utils\/ count = 16/)
     expect(result.stdout).toMatch(/firestore\.rules top-level = 14/)
-    expect(result.stdout).toMatch(/firestore\.rules subcollections = 3/)
+    expect(result.stdout).toMatch(/firestore\.rules subcollections = 4/)
     expect(result.stdout).toMatch(/tests\/ total = 84/)
   })
 

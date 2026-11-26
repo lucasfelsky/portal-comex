@@ -3321,6 +3321,56 @@ describeEmulator('firestore.rules (emulador)', () => {
     })
   })
 
+  describe('coaReads (leitura de COA)', () => {
+    const readPath = 'processes/p1/coaReads/d1'
+    const staffDb = (role, uid = `${role}-1`, overrides = {}) =>
+      testEnv
+        .authenticatedContext(uid, { email: `${role}@sqquimica.com`, role, status: 'Ativo', name: 'Equipe', ...overrides })
+        .firestore()
+
+    beforeEach(async () => {
+      await seed((db) =>
+        setDoc(doc(db, readPath), {
+          schemaVersion: 1,
+          promptVersion: 'coa-tess-2026-11-25',
+          status: 'done',
+          documentType: 'coa',
+          certificates: [],
+          attempts: 1,
+        })
+      )
+    })
+
+    it('admin le o resultado e lista a subcolecao', async () => {
+      await assertSucceeds(getDoc(doc(admin('admin-1'), readPath)))
+      await assertSucceeds(getDocs(collection(admin('admin-1'), 'processes/p1/coaReads')))
+    })
+
+    it.each(['logistica', 'tecnico', 'faturamento', 'user', 'compras', 'viewer'])('%s NAO le nem lista', async (role) => {
+      const db = staffDb(role)
+      await assertFails(getDoc(doc(db, readPath)))
+      await assertFails(getDocs(collection(db, 'processes/p1/coaReads')))
+    })
+
+    it('anonimo NAO le', async () => {
+      await assertFails(getDoc(doc(anon(), readPath)))
+      await assertFails(getDocs(collection(anon(), 'processes/p1/coaReads')))
+    })
+
+    it('admin bloqueado ou com e-mail externo NAO le', async () => {
+      await assertFails(getDoc(doc(admin('admin-2', { status: 'Bloqueado' }), readPath)))
+      await assertFails(getDoc(doc(admin('admin-3', { email: 'externo@gmail.com' }), readPath)))
+    })
+
+    it('nenhum cliente grava: admin nao cria, atualiza nem apaga; logistica nao cria', async () => {
+      const adminDb = admin('admin-1')
+      await assertFails(setDoc(doc(adminDb, 'processes/p1/coaReads/d2'), { status: 'done' }))
+      await assertFails(updateDoc(doc(adminDb, readPath), { status: 'failed' }))
+      await assertFails(deleteDoc(doc(adminDb, readPath)))
+      await assertFails(setDoc(doc(staffDb('logistica'), 'processes/p1/coaReads/d3'), { status: 'done' }))
+    })
+  })
+
   describe('colecoes admin-only (forecastSettings / news / barra)', () => {
     // PR #2 do backlog (auditoria preventiva de drift): harden admin
     // com hasOnly. Cada colecao agora tem allowlist propria.

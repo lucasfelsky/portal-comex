@@ -57,7 +57,7 @@
     "count": 13
   },
   "srcServices": {
-    "count": 25,
+    "count": 26,
     "_list": [
       "announcementsRepository.js",
       "auditRepository.js",
@@ -66,6 +66,7 @@
       "cargoConferencePhotosRepository.js",
       "cargoReportRecipientsRepository.js",
       "cargoReportRepository.js",
+      "coaReadsRepository.js",
       "erpReferenceRepository.js",
       "exchangeRatesRepository.js",
       "externalNewsRepository.js",
@@ -109,7 +110,7 @@
   },
   "firestore": {
     "topLevelCollections": 14,
-    "subcollections": 3,
+    "subcollections": 4,
     "_topLevel_list": [
       "announcements",
       "audits",
@@ -127,6 +128,7 @@
       "users"
     ],
     "_subcollections_list": [
+      "processes/coaReads",
       "processes/documents",
       "processes/events",
       "processes/messages"
