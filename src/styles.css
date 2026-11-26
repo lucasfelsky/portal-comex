@@ -28235,3 +28235,12 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 [data-theme='dark'] .process-detail-view .pdv-panel .documents-po-table--coa .documents-row__actions .documents-icon-button[aria-label^='Excluir']:hover:not(:disabled) {
   color: var(--danger-700);
 }
+
+/* Celular: Baixar, Substituir, Excluir e o alternador do Packing List cabem na mesma linha da célula da Invoice (a 320 px quebram). */
+.documents-po-table.documents-po-table--mobile td {
+  padding-inline: 0;
+}
+
+.documents-po-table--mobile .documents-po-cell .documents-row__actions {
+  gap: 6px;
+}
