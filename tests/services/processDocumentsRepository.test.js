@@ -78,6 +78,7 @@ import {
   listProcessDocuments,
   renameAdditionalDocument,
   saveBlobAsFile,
+  setCoaPurchaseOrder,
   setInvoicePackingListLink,
   uploadProcessDocument,
 } from '../../src/services/processDocumentsRepository'
@@ -239,6 +240,36 @@ describe('uploadProcessDocument', () => {
     expect(slots).toEqual(['coaOriginal:coa-a', 'coaOriginal:coa-b'])
   })
 
+  it('coaOriginal no CONSOLIDADO grava poNumber (aparado); slot e storagePath sem a PO', async () => {
+    await uploadProcessDocument('p1', { type: 'coaOriginal', file, category: 'CONSOLIDADO', po: '  PO-1 ', actor })
+    const [, payload] = mockSetDoc.mock.calls[0]
+    expect(payload.poNumber).toBe('PO-1')
+    expect(payload.slotKey).toBe('coaOriginal:new-doc-id')
+    expect(payload.storagePath).toMatch(/^processes\/p1\/documents\/coaOriginal\/\d+-uid-1-bl\.pdf$/)
+    expect(payload.storagePath).not.toContain('PO-1')
+    expect(mockRef).toHaveBeenCalledWith({}, payload.storagePath)
+  })
+
+  it('coaOriginal no CONSOLIDADO sem PO nao inventa poNumber (a rule recusa)', async () => {
+    await uploadProcessDocument('p1', { type: 'coaOriginal', file, category: 'CONSOLIDADO', po: '   ', actor })
+    expect('poNumber' in mockSetDoc.mock.calls[0][1]).toBe(false)
+  })
+
+  it('coaOriginal fora do CONSOLIDADO nao grava poNumber mesmo recebendo po', async () => {
+    for (const category of ['FCL', 'LCL', 'AEREO', undefined]) {
+      mockSetDoc.mockClear()
+      await uploadProcessDocument('p1', { type: 'coaOriginal', file, category, po: 'PO-1', actor })
+      expect('poNumber' in mockSetDoc.mock.calls[0][1]).toBe(false)
+    }
+  })
+
+  it('so o COA ganha poNumber pelo caminho novo: bl/fispq no CONSOLIDADO continuam sem', async () => {
+    await uploadProcessDocument('p1', { type: 'bl', file, category: 'CONSOLIDADO', po: 'PO-1', actor })
+    await uploadProcessDocument('p1', { type: 'fispq', file, itemId: 'I1', category: 'CONSOLIDADO', po: 'PO-1', actor })
+    expect('poNumber' in mockSetDoc.mock.calls[0][1]).toBe(false)
+    expect('poNumber' in mockSetDoc.mock.calls[1][1]).toBe(false)
+  })
+
   it('other exige description no payload', async () => {
     await uploadProcessDocument('p1', { type: 'other', file, description: 'nota fiscal', actor })
     const [, payload] = mockSetDoc.mock.calls[0]
@@ -333,6 +364,37 @@ describe('setInvoicePackingListLink', () => {
   it('nao configurado -> nao chama updateDoc', async () => {
     firebaseConfigured = false
     await setInvoicePackingListLink('p1', 'd1', false, { uid: 'uid-1' })
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+})
+
+describe('setCoaPurchaseOrder', () => {
+  it('chama updateDoc so com poNumber (aparado) e os 2 carimbos', async () => {
+    await setCoaPurchaseOrder('p1', 'coa1', '  PO-7  ', { uid: 'uid-1' })
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1)
+    const [ref, payload] = mockUpdateDoc.mock.calls[0]
+    expect(ref).toBe('DOC_REF')
+    expect(payload).toEqual({
+      poNumber: 'PO-7',
+      poNumberUpdatedAt: 'SERVER_TIMESTAMP',
+      poNumberUpdatedById: 'uid-1',
+    })
+    expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'coa1')
+  })
+
+  it('PO vazia rejeita e nao chama updateDoc', async () => {
+    await expect(setCoaPurchaseOrder('p1', 'coa1', '   ', { uid: 'uid-1' })).rejects.toThrow('Informe a PO do COA.')
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+
+  it('sem actor grava carimbo vazio (a rule recusa)', async () => {
+    await setCoaPurchaseOrder('p1', 'coa1', 'PO-7')
+    expect(mockUpdateDoc.mock.calls[0][1].poNumberUpdatedById).toBe('')
+  })
+
+  it('nao configurado -> nao chama updateDoc', async () => {
+    firebaseConfigured = false
+    await setCoaPurchaseOrder('p1', 'coa1', 'PO-7', { uid: 'uid-1' })
     expect(mockUpdateDoc).not.toHaveBeenCalled()
   })
 })

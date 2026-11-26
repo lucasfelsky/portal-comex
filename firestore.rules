@@ -726,6 +726,14 @@ service cloud.firestore {
             && request.resource.data.type == 'invoice'));
     }
 
+    // COA por PO: no CONSOLIDADO o COA exige poNumber; nos demais nao pode ter.
+    // storagePath e slot nao mudam (poNumber nao entra no caminho nem no slot).
+    function isValidCoaPurchaseOrderScope(processId) {
+      return request.resource.data.type != 'coaOriginal'
+        || ((get(/databases/$(database)/documents/processes/$(processId)).data.get('category', '') == 'CONSOLIDADO')
+          == ('poNumber' in request.resource.data));
+    }
+
     function isValidProcessDocumentCreate(processId) {
       return exists(/databases/$(database)/documents/processes/$(processId))
         && request.resource.data.keys().hasOnly([
@@ -737,6 +745,7 @@ service cloud.firestore {
         && isValidProcessDocumentFieldShapes()
         && isValidProcessDocumentSlotKey(processId)
         && isValidProcessDocumentStoragePath(processId)
+        && isValidCoaPurchaseOrderScope(processId)
         && (
           request.resource.data.type != 'containerWash'
           || get(/databases/$(database)/documents/processes/$(processId)).data.category in ['FCL', 'CONSOLIDADO']
@@ -771,6 +780,22 @@ service cloud.firestore {
         && request.resource.data.description.size() <= 120
         && request.resource.data.descriptionUpdatedAt == request.time
         && request.resource.data.descriptionUpdatedById == request.auth.uid;
+    }
+
+    // Vincular o COA a uma PO (so admin, so CONSOLIDADO): grava/troca SO' o
+    // poNumber (+ carimbos), nunca name/storagePath/slotKey. Serve para o COA
+    // antigo sem PO e para o COA cuja PO saiu do processo.
+    function isValidCoaPurchaseOrderLinkUpdate(processId) {
+      return resource.data.type == 'coaOriginal'
+        && request.resource.data.type == 'coaOriginal'
+        && get(/databases/$(database)/documents/processes/$(processId)).data.get('category', '') == 'CONSOLIDADO'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['poNumber', 'poNumberUpdatedAt', 'poNumberUpdatedById'])
+        && request.resource.data.poNumber is string
+        && request.resource.data.poNumber.size() >= 1
+        && request.resource.data.poNumber.size() <= 64
+        && request.resource.data.poNumberUpdatedAt == request.time
+        && request.resource.data.poNumberUpdatedById == request.auth.uid;
     }
 
     // S3 do Relatorio de Carga (FR.CMX.001 rev. 005): formulario preenchido no
@@ -1049,11 +1074,13 @@ service cloud.firestore {
       // a query desses perfis precisa de `where('type','in',[...])`. Nunca
       // usuario comum. Imutavel, EXCETO o vinculo
       // Invoice -> Packing List (`isValidInvoicePackingListLinkUpdate`, so
-      // admin) e o nome do documento adicional e do COA
-      // (`isValidAdditionalDocumentRenameUpdate`, so admin) - "versao
+      // admin), o nome do documento adicional e do COA
+      // (`isValidAdditionalDocumentRenameUpdate`, so admin) e o vinculo do COA
+      // a uma PO no CONSOLIDADO (`isValidCoaPurchaseOrderLinkUpdate`, so admin) - "versao
       // anterior" e' derivada por ordem de `uploadedAt` dentro do mesmo
       // `slotKey` (D1), nunca reescrita. COA: 1 slot por arquivo
-      // (`coaOriginal:<id>`), entao nao tem versao anterior.
+      // (`coaOriginal:<id>`), entao nao tem versao anterior. COA por PO: no
+      // CONSOLIDADO o create exige `poNumber`; nos demais nao pode ter.
       match /documents/{documentId} {
         allow read: if isAdmin() || isLogistics()
           || (isDocumentReader() && isDocumentReaderType(resource.data.type));
@@ -1064,7 +1091,8 @@ service cloud.firestore {
             || (isLogistics() && request.resource.data.type == 'cargoReport'
               && isCargoReportComexClosed(processId) && !isCargoConferenceClosedNow(processId))
           );
-        allow update: if isAdmin() && (isValidInvoicePackingListLinkUpdate() || isValidAdditionalDocumentRenameUpdate());
+        allow update: if isAdmin() && (isValidInvoicePackingListLinkUpdate() || isValidAdditionalDocumentRenameUpdate()
+          || isValidCoaPurchaseOrderLinkUpdate(processId));
         allow delete: if isAdmin()
           || (isLogistics() && resource.data.uploadedById == request.auth.uid
             && resource.data.type != 'cargoReport');
