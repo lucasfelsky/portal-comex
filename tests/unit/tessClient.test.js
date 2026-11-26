@@ -13,8 +13,16 @@ import {
   TessError,
   classifyTessAgentStatus,
   createPacer,
+  classifyTessFileStatus,
   createTessClient,
+  isTessFileCompleted,
 } from '../../functions/src/process/tessClient.js'
+import {
+  REAL_FORMAT_OUTPUT_TEXT,
+  TESS_REAL_FORMAT_EXECUTE_CREDITS,
+  TESS_REAL_FORMAT_SAMPLE,
+  TESS_REAL_FORMAT_UPLOAD,
+} from '../fixtures/coa/tessSamples.js'
 
 const KEY = 'chave-sintetica-123'
 const WORKSPACE = '4242'
@@ -81,11 +89,10 @@ describe('constantes do contrato', () => {
     expect(TESS_USER_MESSAGE).toBe('Extraia os dados do COA anexado.')
   })
 
-  it('o codigo do cliente nunca usa o parametro process do upload', () => {
+  it('o codigo do cliente envia process=true no upload (a Tess exige arquivo processado; OBSERVADO 2026-11-26)', () => {
     const source = readFileSync(new URL('../../functions/src/process/tessClient.js', import.meta.url), 'utf8')
-    expect(source).not.toContain('process=')
-    expect(source).not.toMatch(/append\(\s*['"]process['"]/)
-    expect(source).not.toMatch(/\bprocess\s*:/)
+    expect(source).toMatch(/append\(\s*'process'\s*,\s*'true'\s*\)/)
+    expect(source).not.toMatch(/append\(\s*'process'\s*,\s*'false'\s*\)/)
   })
 })
 
@@ -150,16 +157,16 @@ describe('requisicoes comuns', () => {
 })
 
 describe('uploadFile', () => {
-  it('multipart com o campo file chamado coa.pdf (application/pdf) e SEM process', async () => {
+  it('multipart com o campo file chamado coa.pdf (application/pdf) e process=true', async () => {
     const h = createHarness()
-    h.queue.push(json({ id: 73325, object: 'file', credits: 0.02, status: 'waiting' }, { status: 201 }))
+    h.queue.push(json(TESS_REAL_FORMAT_UPLOAD, { status: 201 }))
     const result = await h.client.uploadFile({ bytes: PDF, deadline: farDeadline(h) })
-    expect(result).toEqual({ fileId: 73325, credits: 0.02 })
+    expect(result).toEqual({ fileId: 8800001, credits: 1, status: 'completed' })
 
     const { body, headers } = h.calls[0].init
     expect(body).toBeInstanceOf(FormData)
-    expect([...body.keys()]).toEqual(['file'])
-    expect(body.has('process')).toBe(false)
+    expect([...body.keys()]).toEqual(['file', 'process'])
+    expect(body.get('process')).toBe('true')
     const file = body.get('file')
     expect(file.name).toBe('coa.pdf')
     expect(file.type).toBe('application/pdf')
@@ -504,14 +511,14 @@ describe('mapeamento de erros', () => {
     for (let index = 0; index < 5; index += 1) expect((await catchError(upload(h)))?.code).toBe('tess-unavailable')
   })
 
-  it('timeout do upload e de 30 s e vira tess-timeout', async () => {
+  it('timeout do upload e de 90 s (upload processado e sincrono: ~35 s observado) e vira tess-timeout', async () => {
     const h = createHarness()
     h.queue.push((url, init) => new Promise((resolve, reject) => {
       init.signal.addEventListener('abort', () => reject(new Error('aborted')))
     }))
     const pending = upload(h)
     await new Promise((resolve) => setImmediate(resolve))
-    expect(h.timerList[0].ms).toBe(30000)
+    expect(h.timerList[0].ms).toBe(90000)
     h.timerList[0].fn()
     expect((await catchError(pending))?.code).toBe('tess-timeout')
   })
@@ -565,5 +572,200 @@ describe('classifyTessAgentStatus', () => {
     expect(classifyTessAgentStatus('', '')).toBe('pending')
     expect(classifyTessAgentStatus('running', '{"a":1}')).toBe('done')
     expect(classifyTessAgentStatus(undefined, undefined)).toBe('pending')
+  })
+})
+
+describe('classifyTessFileStatus', () => {
+  it('completed conclui; fail/error e falha; waiting, processing e vazio seguem em andamento', () => {
+    expect(classifyTessFileStatus('completed')).toBe('completed')
+    expect(classifyTessFileStatus('COMPLETED')).toBe('completed')
+    expect(isTessFileCompleted('completed')).toBe(true)
+    expect(classifyTessFileStatus('failed')).toBe('failed')
+    expect(classifyTessFileStatus('error')).toBe('failed')
+    expect(classifyTessFileStatus('processing_failed')).toBe('failed')
+    for (const status of ['waiting', 'processing', 'queued', '', undefined, null, 7]) {
+      expect(classifyTessFileStatus(status)).toBe('pending')
+      expect(isTessFileCompleted(status)).toBe(false)
+    }
+  })
+})
+
+describe('waitFileProcessed (upload que nao voltou completed)', () => {
+  const pending = (status = 'processing', extra = {}) => () => json({ id: 31, object: 'file', status, ...extra })
+  const wait = (h, status = 'waiting', deadline = farDeadline(h)) =>
+    h.client.waitFileProcessed({ fileId: 31, status, deadline })
+
+  it('upload ja completed: nao consulta nada', async () => {
+    const h = createHarness()
+    expect(await wait(h, 'completed')).toEqual({ credits: 0 })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('waiting: consulta GET /files/{id} com espera crescente (3, 5, 10 s) ate completed e devolve os creditos', async () => {
+    const h = createHarness()
+    h.queue.push(pending('waiting'), pending('processing', { credits: 0.5 }), pending('completed', { credits: 1 }))
+    const start = h.clock.t
+    expect(await wait(h)).toEqual({ credits: 1 })
+    expect(h.calls.map((call) => [call.init.method, call.url])).toEqual([
+      ['GET', 'https://api.tess.im/files/31'],
+      ['GET', 'https://api.tess.im/files/31'],
+      ['GET', 'https://api.tess.im/files/31'],
+    ])
+    expect(h.calls[0].at - start).toBe(3000)
+    expect(h.calls[1].at - h.calls[0].at).toBe(5000)
+    expect(h.calls[2].at - h.calls[1].at).toBe(10000)
+    for (const call of h.calls) {
+      expect(call.init.headers.Authorization).toBe(`Bearer ${KEY}`)
+      expect(call.init.headers['x-workspace-id']).toBe(WORKSPACE)
+      expect(call.init.body).toBeUndefined()
+    }
+    expect(h.timerList.every((timer) => timer.ms === 20000 && timer.cleared)).toBe(true)
+  })
+
+  it('status vazio no upload tambem consulta (so completed libera o execute)', async () => {
+    const h = createHarness()
+    h.queue.push(pending('completed'))
+    await wait(h, '')
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('status de falha no upload ou na consulta -> tess-error no estagio process', async () => {
+    let h = createHarness()
+    let error = await catchError(wait(h, 'failed'))
+    expect(error).toMatchObject({ code: 'tess-error', stage: 'process' })
+    expect(h.calls).toHaveLength(0)
+
+    h = createHarness()
+    h.queue.push(pending('processing'), pending('failed'))
+    error = await catchError(wait(h))
+    expect(error).toMatchObject({ code: 'tess-error', stage: 'process' })
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('nunca fica completed: tess-timeout em ate 60 s, estagio process', async () => {
+    const h = createHarness()
+    for (let index = 0; index < 40; index += 1) h.queue.push(pending('processing'))
+    const start = h.clock.t
+    const error = await catchError(wait(h))
+    expect(error).toMatchObject({ code: 'tess-timeout', stage: 'process' })
+    expect(h.clock.t - start).toBeLessThanOrEqual(60000)
+    expect(h.clock.t - start).toBeGreaterThan(60000 - 16000)
+  })
+
+  it('o prazo total tambem vale: deadline curto encerra a espera antes dos 60 s', async () => {
+    const h = createHarness()
+    for (let index = 0; index < 40; index += 1) h.queue.push(pending('processing'))
+    const start = h.clock.t
+    const error = await catchError(wait(h, 'waiting', h.now() + 12000))
+    expect(error?.code).toBe('tess-timeout')
+    expect(h.clock.t - start).toBeLessThan(12000)
+  })
+
+  it('falha transitoria (503, rede) da consulta segue esperando; erro definitivo (403) interrompe', async () => {
+    let h = createHarness()
+    h.queue.push(() => json({}, { status: 503 }), () => Promise.reject(new TypeError('fetch failed')), pending('completed'))
+    expect(await wait(h)).toEqual({ credits: 0 })
+    expect(h.calls).toHaveLength(3)
+
+    h = createHarness()
+    h.queue.push(() => json({ error: 'forbidden' }, { status: 403 }))
+    const error = await catchError(wait(h))
+    expect(error).toMatchObject({ code: 'tess-auth', httpStatus: 403, stage: 'process' })
+  })
+
+  it('corpo que nao e objeto -> tess-bad-response; fileId invalido e recusado antes do fetch', async () => {
+    const h = createHarness()
+    h.queue.push(() => json([1, 2]))
+    expect((await catchError(wait(h)))?.code).toBe('tess-bad-response')
+    const bad = await catchError(h.client.waitFileProcessed({ fileId: '31', status: 'waiting', deadline: farDeadline(h) }))
+    expect(bad?.code).toBe('tess-bad-response')
+    expect(h.calls).toHaveLength(1)
+  })
+})
+
+describe('estagio e status HTTP nos erros (diagnostico sem conteudo)', () => {
+  it('cada metodo marca o proprio estagio e o status HTTP numerico', async () => {
+    const h = createHarness()
+    h.queue.push(
+      () => json({ error: 'x' }, { status: 500 }),
+      () => json({ error: 'x' }, { status: 400 }),
+      () => json({ error: 'x' }, { status: 400 }),
+      () => json({ error: 'x' }, { status: 500 })
+    )
+    const errors = [
+      await catchError(h.client.uploadFile({ bytes: PDF, deadline: farDeadline(h) })),
+      await catchError(h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) })),
+      await catchError(h.client.getAgentResponse({ responseId: 1, deadline: farDeadline(h) })),
+      await catchError(h.client.deleteFile(1)),
+    ]
+    expect(errors.map((error) => [error.stage, error.httpStatus, error.code])).toEqual([
+      ['upload', 500, 'tess-unavailable'],
+      ['execute', 400, 'tess-error'],
+      ['poll', 400, 'tess-error'],
+      ['delete', 500, 'tess-unavailable'],
+    ])
+  })
+
+  it('erro local (resposta ruim, prazo, id invalido) tambem leva o estagio', async () => {
+    const h = createHarness()
+    h.queue.push(() => json({ file_id: 5 }, { status: 201 }))
+    expect((await catchError(h.client.uploadFile({ bytes: PDF, deadline: farDeadline(h) })))?.stage).toBe('upload')
+    expect((await catchError(h.client.executeAgent({ fileId: 1, deadline: h.now() - 1 })))?.stage).toBe('execute')
+    expect((await catchError(h.client.deleteFile('x')))?.stage).toBe('delete')
+  })
+
+  it('execute 422 "arquivo ainda nao processado" -> tess-error (sem retry, sem novo codigo), httpStatus 422, estagio execute', async () => {
+    const h = createHarness()
+    h.queue.push(() => json({
+      message: 'File 8800009 is not processed yet',
+      errors: { file_ids: ['File 8800009 is not processed yet'] },
+    }, { status: 422 }))
+    const error = await catchError(h.client.executeAgent({ fileId: 8800009, deadline: farDeadline(h) }))
+    expect(error).toMatchObject({ code: 'tess-error', httpStatus: 422, stage: 'execute' })
+    expect(error.message).toBe('tess-error')
+    expect(JSON.stringify({ ...error, message: error.message, stack: error.stack })).not.toContain('8800009')
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('o erro nunca carrega corpo ou mensagem da Tess', async () => {
+    const h = createHarness()
+    h.queue.push(() => json({ error: 'PRODUTO X LOTE Y', message: 'PRODUTO X LOTE Y' }, { status: 400 }))
+    const error = await catchError(h.client.executeAgent({ fileId: 1, deadline: farDeadline(h) }))
+    const serialized = JSON.stringify({ ...error, message: error.message, stack: error.stack })
+    expect(serialized).not.toContain('PRODUTO X')
+    expect(Object.keys(error).sort()).toEqual(['code', 'httpStatus', 'name', 'stage'])
+  })
+})
+
+describe('formato REAL observado (2026-11-26) com dados inventados', () => {
+  it('executeAgent le o envelope completo: id, status, texto do output e credits da execucao', async () => {
+    const h = createHarness()
+    h.queue.push(json(TESS_REAL_FORMAT_SAMPLE))
+    const result = await h.client.executeAgent({ fileId: 8800001, deadline: farDeadline(h) })
+    expect(result).toEqual({
+      responseId: 5550001,
+      status: 'succeeded',
+      outputText: REAL_FORMAT_OUTPUT_TEXT,
+      credits: TESS_REAL_FORMAT_EXECUTE_CREDITS,
+    })
+    expect(classifyTessAgentStatus(result.status, result.outputText)).toBe('done')
+    // o texto tem numeros com zeros a direita (JSON valido) que o JSON.stringify nunca geraria
+    expect(result.outputText).toContain('"value": 3750.00')
+    expect(result.outputText).toContain('"value": 1875.50')
+  })
+
+  it('fluxo observado: upload processado (completed, 1 credito) -> execute (~40,7) -> delete', async () => {
+    const h = createHarness()
+    h.queue.push(
+      json(TESS_REAL_FORMAT_UPLOAD, { status: 201 }),
+      json(TESS_REAL_FORMAT_SAMPLE),
+      json({ id: String(TESS_REAL_FORMAT_UPLOAD.id), object: 'file', deleted: true })
+    )
+    const uploaded = await h.client.uploadFile({ bytes: PDF, deadline: farDeadline(h) })
+    expect(isTessFileCompleted(uploaded.status)).toBe(true)
+    const executed = await h.client.executeAgent({ fileId: uploaded.fileId, deadline: farDeadline(h) })
+    expect(await h.client.deleteFile(uploaded.fileId)).toEqual({ deleted: true })
+    expect(uploaded.credits + executed.credits).toBeCloseTo(41.668, 6)
+    expect(h.calls.map((call) => call.init.method)).toEqual(['POST', 'POST', 'DELETE'])
   })
 })
