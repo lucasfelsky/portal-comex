@@ -756,10 +756,11 @@ service cloud.firestore {
         && request.resource.data.alsoPackingListUpdatedById == request.auth.uid;
     }
 
-    // Renomear o documento adicional (`other`): muda so' o nome exibido
-    // (`description`), nunca o arquivo (name/storagePath). Mesmo limite 1..120
-    // do create; type 'other' no doc atual E no novo; com trilha de auditoria.
-    // COA: cada arquivo e' um slot proprio, sem versao; renomear igual ao documento adicional.
+    // Renomear o documento adicional (`other`) e o COA (`coaOriginal`): muda so' o
+    // nome exibido (`description`), nunca o arquivo (name/storagePath). Mesmo limite
+    // 1..120 do create; type 'other' ou 'coaOriginal' no doc atual e o mesmo type no
+    // novo; com trilha de auditoria. COA: cada arquivo e' um slot proprio
+    // (`coaOriginal:<id>`), sem versao; renomear igual ao documento adicional.
     function isValidAdditionalDocumentRenameUpdate() {
       return resource.data.type in ['other', 'coaOriginal']
         && request.resource.data.type == resource.data.type
@@ -1048,10 +1049,11 @@ service cloud.firestore {
       // a query desses perfis precisa de `where('type','in',[...])`. Nunca
       // usuario comum. Imutavel, EXCETO o vinculo
       // Invoice -> Packing List (`isValidInvoicePackingListLinkUpdate`, so
-      // admin) e o nome do documento adicional
+      // admin) e o nome do documento adicional e do COA
       // (`isValidAdditionalDocumentRenameUpdate`, so admin) - "versao
       // anterior" e' derivada por ordem de `uploadedAt` dentro do mesmo
-      // `slotKey` (D1), nunca reescrita.
+      // `slotKey` (D1), nunca reescrita. COA: 1 slot por arquivo
+      // (`coaOriginal:<id>`), entao nao tem versao anterior.
       match /documents/{documentId} {
         allow read: if isAdmin() || isLogistics()
           || (isDocumentReader() && isDocumentReaderType(resource.data.type));

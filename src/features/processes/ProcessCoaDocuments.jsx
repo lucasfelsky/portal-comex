@@ -70,6 +70,8 @@ export default function ProcessCoaDocuments({
   const [resultMessage, setResultMessage] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef(null)
+  const uploadButtonRef = useRef(null)
+  const wasUploadingRef = useRef(false)
   const mountedRef = useRef(true)
   const busyRef = useRef(false)
 
@@ -81,6 +83,17 @@ export default function ProcessCoaDocuments({
   }, [])
 
   const isUploading = progress !== null
+
+  // Teclado: o botão de envio fica desabilitado durante o envio; ao terminar, o foco volta a ele.
+  useEffect(() => {
+    if (isUploading) {
+      wasUploadingRef.current = true
+      return
+    }
+    if (!wasUploadingRef.current) return
+    wasUploadingRef.current = false
+    uploadButtonRef.current?.focus()
+  }, [isUploading])
   const room = Math.max(0, MAX_COA_FILES_PER_PROCESS - count)
 
   async function uploadFiles(files) {
@@ -272,6 +285,7 @@ export default function ProcessCoaDocuments({
                 />
                 <button
                   type="button"
+                  ref={uploadButtonRef}
                   className="secondary-button coa-docs__upload"
                   disabled={isUploading}
                   onClick={() => inputRef.current?.click()}
@@ -290,7 +304,7 @@ export default function ProcessCoaDocuments({
       </div>
 
       {count > 0 ? (
-        <ul className="coa-docs__list" aria-label="Arquivos de COA">
+        <ul className="coa-docs__list" role="list" aria-label="Arquivos de COA">
           {coaDocuments.map((document_) => {
             const displayName = getCoaDisplayName(document_)
             const metaText = [

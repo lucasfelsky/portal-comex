@@ -147,6 +147,22 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
     expect(handlers.onChanged).toHaveBeenCalledTimes(1)
   })
 
+  it('depois do envio o foco volta ao botão de envio (teclado)', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const { container } = renderList()
+
+    await user.upload(fileInputOf(container), [pdf('a.pdf'), pdf('b.pdf')])
+
+    await screen.findByText('2 COAs enviados.')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar COAs' })).toHaveFocus())
+  })
+
+  it('sem envio em andamento o foco não é movido para o botão', () => {
+    renderList({ documents: [coa('c1')] })
+    expect(screen.getByRole('button', { name: 'Adicionar COAs' })).not.toHaveFocus()
+  })
+
   it('1 arquivo com sucesso: "1 COA enviado."', async () => {
     const user = userEvent.setup()
     mockUploadProcessDocument.mockResolvedValue(undefined)
@@ -261,6 +277,7 @@ describe('ProcessCoaDocuments - lista', () => {
     })
 
     const list = screen.getByRole('list', { name: 'Arquivos de COA' })
+    expect(list).toHaveAttribute('role', 'list')
     const items = within(list).getAllByRole('listitem')
     expect(items.map((item) => item.querySelector('.coa-docs__name').textContent)).toEqual([
       'legado-anterior.pdf',

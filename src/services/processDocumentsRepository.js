@@ -212,7 +212,7 @@ export async function setInvoicePackingListLink(processId, documentId, included,
   })
 }
 
-// Renomeia o documento adicional (`other`): muda so' o nome exibido
+// Renomeia o documento adicional (`other`) ou o COA (`coaOriginal`): muda so' o nome exibido
 // (`description`). A rule so' aceita estas 3 chaves; o arquivo (name/storagePath) nunca muda.
 export async function renameAdditionalDocument(processId, documentId, description, actor) {
   if (!isFirebaseConfigured || !firestore) return

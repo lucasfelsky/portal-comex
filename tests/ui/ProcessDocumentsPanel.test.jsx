@@ -1455,7 +1455,7 @@ describe('ProcessDocumentsPanel — Visualizar: PDF e imagem (S1)', () => {
   })
 })
 
-/// COA Original (admin): lista de varios arquivos (S11-A), 1 slot por arquivo, sem versao anterior.
+// COA Original (admin): lista de varios arquivos (S11-A), 1 slot por arquivo, sem versao anterior.
 describe('ProcessDocumentsPanel — COA Original (admin)', () => {
   const SHIPPED_FCL = { ...FCL_PROCESS, shippedAt: '2026-09-01' }
 
@@ -1550,6 +1550,42 @@ describe('ProcessDocumentsPanel — COA Original (admin)', () => {
     // Com nome proprio, o nome do arquivo aparece embaixo; sem nome proprio, nao repete.
     expect(within(await coaItem('Lote ABC')).getByText('c2.pdf')).toBeInTheDocument()
     expect(within(await coaItem('c1.pdf')).getAllByText('c1.pdf')).toHaveLength(1)
+  })
+
+  it('selo "N enviado" conta o COA uma vez (um por tipo): vários COAs novos, só o legado, e nenhum', async () => {
+    const OPEN_PROCESS = { id: 'p1', category: 'LCL' }
+    const cases = [
+      ['nenhum COA', [], null],
+      [
+        'dois COAs novos (coaOriginal:<id>)',
+        [
+          docCoa('c1', { uploadedAt: '2026-09-02T10:00:00.000Z' }),
+          docCoa('c2', { uploadedAt: '2026-09-03T10:00:00.000Z' }),
+        ],
+        '1 enviado',
+      ],
+      ['só o COA legado (slot fixo)', [docCoa('legado', { slotKey: 'coaOriginal' })], '1 enviado'],
+      [
+        'novo + legado',
+        [
+          docCoa('c1', { uploadedAt: '2026-09-02T10:00:00.000Z' }),
+          docCoa('legado', { slotKey: 'coaOriginal', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+        ],
+        '1 enviado',
+      ],
+    ]
+    for (const [label, documents, expected] of cases) {
+      mockListProcessDocuments.mockResolvedValue(documents)
+      const { unmount } = render(<ProcessDocumentsPanel process={OPEN_PROCESS} profile={ADMIN_PROFILE} />)
+      await waitForDocumentsLoaded()
+      if (expected) {
+        expect(await screen.findByText(expected), label).toBeInTheDocument()
+      } else {
+        expect(screen.queryByText(/^d+ enviados?$/), label).not.toBeInTheDocument()
+      }
+      expect(screen.queryByText('2 enviados'), label).not.toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('baixar um COA chama o download com (processId, docId)', async () => {
