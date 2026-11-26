@@ -9,6 +9,7 @@ import {
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
   CARGO_REPORT_CONFLICT_CODE,
   buildClosedConferencePayload,
+  buildConferencePayload,
   toCargoDateKey,
 } from './cargoReportFormModel'
 import { buildCargoReportSheet } from './cargoReportSheet'
@@ -17,7 +18,7 @@ import { buildCargoReportSheet } from './cargoReportSheet'
 // delas para texto, compartilhados entre a barra de ações do computador (CargoReportActionBar / CargoReportForm) e a
 // aba Conferência do celular (S9-H: no celular só salvar e reabrir; fechar e gravar de novo são do computador).
 // Funções, não hooks: quem chama guarda o estado. Os textos foram MOVIDOS do formulário e
-// da barra sem alteração; só o ramo de "sem conexão" é novo.
+// da barra sem alteração; o ramo de "sem conexão" (S9-F) e o de "conferência salva, anexo falhou" (S10-J2b) são novos.
 
 export const CLOSE_ERROR_PREFIX = 'Não foi possível salvar e fechar a conferência.'
 export const REOPEN_ERROR_PREFIX = 'Não foi possível reabrir.'
@@ -34,6 +35,9 @@ export const CARGO_CONFERENCE_MESSAGES = {
     'Conferência fechada e Excel anexado como nova versão. O aviso da conferência foi enviado aos destinatários do Relatório de carga.',
   conferenceReopened: 'Conferência reaberta. A logística pode corrigir e fechar de novo.',
   conferenceAttachedNotSaved: 'O Excel foi anexado e o aviso enviado, mas a conferência não foi marcada como fechada.',
+  // S10-J2b: o fechar grava a conferência aberta ANTES de anexar; se o anexo falhar, ela já está salva.
+  conferenceSavedNotClosed:
+    'A conferência foi salva, mas o Excel não foi anexado e o aviso não foi enviado. Use "Salvar e fechar conferência" de novo.',
   conferenceAttachedConflict:
     'O Excel foi anexado e o aviso enviado, mas o COMEX ou outra pessoa alterou o relatório antes. Recarregue e confira.',
   currentChanged:
@@ -42,6 +46,8 @@ export const CARGO_CONFERENCE_MESSAGES = {
   offline: 'Sem conexão. A conferência não foi salva: confira o sinal e toque em Salvar de novo.',
   offlineDraft: 'Sem conexão. O relatório não foi salvo: confira o sinal e toque em Salvar de novo.',
   offlineClose: 'Sem conexão. A conferência não foi fechada: confira o sinal e toque em Salvar e fechar de novo.',
+  offlineCloseSaved:
+    'Sem conexão. A conferência foi salva, mas não foi fechada: confira o sinal e use "Salvar e fechar conferência" de novo.',
   offlineReopen: 'Sem conexão. A conferência não foi reaberta: confira o sinal e tente de novo.',
 }
 
@@ -84,8 +90,9 @@ export async function buildCargoConferenceCloseFile({ form, process, catalog, pa
   return generateCargoReportFile(buildCargoReportSheet(form, { process, conference: payload, catalog, packaging }))
 }
 
-// Fecha a conferência: monta o payload fechado, gera o Excel e chama o repositório (que anexa e grava).
-// Em erro, anexa o payload montado em `error.closePayload` (a tela precisa dele para o "Gravar de novo").
+// Fecha a conferência: monta a conferência aberta (r+1) e a fechada (r+2), gera o Excel da fechada e chama o
+// repositório (que grava a aberta, anexa e grava a fechada). Em erro, anexa o payload fechado em `error.closePayload`
+// (a tela precisa dele para o "Gravar de novo") e, se a aberta já foi gravada, a cópia dela em `error.savedConference`.
 export async function closeCargoConference({
   processId,
   process,
@@ -99,14 +106,17 @@ export async function closeCargoConference({
 }) {
   const actorName = String(profile?.name ?? profile?.email ?? '').trim()
   let payload = null
+  let openPayload = null
   try {
-    payload = buildClosedConferencePayload({ ...conference, revision: savedRevision }, form.rows, {
+    openPayload = buildConferencePayload({ ...conference, revision: savedRevision }, form.rows, { actorName })
+    payload = buildClosedConferencePayload({ ...conference, revision: openPayload.revision }, form.rows, {
       actorName,
       actorUid: String(profile?.uid ?? ''),
       today,
     })
     const file = await buildCargoConferenceCloseFile({ form, process, catalog, packaging, payload })
     const result = await closeCargoReportConference(processId, {
+      openPayload,
       payload,
       file,
       category: process?.category,
@@ -118,6 +128,9 @@ export async function closeCargoConference({
     // Não enumerável: o payload não aparece quando o erro é impresso no console.
     if (error && typeof error === 'object') {
       Object.defineProperty(error, 'closePayload', { value: payload, configurable: true, writable: true })
+      if (Number.isInteger(error.savedRevision)) {
+        Object.defineProperty(error, 'savedConference', { value: openPayload, configurable: true, writable: true })
+      }
     }
     throw error
   }
@@ -134,6 +147,12 @@ export function describeCargoCloseError(error, payload, { onRetry } = {}) {
       text: CARGO_CONFERENCE_MESSAGES.conferenceAttachedNotSaved,
       action: { label: 'Gravar de novo', run: () => onRetry?.(payload, error.documentId) },
     }
+  }
+  // S10-J2b: a conferência aberta já foi gravada (falha no anexo): o texto diz que nada se perdeu.
+  if (Number.isInteger(error?.savedRevision)) {
+    return isCargoNetworkError(error)
+      ? { kind: 'error', text: CARGO_CONFERENCE_MESSAGES.offlineCloseSaved }
+      : { kind: 'error', text: buildActionErrorMessage(CARGO_CONFERENCE_MESSAGES.conferenceSavedNotClosed, error) }
   }
   if (error?.code === CARGO_REPORT_CONFLICT_CODE) {
     return error.scope === 'current'

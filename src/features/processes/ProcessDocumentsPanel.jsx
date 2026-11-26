@@ -44,6 +44,7 @@ import { canSeePurchaseOrderDetailsForRole, formatPurchaseOrderNumber, getProces
 import { isShipmentConfirmed } from './shipmentConfirmation'
 import { CARGO_STAGE, canEditCargoReport, canOpenCargoReport, getCargoReportStage } from './cargoReportFormModel'
 import { isPortalGeneratedCargoReport } from './cargoReportSheet'
+import CargoConferenceDamageCard from './CargoConferenceDamageCard'
 
 // S3 do Relatorio de Carga: o formulario (com repositorio e catalogo) so' carrega ao abrir.
 const CargoReportForm = lazy(() => import('./CargoReportForm'))
@@ -1267,6 +1268,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         </div>
       ) : (
         <div className="documents-sections">
+          <CargoConferenceDamageCard processId={processId} role={role} reloadToken={reloadToken} />
           <div className="documents-section documents-section--process">
             <DocumentsSectionHeader
               title="Documentos do processo"

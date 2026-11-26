@@ -53,6 +53,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 import {
   closeCargoReportConference,
   concludeCargoReport,
+  getCargoConferenceDamage,
   getCargoReport,
   reopenCargoReport,
   reopenCargoReportConference,
@@ -143,6 +144,36 @@ describe('getCargoReport', () => {
     expect(result.current.revision).toBe(4)
     expect(result.current.updatedAt).toEqual(when)
     expect(result.conference).toBeNull()
+  })
+})
+
+describe('S10-J2b: getCargoConferenceDamage', () => {
+  it('lê processes/<id>/cargoReport/damage e converte updatedAt para Date', async () => {
+    const when = new Date(2026, 10, 24, 9, 30)
+    mockGetDoc.mockResolvedValue(snapshot({ itemCount: 1, items: [{ rowId: 'r-1' }], updatedAt: { toDate: () => when } }))
+
+    const result = await getCargoConferenceDamage('P1')
+
+    expect(mockDoc).toHaveBeenCalledWith(expect.anything(), 'processes', 'P1', 'cargoReport', 'damage')
+    expect(mockGetDoc).toHaveBeenCalledTimes(1)
+    expect(result.itemCount).toBe(1)
+    expect(result.updatedAt).toEqual(when)
+  })
+
+  it('espelho inexistente (processo antigo ou sem avaria) devolve null', async () => {
+    mockGetDoc.mockResolvedValue(snapshot(undefined))
+    await expect(getCargoConferenceDamage('P1')).resolves.toBeNull()
+  })
+
+  it('sem Firebase devolve null sem ler nada', async () => {
+    state.configured = false
+    await expect(getCargoConferenceDamage('P1')).resolves.toBeNull()
+    expect(mockGetDoc).not.toHaveBeenCalled()
+  })
+
+  it('erro de leitura (permissão) sobe como veio, para o cartão decidir', async () => {
+    mockGetDoc.mockRejectedValue(permissionDenied())
+    await expect(getCargoConferenceDamage('P1')).rejects.toMatchObject({ code: 'permission-denied' })
   })
 })
 
@@ -504,13 +535,23 @@ describe('S7: closeCargoReportConference', () => {
       if (ref.path.endsWith('/cargoReport/conference')) return snapshot(conference)
       return snapshot(undefined)
     })
+  // S10-J2b: o fechar grava a conferência ABERTA (r+1) antes de anexar e a FECHADA (r+2) depois.
+  const closeArgs = (overrides = {}) => ({
+    openPayload: conferencePayload(3),
+    payload: closedConferencePayload(4),
+    file,
+    category: 'FCL',
+    actor,
+    currentRevision: 6,
+    ...overrides,
+  })
 
   beforeEach(() => {
     serverDocs()
     mockUploadProcessDocument.mockResolvedValue({ id: 'doc-77' })
   })
 
-  it('relê current e conferência, anexa como logística e grava a conferência fechada, nessa ordem', async () => {
+  it('S10-J2b: relê current e conferência, GRAVA a aberta (r+1), anexa como logística e grava a fechada (r+2), nessa ordem', async () => {
     const order = []
     mockGetDoc.mockImplementation(async (ref) => {
       order.push(`getDoc:${ref.path.split('/').pop()}`)
@@ -520,21 +561,15 @@ describe('S7: closeCargoReportConference', () => {
       order.push('upload')
       return { id: 'doc-77' }
     })
-    mockSetDoc.mockImplementation(async () => {
-      order.push('setDoc')
+    mockSetDoc.mockImplementation(async (ref, data) => {
+      order.push(`setDoc:${ref.path.split('/').pop()}:${data.status}:r${data.revision}`)
     })
 
-    const result = await closeCargoReportConference('P1', {
-      payload: closedConferencePayload(3),
-      file,
-      category: 'FCL',
-      actor,
-      currentRevision: 6,
-    })
+    const result = await closeCargoReportConference('P1', closeArgs())
 
     expect(order.slice(0, 2).sort()).toEqual(['getDoc:conference', 'getDoc:current'])
-    expect(order.slice(2)).toEqual(['upload', 'setDoc'])
-    expect(result).toEqual({ revision: 3, documentId: 'doc-77' })
+    expect(order.slice(2)).toEqual(['setDoc:conference:aberta:r3', 'upload', 'setDoc:conference:fechada:r4'])
+    expect(result).toEqual({ revision: 4, documentId: 'doc-77' })
     expect(mockUploadProcessDocument).toHaveBeenCalledWith('P1', {
       type: 'cargoReport',
       file,
@@ -543,20 +578,24 @@ describe('S7: closeCargoReportConference', () => {
     })
   })
 
-  it('closedDocumentId = id do upload; grava no doc conference, sem merge, com os carimbos do actor', async () => {
-    await closeCargoReportConference('P1', {
-      payload: closedConferencePayload(3),
-      file,
-      category: 'FCL',
-      actor,
-      currentRevision: 6,
-    })
-    const [ref, data] = mockSetDoc.mock.calls[0]
+  it('a gravação aberta vem antes do upload por invocationCallOrder (o aviso do servidor lê o conteúdo final)', async () => {
+    await closeCargoReportConference('P1', closeArgs())
+    const [openOrder, closedOrder] = mockSetDoc.mock.invocationCallOrder
+    const [uploadOrder] = mockUploadProcessDocument.mock.invocationCallOrder
+    expect(openOrder).toBeLessThan(uploadOrder)
+    expect(uploadOrder).toBeLessThan(closedOrder)
+    expect(mockSetDoc.mock.calls[0][1]).toMatchObject({ status: 'aberta', revision: 3, closedDocumentId: '' })
+  })
+
+  it('closedDocumentId = id do upload; a fechada grava no doc conference, sem merge, com os carimbos do actor', async () => {
+    await closeCargoReportConference('P1', closeArgs())
+    expect(mockSetDoc).toHaveBeenCalledTimes(2)
+    const [ref, data] = mockSetDoc.mock.calls[1]
     expect(ref.path).toBe('processes/P1/cargoReport/conference')
-    expect(mockSetDoc.mock.calls[0]).toHaveLength(2)
+    expect(mockSetDoc.mock.calls[1]).toHaveLength(2)
     expect(data).toMatchObject({
       status: 'fechada',
-      revision: 3,
+      revision: 4,
       closedDocumentId: 'doc-77',
       closedById: 'uid-1',
       closedByName: 'Operador Logística',
@@ -566,10 +605,15 @@ describe('S7: closeCargoReportConference', () => {
     })
     // 15 chaves do modelo + 3 carimbos = 18 (allowlist das rules)
     expect(Object.keys(data)).toHaveLength(18)
+    // a aberta também é doc inteiro, sem merge e com os mesmos carimbos
+    expect(mockSetDoc.mock.calls[0]).toHaveLength(2)
+    expect(mockSetDoc.mock.calls[0][0].path).toBe('processes/P1/cargoReport/conference')
+    expect(Object.keys(mockSetDoc.mock.calls[0][1])).toHaveLength(18)
+    expect(mockSetDoc.mock.calls[0][1]).toMatchObject({ updatedById: 'uid-1', updatedByName: 'Operador Logística' })
   })
 
-  it('current em rascunho ou com outra revisão: conflito scope current, sem anexar nem gravar', async () => {
-    const args = { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 }
+  it('current em rascunho ou com outra revisão: conflito scope current, sem gravar nem anexar', async () => {
+    const args = closeArgs()
     serverDocs({ status: 'rascunho', revision: 6 })
     await expect(closeCargoReportConference('P1', args)).rejects.toMatchObject({
       code: 'cargoReport/revision-conflict',
@@ -586,71 +630,105 @@ describe('S7: closeCargoReportConference', () => {
     expect(mockSetDoc).not.toHaveBeenCalled()
   })
 
-  it('revisão da conferência diferente: conflito scope conference, SEM upload', async () => {
+  it('revisão da conferência diferente (a aberta r+1 conta contra o servidor): conflito scope conference, sem gravar nem anexar', async () => {
     serverDocs({ status: 'concluido', revision: 6 }, { revision: 5 })
-    await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 })
-    ).rejects.toMatchObject({ code: 'cargoReport/revision-conflict', scope: 'conference' })
+    await expect(closeCargoReportConference('P1', closeArgs())).rejects.toMatchObject({
+      code: 'cargoReport/revision-conflict',
+      scope: 'conference',
+    })
+    // a conferência já em r+1 no servidor (tela velha, depois de uma gravação aberta) também conflita
+    serverDocs({ status: 'concluido', revision: 6 }, { revision: 3 })
+    await expect(closeCargoReportConference('P1', closeArgs())).rejects.toMatchObject({ scope: 'conference' })
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
     expect(mockSetDoc).not.toHaveBeenCalled()
   })
 
-  it('conferência ainda inexistente conta como revisão 0 (payload revisão 1)', async () => {
+  it('conferência ainda inexistente conta como revisão 0 (aberta revisão 1, fechada revisão 2)', async () => {
     serverDocs({ status: 'concluido', revision: 6 }, null)
     await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(1), file, category: 'FCL', actor, currentRevision: 6 })
-    ).resolves.toMatchObject({ documentId: 'doc-77' })
+      closeCargoReportConference(
+        'P1',
+        closeArgs({ openPayload: conferencePayload(1), payload: closedConferencePayload(2) })
+      )
+    ).resolves.toMatchObject({ documentId: 'doc-77', revision: 2 })
   })
 
-  it('falha na gravação depois do anexo vira cargoReport/attached-not-saved com o documentId', async () => {
-    mockSetDoc.mockRejectedValue(new Error('rede caiu'))
-    await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 })
-    ).rejects.toMatchObject({ code: 'cargoReport/attached-not-saved', documentId: 'doc-77' })
+  it('S10-J2b: falha ao gravar a aberta com releitura em outra revisão vira conflito e não anexa nada', async () => {
+    mockSetDoc.mockRejectedValueOnce(permissionDenied())
+    // 1ª leitura da conferência (passo a) vê r2; a releitura da classificação (depois do setDoc negado) vê outra revisão
+    let conferenceReads = 0
+    mockGetDoc.mockImplementation(async (ref) => {
+      if (ref.path.endsWith('/current')) return snapshot({ status: 'concluido', revision: 6 })
+      conferenceReads += 1
+      return snapshot({ revision: conferenceReads === 1 ? 2 : 9 })
+    })
+    await expect(closeCargoReportConference('P1', closeArgs())).rejects.toMatchObject({
+      code: 'cargoReport/revision-conflict',
+    })
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+    expect(mockSetDoc).toHaveBeenCalledTimes(1)
   })
 
-  it('falha no upload relança o erro original e não grava', async () => {
+  it('S10-J2b: falha na gravação aberta sem conflito segue como veio e nada fica marcado como salvo', async () => {
+    const failure = new Error('rede caiu')
+    mockSetDoc.mockRejectedValueOnce(failure)
+    const error = await closeCargoReportConference('P1', closeArgs()).catch((caught) => caught)
+    expect(error).toBe(failure)
+    expect(error.savedRevision).toBeUndefined()
+    expect(mockUploadProcessDocument).not.toHaveBeenCalled()
+  })
+
+  it('falha na gravação fechada depois do anexo vira cargoReport/attached-not-saved com documentId e savedRevision', async () => {
+    mockSetDoc.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('rede caiu'))
+    const error = await closeCargoReportConference('P1', closeArgs()).catch((caught) => caught)
+    expect(error).toMatchObject({ code: 'cargoReport/attached-not-saved', documentId: 'doc-77', savedRevision: 3 })
+    expect(Object.keys(error)).not.toContain('savedRevision')
+    expect(mockSetDoc).toHaveBeenCalledTimes(2)
+  })
+
+  it('S10-J2b: falha no upload relança o erro original com savedRevision (não enumerável) e só a aberta foi gravada', async () => {
     const failure = new Error('storage/unauthorized')
     mockUploadProcessDocument.mockRejectedValue(failure)
-    await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 })
-    ).rejects.toBe(failure)
-    expect(mockSetDoc).not.toHaveBeenCalled()
+    const error = await closeCargoReportConference('P1', closeArgs()).catch((caught) => caught)
+    expect(error).toBe(failure)
+    expect(error.savedRevision).toBe(3)
+    expect(Object.keys(error)).not.toContain('savedRevision')
+    expect(mockSetDoc).toHaveBeenCalledTimes(1)
+    expect(mockSetDoc.mock.calls[0][1]).toMatchObject({ status: 'aberta', revision: 3 })
   })
 
   it('sem Firebase e sem uid lançam erro antes de ler ou anexar', async () => {
     state.configured = false
-    await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 })
-    ).rejects.toThrow('Documentos disponíveis apenas com o Firebase configurado.')
+    await expect(closeCargoReportConference('P1', closeArgs())).rejects.toThrow(
+      'Documentos disponíveis apenas com o Firebase configurado.'
+    )
     state.configured = true
     mockAuth.currentUser = null
-    await expect(
-      closeCargoReportConference('P1', { payload: closedConferencePayload(3), file, category: 'FCL', actor, currentRevision: 6 })
-    ).rejects.toThrow('Usuário não autenticado')
+    await expect(closeCargoReportConference('P1', closeArgs())).rejects.toThrow('Usuário não autenticado')
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
     expect(mockGetDoc).not.toHaveBeenCalled()
+    expect(mockSetDoc).not.toHaveBeenCalled()
   })
 })
 
 describe('S7: retryCloseConferenceWrite', () => {
   it('grava só a conferência apontando para o documento já anexado, sem novo upload', async () => {
     const result = await retryCloseConferenceWrite('P1', {
-      payload: closedConferencePayload(3),
+      payload: closedConferencePayload(4),
       documentId: 'doc-77',
       actor: LOGISTICS,
     })
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
     expect(mockSetDoc.mock.calls[0][0].path).toBe('processes/P1/cargoReport/conference')
     expect(mockSetDoc.mock.calls[0][1]).toMatchObject({ status: 'fechada', closedDocumentId: 'doc-77' })
-    expect(result).toEqual({ revision: 3, documentId: 'doc-77' })
+    expect(result).toEqual({ revision: 4, documentId: 'doc-77' })
   })
 
   it('conflito de revisão é classificado', async () => {
     mockSetDoc.mockRejectedValue(permissionDenied())
     mockGetDoc.mockResolvedValue(snapshot({ revision: 9 }))
     await expect(
-      retryCloseConferenceWrite('P1', { payload: closedConferencePayload(3), documentId: 'doc-77', actor: LOGISTICS })
+      retryCloseConferenceWrite('P1', { payload: closedConferencePayload(4), documentId: 'doc-77', actor: LOGISTICS })
     ).rejects.toMatchObject({ code: 'cargoReport/revision-conflict' })
   })
 })

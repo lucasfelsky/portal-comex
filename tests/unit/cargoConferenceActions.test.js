@@ -34,6 +34,7 @@ import {
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
   CARGO_REPORT_CONFLICT_CODE,
   buildClosedConferencePayload,
+  buildConferencePayload,
   createEmptyCargoReportRow,
 } from '../../src/features/processes/cargoReportFormModel'
 
@@ -132,20 +133,24 @@ describe('closeCargoConference', () => {
     ...overrides,
   })
 
-  it('monta o payload fechado, gera o Excel e chama o repositório com os mesmos argumentos da barra', async () => {
+  // S10-J2b: a conferência aberta (r+1) é gravada antes do anexo; a fechada (r+2) depois.
+  it('monta a aberta (r+1) e a fechada (r+2), gera o Excel e chama o repositório com os mesmos argumentos da barra', async () => {
     const result = await closeCargoConference(args())
 
-    const expected = buildClosedConferencePayload({ ...CONFERENCE, revision: 7 }, ROWS, {
+    const expectedOpen = buildConferencePayload({ ...CONFERENCE, revision: 7 }, ROWS, { actorName: 'Operador Logística' })
+    const expected = buildClosedConferencePayload({ ...CONFERENCE, revision: 8 }, ROWS, {
       actorName: 'Operador Logística',
       actorUid: 'log-1',
       today: '2026-11-25',
     })
     expect(result).toEqual({ payload: expected, documentId: 'doc-9' })
-    expect(expected).toMatchObject({ status: 'fechada', revision: 8, nfNumber: '48213; 48214', closedDate: '2026-11-25' })
+    expect(expected).toMatchObject({ status: 'fechada', revision: 9, nfNumber: '48213; 48214', closedDate: '2026-11-25' })
+    expect(expectedOpen).toMatchObject({ status: 'aberta', revision: 8, closedDate: '', closedDocumentId: '' })
     expect(mockClose).toHaveBeenCalledTimes(1)
     const [processId, options] = mockClose.mock.calls[0]
     expect(processId).toBe('p1')
     expect(options).toMatchObject({
+      openPayload: expectedOpen,
       payload: expected,
       category: 'FCL',
       actor: LOGISTICA,
@@ -153,6 +158,20 @@ describe('closeCargoConference', () => {
     })
     expect(options.file).toBeInstanceOf(File)
     expect(mockGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('a aberta e a fechada têm o mesmo conteúdo (só revisão, status e fechamento mudam) e o Excel sai da fechada', async () => {
+    await closeCargoConference(args())
+    const { openPayload, payload } = mockClose.mock.calls[0][1]
+    const CLOSING_KEYS = ['revision', 'status', 'closedDate', 'closedById', 'closedByName', 'closedDocumentId']
+    const strip = (data) => Object.fromEntries(Object.entries(data).filter(([key]) => !CLOSING_KEYS.includes(key)))
+    expect(strip(payload)).toEqual(strip(openPayload))
+    expect(openPayload.revision).toBe(payload.revision - 1)
+    expect(openPayload.status).toBe('aberta')
+    expect(payload.status).toBe('fechada')
+    // O Excel é gerado a partir do payload fechado (nome, data de fechamento e recebimento).
+    expect(mockGenerate).toHaveBeenCalledTimes(1)
+    expect(mockClose.mock.calls[0][1].file).toBeInstanceOf(File)
   })
 
   it('o Excel é gerado antes de anexar (ordem das chamadas)', async () => {
@@ -173,8 +192,26 @@ describe('closeCargoConference', () => {
     const failure = Object.assign(new Error('x'), { code: CARGO_REPORT_ATTACHED_NOT_SAVED_CODE, documentId: 'doc-5' })
     mockClose.mockRejectedValue(failure)
     await expect(closeCargoConference(args())).rejects.toBe(failure)
-    expect(failure.closePayload).toMatchObject({ status: 'fechada', revision: 8 })
+    expect(failure.closePayload).toMatchObject({ status: 'fechada', revision: 9 })
     expect(Object.keys(failure)).not.toContain('closePayload')
+  })
+
+  it('S10-J2b: erro com savedRevision (aberta já gravada) leva a aberta em `error.savedConference`, não enumerável', async () => {
+    const failure = Object.assign(new Error('upload'), {})
+    Object.defineProperty(failure, 'savedRevision', { value: 8, configurable: true })
+    mockClose.mockRejectedValue(failure)
+    await expect(closeCargoConference(args())).rejects.toBe(failure)
+    expect(failure.savedConference).toMatchObject({ status: 'aberta', revision: 8, nfNumber: '48213; 48214' })
+    expect(failure.savedConference).toBe(mockClose.mock.calls[0][1].openPayload)
+    expect(Object.keys(failure)).not.toContain('savedConference')
+    expect(failure.closePayload).toMatchObject({ status: 'fechada', revision: 9 })
+  })
+
+  it('S10-J2b: erro sem savedRevision (nada foi gravado) não leva savedConference', async () => {
+    const failure = new Error('conflito antes de gravar')
+    mockClose.mockRejectedValue(failure)
+    await expect(closeCargoConference(args())).rejects.toBe(failure)
+    expect(failure.savedConference).toBeUndefined()
   })
 
   it('erro ao gerar o Excel: o erro segue como veio e nada é anexado', async () => {
@@ -212,6 +249,37 @@ describe('describeCargoCloseError', () => {
     await retryCargoConferenceClose({ processId: 'p1', payload, documentId: 'doc-5', profile: LOGISTICA })
     expect(mockRetryClose).toHaveBeenCalledWith('p1', { payload, documentId: 'doc-5', actor: LOGISTICA })
     expect(mockClose).not.toHaveBeenCalled()
+  })
+
+  it('S10-J2b: falha no anexo com a conferência já salva: texto próprio, sem "Gravar de novo"', () => {
+    const error = new Error('upload')
+    Object.defineProperty(error, 'savedRevision', { value: 8, configurable: true })
+    const described = describeCargoCloseError(error, payload)
+    expect(described.kind).toBe('error')
+    expect(described.action).toBeUndefined()
+    expect(described.text.startsWith(MESSAGES.conferenceSavedNotClosed)).toBe(true)
+    expect(MESSAGES.conferenceSavedNotClosed).toBe(
+      'A conferência foi salva, mas o Excel não foi anexado e o aviso não foi enviado. Use "Salvar e fechar conferência" de novo.'
+    )
+  })
+
+  it('S10-J2b: falha de rede no anexo com a conferência já salva: offlineCloseSaved', () => {
+    const error = Object.assign(new Error('rede'), { code: 'unavailable' })
+    Object.defineProperty(error, 'savedRevision', { value: 8, configurable: true })
+    expect(describeCargoCloseError(error, payload)).toEqual({ kind: 'error', text: MESSAGES.offlineCloseSaved })
+    expect(MESSAGES.offlineCloseSaved).toContain('A conferência foi salva, mas não foi fechada')
+    // Sem savedRevision (nada gravado) continua o texto de sempre.
+    expect(describeCargoCloseError({ code: 'unavailable' }, payload).text).toBe(MESSAGES.offlineClose)
+  })
+
+  it('S10-J2b: attached-not-saved com savedRevision continua oferecendo "Gravar de novo" (o ramo vem antes)', () => {
+    const onRetry = vi.fn()
+    const error = Object.assign(new Error('x'), { code: CARGO_REPORT_ATTACHED_NOT_SAVED_CODE, documentId: 'doc-5' })
+    Object.defineProperty(error, 'savedRevision', { value: 8, configurable: true })
+    const described = describeCargoCloseError(error, payload, { onRetry })
+    expect(described).toMatchObject({ kind: 'retry', text: MESSAGES.conferenceAttachedNotSaved })
+    described.action.run()
+    expect(onRetry).toHaveBeenCalledWith(payload, 'doc-5')
   })
 
   it('anexou e houve conflito: aviso de conflito (sem ação)', () => {

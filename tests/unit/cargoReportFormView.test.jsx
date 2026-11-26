@@ -2011,7 +2011,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
 
   beforeEach(() => {
     mockGetCargoReport.mockResolvedValue({ current: concludedDoc(), conference: conferenceDoc() })
-    mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+    mockClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
   })
 
   async function openCloseDialog(user) {
@@ -2130,9 +2130,11 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     expect(args.category).toBe('FCL')
     expect(args.currentRevision).toBe(6)
     expect(args.file.name).toBe(PORTAL_FILE_NAME)
+    // S10-J2b: a conferência ABERTA (r+1) é gravada antes do anexo; a FECHADA (r+2) depois. A tela abriu em r2.
+    expect(args.openPayload).toMatchObject({ status: 'aberta', revision: 3, closedDate: '', closedDocumentId: '' })
     expect(args.payload).toMatchObject({
       status: 'fechada',
-      revision: 3,
+      revision: 4,
       checkedByName: 'Operador Logística',
       closedDate: todayKey(),
       closedById: 'log-1',
@@ -2222,7 +2224,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
         cause: Object.assign(new Error('offline'), { code: 'unavailable' }),
       })
     )
-    mockRetryClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+    mockRetryClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
     const { user } = await renderForm({ profile: LOGISTICA })
     await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
 
@@ -2235,7 +2237,86 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     const [processId, args] = mockRetryClose.mock.calls[0]
     expect(processId).toBe('p1')
     expect(args).toMatchObject({ documentId: 'doc-log-9', actor: LOGISTICA })
-    expect(args.payload).toMatchObject({ status: 'fechada', revision: 3 })
+    expect(args.payload).toMatchObject({ status: 'fechada', revision: 4 })
+    expect(mockClose).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/Conferência fechada e Excel anexado como nova versão/)).toBeInTheDocument()
+  })
+
+  // S10-J2b: o repositório grava a aberta (r+1) ANTES de anexar. Se o anexo falha, o servidor está em r+1 e a tela precisa
+  // refletir isso, senão o próximo fechar daria conflito de revisão.
+  const savedRevisionError = (message, extra = {}) => {
+    const error = Object.assign(new Error(message), extra)
+    Object.defineProperty(error, 'savedRevision', { value: 3, configurable: true })
+    return error
+  }
+
+  it('S10-J2b: falha no anexo depois de salvar: texto próprio, tela em r+1 (nada sujo) e o novo fechar não dá conflito', async () => {
+    mockClose.mockRejectedValueOnce(savedRevisionError('upload'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await fillReceipt(user)
+    await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+
+    expect(
+      await screen.findByText(
+        /^A conferência foi salva, mas o Excel não foi anexado e o aviso não foi enviado\. Use "Salvar e fechar conferência" de novo\./
+      )
+    ).toBeInTheDocument()
+    await waitDialogClosed(CLOSE_DIALOG)
+    expect(mockClose).toHaveBeenCalledTimes(1)
+    expect(mockClose.mock.calls[0][1].openPayload.revision).toBe(3)
+    expect(mockClose.mock.calls[0][1].payload.revision).toBe(4)
+    expect(mockSaveConference).not.toHaveBeenCalled()
+    // A tela passou a refletir o que foi gravado (r+1): o conteúdo digitado segue na tela e nada está "sujo".
+    expect(screen.getByLabelText('Status do recebimento')).toHaveValue('com_ressalva')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Descartar' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Gravar de novo' })).not.toBeInTheDocument()
+
+    // Novo "Salvar e fechar": parte de r+1 (aberta r4, fechada r5), sem conflito de revisão.
+    mockClose.mockResolvedValueOnce({ revision: 5, documentId: 'doc-log-10' })
+    await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+    await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(2))
+    expect(mockClose.mock.calls[1][1].openPayload).toMatchObject({ status: 'aberta', revision: 4, nfNumber: '000.123.456' })
+    expect(mockClose.mock.calls[1][1].payload).toMatchObject({ status: 'fechada', revision: 5, nfNumber: '000.123.456' })
+    expect(await screen.findByText(/Conferência fechada e Excel anexado como nova versão/)).toBeInTheDocument()
+  })
+
+  it('S10-J2b: sem conexão no anexo depois de salvar: texto de "salva, mas não fechada"', async () => {
+    mockClose.mockRejectedValueOnce(savedRevisionError('rede', { code: 'unavailable' }))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+    expect(
+      await screen.findByText(
+        'Sem conexão. A conferência foi salva, mas não foi fechada: confira o sinal e use "Salvar e fechar conferência" de novo.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+  })
+
+  it('S10-J2b: erro antes de gravar (sem savedRevision) deixa a tela como estava: continua "suja" para salvar', async () => {
+    mockClose.mockRejectedValueOnce(
+      Object.assign(new Error('revision-conflict'), { code: 'cargoReport/revision-conflict', scope: 'conference' })
+    )
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await fillReceipt(user)
+    await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+    await screen.findByText('Outra pessoa salvou a conferência. Recarregue para ver a versão atual antes de salvar de novo.')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+  })
+
+  it('S10-J2b: "Gravar de novo" depois de falhar a fechada (anexo feito, r+1 já salva) grava a fechada r+2 sem anexar', async () => {
+    mockClose.mockRejectedValueOnce(
+      savedRevisionError('attached-not-saved', { code: 'cargoReport/attached-not-saved', documentId: 'doc-log-9' })
+    )
+    mockRetryClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await user.click(within(await openCloseDialog(user)).getByRole('button', { name: 'Salvar e fechar conferência' }))
+    await screen.findByText('O Excel foi anexado e o aviso enviado, mas a conferência não foi marcada como fechada.')
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Gravar de novo' }))
+    await waitFor(() => expect(mockRetryClose).toHaveBeenCalledTimes(1))
+    expect(mockRetryClose.mock.calls[0][1].payload).toMatchObject({ status: 'fechada', revision: 4 })
+    expect(mockRetryClose.mock.calls[0][1]).toMatchObject({ documentId: 'doc-log-9' })
     expect(mockClose).toHaveBeenCalledTimes(1)
     expect(await screen.findByText(/Conferência fechada e Excel anexado como nova versão/)).toBeInTheDocument()
   })
@@ -2254,7 +2335,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
     let finish
     mockClose.mockReturnValue(
       new Promise((resolve) => {
-        finish = () => resolve({ revision: 3, documentId: 'doc-log-9' })
+        finish = () => resolve({ revision: 4, documentId: 'doc-log-9' })
       })
     )
     const { user } = await renderForm({ profile: LOGISTICA })
@@ -2558,7 +2639,7 @@ describe('S8: descarga, data de recebimento fixa e etiquetagem', () => {
     })
 
     it('confirmar leva a descarga e a data derivada ao payload e à folha do Excel', async () => {
-      mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+      mockClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
       const { user } = await renderForm({ profile: LOGISTICA })
       setStart('2026-11-24T08:15')
       setEnd('2026-11-24T10:40')
@@ -3272,7 +3353,7 @@ describe('S10-I: fechar a conferência no computador (divergência, bloqueio e s
         ...conferenceOverrides,
       }),
     })
-    mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+    mockClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
   }
 
   it('divergência SEM observação em nenhum item BLOQUEIA: motivo em alerta e "Fechar" desabilitado', async () => {
@@ -3428,7 +3509,7 @@ describe('S10-J1b: fotos de avaria no computador (coluna Fotos do cartão "Palle
         ...conferenceOverrides,
       }),
     })
-    mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+    mockClose.mockResolvedValue({ revision: 4, documentId: 'doc-log-9' })
   }
 
   beforeEach(() => {
@@ -3598,10 +3679,25 @@ describe('S10-J1b: fotos de avaria no computador (coluna Fotos do cartão "Palle
       expect(within(dialog).getByRole('note')).toHaveTextContent('1 item com foto, mas sem observação')
       expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
       expect(within(dialog).getByRole('button', { name: 'Salvar e fechar conferência' })).toBeEnabled()
+      // S10-J2b: o aviso do servidor (J2a) já leva a quantidade de fotos: com >= 1 foto o diálogo diz isso.
       expect(dialog).toHaveTextContent(
-        'e um aviso no Portal para os destinatários do relatório, incluindo as avarias registradas.'
+        'e um aviso no Portal para os destinatários do relatório, incluindo as avarias registradas e a quantidade de fotos.'
       )
-      // O aviso com a quantidade de fotos é da J2 (o servidor ainda não envia): o texto não promete isso.
+    })
+
+    it('com observação escrita e 2 fotos o diálogo também promete a quantidade de fotos', async () => {
+      load(withPhotos(2, 'Caixas molhadas'))
+      const { user } = await renderForm({ profile: LOGISTICA })
+      const dialog = await openClose(user)
+      expect(dialog).toHaveTextContent('incluindo as avarias registradas e a quantidade de fotos.')
+    })
+
+    it('remover a única foto (fica a observação) tira "e a quantidade de fotos" do diálogo', async () => {
+      load(withPhotos(1, 'Caixas molhadas'))
+      const { user } = await renderForm({ profile: LOGISTICA })
+      await user.click(await screen.findByRole('button', { name: 'Remover foto 1 do item 1' }))
+      const dialog = await openClose(user)
+      expect(dialog).toHaveTextContent('incluindo as avarias registradas.')
       expect(dialog.textContent).not.toMatch(/quantidade de fotos/)
     })
 
