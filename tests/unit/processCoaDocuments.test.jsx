@@ -1,6 +1,7 @@
-// S11-A: linha "COA Original" do painel de documentos = LISTA de arquivos (ProcessCoaDocuments).
+// S11-A/D2: card "COA Original" do painel de documentos = LISTA de arquivos (ProcessCoaDocuments).
 // Envio de varios arquivos em sequencia (progresso, erro por arquivo, teto de 50), lista com
-// os COAs legados (slot fixo) e os novos, e acoes por papel. Fica em tests/unit (fora do audit).
+// os COAs legados (slot fixo) e os novos, acoes por papel e selo da leitura (hook useCoaReadBadges).
+// Fica em tests/unit (fora do audit).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -17,6 +18,7 @@ vi.mock('../../src/services/coaReadsRepository', () => ({
 }))
 
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
+import useCoaReadBadges from '../../src/features/processes/useCoaReadBadges'
 
 const ADMIN = { uid: 'admin-1', name: 'Admin', role: 'admin' }
 const LOGISTICA = { uid: 'log-1', name: 'Ana', role: 'logistica' }
@@ -50,12 +52,23 @@ function renderList(props = {}) {
       documents={[]}
       processId="p1"
       profile={ADMIN}
+      category="FCL"
       isDesktopVariant
       {...handlers}
       {...props}
     />
   )
   return { ...utils, handlers }
+}
+
+// Selo da leitura: o hook e' do painel (uma leitura so'); aqui um painel minimo repassa os selos ao card.
+function CardWithBadges({ documents, profile = ADMIN }) {
+  const badges = useCoaReadBadges({ processId: 'p1', documents, enabled: profile.role === 'admin' })
+  return <ProcessCoaDocuments documents={documents} processId="p1" profile={profile} category="FCL" isDesktopVariant badges={badges} />
+}
+
+async function expandList(user) {
+  await user.click(screen.getByRole('button', { name: /^\+\d+ arquivos?$/ }))
 }
 
 function fileInputOf(container) {
@@ -80,23 +93,36 @@ afterEach(() => {
 })
 
 describe('ProcessCoaDocuments - envio (admin)', () => {
-  it('sem COA: "Nenhum COA enviado.", selo "Não enviado", botão "Enviar COAs" e nada de "Pendente"', () => {
+  it('sem COA: "Nenhum COA enviado", selo "Opcional", botão "Enviar COA" e nada de "Pendente"', () => {
     const { container } = renderList()
 
     expect(screen.getByText('COA Original')).toBeInTheDocument()
-    expect(screen.getByText('Nenhum COA enviado.')).toBeInTheDocument()
-    expect(screen.getByText('Não enviado')).toBeInTheDocument()
+    expect(screen.getByText('Nenhum COA enviado')).toBeInTheDocument()
+    expect(screen.getByText('Opcional')).toBeInTheDocument()
+    expect(screen.queryByText('Não enviado')).not.toBeInTheDocument()
     expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enviar COAs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enviar COA' })).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Arquivos de COA' })).not.toBeInTheDocument()
     expect(fileInputOf(container)).toHaveAttribute('multiple')
   })
 
-  it('com COAs o botão vira "Adicionar COAs" e o selo conta os arquivos', () => {
+  it('com COAs o botão continua "Enviar COA" e o selo único conta os arquivos', () => {
     renderList({ documents: [coa('c1')] })
-    expect(screen.getByRole('button', { name: 'Adicionar COAs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enviar COA' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Adicionar COAs/ })).not.toBeInTheDocument()
     expect(screen.getByText('1 arquivo')).toBeInTheDocument()
-    expect(screen.queryByText('Não enviado')).not.toBeInTheDocument()
+    expect(screen.queryByText('Opcional')).not.toBeInTheDocument()
+  })
+
+  it('o envio do FCL/LCL/AÉREO manda category e nenhuma PO (o COA é do processo)', async () => {
+    const user = userEvent.setup()
+    mockUploadProcessDocument.mockResolvedValue(undefined)
+    const { container } = renderList({ category: 'LCL' })
+    await user.upload(fileInputOf(container), pdf('a.pdf'))
+    await waitFor(() => expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1))
+    const input = mockUploadProcessDocument.mock.calls[0][1]
+    expect(input.category).toBe('LCL')
+    expect(input.po).toBeUndefined()
   })
 
   it('3 arquivos: um envio por vez, na ordem, com progresso e erro só do 2º', async () => {
@@ -111,7 +137,7 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
 
     await waitFor(() => expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('status')).toHaveTextContent('Enviando 1 de 3…')
-    expect(screen.getByRole('button', { name: 'Enviar COAs' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Enviar COA' })).toBeDisabled()
     // O 2º só começa depois que o 1º termina.
     expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1)
 
@@ -131,7 +157,7 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
     expect(alert).not.toHaveTextContent('c.pdf')
     expect(screen.getByRole('status')).toHaveTextContent('2 de 3 COAs enviados.')
     expect(handlers.onChanged).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Enviar COAs' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Enviar COA' })).toBeEnabled()
 
     expect(mockUploadProcessDocument.mock.calls.map(([processId, input]) => [processId, input.type, input.file.name])).toEqual([
       ['p1', 'coaOriginal', 'a.pdf'],
@@ -161,12 +187,12 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
     await user.upload(fileInputOf(container), [pdf('a.pdf'), pdf('b.pdf')])
 
     await screen.findByText('2 COAs enviados.')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar COAs' })).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar COA' })).toHaveFocus())
   })
 
   it('sem envio em andamento o foco não é movido para o botão', () => {
     renderList({ documents: [coa('c1')] })
-    expect(screen.getByRole('button', { name: 'Adicionar COAs' })).not.toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Enviar COA' })).not.toHaveFocus()
   })
 
   it('1 arquivo com sucesso: "1 COA enviado."', async () => {
@@ -197,7 +223,7 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
     mockUploadProcessDocument.mockResolvedValue(undefined)
     const { container } = renderList()
 
-    fireEvent.drop(container.querySelector('.coa-docs'), {
+    fireEvent.drop(container.querySelector('.coa-card'), {
       dataTransfer: { types: ['Files'], files: [pdf('a.pdf'), pdf('b.pdf')] },
     })
 
@@ -207,16 +233,17 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
 
   it('arrastar texto/link (sem arquivos) não envia nada', () => {
     const { container } = renderList()
-    fireEvent.drop(container.querySelector('.coa-docs'), { dataTransfer: { types: ['text/plain'], files: [] } })
+    fireEvent.drop(container.querySelector('.coa-card'), { dataTransfer: { types: ['text/plain'], files: [] } })
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
   })
 
   it('destaca a área enquanto arrasta arquivos e tira o destaque ao soltar', () => {
     const { container } = renderList()
-    const area = container.querySelector('.coa-docs')
+    const area = container.querySelector('.coa-card')
 
     fireEvent.dragOver(area, { dataTransfer: { types: ['Files'], files: [] } })
     expect(area).toHaveClass('documents-drop-active')
+    expect(screen.getByText('Solte os arquivos para enviar o COA')).toBeInTheDocument()
     fireEvent.drop(area, { dataTransfer: { types: ['Files'], files: [] } })
     expect(area).not.toHaveClass('documents-drop-active')
   })
@@ -233,7 +260,7 @@ describe('ProcessCoaDocuments - teto de 50 COAs por processo (só no cliente)', 
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Limite de 50 COAs por processo.')
-    expect(alert).toHaveTextContent('Este processo já tem 49 e cabem mais 1; você escolheu 2.')
+    expect(alert).toHaveTextContent('Cabem mais 1; você escolheu 2.')
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
     expect(handlers.onChanged).not.toHaveBeenCalled()
   })
@@ -249,14 +276,15 @@ describe('ProcessCoaDocuments - teto de 50 COAs por processo (só no cliente)', 
     expect(screen.queryByText(/Limite de 50/)).not.toBeInTheDocument()
   })
 
-  it('50 na lista: pede para excluir algum COA antes', async () => {
+  it('50 na lista: só a frase do limite, sem enviar', async () => {
     const user = userEvent.setup()
     const { container } = renderList({ documents: many(50) })
 
     await user.upload(fileInputOf(container), pdf('a.pdf'))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Limite de 50 COAs por processo. Exclua algum COA antes de enviar outro.')
+    expect(alert).toHaveTextContent('Limite de 50 COAs por processo.')
+    expect(alert).not.toHaveTextContent('Cabem mais')
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
   })
 
@@ -264,7 +292,7 @@ describe('ProcessCoaDocuments - teto de 50 COAs por processo (só no cliente)', 
     const { container } = renderList()
     const files = Array.from({ length: 51 }, (_, index) => pdf(`f${index}.pdf`))
 
-    fireEvent.drop(container.querySelector('.coa-docs'), { dataTransfer: { types: ['Files'], files } })
+    fireEvent.drop(container.querySelector('.coa-card'), { dataTransfer: { types: ['Files'], files } })
 
     expect(screen.getByRole('alert')).toHaveTextContent('você escolheu 51.')
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
@@ -284,8 +312,13 @@ describe('ProcessCoaDocuments - lista', () => {
 
     const list = screen.getByRole('list', { name: 'Arquivos de COA' })
     expect(list).toHaveAttribute('role', 'list')
-    const items = within(list).getAllByRole('listitem')
-    expect(items.map((item) => item.querySelector('.coa-docs__name').textContent)).toEqual([
+    // Acima de 2 arquivos a lista expande no proprio card (L-1): 2 visiveis + "+1 arquivo".
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: '+1 arquivo' })).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '+1 arquivo' }))
+    expect(screen.getByRole('button', { name: 'Mostrar menos' })).toHaveAttribute('aria-expanded', 'true')
+    const items = screen.getAllByRole('listitem')
+    expect(items.map((item) => item.querySelector('.coa-file__name').textContent)).toEqual([
       'legado-anterior.pdf',
       'legado-atual.pdf',
       'Lote ABC-1',
@@ -294,8 +327,27 @@ describe('ProcessCoaDocuments - lista', () => {
     // Com nome próprio o arquivo aparece embaixo; sem, o nome não se repete.
     expect(within(items[2]).getByText('novo.pdf')).toBeInTheDocument()
     expect(within(items[0]).getAllByText('legado-anterior.pdf')).toHaveLength(1)
-    expect(within(items[0]).getByText(/PDF · .*Admin/)).toBeInTheDocument()
+    expect(within(items[0]).getByText(/^PDF · 2 KB · \d{2}\/\d{2}\/2026$/)).toBeInTheDocument()
     expect(screen.queryByText('bl.pdf')).not.toBeInTheDocument()
+  })
+
+  it('mais de 2 arquivos: "Mostrar menos" recolhe a lista e o card nao some', async () => {
+    const user = userEvent.setup()
+    renderList({ documents: [coa('c1'), coa('c2'), coa('c3'), coa('c4')] })
+    expect(screen.getByRole('button', { name: '+2 arquivos' })).toBeInTheDocument()
+    await expandList(user)
+    expect(screen.getAllByRole('listitem')).toHaveLength(4)
+    await user.click(screen.getByRole('button', { name: 'Mostrar menos' }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('celular: a meta mostra data, hora e quem enviou; Ações abre a folha inferior', async () => {
+    const user = userEvent.setup()
+    renderList({ documents: [coa('c1')], isDesktopVariant: false })
+    expect(screen.getByText(/PDF · 2 KB · .*Admin$/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ações de c1.pdf' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('Baixar chama onDownload com o documento; fica desabilitado só no que está baixando', async () => {
@@ -393,25 +445,48 @@ describe('ProcessCoaDocuments - ações por papel', () => {
     const documents = [coa('c1')]
     const { container, handlers } = renderList({ documents, profile })
 
-    expect(screen.queryByRole('button', { name: /^Enviar|^Adicionar COAs/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Enviar/ })).not.toBeInTheDocument()
     expect(fileInputOf(container)).toBeNull()
+    expect(screen.getByText('Somente o COMEX envia este documento')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Baixar c1.pdf' })).toBeInTheDocument()
 
     const menu = await openMenuOf(user, 'c1.pdf')
     expect(menu.getAllByRole('menuitem').map((entry) => entry.textContent)).toEqual(['Visualizar'])
 
     // Arrastar arquivos para a lista não envia nada para quem não é admin.
-    fireEvent.drop(container.querySelector('.coa-docs'), { dataTransfer: { types: ['Files'], files: [pdf('x.pdf')] } })
+    fireEvent.drop(container.querySelector('.coa-card'), { dataTransfer: { types: ['Files'], files: [pdf('x.pdf')] } })
     expect(mockUploadProcessDocument).not.toHaveBeenCalled()
     expect(handlers.onRequestRename).not.toHaveBeenCalled()
     expect(handlers.onRequestDelete).not.toHaveBeenCalled()
   })
 
-  it('leitor sem COA: mostra o aviso de que só o COMEX envia, sem "Pendente"', () => {
-    renderList({ profile: TECNICO })
-    expect(screen.getByText('Nenhum COA enviado.')).toBeInTheDocument()
-    expect(screen.getByText('Somente o COMEX envia este documento')).toBeInTheDocument()
+  it.each([
+    ['logística', LOGISTICA],
+    ['técnico', TECNICO],
+    ['faturamento', FATURAMENTO],
+  ])('%s sem COA: o card some (L-5), sem "Pendente" nem aviso', (_label, profile) => {
+    const { container } = renderList({ profile })
+    expect(container).toBeEmptyDOMElement()
     expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
+  })
+
+  it('consolidado (leitor): cada arquivo mostra a PO, "Sem PO" nos antigos; sem a Referência', async () => {
+    const user = userEvent.setup()
+    renderList({
+      profile: TECNICO,
+      category: 'CONSOLIDADO',
+      showPurchaseOrder: true,
+      documents: [
+        coa('c1', { poNumber: 'PO-77', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+        coa('c2', { poNumber: '', slotKey: 'coaOriginal', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+        coa('c3', { poNumber: 'PO 5093', uploadedAt: '2026-09-03T10:00:00.000Z' }),
+      ],
+    })
+    await expandList(user)
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[0]).getByText(/^PO-77 · PDF/)).toBeInTheDocument()
+    expect(within(items[1]).getByText(/^Sem PO · PDF/)).toBeInTheDocument()
+    expect(within(items[2]).getByText(/^PO 5093 · PDF/)).toBeInTheDocument()
   })
 
   it('leitor com arquivo não-visualizável: sem menu "Ações" (só Baixar)', () => {
@@ -424,7 +499,7 @@ describe('ProcessCoaDocuments - ações por papel', () => {
   })
 })
 
-describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)', () => {
+describe('useCoaReadBadges + card - selo da leitura automática (S11-C/D-9, só admin)', () => {
   const read = (overrides = {}) => ({
     status: 'done',
     documentType: 'coa',
@@ -442,12 +517,16 @@ describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)',
       c5: { status: 'reading', documentType: null, certificates: [], error: null },
       c7: read(),
     })
-    renderList({
-      documents: [coa('c1'), coa('c2'), coa('c3'), coa('c4'), coa('c5'), coa('c6'), coa('c7')].map((item, index) => ({
-        ...item,
-        uploadedAt: `2026-09-01T10:0${index}:00.000Z`,
-      })),
-    })
+    const user = userEvent.setup()
+    render(
+      <CardWithBadges
+        documents={[coa('c1'), coa('c2'), coa('c3'), coa('c4'), coa('c5'), coa('c6'), coa('c7')].map((item, index) => ({
+          ...item,
+          uploadedAt: `2026-09-01T10:0${index}:00.000Z`,
+        }))}
+      />
+    )
+    await expandList(user)
 
     expect(await screen.findByText('Lido · 3 certificados')).toBeInTheDocument()
     expect(mockListCoaReads).toHaveBeenCalledWith('p1')
@@ -455,7 +534,7 @@ describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)',
     expect(screen.getByText('Não é COA')).toBeInTheDocument()
     expect(screen.getByText('Falhou: tente de novo')).toBeInTheDocument()
     expect(screen.getByText('Lido · nenhum certificado')).toBeInTheDocument()
-    const items = within(screen.getByRole('list', { name: 'Arquivos de COA' })).getAllByRole('listitem')
+    const items = screen.getAllByRole('listitem')
     expect(items).toHaveLength(7)
     expect(within(items[4]).queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
     expect(within(items[5]).queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
@@ -463,7 +542,7 @@ describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)',
 
   it('falha ao ler os resultados = sem selo, sem erro na tela', async () => {
     mockListCoaReads.mockRejectedValue(new Error('permission-denied'))
-    renderList({ documents: [coa('c1')] })
+    render(<CardWithBadges documents={[coa('c1')]} />)
     await waitFor(() => expect(mockListCoaReads).toHaveBeenCalledTimes(1))
     expect(screen.queryByText(/Lido|Falhou|Não é COA/)).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -472,7 +551,7 @@ describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)',
   it('logística, técnico e faturamento nunca leem os resultados nem veem o selo', async () => {
     mockListCoaReads.mockResolvedValue({ c1: read({ certificates: [{}] }) })
     for (const profile of [LOGISTICA, TECNICO, FATURAMENTO]) {
-      const { unmount } = renderList({ profile, documents: [coa('c1')] })
+      const { unmount } = render(<CardWithBadges profile={profile} documents={[coa('c1')]} />)
       expect(screen.getByRole('button', { name: 'Baixar c1.pdf' })).toBeInTheDocument()
       unmount()
     }
@@ -480,7 +559,13 @@ describe('ProcessCoaDocuments - selo da leitura automática (S11-C, só admin)',
   })
 
   it('sem COA na lista não lê os resultados', () => {
-    renderList()
+    render(<CardWithBadges documents={[]} />)
     expect(mockListCoaReads).not.toHaveBeenCalled()
+  })
+
+  it('o card nao le os resultados sozinho: sem o hook (badges vazios) nao ha consulta nem selo', () => {
+    renderList({ documents: [coa('c1')] })
+    expect(mockListCoaReads).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Lido|Falhou/)).not.toBeInTheDocument()
   })
 })

@@ -344,7 +344,7 @@ describe.each(['tecnico', 'faturamento'])('ProcessDetailView — perfil leitor (
     expect(screen.queryByText(/pendente/i)).not.toBeInTheDocument()
   })
 
-  it('deep link detailTab="documents" abre o painel (so as 2 linhas)', async () => {
+  it('deep link detailTab="documents" abre o painel (so o Relatório de carga: o card de COA vazio some)', async () => {
     renderDetail({
       detailTab: 'documents',
       isAdmin: false,
@@ -353,7 +353,7 @@ describe.each(['tecnico', 'faturamento'])('ProcessDetailView — perfil leitor (
     })
     expect(await screen.findByText('Documentos do processo')).toBeInTheDocument()
     const labels = Array.from(document.querySelectorAll('.documents-row__label')).map((node) => node.textContent)
-    expect(labels).toEqual(['Relatório de carga', 'COA Original'])
+    expect(labels).toEqual(['Relatório de carga'])
   })
 
   it('deep link detailTab="history" cai na aba geral', () => {

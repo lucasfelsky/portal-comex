@@ -137,6 +137,13 @@ describe('collectCoaCertificates', () => {
     expect(documentNotes).toEqual([])
   })
 
+  it('S11-D2: cada certificado leva a PO do documento (trim), null quando o COA não tem PO', () => {
+    const docs = [doc('d1', 'a.pdf', { poNumber: '  4500186 ' }), doc('d2', 'b.pdf'), doc('d3', 'c.pdf', { poNumber: '' })]
+    const reads = { d1: doneRead('d1', [kgCert('A', 1)]), d2: doneRead('d2', [kgCert('B', 1)]), d3: doneRead('d3', [kgCert('C', 1)]) }
+    const { certificates } = collectCoaCertificates(docs, reads)
+    expect(certificates.map((item) => item.documentPoNumber)).toEqual(['4500186', null, null])
+  })
+
   it('usa o nome próprio (description) do COA como nome do arquivo', () => {
     const { certificates } = collectCoaCertificates([doc('d1', 'x.pdf', { description: 'COA Gooyer lote 1' })], {
       d1: doneRead('d1', [cert()]),
@@ -393,6 +400,57 @@ describe('matchCoaCertificates', () => {
       const result = matchCoaCertificates(certs([kgCert('L1', 10, { poReference: 'GOOYER SEA 199-26' })]), list, CONSOLIDATED)
       expect(result.byItemKey).toEqual({})
       expect(result.unmatched).toEqual([{ certId: 'd#0', reason: 'otherPo', candidateKeys: [] }])
+    })
+
+    describe('S11-D2: PO do documento é dica de segundo nível', () => {
+      const certsOf = (list, poNumber) =>
+        collectCoaCertificates([doc('d', 'a.pdf', { poNumber })], { d: doneRead('d', list) }).certificates
+
+      it('COA sem PO impressa enviado na PO 186: casa só nos itens da 186 (sem a dica seria ambiguous)', () => {
+        const withHint = matchCoaCertificates(certsOf([kgCert('L1', 10)], '4500186'), list, CONSOLIDATED)
+        expect(withHint.byItemKey).toEqual({ [list[1].key]: ['d#0'] })
+        expect(withHint.unmatched).toEqual([])
+        const withoutHint = matchCoaCertificates(certsOf([kgCert('L1', 10)], ''), list, CONSOLIDATED)
+        expect(withoutHint.unmatched[0].reason).toBe('ambiguous')
+      })
+
+      it('PO impressa exact/similar continua mandando mesmo com o documento em outra PO', () => {
+        const result = matchCoaCertificates(
+          certsOf([kgCert('L1', 10, { poReference: 'GOOYER SEA 185-26' })], '4500186'),
+          list,
+          CONSOLIDATED
+        )
+        expect(result.byItemKey).toEqual({ [list[0].key]: ['d#0'] })
+      })
+
+      it('PO impressa de fora do processo continua indo para "só no COA", sem usar a PO do documento', () => {
+        const result = matchCoaCertificates(
+          certsOf([kgCert('L1', 10, { poReference: 'GOOYER SEA 199-26' })], '4500186'),
+          list,
+          CONSOLIDATED
+        )
+        expect(result.unmatched).toEqual([{ certId: 'd#0', reason: 'otherPo', candidateKeys: [] }])
+      })
+
+      it('PO do documento que não é mais do processo é ignorada (procura em todos os grupos)', () => {
+        const result = matchCoaCertificates(certsOf([kgCert('L1', 10)], 'PO-9999'), list, CONSOLIDATED)
+        expect(result.unmatched[0].reason).toBe('ambiguous')
+      })
+
+      it('a dica não cria casamento: a PO certa sem o nome do produto continua none', () => {
+        const result = matchCoaCertificates(
+          certsOf([kgCert('R1', 10, { productName: 'RESINA RA-55' })], '4500185'),
+          list,
+          CONSOLIDATED
+        )
+        expect(result.unmatched[0].reason).toBe('none')
+      })
+
+      it('nos demais tipos (sem POs) a PO do documento é ignorada', () => {
+        const fclList = items([row('a'), row('b', { sqDescription: 'CATALISADOR ZN-12', supplierDescription: '', dbcorpCode: '' })])
+        const result = matchCoaCertificates(certsOf([kgCert('L1', 10)], '4500186'), fclList, FCL)
+        expect(result.byItemKey).toEqual({ [fclList[0].key]: ['d#0'] })
+      })
     })
 
     it('PO certa, mas o nome não existe nesse grupo: none (não procura em outro grupo)', () => {

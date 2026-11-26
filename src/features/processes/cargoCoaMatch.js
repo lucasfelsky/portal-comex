@@ -19,7 +19,7 @@ import {
   readCargoRowQuantity,
   replaceCargoRowsWithLots,
 } from './cargoReportRowOps'
-import { getCoaDisplayName } from './processDocuments'
+import { getCoaDisplayName, getCoaPurchaseOrderNumber } from './processDocuments'
 
 // S11-C do Relatório de Carga: casamento COA × linhas do relatório, divisão por lote e aplicação. Módulo PURO (sem
 // React nem firebase): recebe o resultado da leitura (`CoaRead`, de `coaReadsRepository`), as linhas do formulário e o
@@ -168,6 +168,8 @@ export function collectCoaCertificates(documents, readsById, { describeError } =
         ),
         batchNumber: certificate.batchNumber,
         poReference: certificate.poReference ?? null,
+        // S11-D2: PO do documento (consolidado). Dica fraca: só vale quando o COA não imprime PO.
+        documentPoNumber: getCoaPurchaseOrderNumber(document) || null,
         kg,
         quantityRaw: certificate.quantity?.raw ?? '',
         confidence: certificate.confidence ?? 'low',
@@ -349,6 +351,13 @@ export function matchCoaCertificates(certificates, items, process, manualLinks =
         continue
       }
       if (po.match === 'exact' || po.match === 'similar') pool = items.filter((item) => item.purchaseOrderIndex === po.index)
+      else if (po.match === 'absent' && cert.documentPoNumber) {
+        // S11-D2: COA sem PO impressa enviado na PO do consolidado: restringe aos itens dessa PO.
+        const documentIndex = getCargoReportPurchaseOrders(process).findIndex(
+          (order) => String(order?.po ?? '').trim() === cert.documentPoNumber
+        )
+        if (documentIndex >= 0) pool = items.filter((item) => item.purchaseOrderIndex === documentIndex)
+      }
     }
     const scored = pool.map((item) => ({ item, score: scoreNames(cert.names, item.names) })).filter((entry) => entry.score > 0)
     if (scored.length === 0) {
