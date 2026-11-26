@@ -9,6 +9,8 @@ import {
   CARGO_PHOTOS_PER_CONFERENCE,
   CARGO_PHOTOS_PER_ROW,
   CARGO_PHOTO_ID_PATTERN,
+  patchCargoRowIssue,
+  readCargoRowIssue,
 } from './cargoConferenceIssues'
 
 export const CARGO_PHOTO_MAX_EDGE = 1600
@@ -111,4 +113,58 @@ export function admitCargoPhotoFiles(files, room) {
 export function listUnsavedCargoPhotos(conference, saved) {
   const savedIds = new Set(allPhotos(saved).map((photo) => photo?.id))
   return allPhotos(conference).filter((photo) => photo && !savedIds.has(photo.id))
+}
+
+// ---------- foto no estado do item (via `patchCargoRowIssue`) ----------
+
+// A foto entra no item (fica "não salva", como qualquer alteração da conferência) e o item passa a "Avaria registrada"
+// (como no mock aprovado). Id repetido, 6ª foto do item e 31ª da conferência não entram (devolve o mesmo objeto).
+export function addCargoPhoto(conference, rowId, photo) {
+  const current = readCargoRowIssue(conference, rowId).photos
+  if (!photo || current.some((item) => item?.id === photo.id)) return conference
+  if (current.length >= CARGO_PHOTO_ROW_LIMIT || countCargoPhotos(conference) >= CARGO_PHOTO_CONFERENCE_LIMIT) return conference
+  return patchCargoRowIssue(conference, rowId, { flagged: true, photos: [...current, photo] })
+}
+
+// Tira a foto do estado; vale no Salvar (o arquivo sai do Storage pelo trigger, nunca pelo cliente).
+export function removeCargoPhoto(conference, rowId, photoId) {
+  const current = readCargoRowIssue(conference, rowId).photos
+  const next = current.filter((item) => item?.id !== photoId)
+  if (next.length === current.length) return conference
+  return patchCargoRowIssue(conference, rowId, { photos: next })
+}
+
+// Itens com foto e sem observação ESCRITA (pendência do fechamento; nunca bloqueia).
+export function countCargoRowsWithPhotoWithoutNote(rows, conference) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const { photos, note } = readCargoRowIssue(conference, row.id)
+    return photos.length > 0 && note.trim() === ''
+  }).length
+}
+
+// ---------- mensagens do envio ----------
+
+export const CARGO_PHOTO_MESSAGES = {
+  offline: 'Sem conexão. A foto não foi enviada: confira o sinal e toque em Tentar de novo.',
+  permission: 'Sem permissão para enviar fotos. Entre de novo no Portal e toque em Tentar de novo.',
+  session: 'Sessão expirada. Entre de novo no Portal e toque em Tentar de novo.',
+  generic: 'Não foi possível enviar a foto. Toque em Tentar de novo.',
+}
+
+const NETWORK_CODES = new Set(['unavailable', 'deadline-exceeded', 'storage/retry-limit-exceeded', 'storage/unknown'])
+const NETWORK_TEXT = /failed to fetch|load failed|network ?error|network request failed/i
+
+// -> { text, retryable } ou null (envio cancelado de propósito: não vira erro). Erros `cargoPhoto/*` (foto ilegível, não
+// é imagem, grande demais) já trazem o texto e não adiantam tentar de novo com o mesmo arquivo.
+export function describeCargoPhotoError(error) {
+  const code = String(error?.code ?? '')
+  if (code === 'storage/canceled') return null
+  if (code.startsWith('cargoPhoto/')) return { text: String(error.message ?? CARGO_PHOTO_MESSAGES.generic), retryable: false }
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  if (offline || NETWORK_CODES.has(code) || (error instanceof TypeError && NETWORK_TEXT.test(String(error.message ?? '')))) {
+    return { text: CARGO_PHOTO_MESSAGES.offline, retryable: true }
+  }
+  if (code === 'storage/unauthorized' || code === 'permission-denied') return { text: CARGO_PHOTO_MESSAGES.permission, retryable: true }
+  if (code === 'unauthenticated' || code === 'storage/unauthenticated') return { text: CARGO_PHOTO_MESSAGES.session, retryable: true }
+  return { text: CARGO_PHOTO_MESSAGES.generic, retryable: true }
 }

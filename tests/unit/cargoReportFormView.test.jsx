@@ -2,7 +2,7 @@
 // Repositorios mockados; catalogo SINTETICO. O catalogo e' cacheado por 5 min no modulo do
 // formulario: cada teste avanca o relogio (so' `Date`) para nao herdar o cache do anterior.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockGetCargoReport = vi.fn()
@@ -18,6 +18,10 @@ const mockRetryClose = vi.fn()
 const mockReopenConference = vi.fn()
 const mockGenerate = vi.fn()
 const mockSaveBlob = vi.fn()
+const mockPrepare = vi.fn()
+const mockUploadPhoto = vi.fn()
+const mockDeleteOwnPhotos = vi.fn()
+const mockDownloadPhoto = vi.fn()
 
 vi.mock('../../src/services/cargoReportRepository', () => ({
   getCargoReport: (...args) => mockGetCargoReport(...args),
@@ -29,6 +33,16 @@ vi.mock('../../src/services/cargoReportRepository', () => ({
   closeCargoReportConference: (...args) => mockClose(...args),
   retryCloseConferenceWrite: (...args) => mockRetryClose(...args),
   reopenCargoReportConference: (...args) => mockReopenConference(...args),
+}))
+// S10-J1b: fotos de avaria (redução no aparelho e Storage/function mockados; nada de rede).
+vi.mock('../../src/features/processes/cargoPhotoResize', async (importOriginal) => ({
+  ...(await importOriginal()),
+  prepareCargoPhoto: (...args) => mockPrepare(...args),
+}))
+vi.mock('../../src/services/cargoConferencePhotosRepository', () => ({
+  uploadCargoConferencePhoto: (...args) => mockUploadPhoto(...args),
+  deleteOwnCargoConferencePhotoFiles: (...args) => mockDeleteOwnPhotos(...args),
+  downloadCargoConferencePhotoBlob: (...args) => mockDownloadPhoto(...args),
 }))
 vi.mock('../../src/features/processes/cargoReportExcel', () => ({
   generateCargoReportFile: (...args) => mockGenerate(...args),
@@ -59,6 +73,7 @@ vi.mock('../../src/features/processes/cargoReportImport', async (importOriginal)
 
 import { ToastProvider } from '../../src/components/Toast'
 import CargoReportForm from '../../src/features/processes/CargoReportForm'
+import { clearCargoPhotoCache } from '../../src/features/processes/useCargoPhotoUrls'
 import { buildConferencePayload, toCargoDateKey } from '../../src/features/processes/cargoReportFormModel'
 import {
   duplicateCargoRow,
@@ -3362,5 +3377,289 @@ describe('S10-I: fechar a conferência no computador (divergência, bloqueio e s
     await renderForm()
     expect(screen.queryByRole('button', { name: 'Salvar e fechar conferência' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('S10-J1b: fotos de avaria no computador (coluna Fotos do cartão "Pallets e avarias")', () => {
+  const card = () => screen.getByRole('region', { name: 'Pallets e avarias' })
+  const savedPhoto = (id, rowId = 'r-1') => ({
+    id,
+    path: `processes/p1/cargo-conference/${rowId}/1-log-1-${id}.jpg`,
+    thumbPath: `processes/p1/cargo-conference/${rowId}/1-log-1-${id}-t.jpg`,
+    width: 1600,
+    height: 1200,
+    size: 120000,
+    uploadedAt: 1700000000000,
+    byId: 'log-1',
+  })
+  const withPhotos = (count, note = 'Caixas molhadas') => ({
+    damageByRowId: {
+      'r-1': { flagged: true, note, photos: Array.from({ length: count }, (_, index) => savedPhoto(`s${index + 1}`)) },
+    },
+  })
+  const jpeg = (name = 'avaria.jpg') => new File(['x'], name, { type: 'image/jpeg' })
+  const attach = (user, n, file) => user.upload(within(card()).getByLabelText(`Arquivos de foto do item ${n}`), file)
+  const originalCreate = URL.createObjectURL
+  const originalRevoke = URL.revokeObjectURL
+
+  function load(conferenceOverrides = {}, currentOverrides = {}) {
+    mockGetCargoReport.mockResolvedValue({
+      current: concludedDoc({ expectedPallets: 6, ...currentOverrides }),
+      conference: conferenceDoc({
+        countOkByRowId: {},
+        palletsByRowId: { 'r-1': 2, 'r-2': 3, 'r-3': 1 },
+        receiptStatus: 'com_ressalva',
+        ...conferenceOverrides,
+      }),
+    })
+    mockClose.mockResolvedValue({ revision: 3, documentId: 'doc-log-9' })
+  }
+
+  beforeEach(() => {
+    clearCargoPhotoCache()
+    mockPrepare.mockReset()
+    mockUploadPhoto.mockReset()
+    mockDeleteOwnPhotos.mockReset()
+    mockDownloadPhoto.mockReset()
+    mockPrepare.mockImplementation(async () => ({
+      full: { blob: new Blob(['f']), width: 1600, height: 1200 },
+      thumb: { blob: new Blob(['t']), width: 400, height: 300 },
+    }))
+    mockDownloadPhoto.mockImplementation(async () => new Blob(['img']))
+    mockDeleteOwnPhotos.mockResolvedValue(0)
+    URL.createObjectURL = vi.fn(() => 'blob:foto')
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    // Desmonta antes de devolver o URL original (o cleanup do hook revoga as URLs locais).
+    cleanup()
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+  })
+
+  it('logística vê a coluna Fotos com "Anexar foto ao item N" e SEM "Tirar foto" (câmera é do celular)', async () => {
+    load()
+    await renderForm({ profile: LOGISTICA })
+    expect(within(card()).getByRole('columnheader', { name: 'Fotos' })).toBeInTheDocument()
+    const rows = within(within(card()).getByRole('table')).getAllByRole('row')
+    expect(within(rows[1]).getByRole('button', { name: 'Anexar foto ao item 1' })).toHaveTextContent('Anexar foto')
+    expect(within(card()).queryByRole('button', { name: /Tirar foto/ })).not.toBeInTheDocument()
+    expect(within(card()).queryByLabelText(/Foto da câmera/)).not.toBeInTheDocument()
+    expect(within(card()).getByLabelText('Arquivos de foto do item 2')).toHaveAttribute('multiple')
+  })
+
+  it('a foto anexada entra na linha do item como NÃO salva; Salvar conferência grava o metadado', async () => {
+    load()
+    mockUploadPhoto.mockResolvedValue(savedPhoto('pnovo'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await attach(user, 1, jpeg())
+    const rows = within(within(card()).getByRole('table')).getAllByRole('row')
+    expect(await within(rows[1]).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Avaria registrada')).toBeInTheDocument()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const payload = mockSaveConference.mock.calls[0][1]
+    expect(payload.damageByRowId['r-1']).toEqual({ flagged: true, note: '', photos: [savedPhoto('pnovo')] })
+  })
+
+  it('enquanto uma foto sobe: Salvar, Descartar e Fechar ficam desabilitados com o motivo; depois liberam', async () => {
+    load()
+    let finish
+    mockUploadPhoto.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await attach(user, 1, jpeg())
+    await waitFor(() => expect(mockUploadPhoto).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Descartar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Salvar e fechar conferência' })).toBeDisabled()
+    expect(screen.getByText('Aguarde o envio das fotos.')).toHaveAttribute('role', 'status')
+    finish(savedPhoto('pnovo'))
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    expect(screen.getByRole('button', { name: 'Salvar conferência' })).toBeEnabled()
+    expect(screen.queryByText('Aguarde o envio das fotos.')).not.toBeInTheDocument()
+  })
+
+  it('falha de rede: mensagem na linha, "Tentar de novo" reenvia sem reduzir de novo', async () => {
+    load()
+    mockUploadPhoto.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    mockUploadPhoto.mockResolvedValueOnce(savedPhoto('pnovo'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await attach(user, 2, jpeg())
+    expect(await within(card()).findByRole('alert')).toHaveTextContent('Sem conexão. A foto não foi enviada')
+    await user.click(within(card()).getByRole('button', { name: 'Tentar de novo' }))
+    expect(await within(card()).findByRole('img', { name: 'Foto 1 do item 2' })).toBeInTheDocument()
+    expect(mockPrepare).toHaveBeenCalledTimes(1)
+  })
+
+  it('"Descartar" apaga do Storage a foto não salva (do próprio uid) e a linha volta ao último salvo', async () => {
+    load()
+    mockUploadPhoto.mockResolvedValue(savedPhoto('pnovo'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await attach(user, 1, jpeg())
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(mockDeleteOwnPhotos).toHaveBeenCalledWith('p1', [savedPhoto('pnovo')], { uid: 'log-1' })
+    expect(screen.queryByRole('img', { name: 'Foto 1 do item 1' })).not.toBeInTheDocument()
+    expect(mockSaveConference).not.toHaveBeenCalled()
+  })
+
+  it('"Descartar" depois de remover uma foto JÁ salva traz a foto de volta e não apaga arquivo nenhum', async () => {
+    load(withPhotos(2))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await screen.findByRole('img', { name: 'Foto 2 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(screen.queryByRole('img', { name: 'Foto 2 do item 1' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(await screen.findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    expect(mockDeleteOwnPhotos).not.toHaveBeenCalled()
+  })
+
+  it('"Descartar" também limpa o cartão de erro de um envio que falhou (some o "Tentar de novo")', async () => {
+    load(withPhotos(2))
+    mockUploadPhoto.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await screen.findByRole('img', { name: 'Foto 2 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    await attach(user, 2, jpeg())
+    expect(await within(card()).findByRole('alert')).toHaveTextContent('Sem conexão')
+    expect(within(card()).getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect(within(card()).queryByRole('alert')).not.toBeInTheDocument()
+    expect(within(card()).queryByRole('button', { name: 'Tentar de novo' })).not.toBeInTheDocument()
+    expect(await within(card()).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    expect(within(card()).getByRole('button', { name: 'Anexar foto ao item 2' })).toBeEnabled()
+  })
+
+  it('remover foto enviada agora e não salva apaga o arquivo do próprio uid; a salva só sai no Salvar', async () => {
+    load(withPhotos(1))
+    mockUploadPhoto.mockResolvedValue(savedPhoto('pnovo'))
+    const { user } = await renderForm({ profile: LOGISTICA })
+    await attach(user, 1, jpeg())
+    await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(2))
+    await user.click(screen.getByRole('button', { name: 'Remover foto 2 do item 1' }))
+    expect(mockDeleteOwnPhotos).toHaveBeenCalledWith('p1', [savedPhoto('pnovo')], { uid: 'log-1' })
+    mockDeleteOwnPhotos.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(mockDeleteOwnPhotos).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Salvar conferência' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].damageByRowId['r-1'].photos).toEqual([])
+  })
+
+  it('a faixa conta as fotos da conferência (e avisa o limite por item)', async () => {
+    load(withPhotos(2))
+    await renderForm({ profile: LOGISTICA })
+    expect(within(card()).getByText('Fotos de avaria: 2 de 30 na conferência (até 5 por item).')).toBeInTheDocument()
+  })
+
+  it('5 fotos no item: "Anexar foto" desabilitado com o motivo; os outros itens seguem liberados', async () => {
+    load(withPhotos(5))
+    await renderForm({ profile: LOGISTICA })
+    expect(within(card()).getByRole('button', { name: 'Anexar foto ao item 1' })).toBeDisabled()
+    expect(within(card()).getByText('Limite de 5 fotos por item atingido.')).toBeInTheDocument()
+    expect(within(card()).getByRole('button', { name: 'Anexar foto ao item 2' })).toBeEnabled()
+  })
+
+  describe('fechamento: foto sem observação', () => {
+    async function openClose(user) {
+      await user.click(screen.getByRole('button', { name: 'Salvar e fechar conferência' }))
+      return screen.findByRole('dialog', { name: CLOSE_DIALOG })
+    }
+
+    it('foto SEM observação escrita vira pendência no diálogo (não bloqueia)', async () => {
+      load(withPhotos(1, ''))
+      const { user } = await renderForm({ profile: LOGISTICA })
+      const dialog = await openClose(user)
+      expect(within(dialog).getByRole('note')).toHaveTextContent('1 item com foto, mas sem observação')
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Salvar e fechar conferência' })).toBeEnabled()
+      expect(dialog).toHaveTextContent(
+        'e um aviso no Portal para os destinatários do relatório, incluindo as avarias registradas.'
+      )
+      // O aviso com a quantidade de fotos é da J2 (o servidor ainda não envia): o texto não promete isso.
+      expect(dialog.textContent).not.toMatch(/quantidade de fotos/)
+    })
+
+    it('com observação escrita a pendência some', async () => {
+      load(withPhotos(2, 'Caixas molhadas'))
+      const { user } = await renderForm({ profile: LOGISTICA })
+      const dialog = await openClose(user)
+      expect(dialog.textContent).not.toMatch(/com foto, mas sem observação/)
+    })
+
+    it('avaria SEM foto: texto do aviso igual ao da fatia I', async () => {
+      load({ damageByRowId: { 'r-1': { flagged: true, note: 'Tambor amassado', photos: [] } } })
+      const { user } = await renderForm({ profile: LOGISTICA })
+      const dialog = await openClose(user)
+      expect(dialog).toHaveTextContent('incluindo as avarias registradas.')
+      expect(dialog.textContent).not.toMatch(/quantidade de fotos/)
+    })
+
+    it('a foto anexada agora (sem observação) já aparece como pendência ao fechar, e o fechamento leva a foto', async () => {
+      load()
+      mockUploadPhoto.mockResolvedValue(savedPhoto('pnovo'))
+      const { user } = await renderForm({ profile: LOGISTICA })
+      await attach(user, 1, jpeg())
+      await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+      const dialog = await openClose(user)
+      expect(within(dialog).getByRole('note')).toHaveTextContent('1 item com foto, mas sem observação')
+      await user.click(within(dialog).getByRole('button', { name: 'Salvar e fechar conferência' }))
+      await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(1))
+      expect(mockClose.mock.calls[0][1].payload.damageByRowId['r-1'].photos).toEqual([savedPhoto('pnovo')])
+    })
+  })
+
+  describe('somente leitura e visualização', () => {
+    it('admin vê as miniaturas e abre o visualizador, sem botões de anexar nem "×"', async () => {
+      load(withPhotos(2))
+      const { user } = await renderForm({ profile: ADMIN })
+      expect(await within(card()).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+      expect(within(card()).queryByRole('button', { name: /Anexar|Remover foto|Tirar foto/ })).not.toBeInTheDocument()
+      expect(within(card()).queryByLabelText(/Arquivos de foto/)).not.toBeInTheDocument()
+      await user.click(within(card()).getByRole('button', { name: 'Foto 1 do item 1' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Foto da avaria' })
+      expect(within(dialog).getByRole('heading')).toHaveTextContent(/^Foto 1 de 2 · Item 1 · /)
+      expect(mockDownloadPhoto).toHaveBeenCalledWith('p1', 's1', 'full')
+    })
+
+    it('conferência fechada: a logística também só lê as fotos', async () => {
+      mockGetCargoReport.mockResolvedValue({
+        current: concludedDoc({ expectedPallets: 6 }),
+        conference: closedConferenceDoc({ countOkByRowId: {}, palletsByRowId: { 'r-1': 2 }, ...withPhotos(2) }),
+      })
+      await renderForm({ profile: LOGISTICA })
+      expect(await within(card()).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
+      expect(within(card()).queryByRole('button', { name: /Anexar|Remover foto/ })).not.toBeInTheDocument()
+    })
+
+    it('reabrir a conferência mantém as fotos', async () => {
+      mockGetCargoReport.mockResolvedValue({
+        current: concludedDoc({ expectedPallets: 6 }),
+        conference: closedConferenceDoc({ countOkByRowId: {}, palletsByRowId: { 'r-1': 2 }, ...withPhotos(2) }),
+      })
+      mockReopenConference.mockResolvedValue({ revision: 4 })
+      const { user } = await renderForm({ profile: ADMIN })
+      await user.click(screen.getByRole('button', { name: 'Reabrir conferência' }))
+      await waitFor(() => expect(mockReopenConference).toHaveBeenCalledTimes(1))
+      expect(await screen.findByText('Conferência reaberta. A logística pode corrigir e fechar de novo.')).toBeInTheDocument()
+      expect(await within(card()).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    })
+  })
+
+  it('tablet/celular (variant mobile do formulário): lista de cartões com a coluna Fotos no cartão do item', async () => {
+    load(withPhotos(1))
+    await renderForm({ profile: LOGISTICA, variant: 'mobile' })
+    const item = within(card()).getAllByRole('listitem')[0]
+    expect(await within(item).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
+    expect(within(item).getByRole('button', { name: 'Anexar foto ao item 1' })).toBeInTheDocument()
   })
 })

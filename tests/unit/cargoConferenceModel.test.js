@@ -314,3 +314,56 @@ describe('evaluateCargoConferenceClose: pallets, divergência e avaria', () => {
     expect(result.pendings).not.toContain('1 item sem OK? ou sem pallets contados')
   })
 })
+
+describe('evaluateCargoConferenceClose: foto sem observação (S10-J1b)', () => {
+  const photo = (id) => ({ id, path: 'a', thumbPath: 'b', width: 10, height: 10, size: 1, uploadedAt: 1, byId: 'u' })
+  const complete = {
+    ...EMPTY_CARGO_CONFERENCE,
+    receiptStatus: 'com_ressalva',
+    unloadStartAt: '2026-11-24T08:00',
+    unloadEndAt: '2026-11-24T09:00',
+    labelingOk: true,
+    nfNumber: '48213',
+    okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
+    palletsByRowId: { 'r-1': 2, 'r-2': 3, 'r-3': 1 },
+  }
+
+  it('item com foto e sem observação escrita vira pendência (não bloqueia); com observação some', () => {
+    const withPhoto = { ...complete, damageByRowId: { 'r-1': { flagged: true, note: '', photos: [photo('a')] } } }
+    const result = evaluateCargoConferenceClose(rows, withPhoto, { expectedPallets: 6 })
+    expect(result.blocking).toEqual([])
+    expect(result.pendings).toEqual(['1 item com foto, mas sem observação'])
+    expect(result.hints).toEqual(['1 item com foto sem observação'])
+
+    const written = { ...complete, damageByRowId: { 'r-1': { flagged: true, note: 'Caixa amassada', photos: [photo('a')] } } }
+    expect(evaluateCargoConferenceClose(rows, written, { expectedPallets: 6 }).pendings).toEqual([])
+  })
+
+  it('observação só com espaços conta como sem observação; vários itens vão no plural', () => {
+    const many = {
+      ...complete,
+      damageByRowId: {
+        'r-1': { flagged: true, note: '   ', photos: [photo('a')] },
+        'r-2': { flagged: true, note: '', photos: [photo('b'), photo('c')] },
+      },
+    }
+    expect(evaluateCargoConferenceClose(rows, many, { expectedPallets: 6 }).pendings).toEqual([
+      '2 itens com foto, mas sem observação',
+    ])
+  })
+
+  it('avaria sem foto não gera essa pendência; a ordem fica: avaria x status, foto sem observação, status', () => {
+    const noPhoto = { ...complete, damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }
+    expect(evaluateCargoConferenceClose(rows, noPhoto, { expectedPallets: 6 }).pendings).toEqual([])
+    const ordered = {
+      ...complete,
+      receiptStatus: '',
+      damageByRowId: { 'r-1': { flagged: true, note: '', photos: [photo('a')] } },
+    }
+    expect(evaluateCargoConferenceClose(rows, ordered, { expectedPallets: 6 }).pendings).toEqual([
+      '1 item com avaria registrada, mas o status do recebimento não é "Com ressalva"',
+      '1 item com foto, mas sem observação',
+      'Status do recebimento não informado',
+    ])
+  })
+})

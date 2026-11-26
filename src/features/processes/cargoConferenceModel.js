@@ -4,6 +4,7 @@ import {
   hasCargoRowIssueNote,
   summarizeCargoPallets,
 } from './cargoConferenceIssues'
+import { countCargoRowsWithPhotoWithoutNote } from './cargoConferencePhotos'
 import { CARGO_CONFERENCE_STATUS, isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S9-F do Relatório de Carga: regras da conferência da logística compartilhadas entre o formulário do computador
@@ -119,6 +120,7 @@ export function evaluateCargoConferenceClose(rows, conference, { expectedPallets
   const withoutMark = filled.filter((row) => !isCargoRowConferred(conference, row.id)).length
   const issueCount = filled.filter((row) => hasCargoRowIssue(conference, row.id)).length
   const hasNote = filled.some((row) => hasCargoRowIssueNote(conference, row.id))
+  const photoWithoutNote = countCargoRowsWithPhotoWithoutNote(filled, conference)
   const palletsText = `${summary.counted} contados de ${summary.expected} informados pelo COMEX`
 
   const blocking = []
@@ -151,6 +153,13 @@ export function evaluateCargoConferenceClose(rows, conference, { expectedPallets
       ? [
           `${plural(issueCount, 'item', 'itens')} com avaria registrada, mas o status do recebimento não é "Com ressalva"`,
           `${plural(issueCount, 'item', 'itens')} com avaria e status diferente de "Com ressalva"`,
+        ]
+      : null,
+    // S10-J1b: foto sem observação escrita (não bloqueia).
+    photoWithoutNote > 0
+      ? [
+          `${plural(photoWithoutNote, 'item', 'itens')} com foto, mas sem observação`,
+          `${plural(photoWithoutNote, 'item', 'itens')} com foto sem observação`,
         ]
       : null,
     conference.receiptStatus ? null : ['Status do recebimento não informado'],

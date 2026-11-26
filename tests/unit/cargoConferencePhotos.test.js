@@ -4,19 +4,24 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  CARGO_PHOTO_MESSAGES,
   CARGO_PHOTO_CONFERENCE_LIMIT,
   CARGO_PHOTO_JPEG_QUALITY,
   CARGO_PHOTO_MAX_BYTES,
   CARGO_PHOTO_MAX_EDGE,
   CARGO_PHOTO_ROW_LIMIT,
   CARGO_PHOTO_THUMB_EDGE,
+  addCargoPhoto,
   admitCargoPhotoFiles,
   buildCargoPhotoPaths,
   cargoPhotoRoom,
   countCargoPhotos,
+  countCargoRowsWithPhotoWithoutNote,
   createCargoPhotoId,
+  describeCargoPhotoError,
   describeCargoPhotoLimit,
   listUnsavedCargoPhotos,
+  removeCargoPhoto,
 } from '../../src/features/processes/cargoConferencePhotos.js'
 import {
   CARGO_PHOTOS_PER_CONFERENCE,
@@ -217,5 +222,112 @@ describe('listUnsavedCargoPhotos', () => {
     expect(listUnsavedCargoPhotos({ damageByRowId: {} }, saved)).toEqual([])
     expect(listUnsavedCargoPhotos(conferenceWith({ a: 2 }), null)).toHaveLength(2)
     expect(listUnsavedCargoPhotos(null, null)).toEqual([])
+  })
+})
+
+describe('addCargoPhoto / removeCargoPhoto (S10-J1b)', () => {
+  const empty = { damageByRowId: {}, palletsByRowId: {}, countOkByRowId: {} }
+
+  it('a foto entra no item, que passa a "avaria registrada" (flagged), sem mexer na observação', () => {
+    const base = { ...empty, damageByRowId: { a: { flagged: false, note: 'Caixa amassada', photos: [] } } }
+    const next = addCargoPhoto(base, 'a', photo('f1'))
+    expect(next.damageByRowId.a).toEqual({ flagged: true, note: 'Caixa amassada', photos: [photo('f1')] })
+    expect(base.damageByRowId.a.photos).toEqual([])
+  })
+
+  it('item sem entrada ganha a entrada; as outras linhas ficam como estão', () => {
+    const base = { ...empty, damageByRowId: { b: { flagged: true, note: 'x', photos: [photo('f9')] } } }
+    const next = addCargoPhoto(base, 'a', photo('f1'))
+    expect(Object.keys(next.damageByRowId).sort()).toEqual(['a', 'b'])
+    expect(next.damageByRowId.b).toBe(base.damageByRowId.b)
+  })
+
+  it('a 5ª foto do item entra e a 6ª não (devolve o mesmo objeto)', () => {
+    let current = empty
+    for (let index = 1; index <= CARGO_PHOTOS_PER_ROW; index += 1) current = addCargoPhoto(current, 'a', photo(`f${index}`))
+    expect(current.damageByRowId.a.photos).toHaveLength(5)
+    expect(addCargoPhoto(current, 'a', photo('f6'))).toBe(current)
+  })
+
+  it('a 31ª foto da conferência não entra, mesmo em outro item com vaga', () => {
+    const full = conferenceWith({ a: 5, b: 5, c: 5, d: 5, e: 5, f: 5 })
+    expect(countCargoPhotos(full)).toBe(CARGO_PHOTOS_PER_CONFERENCE)
+    expect(addCargoPhoto(full, 'g', photo('novo'))).toBe(full)
+  })
+
+  it('id repetido e foto vazia não entram', () => {
+    const base = addCargoPhoto(empty, 'a', photo('f1'))
+    expect(addCargoPhoto(base, 'a', photo('f1'))).toBe(base)
+    expect(addCargoPhoto(base, 'a', null)).toBe(base)
+  })
+
+  it('remover tira só a foto pedida; o item com observação continua; foto inexistente não muda nada', () => {
+    const base = {
+      ...empty,
+      damageByRowId: { a: { flagged: true, note: 'Molhada', photos: [photo('f1'), photo('f2')] } },
+    }
+    const next = removeCargoPhoto(base, 'a', 'f1')
+    expect(next.damageByRowId.a.photos.map((item) => item.id)).toEqual(['f2'])
+    expect(next.damageByRowId.a.note).toBe('Molhada')
+    expect(removeCargoPhoto(base, 'a', 'nao-existe')).toBe(base)
+    expect(removeCargoPhoto(base, 'zz', 'f1')).toBe(base)
+  })
+
+  it('remover a última foto de item sem avaria marcada e sem nota apaga a entrada', () => {
+    const base = { ...empty, damageByRowId: { a: { flagged: false, note: '', photos: [photo('f1')] } } }
+    expect(removeCargoPhoto(base, 'a', 'f1').damageByRowId).toEqual({})
+  })
+})
+
+describe('countCargoRowsWithPhotoWithoutNote', () => {
+  it('conta só itens com foto e sem observação escrita', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+    const conference = {
+      damageByRowId: {
+        a: { flagged: true, note: '', photos: [photo('1')] },
+        b: { flagged: true, note: '   ', photos: [photo('2')] },
+        c: { flagged: true, note: 'Molhada', photos: [photo('3')] },
+        d: { flagged: true, note: '', photos: [] },
+      },
+    }
+    expect(countCargoRowsWithPhotoWithoutNote(rows, conference)).toBe(2)
+    expect(countCargoRowsWithPhotoWithoutNote([], conference)).toBe(0)
+    expect(countCargoRowsWithPhotoWithoutNote(null, {})).toBe(0)
+  })
+})
+
+describe('describeCargoPhotoError', () => {
+  it('cancelamento de propósito não é erro', () => {
+    expect(describeCargoPhotoError({ code: 'storage/canceled' })).toBeNull()
+  })
+
+  it('erro da leitura da foto traz o próprio texto e não adianta tentar de novo', () => {
+    const error = Object.assign(new Error('Não foi possível ler esta foto.'), { code: 'cargoPhoto/unreadable' })
+    expect(describeCargoPhotoError(error)).toEqual({ text: 'Não foi possível ler esta foto.', retryable: false })
+  })
+
+  it.each([
+    [{ code: 'unavailable' }],
+    [{ code: 'storage/retry-limit-exceeded' }],
+    [{ code: 'storage/unknown' }],
+    [new TypeError('Failed to fetch')],
+    [new TypeError('Load failed')],
+  ])('falha de rede (%j) vira a mensagem de sem conexão com nova tentativa', (error) => {
+    expect(describeCargoPhotoError(error)).toEqual({ text: CARGO_PHOTO_MESSAGES.offline, retryable: true })
+  })
+
+  it('sem permissão, sessão expirada e erro desconhecido têm texto próprio e permitem tentar de novo', () => {
+    expect(describeCargoPhotoError({ code: 'storage/unauthorized' })).toEqual({
+      text: CARGO_PHOTO_MESSAGES.permission,
+      retryable: true,
+    })
+    expect(describeCargoPhotoError({ code: 'storage/unauthenticated' })).toEqual({
+      text: CARGO_PHOTO_MESSAGES.session,
+      retryable: true,
+    })
+    expect(describeCargoPhotoError(new Error('boom'))).toEqual({ text: CARGO_PHOTO_MESSAGES.generic, retryable: true })
+    expect(CARGO_PHOTO_MESSAGES.offline).toBe(
+      'Sem conexão. A foto não foi enviada: confira o sinal e toque em Tentar de novo.'
+    )
   })
 })

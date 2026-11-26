@@ -26831,7 +26831,7 @@ tr.crf-gsum td {
   vertical-align: top;
 }
 
-.crf-issues__table td:nth-child(5) {
+.crf-issues__table td.crf-issues__notecell {
   min-width: 260px;
 }
 
@@ -26920,4 +26920,297 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
     var(--m-tabbar-gap) + var(--m-tabbar-height) + var(--ccf-actionbar-gap) + var(--ccf-actionbar-height) + 12px +
       env(safe-area-inset-bottom, 0px)
   );
+}
+
+/* S10-J1b: fotos de avaria por item (celular .ccf-photos*, computador .crf-photos*), visualizador .cph-viewer* e contagem. */
+.ccf-photos,
+.crf-photos {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ccf-photos__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ccf-photos__label {
+  color: var(--ink-soft);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.ccf-photos__count,
+.ccf-photos__hint,
+.crf-photos__hint {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.ccf-photos__notice,
+.crf-photos__notice {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.ccf-photos__thumbs,
+.crf-photos__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ccf-photos__thumb,
+.crf-photos__thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 76px;
+}
+
+.crf-photos__thumb {
+  width: 64px;
+}
+
+.ccf-photos__open,
+.crf-photos__open {
+  display: block;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.crf-photos__open {
+  width: 64px;
+  height: 64px;
+}
+
+.ccf-photos__open:disabled,
+.crf-photos__open:disabled {
+  cursor: progress;
+}
+
+.ccf-photos__open img,
+.crf-photos__open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ccf-photos__ph,
+.crf-photos__ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* "Remover": botao proprio numa faixa ABAIXO da miniatura (44 px de altura, largura da miniatura). Sem posicao absoluta e
+   sem ::after: a area de toque dele nunca cobre a miniatura, entao tocar na foto sempre abre (nunca remove). */
+.ccf-photos__del,
+.crf-photos__del {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 1px solid var(--danger-700);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--danger-700);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.ccf-photos__thumb--off,
+.crf-photos__thumb--off {
+  display: grid;
+  gap: 4px;
+  width: 128px;
+  padding: 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.ccf-photos__off,
+.crf-photos__off {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.ccf-photos__retry,
+.crf-photos__retry,
+.ccf-photos__cancel,
+.crf-photos__cancel {
+  min-height: 44px;
+}
+
+.ccf-photos__live,
+.crf-photos__live {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ccf-photos__upload,
+.crf-photos__upload {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.ccf-photos__upload progress,
+.crf-photos__upload progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--primary);
+}
+
+.ccf-photos__upload--error,
+.crf-photos__upload--error {
+  border-color: var(--danger-700);
+  background: var(--danger-50);
+}
+
+.ccf-photos__error,
+.crf-photos__error {
+  margin: 0;
+  color: var(--danger-700);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+}
+
+.ccf-photos__actions,
+.crf-photos__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ccf-photos__actions > button,
+.crf-photos__actions > button {
+  min-height: 44px;
+}
+
+.ccf-photos__bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.crf-photos__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ccf-photos__bar > .secondary-button,
+.crf-photos__bar > .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  font-weight: 700;
+}
+
+.ccf-actionbar__hint {
+  flex: 1 1 0;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.crf-issues__photos {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-footnote);
+}
+
+.crf-issues__table td.crf-issues__photocell {
+  min-width: 150px;
+}
+
+.modal.cph-viewer {
+  max-width: 920px;
+}
+
+.cph-viewer__body {
+  display: grid;
+  gap: 12px;
+  padding: 4px;
+}
+
+.cph-viewer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cph-viewer__caption {
+  margin: 0;
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.cph-viewer__stage {
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.cph-viewer__img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.cph-viewer__msg {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.cph-viewer__nav {
+  display: flex;
+  gap: 8px;
+}
+
+.cph-viewer__nav > button {
+  flex: 1 1 0;
+  min-height: 44px;
+}
+
+.cph-viewer__head > button {
+  min-height: 44px;
 }

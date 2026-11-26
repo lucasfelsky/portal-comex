@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../../components/Toast'
 import { useUnsavedChangesGuard } from '../../contexts/UnsavedChangesContext'
+import { deleteOwnCargoConferencePhotoFiles } from '../../services/cargoConferencePhotosRepository'
 import { getCargoReport, saveCargoReportConference } from '../../services/cargoReportRepository'
 import { buildActionErrorMessage } from '../../utils/errorMessages'
 import {
@@ -13,9 +14,11 @@ import {
 import {
   hasAnyCargoIssue,
   patchCargoRowIssue,
+  readCargoRowIssue,
   stepCargoRowPallets,
   summarizeCargoPallets,
 } from './cargoConferenceIssues'
+import { addCargoPhoto, listUnsavedCargoPhotos, removeCargoPhoto } from './cargoConferencePhotos'
 import {
   EMPTY_CARGO_CONFERENCE,
   cargoConferenceKey,
@@ -39,6 +42,7 @@ import {
 import { orderCargoFormByPurchaseOrder } from './cargoReportGroups'
 import { cargoPackagingContext } from './cargoSupplierPackaging'
 import { invalidateCargoConference } from './useCargoConferenceList'
+import useCargoPhotoUploads from './useCargoPhotoUploads'
 import { loadItemCatalogCached, loadSupplierCatalogCached } from './useCargoReportPackaging'
 
 // S9-F do Relatório de Carga: estado e ações da tela de conferência do celular (um processo). Carrega o relatório do
@@ -151,19 +155,38 @@ export default function useCargoConferenceScreen({ process, profile }) {
   // Avaria registrada e status diferente de "Com ressalva": o celular sugere (botão "Usar Com ressalva"), não troca.
   const suggestStatus = hasAnyCargoIssue(conference) && conference.receiptStatus !== 'com_ressalva'
 
-  // Sair com alteração não salva pede confirmação (como no resto do app).
-  useUnsavedChangesGuard(dirty)
-
   function edit(updater) {
     if (!canSave) return
     setConference(updater)
     setFeedback(null)
   }
 
+  // S10-J1b: fotos de avaria. A foto enviada entra no item e fica "não salva" até o Salvar.
+  const photoUploads = useCargoPhotoUploads({
+    processId,
+    uid: profile?.uid,
+    conference,
+    enabled: canSave,
+    onUploaded: (rowId, photo) => edit((current) => addCargoPhoto(current, rowId, photo)),
+  })
+
+  // Sair com alteração não salva (ou com foto ainda subindo) pede confirmação (como no resto do app).
+  useUnsavedChangesGuard(dirty || photoUploads.isUploading)
+
   const toggleOk = (rowId) => edit((current) => toggleCargoConferenceFlag(current, 'okByRowId', rowId))
   const stepPallets = (rowId, delta) => edit((current) => stepCargoRowPallets(current, rowId, delta))
   const setIssue = (rowId, changes) => edit((current) => patchCargoRowIssue(current, rowId, changes))
   const setLabel = (rowId, field, value) => edit((current) => setCargoConferenceLabel(current, rowId, field, value))
+
+  // Tira a foto do item (vale no Salvar). Foto enviada por mim e ainda não salva: apaga o arquivo agora (melhor esforço).
+  function removePhoto(rowId, photoId) {
+    if (!canSave) return
+    const photo = readCargoRowIssue(conference, rowId).photos.find((item) => item?.id === photoId)
+    edit((current) => removeCargoPhoto(current, rowId, photoId))
+    if (photo && listUnsavedCargoPhotos(conference, saved).some((item) => item.id === photoId)) {
+      deleteOwnCargoConferencePhotoFiles(processId, [photo], { uid: profile?.uid }).catch(() => {})
+    }
+  }
   const patch = (changes) => edit((current) => ({ ...current, ...changes }))
   const applySuggestedStatus = () => patch({ receiptStatus: 'com_ressalva' })
 
@@ -252,6 +275,7 @@ export default function useCargoConferenceScreen({ process, profile }) {
   }
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+  const photoTools = { processId, ...photoUploads, remove: removePhoto }
 
   return {
     loadState,
@@ -269,6 +293,8 @@ export default function useCargoConferenceScreen({ process, profile }) {
     progress,
     pallets,
     suggestStatus,
+    photoTools,
+    isUploading: photoUploads.isUploading,
     feedback,
     isBusy,
     actorName,

@@ -1,18 +1,22 @@
 import {
+  CARGO_PHOTOS_PER_CONFERENCE,
   cargoRowPallets,
   formatCargoPalletsSummary,
   hasAnyCargoIssue,
   hasCargoRowIssue,
   readCargoRowIssue,
 } from './cargoConferenceIssues'
+import { countCargoPhotos } from './cargoConferencePhotos'
 import { describeCargoRow } from './cargoConferenceModel'
+import CargoConferencePhotoBlock from './CargoConferencePhotoBlock'
 import CargoConferenceIssueFields from './CargoConferenceIssueFields'
 import { isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S10-I do Relatório de Carga: cartão "Pallets e avarias" do computador, entre "Itens" e "Responsáveis e recebimento"
 // (mock aprovado). Faixa "Pallets da carga: X contados de Y informados pelo COMEX." (divergente / confere / sem total) e
 // a tabela por item: Pallets contados (com selo) e a observação da avaria (campo para a logística que pode salvar; texto
-// para os demais). Só aparece quando há o que mostrar (logística conferindo, ou contagem/avaria já registrada).
+// para os demais). S10-J1b: coluna "Fotos" (miniaturas; "Anexar foto" para a logística que pode salvar; só leitura para
+// o resto) e a contagem de fotos da conferência. Só aparece quando há o que mostrar (logística conferindo, ou contagem/avaria já registrada).
 // Fora do computador (`isDesktop` falso) a tabela vira uma lista de cartões, sem rolagem horizontal.
 
 const NOTE_CLASS = {
@@ -41,7 +45,15 @@ function AvariaBadge({ show }) {
   return show ? <span className="inline-badge inline-badge--danger">Avaria registrada</span> : null
 }
 
-export default function CargoConferenceIssuesCard({ rows, conference, summary, canEdit, isDesktop = true, onIssueChange }) {
+export default function CargoConferenceIssuesCard({
+  rows,
+  conference,
+  summary,
+  canEdit,
+  isDesktop = true,
+  photoTools = null,
+  onIssueChange,
+}) {
   const filled = (Array.isArray(rows) ? rows : []).filter((row) => !isCargoReportRowEmpty(row))
   const hasCounts = filled.some((row) => {
     const { count, legacyOk } = cargoRowPallets(conference, row.id)
@@ -62,6 +74,24 @@ export default function CargoConferenceIssuesCard({ rows, conference, summary, c
     )
   }
 
+  function renderPhotos(row, number) {
+    const photos = readCargoRowIssue(conference, row.id).photos
+    if (!photoTools || (!canEdit && photos.length === 0)) return '—'
+    return (
+      <CargoConferencePhotoBlock
+        variant="desktop"
+        tools={photoTools}
+        rowId={row.id}
+        number={number}
+        title={describeCargoRow(row, number)}
+        photos={photos}
+        editable={canEdit}
+      />
+    )
+  }
+
+  const photoCount = countCargoPhotos(conference)
+
   return (
     <section className="crf-card crf-issues" aria-label="Pallets e avarias">
       <h3>Pallets e avarias</h3>
@@ -69,6 +99,9 @@ export default function CargoConferenceIssuesCard({ rows, conference, summary, c
       <div className={NOTE_CLASS[summary.state]} role="status">
         {formatCargoPalletsSummary(summary)}
       </div>
+      {photoTools && (canEdit || photoCount > 0) ? (
+        <p className="crf-issues__photos">{`Fotos de avaria: ${photoCount} de ${CARGO_PHOTOS_PER_CONFERENCE} na conferência (até 5 por item).`}</p>
+      ) : null}
       {isDesktop ? (
         <div className="crf-issues__scroll">
           <table className="crf-issues__table" aria-label="Pallets e avarias por item">
@@ -78,6 +111,7 @@ export default function CargoConferenceIssuesCard({ rows, conference, summary, c
                 <th scope="col">Item</th>
                 <th scope="col">Cód.</th>
                 <th scope="col">Pallets</th>
+                {photoTools ? <th scope="col">Fotos</th> : null}
                 <th scope="col">Observação da avaria</th>
               </tr>
             </thead>
@@ -95,7 +129,8 @@ export default function CargoConferenceIssuesCard({ rows, conference, summary, c
                     <td>
                       <PalletsCell {...cargoRowPallets(conference, row.id)} />
                     </td>
-                    <td>{renderNote(row, number)}</td>
+                    {photoTools ? <td className="crf-issues__photocell">{renderPhotos(row, number)}</td> : null}
+                    <td className="crf-issues__notecell">{renderNote(row, number)}</td>
                   </tr>
                 )
               })}
@@ -115,6 +150,7 @@ export default function CargoConferenceIssuesCard({ rows, conference, summary, c
                 <div className="crf-issues__pallets">
                   <span>Pallets</span> <PalletsCell {...cargoRowPallets(conference, row.id)} />
                 </div>
+                {photoTools ? renderPhotos(row, number) : null}
                 {renderNote(row, number)}
               </li>
             )

@@ -7,7 +7,7 @@ import { handleUpperChange } from './CargoReportItems'
 
 // S9-F do Relatório de Carga: cartão de uma linha na conferência do celular (mock aprovado): número, descrição,
 // selo "Conferido" (OK? marcado e pelo menos 1 pallet), dados da linha, botão grande OK?, o contador de pallets do
-// item (S10-I), as etiquetas WMS/SQ (sempre em MAIÚSCULAS) e a observação de avaria. Selos "Sem contagem" e "Avaria
+// item (S10-I), as etiquetas WMS/SQ (sempre em MAIÚSCULAS), as fotos (S10-J1b) e a observação de avaria. Selos "Sem contagem" e "Avaria
 // registrada". Apresentação pura: quem guarda o estado é `useCargoConferenceScreen`. Somente leitura (`editable`
 // falso): botões desabilitados, contador só com o número e etiquetas em texto.
 
@@ -36,6 +36,7 @@ export default function CargoConferenceItemCard({
   hasIssue,
   labels,
   editable,
+  photoTools = null,
   idPrefix,
   onToggleOk,
   onStepPallets,
@@ -135,6 +136,7 @@ export default function CargoConferenceItemCard({
         issue={issue}
         editable={editable}
         itemLabel={`item ${number}`}
+        photoProps={photoTools ? { tools: photoTools, rowId: row.id, number, title: describeCargoRow(row, number) } : null}
         onChange={(patch) => onIssueChange(row.id, patch)}
       />
     </article>

@@ -3,7 +3,7 @@
 // conferência fechada, admin (só acompanha e reabre), consolidado em grupos e o relatório antigo com NF de 40 caracteres.
 // S10-I: contador de pallets por item, total do COMEX, observação por item e o aviso do fechamento do computador.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -14,6 +14,10 @@ const mockRetryClose = vi.fn()
 const mockReopen = vi.fn()
 const mockGenerate = vi.fn()
 const mockInvalidate = vi.fn()
+const mockPrepare = vi.fn()
+const mockUploadPhoto = vi.fn()
+const mockDeleteOwnPhotos = vi.fn()
+const mockDownloadPhoto = vi.fn()
 
 vi.mock('../../src/services/cargoReportRepository', () => ({
   getCargoReport: (...args) => mockGetCargoReport(...args),
@@ -40,6 +44,16 @@ vi.mock('../../src/services/supplierPackagingCatalogRepository', () => ({
   getSupplierPackagingCatalog: vi.fn().mockResolvedValue({ exists: false, version: 0, entries: [], entryCount: 0, aliases: [] }),
   upsertSupplierPackagingEntry: vi.fn(),
 }))
+// S10-J1b: fotos de avaria (redução no aparelho e Storage/function mockados; nada de rede).
+vi.mock('../../src/features/processes/cargoPhotoResize', async (importOriginal) => ({
+  ...(await importOriginal()),
+  prepareCargoPhoto: (...args) => mockPrepare(...args),
+}))
+vi.mock('../../src/services/cargoConferencePhotosRepository', () => ({
+  uploadCargoConferencePhoto: (...args) => mockUploadPhoto(...args),
+  deleteOwnCargoConferencePhotoFiles: (...args) => mockDeleteOwnPhotos(...args),
+  downloadCargoConferencePhotoBlob: (...args) => mockDownloadPhoto(...args),
+}))
 // A invalidação do cache da lista é espiada (a carga da lista tem testes próprios).
 vi.mock('../../src/features/processes/useCargoConferenceList', () => ({
   invalidateCargoConference: (...args) => mockInvalidate(...args),
@@ -48,6 +62,7 @@ vi.mock('../../src/features/processes/useCargoConferenceList', () => ({
 import { ToastProvider } from '../../src/components/Toast'
 import { UnsavedChangesProvider } from '../../src/contexts/UnsavedChangesContext'
 import CargoConferenceScreen from '../../src/features/processes/CargoConferenceScreen'
+import { clearCargoPhotoCache } from '../../src/features/processes/useCargoPhotoUrls'
 
 const LOGISTICA = { uid: 'log-1', name: 'Operador Logística', email: 'op@sqquimica.com', role: 'logistica' }
 const ADMIN = { uid: 'admin-1', name: 'Lucas Admin', email: 'lucas@sqquimica.com', role: 'admin' }
@@ -962,5 +977,236 @@ describe('abas, barra inferior e saída', () => {
     mockGetCargoReport.mockResolvedValue({ current: currentDoc(), conference: conferenceDoc() })
     await user.click(within(alert).getByRole('button', { name: 'Tentar novamente' }))
     expect(await screen.findByRole('tablist')).toBeInTheDocument()
+  })
+})
+
+describe('fotos de avaria por item (S10-J1b)', () => {
+  const saved = (id, rowId = 'r-1') => ({
+    id,
+    path: `processes/p1/cargo-conference/${rowId}/1-log-1-${id}.jpg`,
+    thumbPath: `processes/p1/cargo-conference/${rowId}/1-log-1-${id}-t.jpg`,
+    width: 1600,
+    height: 1200,
+    size: 120000,
+    uploadedAt: 1700000000000,
+    byId: 'log-1',
+  })
+  const withPhotos = (count, note = '') => ({
+    damageByRowId: {
+      'r-1': { flagged: true, note, photos: Array.from({ length: count }, (_, index) => saved(`s${index + 1}`)) },
+    },
+  })
+  const closedConference = (extra = {}) =>
+    conferenceDoc({ status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd', ...extra })
+  const chooseCamera = (user, n, file) => user.upload(screen.getByLabelText(`Foto da câmera do item ${n}`), file)
+  const jpeg = (name = 'avaria.jpg') => new File(['x'], name, { type: 'image/jpeg' })
+  const originalCreate = URL.createObjectURL
+  const originalRevoke = URL.revokeObjectURL
+
+  beforeEach(() => {
+    clearCargoPhotoCache()
+    mockPrepare.mockReset()
+    mockUploadPhoto.mockReset()
+    mockDeleteOwnPhotos.mockReset()
+    mockDownloadPhoto.mockReset()
+    mockPrepare.mockImplementation(async () => ({
+      full: { blob: new Blob(['f']), width: 1600, height: 1200 },
+      thumb: { blob: new Blob(['t']), width: 400, height: 300 },
+    }))
+    mockDownloadPhoto.mockImplementation(async () => new Blob(['img']))
+    mockDeleteOwnPhotos.mockResolvedValue(0)
+    URL.createObjectURL = vi.fn(() => 'blob:foto')
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    // Desmonta antes de devolver o URL original (o cleanup do hook revoga as URLs locais).
+    cleanup()
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+  })
+
+  it('cada cartão tem "Tirar foto" e "Anexar" (logística com a conferência aberta)', async () => {
+    await renderScreen()
+    for (const n of [1, 2, 3]) {
+      const card = screen.getByRole('article', { name: `Item ${n}` })
+      expect(within(card).getByRole('button', { name: `Tirar foto do item ${n}` })).toBeEnabled()
+      expect(within(card).getByRole('button', { name: `Anexar fotos ao item ${n}` })).toBeEnabled()
+    }
+  })
+
+  it('a foto enviada entra no item como NÃO salva: o item vira "Avaria registrada" e nada é gravado até o Salvar', async () => {
+    const { user } = await renderScreen()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(await within(first).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
+    expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
+    expect(within(first).getByRole('button', { name: 'Registrar avaria / ressalva neste item 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(mockSaveConference).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
+  })
+
+  it('Salvar grava o metadado da foto (id, caminhos, tamanho, quem enviou) na observação do item', async () => {
+    const { user } = await renderScreen()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Caixas molhadas')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    const payload = mockSaveConference.mock.calls[0][1]
+    expect(payload.damageByRowId['r-1']).toEqual({
+      flagged: true,
+      note: 'Caixas molhadas',
+      photos: [saved('pnovo')],
+    })
+    expect(await screen.findByText(/^Conferência salva às \d{2}:\d{2}\.$/)).toBeInTheDocument()
+  })
+
+  it('"Salvar" fica desabilitado enquanto uma foto sobe, com o motivo em texto, e libera quando termina', async () => {
+    let finish
+    mockUploadPhoto.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { user } = await renderScreen()
+    await user.click(okButton(1))
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
+    await chooseCamera(user, 1, jpeg())
+    await waitFor(() => expect(mockUploadPhoto).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    expect(screen.getByText('Aguarde o envio das fotos.')).toHaveAttribute('role', 'status')
+    finish(saved('pnovo'))
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
+    expect(screen.queryByText('Aguarde o envio das fotos.')).not.toBeInTheDocument()
+  })
+
+  it('falha de rede no envio: mensagem no item, "Tentar de novo" e a foto entra; Salvar segue a liberar', async () => {
+    mockUploadPhoto.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    mockUploadPhoto.mockResolvedValueOnce(saved('pnovo'))
+    const { user } = await renderScreen()
+    await chooseCamera(user, 2, jpeg())
+    const second = screen.getByRole('article', { name: 'Item 2' })
+    expect(await within(second).findByRole('alert')).toHaveTextContent('Sem conexão. A foto não foi enviada')
+    await user.click(within(second).getByRole('button', { name: 'Tentar de novo' }))
+    expect(await within(second).findByRole('img', { name: 'Foto 1 do item 2' })).toBeInTheDocument()
+    expect(mockPrepare).toHaveBeenCalledTimes(1)
+  })
+
+  it('foto SEM observação: o banner do Salvar avisa "1 item com foto sem observação"; com observação some', async () => {
+    const { user } = await renderScreen()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    const notice = await screen.findByText(/^No fechamento pelo computador:/)
+    expect(notice).toHaveAttribute('role', 'status')
+    expect(notice).toHaveTextContent('1 item com foto sem observação')
+    expect(mockSaveConference).toHaveBeenCalledTimes(1)
+
+    await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Caixa rasgada')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(2))
+    const second = await screen.findByText(/^No fechamento pelo computador:/)
+    expect(second).not.toHaveTextContent('com foto sem observação')
+  })
+
+  it('avaria sem foto continua válida (nada a avisar sobre foto)', async () => {
+    const { user } = await renderScreen()
+    await user.click(screen.getByRole('button', { name: 'Registrar avaria / ressalva neste item 1' }))
+    await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Pallet torto')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    const notice = await screen.findByText(/^No fechamento pelo computador:/)
+    expect(notice).not.toHaveTextContent('foto')
+  })
+
+  it('a faixa conta as fotos da conferência e a aba Recebimento mostra "N foto(s)" por item', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc(withPhotos(2, 'Molhadas')) })
+    expect(screen.getByText('2 de 30 fotos de avaria')).toBeInTheDocument()
+    await openReceipt(user)
+    const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
+    expect(within(card).getByText('2 fotos')).toBeInTheDocument()
+  })
+
+  it('remover foto já salva: some do item e o Salvar grava sem ela (o arquivo sai pelo servidor, não pelo cliente)', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc(withPhotos(2, 'Molhadas')) })
+    await screen.findByRole('img', { name: 'Foto 2 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(screen.queryByRole('img', { name: 'Foto 2 do item 1' })).not.toBeInTheDocument()
+    expect(mockDeleteOwnPhotos).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+    await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
+    expect(mockSaveConference.mock.calls[0][1].damageByRowId['r-1'].photos.map((item) => item.id)).toEqual(['s2'])
+  })
+
+  it('remover foto enviada agora e ainda não salva apaga o arquivo do próprio uid (sem órfão)', async () => {
+    const { user } = await renderScreen()
+    mockUploadPhoto.mockResolvedValue(saved('pnovo'))
+    await chooseCamera(user, 1, jpeg())
+    await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
+    expect(mockDeleteOwnPhotos).toHaveBeenCalledWith('p1', [saved('pnovo')], { uid: 'log-1' })
+  })
+
+  it('5 fotos no item: os dois botões ficam desabilitados com o motivo; os outros itens seguem liberados', async () => {
+    await renderScreen({ conference: conferenceDoc(withPhotos(5, 'Muitas')) })
+    expect(screen.getByRole('button', { name: 'Tirar foto do item 1' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Anexar fotos ao item 1' })).toBeDisabled()
+    expect(screen.getByText('Limite de 5 fotos por item atingido.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tirar foto do item 2' })).toBeEnabled()
+  })
+
+  it('conferência fechada: miniaturas e ampliar, sem "×", sem Tirar foto e sem Anexar', async () => {
+    const { user } = await renderScreen({ conference: closedConference(withPhotos(2, 'Molhadas')) })
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(await within(first).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    expect(within(first).queryByRole('button', { name: /Remover foto|Tirar foto|Anexar/ })).not.toBeInTheDocument()
+    expect(within(first).queryByLabelText(/Foto da câmera|Arquivos de foto/)).not.toBeInTheDocument()
+    await user.click(within(first).getByRole('button', { name: 'Foto 1 do item 1' }))
+    expect(await screen.findByRole('dialog', { name: 'Foto da avaria' })).toBeInTheDocument()
+  })
+
+  it('admin vê as fotos (só leitura) e abre o visualizador', async () => {
+    const { user } = await renderScreen({ profile: ADMIN, conference: conferenceDoc(withPhotos(3, 'Molhadas')) })
+    const first = screen.getByRole('article', { name: 'Item 1' })
+    expect(await within(first).findByRole('img', { name: 'Foto 3 do item 1' })).toBeInTheDocument()
+    expect(within(first).queryByRole('button', { name: /Remover foto|Tirar foto|Anexar/ })).not.toBeInTheDocument()
+    await user.click(within(first).getByRole('button', { name: 'Foto 2 do item 1' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Foto da avaria' })
+    expect(within(dialog).getByRole('heading')).toHaveTextContent('Foto 2 de 3 · Item 1 · DEA FOAM14339 - BB 25KG')
+    expect(mockDownloadPhoto).toHaveBeenCalledWith('p1', 's2', 'full')
+  })
+
+  it('reabrir a conferência mantém as fotos', async () => {
+    const { user } = await renderScreen({ profile: ADMIN, conference: closedConference(withPhotos(2, 'Molhadas')) })
+    await user.click(screen.getByRole('button', { name: 'Reabrir conferência' }))
+    await waitFor(() => expect(mockReopen).toHaveBeenCalledWith('p1', ADMIN))
+    const first = await screen.findByRole('article', { name: 'Item 1' })
+    expect(await within(first).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+  })
+
+  it('sair com foto ainda subindo pede confirmação, como alteração não salva', async () => {
+    mockUploadPhoto.mockImplementation(() => new Promise(() => {}))
+    const onBack = vi.fn()
+    const wrapper = ({ children }) => (
+      <MemoryRouter>
+        <ToastProvider>
+          <UnsavedChangesProvider>{children}</UnsavedChangesProvider>
+        </ToastProvider>
+      </MemoryRouter>
+    )
+    const { user } = await renderScreen({ onBack, wrapper })
+    await chooseCamera(user, 1, jpeg())
+    await waitFor(() => expect(mockUploadPhoto).toHaveBeenCalled())
+    await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
+    expect(onBack).not.toHaveBeenCalled()
+    expect(await screen.findByRole('alertdialog', { name: 'Descartar alterações?' })).toBeInTheDocument()
   })
 })
