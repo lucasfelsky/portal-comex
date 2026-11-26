@@ -27197,3 +27197,66 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .cph-viewer__head > button {
   min-height: 44px;
 }
+
+/* S10-J2b: cartão "Avarias da conferência" na aba Documentos (.cdc*) */
+.cdc__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 var(--m-inset, 20px) 20px;
+}
+
+/* Estado de erro: o corpo é o único filho do cartão (sem cabeçalho). */
+.cdc__body:first-child {
+  padding-top: 16px;
+}
+
+/* No desktop o cartão da seção já tem padding próprio (cabeçalho sem padding): o corpo alinha com o título. */
+.process-detail-view--desktop .cdc__body,
+.process-detail-view--desktop .cdc__body:first-child {
+  padding: 0;
+}
+
+.cdc__summary {
+  margin: 0;
+  font-size: var(--fs-footnote);
+  color: var(--text-muted);
+}
+
+.cdc__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cdc__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  min-width: 0;
+}
+
+/* `.cdc .` vence o `.list-card p` (cinza) do detalhe no celular. */
+.cdc .cdc__title {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.cdc .cdc__note {
+  margin: 0;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cdc .secondary-button {
+  min-height: 44px;
+}

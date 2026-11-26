@@ -17,6 +17,7 @@ const COLLECTION_ID = 'processes'
 const SUBCOLLECTION_ID = 'cargoReport'
 const CURRENT_ID = 'current'
 const CONFERENCE_ID = 'conference'
+const DAMAGE_ID = 'damage'
 const NOT_AUTHENTICATED_MESSAGE = 'Usuário não autenticado: não foi possível gravar o relatório de carga.'
 
 function toDateOrNull(value) {
@@ -75,6 +76,15 @@ export async function getCargoReport(processId) {
     current: currentSnapshot.exists() ? withDate(currentSnapshot.data()) : null,
     conference: conferenceSnapshot.exists() ? withDate(conferenceSnapshot.data()) : null,
   }
+}
+
+// S10-J2b: espelho das avarias da conferência (`processes/{id}/cargoReport/damage`, gravado por trigger no fechamento).
+// -> dados com `updatedAt` como Date|null, ou `null` se não existe (ou sem Firebase: o espelho só existe no servidor).
+export async function getCargoConferenceDamage(processId) {
+  if (!isFirebaseConfigured || !firestore) return null
+
+  const snapshot = await getDoc(cargoReportRef(processId, DAMAGE_ID))
+  return snapshot.exists() ? withDate(snapshot.data()) : null
 }
 
 // A rule nega gravar sobre revisão antiga com `permission-denied`: relê o doc para distinguir
@@ -249,12 +259,26 @@ async function writeClosedConference(processId, { payload, documentId, actor }) 
   return { revision: payload.revision, documentId }
 }
 
-// Ordem: (a) relê `current` e `conference` no servidor, sem anexar nada se houver conflito (COMEX alterou ou
-// reabriu depois que a tela abriu, ou a conferência mudou); (b) anexa o xlsx pelo fluxo normal de documentos
-// como a logística (o servidor rotaciona as versões e manda o aviso da conferência); (c) grava a conferência
-// como fechada, apontando para o anexo. Se (c) falhar depois do anexo, o erro leva o `documentId`
-// (`cargoReport/attached-not-saved`) para a tela oferecer "Gravar de novo" sem anexar outra vez.
-export async function closeCargoReportConference(processId, { payload, file, category, actor, currentRevision } = {}) {
+// A revisão que já está salva no servidor viaja no erro (não enumerável) para a tela passar a refletir a conferência
+// aberta gravada e o próximo "Salvar e fechar" não dar conflito.
+function withSavedRevision(error, revision) {
+  if (error && typeof error === 'object') {
+    Object.defineProperty(error, 'savedRevision', { value: revision, configurable: true })
+  }
+  return error
+}
+
+// Ordem (S10-J2b): (a) relê `current` e `conference` no servidor, sem gravar nem anexar nada se houver conflito
+// (COMEX alterou ou reabriu depois que a tela abriu, ou a conferência mudou); (b) grava a conferência ABERTA
+// (`openPayload`, r+1) com o conteúdo final: o aviso do servidor lê esse conteúdo; (c) anexa o xlsx pelo fluxo normal
+// de documentos como a logística (o servidor rotaciona as versões e manda o aviso da conferência); (d) grava a
+// conferência como fechada (`payload`, r+2), apontando para o anexo. Se (c) falhar, o erro leva `savedRevision`
+// (a conferência ficou salva em r+1). Se (d) falhar depois do anexo, o erro leva o `documentId`
+// (`cargoReport/attached-not-saved`) e também `savedRevision`, para a tela oferecer "Gravar de novo" sem anexar outra vez.
+export async function closeCargoReportConference(
+  processId,
+  { openPayload, payload, file, category, actor, currentRevision } = {}
+) {
   if (!isFirebaseConfigured || !firestore) throw new Error(NO_FIREBASE_MESSAGE)
 
   const uid = auth?.currentUser?.uid
@@ -267,19 +291,26 @@ export async function closeCargoReportConference(processId, { payload, file, cat
   if (current?.status !== 'concluido' || readRevision(current) !== currentRevision) {
     throw revisionConflictError('current')
   }
-  if (readRevision(conference) !== payload.revision - 1) throw revisionConflictError('conference')
+  if (readRevision(conference) !== openPayload.revision - 1) throw revisionConflictError('conference')
 
-  const uploaded = await uploadProcessDocument(processId, {
-    type: 'cargoReport',
-    file,
-    category,
-    actor: { uid: actor?.uid ?? uid, name: actor?.name, role: actor?.role },
-  })
+  await writeDocument(processId, CONFERENCE_ID, openPayload, actor)
+
+  let uploaded
+  try {
+    uploaded = await uploadProcessDocument(processId, {
+      type: 'cargoReport',
+      file,
+      category,
+      actor: { uid: actor?.uid ?? uid, name: actor?.name, role: actor?.role },
+    })
+  } catch (error) {
+    throw withSavedRevision(error, openPayload.revision)
+  }
 
   try {
     return await writeClosedConference(processId, { payload, documentId: uploaded.id, actor })
   } catch (error) {
-    throw attachedNotSavedError(uploaded.id, error)
+    throw withSavedRevision(attachedNotSavedError(uploaded.id, error), openPayload.revision)
   }
 }
 

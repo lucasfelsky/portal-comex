@@ -23,6 +23,7 @@ import {
 } from './cargoConferenceActions'
 import { hasAnyCargoIssue } from './cargoConferenceIssues'
 import { evaluateCargoConferenceClose } from './cargoConferenceModel'
+import { countCargoPhotos } from './cargoConferencePhotos'
 import CargoReportPrintSheet from './CargoReportPrintSheet'
 import {
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
@@ -148,6 +149,7 @@ export function CargoReportCloseConferenceDialog({
   pendingText = '',
   blocking = '',
   hasIssues = false,
+  photoCount = 0,
   busy = false,
   onConfirm,
   onCancel,
@@ -183,7 +185,7 @@ export function CargoReportCloseConferenceDialog({
           <li>
             {'Envia o '}
             <b>aviso da conferência</b>
-            {` por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório${hasIssues ? ', incluindo as avarias registradas' : ''}.`}
+            {` por e-mail para Comex, Técnico, Logística e Faturamento/fiscal (e-mail próprio da conferência) e um aviso no Portal para os destinatários do relatório${hasIssues ? `, incluindo as avarias registradas${photoCount > 0 ? ' e a quantidade de fotos' : ''}` : ''}.`}
           </li>
           <li>
             {'A conferência fica '}
@@ -469,6 +471,10 @@ export function CargoReportActionBar({
         })
         finishClosedConference(payload, documentId)
       } catch (error) {
+        // S10-J2b: a conferência aberta já foi gravada (r+1): a tela passa a refletir isso antes de mostrar o erro.
+        if (error?.savedConference) {
+          onConferencePersisted({ ...error.savedConference, updatedAt: new Date(), updatedByName: actorName })
+        }
         onFeedback(describeCargoCloseError(error, error?.closePayload ?? null, { onRetry: handleRetryClose }))
       } finally {
         setIsCloseOpen(false)
@@ -684,6 +690,7 @@ export function CargoReportActionBar({
         pendingText={closeCheck.pendings.join(', ')}
         blocking={closeCheck.blocking.join(' ')}
         hasIssues={hasAnyCargoIssue(conference)}
+        photoCount={countCargoPhotos(conference)}
         busy={isWorking}
         onConfirm={handleConfirmClose}
         onCancel={() => setIsCloseOpen(false)}
