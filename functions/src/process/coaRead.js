@@ -444,8 +444,12 @@ export function toPublicCoaRead(doc) {
   return copy
 }
 
-// Unico ponto que alimenta o log: ids, uid, status, contagem, creditos, duracao e codigo de erro.
-// NUNCA conteudo do COA, nome de arquivo, produto, lote, PO, `output`, chave ou workspace.
+// Estagios aceitos no log de diagnostico (mesma lista de `TESS_STAGES` em `tessClient.js`).
+const LOG_STAGES = ['upload', 'process', 'execute', 'poll', 'delete']
+
+// Unico ponto que alimenta o log: ids, uid, status, contagem, creditos, duracao, codigo de erro e, so' em falha,
+// o estagio (lista fechada) e o status HTTP (numero). NUNCA conteudo do COA, nome de arquivo, produto, lote, PO,
+// `output`, corpo ou mensagem da Tess, chave, workspace ou agente.
 export function buildCoaLogFields({
   processId,
   documentId,
@@ -456,6 +460,8 @@ export function buildCoaLogFields({
   credits,
   durationMs,
   errorCode,
+  stage,
+  httpStatus,
 }) {
   const fields = { processId, documentId, uid, status }
   if (cached !== undefined) fields.cached = Boolean(cached)
@@ -463,5 +469,7 @@ export function buildCoaLogFields({
   if (credits !== undefined) fields.credits = Number(credits) || 0
   if (durationMs !== undefined) fields.durationMs = Number(durationMs) || 0
   if (errorCode) fields.errorCode = String(errorCode)
+  if (LOG_STAGES.includes(stage)) fields.stage = stage
+  if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) fields.httpStatus = httpStatus
   return fields
 }

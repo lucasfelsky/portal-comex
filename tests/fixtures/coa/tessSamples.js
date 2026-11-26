@@ -296,3 +296,82 @@ export const EXPECTED_CERTIFICATE_COUNTS = {
 
 // Amostras que NAO passam em `parseAgentOutputText`.
 export const REJECTED_SAMPLES = ['schemaV2', 'emptyThenPoll']
+
+// ---------------------------------------------------------------------------
+// FORMATO REAL observado em 2026-11-26 (`POST /agents/{id}/execute` com `waitExecution: true`, ~25 s):
+// envelope completo com os campos extras (`input` com a mencao ao arquivo, `root_id`, `answers`,
+// `generated_files`, `workspace_files`, datas), `output` = TEXTO com UM objeto JSON e numeros com zeros a direita
+// (`3750.00`, JSON valido; JSON.stringify nunca os produz, por isso o texto e' literal). Dados INVENTADOS:
+// nada vem de COA real.
+// ---------------------------------------------------------------------------
+export const REAL_FORMAT_OUTPUT_TEXT = `{
+  "schema_version": 1,
+  "document_type": "coa",
+  "certificates": [
+    {
+      "page": 1,
+      "product_name": "ACME BINDER RESIN BR-30",
+      "product_name_local": null,
+      "product_aliases": ["BR-30"],
+      "batch_number": "SYN-2611-A01",
+      "po_reference": null,
+      "quantity": {"raw": "3,750.00 KG", "value": 3750.00, "unit": "KG", "kg": 3750},
+      "packaging": {"raw": "198 BAGS x 20.00 KG", "package_count": 198, "package_net_kg": 20.00, "package_type": "BAG"},
+      "manufacture_date": "2026-10-05",
+      "expiry_date": "2028-10-04",
+      "expiry_kind": "expiry",
+      "supplier_name": "SYNTHETIC RESINS CO., LTD",
+      "confidence": "high",
+      "warnings": []
+    },
+    {
+      "page": 2,
+      "product_name": "ACME BINDER RESIN BR-30",
+      "product_name_local": null,
+      "product_aliases": ["BR-30"],
+      "batch_number": "SYN-2611-A02",
+      "po_reference": null,
+      "quantity": {"raw": "1,875.50 KG", "value": 1875.50, "unit": "KG", "kg": 1875.5},
+      "packaging": null,
+      "manufacture_date": "2026-10-06",
+      "expiry_date": "2028-10-05",
+      "expiry_kind": "expiry",
+      "supplier_name": "SYNTHETIC RESINS CO., LTD",
+      "confidence": "medium",
+      "warnings": ["packaging line not printed on this certificate"]
+    }
+  ],
+  "warnings": []
+}`
+
+export const TESS_REAL_FORMAT_EXECUTE_CREDITS = 40.668
+
+export const TESS_REAL_FORMAT_SAMPLE = {
+  template_id: 99001,
+  responses: [
+    {
+      id: 5550001,
+      status: 'succeeded',
+      input: 'Extraia os dados do COA anexado.\n@[coa.pdf](doc://file_synthetic0001)',
+      output: REAL_FORMAT_OUTPUT_TEXT,
+      credits: TESS_REAL_FORMAT_EXECUTE_CREDITS,
+      root_id: 5550001,
+      created_at: '2026-11-26T12:00:00.000000Z',
+      updated_at: '2026-11-26T12:00:25.000000Z',
+      answers: { synthetic: true },
+      template_id: 99001,
+      generated_files: [],
+      workspace_files: [],
+    },
+  ],
+}
+
+// Resposta do upload com `process=true` no formato observado: ja `completed` e ~1 credito.
+export const TESS_REAL_FORMAT_UPLOAD = {
+  id: 8800001,
+  object: 'file',
+  bytes: 123456,
+  filename: 'coa.pdf',
+  credits: 1,
+  status: 'completed',
+}

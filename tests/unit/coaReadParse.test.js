@@ -25,6 +25,7 @@ import {
 } from '../../functions/src/process/coaRead.js'
 import {
   EXPECTED_CERTIFICATE_COUNTS,
+  TESS_REAL_FORMAT_SAMPLE,
   TESS_SAMPLES,
   TWO_JSON_OBJECTS_TEXT,
   agentJson,
@@ -657,5 +658,70 @@ describe('documentos gravados', () => {
     expect(buildCoaLogFields({ processId: 'p', documentId: 'd', uid: 'u', status: 'failed', errorCode: 'tess-auth' }).errorCode).toBe(
       'tess-auth'
     )
+  })
+})
+
+describe('formato REAL observado (2026-11-26), dados inventados', () => {
+  const output = TESS_REAL_FORMAT_SAMPLE.responses[0].output
+
+  it('o texto do output tem numeros com zeros a direita e e JSON valido (JSON.parse aceita)', () => {
+    expect(output).toContain('"value": 3750.00')
+    expect(output).toContain('"package_net_kg": 20.00')
+    expect(() => JSON.parse(output)).not.toThrow()
+    expect(sampleOutputText(TESS_REAL_FORMAT_SAMPLE)).toBe(output)
+  })
+
+  it('parseAgentOutputText aceita o texto e normaliza: 2 certificados do mesmo produto, lotes diferentes, PO nula', () => {
+    const parsed = parseAgentOutputText(output)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.value.certificates).toHaveLength(2)
+    expect(parsed.value.certificates[0].quantity.value).toBe(3750)
+
+    const extraction = normalizeCoaExtraction(parsed.value)
+    expect(extraction.documentType).toBe('coa')
+    expect(extraction.certificates).toHaveLength(2)
+    const [first, second] = extraction.certificates
+    expect(first.productName).toBe(second.productName)
+    expect([first.batchNumber, second.batchNumber]).toEqual(['SYN-2611-A01', 'SYN-2611-A02'])
+    expect([first.poReference, second.poReference]).toEqual([null, null])
+    expect(first.quantity).toEqual({ raw: '3,750.00 KG', value: 3750, unit: 'KG', kg: 3750 })
+    expect(second.quantity).toEqual({ raw: '1,875.50 KG', value: 1875.5, unit: 'KG', kg: 1875.5 })
+    expect(first.packaging).toMatchObject({ packageCount: 198, packageNetKg: 20, packageType: 'BAG' })
+    expect(second.packaging).toBeNull()
+    expect([first.page, second.page]).toEqual([1, 2])
+    expect(first.confidence).toBe('high')
+    expect(second.confidence).toBe('medium')
+    expect(extraction.validationWarnings).toEqual([])
+  })
+
+  it('campos extras do envelope (input, root_id, answers, generated_files, workspace_files) nao entram no texto lido', () => {
+    const response = TESS_REAL_FORMAT_SAMPLE.responses[0]
+    for (const key of ['input', 'root_id', 'answers', 'generated_files', 'workspace_files', 'created_at', 'updated_at', 'template_id']) {
+      expect(response).toHaveProperty(key)
+    }
+    // so o `output` (texto) alimenta o parse; o resultado normalizado nao carrega nenhum campo do envelope
+    const stored = JSON.stringify(normalizeCoaExtraction(parseAgentOutputText(response.output).value))
+    for (const leaked of ['doc://file_', 'answers', 'root_id', 'workspace_files', 'generated_files']) {
+      expect(stored).not.toContain(leaked)
+    }
+  })
+})
+
+describe('buildCoaLogFields: diagnostico B2 (stage e httpStatus)', () => {
+  const base = { processId: 'p', documentId: 'd', uid: 'u', status: 'failed' }
+
+  it('aceita os 5 estagios e status HTTP inteiro (100-599)', () => {
+    for (const stage of ['upload', 'process', 'execute', 'poll', 'delete']) {
+      expect(buildCoaLogFields({ ...base, stage, httpStatus: 422 })).toEqual({ ...base, stage, httpStatus: 422 })
+    }
+  })
+
+  it('descarta estagio fora da lista e httpStatus que nao e inteiro 100-599 (nunca texto livre)', () => {
+    const fields = buildCoaLogFields({ ...base, stage: 'File 123 is not processed yet', httpStatus: 'CORPO' })
+    expect(fields).toEqual(base)
+    for (const httpStatus of [0, 99, 600, 422.5, '422', NaN, null, undefined, {}]) {
+      expect(buildCoaLogFields({ ...base, httpStatus })).not.toHaveProperty('httpStatus')
+    }
+    expect(buildCoaLogFields({ ...base, body: 'x', message: 'y', filename: 'z' })).toEqual(base)
   })
 })

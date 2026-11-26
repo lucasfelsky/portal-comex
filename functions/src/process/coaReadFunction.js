@@ -4,11 +4,13 @@
 // Seguranca (nao negociavel):
 // - so' admin ativo @sqquimica.com por claims, sem fallback (`canReadProcessCoa`);
 // - so' PDF (mimeType do metadado, contentType do objeto e assinatura `%PDF-`), com nome generico `coa.pdf` e sem
-//   informacao do processo; sem `process` no upload;
+//   informacao do processo; upload com `process=true` (a Tess exige arquivo processado para a execucao);
 // - o arquivo e' apagado na Tess em `finally`, em TODO caminho (sucesso, erro, timeout); o id fica registrado
 //   (`tessFilePending`) ate o DELETE dar certo, e a proxima leitura do processo limpa o que sobrou;
 // - o texto do PDF e' dado: o JSON da Tess passa por validacao estrita (`coaRead.js`);
-// - logs SEM conteudo: so' ids, uid, status, contagem, creditos, duracao e codigo de erro.
+// - logs SEM conteudo: so' ids, uid, status, contagem, creditos, duracao, codigo de erro e, em falha, o estagio
+//   ('upload'|'process'|'execute'|'poll'|'delete') e o status HTTP (numero). O estagio NAO vai para o doc `coaReads`
+//   (o doc so' guarda `error.code`); fica so' no log, que e' o canal de diagnostico.
 //
 // Uma leitura por vez no Portal todo (`maxInstances: 1`, `concurrency: 1`): a Tess limita 1 req/s por
 // organizacao e 30 arquivos por workspace. Pedido no mesmo documento durante a leitura devolve `reading` (lease).
@@ -41,10 +43,12 @@ import {
 } from './coaRead.js'
 import {
   TESS_CONTRACT_VERSION,
+  TESS_STAGES,
   TessError,
   classifyTessAgentStatus,
   createPacer,
   createTessClient,
+  isTessFileCompleted,
 } from './tessClient.js'
 
 const TESS_API_KEY = defineSecret('TESS_API_KEY')
@@ -80,17 +84,35 @@ async function withRateLimitRetry(run, { now, sleep, deadline }) {
   }
 }
 
-// DELETE com 1 nova tentativa. Nunca lanca: devolve se o arquivo saiu da Tess.
+// DELETE com 1 nova tentativa. Nunca lanca: devolve se o arquivo saiu da Tess e, se nao saiu, o ultimo erro.
 async function deleteTessFile(client, fileId) {
+  let lastError = null
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       await client.deleteFile(fileId)
-      return true
-    } catch {
+      return { ok: true, error: null }
+    } catch (error) {
+      lastError = error
       // segue para a nova tentativa; o pacer garante o intervalo minimo
     }
   }
-  return false
+  return { ok: false, error: lastError }
+}
+
+// Diagnostico sem conteudo: so' estagio (lista fechada) e status HTTP numerico; nunca mensagem/corpo.
+function describeFailure(error, fallbackStage) {
+  const tess = error instanceof TessError
+  return {
+    code: tess ? error.code : 'internal',
+    stage: (tess && TESS_STAGES.includes(error.stage) ? error.stage : null) || fallbackStage || null,
+    httpStatus: tess && Number.isInteger(error.httpStatus) ? error.httpStatus : null,
+  }
+}
+
+// `credits` de um MESMO objeto da Tess (o arquivo; a resposta do agente) e' o custo acumulado dele, nao um
+// incremento: guarda o MAIOR valor visto, para a execucao + consulta nao somarem duas vezes.
+function bumpCredits(credits, key, value) {
+  if (typeof value === 'number' && Number.isFinite(value) && value > credits[key]) credits[key] = value
 }
 
 // D-10: apaga na Tess os arquivos pendentes do processo (ate 5), o deste documento primeiro. O pendente de outro
@@ -115,7 +137,7 @@ async function cleanupPendingTessFiles({ db, client, processId, documentId, nowM
   for (const candidate of candidates.slice(0, COA_LIMITS.preventiveCleanupMax)) {
     const fileId = candidate.data.tessFileId
     const valid = Number.isSafeInteger(fileId) && fileId > 0
-    const gone = valid ? await deleteTessFile(client, fileId) : true
+    const gone = valid ? (await deleteTessFile(client, fileId)).ok : true
     if (!gone) continue
     if (candidate.own) ownCleaned = true
     try {
@@ -149,9 +171,9 @@ async function uploadWithPolicy({ client, bytes, deadline, clock, cleanup }) {
   }
 }
 
-async function executeAndCollect({ client, fileId, deadline, clock, credits, onResponseId }) {
+async function executeAndCollect({ client, fileId, deadline, clock, credits, onResponseId, onStage }) {
   const executed = await withRateLimitRetry(() => client.executeAgent({ fileId, deadline }), clock)
-  credits.push(executed.credits)
+  bumpCredits(credits, 'response', executed.credits)
   let responseId = executed.responseId
   if (responseId !== null) await onResponseId(responseId)
 
@@ -159,14 +181,15 @@ async function executeAndCollect({ client, fileId, deadline, clock, credits, onR
   let state = classifyTessAgentStatus(executed.status, outputText)
   let pollIndex = 0
   while (state === 'pending') {
-    if (responseId === null) throw new TessError('tess-bad-response')
+    if (responseId === null) throw new TessError('tess-bad-response', { stage: 'execute' })
     const waitMs = POLL_WAITS_SECONDS[Math.min(pollIndex, POLL_WAITS_SECONDS.length - 1)] * 1000
-    if (clock.now() + waitMs >= deadline) throw new TessError('tess-timeout')
+    if (clock.now() + waitMs >= deadline) throw new TessError('tess-timeout', { stage: 'poll' })
     await clock.sleep(waitMs)
     pollIndex += 1
+    onStage('poll')
     try {
       const polled = await withRateLimitRetry(() => client.getAgentResponse({ responseId, deadline }), clock)
-      credits.push(polled.credits)
+      bumpCredits(credits, 'response', polled.credits)
       outputText = polled.outputText
       state = classifyTessAgentStatus(polled.status, polled.outputText)
     } catch (error) {
@@ -175,7 +198,7 @@ async function executeAndCollect({ client, fileId, deadline, clock, credits, onR
       if (!transient) throw error
     }
   }
-  if (state === 'failed') throw new TessError('tess-error')
+  if (state === 'failed') throw new TessError('tess-error', { stage: responseId === null ? 'execute' : 'poll' })
   return outputText
 }
 
@@ -294,7 +317,9 @@ async function readCoa(request, deps) {
 
   const reading = decision.reading
   const clock = { now, sleep, deadline: startedMs + COA_TESS_BUDGET_MS }
-  const credits = []
+  const credits = { file: 0, response: 0 }
+  let phase = null
+  let failure = null
   let client = null
   let fileId = null
   let responseId = null
@@ -317,17 +342,33 @@ async function readCoa(request, deps) {
     if (!isPdfSignature(bytes)) {
       failureCode = 'not-pdf'
     } else {
+      phase = 'upload'
       const uploaded = await uploadWithPolicy({ client, bytes, deadline: clock.deadline, clock, cleanup })
       fileId = uploaded.fileId
-      credits.push(uploaded.credits)
+      bumpCredits(credits, 'file', uploaded.credits)
       await coaRef.update({ tessFileId: fileId, tessFilePending: true })
 
+      // A Tess so' deixa o agente usar arquivo PROCESSADO. O upload com process=true ja devolve `completed`;
+      // qualquer outro status espera (consulta do arquivo) ANTES do execute.
+      if (!isTessFileCompleted(uploaded.status)) {
+        phase = 'process'
+        const processed = await withRateLimitRetry(
+          () => client.waitFileProcessed({ fileId, status: uploaded.status, deadline: clock.deadline }),
+          clock
+        )
+        bumpCredits(credits, 'file', processed?.credits)
+      }
+
+      phase = 'execute'
       outputText = await executeAndCollect({
         client,
         fileId,
         deadline: clock.deadline,
         clock,
         credits,
+        onStage: (stage) => {
+          phase = stage
+        },
         onResponseId: async (id) => {
           responseId = id
           try {
@@ -339,10 +380,26 @@ async function readCoa(request, deps) {
       })
     }
   } catch (error) {
-    failureCode = error instanceof TessError ? error.code : 'internal'
+    failure = describeFailure(error, phase)
+    failureCode = failure.code
   } finally {
     // O arquivo sai da Tess em TODO caminho; falha deixa `tessFilePending: true` (a proxima leitura limpa).
-    if (fileId !== null && client) deleteOk = await deleteTessFile(client, fileId)
+    if (fileId !== null && client) {
+      const deleted = await deleteTessFile(client, fileId)
+      deleteOk = deleted.ok
+      if (!deleted.ok) {
+        const reason = describeFailure(deleted.error, 'delete')
+        logger.warn('Falha ao apagar arquivo na Tess.', buildCoaLogFields({
+          processId,
+          documentId,
+          uid,
+          status: 'delete-failed',
+          errorCode: reason.code,
+          stage: 'delete',
+          httpStatus: reason.httpStatus,
+        }))
+      }
+    }
   }
 
   let extraction = null
@@ -359,7 +416,7 @@ async function readCoa(request, deps) {
   const finish = {
     finishedAtMs: finishedMs,
     durationMs: finishedMs - startedMs,
-    tessCredits: sumTessCredits(credits),
+    tessCredits: sumTessCredits([credits.file, credits.response]),
     tessFileId: fileId !== null ? fileId : (ownPending ? reading.tessFileId : null),
     tessFilePending: fileId !== null ? !deleteOk : ownPending,
     tessResponseId: responseId,
@@ -394,6 +451,8 @@ async function readCoa(request, deps) {
     credits: finalDoc.tessCredits,
     durationMs: finalDoc.durationMs,
     errorCode: finalDoc.error?.code,
+    stage: failure?.stage,
+    httpStatus: failure?.httpStatus,
   }))
   return { status: finalDoc.status, cached: false, read: toPublicCoaRead(finalDoc) }
 }

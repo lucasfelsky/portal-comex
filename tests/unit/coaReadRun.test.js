@@ -5,13 +5,17 @@
 //
 // @vitest-environment node
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { HttpsError } from 'firebase-functions/v2/https'
 import { COA_TESS_BUDGET_MS, runCoaRead } from '../../functions/src/process/coaReadFunction.js'
 import { COA_LIMITS, COA_PROMPT_VERSION } from '../../functions/src/process/coaRead.js'
-import { TessError } from '../../functions/src/process/tessClient.js'
+import { TESS_MIN_INTERVAL_MS, TessError } from '../../functions/src/process/tessClient.js'
 import {
+  REAL_FORMAT_OUTPUT_TEXT,
   TESS_POLL_FINAL,
+  TESS_REAL_FORMAT_SAMPLE,
+  TESS_REAL_FORMAT_UPLOAD,
   TESS_SAMPLES,
   TWO_JSON_OBJECTS_TEXT,
   agentJson,
@@ -140,9 +144,10 @@ function makeEnv({ store = baseStore(), metadata = {}, bytes = PDF_BYTES, secret
     }),
   }
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
-  const tessCalls = { upload: 0, execute: 0, poll: 0, delete: [] }
+  const tessCalls = { upload: 0, process: 0, execute: 0, poll: 0, delete: [] }
   const defaults = {
-    uploadFile: async () => ({ fileId: 501, credits: 0.1 }),
+    uploadFile: async () => ({ fileId: 501, credits: 0.1, status: 'completed' }),
+    waitFileProcessed: async () => ({ credits: 0 }),
     executeAgent: async () => ({ responseId: 601, status: 'succeeded', outputText: GOOD_OUTPUT, credits: 0.25 }),
     getAgentResponse: async () => ({ status: 'succeeded', outputText: GOOD_OUTPUT, credits: 0.05 }),
     deleteFile: async () => ({ deleted: true }),
@@ -157,6 +162,12 @@ function makeEnv({ store = baseStore(), metadata = {}, bytes = PDF_BYTES, secret
         events.push('upload')
         tessCalls.lastUploadBytes = args.bytes
         return impl.uploadFile(args, tessCalls.upload)
+      },
+      async waitFileProcessed(args) {
+        tessCalls.process += 1
+        events.push('process')
+        tessCalls.lastProcessArgs = args
+        return impl.waitFileProcessed(args, tessCalls.process)
       },
       async executeAgent(args) {
         tessCalls.execute += 1
@@ -407,10 +418,10 @@ describe('leitura com sucesso', () => {
     expect(readDoc(env)).toMatchObject({ tessFilePending: false })
   })
 
-  it('tessCredits = upload + execute + consultas', async () => {
+  it('tessCredits = upload + o MAIOR valor da resposta do agente (execute e consultas nao somam duas vezes)', async () => {
     const env = makeEnv({
       tess: {
-        uploadFile: async () => ({ fileId: 7, credits: 0.1 }),
+        uploadFile: async () => ({ fileId: 7, credits: 0.1, status: 'completed' }),
         executeAgent: async () => ({ responseId: 8, status: 'starting', outputText: '', credits: 0.0003 }),
         getAgentResponse: async (_args, call) =>
           call < 2
@@ -420,8 +431,9 @@ describe('leitura com sucesso', () => {
     })
     const result = await runCoaRead(adminRequest(), env.deps)
     expect(result.status).toBe('done')
-    expect(readDoc(env).tessCredits).toBeCloseTo(0.1 + 0.0003 + 0.2 + 0.4, 9)
-    expect(result.read.tessCredits).toBeCloseTo(0.7003, 9)
+    // `credits` da resposta do agente e' o custo acumulado do MESMO objeto: vale o ultimo/maior valor, nao a soma
+    expect(readDoc(env).tessCredits).toBeCloseTo(0.1 + 0.4, 9)
+    expect(result.read.tessCredits).toBeCloseTo(0.5, 9)
   })
 
   it('not_coa vira done com lista vazia (documentType preservado)', async () => {
@@ -1127,5 +1139,285 @@ describe('documento com varios certificados e dados do agente hostis', () => {
     const result = await runCoaRead(adminRequest(), env.deps)
     expect(result.read.certificates).toHaveLength(60)
     expect(result.read.validationWarnings).toHaveLength(1)
+  })
+})
+
+describe('arquivo processado antes do execute (B2: a Tess recusa arquivo nao processado)', () => {
+  it('upload completed: nao consulta o arquivo; vai direto ao execute', async () => {
+    const env = makeEnv()
+    await runCoaRead(adminRequest(), env.deps)
+    expect(env.tessCalls.process).toBe(0)
+    expect(env.events.filter((event) => event !== 'createClient')).toEqual(['download', 'upload', 'execute', 'delete:501'])
+  })
+
+  it.each(['waiting', 'processing', ''])('upload com status "%s": espera o processamento ANTES do execute', async (status) => {
+    let processed = false
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status }),
+        waitFileProcessed: async () => {
+          processed = true
+          return { credits: 0 }
+        },
+        executeAgent: async () => {
+          expect(processed, 'execute antes de o arquivo estar processado').toBe(true)
+          return { responseId: 601, status: 'succeeded', outputText: GOOD_OUTPUT, credits: 0 }
+        },
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('done')
+    expect(env.events.filter((event) => event !== 'createClient')).toEqual(['download', 'upload', 'process', 'execute', 'delete:501'])
+    expect(env.tessCalls.lastProcessArgs).toMatchObject({ fileId: 501, status, deadline: START + COA_TESS_BUDGET_MS })
+  })
+
+  it('o id pendente e gravado ANTES da espera (falha do processamento ainda apaga o arquivo)', async () => {
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status: 'waiting' }),
+        waitFileProcessed: async () => {
+          expect(readDoc(env)).toMatchObject({ tessFileId: 501, tessFilePending: true })
+          throw new TessError('tess-timeout', { stage: 'process' })
+        },
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('failed')
+    expect(result.read.error).toEqual({ code: 'tess-timeout' })
+    expect(env.tessCalls.execute).toBe(0)
+    expect(env.tessCalls.delete).toEqual([501])
+    expect(readDoc(env)).toMatchObject({ tessFilePending: false, tessCredits: 1 })
+  })
+
+  it('processamento do arquivo falhou (tess-error) -> failed, sem execute, com delete, estagio process no log', async () => {
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status: 'processing' }),
+        waitFileProcessed: async () => {
+          throw new TessError('tess-error', { stage: 'process' })
+        },
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.read.error).toEqual({ code: 'tess-error' })
+    expect(env.tessCalls.execute).toBe(0)
+    expect(env.tessCalls.delete).toEqual([501])
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({ status: 'failed', errorCode: 'tess-error', stage: 'process' })
+  })
+
+  it('429 na consulta do arquivo: espera retry_after UMA vez e repete a espera', async () => {
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status: 'waiting' }),
+        waitFileProcessed: async (_args, call) => {
+          if (call === 1) throw new TessError('tess-rate-limit', { httpStatus: 429, retryAfterSeconds: 30 })
+          return { credits: 0 }
+        },
+      },
+    })
+    expect((await runCoaRead(adminRequest(), env.deps)).status).toBe('done')
+    expect(env.tessCalls.process).toBe(2)
+    expect(env.sleeps).toEqual([30000])
+  })
+
+  it('execute 422 "arquivo nao processado": failed tess-error, UMA chamada (sem retry cego), delete, estagio e HTTP no log', async () => {
+    const env = makeEnv({
+      tess: {
+        executeAgent: async () => {
+          throw new TessError('tess-error', { httpStatus: 422, stage: 'execute' })
+        },
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('failed')
+    expect(result.read.error).toEqual({ code: 'tess-error' })
+    expect(env.tessCalls.execute).toBe(1)
+    expect(env.tessCalls.upload).toBe(1)
+    expect(env.tessCalls.delete).toEqual([501])
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({
+      status: 'failed',
+      errorCode: 'tess-error',
+      stage: 'execute',
+      httpStatus: 422,
+    })
+    // o estagio fica so' no log: o doc continua com `error.code`
+    expect(readDoc(env).error).toEqual({ code: 'tess-error' })
+    expect(JSON.stringify(readDoc(env))).not.toContain('stage')
+  })
+})
+
+describe('creditos da leitura no formato observado', () => {
+  it('upload processado (1) + execute (40,668) = 41,668; a consulta com o mesmo total nao duplica', async () => {
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: TESS_REAL_FORMAT_UPLOAD.id, credits: TESS_REAL_FORMAT_UPLOAD.credits, status: 'completed' }),
+        executeAgent: async () => ({ responseId: 5550001, status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: 40.668 }),
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('done')
+    expect(readDoc(env).tessCredits).toBeCloseTo(41.668, 6)
+
+    // execute devolve a resposta em andamento com custo parcial; a consulta devolve o TOTAL do mesmo objeto
+    const polled = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status: 'completed' }),
+        executeAgent: async () => ({ responseId: 5, status: 'starting', outputText: '', credits: 0.5 }),
+        getAgentResponse: async () => ({ status: 'succeeded', outputText: REAL_FORMAT_OUTPUT_TEXT, credits: 40.668 }),
+      },
+    })
+    await runCoaRead(adminRequest(), polled.deps)
+    expect(readDoc(polled).tessCredits).toBeCloseTo(41.668, 6)
+  })
+
+  it('creditos do arquivo: o maior entre upload e consulta do arquivo (nao soma os dois)', async () => {
+    const env = makeEnv({
+      tess: {
+        uploadFile: async () => ({ fileId: 501, credits: 1, status: 'waiting' }),
+        waitFileProcessed: async () => ({ credits: 1 }),
+        executeAgent: async () => ({ responseId: 1, status: 'succeeded', outputText: GOOD_OUTPUT, credits: 2 }),
+      },
+    })
+    await runCoaRead(adminRequest(), env.deps)
+    expect(readDoc(env).tessCredits).toBeCloseTo(3, 9)
+  })
+})
+
+describe('formato REAL observado com dados inventados (parse + normalizacao pela function)', () => {
+  it('2 certificados do MESMO produto com lotes diferentes, po_reference null, numeros com zeros a direita', async () => {
+    const env = makeEnv({
+      tess: {
+        executeAgent: async () => {
+          const response = TESS_REAL_FORMAT_SAMPLE.responses[0]
+          return { responseId: response.id, status: response.status, outputText: response.output, credits: response.credits }
+        },
+      },
+    })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('done')
+    const [first, second] = result.read.certificates
+    expect(result.read.certificates).toHaveLength(2)
+    expect(first.productName).toBe(second.productName)
+    expect([first.batchNumber, second.batchNumber]).toEqual(['SYN-2611-A01', 'SYN-2611-A02'])
+    expect([first.poReference, second.poReference]).toEqual([null, null])
+    expect(first.quantity).toMatchObject({ value: 3750, kg: 3750, unit: 'KG' })
+    expect(second.quantity).toMatchObject({ value: 1875.5, kg: 1875.5 })
+    expect(readDoc(env).tessResponseId).toBe(5550001)
+  })
+})
+
+describe('logs de diagnostico: so estagio, status HTTP e codigo (nunca corpo, mensagem ou conteudo)', () => {
+  const LEAKS = ['CORPO-DA-TESS', 'MENSAGEM-DA-TESS', 'PRODUTO SECRETO', 'ACX2610', 'ARQUIVO-SECRETO', 'KEY-SECRET-ZZZ', '8675309', '3141592', 'LOTE-SECRETO', 'PO-SECRETA']
+
+  // Erro "hostil": alem do codigo, carrega mensagem, corpo e nome de arquivo (como um erro cru de fetch faria).
+  function hostile(code, extra) {
+    const error = new TessError(code, extra)
+    error.message = 'MENSAGEM-DA-TESS PRODUTO SECRETO ACX2610 LOTE-SECRETO PO-SECRETA 3141592'
+    error.body = { message: 'CORPO-DA-TESS KEY-SECRET-ZZZ', filename: 'ARQUIVO-SECRETO.pdf', workspace: '8675309' }
+    error.response = { status: extra.httpStatus, text: 'CORPO-DA-TESS' }
+    return error
+  }
+
+  const allLogs = (env) =>
+    JSON.stringify([env.logger.info.mock.calls, env.logger.warn.mock.calls, env.logger.error.mock.calls, env.logger.debug.mock.calls])
+
+  it.each([
+    ['upload', { uploadFile: async () => { throw hostile('tess-unavailable', { httpStatus: 503, stage: 'upload' }) } }, 'tess-unavailable', 503],
+    ['process', { uploadFile: async () => ({ fileId: 501, credits: 1, status: 'waiting' }), waitFileProcessed: async () => { throw hostile('tess-error', { httpStatus: 404, stage: 'process' }) } }, 'tess-error', 404],
+    ['execute', { executeAgent: async () => { throw hostile('tess-error', { httpStatus: 422, stage: 'execute' }) } }, 'tess-error', 422],
+    ['poll', {
+      executeAgent: async () => ({ responseId: 1, status: 'starting', outputText: '', credits: 0 }),
+      getAgentResponse: async () => { throw hostile('tess-error', { httpStatus: 400, stage: 'poll' }) },
+    }, 'tess-error', 400],
+  ])('falha no estagio %s: log com stage, httpStatus e errorCode; nada do erro cru', async (stage, tess, errorCode, httpStatus) => {
+    const env = makeEnv({ tess })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('failed')
+    expect(env.logger.info.mock.calls.at(-1)[1]).toEqual({
+      processId: 'p1',
+      documentId: 'd1',
+      uid: 'admin-1',
+      status: 'failed',
+      cached: false,
+      certificates: 0,
+      credits: expect.any(Number),
+      durationMs: expect.any(Number),
+      errorCode,
+      stage,
+      httpStatus,
+    })
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+  })
+
+  it('falha do delete (2 tentativas): aviso com stage delete, httpStatus e codigo; leitura segue done', async () => {
+    const env = makeEnv({ tess: { deleteFile: async () => { throw hostile('tess-unavailable', { httpStatus: 500, stage: 'delete' }) } } })
+    const result = await runCoaRead(adminRequest(), env.deps)
+    expect(result.status).toBe('done')
+    expect(env.logger.warn).toHaveBeenCalledTimes(1)
+    expect(env.logger.warn.mock.calls[0][1]).toEqual({
+      processId: 'p1',
+      documentId: 'd1',
+      uid: 'admin-1',
+      status: 'delete-failed',
+      errorCode: 'tess-unavailable',
+      stage: 'delete',
+      httpStatus: 500,
+    })
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+  })
+
+  it('excecao inesperada no upload: stage vem da fase (sem httpStatus, codigo internal)', async () => {
+    const env = makeEnv({ tess: { uploadFile: async () => { throw new Error('MENSAGEM-DA-TESS PRODUTO SECRETO') } } })
+    await runCoaRead(adminRequest(), env.deps)
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({ status: 'failed', errorCode: 'internal', stage: 'upload' })
+    expect(env.logger.info.mock.calls.at(-1)[1]).not.toHaveProperty('httpStatus')
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+  })
+
+  it('timeout de orcamento nas consultas: estagio poll', async () => {
+    const env = makeEnv({
+      tess: {
+        executeAgent: async () => ({ responseId: 1, status: 'starting', outputText: '', credits: 0 }),
+        getAgentResponse: async () => ({ status: 'running', outputText: '', credits: 0 }),
+      },
+    })
+    await runCoaRead(adminRequest(), env.deps)
+    expect(env.logger.info.mock.calls.at(-1)[1]).toMatchObject({ errorCode: 'tess-timeout', stage: 'poll' })
+  })
+
+  it('estagio fora da lista e httpStatus nao numerico nao entram no log (so campos permitidos)', async () => {
+    const env = makeEnv({
+      tess: { executeAgent: async () => { throw hostile('tess-error', { httpStatus: 'CORPO-DA-TESS', stage: 'MENSAGEM-DA-TESS' }) } },
+    })
+    await runCoaRead(adminRequest(), env.deps)
+    const last = env.logger.info.mock.calls.at(-1)[1]
+    // o estagio do erro e' invalido: cai para a fase atual (execute); httpStatus nao numerico some
+    expect(last.stage).toBe('execute')
+    expect(last).not.toHaveProperty('httpStatus')
+    for (const leak of LEAKS) expect(allLogs(env), `log vazou ${leak}`).not.toContain(leak)
+  })
+
+  it('sucesso e cache continuam sem stage nem httpStatus', async () => {
+    const env = makeEnv()
+    await runCoaRead(adminRequest(), env.deps)
+    await runCoaRead(adminRequest(), env.deps)
+    for (const call of env.logger.info.mock.calls) {
+      expect(call[1]).not.toHaveProperty('stage')
+      expect(call[1]).not.toHaveProperty('httpStatus')
+    }
+  })
+})
+
+describe('orcamento de tempo da callable (estrutural)', () => {
+  const source = readFileSync(new URL('../../functions/src/process/coaReadFunction.js', import.meta.url), 'utf8')
+  const timeoutSeconds = Number(/timeoutSeconds:\s*(\d+)/.exec(source)?.[1])
+  const DELETE_TIMEOUT_MS = 15000
+  const SLACK_MS = 10000
+
+  it('COA_TESS_BUDGET_MS + 2 x (pacer + timeout do DELETE) + folga < timeoutSeconds < leaseMs', () => {
+    expect(Number.isFinite(timeoutSeconds)).toBe(true)
+    const reserved = COA_TESS_BUDGET_MS + 2 * (TESS_MIN_INTERVAL_MS + DELETE_TIMEOUT_MS) + SLACK_MS
+    expect(reserved).toBeLessThan(timeoutSeconds * 1000)
+    expect(timeoutSeconds * 1000).toBeLessThan(COA_LIMITS.leaseMs)
   })
 })
