@@ -455,7 +455,7 @@ describe('firestore.rules structure', () => {
       expect(rules).toMatch(/match\s+\/processes\/\{processId\}\s*\{[\s\S]*match\s+\/documents\/\{documentId\}\s*\{/)
     })
 
-    it('match /documents/{documentId} so permite update do vinculo Invoice->Packing List ou do nome do documento adicional (admin), leitura so admin/logistica', () => {
+    it('match /documents/{documentId} so permite update do vinculo Invoice->Packing List, do nome do documento adicional/COA ou do vinculo do COA a uma PO (admin), leitura so admin/logistica', () => {
       const match = rules.match(/match\s+\/documents\/\{documentId\}\s*\{([\s\S]*?)\n\s{6}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
@@ -463,7 +463,7 @@ describe('firestore.rules structure', () => {
         /allow\s+read:\s*if\s+isAdmin\s*\(\s*\)\s*\|\|\s*isLogistics\s*\(\s*\)\s*\|\|\s*\(\s*isDocumentReader\s*\(\s*\)\s*&&\s*isDocumentReaderType\s*\(\s*resource\.data\.type\s*\)\s*\)\s*;/
       )
       expect(body).toMatch(
-        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*\(\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)\s*\|\|\s*isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\)/
+        /allow\s+update:\s*if\s+isAdmin\s*\(\s*\)\s*&&\s*\(\s*isValidInvoicePackingListLinkUpdate\s*\(\s*\)\s*\|\|\s*isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\|\|\s*isValidCoaPurchaseOrderLinkUpdate\s*\(\s*processId\s*\)\s*\)\s*;/
       )
       expect(body).toMatch(/isValidProcessDocumentCreate\s*\(\s*processId\s*\)/)
     })
@@ -483,6 +483,50 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/descriptionUpdatedById\s*==\s*request\.auth\.uid/)
       expect(body).toMatch(/description\.size\(\)\s*>=\s*1/)
       expect(body).toMatch(/description\.size\(\)\s*<=\s*120/)
+    })
+
+    it('isValidCoaPurchaseOrderLinkUpdate: so coaOriginal, so CONSOLIDADO, so poNumber + carimbos (1..64, request.time, uid)', () => {
+      const match = rules.match(/function\s+isValidCoaPurchaseOrderLinkUpdate\s*\(\s*processId\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/resource\.data\.type\s*==\s*'coaOriginal'/)
+      expect(body).toMatch(/request\.resource\.data\.type\s*==\s*'coaOriginal'/)
+      expect(body).toMatch(/processes\/\$\(processId\)\)\.data\.get\(\s*'category'\s*,\s*''\s*\)\s*==\s*'CONSOLIDADO'/)
+      // Nenhum outro tipo ganha o vinculo da PO.
+      expect(body).not.toMatch(/'bl'|'invoice'|'packingList'|'cargoReport'|'fispq'|'containerWash'|'other'/)
+      expect(body).toMatch(
+        /affectedKeys\(\)\s*\.hasOnly\(\s*\[\s*'poNumber'\s*,\s*'poNumberUpdatedAt'\s*,\s*'poNumberUpdatedById'\s*\]\s*\)/
+      )
+      expect(body).toMatch(/request\.resource\.data\.poNumber\s+is\s+string/)
+      expect(body).toMatch(/poNumber\.size\(\)\s*>=\s*1/)
+      expect(body).toMatch(/poNumber\.size\(\)\s*<=\s*64/)
+      expect(body).toMatch(/poNumberUpdatedAt\s*==\s*request\.time/)
+      expect(body).toMatch(/poNumberUpdatedById\s*==\s*request\.auth\.uid/)
+    })
+
+    it('isValidCoaPurchaseOrderScope: COA no CONSOLIDADO exige poNumber e fora dele nao pode ter; so COA e afetado; chamada no create', () => {
+      const match = rules.match(/function\s+isValidCoaPurchaseOrderScope\s*\(\s*processId\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(match).not.toBeNull()
+      const body = match[1]
+      expect(body).toMatch(/request\.resource\.data\.type\s*!=\s*'coaOriginal'/)
+      expect(body).toMatch(/processes\/\$\(processId\)\)\.data\.get\(\s*'category'\s*,\s*''\s*\)\s*==\s*'CONSOLIDADO'/)
+      expect(body).toMatch(/==\s*\(\s*'poNumber'\s+in\s+request\.resource\.data\s*\)/)
+      const create = rules.match(/function\s+isValidProcessDocumentCreate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(create).not.toBeNull()
+      expect(create[1]).toMatch(/&&\s*isValidCoaPurchaseOrderScope\s*\(\s*processId\s*\)/)
+      // Definicao + chamada: nenhuma outra referencia solta.
+      expect(rules.match(/isValidCoaPurchaseOrderScope\s*\(\s*processId\s*\)/g)).toHaveLength(2)
+    })
+
+    it('COA por PO: slot e storagePath do COA nao levam a PO (regex do slot e bloco sem escopo inalterados)', () => {
+      const storage = rules.match(/function\s+isValidProcessDocumentStoragePath\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(storage).not.toBeNull()
+      // O ramo com `poNumber` no caminho e' so' invoice/packingList.
+      const before = storage[1].slice(0, storage[1].indexOf('poNumber'))
+      const poBranch = before.split('|| (').pop()
+      expect(poBranch).toMatch(/'invoice'/)
+      expect(poBranch).not.toMatch(/coaOriginal/)
+      expect(rules.match(/\^coaOriginal:\[A-Za-z0-9\]\{1,64\}\$/g)).toHaveLength(1)
     })
   })
 

@@ -12,13 +12,17 @@ import {
   buildDocumentSlotKey,
   MAX_ADDITIONAL_DOCUMENT_NAME_LENGTH,
   MAX_COA_FILES_PER_PROCESS,
+  MAX_COA_FILES_PER_PURCHASE_ORDER,
   canDeleteDocument,
   canRenameDocument,
   canUploadDocumentType,
   canViewProcessDocuments,
   canViewProcessHistory,
+  countSentCoaSlots,
   formatDocumentSize,
   getCoaDisplayName,
+  getCoaPurchaseOrderNumber,
+  getCoaUploadRoom,
   getDocumentFileKindLabel,
   getDocumentIndexFromDocuments,
   getDocumentPendingFields,
@@ -29,9 +33,12 @@ import {
   getSlotKeyPoNumber,
   getUnlinkedDocumentGroups,
   groupDocumentsBySlot,
+  isCoaPurchaseOrderScoped,
   isFileDragEvent,
   isProcessDocumentType,
   listCoaDocuments,
+  listCoaDocumentsForPurchaseOrder,
+  listCoaDocumentsWithoutPurchaseOrder,
   normalizeDocumentIndex,
   pickDroppedFiles,
   pickSingleDroppedFile,
@@ -903,6 +910,186 @@ describe('listCoaDocuments / getCoaDisplayName', () => {
     expect(getCoaDisplayName({ name: 'scan01.pdf', description: '' })).toBe('scan01.pdf')
     expect(getCoaDisplayName({ name: 'scan01.pdf' })).toBe('scan01.pdf')
     expect(getCoaDisplayName(null)).toBe('COA')
+  })
+})
+
+// COA por PO (S11-D1): helpers puros do CONSOLIDADO.
+describe('COA por PO (CONSOLIDADO)', () => {
+  const coa = (id, uploadedAt, overrides = {}) => ({
+    id,
+    type: 'coaOriginal',
+    slotKey: `coaOriginal:${id}`,
+    name: `${id}.pdf`,
+    uploadedAt,
+    ...overrides,
+  })
+  const orders = [{ po: 'PO-1' }, { po: 'PO-2' }, { po: ' PO-3 ' }]
+  const many = (count, overrides = {}) =>
+    Array.from({ length: count }, (_, index) =>
+      coa(`m${String(index).padStart(3, '0')}`, `2026-10-01T10:${String(index % 60).padStart(2, '0')}:00.000Z`, overrides)
+    )
+
+  it('so o CONSOLIDADO guarda o COA por PO; teto 50 por PO e por processo', () => {
+    expect(isCoaPurchaseOrderScoped('CONSOLIDADO')).toBe(true)
+    for (const category of ['FCL', 'LCL', 'AEREO', '', undefined, null]) {
+      expect(isCoaPurchaseOrderScoped(category)).toBe(false)
+    }
+    expect(MAX_COA_FILES_PER_PURCHASE_ORDER).toBe(50)
+    expect(MAX_COA_FILES_PER_PROCESS).toBe(50)
+  })
+
+  it('getCoaPurchaseOrderNumber: aparado; vazio quando ausente, nulo ou so espacos', () => {
+    expect(getCoaPurchaseOrderNumber({ poNumber: '  PO-1 ' })).toBe('PO-1')
+    expect(getCoaPurchaseOrderNumber({ poNumber: '' })).toBe('')
+    expect(getCoaPurchaseOrderNumber({ poNumber: '   ' })).toBe('')
+    expect(getCoaPurchaseOrderNumber({})).toBe('')
+    expect(getCoaPurchaseOrderNumber(null)).toBe('')
+  })
+
+  it('listCoaDocumentsForPurchaseOrder: so os COAs da PO, na ordem da lista; PO com espacos casa', () => {
+    const documents = [
+      coa('c3', '2026-09-03T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('c2', '2026-09-02T10:00:00.000Z', { poNumber: 'PO-2' }),
+      coa('c1', '2026-09-01T10:00:00.000Z', { poNumber: ' PO-1 ' }),
+      coa('legacy', '2026-08-01T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+      { id: 'inv', type: 'invoice', slotKey: 'invoice:PO-1', poNumber: 'PO-1', uploadedAt: '2026-09-01T10:00:00.000Z' },
+    ]
+    expect(listCoaDocumentsForPurchaseOrder(documents, 'PO-1').map((document) => document.id)).toEqual(['c1', 'c3'])
+    expect(listCoaDocumentsForPurchaseOrder(documents, '  PO-2  ').map((document) => document.id)).toEqual(['c2'])
+    expect(listCoaDocumentsForPurchaseOrder(documents, 'PO-9')).toEqual([])
+  })
+
+  it('listCoaDocumentsForPurchaseOrder: PO vazia nunca casa COA sem PO; entrada invalida -> []', () => {
+    const documents = [coa('legacy', '2026-08-01T10:00:00.000Z', { slotKey: 'coaOriginal' })]
+    expect(listCoaDocumentsForPurchaseOrder(documents, '')).toEqual([])
+    expect(listCoaDocumentsForPurchaseOrder(documents, '   ')).toEqual([])
+    expect(listCoaDocumentsForPurchaseOrder(documents, undefined)).toEqual([])
+    expect(listCoaDocumentsForPurchaseOrder(null, 'PO-1')).toEqual([])
+  })
+
+  it('listCoaDocumentsWithoutPurchaseOrder: "Sem PO" (inclui slot legado) e "PO removida"', () => {
+    const documents = [
+      coa('ok', '2026-09-05T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('trim', '2026-09-04T10:00:00.000Z', { poNumber: 'PO-3' }),
+      coa('gone', '2026-09-03T10:00:00.000Z', { poNumber: 'PO-9' }),
+      coa('blank', '2026-09-02T10:00:00.000Z', { poNumber: '  ' }),
+      coa('legacy', '2026-09-01T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+      { id: 'inv', type: 'invoice', slotKey: 'invoice:PO-9', poNumber: 'PO-9', uploadedAt: '2026-09-01T10:00:00.000Z' },
+    ]
+    const result = listCoaDocumentsWithoutPurchaseOrder(documents, orders)
+    expect(result.map((entry) => [entry.document.id, entry.reason])).toEqual([
+      ['legacy', 'Sem PO'],
+      ['blank', 'Sem PO'],
+      ['gone', 'PO removida'],
+    ])
+  })
+
+  it('listCoaDocumentsWithoutPurchaseOrder: sem POs no processo todo COA com PO vira "PO removida"; entrada invalida -> []', () => {
+    const documents = [coa('a', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' })]
+    expect(listCoaDocumentsWithoutPurchaseOrder(documents, []).map((entry) => entry.reason)).toEqual(['PO removida'])
+    expect(listCoaDocumentsWithoutPurchaseOrder(documents, undefined).map((entry) => entry.reason)).toEqual([
+      'PO removida',
+    ])
+    expect(listCoaDocumentsWithoutPurchaseOrder(null, orders)).toEqual([])
+  })
+
+  it('getCoaUploadRoom: teto 50 POR PO no CONSOLIDADO (outra PO e COA sem PO nao consomem)', () => {
+    const documents = [
+      ...many(30, { poNumber: 'PO-1' }),
+      ...many(50, { poNumber: 'PO-2' }).map((document) => ({ ...document, id: `x-${document.id}` })),
+      coa('legacy', '2026-08-01T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+    ]
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-1' })).toBe(20)
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: ' PO-1 ' })).toBe(20)
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-2' })).toBe(0)
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-3' })).toBe(50)
+  })
+
+  it('getCoaUploadRoom: CONSOLIDADO sem PO nao tem vaga (o envio exige PO)', () => {
+    expect(getCoaUploadRoom({ documents: [], category: 'CONSOLIDADO', po: '' })).toBe(0)
+    expect(getCoaUploadRoom({ documents: [], category: 'CONSOLIDADO' })).toBe(0)
+  })
+
+  it('getCoaUploadRoom: demais categorias contam 50 por PROCESSO e ignoram a PO', () => {
+    const documents = many(45)
+    for (const category of ['FCL', 'LCL', 'AEREO']) {
+      expect(getCoaUploadRoom({ documents, category, po: 'PO-1' })).toBe(5)
+      expect(getCoaUploadRoom({ documents, category })).toBe(5)
+    }
+    expect(getCoaUploadRoom({ documents: [], category: 'FCL' })).toBe(50)
+  })
+
+  it('getCoaUploadRoom: nunca < 0 e so conta COA', () => {
+    const documents = [
+      ...many(60, { poNumber: 'PO-1' }),
+      { id: 'b1', type: 'bl', slotKey: 'bl', poNumber: 'PO-2', uploadedAt: '2026-09-01T10:00:00.000Z' },
+    ]
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-1' })).toBe(0)
+    expect(getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-2' })).toBe(50)
+    expect(getCoaUploadRoom({ documents: many(60), category: 'FCL' })).toBe(0)
+    expect(getCoaUploadRoom()).toBe(50)
+  })
+
+  it('countSentCoaSlots: demais categorias = 1 se houver COA (qualquer PO ou slot legado)', () => {
+    const documents = [
+      coa('a', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('b', '2026-09-02T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+    ]
+    for (const category of ['FCL', 'LCL', 'AEREO']) {
+      expect(countSentCoaSlots(documents, { category, purchaseOrders: orders })).toBe(1)
+      expect(countSentCoaSlots([], { category, purchaseOrders: orders })).toBe(0)
+    }
+    expect(countSentCoaSlots([{ id: 'b1', type: 'bl', slotKey: 'bl' }], { category: 'FCL' })).toBe(0)
+  })
+
+  it('countSentCoaSlots: CONSOLIDADO admin/logistica = 1 por PO atual com COA; sem-PO e PO removida nao contam', () => {
+    const documents = [
+      coa('a1', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('a2', '2026-09-02T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('c1', '2026-09-03T10:00:00.000Z', { poNumber: 'PO-3' }),
+      coa('gone', '2026-09-04T10:00:00.000Z', { poNumber: 'PO-9' }),
+      coa('legacy', '2026-09-05T10:00:00.000Z', { slotKey: 'coaOriginal' }),
+    ]
+    expect(countSentCoaSlots(documents, { category: 'CONSOLIDADO', purchaseOrders: orders })).toBe(2)
+    expect(countSentCoaSlots(documents, { category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-2' }] })).toBe(0)
+    expect(countSentCoaSlots(documents, { category: 'CONSOLIDADO', purchaseOrders: [] })).toBe(0)
+    expect(countSentCoaSlots([], { category: 'CONSOLIDADO', purchaseOrders: orders })).toBe(0)
+  })
+
+  it('countSentCoaSlots: PO repetida na lista de POs conta uma vez', () => {
+    const documents = [coa('a1', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' })]
+    expect(
+      countSentCoaSlots(documents, { category: 'CONSOLIDADO', purchaseOrders: [{ po: 'PO-1' }, { po: ' PO-1 ' }] })
+    ).toBe(1)
+  })
+
+  it('countSentCoaSlots: CONSOLIDADO tecnico/faturamento = 1 se houver QUALQUER COA (nao veem a tabela por PO)', () => {
+    const onlyLegacy = [coa('legacy', '2026-09-05T10:00:00.000Z', { slotKey: 'coaOriginal' })]
+    const two = [
+      coa('a1', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('b1', '2026-09-02T10:00:00.000Z', { poNumber: 'PO-2' }),
+    ]
+    const options = { category: 'CONSOLIDADO', purchaseOrders: orders, isReadOnlyViewer: true }
+    expect(countSentCoaSlots(onlyLegacy, options)).toBe(1)
+    expect(countSentCoaSlots(two, options)).toBe(1)
+    expect(countSentCoaSlots([], options)).toBe(0)
+  })
+
+  it('countSentCoaSlots sem opcoes nao quebra', () => {
+    expect(countSentCoaSlots([coa('a', '2026-09-01T10:00:00.000Z')])).toBe(1)
+    expect(countSentCoaSlots(undefined)).toBe(0)
+  })
+
+  it('helpers nao alteram os arrays de entrada', () => {
+    const documents = [
+      coa('b', '2026-09-02T10:00:00.000Z', { poNumber: 'PO-1' }),
+      coa('a', '2026-09-01T10:00:00.000Z', { poNumber: 'PO-1' }),
+    ]
+    listCoaDocumentsForPurchaseOrder(documents, 'PO-1')
+    listCoaDocumentsWithoutPurchaseOrder(documents, orders)
+    getCoaUploadRoom({ documents, category: 'CONSOLIDADO', po: 'PO-1' })
+    countSentCoaSlots(documents, { category: 'CONSOLIDADO', purchaseOrders: orders })
+    expect(documents.map((document) => document.id)).toEqual(['b', 'a'])
   })
 })
 

@@ -312,6 +312,11 @@
       "descriptionUpdatedAt",
       "descriptionUpdatedById"
     ],
+    "isValidCoaPurchaseOrderLinkUpdate": [
+      "poNumber",
+      "poNumberUpdatedAt",
+      "poNumberUpdatedById"
+    ],
     "isValidProcessDocumentCreate": [
       "alsoPackingList",
       "containerId",

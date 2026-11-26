@@ -24,6 +24,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -2774,11 +2775,14 @@ describeEmulator('firestore.rules (emulador)', () => {
         await assertSucceeds(setDoc(doc(admin('admin-1'), coaPath), coaFields()))
       })
 
-      it('admin cria coaOriginal em processo CONSOLIDADO e LCL', async () => {
+      it('admin cria coaOriginal em processo CONSOLIDADO (com poNumber) e LCL (sem poNumber)', async () => {
         await assertSucceeds(
           setDoc(
             doc(admin('admin-1'), 'processes/p-consolidado/documents/d1'),
-            coaFields({ storagePath: 'processes/p-consolidado/documents/coaOriginal/1-admin-1-coa.pdf' })
+            coaFields({
+              storagePath: 'processes/p-consolidado/documents/coaOriginal/1-admin-1-coa.pdf',
+              poNumber: 'PO-1',
+            })
           )
         )
         await assertSucceeds(
@@ -2788,6 +2792,165 @@ describeEmulator('firestore.rules (emulador)', () => {
           )
         )
       })
+
+
+      // S11-D1 (COA por PO): no CONSOLIDADO o COA exige `poNumber`; nos demais nao pode ter.
+      // Slot (`coaOriginal:<id>`) e storagePath nao levam a PO.
+      const consolidatedPath = 'processes/p-consolidado/documents/d1'
+      const consolidatedCoaFields = (overrides = {}) =>
+        coaFields({
+          storagePath: 'processes/p-consolidado/documents/coaOriginal/1-admin-1-coa.pdf',
+          poNumber: 'PO-1',
+          ...overrides,
+        })
+      const consolidatedCoaWithoutPo = (overrides = {}) => {
+        const fields = consolidatedCoaFields(overrides)
+        delete fields.poNumber
+        return fields
+      }
+      const linkUpdate = (overrides = {}) => ({
+        poNumber: 'PO-2',
+        poNumberUpdatedAt: serverTimestamp(),
+        poNumberUpdatedById: 'admin-1',
+        ...overrides,
+      })
+
+      describe('create por categoria (poNumber)', () => {
+        it('admin cria coaOriginal em processo CONSOLIDADO COM poNumber', async () => {
+          await assertSucceeds(setDoc(doc(admin('admin-1'), consolidatedPath), consolidatedCoaFields()))
+        })
+
+        it('admin cria coaOriginal em LCL e FCL SEM poNumber', async () => {
+          await assertSucceeds(
+            setDoc(
+              doc(admin('admin-1'), 'processes/p-lcl/documents/d1'),
+              coaFields({ storagePath: 'processes/p-lcl/documents/coaOriginal/1-admin-1-coa.pdf' })
+            )
+          )
+          await assertSucceeds(setDoc(doc(admin('admin-1'), coaPath), coaFields()))
+        })
+
+        it('CONSOLIDADO SEM poNumber falha (inclusive com slot e caminho validos)', async () => {
+          await assertFails(setDoc(doc(admin('admin-1'), consolidatedPath), consolidatedCoaWithoutPo()))
+        })
+
+        it('CONSOLIDADO com poNumber vazio, 65 caracteres ou nao-string falha; 1 e 64 caracteres passam', async () => {
+          for (const poNumber of ['', 'x'.repeat(65), 123, null, true, ['PO-1']]) {
+            await assertFails(setDoc(doc(admin('admin-1'), consolidatedPath), consolidatedCoaFields({ poNumber })))
+          }
+          await assertSucceeds(setDoc(doc(admin('admin-1'), consolidatedPath), consolidatedCoaFields({ poNumber: 'P' })))
+          await assertSucceeds(
+            setDoc(
+              doc(admin('admin-1'), 'processes/p-consolidado/documents/d2'),
+              consolidatedCoaFields({ slotKey: 'coaOriginal:d2', poNumber: 'P'.repeat(64) })
+            )
+          )
+        })
+
+        it('LCL e FCL COM poNumber falham', async () => {
+          await assertFails(
+            setDoc(
+              doc(admin('admin-1'), 'processes/p-lcl/documents/d1'),
+              coaFields({ storagePath: 'processes/p-lcl/documents/coaOriginal/1-admin-1-coa.pdf', poNumber: 'PO-1' })
+            )
+          )
+          await assertFails(setDoc(doc(admin('admin-1'), coaPath), coaFields({ poNumber: 'PO-1' })))
+        })
+
+        it('processo sem categoria e tratado como nao consolidado (sem poNumber passa, com poNumber falha)', async () => {
+          await seed((db) => setDoc(doc(db, 'processes/p-sem-categoria'), { name: 'legado' }))
+          const path = 'processes/p-sem-categoria/documents/d1'
+          const storagePath = 'processes/p-sem-categoria/documents/coaOriginal/1-admin-1-coa.pdf'
+          await assertFails(setDoc(doc(admin('admin-1'), path), coaFields({ storagePath, poNumber: 'PO-1' })))
+          await assertSucceeds(setDoc(doc(admin('admin-1'), path), coaFields({ storagePath })))
+        })
+
+        it('CONSOLIDADO: storagePath com a PO no caminho falha (o COA nao usa segmento de PO)', async () => {
+          await assertFails(
+            setDoc(
+              doc(admin('admin-1'), consolidatedPath),
+              consolidatedCoaFields({
+                storagePath: 'processes/p-consolidado/documents/coaOriginal/PO-1/1-admin-1-coa.pdf',
+              })
+            )
+          )
+        })
+
+        it('CONSOLIDADO: slot com a PO (coaOriginal:<po>:<id>) ou slot legado falha', async () => {
+          for (const slotKey of ['coaOriginal:PO-1', 'coaOriginal:PO1:d1', 'coaOriginal', 'coaOriginal:']) {
+            await assertFails(setDoc(doc(admin('admin-1'), consolidatedPath), consolidatedCoaFields({ slotKey })))
+          }
+        })
+
+        it('CONSOLIDADO: 2 COAs na mesma PO e COAs em POs diferentes passam (1 slot por arquivo)', async () => {
+          const db = admin('admin-1')
+          await assertSucceeds(setDoc(doc(db, consolidatedPath), consolidatedCoaFields()))
+          await assertSucceeds(
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/d2'),
+              consolidatedCoaFields({ slotKey: 'coaOriginal:d2', storagePath: 'processes/p-consolidado/documents/coaOriginal/2-admin-1-coa.pdf' })
+            )
+          )
+          await assertSucceeds(
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/d3'),
+              consolidatedCoaFields({
+                slotKey: 'coaOriginal:d3',
+                poNumber: 'PO-2',
+                storagePath: 'processes/p-consolidado/documents/coaOriginal/3-admin-1-coa.pdf',
+              })
+            )
+          )
+        })
+
+        it('logistica, tecnico e faturamento NAO criam coaOriginal no CONSOLIDADO (nem com poNumber)', async () => {
+          for (const role of ['logistica', 'tecnico', 'faturamento']) {
+            await assertFails(
+              setDoc(
+                doc(staffDb(role), consolidatedPath),
+                consolidatedCoaFields({
+                  uploadedById: `${role}-1`,
+                  uploadedByRole: role,
+                  uploadedByName: 'Equipe',
+                  storagePath: `processes/p-consolidado/documents/coaOriginal/1-${role}-1-coa.pdf`,
+                })
+              )
+            )
+          }
+        })
+
+        it('a regra do poNumber so vale para COA: bl, cargoReport e other no CONSOLIDADO continuam sem poNumber', async () => {
+          const db = admin('admin-1')
+          await assertSucceeds(
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/b1'),
+              baseFields({ storagePath: 'processes/p-consolidado/documents/bl/1-admin-1-BL.pdf' })
+            )
+          )
+          await assertSucceeds(
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/c1'),
+              baseFields({
+                type: 'cargoReport',
+                slotKey: 'cargoReport',
+                storagePath: 'processes/p-consolidado/documents/cargoReport/1-admin-1-cr.pdf',
+              })
+            )
+          )
+          await assertSucceeds(
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/o1'),
+              baseFields({
+                type: 'other',
+                slotKey: 'other:o1',
+                description: 'Laudo',
+                storagePath: 'processes/p-consolidado/documents/other/1-admin-1-laudo.pdf',
+              })
+            )
+          )
+        })
+      })
+
 
       it('2 COAs no mesmo processo passam (1 slot por arquivo, nada e rotacionado)', async () => {
         await assertSucceeds(setDoc(doc(admin('admin-1'), 'processes/p1/documents/d1'), coaFields()))
@@ -2931,6 +3094,215 @@ describeEmulator('firestore.rules (emulador)', () => {
         it('o mesmo update continua falhando em BL (so other e coaOriginal renomeiam)', async () => {
           await seed((db) => setDoc(doc(db, 'processes/p1/documents/b1'), baseFields({ uploadedAt: new Date() })))
           await assertFails(updateDoc(doc(admin('admin-1'), 'processes/p1/documents/b1'), renameUpdate()))
+        })
+      })
+
+      // S11-D1: vincular o COA a uma PO (so admin, so CONSOLIDADO, so poNumber + carimbos).
+      describe('vincular a uma PO (poNumber + carimbos)', () => {
+        const legacyPath = 'processes/p-consolidado/documents/legado'
+        const fclPath = 'processes/p1/documents/fcl1'
+        const lclPath = 'processes/p-lcl/documents/lcl1'
+        const invoicePath = 'processes/p-consolidado/documents/inv1'
+
+        beforeEach(async () => {
+          await seed(async (db) => {
+            await setDoc(doc(db, consolidatedPath), consolidatedCoaFields({ uploadedAt: new Date() }))
+            await setDoc(
+              doc(db, legacyPath),
+              consolidatedCoaWithoutPo({ slotKey: 'coaOriginal', uploadedAt: new Date() })
+            )
+            await setDoc(
+              doc(db, fclPath),
+              coaFields({ slotKey: 'coaOriginal:fcl1', uploadedAt: new Date() })
+            )
+            await setDoc(
+              doc(db, lclPath),
+              coaFields({
+                slotKey: 'coaOriginal:lcl1',
+                storagePath: 'processes/p-lcl/documents/coaOriginal/1-admin-1-coa.pdf',
+                uploadedAt: new Date(),
+              })
+            )
+            await setDoc(
+              doc(db, invoicePath),
+              baseFields({
+                type: 'invoice',
+                slotKey: 'invoice:PO-1',
+                poNumber: 'PO-1',
+                storagePath: 'processes/p-consolidado/documents/invoice/PO-1/1-admin-1-inv.pdf',
+                uploadedAt: new Date(),
+              })
+            )
+          })
+        })
+
+        it('admin vincula o COA legado (slot coaOriginal, sem poNumber) a uma PO', async () => {
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), legacyPath), linkUpdate()))
+        })
+
+        it('admin vincula COA novo sem poNumber e troca a PO de um COA que ja tem (PO removida)', async () => {
+          await seed((db) =>
+            setDoc(
+              doc(db, 'processes/p-consolidado/documents/semPo'),
+              consolidatedCoaWithoutPo({ slotKey: 'coaOriginal:semPo', uploadedAt: new Date() })
+            )
+          )
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), 'processes/p-consolidado/documents/semPo'), linkUpdate()))
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), consolidatedPath), linkUpdate({ poNumber: 'PO-9' })))
+        })
+
+        it('vincular mantem slot, storagePath e name (so poNumber e carimbos mudam)', async () => {
+          await assertSucceeds(updateDoc(doc(admin('admin-1'), legacyPath), linkUpdate()))
+          const snapshot = await assertSucceeds(getDoc(doc(admin('admin-1'), legacyPath)))
+          expect(snapshot.data().poNumber).toBe('PO-2')
+          expect(snapshot.data().slotKey).toBe('coaOriginal')
+          expect(snapshot.data().storagePath).toBe('processes/p-consolidado/documents/coaOriginal/1-admin-1-coa.pdf')
+          expect(snapshot.data().poNumberUpdatedById).toBe('admin-1')
+        })
+
+        it('poNumber com 1 e 64 caracteres passa; vazio, 65, nao-string, nulo e remocao falham', async () => {
+          const ref = doc(admin('admin-1'), legacyPath)
+          await assertSucceeds(updateDoc(ref, linkUpdate({ poNumber: 'P' })))
+          await assertSucceeds(updateDoc(ref, linkUpdate({ poNumber: 'P'.repeat(64) })))
+          for (const poNumber of ['', 'P'.repeat(65), 123, null, true, ['PO-1']]) {
+            await assertFails(updateDoc(ref, linkUpdate({ poNumber })))
+          }
+          await assertFails(updateDoc(doc(admin('admin-1'), consolidatedPath), linkUpdate({ poNumber: deleteField() })))
+        })
+
+        it('processo FCL ou LCL: vincular falha (com ou sem poNumber previo)', async () => {
+          await assertFails(updateDoc(doc(admin('admin-1'), fclPath), linkUpdate()))
+          await assertFails(updateDoc(doc(admin('admin-1'), lclPath), linkUpdate()))
+        })
+
+        it('vincular junto com name, storagePath, description, slotKey, type, uploadedAt ou uploadedById falha', async () => {
+          const ref = doc(admin('admin-1'), legacyPath)
+          await assertFails(updateDoc(ref, linkUpdate({ name: 'outro.pdf' })))
+          await assertFails(
+            updateDoc(
+              ref,
+              linkUpdate({ storagePath: 'processes/p-consolidado/documents/coaOriginal/9-admin-1-outro.pdf' })
+            )
+          )
+          await assertFails(updateDoc(ref, linkUpdate({ description: 'Lote ABC-123' })))
+          await assertFails(updateDoc(ref, linkUpdate({ slotKey: 'coaOriginal:outro' })))
+          await assertFails(updateDoc(ref, linkUpdate({ type: 'other' })))
+          await assertFails(updateDoc(ref, linkUpdate({ uploadedAt: new Date('2020-01-01') })))
+          await assertFails(updateDoc(ref, linkUpdate({ uploadedById: 'admin-2' })))
+          await assertFails(updateDoc(ref, linkUpdate({ size: 1 })))
+          await assertFails(updateDoc(ref, linkUpdate({ alsoPackingList: true })))
+        })
+
+        it('renomear junto com poNumber falha (cada update faz uma coisa so)', async () => {
+          await assertFails(
+            updateDoc(doc(admin('admin-1'), legacyPath), {
+              description: 'Lote ABC-123',
+              descriptionUpdatedAt: serverTimestamp(),
+              descriptionUpdatedById: 'admin-1',
+              poNumber: 'PO-2',
+            })
+          )
+        })
+
+        it('sem carimbos, com poNumberUpdatedAt fora do request.time ou carimbo de outro uid falha', async () => {
+          const ref = doc(admin('admin-1'), legacyPath)
+          await assertFails(updateDoc(ref, { poNumber: 'PO-2' }))
+          await assertFails(updateDoc(ref, { poNumber: 'PO-2', poNumberUpdatedAt: serverTimestamp() }))
+          await assertFails(updateDoc(ref, { poNumber: 'PO-2', poNumberUpdatedById: 'admin-1' }))
+          await assertFails(updateDoc(ref, linkUpdate({ poNumberUpdatedAt: new Date('2020-01-01') })))
+          await assertFails(updateDoc(ref, linkUpdate({ poNumberUpdatedById: 'admin-2' })))
+        })
+
+        it.each(['logistica', 'tecnico', 'faturamento'])('%s NAO vincula o COA a uma PO', async (role) => {
+          const stamp = { poNumberUpdatedById: `${role}-1` }
+          await assertFails(updateDoc(doc(staffDb(role), legacyPath), linkUpdate(stamp)))
+          await assertFails(updateDoc(doc(staffDb(role), consolidatedPath), linkUpdate(stamp)))
+        })
+
+        it('usuario comum e anonimo NAO vinculam o COA a uma PO', async () => {
+          await assertFails(updateDoc(doc(approvedUser('user-1'), legacyPath), linkUpdate({ poNumberUpdatedById: 'user-1' })))
+          await assertFails(updateDoc(doc(anon(), legacyPath), linkUpdate()))
+        })
+
+        it('o mesmo update falha em invoice, packingList, bl e other (so coaOriginal vincula PO)', async () => {
+          await seed(async (db) => {
+            await setDoc(
+              doc(db, 'processes/p-consolidado/documents/pl1'),
+              baseFields({
+                type: 'packingList',
+                slotKey: 'packingList:PO-1',
+                poNumber: 'PO-1',
+                storagePath: 'processes/p-consolidado/documents/packingList/PO-1/1-admin-1-pl.pdf',
+                uploadedAt: new Date(),
+              })
+            )
+            await setDoc(
+              doc(db, 'processes/p-consolidado/documents/b1'),
+              baseFields({ storagePath: 'processes/p-consolidado/documents/bl/1-admin-1-BL.pdf', uploadedAt: new Date() })
+            )
+            await setDoc(
+              doc(db, 'processes/p-consolidado/documents/o1'),
+              baseFields({
+                type: 'other',
+                slotKey: 'other:o1',
+                description: 'Laudo',
+                storagePath: 'processes/p-consolidado/documents/other/1-admin-1-laudo.pdf',
+                uploadedAt: new Date(),
+              })
+            )
+          })
+          for (const path of [invoicePath, 'processes/p-consolidado/documents/pl1', 'processes/p-consolidado/documents/b1', 'processes/p-consolidado/documents/o1']) {
+            await assertFails(updateDoc(doc(admin('admin-1'), path), linkUpdate()))
+          }
+        })
+
+        it('o vinculo da PO nao abre outros updates: nome do COA e vinculo Invoice->PL continuam como antes', async () => {
+          await assertSucceeds(
+            updateDoc(doc(admin('admin-1'), consolidatedPath), {
+              description: 'Lote ABC-123',
+              descriptionUpdatedAt: serverTimestamp(),
+              descriptionUpdatedById: 'admin-1',
+            })
+          )
+          await assertSucceeds(
+            updateDoc(doc(admin('admin-1'), invoicePath), {
+              alsoPackingList: true,
+              alsoPackingListUpdatedAt: serverTimestamp(),
+              alsoPackingListUpdatedById: 'admin-1',
+            })
+          )
+          await assertFails(updateDoc(doc(admin('admin-1'), consolidatedPath), { name: 'outro.pdf' }))
+        })
+
+        it('admin, logistica, tecnico e faturamento leem o COA com poNumber; usuario comum nao', async () => {
+          await assertSucceeds(getDoc(doc(admin('admin-1'), consolidatedPath)))
+          await assertSucceeds(getDoc(doc(logistics('log-1'), consolidatedPath)))
+          for (const role of ['tecnico', 'faturamento']) {
+            await assertSucceeds(getDoc(doc(staffDb(role), consolidatedPath)))
+            await assertSucceeds(getDoc(doc(staffDb(role), legacyPath)))
+          }
+          await assertFails(getDoc(doc(approvedUser('user-1'), consolidatedPath)))
+        })
+
+        it('leitor lista os COAs do consolidado com where(type in [cargoReport, coaOriginal])', async () => {
+          const snapshot = await assertSucceeds(
+            getDocs(
+              query(
+                collection(staffDb('tecnico'), 'processes/p-consolidado/documents'),
+                where('type', 'in', ['cargoReport', 'coaOriginal'])
+              )
+            )
+          )
+          expect(snapshot.docs.map((item) => item.id).sort()).toEqual(['d1', 'legado'])
+        })
+
+        it('admin exclui o COA com poNumber e o legado sem PO; logistica, tecnico e faturamento NAO', async () => {
+          for (const role of ['logistica', 'tecnico', 'faturamento']) {
+            await assertFails(deleteDoc(doc(staffDb(role), consolidatedPath)))
+            await assertFails(deleteDoc(doc(staffDb(role), legacyPath)))
+          }
+          await assertSucceeds(deleteDoc(doc(admin('admin-1'), consolidatedPath)))
+          await assertSucceeds(deleteDoc(doc(admin('admin-1'), legacyPath)))
         })
       })
 
