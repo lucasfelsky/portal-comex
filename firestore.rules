@@ -633,7 +633,8 @@ service cloud.firestore {
           && request.resource.data.slotKey.matches('^other:.+$'))
         || (request.resource.data.type == 'bl' && request.resource.data.slotKey == 'bl')
         || (request.resource.data.type == 'cargoReport' && request.resource.data.slotKey == 'cargoReport')
-        || (request.resource.data.type == 'coaOriginal' && request.resource.data.slotKey == 'coaOriginal')
+        || (request.resource.data.type == 'coaOriginal'
+          && request.resource.data.slotKey.matches('^coaOriginal:[A-Za-z0-9]{1,64}$'))
         || (
           (request.resource.data.type == 'invoice' || request.resource.data.type == 'packingList')
           && get(/databases/$(database)/documents/processes/$(processId)).data.category == 'CONSOLIDADO'
@@ -758,9 +759,10 @@ service cloud.firestore {
     // Renomear o documento adicional (`other`): muda so' o nome exibido
     // (`description`), nunca o arquivo (name/storagePath). Mesmo limite 1..120
     // do create; type 'other' no doc atual E no novo; com trilha de auditoria.
+    // COA: cada arquivo e' um slot proprio, sem versao; renomear igual ao documento adicional.
     function isValidAdditionalDocumentRenameUpdate() {
-      return resource.data.type == 'other'
-        && request.resource.data.type == 'other'
+      return resource.data.type in ['other', 'coaOriginal']
+        && request.resource.data.type == resource.data.type
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['description', 'descriptionUpdatedAt', 'descriptionUpdatedById'])
         && request.resource.data.description is string

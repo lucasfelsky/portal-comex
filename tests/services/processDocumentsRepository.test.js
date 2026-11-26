@@ -221,6 +221,24 @@ describe('uploadProcessDocument', () => {
     expect(payload.slotKey).toBe('fispq:ITEM-1')
   })
 
+  it('coaOriginal: 1 slot por arquivo (coaOriginal:<id>), storagePath sem escopo e sem description', async () => {
+    const coaFile = { name: 'coa lote 1.pdf', size: 4096, type: 'application/pdf' }
+    await uploadProcessDocument('p1', { type: 'coaOriginal', file: coaFile, actor })
+    const [, payload] = mockSetDoc.mock.calls[0]
+    expect(payload.type).toBe('coaOriginal')
+    expect(payload.slotKey).toBe('coaOriginal:new-doc-id')
+    expect(payload.storagePath).toMatch(/^processes\/p1\/documents\/coaOriginal\/\d+-uid-1-coa-lote-1\.pdf$/)
+    expect(payload).not.toHaveProperty('description')
+  })
+
+  it('coaOriginal: dois envios seguidos geram slots diferentes (nada e rotacionado)', async () => {
+    mockDoc.mockImplementationOnce(() => ({ id: 'coa-a' })).mockImplementationOnce(() => ({ id: 'coa-b' }))
+    await uploadProcessDocument('p1', { type: 'coaOriginal', file, actor })
+    await uploadProcessDocument('p1', { type: 'coaOriginal', file, actor })
+    const slots = mockSetDoc.mock.calls.map(([, payload]) => payload.slotKey)
+    expect(slots).toEqual(['coaOriginal:coa-a', 'coaOriginal:coa-b'])
+  })
+
   it('other exige description no payload', async () => {
     await uploadProcessDocument('p1', { type: 'other', file, description: 'nota fiscal', actor })
     const [, payload] = mockSetDoc.mock.calls[0]
@@ -329,6 +347,15 @@ describe('renameAdditionalDocument', () => {
       descriptionUpdatedById: 'uid-1',
     })
     expect(mockDoc).toHaveBeenCalledWith({}, 'processes', 'p1', 'documents', 'o1')
+  })
+
+  it('renomeia tambem o COA (mesma funcao, mesmas 3 chaves)', async () => {
+    await renameAdditionalDocument('p1', 'coa1', 'Lote ABC-123', { uid: 'uid-1' })
+    expect(mockUpdateDoc).toHaveBeenCalledWith('DOC_REF', {
+      description: 'Lote ABC-123',
+      descriptionUpdatedAt: 'SERVER_TIMESTAMP',
+      descriptionUpdatedById: 'uid-1',
+    })
   })
 
   it('nome correto com acento (câmbio, NÃO) e gravado intacto, sem U+FFFD', async () => {

@@ -558,7 +558,7 @@ describe('S7 - Documentos: cartão compacto e menu "Ações"', () => {
     window.localStorage.clear()
   })
 
-  it('BL e Invoice: "Baixar" direto + "Ações"; COA Original sem arquivo: "Enviar" direto e sem "Ações"', async () => {
+  it('BL e Invoice: "Baixar" direto + "Ações"; COA Original sem arquivo: "Enviar COAs" direto e sem "Ações"', async () => {
     mockListProcessDocuments.mockResolvedValue([
       doc({ id: 'b1', name: 'BL ACME.pdf' }),
       doc({ id: 'i1', type: 'invoice', slotKey: 'invoice', name: 'INV-1.pdf' }),
@@ -572,8 +572,51 @@ describe('S7 - Documentos: cartão compacto e menu "Ações"', () => {
       expect(within(row).getByRole('button', { name: `Ações de ${title}` })).toHaveAttribute('aria-haspopup', 'menu')
     }
     const coa = rowOf('COA Original')
-    expect(within(coa).getByRole('button', { name: 'Enviar' })).toBeInTheDocument()
+    expect(within(coa).getByRole('button', { name: 'Enviar COAs' })).toBeInTheDocument()
     expect(within(coa).queryByRole('button', { name: /^Ações de / })).not.toBeInTheDocument()
+  })
+
+  it('COA Original (lista): cartão na linha toda, cada arquivo com "Baixar" direto e menu Visualizar / Renomear / Excluir', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([
+      doc({ id: 'k1', type: 'coaOriginal', slotKey: 'coaOriginal:k1', name: 'COA lote 1.pdf', uploadedAt: '2026-09-02T10:00:00.000Z' }),
+      doc({ id: 'k0', type: 'coaOriginal', slotKey: 'coaOriginal', name: 'COA antigo.pdf', description: 'Lote antigo', uploadedAt: '2026-09-01T10:00:00.000Z' }),
+    ])
+    const { container } = render(<ProcessDocumentsPanel process={FCL} profile={ADMIN} variant="desktop" />)
+    await loaded()
+
+    expect(container.querySelectorAll('.documents-section__rows > .coa-docs')).toHaveLength(1)
+    const items = Array.from(container.querySelectorAll('.coa-docs__item'))
+    expect(items.map((item) => item.querySelector('.coa-docs__name').textContent)).toEqual(['Lote antigo', 'COA lote 1.pdf'])
+
+    const first = within(items[1])
+    expect(first.getByRole('button', { name: 'Baixar COA lote 1.pdf' })).toBeInTheDocument()
+    const trigger = first.getByRole('button', { name: 'Ações de COA lote 1.pdf' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    await user.click(trigger)
+    const menuElement = await screen.findByRole('menu', { name: 'Ações de COA lote 1.pdf' })
+    const entries = within(menuElement).getAllByRole('menuitem')
+    expect(entries.map((item) => item.textContent)).toEqual(['Visualizar', 'Renomear', 'Excluir'])
+    expect(entries[2]).toHaveClass('process-detail-more__item--danger')
+    expect(menuElement.querySelector('[role="separator"] + [role="menuitem"]')).toHaveTextContent('Excluir')
+  })
+
+  it('COA Original: leitores (técnico/faturamento) recebem só Visualizar no menu e nenhum botão de envio', async () => {
+    const user = userEvent.setup()
+    mockListProcessDocuments.mockResolvedValue([
+      doc({ id: 'k1', type: 'coaOriginal', slotKey: 'coaOriginal:k1', name: 'COA lote 1.pdf' }),
+    ])
+    const { container } = render(
+      <ProcessDocumentsPanel process={FCL} profile={{ uid: 't-1', name: 'Téc', role: 'tecnico' }} variant="desktop" />
+    )
+    await loaded()
+
+    const item = within(container.querySelector('.coa-docs__item'))
+    expect(item.getByRole('button', { name: 'Baixar COA lote 1.pdf' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Enviar|^Adicionar COAs/ })).not.toBeInTheDocument()
+    await user.click(item.getByRole('button', { name: 'Ações de COA lote 1.pdf' }))
+    const menuElement = within(await screen.findByRole('menu'))
+    expect(menuElement.getAllByRole('menuitem').map((entry) => entry.textContent)).toEqual(['Visualizar'])
   })
 
   it('o menu usa role="menu", itens menuitem, Excluir separado e em vermelho, e some ao escolher o item', async () => {

@@ -468,12 +468,14 @@ describe('firestore.rules structure', () => {
       expect(body).toMatch(/isValidProcessDocumentCreate\s*\(\s*processId\s*\)/)
     })
 
-    it('isValidAdditionalDocumentRenameUpdate so aceita description + carimbos, type other, 1..120', () => {
+    it('isValidAdditionalDocumentRenameUpdate so aceita description + carimbos, type other ou coaOriginal (sem trocar o type), 1..120', () => {
       const match = rules.match(/function\s+isValidAdditionalDocumentRenameUpdate\s*\(\s*\)\s*\{([\s\S]*?)\n\s{4}\}/)
       expect(match).not.toBeNull()
       const body = match[1]
-      expect(body).toMatch(/resource\.data\.type\s*==\s*'other'/)
-      expect(body).toMatch(/request\.resource\.data\.type\s*==\s*'other'/)
+      expect(body).toMatch(/resource\.data\.type\s+in\s*\[\s*'other'\s*,\s*'coaOriginal'\s*\]/)
+      expect(body).toMatch(/request\.resource\.data\.type\s*==\s*resource\.data\.type/)
+      // Nenhum outro tipo (BL, invoice, relatorio...) ganha renomear.
+      expect(body).not.toMatch(/'bl'|'invoice'|'packingList'|'cargoReport'|'fispq'|'containerWash'/)
       expect(body).toMatch(
         /affectedKeys\(\)\s*\.hasOnly\(\s*\[\s*'description'\s*,\s*'descriptionUpdatedAt'\s*,\s*'descriptionUpdatedById'\s*\]\s*\)/
       )
@@ -571,8 +573,14 @@ describe('firestore.rules structure', () => {
       expect(withoutRead).not.toMatch(/isDocumentReader/)
     })
 
-    it('coaOriginal e valido em type, slotKey e storagePath de documents', () => {
-      expect(rules).toMatch(/request\.resource\.data\.type\s*==\s*'coaOriginal'\s*&&\s*request\.resource\.data\.slotKey\s*==\s*'coaOriginal'/)
+    it('coaOriginal e valido em type, slotKey (1 slot por arquivo: coaOriginal:<id>, sem o slot fixo legado) e storagePath de documents', () => {
+      const slotFn = rules.match(/function\s+isValidProcessDocumentSlotKey\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{4}\}/)
+      expect(slotFn).not.toBeNull()
+      expect(slotFn[1]).toMatch(
+        /request\.resource\.data\.type\s*==\s*'coaOriginal'\s*&&\s*request\.resource\.data\.slotKey\.matches\(\s*'\^coaOriginal:\[A-Za-z0-9\]\{1,64\}\$'\s*\)/
+      )
+      // O slot fixo legado nao e mais aceito no create (aba antiga: "sem permissao", sem rotacionar COA).
+      expect(rules).not.toMatch(/slotKey\s*==\s*'coaOriginal'/)
       expect(rules).toMatch(/request\.resource\.data\.type\s+in\s*\[[^\]]*'coaOriginal'[^\]]*\]/)
       expect(rules).toMatch(/request\.resource\.data\.type\s*==\s*'cargoReport'\s*\|\|\s*request\.resource\.data\.type\s*==\s*'coaOriginal'/)
     })

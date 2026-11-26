@@ -27268,3 +27268,104 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .crf-pal__num {
   touch-action: manipulation;
 }
+
+/* S11-A: COA Original vira lista de varios arquivos (ProcessCoaDocuments). O cartao ocupa a linha toda da grade do
+   desktop; cada arquivo e' uma sublinha com o menu "Acoes" (alvos de toque de 44px). */
+.documents-section__rows > .coa-docs {
+  grid-column: 1 / -1;
+}
+
+.coa-docs__upload {
+  min-height: 44px;
+}
+
+.coa-docs__errors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.coa-docs__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.coa-docs__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coa-docs__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.coa-docs__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.coa-docs__text {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.coa-docs__name {
+  margin: 0;
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.coa-docs__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.coa-docs__download {
+  min-height: 44px;
+  padding-inline: 14px;
+}
+
+.coa-docs__item .docs-more {
+  flex: none;
+  margin-left: 0;
+}
+
+.coa-docs__item .docs-more .docs-more__trigger {
+  width: auto;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.coa-docs__item .docs-more .docs-more__trigger .documents-row__action-label {
+  display: inline;
+}
+
+.coa-docs__item .docs-more .docs-more__trigger svg {
+  display: inline-block;
+  flex: none;
+}

@@ -17,6 +17,7 @@ import Icon from '../../components/Icon'
 import RenameDocumentDialog from './RenameDocumentDialog'
 import DocumentPreviewDialog from './DocumentPreviewDialog'
 import DocumentActionsMenu from './DocumentActionsMenu'
+import ProcessCoaDocuments from './ProcessCoaDocuments'
 import { getDocumentPreviewKind } from './spreadsheetPreview'
 import {
   CONTAINER_WASH_CATEGORIES,
@@ -331,7 +332,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
   const enviadosCount = useMemo(() => {
     let count = 0
     for (const type of processLevelTypes) {
-      if (findGroup(buildDocumentSlotKey(type))?.primary) count += 1
+      if (type === 'coaOriginal' ? documents.some((document_) => document_.type === type) : findGroup(buildDocumentSlotKey(type))?.primary) count += 1
     }
     if (isReadOnlyViewer) return count
     for (const type of PO_SCOPABLE_TYPES) {
@@ -1272,7 +1273,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
           <div className="documents-section documents-section--process">
             <DocumentsSectionHeader
               title="Documentos do processo"
-              subtitle="Cada tipo guarda o arquivo atual e a última versão anterior."
+              subtitle="Cada COA fica na lista; os demais tipos guardam o arquivo atual e a última versão anterior."
               badge={
                 isDesktopVariant && showLoadedContent && !isEmptyDocuments ? (
                   <p className="documents-section__note">{visibilityNote}</p>
@@ -1281,6 +1282,23 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
             />
             <div className="documents-section__rows">
               {processLevelTypes.map((type) => {
+                if (type === 'coaOriginal') {
+                  return (
+                    <ProcessCoaDocuments
+                      key={type}
+                      documents={documents} processId={processId} profile={profile}
+                      isDesktopVariant={isDesktopVariant} downloadingId={downloadingId} rowErrors={rowErrors}
+                      onChanged={() => setReloadToken((token) => token + 1)}
+                      onDownload={handleDownload}
+                      onPreview={(document_) => {
+                        setPreviewDocument(document_)
+                        setIsPreviewOpen(true)
+                      }}
+                      onRequestDelete={setConfirmDeleteDoc}
+                      onRequestRename={openRename}
+                    />
+                  )
+                }
                 const slotKey = buildDocumentSlotKey(type)
                 const group = findGroup(slotKey)
                 const primary = group?.primary ?? null
@@ -1672,7 +1690,7 @@ export default function ProcessDocumentsPanel({ process, profile, onPendingCount
         open={isPreviewOpen}
         document={previewDocument}
         processId={processId}
-        title={getDocumentTypeLabel('cargoReport')}
+        title={getDocumentTypeLabel(previewDocument?.type ?? 'cargoReport')}
         onClose={() => setIsPreviewOpen(false)}
       />
     </div>
