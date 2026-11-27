@@ -2,6 +2,7 @@ import { cargoRowPallets, hasCargoRowIssue } from './cargoConferenceIssues'
 import { describeCargoRow, isCargoRowConferred } from './cargoConferenceModel'
 import { getCargoRowUnits, isCargoRowUnitsDivergent, listCargoPartialPallets } from './cargoConferenceUnits'
 import { normalizeItemCode } from './cargoReportCatalog'
+import { computeLotSq } from './cargoReportFormModel'
 import { CARGO_ORPHAN_GROUP_LABEL, groupCargoRowsByPurchaseOrder } from './cargoReportGroups'
 import { purchaseOrderLabel } from './cargoReportRowOps'
 
@@ -11,7 +12,8 @@ import { purchaseOrderLabel } from './cargoReportRowOps'
 //     fornecedor; sem nada, a linha é um item sozinho. Sempre DENTRO do grupo de PO (o mesmo código em 2 POs = 2 itens).
 //   - Nome de referência do fornecedor (D-3): o `supplierDescription` do primeiro lote do item que o tenha; o lote
 //     cujo nome (dobrado) é diferente do de referência ganha o selo "Nome diferente do fornecedor".
-//   - Busca: nome SQ, nome do fornecedor e código, sem diferenciar caixa, acento nem espaço repetido.
+//   - Busca: nome SQ, nome do fornecedor, código e lote (do fornecedor e SQ, de qualquer lote do item), sem diferenciar
+//     caixa, acento nem espaço repetido; casa por trecho (a pontuação do lote conta: "2231" acha "L-2231").
 
 // Texto de comparação da busca: NFD sem diacrítico, minúsculas e espaços colapsados (mesma regra de
 // `normalizeComparableText`, processStatus.js, mais o colapso de espaço).
@@ -25,6 +27,7 @@ export function foldCargoSearchText(value) {
 }
 
 export const CARGO_SEARCH_BY_SUPPLIER = 'Achado pelo nome no fornecedor'
+export const CARGO_SEARCH_BY_LOT = 'Achado pelo lote'
 export const CARGO_NO_LOT_TITLE = 'Sem lote informado'
 
 // "Lote L-2231" ou "Sem lote informado".
@@ -44,7 +47,14 @@ function itemIdentity(row) {
 }
 
 function buildItem(group, identity, entries) {
-  const lots = entries.map(({ row, rowIndex }) => ({ row, rowIndex, title: describeCargoLot(row), differentName: false }))
+  // `lotSq`: o mesmo valor de `deriveCargoReportRow(...).lotSq` (mesma função), só para a busca pelo lote.
+  const lots = entries.map(({ row, rowIndex }) => ({
+    row,
+    rowIndex,
+    title: describeCargoLot(row),
+    lotSq: computeLotSq(row?.supplierLot, row?.po),
+    differentName: false,
+  }))
   const reference = lots.map((lot) => String(lot.row.supplierDescription ?? '').trim()).find(Boolean) ?? ''
   const referenceFolded = foldCargoSearchText(reference)
   for (const lot of lots) {
@@ -142,7 +152,34 @@ export function summarizeCargoConferenceItem(item, conference, expectedUnits = n
   }
 }
 
+// Trecho do lote (mesma dobra da busca). Texto vazio nunca casa: lote vazio ("Sem lote informado") não aparece por busca vazia.
+function lotFieldMatches(value, folded) {
+  return folded !== '' && foldCargoSearchText(value).includes(folded)
+}
+
+// Lotes do item que casam com a busca, na ordem do item: [{ rowId, label, sq }]. Um lote conta UMA vez: pelo lote do fornecedor
+// (`supplierLot`) e, se este não casar, pelo lote SQ (`lotSq` = lote + 3 primeiras letras da PO, o da coluna "LOTE SQ").
+export function matchCargoLots(item, query) {
+  const folded = foldCargoSearchText(query)
+  const found = []
+  for (const lot of item.lots) {
+    const supplierLot = String(lot.row.supplierLot ?? '').trim()
+    if (lotFieldMatches(supplierLot, folded)) found.push({ rowId: lot.row.id, label: supplierLot, sq: false })
+    else if (lotFieldMatches(lot.lotSq, folded)) found.push({ rowId: lot.row.id, label: lot.lotSq, sq: true })
+  }
+  return found
+}
+
+// "Achado pelo lote L-2231", "Achado pelo lote SQ L-2231DEM" e, com mais de um lote casando, o primeiro + "+N lotes".
+function describeLotMatch(found) {
+  const [first] = found
+  const extra = found.length - 1
+  const base = `${CARGO_SEARCH_BY_LOT}${first.sq ? ' SQ' : ''} ${first.label}`
+  return extra > 0 ? `${base} +${extra} ${extra === 1 ? 'lote' : 'lotes'}` : base
+}
+
 // { ok, by }: `by` diz por que o item apareceu quando não foi pelo nome da SQ.
+// Precedência do motivo: nome da SQ (sem motivo) > nome no fornecedor > código > lote.
 export function matchCargoConferenceItem(item, query) {
   const folded = foldCargoSearchText(query)
   if (!folded) return { ok: true, by: '' }
@@ -151,6 +188,8 @@ export function matchCargoConferenceItem(item, query) {
     return { ok: true, by: CARGO_SEARCH_BY_SUPPLIER }
   }
   if (item.code && foldCargoSearchText(item.code).includes(folded)) return { ok: true, by: `Achado pelo código ${item.code}` }
+  const lots = matchCargoLots(item, query)
+  if (lots.length > 0) return { ok: true, by: describeLotMatch(lots) }
   return { ok: false, by: '' }
 }
 
