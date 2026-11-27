@@ -135,9 +135,9 @@
     ]
   },
   "tests": {
-    "totalFiles": 84,
+    "totalFiles": 85,
     "_breakdown": {
-      "firebase": 4,
+      "firebase": 5,
       "functions": 16,
       "ui": 64
     }
@@ -419,11 +419,14 @@
       "notes",
       "okByRowId",
       "palletsByRowId",
+      "partialPallets",
       "receiptStatus",
       "receivedDate",
       "revision",
       "schemaVersion",
       "status",
+      "unitsByRowId",
+      "unloadByUnit",
       "unloadEndAt",
       "unloadStartAt",
       "updatedAt",

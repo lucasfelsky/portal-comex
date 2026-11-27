@@ -224,7 +224,7 @@ describe('firestore.rules structure', () => {
       expect(body).not.toMatch(/labeledBy|labelMadeBy/)
     })
 
-    it('isValidCargoReportConference: hasOnly de 23 chaves e hasAll de 21 (palletsByRowId e damageByRowId S11 opcionais), mapas, recebimento, descarga (S8), fechamento e current existente', () => {
+    it('isValidCargoReportConference: hasOnly de 26 chaves e hasAll de 21 (palletsByRowId e damageByRowId S11 e unitsByRowId, partialPallets e unloadByUnit opcionais), mapas, recebimento, descarga (S8), fechamento e current existente', () => {
       const fn = rules.match(/function\s+isValidCargoReportConference\s*\(\s*processId\s*\)\s*\{[\s\S]*?\n {4}\}/)
       expect(fn).not.toBeNull()
       const body = fn[0]
@@ -256,10 +256,10 @@ describe('firestore.rules structure', () => {
       expect(only).not.toBeNull()
       expect(all).not.toBeNull()
       const parse = (match) => match[1].match(/'([^']+)'/g).map((item) => item.replace(/'/g, '')).sort()
-      // S11: os 2 mapas novos entram no hasOnly (23) e ficam FORA do hasAll (21): bundle e conferencia antigos continuam gravando.
-      expect(parse(only)).toEqual([...keys, 'palletsByRowId', 'damageByRowId'].sort())
+      // S11 + conferencia por item: as 5 chaves opcionais entram no hasOnly (26) e ficam FORA do hasAll (21): bundle e conferencia antigos continuam gravando.
+      expect(parse(only)).toEqual([...keys, 'palletsByRowId', 'damageByRowId', 'unitsByRowId', 'partialPallets', 'unloadByUnit'].sort())
       expect(parse(all)).toEqual([...keys].sort())
-      expect(parse(only)).toHaveLength(23)
+      expect(parse(only)).toHaveLength(26)
       expect(parse(all)).toHaveLength(21)
       for (const map of ['palletsByRowId', 'damageByRowId']) {
         expect(body).toContain(`!('${map}' in request.resource.data)`)
@@ -268,6 +268,16 @@ describe('firestore.rules structure', () => {
         // "Pegajosa": depois de gravada, a chave nao pode sumir (bundle antigo recebe "Sem permissao" em vez de apagar dados).
         expect(body).toContain(`(resource == null || !('${map}' in resource.data) || '${map}' in request.resource.data)`)
       }
+      // Conferencia por item: as 3 chaves novas ficam em funcao propria (a escrita que FECHA a conferencia chega perto do limite de 1000 expressoes).
+      expect(body).toMatch(/&&\s*isValidCargoConferenceUnitKeys\(\)/)
+      const unitKeys = rules.match(/function\s+isValidCargoConferenceUnitKeys\s*\(\s*\)\s*\{[\s\S]*?\n {4}\}/)
+      expect(unitKeys).not.toBeNull()
+      expect(unitKeys[0]).toMatch(/unitsByRowId',\s*\{\}\)/)
+      expect(unitKeys[0]).toMatch(/u is map\s*&&\s*u\.size\(\)\s*<=\s*200/)
+      expect(unitKeys[0]).toMatch(/p is list\s*&&\s*p\.size\(\)\s*<=\s*50\s*&&\s*\(p\.size\(\)\s*==\s*0\s*\|\|\s*p\[0\] is map\)/)
+      expect(unitKeys[0]).toMatch(/l is map\s*&&\s*l\.size\(\)\s*<=\s*50/)
+      // Pegajosas: nenhuma das 3 chaves ja gravadas (resource) pode sumir.
+      expect(unitKeys[0]).toMatch(/resource == null\s*\|\|\s*\['unitsByRowId', 'partialPallets', 'unloadByUnit'\]\.toSet\(\)\.intersection\(resource\.data\.keys\(\)\.toSet\(\)\)\.hasOnly\(d\.keys\(\)\)/)
       // `countOkByRowId` segue igual (legado) e `notes` nao e travado (o legado pre-S7 copia `notes` do current).
       expect(body).toMatch(/notes\.size\(\)\s*<=\s*2000/)
       expect(body).toMatch(/exists\(\/databases\/\$\(database\)\/documents\/processes\/\$\(processId\)\/cargoReport\/current\)/)
@@ -328,10 +338,11 @@ describe('firestore.rules structure', () => {
     it('S7: isLogisticsCargoConferenceWrite trava nome, exige documento cargoReport proprio e COMEX fechado', () => {
       const body = fnBody('isLogisticsCargoConferenceWrite')
       expect(body).toMatch(/resource\s*==\s*null\s*\|\|\s*resource\.data\.get\('status',\s*'aberta'\)\s*==\s*'aberta'/)
-      expect(body).toContain('checkedByName == myName()')
+      // Custo: o nome e' travado via updatedByName (o gate isValidCargoReportConference exige updatedByName == myName()).
+      expect(body).toContain('checkedByName == request.resource.data.updatedByName')
       expect(body).toContain('isCargoReportComexClosed(processId)')
       expect(body).toContain('closedById == request.auth.uid')
-      expect(body).toContain('closedByName == myName()')
+      expect(body).toContain('closedByName == request.resource.data.updatedByName')
       expect(body).toMatch(/\.data\.type\s*==\s*'cargoReport'/)
       expect(body).toContain('uploadedById == request.auth.uid')
     })
