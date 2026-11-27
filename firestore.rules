@@ -915,6 +915,27 @@ service cloud.firestore {
         && request.resource.data.updatedByName == myName();
     }
 
+    // Conferencia por item: `unitsByRowId` (mapa <= 200), `partialPallets` (lista <= 50) e `unloadByUnit` (mapa <= 50) tambem sao
+    // opcionais e "pegajosas"; as rules so' validam tipo e tamanho (o cliente valida cada entrada: cargoConferenceUnits.js e
+    // cargoConferenceUnload.js). Com `unloadByUnit` preenchido, unloadStartAt/unloadEndAt passam a ser calculados pelo cliente.
+    // Fica em funcao propria com `let` de proposito: a escrita que FECHA a conferencia (logistica, com get() do documento) e' a
+    // mais cara e o limite e' de 1000 expressoes por avaliacao; inline (como palletsByRowId) estourava. MARGEM medida no emulador
+    // (2026-11-27): acrescentar N x `&& (1 == 1)` ao fim desta funcao ainda passa o pior caso real (doc ja com as 5 chaves
+    // opcionais, fechado com as 5) com N = 14 e falha com N = 15. Nao aumente esta funcao nem as vizinhas sem re-medir
+    // (tests/firebase/cargoConferenceUnits.rules.emulator.test.js, casos "custo"). Sem o corte em
+    // isLogisticsCargoConferenceWrite (nomes comparados com updatedByName) o fechamento real FALHA mesmo sem as chaves novas.
+    function isValidCargoConferenceUnitKeys() {
+      let d = request.resource.data;
+      let u = d.get('unitsByRowId', {});
+      let p = d.get('partialPallets', []);
+      let l = d.get('unloadByUnit', {});
+      return u is map && u.size() <= 200
+        && p is list && p.size() <= 50 && (p.size() == 0 || p[0] is map)
+        && l is map && l.size() <= 50
+        && (resource == null
+          || ['unitsByRowId', 'partialPallets', 'unloadByUnit'].toSet().intersection(resource.data.keys().toSet()).hasOnly(d.keys()));
+    }
+
     // S11: `palletsByRowId` (contador de pallets por item) e `damageByRowId` (observacao por item) sao opcionais (fora do
     // hasAll) e "pegajosas" como `expectedPallets`; as rules so' validam o formato do mapa (o cliente valida as entradas).
     // S10: nfNumber da conferencia = lista de NFs separada por "; " (ate 1000); o legado do current segue 40.
@@ -924,7 +945,7 @@ service cloud.firestore {
         'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
         'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
         'updatedAt', 'updatedById', 'updatedByName',
-        'palletsByRowId', 'damageByRowId',
+        'palletsByRowId', 'damageByRowId', 'unitsByRowId', 'partialPallets', 'unloadByUnit',
       ])
         && request.resource.data.keys().hasAll([
           'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'labelsByRowId', 'checkedByName',
@@ -951,6 +972,7 @@ service cloud.firestore {
         && (!('damageByRowId' in request.resource.data)
           || (request.resource.data.damageByRowId is map && request.resource.data.damageByRowId.size() <= 200))
         && (resource == null || !('damageByRowId' in resource.data) || 'damageByRowId' in request.resource.data)
+        && isValidCargoConferenceUnitKeys()
         && request.resource.data.checkedByName is string
         && request.resource.data.checkedByName.size() <= 120
         && request.resource.data.receiptStatus in ['', 'com_ressalva', 'sem_ressalva']
@@ -996,15 +1018,17 @@ service cloud.firestore {
     // no estado "COMEX fechado" e com o documento `cargoReport` que ELA mesma
     // anexou (`closedDocumentId`). Conferencia fechada nao aceita gravacao da
     // logistica; quem reabre e' o admin (`isAdminCargoConferenceReopen`).
+    // Custo: checkedByName/closedByName comparam com `updatedByName`, que `isValidCargoReportConference` (gate de todo
+    // write) ja' exige igual a myName(); equivalente a comparar com myName() e economiza ~2 chamadas de myName() no fechamento.
     function isLogisticsCargoConferenceWrite(processId) {
       return (resource == null || resource.data.get('status', 'aberta') == 'aberta')
-        && request.resource.data.checkedByName == myName()
+        && request.resource.data.checkedByName == request.resource.data.updatedByName
         && (
           request.resource.data.status == 'aberta'
           || (
             isCargoReportComexClosed(processId)
             && request.resource.data.closedById == request.auth.uid
-            && request.resource.data.closedByName == myName()
+            && request.resource.data.closedByName == request.resource.data.updatedByName
             && exists(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId))
             && get(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId)).data.type == 'cargoReport'
             && get(/databases/$(database)/documents/processes/$(processId)/documents/$(request.resource.data.closedDocumentId)).data.uploadedById == request.auth.uid
