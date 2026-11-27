@@ -27,6 +27,7 @@ import PoCoaCell from '../../src/features/processes/PoCoaCell'
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
 import { resetCoaAutoRead } from '../../src/features/processes/coaAutoReadQueue'
 import { setCoaAutoReadActor } from '../../src/features/processes/coaAutoReadSession'
+import { resetCoaUploads } from '../../src/features/processes/coaUploadStore'
 import useCoaAutoRead from '../../src/features/processes/useCoaAutoRead'
 import useCoaReadBadges from '../../src/features/processes/useCoaReadBadges'
 
@@ -138,6 +139,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 beforeEach(() => {
   vi.clearAllMocks()
   resetCoaAutoRead()
+  resetCoaUploads()
   serverDocuments = []
   mockListCoaReads.mockResolvedValue({})
   mockUploadsOk()
@@ -146,6 +148,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetCoaAutoRead()
+  resetCoaUploads()
   vi.restoreAllMocks()
 })
 

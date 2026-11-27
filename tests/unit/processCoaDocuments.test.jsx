@@ -19,6 +19,7 @@ vi.mock('../../src/services/coaReadsRepository', () => ({
 
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
 import useCoaReadBadges from '../../src/features/processes/useCoaReadBadges'
+import { resetCoaUploads } from '../../src/features/processes/coaUploadStore'
 
 const ADMIN = { uid: 'admin-1', name: 'Admin', role: 'admin' }
 const LOGISTICA = { uid: 'log-1', name: 'Ana', role: 'logistica' }
@@ -84,11 +85,13 @@ let consoleErrorSpy
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetCoaUploads()
   mockListCoaReads.mockResolvedValue({})
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
 afterEach(() => {
+  resetCoaUploads()
   consoleErrorSpy.mockRestore()
 })
 
@@ -207,14 +210,16 @@ describe('ProcessCoaDocuments - envio (admin)', () => {
 
   it('todos falham: alerta por arquivo, sem recarregar a lista', async () => {
     const user = userEvent.setup()
-    mockUploadProcessDocument.mockRejectedValue({ code: 'permission-denied' })
+    // S11-I (D-3): erro de permissão interrompe o lote; aqui o erro é só do arquivo (rede), então cada um é tentado.
+    mockUploadProcessDocument.mockRejectedValue({ code: 'storage/retry-limit-exceeded' })
     const { container, handlers } = renderList()
 
     await user.upload(fileInputOf(container), [pdf('a.pdf'), pdf('b.pdf')])
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('a.pdf: Você não tem permissão para esta ação.')
-    expect(alert).toHaveTextContent('b.pdf: Você não tem permissão para esta ação.')
+    await waitFor(() => expect(alert).toHaveTextContent('b.pdf: O envio do arquivo demorou demais. Tente novamente.'))
+    expect(alert).toHaveTextContent('a.pdf: O envio do arquivo demorou demais. Tente novamente.')
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2)
     expect(handlers.onChanged).not.toHaveBeenCalled()
     expect(screen.queryByText(/^\d+( de \d+)? COAs? enviados?\.$/)).not.toBeInTheDocument()
   })

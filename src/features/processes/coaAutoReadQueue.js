@@ -23,8 +23,9 @@
 //   ignorado pela fila (época antiga), sem mexer na fila do usuário novo.
 // - Quem pode ENFILEIRAR continua sendo um componente montado e habilitado (admin) no INÍCIO do envio (`mounts`).
 // - S11-H (L157): cada arquivo é enfileirado assim que sobe com sucesso (não no fim do lote). O envio leva um bilhete
-//   (`beginCoaAutoReadSend`) com a época da sessão: se o componente desmontar no meio, o arquivo que ainda termina de
-//   subir entra na fila; se a conta mudar no meio, nenhum arquivo do envio antigo entra (época).
+//   (`beginCoaAutoReadSend`) com a época da sessão. S11-I: o envio continua até o fim em segundo plano
+//   (`coaUploadStore`) e cada arquivo entra na fila com o bilhete, mesmo sem componente montado; se a conta mudar no
+//   meio, nenhum arquivo do envio antigo entra (época).
 // - Nenhum timer: nada para vazar.
 
 import { describeCoaReadError, readProcessCoa } from '../../services/coaReadsRepository'
@@ -210,7 +211,7 @@ export function registerCoaAutoReadMount(processId) {
 // S11-H (L157): "bilhete" do envio. Quem vai subir arquivos o pede NO INÍCIO do envio: só existe com componente de COA
 // habilitado (admin) montado para o processo, e guarda a época da sessão e a geração da fila daquele instante. Cada
 // arquivo é enfileirado assim que sobe (`enqueueCoaAutoRead(..., send)`), mesmo que o componente desmonte no meio do
-// envio; o bilhete vale enquanto a sessão for a mesma (logout/troca de usuário/perda do admin o invalida). Assina a
+// envio (o laço de upload segue até o fim, S11-I); o bilhete vale enquanto a sessão for a mesma (logout/troca de usuário/perda do admin o invalida). Assina a
 // sessão aqui (e não só no 1º enfileiramento) para que um logout ANTES do 1º arquivo subir também invalide o bilhete.
 export function beginCoaAutoReadSend(processId) {
   if (!processId || (mounts.get(processId) ?? 0) <= 0) return null

@@ -31,6 +31,7 @@ import PoCoaCell from '../../src/features/processes/PoCoaCell'
 import ProcessCoaDocuments from '../../src/features/processes/ProcessCoaDocuments'
 import { resetCoaAutoRead } from '../../src/features/processes/coaAutoReadQueue'
 import { setCoaAutoReadActor } from '../../src/features/processes/coaAutoReadSession'
+import { resetCoaUploads } from '../../src/features/processes/coaUploadStore'
 import useCoaReadBadges from '../../src/features/processes/useCoaReadBadges'
 
 const ADMIN = { uid: 'admin-1', name: 'Admin ACME', role: 'admin' }
@@ -147,6 +148,7 @@ const settle = async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   resetCoaAutoRead()
+  resetCoaUploads()
   mockListCoaReads.mockResolvedValue({})
   pendingUploads()
   pendingReads()
@@ -155,6 +157,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetCoaAutoRead()
+  resetCoaUploads()
   vi.restoreAllMocks()
 })
 
@@ -172,6 +175,9 @@ describe('logout durante o envio', () => {
     await settle()
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
     expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
+    // S11-I: o envio antigo não começa mais nenhum arquivo depois da troca de sessão.
+    expect(uploads).toHaveLength(1)
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1)
   })
 
   it('logout no meio do lote: o arquivo que sobe depois da troca de sessão não entra; o que já estava na fila foi limpo', async () => {
@@ -194,6 +200,23 @@ describe('logout durante o envio', () => {
     expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
   })
 
+  it('logout no meio de um lote de 3: o 2º já estava subindo e termina; o 3º não sobe', async () => {
+    setCoaAutoReadActor({ uid: ADMIN.uid, role: 'admin' })
+    const user = userEvent.setup()
+    const { container } = render(<Panel />)
+    await user.upload(inputs(container)[0], [pdf('SYN-1.pdf'), pdf('SYN-2.pdf'), pdf('SYN-3.pdf')])
+    await waitFor(() => expect(uploads).toHaveLength(1))
+    await finishUpload(0, 'new1')
+    await waitFor(() => expect(uploads).toHaveLength(2))
+
+    act(() => setCoaAutoReadActor({ uid: 'admin-2', role: 'admin' }))
+    await finishUpload(1, 'new2')
+    await settle()
+    expect(uploads).toHaveLength(2)
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText(/Enviando \d+ de \d+/)).not.toBeInTheDocument()
+  })
+
   it('perder o perfil de admin no meio do envio também invalida o resto', async () => {
     setCoaAutoReadActor({ uid: ADMIN.uid, role: 'admin' })
     const user = userEvent.setup()
@@ -204,6 +227,9 @@ describe('logout durante o envio', () => {
     await finishUpload(0, 'new1')
     await settle()
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
+    // S11-I: o 2º arquivo também não sobe.
+    expect(uploads).toHaveLength(1)
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -278,24 +304,29 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
     expect(lastTotal).toBe(3)
   })
 
-  it('sair da tela depois do 1º upload e antes do 2º (era o bug): o 1º entra na fila e é lido; o resto do lote não sobe', async () => {
+  it('sair da tela depois do 1º upload e antes do 2º (S11-I): o envio continua, os 3 sobem e os 3 são lidos, em ordem', async () => {
     let unmount
+    let sentCount = 0
     mockUploadProcessDocument.mockReset().mockImplementation(async (_processId, { file }) => {
       // O upload devolve já com o componente fora da tela (o admin saiu da aba durante o envio).
       unmount?.()
-      return coaDocument('new1', { name: file.name })
+      unmount = undefined
+      sentCount += 1
+      return coaDocument(`new${sentCount}`, { name: file.name })
     })
     const user = userEvent.setup()
     const view = render(<Panel />)
     unmount = view.unmount
     await user.upload(inputs(view.container)[0], [pdf('SYN-1.pdf'), pdf('SYN-2.pdf'), pdf('SYN-3.pdf')])
-    await waitFor(() => expect(reads).toHaveLength(1))
-    expect(reads[0].documentId).toBe('new1')
-    reads[0].resolve(readResult(read('new1')))
-    await settle()
-    expect(readIds()).toEqual(['new1'])
-    // Comportamento mantido: o laço para ao desmontar e o 2º/3º arquivo não sobem.
-    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(1)
+    for (let index = 0; index < 3; index += 1) {
+      await waitFor(() => expect(reads).toHaveLength(index + 1))
+      expect(reads[index].documentId).toBe(`new${index + 1}`)
+      reads[index].resolve(readResult(read(`new${index + 1}`)))
+      await settle()
+    }
+    expect(readIds()).toEqual(['new1', 'new2', 'new3'])
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(3)
+    expect(maxParallel).toBe(1)
     const reactWarnings = console.error.mock.calls.filter((call) => /unmounted|not wrapped in act/i.test(String(call[0])))
     expect(reactWarnings).toEqual([])
   })
@@ -303,7 +334,7 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
   it('desmontar com um upload em andamento: o arquivo que termina de subir entra na fila e é lido', async () => {
     const user = userEvent.setup()
     const view = render(<Panel />)
-    await user.upload(inputs(view.container)[0], [pdf('SYN-1.pdf'), pdf('SYN-2.pdf')])
+    await user.upload(inputs(view.container)[0], [pdf('SYN-1.pdf'), pdf('SYN-2.pdf'), pdf('SYN-3.pdf')])
     await waitFor(() => expect(uploads).toHaveLength(1))
     await finishUpload(0, 'new1')
     await waitFor(() => expect(uploads).toHaveLength(2))
@@ -315,10 +346,14 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
     await waitFor(() => expect(reads).toHaveLength(2))
     expect(reads[1].documentId).toBe('new2')
     reads[1].resolve(readResult(read('new2')))
+    // S11-I: o laço segue depois do desmonte; o 3º arquivo também sobe e é lido.
+    await waitFor(() => expect(uploads).toHaveLength(3))
+    await finishUpload(2, 'new3')
+    await waitFor(() => expect(reads).toHaveLength(3))
+    reads[2].resolve(readResult(read('new3')))
     await settle()
-    expect(readIds()).toEqual(['new1', 'new2'])
-    // O laço para depois do arquivo que estava em andamento (um 3º não existe aqui; nenhum upload extra).
-    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2)
+    expect(readIds()).toEqual(['new1', 'new2', 'new3'])
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(3)
   })
 
   it('envio iniciado sem a leitura habilitada (não-admin): nada entra, mesmo subindo normalmente', async () => {
@@ -335,7 +370,8 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
     await user.upload(inputs(container)[0], [pdf('SYN-1.pdf'), pdf('SYN-2.pdf'), pdf('SYN-3.pdf')])
     await waitFor(() => expect(uploads).toHaveLength(1))
     await act(async () => {
-      uploads[0].reject(Object.assign(new Error('x'), { code: 'permission-denied' }))
+      // S11-I (D-3): erro de permissão interrompe o lote; aqui o erro é só do arquivo (rede), o lote segue.
+      uploads[0].reject(Object.assign(new Error('x'), { code: 'storage/retry-limit-exceeded' }))
     })
     await waitFor(() => expect(uploads).toHaveLength(2))
     await finishUpload(1, 'new2')
@@ -446,13 +482,19 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
         <Panel />
       </StrictMode>
     )
+    // S11-I: o envio da 1ª montagem segue no store; a 2ª montagem vê o andamento e não abre um 2º envio na mesma chave.
+    expect(await screen.findByText('Enviando 2 de 2…')).toBeInTheDocument()
+    expect(second.container.querySelector('button[disabled]')).not.toBeNull()
     await user.upload(inputs(second.container)[0], pdf('SYN-1.pdf'))
-    await waitFor(() => expect(uploads.length).toBeGreaterThanOrEqual(2))
-    await finishUpload(uploads.length - 1, 'new1')
     await settle()
+    expect(mockUploadProcessDocument).toHaveBeenCalledTimes(2)
+    await finishUpload(1, 'new2')
+    await waitFor(() => expect(screen.queryByText(/Enviando \d+ de \d+/)).not.toBeInTheDocument())
     reads[0].resolve(readResult(read('new1')))
+    await waitFor(() => expect(reads).toHaveLength(2))
+    reads[1].resolve(readResult(read('new2')))
     await settle()
-    expect(readIds()).toEqual(['new1'])
+    expect(readIds()).toEqual(['new1', 'new2'])
   })
 })
 

@@ -185,6 +185,11 @@ export function useToast() {
   return ctx
 }
 
+// Igual a `useToast`, mas devolve null sem <ToastProvider> (telas que só avisam quando há onde mostrar).
+export function useOptionalToast() {
+  return useContext(ToastContext)
+}
+
 function ToastViewport({ toasts, onDismiss, onPause, onResume }) {
   if (toasts.length === 0) return null
 

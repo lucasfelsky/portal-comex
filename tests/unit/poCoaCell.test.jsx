@@ -1,7 +1,7 @@
 // S11-D2: celula "COA" de uma PO na tabela do CONSOLIDADO (PoCoaCell): Enviar COA por linha (varios arquivos), teto de 50
 // por PO e envio sem PO barrado ANTES do upload (getCoaUploadRoom), lista so' dos COAs da PO e erros filtrados.
 // Fica em tests/unit (fora do audit).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -12,6 +12,7 @@ vi.mock('../../src/services/processDocumentsRepository', () => ({
 }))
 
 import PoCoaCell, { COA_UPLOAD_BUTTON_CLASS } from '../../src/features/processes/PoCoaCell'
+import { resetCoaUploads } from '../../src/features/processes/coaUploadStore'
 
 const ADMIN = { uid: 'admin-1', name: 'Admin', role: 'admin' }
 const LOGISTICA = { uid: 'log-1', name: 'Ana', role: 'logistica' }
@@ -63,7 +64,12 @@ function renderCell(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetCoaUploads()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  resetCoaUploads()
 })
 
 describe('PoCoaCell - envio por PO (admin)', () => {
