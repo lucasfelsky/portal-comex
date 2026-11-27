@@ -1,7 +1,9 @@
 import { isMaritimeCategory, isAirCategory } from './processCategories'
 import { hasArrivalSignal, isDuimpUnderWater } from './arrivalCustoms'
 import {
+  canonicalizeCollectionStatus,
   canonicalizeProcessStatus,
+  getDisplayedCollectionStatus,
   getDisplayedProcessStatus,
   getQuickReadProcessStatus,
   getUnscheduledItemLabel,
@@ -80,6 +82,12 @@ function buildDerived(phase, process) {
   }
 }
 
+// descarga fica na fase pós-recebimento (Conferência), mas o selo não diz "Recebida"
+function isCdUnloadingOnlyStatus(status) {
+  const normalized = normalizeComparableText(canonicalizeCollectionStatus(status)).trim()
+  return normalized === 'veiculo no cd para descarga' || normalized === 'carga sendo descarregada no cd'
+}
+
 function isOverdue(process, todayIso) {
   if (!process?.eta) return false
 
@@ -136,7 +144,11 @@ export function getProcessDerivedStatus(process, now = new Date()) {
   }
 
   if (isCdUnloadingOrReceivedStatus(process.collectionStatus)) {
-    return buildDerived(DERIVED_STATUS_PHASES.POS_RECEBIMENTO, process)
+    const derived = buildDerived(DERIVED_STATUS_PHASES.POS_RECEBIMENTO, process)
+    if (isCdUnloadingOnlyStatus(process.collectionStatus)) {
+      return { ...derived, label: getDisplayedCollectionStatus(process.collectionStatus) }
+    }
+    return derived
   }
 
   if (isProcessStatusFinalized(process.processStatus)) {
