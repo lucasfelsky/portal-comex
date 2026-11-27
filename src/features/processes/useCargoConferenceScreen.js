@@ -19,6 +19,7 @@ import {
   summarizeCargoPallets,
 } from './cargoConferenceIssues'
 import { addCargoPhoto, listUnsavedCargoPhotos, removeCargoPhoto } from './cargoConferencePhotos'
+import { patchCargoUnloadUnit, removeCargoUnloadUnit, toCargoDateTimeKeyLocal } from './cargoConferenceUnload'
 import {
   CARGO_PARTIAL_PALLETS_MAX,
   addCargoPartialPallet,
@@ -191,6 +192,14 @@ export default function useCargoConferenceScreen({ process, profile }) {
   const setIssue = (rowId, changes) => edit((current) => patchCargoRowIssue(current, rowId, changes))
   const setLabel = (rowId, field, value) => edit((current) => setCargoConferenceLabel(current, rowId, field, value))
 
+  // Fatia C: descarga por unidade. Cada edição devolve a conferência com o início, o fim e a data de recebimento já
+  // recalculados; "agora" é o minuto local do aparelho (`YYYY-MM-DDTHH:mm`, como o campo). Sem correção automática: "Finalizar
+  // agora" antes do início grava e mostra o erro (o Salvar barra).
+  const setUnloadUnit = (unitId, changes) => edit((current) => patchCargoUnloadUnit(current, unitId, changes))
+  const startUnloadNow = (unitId) => setUnloadUnit(unitId, { startAt: toCargoDateTimeKeyLocal(new Date()) })
+  const finishUnloadNow = (unitId) => setUnloadUnit(unitId, { endAt: toCargoDateTimeKeyLocal(new Date()) })
+  const removeUnloadUnit = (unitId) => edit((current) => removeCargoUnloadUnit(current, unitId))
+
   // Tira a foto do item (vale no Salvar). Foto enviada por mim e ainda não salva: apaga o arquivo agora (melhor esforço).
   function removePhoto(rowId, photoId) {
     if (!canSave) return
@@ -339,6 +348,10 @@ export default function useCargoConferenceScreen({ process, profile }) {
     expectedUnits,
     setIssue,
     setLabel,
+    setUnloadUnit,
+    startUnloadNow,
+    finishUnloadNow,
+    removeUnloadUnit,
     patch,
     applySuggestedStatus,
     markAllOk,

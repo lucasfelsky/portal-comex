@@ -28798,3 +28798,87 @@ body.ccf-kbd .mobile-bottom-nav {
 .ccf-psheet__err:empty {
   display: none;
 }
+
+/* Conferencia por item (Fatia C): descarga por unidade (mock v5). Uma linha por conteiner (`.ccf-unit`, borda info em andamento),
+   a caixa do tempo total (numero em 26 px; o tempo corrido do aviso de sobreposicao e texto, nunca 26 px, e sem quebra) e o
+   erro de horarios da unidade. Botoes: `secondary-button` de 44 px. Sem media query: so tokens. */
+.ccf-unit {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.ccf-unit--run {
+  border-color: var(--info);
+}
+
+.ccf-unit__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ccf-unit__t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-subhead);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ccf-unit__t small {
+  display: block;
+  color: var(--text-muted);
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+
+.ccf-unit__act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ccf-unit__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.ccf-unit__err {
+  color: var(--danger-700);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ccf-total {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+}
+
+.ccf-total > b {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.ccf-total .ccf-note b {
+  white-space: nowrap;
+}

@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { buildConferencePayload } from '../../src/features/processes/cargoReportFormModel'
+import { buildClosedConferencePayload, buildConferencePayload } from '../../src/features/processes/cargoReportFormModel'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const RULES_PATH = join(HERE, '..', '..', 'firestore.rules')
@@ -265,6 +265,60 @@ describeEmulator('firestore.rules: conferencia por item (unitsByRowId, partialPa
     await seedConference(conference({ ...OLD_MAPS, ...NEW }))
     await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 2, ...OLD_MAPS, ...NEW })))
     await assertSucceeds(setDoc(doc(logistics(), CONF), conference({ revision: 3, ...OLD_MAPS, ...NEW })))
+  })
+
+  // Fatia C: o payload REAL da descarga por unidade (3 unidades, uma em andamento, + os calculados) com os carimbos do repositorio.
+  const UNLOAD3 = {
+    'CNT-1': { startAt: '2026-11-27T08:10', endAt: '2026-11-27T09:35' },
+    'CNT-2': { startAt: '2026-11-27T09:20', endAt: '2026-11-27T10:30' },
+    'CNT-3': { startAt: '2026-11-27T10:50', endAt: '' },
+  }
+  const UNLOAD3_TIMES = { unloadStartAt: '2026-11-27T08:10', unloadEndAt: '2026-11-27T10:30', receivedDate: '2026-11-27' }
+
+  it('Fatia C: payload REAL com unloadByUnit (3 unidades + calculados) e aceito ao salvar, ao salvar de novo e ao esvaziar as unidades', async () => {
+    await seedCurrent()
+    const input = { okByRowId: { 'r-0': true }, ...OLD_MAPS, unloadByUnit: UNLOAD3 }
+    const first = realPayload(input, 0)
+    expect(first).toMatchObject({ unloadByUnit: UNLOAD3, ...UNLOAD3_TIMES })
+    await assertSucceeds(setDoc(doc(logistics(), CONF), first))
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload(input, 1)))
+    const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+    expect(snapshot.data()).toMatchObject({ revision: 2, unloadByUnit: UNLOAD3, ...UNLOAD3_TIMES })
+    // Remover todas as unidades grava {} (a chave e pegajosa: some o conteudo, nao a chave) e o inicio/fim voltam a vazio.
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload({ ...input, unloadByUnit: {} }, 2)))
+    // Bundle sem a chave (payload de antes da fatia C) nao pode apagar a descarga ja gravada.
+    const legacyShape = realPayload(input, 3)
+    delete legacyShape.unloadByUnit
+    await assertFails(setDoc(doc(logistics(), CONF), legacyShape))
+  })
+
+  it('Fatia C: payload REAL de FECHAMENTO com unloadByUnit (3 unidades + calculados) e aceito (pior caso: doc ja com as 5 chaves)', async () => {
+    const input = { okByRowId: { 'r-0': true }, ...OLD_MAPS, unitsByRowId: NEW.unitsByRowId, partialPallets: NEW.partialPallets, unloadByUnit: UNLOAD3 }
+    await seedCurrent('concluido')
+    await seed((db) =>
+      setDoc(doc(db, `processes/${PID}/documents/doc-units`), {
+        type: 'cargoReport',
+        slotKey: 'cargoReport',
+        uploadedById: 'log-1',
+        uploadedAt: new Date('2026-11-01T11:30:00Z'),
+      })
+    )
+    await seedConference(conference({ ...OLD_MAPS, ...NEW, unloadByUnit: UNLOAD3, ...UNLOAD3_TIMES }))
+    const closed = {
+      ...buildClosedConferencePayload({ ...input, revision: 1 }, [{ id: 'r-0' }, { id: 'r-1' }], {
+        actorName: 'Logistica',
+        actorUid: 'log-1',
+        today: '2026-11-24',
+      }),
+      closedDocumentId: 'doc-units',
+      updatedAt: serverTimestamp(),
+      updatedById: 'log-1',
+      updatedByName: 'Logistica',
+    }
+    expect(closed).toMatchObject({ status: 'fechada', unloadByUnit: UNLOAD3, ...UNLOAD3_TIMES })
+    await assertSucceeds(setDoc(doc(logistics(), CONF), closed))
+    const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+    expect(snapshot.data()).toMatchObject({ status: 'fechada', unloadByUnit: UNLOAD3, ...UNLOAD3_TIMES })
   })
 
   it('custo B: negativas com controle positivo (fechar com nome de outro ator ou documento alheio falha; o valido passa)', async () => {

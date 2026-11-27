@@ -367,9 +367,9 @@ describe('logística: aba Recebimento', () => {
     expect(screen.queryByText('Observações', { selector: 'h3' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: 'Ressalvas e avarias' })).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value: '2026-11-24T08:10' } })
-    fireEvent.change(screen.getByLabelText('Fim da descarga'), { target: { value: '2026-11-24T09:40' } })
-    expect(screen.getByText('90 min')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Início da descarga · Descarga única'), { target: { value: '2026-11-24T08:10' } })
+    fireEvent.change(screen.getByLabelText('Fim da descarga · Descarga única'), { target: { value: '2026-11-24T09:40' } })
+    expect(document.querySelector('.ccf-total > b')).toHaveTextContent('1 h 30 min')
     expect(screen.getByText('24/11/2026')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Etiquetagem OK' }))
@@ -405,11 +405,11 @@ describe('logística: aba Recebimento', () => {
   it('descarga inválida (fim antes do início) mostra o erro, zera o tempo e não salva', async () => {
     const { user } = await renderScreen()
     await openReceipt(user)
-    fireEvent.change(screen.getByLabelText('Início da descarga'), { target: { value: '2026-11-24T10:00' } })
-    fireEvent.change(screen.getByLabelText('Fim da descarga'), { target: { value: '2026-11-24T09:00' } })
+    fireEvent.change(screen.getByLabelText('Início da descarga · Descarga única'), { target: { value: '2026-11-24T10:00' } })
+    fireEvent.change(screen.getByLabelText('Fim da descarga · Descarga única'), { target: { value: '2026-11-24T09:00' } })
     expect(screen.getByText('O fim da descarga deve ser igual ou posterior ao início.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Fim da descarga')).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.queryByText(/ min$/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Fim da descarga · Descarga única')).toHaveAttribute('aria-invalid', 'true')
+    expect(document.querySelector('.ccf-total > b')).toHaveTextContent('—')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     expect(await screen.findByText('Corrija o horário da descarga antes de salvar.')).toBeInTheDocument()
     expect(mockSaveConference).not.toHaveBeenCalled()
@@ -565,7 +565,7 @@ describe('conferência já fechada (logística)', () => {
 
     await openReceipt(user)
     expect(screen.getByRole('button', { name: 'Sem ressalva' })).toBeDisabled()
-    expect(screen.getByLabelText('Início da descarga')).toBeDisabled()
+    expect(screen.getByLabelText('Início da descarga · Descarga única')).toBeDisabled()
     // `conference.notes` antigo: só leitura, num bloco "Observações (registro antigo)".
     expect(screen.queryByRole('textbox', { name: 'Observações' })).not.toBeInTheDocument()
     expect(screen.getByText('Observações (registro antigo)')).toBeInTheDocument()
