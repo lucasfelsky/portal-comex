@@ -81,10 +81,10 @@ describe('total de pallets do COMEX', () => {
   it('summarizeCargoPallets: soma só as linhas preenchidas e compara com o total', () => {
     const conference = { ...EMPTY_CARGO_CONFERENCE, palletsByRowId: { 'r-1': 2, 'r-2': 3, 'r-3': 1, 'r-vazia': 9 } }
     const withEmpty = [...rows, createEmptyCargoReportRow('r-vazia')]
-    expect(summarizeCargoPallets(withEmpty, conference, 6)).toEqual({ counted: 6, expected: 6, state: 'confere', difference: 0 })
-    expect(summarizeCargoPallets(withEmpty, conference, 8)).toEqual({ counted: 6, expected: 8, state: 'divergente', difference: -2 })
-    expect(summarizeCargoPallets(withEmpty, conference, 4)).toEqual({ counted: 6, expected: 4, state: 'divergente', difference: 2 })
-    expect(summarizeCargoPallets(withEmpty, conference, null)).toEqual({ counted: 6, expected: null, state: 'semTotal', difference: 0 })
+    expect(summarizeCargoPallets(withEmpty, conference, 6)).toEqual({ counted: 6, partial: 0, expected: 6, state: 'confere', difference: 0 })
+    expect(summarizeCargoPallets(withEmpty, conference, 8)).toEqual({ counted: 6, partial: 0, expected: 8, state: 'divergente', difference: -2 })
+    expect(summarizeCargoPallets(withEmpty, conference, 4)).toEqual({ counted: 6, partial: 0, expected: 4, state: 'divergente', difference: 2 })
+    expect(summarizeCargoPallets(withEmpty, conference, null)).toEqual({ counted: 6, partial: 0, expected: null, state: 'semTotal', difference: 0 })
   })
 
   it('nada contado com total informado é divergente (0 gravado ou sem entrada)', () => {
@@ -230,5 +230,49 @@ describe('status sugerido pela avaria', () => {
     const result = applyCargoIssueStatusSuggestion(first, second)
     expect(result.suggested).toBe(false)
     expect(result.conference.receiptStatus).toBe('')
+  })
+})
+
+// ---------- Fatia B: pallets parciais no total da carga ----------
+
+describe('Fatia B: o pallet parcial entra no total de pallets da carga', () => {
+  const partial = (id, ...parts) => ({ id, parts: parts.map(([rowId, units]) => ({ rowId, units })) })
+
+  it('summarizeCargoPallets soma inteiros + parciais e devolve quantos parciais entraram (cada parcial conta 1, dividido ou não)', () => {
+    const conference = {
+      ...EMPTY_CARGO_CONFERENCE,
+      palletsByRowId: { 'r-1': 4, 'r-2': 3 },
+      partialPallets: [partial('pp1', ['r-1', 30], ['r-2', 20]), partial('pp2', ['r-3', 5])],
+    }
+    expect(summarizeCargoPallets(rows, conference, 9)).toEqual({ counted: 9, partial: 2, expected: 9, state: 'confere', difference: 0 })
+    expect(summarizeCargoPallets(rows, conference, 10)).toEqual({ counted: 9, partial: 2, expected: 10, state: 'divergente', difference: -1 })
+    expect(summarizeCargoPallets(rows, conference, null)).toMatchObject({ counted: 9, partial: 2, state: 'semTotal' })
+  })
+
+  it('D-6: parcial de linha removida some; com 1 parte que resta vira "pallet incompleto" e continua contando 1', () => {
+    const conference = {
+      ...EMPTY_CARGO_CONFERENCE,
+      partialPallets: [partial('pp1', ['r-1', 30], ['removida', 20]), partial('pp2', ['removida', 4])],
+    }
+    expect(summarizeCargoPallets(rows, conference, 1)).toMatchObject({ counted: 1, partial: 1, state: 'confere' })
+  })
+
+  it('o computador (formatCargoPalletsSummary) ganha " (inclui N parcial|parciais)" antes do ponto, nos 3 estados', () => {
+    expect(formatCargoPalletsSummary({ counted: 23, partial: 1, expected: 23, state: 'confere' })).toBe(
+      'Pallets da carga: 23 contados de 23 informados pelo COMEX (inclui 1 parcial).'
+    )
+    expect(formatCargoPalletsSummary({ counted: 22, partial: 2, expected: 25, state: 'divergente' })).toBe(
+      'Pallets da carga: 22 contados de 25 informados pelo COMEX (inclui 2 parciais). Divergente.'
+    )
+    expect(formatCargoPalletsSummary({ counted: 22, partial: 2, expected: 25, state: 'divergente' }, { withState: false })).toBe(
+      'Pallets da carga: 22 contados de 25 informados pelo COMEX (inclui 2 parciais).'
+    )
+    expect(formatCargoPalletsSummary({ counted: 3, partial: 1, expected: null, state: 'semTotal' })).toBe(
+      'Pallets da carga: 3 contados (inclui 1 parcial). Total não informado pelo COMEX.'
+    )
+    // Sem parciais (ou summary antigo sem a chave) o texto é o de sempre.
+    expect(formatCargoPalletsSummary({ counted: 3, partial: 0, expected: 3, state: 'confere' })).toBe(
+      'Pallets da carga: 3 contados de 3 informados pelo COMEX.'
+    )
   })
 })

@@ -8,7 +8,6 @@ import useMediaQuery from '../../hooks/useMediaQuery'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
 import {
   CARGO_PHOTOS_PER_CONFERENCE,
-  formatCargoPalletsSummary,
   listCargoIssueRows,
   readCargoRowIssue,
 } from './cargoConferenceIssues'
@@ -18,6 +17,8 @@ import { describeCargoRow } from './cargoConferenceModel'
 import CargoConferenceItemList from './CargoConferenceItemList'
 import CargoConferenceItemView from './CargoConferenceItemView'
 import CargoConferenceReceiptPanel from './CargoConferenceReceiptPanel'
+import CargoPartialPalletSheet from './CargoPartialPalletSheet'
+import { formatCargoPalletsStrip } from './cargoConferenceUnits'
 import { CARGO_STAGE } from './cargoReportFormModel'
 import { getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { getDerivedStatusToneClass, getProcessDerivedStatus } from './processDerivedStatus'
@@ -32,7 +33,9 @@ import { readCargoScrollTop, writeCargoScrollTop } from './useCargoStickyStuck'
 // conferência fechada e papel admin.
 // Conferência por item (Fatia A): a aba Itens lista só os ITENS (com busca); a tela do item (parâmetro de URL `item`,
 // D-14) mostra todos os lotes dele. A busca e o "Só pendentes" vivem aqui e sobrevivem a abrir e voltar do item; a
-// rolagem da lista é restaurada ao voltar. "Próximo item" anda pelos itens da busca. Nenhum dado novo.
+// rolagem da lista é restaurada ao voltar. "Próximo item" anda pelos itens da busca.
+// Fatia B: a folha "Pallet parcial" (aberta pelo botão de um lote) é montada aqui; a faixa da lista conta os pallets com os
+// parciais ("N pallets contados de M informados pelo COMEX (inclui K parciais)").
 
 const TABS = [
   { value: 'itens', label: 'Itens' },
@@ -59,6 +62,11 @@ function renderActionBar(children, aboveNav) {
   )
 }
 
+// "Poliol Flex 3000 · L-2232" (sem lote: "· sem lote"), como o mock mostra na folha.
+function describePartialLot({ name, lot }) {
+  return `${name} · ${lot || 'sem lote'}`
+}
+
 const PALLETS_BADGES = {
   divergente: { className: 'ccf-badge ccf-badge--warn', label: 'Divergente' },
   confere: { className: 'ccf-badge ccf-badge--ok', label: 'Confere' },
@@ -78,7 +86,7 @@ function ProgressLine({ itemsDone, itemsTotal, lotsDone, lotsTotal, process, pal
         {describeCargoConferenceCategory(process?.category)} · {describeCargoConferenceSupplier(process)}
       </p>
       <p className="ccf-pallets">
-        <span>{formatCargoPalletsSummary(pallets, { withState: false })}</span>
+        <span>{formatCargoPalletsStrip(pallets)}</span>
         <span className={badge.className}>{badge.label}</span>
         {photoCount > 0 ? <span>{`${photoCount} de ${CARGO_PHOTOS_PER_CONFERENCE} fotos de avaria`}</span> : null}
       </p>
@@ -101,6 +109,9 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const [pinnedKeys, setPinnedKeys] = useState(() => new Set())
   // Etiquetas, fotos e avaria: aberto/fechado por lote (sem valor = abre sozinho quando há avaria).
   const [detailsOpen, setDetailsOpen] = useState({})
+  // Folha "Pallet parcial": { rowId, itemKey } do lote que a abriu. Vale só para o item em que foi aberta: trocar de item
+  // (voltar do aparelho, Próximo item, voltar aos itens) a fecha sem efeito colateral.
+  const [sheet, setSheet] = useState(null)
   const rootRef = useRef(null)
   const listScroll = useRef(0)
   const shownKey = useRef('')
@@ -117,6 +128,11 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const itemKey = searchParams.get('item') ?? ''
   const activeItem = isReady && itemKey ? (model.itemByKey.get(itemKey) ?? null) : null
   const activeKey = activeItem?.key ?? ''
+
+  // Sair do item que abriu a folha (voltar do aparelho, "Voltar aos itens", Próximo item) ZERA a folha: reabrir o mesmo item não
+  // a traz de volta (ajuste de estado na renderização, sem efeito).
+  if (sheet && sheet.itemKey !== activeKey) setSheet(null)
+  const sheetRowId = sheet && sheet.itemKey === activeKey ? sheet.rowId : ''
 
   const pinRow = (rowId) => {
     const key = model.keyByRowId.get(rowId)
@@ -368,6 +384,8 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
     const cards = {
       conference,
       derived: screen.derived,
+      expectedUnits: screen.expectedUnits,
+      infoByRowId: model.infoByRowId,
       awaitingCount,
       editable: screen.canSave,
       photoTools: screen.photoTools,
@@ -378,6 +396,10 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
           setDetailsOpen((current) => (current[rowId] === open ? current : { ...current, [rowId]: open })),
         toggleOk: withPin(screen.toggleOk),
         stepPallets: withPin(screen.stepPallets),
+        stepUnits: withPin(screen.stepUnits),
+        setUnits: withPin(screen.setUnits),
+        openPartial: (rowId) => setSheet({ rowId, itemKey: activeKey }),
+        removePartial: screen.removePartialPallet,
         setIssue: withPin(screen.setIssue),
         setLabel: withPin(screen.setLabel),
         pin: pinRow,
@@ -393,6 +415,19 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
           onBack={backToItems}
         />
         {renderActionBar(actions, aboveNav)}
+        {sheetRowId && model.infoByRowId.has(sheetRowId) ? (
+          <CargoPartialPalletSheet
+            rowId={sheetRowId}
+            lotLabel={describePartialLot(model.infoByRowId.get(sheetRowId))}
+            options={rows
+              .filter((candidate) => candidate.id !== sheetRowId && model.infoByRowId.has(candidate.id))
+              .map((candidate) => ({ rowId: candidate.id, label: describePartialLot(model.infoByRowId.get(candidate.id)) }))}
+            onAdd={(parts) => {
+              if (screen.addPartialPallet(parts)) setSheet(null)
+            }}
+            onClose={() => setSheet(null)}
+          />
+        ) : null}
       </div>
     )
   }
@@ -432,6 +467,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
             <CargoConferenceItemList
               model={model}
               conference={conference}
+              expectedUnits={screen.expectedUnits}
               query={query}
               onQueryChange={setQuery}
               canSave={screen.canSave}

@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { buildConferencePayload } from '../../src/features/processes/cargoReportFormModel'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const RULES_PATH = join(HERE, '..', '..', 'firestore.rules')
@@ -112,6 +113,35 @@ describeEmulator('firestore.rules: conferencia por item (unitsByRowId, partialPa
     await assertSucceeds(
       setDoc(doc(logistics(), CONF), conference({ revision: 2, unitsByRowId: {}, partialPallets: [], unloadByUnit: {} }))
     )
+  })
+
+  // Fatia B: o payload REAL do app (`buildConferencePayload`, o mesmo do celular e do computador) + os carimbos do repositório.
+  const realPayload = (input, revision) => ({
+    ...buildConferencePayload({ ...input, revision }, [{ id: 'r-0' }, { id: 'r-1' }], { actorName: 'Logistica' }),
+    updatedAt: serverTimestamp(),
+    updatedById: 'log-1',
+    updatedByName: 'Logistica',
+  })
+
+  it('payload REAL de buildConferencePayload com unitsByRowId e partialPallets é aceito (criar e salvar de novo) e volta intacto', async () => {
+    await seedCurrent()
+    const input = { okByRowId: { 'r-0': true }, palletsByRowId: { 'r-0': 3 }, unitsByRowId: NEW.unitsByRowId, partialPallets: NEW.partialPallets }
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload(input, 0)))
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload(input, 1)))
+    const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+    expect(snapshot.data()).toMatchObject({ revision: 2, unitsByRowId: NEW.unitsByRowId, partialPallets: NEW.partialPallets })
+  })
+
+  it('payload REAL com as chaves VAZIAS (nunca usou unidades) é aceito e as chaves passam a existir (pegajosas)', async () => {
+    await seedCurrent()
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload({ okByRowId: { 'r-0': true } }, 0)))
+    const snapshot = await assertSucceeds(getDoc(doc(admin(), CONF)))
+    expect(snapshot.data()).toMatchObject({ unitsByRowId: {}, partialPallets: [] })
+    // Conferência antiga (sem as chaves) seguida do primeiro payload real do app novo.
+    await testEnv.clearFirestore()
+    await seedCurrent()
+    await seedConference(conference())
+    await assertSucceeds(setDoc(doc(logistics(), CONF), realPayload({ okByRowId: { 'r-0': true } }, 1)))
   })
 
   it('cada chave isolada passa (as outras ficam ausentes)', async () => {

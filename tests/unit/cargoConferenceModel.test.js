@@ -22,14 +22,16 @@ const rows = [
 ]
 
 describe('estado vazio e chave de "sujo"', () => {
-  it('EMPTY_CARGO_CONFERENCE tem as 21 chaves da conferência lida, aberta e vazia', () => {
-    expect(Object.keys(EMPTY_CARGO_CONFERENCE)).toHaveLength(21)
+  it('EMPTY_CARGO_CONFERENCE tem as 23 chaves da conferência lida, aberta e vazia (Fatia B: unidades e pallets parciais)', () => {
+    expect(Object.keys(EMPTY_CARGO_CONFERENCE)).toHaveLength(23)
     expect(EMPTY_CARGO_CONFERENCE).toMatchObject({
       revision: 0,
       status: CARGO_CONFERENCE_STATUS.open,
       okByRowId: {},
       countOkByRowId: {},
       palletsByRowId: {},
+      unitsByRowId: {},
+      partialPallets: [],
       damageByRowId: {},
       labelsByRowId: {},
       nfNumber: '',
@@ -75,7 +77,8 @@ describe('estado vazio e chave de "sujo"', () => {
     }
     expect(cargoConferenceKey(conference, rows.slice(0, 1))).toBe(
       JSON.stringify({
-        marks: [['r-1', true, false, null, false, '', [], 'W1', 'S1']],
+        marks: [['r-1', true, false, null, false, '', [], 'W1', 'S1', null]],
+        partials: [],
         receiptStatus: 'sem_ressalva',
         receivedDate: '',
         unloadStartAt: '',
@@ -368,5 +371,97 @@ describe('evaluateCargoConferenceClose: foto sem observação (S10-J1b)', () => 
       '1 item com foto, mas sem observação',
       'Status do recebimento não informado',
     ])
+  })
+})
+
+// ---------- Fatia B: unidades por lote e pallet parcial ----------
+
+describe('Fatia B: o pallet parcial vale como pallet contado', () => {
+  const partial = { id: 'pp1', parts: [{ rowId: 'r-1', units: 30 }, { rowId: 'r-2', units: 20 }] }
+
+  it('lote conferido = OK? + pelo menos 1 pallet inteiro OU parcial (nos DOIS lotes do parcial)', () => {
+    const conference = {
+      ...EMPTY_CARGO_CONFERENCE,
+      okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
+      palletsByRowId: { 'r-1': 0, 'r-3': 0 },
+      partialPallets: [partial],
+    }
+    expect(isCargoRowConferred(conference, 'r-1')).toBe(true)
+    expect(isCargoRowConferred(conference, 'r-2')).toBe(true)
+    // r-3 não está em parcial e tem 0 inteiro: não conta.
+    expect(isCargoRowConferred(conference, 'r-3')).toBe(false)
+    expect(summarizeCargoConferenceProgress(rows, conference)).toEqual({ done: 2, total: 3 })
+  })
+
+  it('sem OK? o parcial sozinho não confere o lote', () => {
+    const conference = { ...EMPTY_CARGO_CONFERENCE, partialPallets: [partial] }
+    expect(isCargoRowConferred(conference, 'r-1')).toBe(false)
+  })
+
+  it('o pallet incompleto (1 parte) também conta', () => {
+    const conference = {
+      ...EMPTY_CARGO_CONFERENCE,
+      okByRowId: { 'r-1': true },
+      partialPallets: [{ id: 'pp2', parts: [{ rowId: 'r-1', units: 5 }] }],
+    }
+    expect(isCargoRowConferred(conference, 'r-1')).toBe(true)
+  })
+})
+
+describe('Fatia B: pendência "N lote(s) com unidades divergentes" (D-16: não bloqueia)', () => {
+  const complete = {
+    ...EMPTY_CARGO_CONFERENCE,
+    receiptStatus: 'com_ressalva',
+    unloadStartAt: '2026-11-24T08:00',
+    unloadEndAt: '2026-11-24T09:00',
+    labelingOk: true,
+    nfNumber: '48213',
+    okByRowId: { 'r-1': true, 'r-2': true, 'r-3': true },
+    palletsByRowId: { 'r-1': 2, 'r-2': 3, 'r-3': 1 },
+  }
+  const expectedUnitsByRowId = { 'r-1': 100, 'r-2': 200, 'r-3': null }
+
+  it('1 lote divergente: pendência e frase curta iguais ("1 lote com unidades divergentes"), sem bloqueio', () => {
+    const conference = { ...complete, unitsByRowId: { 'r-1': 90, 'r-2': 200 } }
+    const result = evaluateCargoConferenceClose(rows, conference, { expectedPallets: 6, expectedUnitsByRowId })
+    expect(result).toEqual({ blocking: [], pendings: ['1 lote com unidades divergentes'], hints: ['1 lote com unidades divergentes'] })
+  })
+
+  it('vários lotes: plural; sem esperado (D-11), com 0 e sem contagem o lote não diverge', () => {
+    const two = { ...complete, unitsByRowId: { 'r-1': 90, 'r-2': 201, 'r-3': 7 } }
+    expect(evaluateCargoConferenceClose(rows, two, { expectedPallets: 6, expectedUnitsByRowId }).pendings).toEqual([
+      '2 lotes com unidades divergentes',
+    ])
+    const none = { ...complete, unitsByRowId: { 'r-1': 0, 'r-3': 7 } }
+    expect(evaluateCargoConferenceClose(rows, none, { expectedPallets: 6, expectedUnitsByRowId }).pendings).toEqual([])
+  })
+
+  it('sem o esperado nas opções (computador antigo) a pendência não existe; unidades iguais ao esperado também não', () => {
+    const conference = { ...complete, unitsByRowId: { 'r-1': 90 } }
+    expect(evaluateCargoConferenceClose(rows, conference, { expectedPallets: 6 }).pendings).toEqual([])
+    const equal = { ...complete, unitsByRowId: { 'r-1': 100, 'r-2': 200 } }
+    expect(evaluateCargoConferenceClose(rows, equal, { expectedPallets: 6, expectedUnitsByRowId }).pendings).toEqual([])
+  })
+
+  it('só as linhas preenchidas entram; a pendência convive com a divergência de pallets', () => {
+    const conference = { ...complete, unitsByRowId: { 'r-1': 90, 'r-vazia': 7 }, damageByRowId: { 'r-3': { flagged: true, note: 'Caixa molhada', photos: [] } } }
+    const result = evaluateCargoConferenceClose([...rows, createEmptyCargoReportRow('r-vazia')], conference, {
+      expectedPallets: 8,
+      expectedUnitsByRowId: { ...expectedUnitsByRowId, 'r-vazia': 50 },
+    })
+    expect(result.blocking).toEqual([])
+    expect(result.pendings).toEqual([
+      '1 lote com unidades divergentes',
+      'Pallets divergentes: 6 contados de 8 informados pelo COMEX (com observação)',
+    ])
+  })
+
+  it('o parcial entra na soma de pallets do fechamento (cada parcial conta 1)', () => {
+    const conference = {
+      ...complete,
+      palletsByRowId: { 'r-1': 1, 'r-2': 2, 'r-3': 1 },
+      partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r-1', units: 30 }, { rowId: 'r-2', units: 20 }] }],
+    }
+    expect(evaluateCargoConferenceClose(rows, conference, { expectedPallets: 5 })).toEqual({ blocking: [], pendings: [], hints: [] })
   })
 })

@@ -24,6 +24,7 @@ import {
 import { hasAnyCargoIssue } from './cargoConferenceIssues'
 import { evaluateCargoConferenceClose } from './cargoConferenceModel'
 import { countCargoPhotos } from './cargoConferencePhotos'
+import { expectedUnitsFromDerived } from './cargoConferenceUnits'
 import CargoReportPrintSheet from './CargoReportPrintSheet'
 import {
   CARGO_REPORT_ATTACHED_NOT_SAVED_CODE,
@@ -38,11 +39,13 @@ import {
   canReopenCargoConference,
   canReopenCargoReportComex,
   canSaveCargoConference,
+  deriveCargoReportRow,
   fromConferenceDoc,
   toCargoDateKey,
   validateCargoUnload,
 } from './cargoReportFormModel'
 import { buildCargoReportSheet, describeCargoReportAlerts } from './cargoReportSheet'
+import { cargoPackagingContext } from './cargoSupplierPackaging'
 
 // S4/S7 do Relatório de Carga: diálogos de "Salvar e fechar" (COMEX) e "Salvar e fechar conferência"
 // (logística) e a barra de ações do formulário (Exportar Excel, Imprimir / Salvar PDF, salvar, fechar e
@@ -425,7 +428,12 @@ export function CargoReportActionBar({
 
   // S10-I: bloqueio (divergência de pallets sem observação) e pendências do fechamento; só o computador fecha.
   function evaluateClose() {
-    return evaluateCargoConferenceClose(form.rows, conference, { expectedPallets: form.expectedPallets })
+    // Fatia B: o esperado das unidades por lote (Nº de emb. inteiro) alimenta a pendência "N lotes com unidades divergentes".
+    const derived = form.rows.map((row) => deriveCargoReportRow(row, catalog, cargoPackagingContext(packaging, row.id)))
+    return evaluateCargoConferenceClose(form.rows, conference, {
+      expectedPallets: form.expectedPallets,
+      expectedUnitsByRowId: expectedUnitsFromDerived(form.rows, derived),
+    })
   }
 
   function finishClosedConference(payload, documentId) {

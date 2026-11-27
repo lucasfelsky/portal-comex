@@ -1,3 +1,4 @@
+import { countCargoPartialPallets, describeCargoPartialCount } from './cargoConferenceUnits'
 import { isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S10-I do Relatório de Carga: contador de pallets por item, total de pallets informado pelo COMEX, observação de
@@ -166,13 +167,18 @@ export function hasCargoRowIssueNote(conference, rowId) {
 
 // ---------- soma x total do COMEX ----------
 
-// { counted, expected, state: 'semTotal' | 'confere' | 'divergente', difference }. Só as linhas preenchidas entram na
-// soma; `expectedPallets` não inteiro 1..9999 = sem total. Divergente = soma diferente do total (inclusive 0 contados).
+// { counted, partial, expected, state: 'semTotal' | 'confere' | 'divergente', difference }. Só as linhas preenchidas entram
+// na soma; `expectedPallets` não inteiro 1..9999 = sem total. Divergente = soma diferente do total (inclusive 0 contados).
+// Fatia B: `counted` = pallets inteiros + pallets PARCIAIS (cada parcial conta 1, mesmo dividido entre dois lotes) e
+// `partial` = quantos parciais entraram (a parte de linha que saiu do relatório não conta, D-6).
 export function summarizeCargoPallets(rows, conference, expectedPallets) {
-  const counted = filledRows(rows).reduce((sum, row) => sum + (cargoRowPallets(conference, row.id).count ?? 0), 0)
+  const filled = filledRows(rows)
+  const whole = filled.reduce((sum, row) => sum + (cargoRowPallets(conference, row.id).count ?? 0), 0)
+  const partial = countCargoPartialPallets(conference, filled.map((row) => row.id))
+  const counted = whole + partial
   const expected = readExpectedPallets(expectedPallets)
-  if (expected === null) return { counted, expected, state: 'semTotal', difference: 0 }
-  return { counted, expected, state: counted === expected ? 'confere' : 'divergente', difference: counted - expected }
+  if (expected === null) return { counted, partial, expected, state: 'semTotal', difference: 0 }
+  return { counted, partial, expected, state: counted === expected ? 'confere' : 'divergente', difference: counted - expected }
 }
 
 function palletsWord(count, singular, pluralForm) {
@@ -180,11 +186,13 @@ function palletsWord(count, singular, pluralForm) {
 }
 
 // "Pallets da carga: 23 contados de 25 informados pelo COMEX." Com `withState` (padrão), a divergência fecha com
-// " Divergente."; o celular passa `withState: false` porque mostra o selo ao lado.
+// " Divergente."; o celular passa `withState: false` porque mostra o selo ao lado. Com parciais, o texto ganha
+// " (inclui N parcial|parciais)" antes do ponto (o número já os inclui, D-7).
 export function formatCargoPalletsSummary(summary, { withState = true } = {}) {
   const counted = palletsWord(summary.counted, 'contado', 'contados')
-  if (summary.state === 'semTotal') return `Pallets da carga: ${counted}. Total não informado pelo COMEX.`
-  const base = `Pallets da carga: ${counted} de ${palletsWord(summary.expected, 'informado', 'informados')} pelo COMEX.`
+  const partial = summary.partial > 0 ? ` (inclui ${describeCargoPartialCount(summary.partial)})` : ''
+  if (summary.state === 'semTotal') return `Pallets da carga: ${counted}${partial}. Total não informado pelo COMEX.`
+  const base = `Pallets da carga: ${counted} de ${palletsWord(summary.expected, 'informado', 'informados')} pelo COMEX${partial}.`
   return summary.state === 'divergente' && withState ? `${base} Divergente.` : base
 }
 

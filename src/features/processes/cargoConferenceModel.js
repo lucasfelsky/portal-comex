@@ -5,6 +5,12 @@ import {
   summarizeCargoPallets,
 } from './cargoConferenceIssues'
 import { countCargoRowsWithPhotoWithoutNote } from './cargoConferencePhotos'
+import {
+  getCargoRowUnits,
+  isCargoRowUnitsDivergent,
+  listCargoPartialPallets,
+  partialPalletsOfRow,
+} from './cargoConferenceUnits'
 import { CARGO_CONFERENCE_STATUS, isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S9-F do Relatório de Carga: regras da conferência da logística compartilhadas entre o formulário do computador
@@ -17,6 +23,8 @@ export const EMPTY_CARGO_CONFERENCE = {
   okByRowId: {},
   countOkByRowId: {},
   palletsByRowId: {},
+  unitsByRowId: {},
+  partialPallets: [],
   damageByRowId: {},
   labelsByRowId: {},
   checkedByName: '',
@@ -52,10 +60,12 @@ export function cargoConferenceKey(conference, rows) {
     (conference.damageByRowId?.[row.id]?.photos ?? []).map((photo) => photo?.id),
     String(conference.labelsByRowId?.[row.id]?.wms ?? '').trim(),
     String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
+    getCargoRowUnits(conference, row.id),
   ])
   // "Conferido por" é automático (não digitado): fora da chave. O rodapé do recebimento entra.
   return JSON.stringify({
     marks,
+    partials: listCargoPartialPallets(conference, rows.map((row) => row.id)),
     receiptStatus: conference.receiptStatus ?? '',
     receivedDate: conference.receivedDate ?? '',
     unloadStartAt: conference.unloadStartAt ?? '',
@@ -89,10 +99,11 @@ export function markAllCargoRowsOk(conference, rows) {
   return { ...conference, okByRowId }
 }
 
-// Linha conferida = OK? marcado e pelo menos 1 pallet contado. Relatório antigo (Contagem OK, sem número) conta como
-// contado enquanto a linha não ganha um número.
+// Linha conferida = OK? marcado e pelo menos 1 pallet contado, INTEIRO ou PARCIAL (Fatia B: o pallet parcial vale como
+// pallet contado). Relatório antigo (Contagem OK, sem número) conta como contado enquanto a linha não ganha um número.
 export function isCargoRowConferred(conference, rowId) {
   if (conference?.okByRowId?.[rowId] !== true) return false
+  if (partialPalletsOfRow(conference, rowId).length > 0) return true
   const { count, legacyOk } = cargoRowPallets(conference, rowId)
   return count !== null ? count >= 1 : legacyOk
 }
@@ -114,10 +125,16 @@ function lowerFirst(text) {
 //   blocking: impede o fechar (divergência de pallets sem observação escrita em nenhum item);
 //   pendings: avisos que não bloqueiam ("Dá para fechar assim");
 //   hints: os mesmos pontos em frase curta, para o aviso do celular ao salvar (bloqueio primeiro).
-export function evaluateCargoConferenceClose(rows, conference, { expectedPallets = null } = {}) {
+// `expectedUnitsByRowId` (Fatia B, opcional): { [rowId]: Nº de emb. inteiro | null }; os lotes com unidades contadas
+// diferentes do esperado entram como pendência "N lote(s) com unidades divergentes" (D-16: não bloqueia; sem esperado,
+// sem contagem ou 0 não diverge).
+export function evaluateCargoConferenceClose(rows, conference, { expectedPallets = null, expectedUnitsByRowId = null } = {}) {
   const filled = (Array.isArray(rows) ? rows : []).filter((row) => !isCargoReportRowEmpty(row))
   const summary = summarizeCargoPallets(filled, conference, expectedPallets)
   const withoutMark = filled.filter((row) => !isCargoRowConferred(conference, row.id)).length
+  const unitsDivergent = filled.filter((row) =>
+    isCargoRowUnitsDivergent(getCargoRowUnits(conference, row.id), expectedUnitsByRowId?.[row.id])
+  ).length
   const issueCount = filled.filter((row) => hasCargoRowIssue(conference, row.id)).length
   const hasNote = filled.some((row) => hasCargoRowIssueNote(conference, row.id))
   const photoWithoutNote = countCargoRowsWithPhotoWithoutNote(filled, conference)
@@ -142,6 +159,7 @@ export function evaluateCargoConferenceClose(rows, conference, { expectedPallets
           `${plural(withoutMark, 'item', 'itens')} sem OK? ou sem pallets`,
         ]
       : null,
+    unitsDivergent > 0 ? [`${plural(unitsDivergent, 'lote', 'lotes')} com unidades divergentes`] : null,
     summary.state === 'divergente' && hasNote
       ? [
           `Pallets divergentes: ${palletsText} (com observação)`,
