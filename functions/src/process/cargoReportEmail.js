@@ -8,7 +8,7 @@
 // (clientes que bloqueiam imagem) e na versao texto puro; o processo vai no
 // ASSUNTO e no texto puro.
 //
-// Modulo PURO: so' importa `node:url` e `./cargoReportNotification.js`. Sem
+// Modulo PURO: so' importa `node:url`, `./cargoReportNotification.js` e `./cargoConferenceCount.js` (tambem puro). Sem
 // SDK do Firebase, sem cliente SMTP e sem o modulo `core` compartilhado (mesmo
 // padrao dos demais modulos puros de `functions/src/process/`: importavel por
 // teste e pelo script de pre-visualizacao sem mocks nem secrets). Devolve
@@ -22,6 +22,7 @@
 // `functions/` inteira, entao `functions/assets/email/` vai junto.
 
 import { fileURLToPath } from 'node:url'
+import { parseCargoConferenceCountLines } from './cargoConferenceCount.js'
 import {
   CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX,
   CARGO_REPORT_NOTIFICATION_BODY,
@@ -56,6 +57,9 @@ const CONFERENCE_BANNER_BG = '#144155'
 const DAMAGE_TITLE = '#144155'
 const DAMAGE_TEXT = '#3d4f57'
 const DAMAGE_BORDER = '#d6e0e3'
+// Fatia D: pilula ambar da divergencia de unidades ("faltam 10", "2 a mais").
+const COUNT_PILL_BG = '#FDF3DC'
+const COUNT_PILL_TEXT = '#8A5A0A'
 
 // Mesma semantica de `escapeHtml` do modulo `core` compartilhado, duplicada
 // aqui para manter este modulo puro.
@@ -208,12 +212,67 @@ ${paragraphs}
 </tr>`
 }
 
+// Fatia D: secao "Contagem" (1 <tr> do container, ANTES de "Avarias e ressalvas"), mesmo cartao das avarias. Os blocos
+// vem de `parseCargoConferenceCountLines` (formato fixo das linhas do aviso): subtitulo = cabecalho sem "Contagem: ";
+// sublista em maiusculas pequenas; parcial com "(N un.)" em negrito; lote divergente com contado/esperado em negrito e
+// pilula ambar. Tudo escapado com `escapeEmailHtml`; linha fora do formato vira paragrafo simples (sem perder conteudo).
+function buildCountSectionHtml(blocks, tableAttrs) {
+  const paragraph = (html) =>
+    `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:14px;line-height:21px;color:${DAMAGE_TEXT};">${html}</p>`
+  const sublist = (text) =>
+    `<p style="margin:6px 0 6px 0;font-family:${FONT};font-size:12px;font-weight:700;letter-spacing:.04em;line-height:18px;color:${DAMAGE_TITLE};text-transform:uppercase;">${escapeEmailHtml(text)}</p>`
+  const pill = (text) =>
+    ` <span style="display:inline-block;padding:1px 8px;border-radius:999px;background-color:${COUNT_PILL_BG};color:${COUNT_PILL_TEXT};font-family:${FONT};font-size:12px;font-weight:700;line-height:18px;white-space:nowrap;">${escapeEmailHtml(text)}</span>`
+
+  let subtitle = ''
+  const paragraphs = []
+  for (const block of blocks) {
+    if (block.kind === 'heading') {
+      subtitle = block.text
+    } else if (block.kind === 'label') {
+      paragraphs.push(sublist(block.text))
+    } else if (block.kind === 'partial') {
+      const parts = block.parts.map((part) => `${escapeEmailHtml(part.label)} <b>(${part.units} un.)</b>`)
+      paragraphs.push(paragraph(`• ${parts.join(' + ')}`))
+    } else if (block.kind === 'divergent') {
+      const counted = `<b>${block.counted}</b> ${block.counted === 1 ? 'contada' : 'contadas'}`
+      const expected = `<b>${block.expected}</b> ${block.expected === 1 ? 'esperada' : 'esperadas'}`
+      paragraphs.push(paragraph(`• ${escapeEmailHtml(block.label)}: ${counted} de ${expected}${pill(block.difference)}`))
+    } else {
+      paragraphs.push(paragraph(escapeEmailHtml(block.text)))
+    }
+  }
+  const subtitleHtml = subtitle
+    ? `\n<div style="margin-top:4px;font-size:13px;font-weight:400;line-height:19px;color:${DAMAGE_TEXT};">${escapeEmailHtml(subtitle)}</div>`
+    : ''
+  return `
+<tr>
+<td align="center" style="padding:16px 0 0 0;">
+<table ${tableAttrs} width="600" class="sq-container" style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid ${DAMAGE_BORDER};border-radius:14px;">
+<tr>
+<td align="left" style="padding:18px 22px 10px 22px;font-family:${FONT};font-size:16px;font-weight:600;line-height:22px;color:${DAMAGE_TITLE};">
+Contagem${subtitleHtml}
+</td>
+</tr>
+<tr>
+<td align="left" style="padding:0 22px 12px 22px;">
+${paragraphs.join('\n')}
+</td>
+</tr>
+</table>
+</td>
+</tr>`
+}
+
 // S7: e-mail do fechamento da conferencia da logistica (`process_cargo_report_conference`). Mesma estrutura do
 // e-mail do COMEX (container 600, banner por CID, botao, rodape); mudam a arte, o `alt`, o preheader e o texto puro.
 // `subject` = assunto ja montado por `buildCargoReportConferenceSubject`.
 // S10-J2: `damageLines` (linhas da secao "Avarias e ressalvas", de `buildCargoConferenceDamageLines`). Com linhas, entram
 // uma tabela de 600 px entre o botao e o rodape e as linhas no texto puro, antes do link; SEM linhas, `html`, `text` e
 // `attachments` saem IDENTICOS aos de antes (teste de igualdade). Cada linha e' escapada; fotos nao viajam no e-mail.
+// Fatia D: `countLines` (linhas da secao "Contagem", de `buildCargoConferenceCountLines` ou do corpo da notificacao via
+// `extractCargoConferenceCountLines`): entram ANTES das avarias (cartao proprio no HTML, com pilula ambar; linhas no
+// texto puro). Sem linhas validas, nada muda (mesmo teste de igualdade).
 export function buildCargoReportConferenceEmail({
   subject: rawSubject,
   processId,
@@ -221,6 +280,7 @@ export function buildCargoReportConferenceEmail({
   appUrl = DEFAULT_APP_URL,
   bannerSrc,
   damageLines = [],
+  countLines = [],
 } = {}) {
   const subject = sanitizeCargoReportText(rawSubject) || CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX
   const label = extractCargoReportProcessLabel(subject)
@@ -231,6 +291,9 @@ export function buildCargoReportConferenceEmail({
   const damageList = (Array.isArray(damageLines) ? damageLines : [])
     .map((line) => (typeof line === 'string' ? line.trim() : ''))
     .filter(Boolean)
+  const countList = (Array.isArray(countLines) ? countLines : [])
+    .map((line) => (typeof line === 'string' ? line.trim() : ''))
+    .filter(Boolean)
 
   const text = [
     greeting,
@@ -238,6 +301,7 @@ export function buildCargoReportConferenceEmail({
     CARGO_CONFERENCE_EMAIL_TEXT,
     '',
     ...(label ? [`Processo: ${label}`, ''] : []),
+    ...(countList.length > 0 ? [...countList, ''] : []),
     ...(damageList.length > 0 ? [...damageList, ''] : []),
     'Abra o processo no Portal COMEX (aba Documentos):',
     url,
@@ -268,6 +332,8 @@ export function buildCargoReportConferenceEmail({
   const safeImgSrc = escapeEmailHtml(imgSrc)
   const tableAttrs = 'role="presentation" cellpadding="0" cellspacing="0" border="0"'
   const damageSectionHtml = damageList.length > 0 ? buildDamageSectionHtml(damageList, tableAttrs) : ''
+  const countSectionHtml =
+    countList.length > 0 ? buildCountSectionHtml(parseCargoConferenceCountLines(countList), tableAttrs) : ''
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml">
@@ -304,7 +370,7 @@ export function buildCargoReportConferenceEmail({
 </tr>
 </table>
 </td>
-</tr>${damageSectionHtml}
+</tr>${countSectionHtml}${damageSectionHtml}
 <tr>
 <td align="center" style="padding:20px 12px 0 12px;font-family:${FONT};font-size:12px;line-height:18px;color:${FOOTER_TEXT};text-align:center;">
 E-mail automático do Portal COMEX

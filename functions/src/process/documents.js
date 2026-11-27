@@ -29,7 +29,9 @@
 //   `./cargoReportNotification.js`. S10-J2: no estagio da conferencia, (1) trava contra aviso duplicado
 //   (transacao em `cargoReport/conferenceNotice`, por `documentId`), (2) quando ha avaria registrada, o aviso
 //   ganha a secao "Avarias e ressalvas" (itens, observacao, nº de fotos; lida de `cargoReport/conference` +
-//   `current`; falha de leitura = aviso de hoje). Estagio COMEX: intacto.
+//   `current`; falha de leitura = aviso de hoje). Fatia D: o aviso ganha tambem a secao "Contagem" (pallets
+//   parciais e lotes com unidades divergentes, ANTES de Avarias) e o assunto/titulo ganha " (com divergências)" so' com
+//   unidades divergentes. Estagio COMEX: intacto.
 //
 // Este arquivo pode importar `firebase-admin`/`firebase-functions` (ao
 // contrario de `milestones.js`, que fica puro por causa do teste sem
@@ -62,9 +64,8 @@ import {
 } from './cargoReportNotification.js';
 import { buildCargoReportConferenceEmail, buildCargoReportEmail } from './cargoReportEmail.js';
 import {
-  buildCargoConferenceDamageLines,
   buildCargoConferenceDamageText,
-  summarizeCargoConferenceDamage,
+  buildCargoConferenceNoticeSections,
 } from './cargoConferenceDamage.js';
 import {
   APP_URL,
@@ -382,18 +383,18 @@ async function claimCargoConferenceNotice(firestore, processId, documentId) {
   }
 }
 
-// S10-J2: resumo das avarias da conferencia para o aviso (le `conference` + `current`: 2 leituras). Qualquer falha ou doc
-// ausente = `null` (aviso de hoje, sem a secao); o log leva so' o id do processo e o codigo do erro.
-async function readCargoConferenceDamageSummary(firestore, processId) {
+// S10-J2 + Fatia D: secoes do aviso da conferencia (Contagem e Avarias; le `conference` + `current`: 2 leituras).
+// Qualquer falha ou doc ausente = `null` (aviso de hoje, sem secoes); o log leva so' o id do processo e o codigo do erro.
+async function readCargoConferenceNoticeSections(firestore, processId) {
   try {
     const [conferenceSnapshot, currentSnapshot] = await Promise.all([
       firestore.doc(`processes/${processId}/cargoReport/conference`).get(),
       firestore.doc(`processes/${processId}/cargoReport/current`).get(),
     ])
     if (!conferenceSnapshot.exists || !currentSnapshot.exists) return null
-    return summarizeCargoConferenceDamage(conferenceSnapshot.data() ?? {}, currentSnapshot.data() ?? {})
+    return buildCargoConferenceNoticeSections(conferenceSnapshot.data() ?? {}, currentSnapshot.data() ?? {})
   } catch (error) {
-    logger.warn('Falha ao ler a conferencia para o aviso; seguindo sem a secao de avarias.', {
+    logger.warn('Falha ao ler a conferencia para o aviso; seguindo sem as secoes de contagem e avarias.', {
       processId,
       error: error?.code,
     })
@@ -464,17 +465,15 @@ export const notifyCargoReportUploaded = onDocumentCreated(
       processNumber: repairTextEncoding(String(process.processNumber ?? '')),
       name: repairTextEncoding(String(process.name ?? '')),
     }
-    const cargoReportSubject = isConferenceStage
-      ? buildCargoReportConferenceSubject(subjectSource)
-      : buildCargoReportSubject(subjectSource)
     const notificationType = isConferenceStage
       ? CARGO_REPORT_CONFERENCE_NOTIFICATION_TYPE
       : CARGO_REPORT_NOTIFICATION_TYPE
     const buildDirectEmail = isConferenceStage ? buildCargoReportConferenceEmail : buildCargoReportEmail
 
-    // S10-J2 (so' a conferencia): trava de duplicidade e secao de avarias.
-    let damageSummary = null
-    let damageLines = []
+    // S10-J2 (so' a conferencia): trava de duplicidade e secoes do aviso. Fatia D: Contagem (pallets parciais e lotes
+    // com unidades divergentes) ANTES de Avarias; o assunto so' fica pronto depois da leitura, porque ganha
+    // " (com divergências)" quando ha lote com unidades divergentes.
+    let sections = null
     if (isConferenceStage) {
       const shouldSend = await claimCargoConferenceNotice(firestore, processId, String(event.params.documentId ?? ''))
       if (!shouldSend) {
@@ -484,12 +483,20 @@ export const notifyCargoReportUploaded = onDocumentCreated(
         })
         return
       }
-      damageSummary = await readCargoConferenceDamageSummary(firestore, processId)
-      damageLines = buildCargoConferenceDamageLines(damageSummary)
+      sections = await readCargoConferenceNoticeSections(firestore, processId)
     }
-    const damageText = buildCargoConferenceDamageText(damageLines)
+    const countLines = sections?.countLines ?? []
+    const damageLines = sections?.damageLines ?? []
+    const damageSummary = sections?.damageSummary ?? null
+    const countSummary = sections?.countSummary ?? null
+    const cargoReportSubject = isConferenceStage
+      ? buildCargoReportConferenceSubject(subjectSource, { divergent: sections?.divergent === true })
+      : buildCargoReportSubject(subjectSource)
+    const sectionsText = [buildCargoConferenceDamageText(countLines), buildCargoConferenceDamageText(damageLines)]
+      .filter(Boolean)
+      .join('\n\n')
     const notificationBody = isConferenceStage
-      ? `${CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY}${damageText ? `\n\n${damageText}` : ''}`
+      ? `${CARGO_REPORT_CONFERENCE_NOTIFICATION_BODY}${sectionsText ? `\n\n${sectionsText}` : ''}`
       : CARGO_REPORT_NOTIFICATION_BODY
 
     // Bloco A: in-app/push (+ e-mail via sendProcessNotificationEmail).
@@ -529,7 +536,7 @@ export const notifyCargoReportUploaded = onDocumentCreated(
             processId,
             recipientName: '',
             appUrl: APP_URL,
-            ...(isConferenceStage ? { damageLines } : {}),
+            ...(isConferenceStage ? { countLines, damageLines } : {}),
           })
 
           for (const to of directEmails) {
@@ -569,6 +576,9 @@ export const notifyCargoReportUploaded = onDocumentCreated(
       ...(damageSummary && damageSummary.itemCount > 0
         ? { damageItems: damageSummary.itemCount, damagePhotos: damageSummary.photoCount }
         : {}),
+      // D-30: so' numeros (nunca nome, lote nem unidades).
+      ...(countSummary && countSummary.partialCount > 0 ? { countPartialPallets: countSummary.partialCount } : {}),
+      ...(countSummary && countSummary.divergentCount > 0 ? { countDivergentLots: countSummary.divergentCount } : {}),
     })
   }
 )

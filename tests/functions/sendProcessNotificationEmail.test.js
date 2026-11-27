@@ -369,6 +369,83 @@ describe('sendProcessNotificationEmail', () => {
     })
   })
 
+  // Fatia D: o e-mail aos usuários extrai também a seção "Contagem" do `body` (ANTES de "Avarias e ressalvas").
+  describe('process_cargo_report_conference com Contagem (Fatia D)', () => {
+    const FIXED =
+      'Conferência da logística concluída no Relatório de Carga. Etiquetas, contagem e dados do recebimento estão disponíveis na pasta do processo no Portal COMEX.'
+    const BASE_TITLE = 'Conferência do Relatório de Carga - PO 12345 - Resina Atlas'
+    const COUNT = [
+      'Contagem: 2 pallets parciais, 2 lotes com unidades divergentes.',
+      'Pallets parciais:',
+      '• Poliol Flex 3000 · Lote L-2232 (30 un.) + Resina Acrílica RA-55 · Lote A-1180 (20 un.)',
+      '• Catalisador ZN-12 · Lote Z-9911 (25 un.) + Aditivo AX-7 · Lote X-0041 (10 un.)',
+      'Unidades divergentes:',
+      '• Catalisador ZN-12 · Lote Z-9910: 150 contadas de 160 esperadas (faltam 10).',
+      '• Poliol Flex 3000 · Lote L-2240: 52 contadas de 50 esperadas (2 a mais).',
+    ]
+    const DAMAGE = [
+      'Avarias e ressalvas: 1 item, 2 fotos no Portal.',
+      'Pallets: 22 contados de 22 informados pelo COMEX (confere), inclui 2 parciais.',
+      '• Item 5 · Catalisador ZN-12 · 2 fotos: 2 sacos rasgados na lateral do pallet, produto exposto.',
+    ]
+
+    async function sendWith(title, body) {
+      setSecretValue('SMTP_HOST', 'smtp.test.com')
+      setSecretValue('SMTP_USER', 'noreply@sqquimica.com')
+      setSecretValue('SMTP_PASS', 'pass')
+      setupMailer()
+      await handler(
+        makeEvent({ type: 'process_cargo_report_conference', recipientUserId: RECIPIENT_UID, processId: 'proc-1', title, body })
+      )
+      expect(mockSendMail).toHaveBeenCalledTimes(1)
+      return mockSendMail.mock.calls[0][0]
+    }
+
+    it('Contagem + Avarias: as duas seções (Contagem primeiro), pílula, assunto com sufixo e "Processo:" sem sufixo', async () => {
+      const args = await sendWith(`${BASE_TITLE} (com divergências)`, `${FIXED}\n\n${COUNT.join('\n')}\n\n${DAMAGE.join('\n')}`)
+      expect(args.subject).toBe(`${BASE_TITLE} (com divergências)`)
+      for (const line of [...COUNT, ...DAMAGE]) expect(args.text).toContain(line)
+      expect(args.text.indexOf('Contagem: ')).toBeLessThan(args.text.indexOf('Avarias e ressalvas: '))
+      expect(args.text).toContain('Processo: PO 12345 - Resina Atlas\n')
+      expect(args.text).not.toContain('Processo: PO 12345 - Resina Atlas (com divergências)')
+      expect(args.html).toContain('>\nContagem')
+      expect(args.html).toContain('Avarias e ressalvas')
+      expect(args.html.indexOf('>\nContagem')).toBeLessThan(args.html.indexOf('>\nAvarias e ressalvas'))
+      expect(args.html).toContain('<b>150</b> contadas de <b>160</b> esperadas')
+      expect(args.html).toContain('>faltam 10</span>')
+      expect(args.html).toContain('>2 a mais</span>')
+      expect(args.html).toContain('Conferência do Relatório de Carga do processo PO 12345 - Resina Atlas concluída no Portal COMEX.</div>')
+      expect(args.attachments).toHaveLength(1)
+      expect(args.attachments[0].cid).toBe('cargo-conference-banner@portal-comex')
+      expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('Catalisador')
+    })
+
+    it('só Contagem (parciais, sem avaria e sem divergência): sem sufixo e sem seção de avarias', async () => {
+      const lines = ['Contagem: 1 pallet parcial.', 'Pallets parciais:', '• Poliol Flex 3000 · Lote L-2232 (30 un.)']
+      const args = await sendWith(BASE_TITLE, `${FIXED}\n\n${lines.join('\n')}`)
+      expect(args.subject).toBe(BASE_TITLE)
+      for (const line of lines) expect(args.text).toContain(line)
+      expect(args.html).toContain('<b>(30 un.)</b>')
+      expect(args.html).not.toContain('Avarias e ressalvas')
+      expect(args.html).not.toContain('border-radius:999px')
+    })
+
+    it('só Avarias no body (como hoje): sem a seção Contagem', async () => {
+      const args = await sendWith(BASE_TITLE, `${FIXED}\n\n${DAMAGE.join('\n')}`)
+      expect(args.text).not.toContain('Contagem:')
+      expect(args.html).not.toContain('>\nContagem')
+      expect(args.html).toContain('Avarias e ressalvas')
+    })
+
+    it('body de hoje (sem as duas seções): e-mail igual ao de hoje', async () => {
+      const args = await sendWith(BASE_TITLE, FIXED)
+      expect(args.text).not.toContain('Contagem:')
+      expect(args.html).not.toContain('Avarias e ressalvas')
+      expect(args.html).not.toContain('>\nContagem')
+      expect(args.text).toContain('Processo: PO 12345 - Resina Atlas')
+    })
+  })
+
   it('outro tipo de e-mail de processo -> texto puro, sem html nem anexos', async () => {
     setSecretValue('SMTP_HOST', 'smtp.test.com')
     setSecretValue('SMTP_USER', 'noreply@sqquimica.com')

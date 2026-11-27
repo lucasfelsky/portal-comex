@@ -12,6 +12,12 @@
 // `extractCargoConferenceDamageLines` a lê de volta do `body` da notificação; `buildCargoDamageMirror` monta o espelho
 // `processes/{id}/cargoReport/damage` (SEM caminho de arquivo, `byId`, NF, etiquetas nem descarga).
 
+import {
+  buildCargoConferenceCountLines,
+  extractCargoNoticeSectionLines,
+  readCargoPartialPallets,
+  summarizeCargoConferenceCount,
+} from './cargoConferenceCount.js'
 import { DOCUMENT_READER_ROLES } from './documentIndex.js'
 
 export const CARGO_CONFERENCE_PHOTO_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/
@@ -194,14 +200,38 @@ function readExpectedPallets(value) {
   return Number.isInteger(value) && value >= 1 && value <= CARGO_PALLETS_EXPECTED_MAX ? value : null
 }
 
-// Resume as avarias da conferência fechada. Lê `current.rows` (linhas preenchidas, na ordem do relatório),
-// `current.expectedPallets`, `conference.palletsByRowId` e `conference.damageByRowId`. Item com avaria = marcado, com
-// observação escrita ou com foto (mesma regra do cliente); linha que já não existe no `current` fica de fora.
-// Rótulo = descrição SQ, senão a do fornecedor, senão "Item N". `pallets.state`: semTotal | confere | divergente.
-export function summarizeCargoConferenceDamage(conferenceData, currentData) {
+// Linhas preenchidas do `current.rows`, na ordem do relatório e já com rowId: `{ row, rowId, index, label, lot }`.
+// `index` = posição entre as linhas preenchidas (base 1); rótulo = descrição SQ, senão a do fornecedor, senão "Item N".
+// Linha vazia (regra do cliente) ou sem id fica de fora. Fonte única das avarias e da Contagem (Fatia D).
+export function listCargoNoticeRows(currentData) {
   const rows = (Array.isArray(currentData?.rows) ? currentData.rows : []).filter(
     (row) => isPlainObject(row) && !isCargoRowEmpty(row)
   )
+  const result = []
+  rows.forEach((row, position) => {
+    const rowId = readText(row.id)
+    if (!rowId) return
+    const index = position + 1
+    result.push({
+      row,
+      rowId,
+      index,
+      label: readText(row.sqDescription) || readText(row.supplierDescription) || `Item ${index}`,
+      lot: readText(row.supplierLot),
+    })
+  })
+  return result
+}
+
+// Resume as avarias da conferência fechada. Lê `current.rows` (linhas preenchidas, na ordem do relatório),
+// `current.expectedPallets`, `conference.palletsByRowId`, `conference.partialPallets` e `conference.damageByRowId`. Item
+// com avaria = marcado, com observação escrita ou com foto (mesma regra do cliente); linha que já não existe no
+// `current` fica de fora. Rótulo = descrição SQ, senão a do fornecedor, senão "Item N".
+// `pallets.state`: semTotal | confere | divergente. Fatia D (D-7/D-27): `counted` inclui os pallets parciais válidos
+// (cada um conta 1) e `pallets.partial` traz quantos são (a chave só existe quando há parcial: sem parcial o resumo é o de
+// antes).
+export function summarizeCargoConferenceDamage(conferenceData, currentData) {
+  const noticeRows = listCargoNoticeRows(currentData)
   const damageMap = isPlainObject(conferenceData?.damageByRowId) ? conferenceData.damageByRowId : {}
   const palletsMap = isPlainObject(conferenceData?.palletsByRowId) ? conferenceData.palletsByRowId : {}
 
@@ -209,9 +239,7 @@ export function summarizeCargoConferenceDamage(conferenceData, currentData) {
   let photoCount = 0
   let counted = 0
 
-  rows.forEach((row, position) => {
-    const rowId = readText(row.id)
-    if (!rowId) return
+  noticeRows.forEach(({ row, rowId, index, label }) => {
     const pallets = palletsMap[rowId]
     if (Number.isInteger(pallets) && pallets >= 0 && pallets <= CARGO_PALLETS_ROW_MAX) counted += pallets
 
@@ -222,12 +250,11 @@ export function summarizeCargoConferenceDamage(conferenceData, currentData) {
     const photos = readSummaryPhotos(entry.photos, CARGO_DAMAGE_PHOTOS_PER_CONFERENCE - photoCount)
     if (!flagged && !note && photos.length === 0) return
 
-    const index = position + 1
     photoCount += photos.length
     items.push({
       rowId,
       index,
-      label: readText(row.sqDescription) || readText(row.supplierDescription) || `Item ${index}`,
+      label,
       code: readText(row.dbcorpCode),
       note,
       flagged,
@@ -236,22 +263,34 @@ export function summarizeCargoConferenceDamage(conferenceData, currentData) {
     })
   })
 
+  const partial = readCargoPartialPallets(conferenceData?.partialPallets, noticeRows.map((entry) => entry.rowId)).length
+  counted += partial
+
   const expected = readExpectedPallets(currentData?.expectedPallets)
   const state = expected === null ? 'semTotal' : counted === expected ? 'confere' : 'divergente'
-  return { items, itemCount: items.length, photoCount, pallets: { counted, expected, state } }
+  return {
+    items,
+    itemCount: items.length,
+    photoCount,
+    pallets: { counted, expected, state, ...(partial > 0 ? { partial } : {}) },
+  }
 }
 
 function pluralize(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`
 }
 
-// "Pallets: 23 contados de 25 informados pelo COMEX (divergente)." Sem total do COMEX: null (nada a dizer).
+// "Pallets: 23 contados de 25 informados pelo COMEX (divergente)." Sem total do COMEX: null (nada a dizer). Com pallets
+// parciais no total (Fatia D): "... (confere), inclui 2 parciais."
 export function formatCargoDamagePalletsLine(pallets) {
   if (!isPlainObject(pallets) || pallets.state === 'semTotal' || pallets.expected === null || pallets.expected === undefined) {
     return null
   }
   const state = pallets.state === 'confere' ? 'confere' : 'divergente'
-  return `Pallets: ${pluralize(pallets.counted, 'contado', 'contados')} de ${pluralize(pallets.expected, 'informado', 'informados')} pelo COMEX (${state}).`
+  const partial = Number.isInteger(pallets.partial) && pallets.partial > 0
+    ? `, inclui ${pluralize(pallets.partial, 'parcial', 'parciais')}`
+    : ''
+  return `Pallets: ${pluralize(pallets.counted, 'contado', 'contados')} de ${pluralize(pallets.expected, 'informado', 'informados')} pelo COMEX (${state})${partial}.`
 }
 
 function clipText(value, max) {
@@ -298,14 +337,25 @@ export function buildCargoConferenceDamageText(lines) {
   return list.length === 0 ? '' : list.join('\n')
 }
 
-// Lê a seção de volta do `body` da notificação: do início da linha "Avarias e ressalvas:" até o fim. `body` de hoje
-// (sem a seção), vazio ou que não é texto -> `[]`.
+// Lê a seção de volta do `body` da notificação: do início da linha "Avarias e ressalvas:" até o fim OU até a próxima
+// linha que abre com outro marcador de seção ("Contagem:", Fatia D). `body` de hoje (sem a seção), vazio ou que não é
+// texto -> `[]`; corpo antigo (sem "Contagem:") -> o mesmo resultado de antes.
 export function extractCargoConferenceDamageLines(body) {
-  if (typeof body !== 'string' || body === '') return []
-  const lines = body.split(/\r?\n/)
-  const start = lines.findIndex((line) => line.startsWith(CARGO_DAMAGE_SECTION_MARKER))
-  if (start < 0) return []
-  return lines.slice(start).map((line) => line.trimEnd()).filter((line) => line.trim() !== '')
+  return extractCargoNoticeSectionLines(body, CARGO_DAMAGE_SECTION_MARKER)
+}
+
+// Fatia D: as duas seções do aviso a partir de `conference` + `current`. `countLines` (Contagem, [] sem parcial e sem
+// divergência), `damageLines` (Avarias, [] sem avaria), `divergent` (há lote com unidades divergentes: o assunto ganha o
+// sufixo) e os resumos (para o log, só números). A linha de pallets fica SÓ numa das seções: na de avarias quando ela
+// existe; na Contagem quando não há avaria.
+export function buildCargoConferenceNoticeSections(conferenceData, currentData) {
+  const damageSummary = summarizeCargoConferenceDamage(conferenceData, currentData)
+  const damageLines = buildCargoConferenceDamageLines(damageSummary)
+  const countSummary = summarizeCargoConferenceCount(conferenceData, listCargoNoticeRows(currentData))
+  const countLines = buildCargoConferenceCountLines(countSummary, {
+    palletsLine: damageLines.length === 0 ? formatCargoDamagePalletsLine(damageSummary.pallets) : null,
+  })
+  return { countLines, damageLines, divergent: countSummary.divergentCount > 0, damageSummary, countSummary }
 }
 
 // Espelho `processes/{id}/cargoReport/damage` (10 chaves). Só o necessário para Técnico/Faturamento: nada de caminho de

@@ -62,10 +62,15 @@ export function buildCargoReportSubject(process) {
   return buildSubjectWithPrefix(CARGO_REPORT_SUBJECT_PREFIX, process)
 }
 
+// Fatia D: sufixo do assunto/titulo da conferencia quando ha lote com unidades divergentes.
+export const CARGO_REPORT_CONFERENCE_DIVERGENCE_SUFFIX = ' (com divergências)'
+
 // S7: `Conferência do Relatório de Carga - PO <numero> - <nome>` (CONSOLIDADO: `... - <nome>`); mesmas
-// regras do assunto do COMEX, inclusive "nao depende de role".
-export function buildCargoReportConferenceSubject(process) {
-  return buildSubjectWithPrefix(CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX, process)
+// regras do assunto do COMEX, inclusive "nao depende de role". Fatia D: `{ divergent: true }` acrescenta
+// " (com divergências)" (so' com unidades divergentes; parcial sem divergencia nao muda o assunto).
+export function buildCargoReportConferenceSubject(process, { divergent = false } = {}) {
+  const subject = buildSubjectWithPrefix(CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX, process)
+  return divergent ? `${subject}${CARGO_REPORT_CONFERENCE_DIVERGENCE_SUFFIX}` : subject
 }
 
 // Estagio do aviso a partir do documento `cargoReport` criado: anexo da logistica = conferencia fechada;
@@ -78,12 +83,18 @@ export function resolveCargoReportUploadStage(document) {
 // carrega o titulo): `Relatório de Carga - X` -> `X`; so' o prefixo ou vazio
 // -> ''; texto fora do padrao -> o proprio texto (sanitizado).
 // Reconhece os 2 prefixos (o da conferencia vem ANTES: nenhum comeca com o outro, mas a ordem documenta).
+// Fatia D: no assunto da conferencia o sufixo " (com divergências)" NAO faz parte do rotulo ("Processo:" e preheader);
+// no assunto do COMEX nada e' removido.
 export function extractCargoReportProcessLabel(subject) {
   const text = sanitizeCargoReportText(subject)
+  const withoutSuffix = text.endsWith(CARGO_REPORT_CONFERENCE_DIVERGENCE_SUFFIX)
+    ? text.slice(0, -CARGO_REPORT_CONFERENCE_DIVERGENCE_SUFFIX.length).trimEnd()
+    : text
   for (const prefix of [CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX, CARGO_REPORT_SUBJECT_PREFIX]) {
-    if (text === prefix) return ''
+    const candidate = prefix === CARGO_REPORT_CONFERENCE_SUBJECT_PREFIX ? withoutSuffix : text
+    if (candidate === prefix) return ''
     const prefixWithSeparator = `${prefix}${CARGO_REPORT_SUBJECT_SEPARATOR}`
-    if (text.startsWith(prefixWithSeparator)) return text.slice(prefixWithSeparator.length).trim()
+    if (candidate.startsWith(prefixWithSeparator)) return candidate.slice(prefixWithSeparator.length).trim()
   }
   return text
 }
