@@ -37,6 +37,7 @@ function deferred() {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 const KEY = buildCoaAutoReadKey('p1', '')
+const CLOSED_NOTE = 'O relatório já foi fechado; a leitura de COA é só no rascunho.'
 const calledIds = () => mockReadProcessCoa.mock.calls.map((call) => call[1])
 
 let unmount
@@ -134,12 +135,25 @@ describe('coaAutoReadQueue - quem entra', () => {
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
   })
 
-  it('só PDF com id: outros tipos e documentos sem id entram mudos', async () => {
+  it('só PDF com id: outros tipos e documentos sem id não são lidos e deixam a linha "não iniciada" (S11-J)', async () => {
     mockReadProcessCoa.mockResolvedValue(done('a'))
     expect(enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' }), doc('', {}), undefined, null])).toBe(0)
     expect(enqueueCoaAutoRead('p1', undefined)).toBe(0)
     await flush()
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
+    expect(getCoaAutoReadState().notices).toEqual({
+      [KEY]: 'Leitura automática não iniciada: não foi possível identificar o arquivo enviado. Use Ler COAs no formulário.',
+    })
+    expect(enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' })])).toBe(0)
+    expect(getCoaAutoReadState().notices[KEY]).toBe(
+      'Leitura automática não iniciada: só PDF é lido automaticamente. Use Ler COAs no formulário.'
+    )
+  })
+
+  it('documento ausente (undefined/null) e lista vazia continuam mudos', async () => {
+    expect(enqueueCoaAutoRead('p1', [undefined, null])).toBe(0)
+    expect(enqueueCoaAutoRead('p1', [])).toBe(0)
+    expect(enqueueCoaAutoRead('p1', undefined)).toBe(0)
     expect(getCoaAutoReadState().notices).toEqual({})
   })
 
@@ -155,13 +169,13 @@ describe('coaAutoReadQueue - quem entra', () => {
 })
 
 describe('coaAutoReadQueue - erros', () => {
-  it('report-closed é silencioso e descarta o resto do processo sem chamar a callable de novo', async () => {
+  it('report-closed descarta o resto do processo sem chamar a callable de novo e deixa só a nota (S11-J)', async () => {
     mockReadProcessCoa.mockRejectedValueOnce(rejectWith('report-closed'))
     enqueueCoaAutoRead('p1', [doc('a'), doc('b'), doc('c')])
     await flush()
     await flush()
     expect(calledIds()).toEqual(['a'])
-    expect(getCoaAutoReadState().notices).toEqual({})
+    expect(getCoaAutoReadState().notices).toEqual({ [KEY]: CLOSED_NOTE })
     expect(getCoaAutoReadState().progress).toEqual({})
   })
 
@@ -406,7 +420,7 @@ describe('coaAutoReadQueue - erros entre processos, sem componente montado', () 
     other()
     for (let index = 0; index < 6; index += 1) await flush()
     expect(calledIds()).toEqual(['a', 'c', 'd'])
-    expect(getCoaAutoReadState().notices).toEqual({})
+    expect(getCoaAutoReadState().notices).toEqual({ [KEY]: CLOSED_NOTE })
     expect(getCoaAutoReadState().progress).toEqual({})
   })
 
@@ -632,6 +646,50 @@ describe('coaAutoReadQueue - bilhete do envio (S11-H, L157)', () => {
     await flush()
     await flush()
     expect(calledIds()).toEqual(['a', 'x1'])
+    other()
+  })
+})
+
+describe('coaAutoReadQueue - lote que continua depois de relatório fechado ou erro de serviço (S11-J)', () => {
+  const OTHER_KEY = buildCoaAutoReadKey('p1', 'PO-9')
+
+  it('report-closed: o arquivo seguinte do mesmo bilhete, em outro escopo, não é lido e a nota aparece nele', async () => {
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('report-closed'))
+    const ticket = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', ticket)).toBe(1)
+    await flush()
+    await flush()
+    expect(enqueueCoaAutoRead('p1', [doc('b')], 'PO-9', ticket)).toBe(0)
+    await flush()
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().notices[OTHER_KEY]).toBe(CLOSED_NOTE)
+  })
+
+  it('erro de serviço: o arquivo seguinte do mesmo bilhete não é lido e diz por quê, sem pisar em aviso existente', async () => {
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('tess-auth'))
+    const ticket = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', ticket)).toBe(1)
+    await flush()
+    await flush()
+    const interrupted = getCoaAutoReadState().notices[KEY]
+    expect(interrupted).toMatch(/^Leitura automática interrompida: /)
+    expect(enqueueCoaAutoRead('p1', [doc('b')], '', ticket)).toBe(0)
+    expect(enqueueCoaAutoRead('p1', [doc('c')], 'PO-9', ticket)).toBe(0)
+    await flush()
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().notices[KEY]).toBe(interrupted)
+    expect(getCoaAutoReadState().notices[OTHER_KEY]).toBe(
+      'Leitura automática não iniciada: a leitura anterior foi interrompida. Use Ler COAs no formulário.'
+    )
+  })
+
+  it('um bilhete novo apaga as linhas "não iniciada" do lote anterior do processo (e só dele)', async () => {
+    const other = registerCoaAutoReadMount('p2')
+    enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' })])
+    enqueueCoaAutoRead('p2', [doc('x', { mimeType: 'application/msword' })])
+    expect(Object.keys(getCoaAutoReadState().notices).sort()).toEqual([KEY, buildCoaAutoReadKey('p2', '')].sort())
+    beginCoaAutoReadSend('p1')
+    expect(Object.keys(getCoaAutoReadState().notices)).toEqual([buildCoaAutoReadKey('p2', '')])
     other()
   })
 })
