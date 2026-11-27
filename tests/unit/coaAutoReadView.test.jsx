@@ -134,6 +134,18 @@ function Panel({ profile = ADMIN, category = 'FCL', initial = [], processId = 'p
 }
 
 const inputs = (container) => Array.from(container.querySelectorAll('input[type="file"]'))
+// S11-J: o aviso da fila é um botão-ícone com pop-up; o mesmo texto vai para uma região `status` oculta (leitor de tela).
+const BUSY_NOTICE = 'Leitura automática interrompida: Outra leitura de COA está em andamento. Tente de novo em 1 minuto. Use Ler COAs no formulário.'
+async function expectNotice(message, name = 'Leitura automática interrompida') {
+  const [button] = await screen.findAllByRole('button', { name })
+  const tip = screen.getAllByRole('tooltip').find((node) => node.textContent === message)
+  expect(tip).toBeTruthy()
+  expect(button).toHaveAccessibleDescription(message)
+  const region = screen.getAllByRole('status').find((node) => node.textContent === message)
+  expect(region).toHaveClass('documents-visually-hidden')
+  return button
+}
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 beforeEach(() => {
@@ -323,8 +335,7 @@ describe('card do COA (FCL): admin anexa vários arquivos', () => {
     const user = userEvent.setup()
     const { container } = render(<Panel />)
     await user.upload(inputs(container)[0], [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf')])
-    const notice = await screen.findByText(message)
-    expect(notice).toHaveAttribute('role', 'status')
+    await expectNotice(message)
     expect(screen.queryByText(/Lendo os COAs/)).not.toBeInTheDocument()
     await flush()
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
@@ -442,8 +453,7 @@ describe('card do COA (FCL): admin anexa vários arquivos', () => {
     await flush()
 
     render(<Panel initial={[coaDocument('new1'), coaDocument('new2')]} />)
-    const notice = await screen.findByText(/Leitura automática interrompida: Outra leitura de COA está em andamento/)
-    expect(notice).toHaveAttribute('role', 'status')
+    await expectNotice(BUSY_NOTICE)
     expect(screen.queryByText(/Lendo os COAs|Na fila/)).not.toBeInTheDocument()
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
   })
@@ -539,8 +549,10 @@ describe('CONSOLIDADO: células por PO na mesma fila', () => {
     await user.upload(two, pdf('b.pdf'))
     await waitFor(() => expect(mockReadProcessCoa).toHaveBeenCalledTimes(1))
     first.reject(callError('tess-rate-limit'))
-    const notices = await screen.findAllByText(/Leitura automática interrompida: O serviço de leitura pediu uma pausa/)
-    expect(notices).toHaveLength(2)
+    const RATE_NOTICE = 'Leitura automática interrompida: O serviço de leitura pediu uma pausa. Tente de novo em 1 minuto. Use Ler COAs no formulário.'
+    await expectNotice(RATE_NOTICE)
+    expect(screen.getAllByRole('button', { name: 'Leitura automática interrompida' })).toHaveLength(2)
+    expect(screen.getAllByRole('tooltip').filter((node) => node.textContent === RATE_NOTICE)).toHaveLength(2)
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
   })
 })

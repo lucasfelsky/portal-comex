@@ -26,6 +26,11 @@
 //   (`beginCoaAutoReadSend`) com a época da sessão. S11-I: o envio continua até o fim em segundo plano
 //   (`coaUploadStore`) e cada arquivo entra na fila com o bilhete, mesmo sem componente montado; se a conta mudar no
 //   meio, nenhum arquivo do envio antigo entra (época).
+// - S11-J: nada deixa de ser lido em silêncio. Arquivo que subiu e NÃO entra na fila (não é PDF, sem id, leitura
+//   anterior interrompida) deixa o aviso "Leitura automática não iniciada: <motivo>." (pop-up do ícone) no escopo
+//   dele; `report-closed` deixa a nota "O relatório já foi fechado; a leitura de COA é só no rascunho." (sem
+//   custo extra: a nota sai da MESMA chamada que já aconteceu). A linha fica no store e aparece ao voltar à aba.
+//   Conta que mudou (época) segue muda: o aviso seria de outra sessão.
 // - Nenhum timer: nada para vazar.
 
 import { describeCoaReadError, readProcessCoa } from '../../services/coaReadsRepository'
@@ -37,6 +42,10 @@ const KEY_SEPARATOR = '|'
 
 export const COA_AUTO_READ_HINT = 'Cada arquivo pode levar até 2 minutos.'
 export const COA_AUTO_READ_WAITING = 'Na fila para leitura.'
+export const COA_AUTO_READ_NOT_STARTED = 'Leitura automática não iniciada'
+const REPORT_CLOSED_NOTE = 'O relatório já foi fechado; a leitura de COA é só no rascunho.'
+const NOT_PDF_REASON = 'só PDF é lido automaticamente'
+const NO_ID_REASON = 'não foi possível identificar o arquivo enviado'
 
 function emptyState() {
   // `activeKey`: escopo do arquivo que está sendo lido agora (os demais com itens na fila só esperam a vez).
@@ -126,6 +135,24 @@ function interrupt(failedItem, code) {
   })
 }
 
+function lowerFirst(text) {
+  return text.charAt(0).toLowerCase() + text.slice(1)
+}
+
+// Linha "não iniciada" (arquivo que subiu mas não entrou na fila). `onlyIfEmpty`: não pisa em aviso que já explica.
+function noteNotStarted(key, reason, { onlyIfEmpty = false, hint = false } = {}) {
+  if (onlyIfEmpty && state.notices[key]) return
+  const text = `${COA_AUTO_READ_NOT_STARTED}: ${lowerFirst(reason.replace(/[.\s]+$/, ''))}.${hint ? ' Use Ler COAs no formulário.' : ''}`
+  if (state.notices[key] === text) return
+  emit({ notices: { ...state.notices, [key]: text } })
+}
+
+function noteClosed(keys) {
+  const notices = { ...state.notices }
+  for (const key of keys) notices[key] = REPORT_CLOSED_NOTE
+  emit({ notices })
+}
+
 function classify(code) {
   if (code === REPORT_CLOSED) return 'closed'
   if (COA_READ_FILE_ERROR_CODES.has(code)) return 'file'
@@ -181,7 +208,11 @@ async function pump() {
       if (kind === 'closed') {
         closedSeq.set(item.processId, (closedSeq.get(item.processId) ?? 0) + 1)
         const keys = dropQueued((queued) => queued.processId === item.processId)
-        progress = withoutKeys(progress, keys)
+        progress = withoutKeys(progress, [...keys, itemKey(item)])
+        const notices = { ...state.notices }
+        for (const key of new Set([itemKey(item), ...keys])) notices[key] = REPORT_CLOSED_NOTE
+        emit({ progress, notices, readVersions: bumpReadVersion(item.processId) })
+        continue
       }
       emit({ progress, readVersions: bumpReadVersion(item.processId) })
     }
@@ -216,6 +247,11 @@ export function registerCoaAutoReadMount(processId) {
 export function beginCoaAutoReadSend(processId) {
   if (!processId || (mounts.get(processId) ?? 0) <= 0) return null
   watchSession()
+  // Lote novo: as linhas "não iniciada" do lote anterior deste processo saem (a linha descreve o último envio).
+  const stale = Object.keys(state.notices).filter(
+    (key) => key.startsWith(`${processId}${KEY_SEPARATOR}`) && state.notices[key].startsWith(COA_AUTO_READ_NOT_STARTED)
+  )
+  if (stale.length > 0) emit({ notices: withoutKeys(state.notices, stale) })
   return { processId, epoch, generation, fault: faultSeq, closed: closedSeq.get(processId) ?? 0 }
 }
 
@@ -227,27 +263,51 @@ export function enqueueCoaAutoRead(processId, documents, scope = '', send = null
   if (send) {
     if (send.processId !== processId || send.epoch !== epoch || send.generation !== generation) return 0
     // Depois de erro de serviço ou de relatório fechado, o resto do lote que ainda sobe não entra (como na fila já montada).
-    if (send.fault !== faultSeq || send.closed !== (closedSeq.get(processId) ?? 0)) return 0
+    const key = buildCoaAutoReadKey(processId, scope)
+    if (send.closed !== (closedSeq.get(processId) ?? 0)) {
+      noteClosed([key])
+      return 0
+    }
+    if (send.fault !== faultSeq) {
+      noteNotStarted(key, 'a leitura anterior foi interrompida', { onlyIfEmpty: true, hint: true })
+      return 0
+    }
   } else if ((mounts.get(processId) ?? 0) <= 0) {
     return 0
   }
   const fresh = []
+  let skipReason = ''
   for (const document of Array.isArray(documents) ? documents : []) {
     const documentId = String(document?.id ?? '')
-    if (!documentId || String(document?.mimeType ?? '').toLowerCase() !== 'application/pdf') continue
+    if (!document) continue
+    if (!documentId) {
+      skipReason = NO_ID_REASON
+      continue
+    }
+    if (String(document.mimeType ?? '').toLowerCase() !== 'application/pdf') {
+      skipReason = NOT_PDF_REASON
+      continue
+    }
     const attemptKey = `${processId}${KEY_SEPARATOR}${documentId}`
     if (attempted.has(attemptKey)) continue
     attempted.add(attemptKey)
     fresh.push({ processId, documentId, scope, epoch })
   }
-  if (fresh.length === 0) return 0
+  const key = buildCoaAutoReadKey(processId, scope)
+  if (fresh.length === 0) {
+    if (skipReason) {
+      watchSession()
+      noteNotStarted(key, skipReason)
+    }
+    return 0
+  }
   watchSession()
 
-  const key = buildCoaAutoReadKey(processId, scope)
   const entry = state.progress[key]
   queue.push(...fresh)
   const notices = { ...state.notices }
-  delete notices[key]
+  // Um arquivo "não iniciado" do mesmo lote não some quando o próximo (PDF) entra: o aviso de interrupção, sim.
+  if (!String(notices[key] ?? '').startsWith(COA_AUTO_READ_NOT_STARTED)) delete notices[key]
   emit({
     progress: { ...state.progress, [key]: { done: entry?.done ?? 0, total: (entry?.total ?? 0) + fresh.length } },
     notices,
