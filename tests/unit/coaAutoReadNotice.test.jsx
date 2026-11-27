@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CoaAutoReadNotice from '../../src/features/processes/CoaAutoReadNotice'
 import CoaAutoReadStatus from '../../src/features/processes/CoaAutoReadStatus'
@@ -104,6 +104,54 @@ describe('CoaAutoReadNotice', () => {
     expect(screen.getByRole('tooltip')).toHaveClass(OPEN)
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.getByRole('tooltip')).not.toHaveClass(OPEN)
+  })
+})
+
+// jsdom não preenche `pointerType` no evento de ponteiro: define-se na instância (o navegador sempre informa).
+function pointerEnter(element, pointerType) {
+  const event = createEvent.pointerOver(element)
+  Object.defineProperty(event, 'pointerType', { value: pointerType })
+  fireEvent(element, event)
+}
+
+function pointerLeave(element, pointerType) {
+  const event = createEvent.pointerOut(element)
+  Object.defineProperty(event, 'pointerType', { value: pointerType })
+  fireEvent(element, event)
+}
+
+describe('CoaAutoReadNotice - instâncias e tipo de ponteiro', () => {
+  it('dois avisos ao mesmo tempo: ids de tooltip diferentes e cada botão descrito pelo próprio tooltip', () => {
+    render(
+      <div>
+        <CoaAutoReadNotice text={NOT_STARTED} />
+        <CoaAutoReadNotice text={INTERRUPTED} />
+      </div>
+    )
+    const [first, second] = screen.getAllByRole('tooltip')
+    expect(first.id).toBeTruthy()
+    expect(second.id).toBeTruthy()
+    expect(first.id).not.toBe(second.id)
+    const notStarted = screen.getByRole('button', { name: 'Leitura automática não iniciada' })
+    const interrupted = screen.getByRole('button', { name: 'Leitura automática interrompida' })
+    expect(notStarted).toHaveAttribute('aria-describedby', first.id)
+    expect(interrupted).toHaveAttribute('aria-describedby', second.id)
+    expect(notStarted).toHaveAccessibleDescription(NOT_STARTED)
+    expect(interrupted).toHaveAccessibleDescription(INTERRUPTED)
+  })
+
+  it('toque (pointerType touch) que dispara pointerenter NÃO abre o pop-up por hover; o mouse abre', () => {
+    render(<CoaAutoReadNotice text={NOT_STARTED} />)
+    const button = screen.getByRole('button')
+    const tip = screen.getByRole('tooltip')
+    pointerEnter(button, 'touch')
+    expect(tip).not.toHaveClass(OPEN)
+    pointerEnter(button, 'pen')
+    expect(tip).not.toHaveClass(OPEN)
+    pointerEnter(button, 'mouse')
+    expect(tip).toHaveClass(OPEN)
+    pointerLeave(button, 'mouse')
+    expect(tip).not.toHaveClass(OPEN)
   })
 })
 
