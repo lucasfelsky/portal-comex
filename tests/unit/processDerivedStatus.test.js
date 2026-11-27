@@ -528,3 +528,56 @@ describe('getProcessDerivedStatus - regressao do relato: DUIMP registrada nao de
     expect(result.phase).toBe(DERIVED_STATUS_PHASES.EMBARCADO)
   })
 })
+
+describe('getProcessDerivedStatus - descarga no CD não é recebimento', () => {
+  const BASE = {
+    category: 'FCL',
+    eta: '2026-07-01',
+    berthedAt: '2026-07-02T08:00',
+    processStatus: 'Carga recebida',
+    collectionWindows: [],
+  }
+
+  it.each([
+    'Veículo no CD para descarga',
+    'Veiculo no CD para descarga',
+    'Carga sendo descarregada no CD',
+  ])('collectionStatus %j -> "Carga sendo descarregada" na fase pós-recebimento', (collectionStatus) => {
+    const result = getProcessDerivedStatus({ ...BASE, collectionStatus })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+    expect(result.label).toBe('Carga sendo descarregada')
+    expect(result.tone).toBe('info')
+  })
+
+  it.each([
+    'Carga recebida, em conferência',
+    'Carga em processo de Entrada',
+    'Carga recebida',
+  ])('controle: collectionStatus %j continua "Recebida no CD"', (collectionStatus) => {
+    const result = getProcessDerivedStatus({ ...BASE, collectionStatus })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+    expect(result.label).toBe('Recebida no CD')
+  })
+
+  it('controle: Carga disponível em estoque continua concluído', () => {
+    const result = getProcessDerivedStatus({ ...BASE, collectionStatus: 'Carga disponível em estoque' })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.CONCLUIDO)
+  })
+
+  it('CONSOLIDADO com 3 contêineres e janelas passadas: a descarga vence a janela (não vira EM_ROTA)', () => {
+    const result = getProcessDerivedStatus({
+      category: 'CONSOLIDADO',
+      eta: '2026-07-01',
+      containerQuantity: 3,
+      processStatus: 'Carga recebida',
+      collectionStatus: 'Veículo no CD para descarga',
+      collectionWindows: [1, 2, 3].map((containerNumber) => ({
+        id: `w-${containerNumber}`,
+        containerNumber,
+        scheduledAt: `2026-07-0${containerNumber}T09:00:00-03:00`,
+      })),
+    })
+    expect(result.phase).toBe(DERIVED_STATUS_PHASES.POS_RECEBIMENTO)
+    expect(result.label).toBe('Carga sendo descarregada')
+  })
+})

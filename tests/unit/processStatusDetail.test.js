@@ -171,3 +171,35 @@ describe('getArrivalNoteLabel', () => {
     ).toBe('Coleta ainda não agendada')
   })
 })
+
+describe('descarga no CD - detalhe e nota de chegada', () => {
+  it('getProcessStatusDetail: descarga devolve vazio (o texto já está no selo)', () => {
+    expect(
+      getProcessStatusDetail({
+        ...base,
+        processStatus: 'Carga recebida',
+        collectionStatus: 'Veículo no CD para descarga',
+      }),
+    ).toBe('')
+  })
+
+  it('getProcessStatusDetail: conferência mantém o texto (selo continua "Recebida no CD")', () => {
+    expect(
+      getProcessStatusDetail({
+        ...base,
+        processStatus: 'Carga recebida',
+        collectionStatus: 'Carga recebida, em conferência',
+      }),
+    ).toBe('Carga recebida, em conferência')
+  })
+
+  it('getArrivalNoteLabel: descarga -> sem nota (não volta "Carga em trânsito para o CD")', () => {
+    expect(
+      getArrivalNoteLabel({
+        ...base,
+        processStatus: 'Carga recebida',
+        collectionStatus: 'Veículo no CD para descarga',
+      }),
+    ).toBe('')
+  })
+})
