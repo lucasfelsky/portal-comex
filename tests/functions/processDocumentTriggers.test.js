@@ -1380,6 +1380,211 @@ describe('notifyCargoReportUploaded', () => {
         expect(logged).not.toContain(secret)
       }
     })
+
+    // Fatia D: seção "Contagem" (pallets parciais e lotes com unidades divergentes) e sufixo no assunto.
+    describe('Contagem: pallets parciais e unidades divergentes (Fatia D)', () => {
+      const countRow = (id, sqDescription, supplierLot, frozenPackages) => ({
+        id, po: 'PO1', dbcorpCode: '1001', sqDescription, supplierLot, quantityKg: 1000, frozenNetWeightKg: null, frozenPackages,
+      })
+      const COUNT_CURRENT = {
+        expectedPallets: 22,
+        rows: [
+          countRow('r-1', 'Catalisador ZN-12', 'Z-9910', 160),
+          countRow('r-2', 'Poliol Flex 3000', 'L-2240', 50),
+          countRow('r-3', 'Poliol Flex 3000', 'L-2232', 100),
+          countRow('r-4', 'Resina Acrílica RA-55', 'A-1180', 80),
+          countRow('r-5', 'Catalisador ZN-12', 'Z-9911', 60),
+          countRow('r-6', 'Aditivo AX-7', 'X-0041', 40),
+        ],
+      }
+      const MATCHING = { 'r-1': 160, 'r-2': 50, 'r-3': 100, 'r-4': 80, 'r-5': 60, 'r-6': 40 }
+      const PARTIALS = [
+        { id: 'pp-1', parts: [{ rowId: 'r-3', units: 30 }, { rowId: 'r-4', units: 20 }] },
+        { id: 'pp-2', parts: [{ rowId: 'r-5', units: 25 }, { rowId: 'r-6', units: 10 }] },
+      ]
+      const COUNT_DAMAGE = {
+        'r-5': { flagged: true, note: '2 sacos rasgados na lateral do pallet, produto exposto.', photos: [photo('aaa'), photo('bbb')] },
+      }
+      const TITLE = 'Conferência do Relatório de Carga - PO 12345 - Resina Atlas'
+      const PARTIAL_LINES = [
+        'Pallets parciais:',
+        '• Poliol Flex 3000 · Lote L-2232 (30 un.) + Resina Acrílica RA-55 · Lote A-1180 (20 un.)',
+        '• Catalisador ZN-12 · Lote Z-9911 (25 un.) + Aditivo AX-7 · Lote X-0041 (10 un.)',
+      ]
+      const DIVERGENT_LINES = [
+        'Unidades divergentes:',
+        '• Catalisador ZN-12 · Lote Z-9910: 150 contadas de 160 esperadas (faltam 10).',
+        '• Poliol Flex 3000 · Lote L-2240: 52 contadas de 50 esperadas (2 a mais).',
+      ]
+      const D_COUNT = ['Contagem: 2 pallets parciais, 2 lotes com unidades divergentes.', ...PARTIAL_LINES, ...DIVERGENT_LINES]
+      const D_DAMAGE = [
+        'Avarias e ressalvas: 1 item, 2 fotos no Portal.',
+        'Pallets: 22 contados de 22 informados pelo COMEX (confere), inclui 2 parciais.',
+        '• Item 5 · Catalisador ZN-12 · 2 fotos: 2 sacos rasgados na lateral do pallet, produto exposto.',
+      ]
+
+      function seedCount(conference) {
+        cargoStore.docs.set(CONF_PATH, { status: 'fechada', revision: 3, damageByRowId: {}, ...conference })
+        cargoStore.docs.set(CUR_PATH, COUNT_CURRENT)
+      }
+      const scenarioD = () =>
+        seedCount({
+          unitsByRowId: { ...MATCHING, 'r-1': 150, 'r-2': 52 },
+          palletsByRowId: { 'r-1': 4, 'r-2': 4, 'r-3': 3, 'r-4': 3, 'r-5': 3, 'r-6': 3 },
+          partialPallets: PARTIALS,
+          damageByRowId: COUNT_DAMAGE,
+        })
+      const scenarioB = () =>
+        seedCount({
+          unitsByRowId: MATCHING,
+          palletsByRowId: { 'r-1': 4, 'r-2': 4, 'r-3': 3, 'r-4': 3, 'r-5': 3, 'r-6': 3 },
+          partialPallets: PARTIALS,
+        })
+
+      it('cenário d: corpo = texto de hoje + Contagem + Avarias (todos os destinatários) e título com " (com divergências)"', async () => {
+        setupChain({ users: [ADMIN_1, ADMIN_2, LOGI_1, TEC_1], config: { tecnico: ['tecnico@sqquimica.com'], faturamento: [] } })
+        configureSmtp()
+        scenarioD()
+
+        await run()
+
+        const notifications = conferenceNotifications()
+        expect(notifications).toHaveLength(4)
+        for (const data of notifications) {
+          expect(data.title).toBe(`${TITLE} (com divergências)`)
+          expect(data.body).toBe(`${CONFERENCE_BODY}\n\n${D_COUNT.join('\n')}\n\n${D_DAMAGE.join('\n')}`)
+        }
+      })
+
+      it('cenário b (só parciais): sem sufixo no título; a linha de pallets fica na Contagem', async () => {
+        setupChain({ users: [ADMIN_1], config: { tecnico: [], faturamento: [] } })
+        configureSmtp()
+        scenarioB()
+
+        await run()
+
+        const [notice] = conferenceNotifications()
+        expect(notice.title).toBe(TITLE)
+        expect(notice.body).toBe(
+          [
+            CONFERENCE_BODY,
+            '',
+            'Contagem: 2 pallets parciais.',
+            'Pallets: 22 contados de 22 informados pelo COMEX (confere), inclui 2 parciais.',
+            ...PARTIAL_LINES,
+          ].join('\n')
+        )
+        expect(notice.body).not.toContain('Avarias e ressalvas')
+      })
+
+      it('e-mail direto (lista sem usuário): Contagem com pílula, assunto com sufixo, "Processo:" e preheader sem ele', async () => {
+        setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+        configureSmtp()
+        scenarioD()
+
+        await run()
+
+        expect(mockSendMail).toHaveBeenCalledTimes(1)
+        const mail = mailOf()
+        expect(mail.subject).toBe(`${TITLE} (com divergências)`)
+        for (const line of [...D_COUNT, ...D_DAMAGE]) expect(mail.text).toContain(line)
+        expect(mail.text.indexOf('Contagem: ')).toBeLessThan(mail.text.indexOf('Avarias e ressalvas: '))
+        expect(mail.text).toContain('Processo: PO 12345 - Resina Atlas\n')
+        expect(mail.html).toContain('>faltam 10</span>')
+        expect(mail.html).toContain('>2 a mais</span>')
+        expect(mail.html).toContain('Conferência do Relatório de Carga do processo PO 12345 - Resina Atlas concluída no Portal COMEX.</div>')
+        expect(mail.attachments).toHaveLength(1)
+      })
+
+      it('conferência antiga (sem as chaves da Fatia B): corpo, título e e-mail de hoje', async () => {
+        setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+        configureSmtp()
+        seed()
+
+        await run()
+
+        for (const data of conferenceNotifications()) {
+          expect(data.title).toBe(TITLE)
+          expect(data.body).toBe(`${CONFERENCE_BODY}\n\n${SECTION_LINES.join('\n')}`)
+        }
+        const mail = mailOf()
+        expect(mail.subject).toBe(TITLE)
+        expect(mail.html).not.toContain('Contagem')
+        expect(mail.text).not.toContain('Contagem')
+      })
+
+      it('lote contado igual ao esperado e unidades 0 ou ausentes: sem Contagem e sem sufixo', async () => {
+        setupChain({ users: [ADMIN_1], config: { tecnico: [], faturamento: [] } })
+        configureSmtp()
+        seedCount({ unitsByRowId: { ...MATCHING, 'r-2': 0, 'r-6': 0 }, palletsByRowId: { 'r-1': 22 } })
+        delete cargoStore.docs.get(CONF_PATH).unitsByRowId['r-3']
+
+        await run()
+
+        const [notice] = conferenceNotifications()
+        expect(notice.title).toBe(TITLE)
+        expect(notice.body).toBe(CONFERENCE_BODY)
+      })
+
+      it('falha na leitura da conferência: título sem sufixo e corpo de hoje', async () => {
+        setupChain({ users: [ADMIN_1], config: { tecnico: [], faturamento: [] } })
+        configureSmtp()
+        scenarioD()
+        cargoStore.failRead.add(CONF_PATH)
+
+        await run()
+
+        const [notice] = conferenceNotifications()
+        expect(notice.title).toBe(TITLE)
+        expect(notice.body).toBe(CONFERENCE_BODY)
+      })
+
+      it('trava de duplicidade com Contagem: a segunda entrega do mesmo anexo não reenvia; anexo novo reenvia', async () => {
+        setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+        configureSmtp()
+        scenarioD()
+
+        await run('doc-1')
+        const afterFirst = conferenceNotifications().length
+        expect(afterFirst).toBe(3)
+        await run('doc-1')
+        await run('doc-1')
+        expect(conferenceNotifications()).toHaveLength(afterFirst)
+        expect(mockSendMail).toHaveBeenCalledTimes(1)
+        expect(cargoStore.docs.get(NOTICE_PATH)).toEqual({ documentId: 'doc-1', sentAt: 'SERVER_TIMESTAMP' })
+
+        await run('doc-2')
+        expect(conferenceNotifications()).toHaveLength(afterFirst * 2)
+        expect(mockSendMail).toHaveBeenCalledTimes(2)
+        expect(mailOf(1).subject).toBe(mailOf(0).subject)
+      })
+
+      it('o log leva só contagens (parciais e lotes divergentes): nada de nome, lote nem unidades', async () => {
+        setupChain({ config: { tecnico: [], faturamento: ['fiscal@sqquimica.com'] } })
+        configureSmtp()
+        scenarioD()
+
+        await run()
+
+        const finalCall = mockLogger.info.mock.calls.find(([message]) => message === 'Relatorio de Carga notificado.')
+        expect(finalCall[1]).toEqual({
+          processId: PROCESS_ID,
+          stage: 'conferencia',
+          inAppRecipients: 3,
+          directEmails: 1,
+          ignoredNonCorporate: 0,
+          failedDirectEmails: 0,
+          damageItems: 1,
+          damagePhotos: 2,
+          countPartialPallets: 2,
+          countDivergentLots: 2,
+        })
+        const logged = JSON.stringify([mockLogger.info.mock.calls, mockLogger.warn.mock.calls, mockLogger.error.mock.calls])
+        for (const secret of ['Catalisador', 'Poliol', 'Resina Acr', 'Aditivo', 'Z-9910', 'L-2232', '150 contadas']) {
+          expect(logged).not.toContain(secret)
+        }
+      })
+    })
   })
 
   it('processo inexistente / sem dado criado -> nada', async () => {

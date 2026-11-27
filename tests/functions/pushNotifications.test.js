@@ -210,3 +210,105 @@ describe('push FCM no createNotifications (via notifySupportTicketResolved)', ()
     expect(mockBatch.commit).toHaveBeenCalledTimes(1)
   })
 })
+
+// Fatia D (D-28): teto do corpo do PUSH. O FCM recusa payload > ~4 KB com `messaging/invalid-argument`, código que está
+// em DEAD_TOKEN_CODES (apagaria tokens VIVOS). O corpo do push sai cortado; o doc in-app segue com o texto inteiro.
+describe('push FCM: teto do corpo (D-28)', () => {
+  const FCM_PAYLOAD_LIMIT_BYTES = 4096
+  const ticketWithResolution = (resolutionMessage) => ({ ...RESOLVED_TICKET, resolutionMessage })
+  const sentBody = () => mockMessagingApi.sendEachForMulticast.mock.calls[0][0].notification.body
+  const graphemeEnds = (text) => {
+    const ends = new Set([0])
+    for (const { index, segment } of new Intl.Segmenter('pt-BR', { granularity: 'grapheme' }).segment(text)) {
+      ends.add(index + segment.length)
+    }
+    return ends
+  }
+
+  // Simula o FCM: mensagem acima de 4 KB -> `messaging/invalid-argument` em todos os tokens.
+  function simulateFcmSizeLimit() {
+    mockMessagingApi.sendEachForMulticast.mockImplementation(async (message) => {
+      const tooBig = Buffer.byteLength(JSON.stringify(message)) > FCM_PAYLOAD_LIMIT_BYTES
+      const responses = message.tokens.map(() =>
+        tooBig ? { success: false, error: { code: 'messaging/invalid-argument' } } : { success: true }
+      )
+      return { successCount: tooBig ? 0 : responses.length, failureCount: tooBig ? responses.length : 0, responses }
+    })
+  }
+
+  beforeEach(() => {
+    setupFirestoreChain({
+      users: [{ id: 'user-1', data: { name: 'Joana', fcmTokens: ['tok-a', 'tok-b'] } }],
+    })
+  })
+
+  it('corpo de 3.000 caracteres: push com no máximo 1.000 e reticências; o doc in-app guarda o corpo inteiro', async () => {
+    const long = 'Contagem de pallets e lotes divergentes. '.repeat(75).trim()
+    expect(long.length).toBeGreaterThan(3000)
+
+    await handler(makeEvent(BASE_TICKET, ticketWithResolution(long)))
+
+    const body = sentBody()
+    expect(body.length).toBeLessThanOrEqual(1000)
+    expect(body.endsWith('…')).toBe(true)
+    const fullBody = `Seu chamado foi resolvido por Admin Root: ${long}`
+    expect(fullBody.startsWith(body.slice(0, -1))).toBe(true)
+    const inApp = mockBatch.set.mock.calls[0][1]
+    expect(inApp.body).toBe(fullBody)
+  })
+
+  it('corpo curto (até 1.000 caracteres) segue idêntico, sem reticências', async () => {
+    const short = 'x'.repeat(900)
+    await handler(makeEvent(BASE_TICKET, ticketWithResolution(short)))
+    expect(sentBody()).toBe(`Seu chamado foi resolvido por Admin Root: ${short}`)
+    expect(sentBody().includes('…')).toBe(false)
+  })
+
+  it('o corte nunca parte emoji nem acento composto (corte por grafemas)', async () => {
+    const family = '👨‍👩‍👧‍👦' // emoji ZWJ: 1 grafema, 11 unidades UTF-16
+    const bodies = [
+      'ação '.repeat(400), // acentos
+      `${'a'.repeat(30)}${'😀'.repeat(900)}`, // pares substitutos
+      'é'.repeat(800), // letra + acento combinante (NFD)
+      `${family}`.repeat(300), // sequências ZWJ
+    ]
+    for (const text of bodies) {
+      mockMessagingApi.sendEachForMulticast.mockClear()
+      const full = `Seu chamado foi resolvido por Admin Root: ${text}`
+      await handler(makeEvent(BASE_TICKET, ticketWithResolution(text)))
+      const body = sentBody()
+      const kept = body.slice(0, -1)
+      expect(body.endsWith('…')).toBe(true)
+      expect(body.isWellFormed()).toBe(true) // nenhum substituto solto
+      expect(full.startsWith(kept.trimEnd())).toBe(true)
+      expect(graphemeEnds(full).has(kept.length)).toBe(true) // termina numa fronteira de grafema
+      expect(Array.from(body.slice(0, -1)).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('corpo cheio de emoji (4 bytes cada) fica abaixo de 3.000 bytes UTF-8', async () => {
+    await handler(makeEvent(BASE_TICKET, ticketWithResolution('😀'.repeat(1500))))
+    expect(Buffer.byteLength(sentBody())).toBeLessThanOrEqual(3000)
+  })
+
+  it('erro de tamanho do FCM NÃO apaga tokens vivos: o corte impede o invalid-argument por payload grande', async () => {
+    const huge = 'Contagem e avarias do fechamento da conferência. '.repeat(200) // ~9,8 KB, o pior caso do aviso
+    // Controle: SEM o corte, esta mensagem passaria de 4 KB e o FCM simulado devolveria invalid-argument (tokens apagados).
+    const uncut = { tokens: ['tok-a', 'tok-b'], notification: { title: 'Conferência', body: huge } }
+    expect(Buffer.byteLength(JSON.stringify(uncut))).toBeGreaterThan(FCM_PAYLOAD_LIMIT_BYTES)
+
+    simulateFcmSizeLimit()
+    await handler(makeEvent(BASE_TICKET, ticketWithResolution(huge)))
+
+    expect(mockMessagingApi.sendEachForMulticast).toHaveBeenCalledTimes(1)
+    const sent = mockMessagingApi.sendEachForMulticast.mock.calls[0][0]
+    expect(Buffer.byteLength(JSON.stringify(sent))).toBeLessThan(FCM_PAYLOAD_LIMIT_BYTES)
+    expect(mockFirestoreApi.FieldValue.arrayRemove).not.toHaveBeenCalled()
+  })
+
+  it('pior caso de bytes (emoji) também não dispara invalid-argument nem apaga tokens', async () => {
+    simulateFcmSizeLimit()
+    await handler(makeEvent(BASE_TICKET, ticketWithResolution('😀'.repeat(5000))))
+    expect(mockFirestoreApi.FieldValue.arrayRemove).not.toHaveBeenCalled()
+  })
+})

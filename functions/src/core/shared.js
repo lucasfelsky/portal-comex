@@ -809,6 +809,20 @@ const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-argument',
 ])
 
+// D-28: o FCM recusa payload > ~4 KB com `messaging/invalid-argument` (acima, em DEAD_TOKEN_CODES: apagaria tokens vivos).
+// Corpo do PUSH: no maximo 1.000 caracteres (grafemas, reticencias inclusas) e 3.000 bytes UTF-8; nunca parte emoji/acento.
+function clipPushBody(text) {
+  if (text.length <= 1000) return text // 1.000 unidades UTF-16 nunca passam de 3.000 bytes
+  const kept = []
+  let bytes = 3
+  for (const { segment } of new Intl.Segmenter('pt-BR', { granularity: 'grapheme' }).segment(text)) {
+    bytes += Buffer.byteLength(segment)
+    if (kept.length >= 999 || bytes > 3000) break
+    kept.push(segment)
+  }
+  return `${kept.join('').trimEnd()}…`
+}
+
 async function sendPushForEntries(entries, userDataByUid = new Map()) {
   const firestore = getFirestore()
 
@@ -826,7 +840,7 @@ async function sendPushForEntries(entries, userDataByUid = new Map()) {
       tokens,
       notification: {
         title: repairTextEncoding(normalizeString(entry.title)),
-        body: repairTextEncoding(normalizeString(entry.body)),
+        body: clipPushBody(repairTextEncoding(normalizeString(entry.body))),
       },
       webpush: {
         fcmOptions: { link: APP_URL },
