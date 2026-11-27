@@ -140,6 +140,18 @@ function Panel({ profile = ADMIN, category = 'FCL', processId = 'p1' }) {
 }
 
 const inputs = (container) => Array.from(container.querySelectorAll('input[type="file"]'))
+// S11-J: o aviso da fila é um botão-ícone com pop-up; o mesmo texto vai para uma região `status` oculta (leitor de tela).
+const BUSY_NOTICE = 'Leitura automática interrompida: Outra leitura de COA está em andamento. Tente de novo em 1 minuto. Use Ler COAs no formulário.'
+async function expectNotice(message, name = 'Leitura automática interrompida') {
+  const [button] = await screen.findAllByRole('button', { name })
+  const tip = screen.getAllByRole('tooltip').find((node) => node.textContent === message)
+  expect(tip).toBeTruthy()
+  expect(button).toHaveAccessibleDescription(message)
+  const region = screen.getAllByRole('status').find((node) => node.textContent === message)
+  expect(region).toHaveClass('documents-visually-hidden')
+  return button
+}
+
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 const settle = async () => {
   for (let index = 0; index < 4; index += 1) await act(async () => flush())
@@ -439,11 +451,11 @@ describe('card do COA: cada arquivo entra na fila ao subir', () => {
     await act(async () => {
       reads[0].reject(Object.assign(new Error('busy'), { code: 'busy' }))
     })
-    expect(await screen.findByText(/Leitura automática interrompida: Outra leitura de COA está em andamento/)).toBeInTheDocument()
+    await expectNotice(BUSY_NOTICE)
     await finishUpload(1, 'new2')
     await settle()
     expect(readIds()).toEqual(['new1'])
-    expect(screen.getByText(/Leitura automática interrompida/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leitura automática interrompida' })).toBeInTheDocument()
   })
 
   it('report-closed na 1ª leitura com o lote ainda subindo: o arquivo que sobe depois não é lido (silêncio)', async () => {

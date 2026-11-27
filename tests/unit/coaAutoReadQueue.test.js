@@ -142,11 +142,11 @@ describe('coaAutoReadQueue - quem entra', () => {
     await flush()
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
     expect(getCoaAutoReadState().notices).toEqual({
-      [KEY]: 'Leitura automática não iniciada: não foi possível identificar o arquivo enviado. Use Ler COAs no formulário.',
+      [KEY]: 'Leitura automática não iniciada: não foi possível identificar o arquivo enviado.',
     })
     expect(enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' })])).toBe(0)
     expect(getCoaAutoReadState().notices[KEY]).toBe(
-      'Leitura automática não iniciada: só PDF é lido automaticamente. Use Ler COAs no formulário.'
+      'Leitura automática não iniciada: só PDF é lido automaticamente.'
     )
   })
 
@@ -165,6 +165,8 @@ describe('coaAutoReadQueue - quem entra', () => {
     expect(enqueueCoaAutoRead('p1', [doc('a')])).toBe(0)
     await flush()
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+    // PDF válido já tentado volta mudo: nenhum aviso (nem "só PDF") para um erro só do arquivo.
+    expect(getCoaAutoReadState().notices).toEqual({})
   })
 })
 
@@ -337,6 +339,7 @@ describe('coaAutoReadQueue - ciclo de vida e selo', () => {
     expect(enqueueCoaAutoRead('p1', [doc('a')], 'PO-1')).toBe(0)
     await flush()
     expect(mockReadProcessCoa).toHaveBeenCalledTimes(1)
+    expect(getCoaAutoReadState().notices).toEqual({})
   })
 
   it('sem componente montado no momento do envio, não enfileira (mesmo com a fila andando)', async () => {
@@ -606,13 +609,18 @@ describe('coaAutoReadQueue - bilhete do envio (S11-H, L157)', () => {
     await flush()
     await flush()
     expect(calledIds()).toEqual(['a'])
+    // PDF válido reenfileirado (mesmo documentId) não gera aviso algum.
+    expect(getCoaAutoReadState().notices).toEqual({})
   })
 
-  it('com bilhete, não-PDF segue mudo', async () => {
+  it('com bilhete, não-PDF e sem id não são lidos e deixam o aviso (o último motivo vale)', async () => {
     const send = beginCoaAutoReadSend('p1')
     expect(enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' }), doc('')], '', send)).toBe(0)
     await flush()
     expect(mockReadProcessCoa).not.toHaveBeenCalled()
+    expect(getCoaAutoReadState().notices).toEqual({
+      [KEY]: 'Leitura automática não iniciada: não foi possível identificar o arquivo enviado.',
+    })
   })
 
   it('erro de serviço na leitura: o resto do lote que ainda sobe NÃO entra; um envio novo depois entra e limpa o aviso', async () => {

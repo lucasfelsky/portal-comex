@@ -28255,3 +28255,84 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* S11-J: aviso da leitura automática do COA como botão-ícone com pop-up (mesmo padrão do alternador do Packing List). */
+.coa-auto-read-notice {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  flex: none;
+  margin-top: 4px;
+  font-style: normal;
+}
+
+.coa-auto-read-notice__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--warning);
+  border-radius: 10px;
+  background: var(--warning-50);
+  color: var(--warning-700);
+  cursor: pointer;
+}
+
+.coa-auto-read-notice__button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.coa-auto-read-notice__button:hover {
+  border-color: var(--warning-700);
+}
+
+.coa-auto-read-notice__button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--focus-ring);
+}
+
+.coa-auto-read-notice__tip {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: min(240px, calc(100vw - 72px));
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ink);
+  box-shadow: var(--shadow-lg);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.coa-auto-read-notice__tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 13px;
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+}
+
+.coa-auto-read-notice__tip--open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.coa-card--mobile > .coa-auto-read-notice {
+  margin-inline: var(--m-inset, 16px);
+}

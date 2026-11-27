@@ -264,9 +264,14 @@ describe('tipo do arquivo informado pelo navegador', () => {
 })
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-const NOT_PDF_LINE = 'Leitura automática não iniciada: só PDF é lido automaticamente. Use Ler COAs no formulário.'
+const NOT_PDF_LINE = 'Leitura automática não iniciada: só PDF é lido automaticamente.'
 const CLOSED_NOTE = 'O relatório já foi fechado; a leitura de COA é só no rascunho.'
 const statusLine = (text) => screen.queryAllByRole('status').find((node) => node.textContent === text)
+// O aviso é um botão-ícone com pop-up (texto exato no tooltip) e a região oculta repete o texto para leitor de tela.
+const noticeShown = (text, name = 'Leitura automática não iniciada') =>
+  screen.queryAllByRole('button', { name }).length > 0 &&
+  screen.queryAllByRole('tooltip').some((node) => node.textContent === text) &&
+  statusLine(text)?.classList.contains('documents-visually-hidden') === true
 
 describe('falha visível: leitura automática não iniciada (S11-J)', () => {
   it('arquivo que não é PDF sobe e a tela diz por que não foi lido (ficando e ao voltar)', async () => {
@@ -275,13 +280,13 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
     await loaded()
     await user.upload(fileInput(view.container), [file('SYN-1.docx', DOCX)], { applyAccept: false })
     await waitFor(() => expect(storedDocs('p1')).toHaveLength(1), { timeout: 3000 })
-    await waitFor(() => expect(statusLine(NOT_PDF_LINE)).toBeTruthy())
+    await waitFor(() => expect(noticeShown(NOT_PDF_LINE)).toBe(true))
     expect(readIds()).toHaveLength(0)
 
     view.rerender(<Screen show={false} />)
     view.rerender(<Screen />)
     await loaded()
-    await waitFor(() => expect(statusLine(NOT_PDF_LINE)).toBeTruthy())
+    await waitFor(() => expect(noticeShown(NOT_PDF_LINE)).toBe(true))
     expect(readIds()).toHaveLength(0)
   })
 
@@ -292,7 +297,7 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
     await user.upload(fileInput(view.container), [file('SYN-1.docx', DOCX), file('SYN-2.pdf')], { applyAccept: false })
     await waitFor(() => expect(readIds()).toHaveLength(1), { timeout: 3000 })
     await settle()
-    expect(statusLine(NOT_PDF_LINE)).toBeTruthy()
+    expect(noticeShown(NOT_PDF_LINE)).toBe(true)
     expect(readIds()).toHaveLength(1)
   })
 
@@ -301,11 +306,12 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
     const view = render(<Screen />)
     await loaded()
     await user.upload(fileInput(view.container), [file('SYN-1.docx', DOCX)], { applyAccept: false })
-    await waitFor(() => expect(statusLine(NOT_PDF_LINE)).toBeTruthy(), { timeout: 3000 })
+    await waitFor(() => expect(noticeShown(NOT_PDF_LINE)).toBe(true), { timeout: 3000 })
     await user.upload(fileInput(view.container), [file('SYN-2.pdf')])
     await waitFor(() => expect(readIds()).toHaveLength(1), { timeout: 3000 })
     await settle()
-    expect(statusLine(NOT_PDF_LINE)).toBeFalsy()
+    expect(noticeShown(NOT_PDF_LINE)).toBe(false)
+    expect(screen.queryByRole('button', { name: 'Leitura automática não iniciada' })).not.toBeInTheDocument()
   })
 
   it('célula de PO: o mesmo aviso aparece na célula da PO', async () => {
@@ -315,7 +321,7 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
     await user.upload(fileInput(view.container, 'Selecionar arquivos de COA da PO 9010'), [file('SYN-1.docx', DOCX)], {
       applyAccept: false,
     })
-    await waitFor(() => expect(statusLine(NOT_PDF_LINE)).toBeTruthy(), { timeout: 3000 })
+    await waitFor(() => expect(noticeShown(NOT_PDF_LINE)).toBe(true), { timeout: 3000 })
     expect(readIds()).toHaveLength(0)
   })
 
@@ -334,7 +340,7 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
 
     view.rerender(<Screen />)
     await loaded()
-    await waitFor(() => expect(statusLine(CLOSED_NOTE)).toBeTruthy())
+    await waitFor(() => expect(noticeShown(CLOSED_NOTE)).toBe(true))
     expect(readIds()).toHaveLength(1)
   })
 
@@ -351,5 +357,6 @@ describe('falha visível: leitura automática não iniciada (S11-J)', () => {
     const lines = screen.queryAllByRole('status').filter((node) => /Leitura automática/.test(node.textContent))
     expect(lines).toHaveLength(1)
     expect(lines[0]).toHaveTextContent(/^Leitura automática interrompida: .* Use Ler COAs no formulário\.$/)
+    expect(screen.getByRole('button', { name: 'Leitura automática interrompida' })).toBeInTheDocument()
   })
 })

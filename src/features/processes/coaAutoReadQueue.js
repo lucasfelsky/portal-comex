@@ -27,8 +27,8 @@
 //   (`coaUploadStore`) e cada arquivo entra na fila com o bilhete, mesmo sem componente montado; se a conta mudar no
 //   meio, nenhum arquivo do envio antigo entra (época).
 // - S11-J: nada deixa de ser lido em silêncio. Arquivo que subiu e NÃO entra na fila (não é PDF, sem id, leitura
-//   anterior interrompida) deixa a linha "Leitura automática não iniciada: <motivo>. Use Ler COAs no formulário." no
-//   escopo dele; `report-closed` deixa a nota "O relatório já foi fechado; a leitura de COA é só no rascunho." (sem
+//   anterior interrompida) deixa o aviso "Leitura automática não iniciada: <motivo>." (pop-up do ícone) no escopo
+//   dele; `report-closed` deixa a nota "O relatório já foi fechado; a leitura de COA é só no rascunho." (sem
 //   custo extra: a nota sai da MESMA chamada que já aconteceu). A linha fica no store e aparece ao voltar à aba.
 //   Conta que mudou (época) segue muda: o aviso seria de outra sessão.
 // - Nenhum timer: nada para vazar.
@@ -140,9 +140,9 @@ function lowerFirst(text) {
 }
 
 // Linha "não iniciada" (arquivo que subiu mas não entrou na fila). `onlyIfEmpty`: não pisa em aviso que já explica.
-function noteNotStarted(key, reason, { onlyIfEmpty = false } = {}) {
+function noteNotStarted(key, reason, { onlyIfEmpty = false, hint = false } = {}) {
   if (onlyIfEmpty && state.notices[key]) return
-  const text = `${COA_AUTO_READ_NOT_STARTED}: ${lowerFirst(reason.replace(/[.\s]+$/, ''))}. Use Ler COAs no formulário.`
+  const text = `${COA_AUTO_READ_NOT_STARTED}: ${lowerFirst(reason.replace(/[.\s]+$/, ''))}.${hint ? ' Use Ler COAs no formulário.' : ''}`
   if (state.notices[key] === text) return
   emit({ notices: { ...state.notices, [key]: text } })
 }
@@ -269,7 +269,7 @@ export function enqueueCoaAutoRead(processId, documents, scope = '', send = null
       return 0
     }
     if (send.fault !== faultSeq) {
-      noteNotStarted(key, 'a leitura anterior foi interrompida', { onlyIfEmpty: true })
+      noteNotStarted(key, 'a leitura anterior foi interrompida', { onlyIfEmpty: true, hint: true })
       return 0
     }
   } else if ((mounts.get(processId) ?? 0) <= 0) {
