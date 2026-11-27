@@ -48,12 +48,12 @@ const ROWS = [
 const model = buildCargoConferenceItems(ROWS, [])
 const EMPTY = { okByRowId: {}, countOkByRowId: {}, palletsByRowId: {}, damageByRowId: {} }
 
-function Harness({ conference = EMPTY, canSave = true, initialQuery = '', initialPending = false, pinned = new Set(), onOpen = vi.fn() }) {
+function Harness({ conference = EMPTY, canSave = true, initialQuery = '', initialPending = false, pinned = new Set(), onOpen = vi.fn(), model: modelProp = model }) {
   const [query, setQuery] = useState(initialQuery)
   const [pending, setPending] = useState(initialPending)
   return (
     <CargoConferenceItemList
-      model={model}
+      model={modelProp}
       conference={conference}
       query={query}
       onQueryChange={setQuery}
@@ -143,6 +143,83 @@ describe('busca', () => {
     await userEvent.clear(searchBox())
     await userEvent.type(searchBox(), 'ba5190')
     expect(within(rowButton('Resina Acrílica RA-55')).getByText('Achado pelo código BA5190')).toBeInTheDocument()
+  })
+
+  it('achado pelo lote do fornecedor: a linha diz "Achado pelo lote <lote>" no mesmo padrão visual dos outros motivos', async () => {
+    render(<Harness />)
+    await userEvent.type(searchBox(), 'a-1180')
+    expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(1)
+    const hint = within(rowButton('Resina Acrílica RA-55')).getByText('Achado pelo lote A-1180')
+    expect(hint).toHaveClass('ccf-irow__hint')
+    // O nome acessível do botão segue "Abrir <nome>" e o motivo é texto da própria linha (mesmo elemento dos outros motivos).
+    expect(rowButton('Resina Acrílica RA-55')).toHaveTextContent('Achado pelo lote A-1180')
+    expect(screen.getByText(/^de 3 itens$/).querySelector('b')).toHaveTextContent('1')
+  })
+
+  it('achado por trecho do lote, sem diferenciar caixa: "2231" e "l-2231"; vários lotes viram "+N lote(s)"', async () => {
+    render(<Harness />)
+    await userEvent.type(searchBox(), '2231')
+    expect(within(rowButton('Poliol Flex 3000')).getByText('Achado pelo lote L-2231')).toBeInTheDocument()
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), 'L-223')
+    expect(within(rowButton('Poliol Flex 3000')).getByText('Achado pelo lote L-2231 +1 lote')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(1)
+  })
+
+  it('achado pelo lote SQ: "Achado pelo lote SQ <lote SQ>" (lote + 3 primeiras letras da PO)', async () => {
+    const poRows = [
+      { ...row('q1', 'BA5012', 'Poliol Flex 3000', 'POLYETHER POLYOL PE-3000', 'L-2231'), po: 'DEMO SEA 011-26' },
+      { ...row('q2', 'BA5012', 'Poliol Flex 3000', 'POLYETHER POLYOL PE-3000', 'L-2232'), po: 'DEMO SEA 011-26' },
+      { ...row('q3', 'BA5190', 'Resina Acrílica RA-55', 'ACRYLIC RESIN AR-55 (50%)', ''), po: 'DEMO SEA 011-26' },
+    ]
+    render(<Harness model={buildCargoConferenceItems(poRows, [])} />)
+    await userEvent.type(searchBox(), 'l-2231dem')
+    expect(within(rowButton('Poliol Flex 3000')).getByText('Achado pelo lote SQ L-2231DEM')).toHaveClass('ccf-irow__hint')
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), 'dem')
+    expect(within(rowButton('Poliol Flex 3000')).getByText('Achado pelo lote SQ L-2231DEM +1 lote')).toBeInTheDocument()
+    // O lote vazio não tem lote SQ: o item sem lote não aparece.
+    expect(screen.queryByRole('button', { name: 'Abrir Resina Acrílica RA-55' })).not.toBeInTheDocument()
+  })
+
+  it('nome da SQ não mostra motivo mesmo quando o lote também casa; sem busca, nenhum motivo; lote de outro item não traz o item', async () => {
+    const mixed = [
+      row('m1', 'BA5012', 'Poliol Flex 3000', 'POLYETHER POLYOL PE-3000', 'POLIOL-7'),
+      row('m2', 'BA5033', 'Catalisador ZN-12', 'ZINC CATALYST ZN12', 'Z-9910'),
+    ]
+    render(<Harness model={buildCargoConferenceItems(mixed, [])} />)
+    expect(screen.queryByText(/Achado pelo/)).not.toBeInTheDocument()
+    await userEvent.type(searchBox(), 'poliol')
+    expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(1)
+    expect(screen.queryByText(/Achado pelo/)).not.toBeInTheDocument()
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), '9910')
+    expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(1)
+    expect(rowButton('Catalisador ZN-12')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abrir Poliol Flex 3000' })).not.toBeInTheDocument()
+  })
+
+  it('item sem lote não aparece por "Sem lote informado" nem por espaços na busca', async () => {
+    const noLot = [row('s1', 'BA6001', 'Aditivo AX-7', 'ADDITIVE AX7 POWDER', ''), row('s2', 'BA5012', 'Poliol Flex 3000', 'POLYOL', 'L-2231')]
+    render(<Harness model={buildCargoConferenceItems(noLot, [])} />)
+    await userEvent.type(searchBox(), 'sem lote')
+    expect(screen.getByText('Nenhum item encontrado para “sem lote”.')).toBeInTheDocument()
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), '   ')
+    // Só espaços = busca vazia: tudo aparece, sem motivo e sem a contagem "X de Y".
+    expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(2)
+    expect(screen.queryByText(/Achado pelo/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^de \d+ itens?$/)).not.toBeInTheDocument()
+  })
+
+  it('a busca pelo lote e "Só pendentes" valem juntos', async () => {
+    render(<Harness initialPending conference={{ ...EMPTY, okByRowId: { r4: true }, palletsByRowId: { r4: 1 } }} />)
+    // Resina está conferida: o filtro a esconde, mesmo achada pelo lote.
+    await userEvent.type(searchBox(), 'a-1180')
+    expect(screen.getByText('Nenhum item encontrado para “a-1180”. O filtro Só pendentes está ligado.')).toBeInTheDocument()
+    await userEvent.clear(searchBox())
+    await userEvent.type(searchBox(), 'z-9910')
+    expect(within(rowButton('Catalisador ZN-12')).getByText('Achado pelo lote Z-9910')).toBeInTheDocument()
   })
 
   it('sem resultado: "Nenhum item encontrado para “tinta”." e "Limpar busca" (secondary-button) que traz a lista de volta', async () => {
@@ -454,6 +531,42 @@ describe('navegação: item na URL', () => {
     await user.click(screen.getByRole('button', { name: 'voltar do aparelho' }))
     expect(location()).toBe('/conferencia?processo=p1')
     expect(searchBox()).toHaveValue('alfa')
+  })
+
+  describe('busca pelo lote (fatia A2)', () => {
+    const LOT_ROWS = [
+      row('n1', 'BA5012', 'Alfa Um', 'ALPHA ONE', 'L-2231'),
+      row('n2', 'BA5033', 'Beta Dois', 'BETA TWO', 'L-5500'),
+      row('n3', 'BA5190', 'Alfa Três', 'ALPHA THREE', 'L-2299'),
+    ]
+
+    it('a busca pelo lote e o Só pendentes sobrevivem a abrir e voltar do item', async () => {
+      const { user } = await renderNav({ rows: LOT_ROWS })
+      await user.type(searchBox(), '22')
+      await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
+      expect(within(itemButton('Alfa Um')).getByText('Achado pelo lote L-2231')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(2)
+      await user.click(itemButton('Alfa Um'))
+      await user.click(screen.getAllByRole('button', { name: 'Voltar aos itens' })[0])
+      expect(searchBox()).toHaveValue('22')
+      expect(screen.getByRole('checkbox', { name: 'Só pendentes' })).toBeChecked()
+      expect(screen.getAllByRole('button', { name: /^Abrir / })).toHaveLength(2)
+      expect(within(itemButton('Alfa Três')).getByText('Achado pelo lote L-2299')).toBeInTheDocument()
+    })
+
+    it('"Próximo item" segue o filtro por lote (pula o item cujo lote não casa)', async () => {
+      const { user } = await renderNav({ rows: LOT_ROWS })
+      await user.type(searchBox(), 'l-22')
+      await user.click(itemButton('Alfa Um'))
+      expect(screen.getByText('Item 1 de 3')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Próximo item/ }))
+      expect(screen.getByRole('heading', { level: 2, name: 'Alfa Três' })).toBeInTheDocument()
+      expect(screen.getByText('Item 3 de 3')).toBeInTheDocument()
+      const bar = screen.getByRole('group', { name: 'Ações da conferência' })
+      expect(within(bar).queryByRole('button', { name: /Próximo item/ })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'voltar do aparelho' }))
+      expect(searchBox()).toHaveValue('l-22')
+    })
   })
 
   it('o Só pendentes não limita o Próximo item (anda por todos os itens da busca)', async () => {

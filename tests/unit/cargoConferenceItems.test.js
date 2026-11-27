@@ -9,8 +9,10 @@ import {
   listCargoSearchItems,
   locateCargoItem,
   matchCargoConferenceItem,
+  matchCargoLots,
   summarizeCargoConferenceItem,
 } from '../../src/features/processes/cargoConferenceItems'
+import { deriveCargoReportRow } from '../../src/features/processes/cargoReportFormModel'
 
 const row = (id, overrides = {}) => ({
   id,
@@ -180,6 +182,106 @@ describe('matchCargoConferenceItem: busca', () => {
   it('sem resultado: lista vazia', () => {
     expect(names('tinta')).toEqual([])
     expect(matchCargoConferenceItem(items[0], 'tinta')).toEqual({ ok: false, by: '' })
+  })
+})
+
+describe('busca pelo lote (fatia A2): lote do fornecedor e lote SQ de qualquer lote do item', () => {
+  const { items } = buildCargoConferenceItems(ROWS, [])
+  const names = (query, list = items) => listCargoSearchItems(list, query).map((item) => item.name)
+  const [poliol, catalisador, resina, aditivo] = items
+  const withPo = (id, lot, extra = {}) => row(id, { po: 'DEMO SEA 011-26', supplierLot: lot, ...extra })
+
+  it('acha pelo lote do fornecedor e diz "Achado pelo lote <lote>"', () => {
+    expect(names('A-1180')).toEqual(['Resina Acrílica RA-55'])
+    expect(matchCargoConferenceItem(resina, 'A-1180')).toEqual({ ok: true, by: 'Achado pelo lote A-1180' })
+    expect(matchCargoConferenceItem(poliol, 'L-2240')).toEqual({ ok: true, by: 'Achado pelo lote L-2240' })
+  })
+
+  it('casa por trecho do lote, com a pontuação do lote contando (mesma regra do código: sem forma compacta)', () => {
+    expect(matchCargoConferenceItem(poliol, '2231')).toEqual({ ok: true, by: 'Achado pelo lote L-2231' })
+    expect(matchCargoConferenceItem(catalisador, '991')).toEqual({ ok: true, by: 'Achado pelo lote Z-9910' })
+    // O "-" faz parte do texto comparado: "l 2231" e "L2231" não acham "L-2231" (igual ao que o código já faz).
+    expect(names('l 2231')).toEqual([])
+    expect(names('l2231')).toEqual([])
+  })
+
+  it('não diferencia caixa nem acento, nem espaço repetido, no lote do fornecedor', () => {
+    const list = buildCargoConferenceItems([row('a', { supplierLot: 'Lót-Ç 9A' }), row('b', { dbcorpCode: 'BA9', sqDescription: 'Outro', supplierDescription: 'X', supplierLot: 'ZZ-1' })], []).items
+    expect(matchCargoConferenceItem(list[0], 'LOT-c  9a')).toEqual({ ok: true, by: 'Achado pelo lote Lót-Ç 9A' })
+    expect(matchCargoConferenceItem(list[0], 'lót-ç')).toEqual({ ok: true, by: 'Achado pelo lote Lót-Ç 9A' })
+    expect(names('LÓT-Ç', list)).toEqual(['Poliol Flex 3000'])
+    expect(names('l-2231')).toEqual(['Poliol Flex 3000'])
+    expect(names('  L-2231  ')).toEqual(['Poliol Flex 3000'])
+  })
+
+  it('o lote SQ é o mesmo valor de deriveCargoReportRow (lote + 3 primeiras letras da PO) e também acha o item', () => {
+    const rows = [withPo('s1', 'L-2231'), withPo('s2', 'L-2232', { dbcorpCode: 'BA5033', sqDescription: 'Catalisador ZN-12', supplierDescription: 'ZINC CATALYST ZN12' })]
+    const model = buildCargoConferenceItems(rows, [])
+    expect(model.items[0].lots[0].lotSq).toBe(deriveCargoReportRow(rows[0], null).lotSq)
+    expect(model.items[0].lots[0].lotSq).toBe('L-2231DEM')
+    expect(matchCargoConferenceItem(model.items[0], 'l-2231dem')).toEqual({ ok: true, by: 'Achado pelo lote SQ L-2231DEM' })
+    expect(matchCargoConferenceItem(model.items[1], '2232dem')).toEqual({ ok: true, by: 'Achado pelo lote SQ L-2232DEM' })
+    expect(names('2232dem', model.items)).toEqual(['Catalisador ZN-12'])
+  })
+
+  it('quando o mesmo lote casa pelo fornecedor e pelo SQ, vale o do fornecedor (o lote conta uma vez só)', () => {
+    const { items: list } = buildCargoConferenceItems([withPo('s1', 'L-2231')], [])
+    expect(matchCargoConferenceItem(list[0], '2231')).toEqual({ ok: true, by: 'Achado pelo lote L-2231' })
+  })
+
+  it('vários lotes casando: o primeiro e "+N lotes" ("+1 lote" no singular)', () => {
+    expect(matchCargoConferenceItem(poliol, '22')).toEqual({ ok: true, by: 'Achado pelo lote L-2231 +2 lotes' })
+    expect(matchCargoConferenceItem(poliol, '223')).toEqual({ ok: true, by: 'Achado pelo lote L-2231 +1 lote' })
+    expect(matchCargoLots(poliol, '22').map((found) => found.rowId)).toEqual(['r1', 'r2', 'r3'])
+  })
+
+  it('vários lotes casando só pelo lote SQ: o primeiro, SQ, e "+N lotes"', () => {
+    const { items: list } = buildCargoConferenceItems([withPo('s1', 'L-2231'), withPo('s2', 'L-2232'), withPo('s3', 'L-2240')], [])
+    expect(matchCargoConferenceItem(list[0], 'dem')).toEqual({ ok: true, by: 'Achado pelo lote SQ L-2231DEM +2 lotes' })
+  })
+
+  it('lote do fornecedor e lote SQ misturados: o primeiro lote que casa dá o texto', () => {
+    const { items: list } = buildCargoConferenceItems([row('s1', { po: '', supplierLot: 'L-2231' }), withPo('s2', 'L-9000')], [])
+    // "dem" só casa o lote SQ do 2º lote (o 1º não tem PO).
+    expect(matchCargoConferenceItem(list[0], 'dem')).toEqual({ ok: true, by: 'Achado pelo lote SQ L-9000DEM' })
+    expect(matchCargoConferenceItem(list[0], 'l-')).toEqual({ ok: true, by: 'Achado pelo lote L-2231 +1 lote' })
+  })
+
+  it('item sem lote: nunca casa por "Sem lote informado", por texto vazio nem por espaços', () => {
+    expect(aditivo.lots[0].title).toBe('Sem lote informado')
+    expect(names('sem lote')).toEqual([])
+    expect(names('informado')).toEqual([])
+    expect(matchCargoLots(aditivo, '')).toEqual([])
+    expect(matchCargoLots(aditivo, '   ')).toEqual([])
+    expect(matchCargoLots(poliol, '')).toEqual([])
+    expect(matchCargoLots(poliol, '  ')).toEqual([])
+    // Lote só de espaços também é "sem lote".
+    const { items: list } = buildCargoConferenceItems([row('a', { supplierLot: '   ' })], [])
+    expect(matchCargoLots(list[0], ' ')).toEqual([])
+    expect(matchCargoLots(list[0], 'x')).toEqual([])
+    // Busca vazia: acha tudo e não mostra motivo.
+    expect(matchCargoConferenceItem(aditivo, '')).toEqual({ ok: true, by: '' })
+    expect(matchCargoConferenceItem(aditivo, '   ')).toEqual({ ok: true, by: '' })
+  })
+
+  it('o lote de OUTRO item não traz este item', () => {
+    expect(names('9910')).toEqual(['Catalisador ZN-12'])
+    expect(matchCargoConferenceItem(poliol, '9910')).toEqual({ ok: false, by: '' })
+    expect(matchCargoConferenceItem(resina, '2231')).toEqual({ ok: false, by: '' })
+    expect(names('l-2240')).toEqual(['Poliol Flex 3000'])
+  })
+
+  it('precedência do motivo: nome SQ (sem motivo) > nome no fornecedor > código > lote', () => {
+    const lotOf = (extra) => buildCargoConferenceItems([row('a', { dbcorpCode: 'BA7000', sqDescription: 'Bloco Azul', supplierDescription: 'ZZ BLOCK', ...extra })], []).items[0]
+    expect(matchCargoConferenceItem(lotOf({ supplierLot: 'BLOCO-9' }), 'bloco')).toEqual({ ok: true, by: '' })
+    expect(matchCargoConferenceItem(lotOf({ supplierLot: 'ZZ-9' }), 'zz')).toEqual({ ok: true, by: 'Achado pelo nome no fornecedor' })
+    expect(matchCargoConferenceItem(lotOf({ supplierLot: 'BA7000-L' }), 'ba7000')).toEqual({ ok: true, by: 'Achado pelo código BA7000' })
+    expect(matchCargoConferenceItem(lotOf({ supplierLot: 'XQ-77' }), 'xq-77')).toEqual({ ok: true, by: 'Achado pelo lote XQ-77' })
+  })
+
+  it('"Próximo item" (listCargoSearchItems) segue o filtro por lote', () => {
+    expect(listCargoSearchItems(items, '22').map((item) => item.name)).toEqual(['Poliol Flex 3000'])
+    expect(listCargoSearchItems(items, 'z-9910').map((item) => item.key)).toEqual([catalisador.key])
   })
 })
 

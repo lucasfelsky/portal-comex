@@ -798,3 +798,50 @@ test.describe('asserções (320 px)', () => {
     }
   })
 })
+
+// Fatia A2: busca pelo lote. O mock v5 não tem este estado (pedido posterior): sem lado a lado com o mock; a captura é claro x escuro
+// a 390 px (PNG em OUT_DIR, fora do git) e as asserções saem != 0.
+test.describe('asserções (busca pelo lote, 390 px)', () => {
+  test('o motivo "Achado pelo lote" aparece no mesmo padrão dos outros; sem lote não casa; captura claro x escuro', async ({ browser }) => {
+    test.setTimeout(300_000)
+    const files = []
+    for (const theme of THEMES) {
+      const context = await newContext(browser, theme, SIZES[0], 'logistica')
+      try {
+        const page = await openPage(context)
+        await setConference(FCL, 'and')
+        await openConference(page, FCL)
+        await typeSearch(page, 'l-223')
+        await expect(page.locator('.ccf-irow')).toHaveCount(1)
+        const hint = page.locator('.ccf-irow .ccf-irow__hint')
+        await expect(hint).toHaveText('Achado pelo lote L-2231 +1 lote')
+        const sameStyle = await page.evaluate(() => {
+          const hintStyle = getComputedStyle(document.querySelector('.ccf-irow__hint'))
+          return { weight: hintStyle.fontWeight, display: hintStyle.display }
+        })
+        expect(sameStyle.weight).toBe('700')
+        expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= document.scrollingElement.clientWidth), `sem rolagem horizontal (${theme})`).toBe(true)
+        const file = path.join(OUT_DIR, `busca-lote-390-${theme}.png`)
+        await page.screenshot({ path: file, animations: 'disabled' })
+        files.push(file)
+        await typeSearch(page, 'z-9910')
+        await expect(page.getByText('Achado pelo lote Z-9910')).toBeVisible()
+        await typeSearch(page, 'sem lote')
+        await expect(page.locator('.ccf-irow')).toHaveCount(0)
+        await expect(page.getByText('Nenhum item encontrado para “sem lote”.')).toBeVisible()
+        await typeSearch(page, '')
+        await expect(page.locator('.ccf-irow__hint')).toHaveCount(0)
+      } finally {
+        await context.close()
+      }
+    }
+    const toData = (file) => `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`
+    const page = await browser.newPage({ viewport: { width: SIZES[0].width * 2 + 90, height: SIZES[0].height + 90 } })
+    await page.setContent(`<!doctype html><body style="margin:0;background:#5c6b73;font:600 13px sans-serif;color:#fff">
+      <div style="display:flex;gap:30px;padding:20px">${files
+        .map((file, index) => `<figure style="margin:0"><figcaption style="margin-bottom:6px">achado pelo lote · ${THEMES[index]}</figcaption><img src="${toData(file)}" style="display:block"></figure>`)
+        .join('')}</div></body>`)
+    await page.screenshot({ path: path.join(OUT_DIR, 'busca-lote-390-lado-a-lado.png'), fullPage: true })
+    await page.close()
+  })
+})
