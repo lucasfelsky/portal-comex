@@ -2,13 +2,23 @@
 // consolidado) e pela célula "COA" de cada PO. Progresso "Enviando X de Y…", erro por arquivo, teto de vagas
 // (`room`, vem de `getCoaUploadRoom`), arrastar e soltar e foco de volta ao botão ao terminar.
 //
+// S11-I: o laço de upload mora em `coaUploadStore` (envio em segundo plano). Este hook só valida, inicia o envio com
+// tudo capturado e lê o andamento do store (`useSyncExternalStore`): sair da aba ou trocar de processo não interrompe.
+//
 // `po` só vale no CONSOLIDADO (o COA é por PO lá); sem PO o envio é barrado ANTES do upload.
-// Padrão replicado (não é util compartilhado): guard `isMounted` em async (aqui via `mountedRef`).
 
-import { useEffect, useRef, useState } from 'react'
-import { getFriendlyErrorDetail } from '../../utils/errorMessages'
-import { uploadProcessDocument } from '../../services/processDocumentsRepository'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useOptionalToast } from '../../components/Toast'
 import useCoaAutoRead from './useCoaAutoRead'
+import { buildCoaAutoReadKey } from './coaAutoReadQueue'
+import {
+  COA_UPLOAD_ERROR_TITLE,
+  getCoaUploadState,
+  isCoaUploadBusy,
+  startCoaUpload,
+  subscribeCoaUpload,
+  watchCoaUpload,
+} from './coaUploadStore'
 import {
   MAX_COA_FILES_PER_PROCESS,
   MAX_COA_FILES_PER_PURCHASE_ORDER,
@@ -19,7 +29,7 @@ import {
 } from './processDocuments'
 
 const COA_TYPE = 'coaOriginal'
-export const COA_UPLOAD_ERROR_TITLE = 'Não foi possível enviar o documento.'
+export { COA_UPLOAD_ERROR_TITLE }
 
 function pluralize(count, singular, plural) {
   return count === 1 ? singular : plural
@@ -30,29 +40,61 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
   const canUpload = canUploadDocumentType(role, COA_TYPE)
   const scoped = isCoaPurchaseOrderScoped(category)
   const poNumber = String(po ?? '').trim()
+  const scope = scoped ? poNumber : ''
+  const key = buildCoaAutoReadKey(processId, scope)
   // S11-E: leitura automática ao anexar (sempre ligada, só admin; fila única do painel).
-  const autoRead = useCoaAutoRead({ processId, enabled: canUpload && role === 'admin', scope: scoped ? poNumber : '' })
+  const autoRead = useCoaAutoRead({ processId, enabled: canUpload && role === 'admin', scope })
+  const toast = useOptionalToast()
 
-  const [progress, setProgress] = useState(null)
-  const [errors, setErrors] = useState([])
-  const [resultMessage, setResultMessage] = useState('')
+  const entry = useSyncExternalStore(
+    subscribeCoaUpload,
+    () => getCoaUploadState().entries[key],
+    () => undefined
+  )
+  const [blocked, setBlocked] = useState(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef(null)
   const buttonRef = useRef(null)
   const wasUploadingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const busyRef = useRef(false)
+  const startedHereRef = useRef(false)
+  const onChangedRef = useRef(onChanged)
+  const doneSeq = entry?.doneSeq ?? 0
+  const seqRef = useRef({ key, seq: doneSeq })
 
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
+    onChangedRef.current = onChanged
+  })
+
+  // Conta este componente como "assistindo" a chave (resultado pronto aparece uma vez; falha com a tela fechada vira toast).
+  useEffect(() => (canUpload ? watchCoaUpload(key) : undefined), [canUpload, key])
+
+  // Recarrega a lista quando um envio termina com a tela aberta (inclusive se voltou no meio do envio). O valor da
+  // montagem só é guardado: o painel já carrega a lista ao montar.
+  useEffect(() => {
+    const last = seqRef.current
+    if (last.key !== key) {
+      seqRef.current = { key, seq: doneSeq }
+      startedHereRef.current = false
+      return
     }
-  }, [])
+    if (doneSeq === last.seq) return
+    seqRef.current = { key, seq: doneSeq }
+    if (doneSeq > last.seq) onChangedRef.current?.()
+  }, [key, doneSeq])
 
-  const isUploading = progress !== null
+  const isUploading = entry?.status === 'sending'
+  const progress = isUploading ? { current: entry.current, total: entry.total } : null
+  const errors = blocked ? [blocked] : (entry?.errors ?? [])
+  let resultMessage = ''
+  if (!blocked && entry?.status === 'done' && entry.sent > 0) {
+    resultMessage =
+      entry.errors.length === 0
+        ? `${entry.sent} ${pluralize(entry.sent, 'COA enviado', 'COAs enviados')}.`
+        : `${entry.sent} de ${entry.total} COAs enviados.`
+  }
 
-  // Teclado: o botão de envio fica desabilitado durante o envio; ao terminar, o foco volta a ele.
+  // Teclado: o botão de envio fica desabilitado durante o envio; ao terminar, o foco volta a ele (só se esta instância
+  // iniciou o envio: quem voltou à aba no meio dele não perde o foco).
   useEffect(() => {
     if (isUploading) {
       wasUploadingRef.current = true
@@ -60,6 +102,8 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     }
     if (!wasUploadingRef.current) return
     wasUploadingRef.current = false
+    if (!startedHereRef.current) return
+    startedHereRef.current = false
     buttonRef.current?.focus()
   }, [isUploading])
 
@@ -72,62 +116,25 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     return { name: '', detail: room > 0 ? `${base} Cabem mais ${room}; você escolheu ${selected}.` : base }
   }
 
-  async function uploadFiles(files) {
-    if (!canUpload || busyRef.current || files.length === 0) return
-    const blocked = getBlockedMessage(files.length)
-    if (blocked) {
-      setResultMessage('')
-      setErrors([blocked])
+  function uploadFiles(files) {
+    if (!canUpload || files.length === 0 || isCoaUploadBusy(key)) return
+    const message = getBlockedMessage(files.length)
+    if (message) {
+      setBlocked(message)
       return
     }
-
-    busyRef.current = true
-    setErrors([])
-    setResultMessage('')
-    const failures = []
-    let sent = 0
-    // S11-H (L157): bilhete da leitura automática pedido AGORA (componente montado e admin no início do envio); cada
-    // PDF entra na fila assim que sobe, sem esperar o lote nem o componente seguir montado. Nulo = nada é enfileirado.
-    const send = autoRead.beginSend()
-
-    try {
-      for (let index = 0; index < files.length; index += 1) {
-        // Desmontou no meio: o laço para (comportamento anterior; os ainda não enviados NÃO sobem). O arquivo que já
-        // subiu (ou que está subindo agora) já foi/será enfileirado pelo bilhete acima.
-        if (!mountedRef.current) return
-        const file = files[index]
-        setProgress({ current: index + 1, total: files.length })
-        try {
-          const created = await uploadProcessDocument(processId, {
-            type: COA_TYPE,
-            file,
-            category,
-            po: scoped ? poNumber : undefined,
-            actor: { uid: profile?.uid, name: profile?.name, role },
-          })
-          sent += 1
-          // Só recém-enviado com sucesso (a fila ignora o que não é PDF e o que já foi tentado).
-          if (send) autoRead.enqueue([created], send)
-        } catch (error) {
-          console.error(COA_UPLOAD_ERROR_TITLE, error)
-          failures.push({ name: file?.name ?? '', detail: getFriendlyErrorDetail(error) })
-        }
-      }
-    } finally {
-      busyRef.current = false
-    }
-
-    if (!mountedRef.current) return
-    setProgress(null)
-    setErrors(failures)
-    if (sent > 0) {
-      setResultMessage(
-        failures.length === 0
-          ? `${sent} ${pluralize(sent, 'COA enviado', 'COAs enviados')}.`
-          : `${sent} de ${files.length} COAs enviados.`
-      )
-      onChanged?.()
-    }
+    setBlocked(null)
+    // Tudo é capturado AGORA: o envio segue com estes valores mesmo que a tela feche ou o processo mude.
+    startedHereRef.current = startCoaUpload({
+      processId,
+      scope,
+      category,
+      actor: { uid: profile?.uid, name: profile?.name, role },
+      files,
+      // S11-H (L157): bilhete da leitura automática pedido AGORA (montado e admin no início). Nulo = nada é enfileirado.
+      send: autoRead.beginSend(),
+      notify: toast,
+    })
   }
 
   function handleDragOver(event) {
@@ -149,10 +156,9 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     event.stopPropagation()
     setIsDragOver(false)
     const dropped = event.dataTransfer?.files?.length ?? 0
-    const blocked = getBlockedMessage(Math.max(dropped, 1))
-    if (blocked) {
-      setResultMessage('')
-      setErrors([blocked])
+    const message = getBlockedMessage(Math.max(dropped, 1))
+    if (message) {
+      setBlocked(message)
       return
     }
     const { files } = pickDroppedFiles(event.dataTransfer, room)
