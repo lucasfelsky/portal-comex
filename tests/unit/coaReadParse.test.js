@@ -725,3 +725,18 @@ describe('buildCoaLogFields: diagnostico B2 (stage e httpStatus)', () => {
     expect(buildCoaLogFields({ ...base, body: 'x', message: 'y', filename: 'z' })).toEqual(base)
   })
 })
+
+describe('buildCoaLogFields: aviso de modelo (S11-G) so como flag booleana', () => {
+  const base = { processId: 'p', documentId: 'd', uid: 'u', status: 'model-mismatch', stage: 'execute' }
+
+  it('modelMismatch true vira boolean true; ausente nao cria o campo', () => {
+    expect(buildCoaLogFields({ ...base, modelMismatch: true })).toEqual({ ...base, modelMismatch: true })
+    expect(buildCoaLogFields(base)).not.toHaveProperty('modelMismatch')
+  })
+
+  it('texto no lugar da flag nunca passa (vira false) e o modelo declarado pela Tess nao tem campo proprio', () => {
+    expect(buildCoaLogFields({ ...base, modelMismatch: 'MODELO-SECRETO' }).modelMismatch).toBe(false)
+    const fields = buildCoaLogFields({ ...base, modelMismatch: true, model: 'MODELO-SECRETO', answers: { model: 'MODELO-SECRETO' } })
+    expect(JSON.stringify(fields)).not.toContain('MODELO-SECRETO')
+  })
+})

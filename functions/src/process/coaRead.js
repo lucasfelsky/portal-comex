@@ -10,6 +10,10 @@
 export const COA_READ_SCHEMA_VERSION = 1
 // Sobe quando o prompt do agente muda na Tess: o cache de leituras e' por versao do prompt.
 export const COA_PROMPT_VERSION = 'coa-tess-2026-11-25'
+// Modelo enviado em TODA execucao do agente (campo `model` do execute). OBSERVADO em 2026-11-26 (3 COAs, mesmo
+// arquivo, 3 modelos): o `low` leu os mesmos certificados, lotes e kg que o modelo padrao do agente por ~8 a 19
+// creditos e 4 a 12 s (padrao do agente: 56 a 112 creditos). NAO muda `COA_PROMPT_VERSION`: o cache segue valido.
+export const COA_TESS_MODEL = 'claude-sonnet-5-5-low'
 
 export const COA_LIMITS = Object.freeze({
   maxBytes: 20971520,
@@ -448,7 +452,7 @@ export function toPublicCoaRead(doc) {
 const LOG_STAGES = ['upload', 'process', 'execute', 'poll', 'delete']
 
 // Unico ponto que alimenta o log: ids, uid, status, contagem, creditos, duracao, codigo de erro e, so' em falha,
-// o estagio (lista fechada) e o status HTTP (numero). NUNCA conteudo do COA, nome de arquivo, produto, lote, PO,
+// o estagio (lista fechada), o status HTTP (numero) e a flag `modelMismatch` (boolean). NUNCA conteudo do COA, nome de arquivo, produto, lote, PO,
 // `output`, corpo ou mensagem da Tess, chave, workspace ou agente.
 export function buildCoaLogFields({
   processId,
@@ -462,6 +466,7 @@ export function buildCoaLogFields({
   errorCode,
   stage,
   httpStatus,
+  modelMismatch,
 }) {
   const fields = { processId, documentId, uid, status }
   if (cached !== undefined) fields.cached = Boolean(cached)
@@ -471,5 +476,7 @@ export function buildCoaLogFields({
   if (errorCode) fields.errorCode = String(errorCode)
   if (LOG_STAGES.includes(stage)) fields.stage = stage
   if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) fields.httpStatus = httpStatus
+  // So' a flag: o modelo que a Tess declarou nunca vai para o log.
+  if (modelMismatch !== undefined) fields.modelMismatch = modelMismatch === true
   return fields
 }

@@ -11,6 +11,9 @@
 // - logs SEM conteudo: so' ids, uid, status, contagem, creditos, duracao, codigo de erro e, em falha, o estagio
 //   ('upload'|'process'|'execute'|'poll'|'delete') e o status HTTP (numero). O estagio NAO vai para o doc `coaReads`
 //   (o doc so' guarda `error.code`); fica so' no log, que e' o canal de diagnostico.
+// - modelo: o cliente envia `COA_TESS_MODEL` (coaRead.js; ~8 a 19 creditos por leitura, medido em 3 COAs
+//   em 2026-11-26; o padrao do agente gastava 56 a 112). Resposta com outro modelo = `warn` so' com a flag
+//   `modelMismatch` e `stage: 'execute'`; a leitura continua. 422 do execute segue `tess-error` (sem retry sem modelo).
 //
 // Uma leitura por vez no Portal todo (`maxInstances: 1`, `concurrency: 1`): a Tess limita 1 req/s por
 // organizacao e 30 arquivos por workspace. Pedido no mesmo documento durante a leitura devolve `reading` (lease).
@@ -171,9 +174,11 @@ async function uploadWithPolicy({ client, bytes, deadline, clock, cleanup }) {
   }
 }
 
-async function executeAndCollect({ client, fileId, deadline, clock, credits, onResponseId, onStage }) {
+async function executeAndCollect({ client, fileId, deadline, clock, credits, onResponseId, onStage, onModelMismatch }) {
   const executed = await withRateLimitRetry(() => client.executeAgent({ fileId, deadline }), clock)
   bumpCredits(credits, 'response', executed.credits)
+  // Aviso de diagnostico: a Tess respondeu com outro modelo. O resultado segue sendo usado.
+  if (executed.modelMismatch === true) onModelMismatch()
   let responseId = executed.responseId
   if (responseId !== null) await onResponseId(responseId)
 
@@ -368,6 +373,16 @@ async function readCoa(request, deps) {
         credits,
         onStage: (stage) => {
           phase = stage
+        },
+        onModelMismatch: () => {
+          logger.warn('Modelo da Tess diferente do pedido.', buildCoaLogFields({
+            processId,
+            documentId,
+            uid,
+            status: 'model-mismatch',
+            stage: 'execute',
+            modelMismatch: true,
+          }))
         },
         onResponseId: async (id) => {
           responseId = id
