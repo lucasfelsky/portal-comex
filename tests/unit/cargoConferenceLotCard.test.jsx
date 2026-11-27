@@ -27,6 +27,10 @@ function renderCard(props = {}) {
   const handlers = {
     onToggleOk: vi.fn(),
     onStepPallets: vi.fn(),
+    onSetUnits: vi.fn(),
+    onStepUnits: vi.fn(),
+    onOpenPartial: vi.fn(),
+    onRemovePartial: vi.fn(),
     onIssueChange: vi.fn(),
     onLabelChange: vi.fn(),
     onToggleDetails: vi.fn(),
@@ -244,5 +248,141 @@ describe('cartão do lote: onPin', () => {
   it('sem onPin o cartão continua funcionando (somente leitura, testes antigos)', () => {
     renderCard()
     expect(() => fireEvent.click(screen.getByRole('heading', { level: 4 }))).not.toThrow()
+  })
+})
+
+// ---------- Fatia B: unidades por lote e pallet parcial ----------
+
+const OTHER = { units: 20, name: 'Resina Acrílica RA-55', lot: 'A-1180' }
+const unitsInput = () => screen.getByLabelText('Unidades contadas do Lote L-2231')
+
+describe('cartão do lote: unidades contadas (Fatia B)', () => {
+  it('editável: rótulo do mock, "−", campo numérico, "+ Unidade" e "Esperadas: N (Nº de emb. do relatório)"', () => {
+    renderCard({ expectedUnits: 100 })
+    expect(screen.getByText('Unidades contadas (todas as embalagens do lote)')).toBeInTheDocument()
+    expect(unitsInput()).toHaveAttribute('inputmode', 'numeric')
+    expect(unitsInput()).toHaveAttribute('placeholder', '0')
+    expect(unitsInput()).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Tirar uma unidade da contagem do item 1' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Adicionar uma unidade à contagem do item 1' })).toHaveTextContent('+ Unidade')
+    const sum = screen.getByText(/^Esperadas:/)
+    expect(sum).toHaveTextContent('Esperadas: 100 (Nº de emb. do relatório)')
+    expect(within(sum).getByText('100').tagName).toBe('B')
+    expect(screen.queryByText(/diferença de/)).not.toBeInTheDocument()
+  })
+
+  it('"+ Unidade" e "−" avisam onStepUnits; digitar avisa onSetUnits (só dígitos; vazio = nunca contado)', () => {
+    const { onStepUnits, onSetUnits } = renderCard({ expectedUnits: 100, units: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar uma unidade à contagem do item 1' }))
+    expect(onStepUnits).toHaveBeenCalledWith('r-9', 1)
+    fireEvent.click(screen.getByRole('button', { name: 'Tirar uma unidade da contagem do item 1' }))
+    expect(onStepUnits).toHaveBeenCalledWith('r-9', -1)
+    fireEvent.change(unitsInput(), { target: { value: '1a2b' } })
+    expect(onSetUnits).toHaveBeenLastCalledWith('r-9', 12)
+    fireEvent.change(unitsInput(), { target: { value: '' } })
+    expect(onSetUnits).toHaveBeenLastCalledWith('r-9', null)
+    fireEvent.change(unitsInput(), { target: { value: '9999999' } })
+    expect(onSetUnits).toHaveBeenLastCalledWith('r-9', 99999)
+  })
+
+  it('divergente: selo "Unidades divergentes", caixa âmbar e " · diferença de N"; igual ao esperado não diverge', () => {
+    renderCard({ units: 90, expectedUnits: 100, unitsDivergent: true })
+    expect(screen.getByText('Unidades divergentes')).toHaveClass('ccf-badge--warn')
+    expect(unitsInput().closest('.ccf-cnum')).toHaveClass('ccf-cnum--div')
+    expect(screen.getByText(/^Esperadas:/)).toHaveTextContent('Esperadas: 100 (Nº de emb. do relatório) · diferença de 10')
+    document.body.innerHTML = ''
+    renderCard({ units: 100, expectedUnits: 100, unitsDivergent: false })
+    expect(screen.queryByText('Unidades divergentes')).not.toBeInTheDocument()
+    expect(unitsInput().closest('.ccf-cnum')).toHaveClass('ccf-cnum--on')
+    expect(screen.queryByText(/diferença de/)).not.toBeInTheDocument()
+  })
+
+  it('sem Nº de emb. inteiro: "Esperadas: —" e nenhum selo (D-11)', () => {
+    renderCard({ units: 40, expectedUnits: null, unitsDivergent: false })
+    expect(screen.getByText(/^Esperadas:/)).toHaveTextContent('Esperadas: — (Nº de emb. do relatório)')
+    expect(screen.queryByText('Unidades divergentes')).not.toBeInTheDocument()
+  })
+
+  it('número longo (milhar) ganha a classe que reduz a fonte na largura estreita', () => {
+    renderCard({ units: 1000, expectedUnits: 1000 })
+    expect(unitsInput()).toHaveValue('1.000')
+    expect(unitsInput().closest('.ccf-cnum')).toHaveClass('ccf-cnum--long')
+    document.body.innerHTML = ''
+    renderCard({ units: 100, expectedUnits: 100 })
+    expect(unitsInput().closest('.ccf-cnum')).not.toHaveClass('ccf-cnum--long')
+  })
+
+  it('somente leitura: o número na caixa ("—" sem contagem), a legenda "unidades" e o esperado; sem botões nem campo', () => {
+    renderCard({ editable: false, units: 90, expectedUnits: 100, unitsDivergent: true })
+    expect(screen.getByText('Unidades contadas (todas as embalagens do lote)')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Unidades contadas do Lote L-2231')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /unidade/i })).not.toBeInTheDocument()
+    expect(document.querySelector('.ccf-cnum')).toHaveTextContent('90unidades')
+    expect(screen.getByText(/^Esperadas:/)).toHaveTextContent('· diferença de 10')
+    document.body.innerHTML = ''
+    renderCard({ editable: false, units: null, expectedUnits: 100 })
+    expect(document.querySelector('.ccf-cnum')).toHaveTextContent('—unidades')
+  })
+})
+
+describe('cartão do lote: pallet parcial (Fatia B)', () => {
+  it('mostra o parcial com o outro lote, "N das unidades contadas estão em pallet parcial." e a lixeira de remover', () => {
+    const { onRemovePartial } = renderCard({ partials: [{ id: 'pp1', mineUnits: 30, other: OTHER }] })
+    const card = document.querySelector('.ccf-parc')
+    expect(card).toHaveTextContent('Pallet parcial · 30 un. deste lote + 20 un. de Resina Acrílica RA-55 · A-1180')
+    expect(within(card).getByText('Pallet parcial').tagName).toBe('B')
+    expect(screen.getByText('30 das unidades contadas estão em pallet parcial.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remover este pallet parcial' }))
+    expect(onRemovePartial).toHaveBeenCalledWith('pp1')
+  })
+
+  it('"Nenhum (pallet incompleto)" mostra " · pallet incompleto"; outro lote sem número de lote mostra só o nome', () => {
+    renderCard({ partials: [{ id: 'pp1', mineUnits: 12, other: null }] })
+    expect(document.querySelector('.ccf-parc')).toHaveTextContent('Pallet parcial · 12 un. deste lote · pallet incompleto')
+    document.body.innerHTML = ''
+    renderCard({ partials: [{ id: 'pp2', mineUnits: 3, other: { units: 4, name: 'Aditivo AX-7', lot: '' } }] })
+    expect(document.querySelector('.ccf-parc')).toHaveTextContent('Pallet parcial · 3 un. deste lote + 4 un. de Aditivo AX-7')
+  })
+
+  it('vários parciais somam as unidades deste lote na frase de baixo', () => {
+    renderCard({
+      partials: [
+        { id: 'pp1', mineUnits: 30, other: OTHER },
+        { id: 'pp2', mineUnits: 5, other: null },
+      ],
+    })
+    expect(document.querySelectorAll('.ccf-parc')).toHaveLength(2)
+    expect(screen.getByText('35 das unidades contadas estão em pallet parcial.')).toBeInTheDocument()
+  })
+
+  it('o botão secundário "Pallet parcial" abre a folha do lote e só existe editável', () => {
+    const { onOpenPartial } = renderCard()
+    const button = screen.getByRole('button', { name: 'Pallet parcial' })
+    expect(button).toHaveClass('secondary-button')
+    fireEvent.click(button)
+    expect(onOpenPartial).toHaveBeenCalledWith('r-9')
+    document.body.innerHTML = ''
+    renderCard({ editable: false, partials: [{ id: 'pp1', mineUnits: 30, other: OTHER }] })
+    expect(screen.queryByRole('button', { name: 'Pallet parcial' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remover este pallet parcial' })).not.toBeInTheDocument()
+    // O cartão do parcial continua visível na leitura (sem a lixeira).
+    expect(document.querySelector('.ccf-parc')).toHaveTextContent('Pallet parcial · 30 un. deste lote')
+  })
+
+  it('o pallet parcial vale como pallet contado: sem "Sem contagem" nem "A contar"', () => {
+    renderCard({ awaitingCount: true, partials: [{ id: 'pp1', mineUnits: 30, other: OTHER }] })
+    expect(screen.queryByText('Sem contagem')).not.toBeInTheDocument()
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    document.body.innerHTML = ''
+    renderCard({ awaitingCount: true, pallets: { count: 0, legacyOk: false }, partials: [{ id: 'pp1', mineUnits: 30, other: null }] })
+    expect(screen.queryByText('Sem contagem')).not.toBeInTheDocument()
+  })
+
+  it('sem as props da Fatia B o cartão é o da Fatia A (conferência antiga abre igual)', () => {
+    renderCard()
+    expect(document.querySelector('.ccf-parc')).toBeNull()
+    expect(screen.queryByText(/estão em pallet parcial/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Unidades divergentes')).not.toBeInTheDocument()
+    expect(screen.getByText('Sem contagem')).toBeInTheDocument()
   })
 })

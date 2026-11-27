@@ -441,14 +441,14 @@ describe('buildCargoReportPayload', () => {
 })
 
 const CONFERENCE_KEYS = [
-  'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'palletsByRowId', 'damageByRowId',
-  'labelsByRowId', 'checkedByName',
+  'schemaVersion', 'revision', 'status', 'okByRowId', 'countOkByRowId', 'palletsByRowId', 'unitsByRowId', 'partialPallets',
+  'damageByRowId', 'labelsByRowId', 'checkedByName',
   'receiptStatus', 'receivedDate', 'nfNumber', 'notes', 'unloadStartAt', 'unloadEndAt', 'labelingOk',
   'closedDate', 'closedById', 'closedByName', 'closedDocumentId',
 ]
 
 describe('buildConferencePayload', () => {
-  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 20 chaves (S8 + S10-I)', () => {
+  it('poda ids orfaos, converte para booleano, soma 1 na revisao e devolve as 22 chaves (S8 + S10-I + Fatia B)', () => {
     const payload = buildConferencePayload(
       { okByRowId: { a: true, b: 0, orfa: true }, revision: 2 },
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
@@ -461,6 +461,8 @@ describe('buildConferencePayload', () => {
       okByRowId: { a: true, b: false },
       countOkByRowId: {},
       palletsByRowId: {},
+      unitsByRowId: {},
+      partialPallets: [],
       damageByRowId: {},
       labelsByRowId: {},
       checkedByName: 'Operador',
@@ -477,8 +479,9 @@ describe('buildConferencePayload', () => {
       closedDocumentId: '',
     })
     expect(Object.keys(payload)).toEqual(CONFERENCE_KEYS)
-    // O repositório acrescenta updatedAt/updatedById/updatedByName: 20 + 3 = 23 chaves nas rules.
-    expect(CONFERENCE_KEYS).toHaveLength(20)
+    // O repositório acrescenta updatedAt/updatedById/updatedByName: 22 + 3 = 25 chaves nas rules (as 3 de unidades, parciais e
+    // descarga por unidade são opcionais; a Fatia B grava as duas primeiras, a descarga por unidade é da Fatia C).
+    expect(CONFERENCE_KEYS).toHaveLength(22)
   })
 
   it('S6: poda id orfao nos mapas e força booleano no OK?; o legado "Contagem OK" só passa como true', () => {
@@ -1078,7 +1081,7 @@ describe('S8: buildConferencePayload com descarga, etiquetagem e data derivada',
       receivedDate: '2026-11-24',
       labelingOk: true,
     })
-    expect(Object.keys(payload)).toHaveLength(20)
+    expect(Object.keys(payload)).toHaveLength(22)
     // O tempo total é derivado: nenhuma chave de minutos entra no payload.
     expect(Object.keys(payload).some((key) => /minutes/i.test(key))).toBe(false)
   })

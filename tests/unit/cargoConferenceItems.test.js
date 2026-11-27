@@ -192,13 +192,17 @@ describe('summarizeCargoConferenceItem e locateCargoItem', () => {
     damageByRowId: { r2: { flagged: true, note: 'Tambor amassado', photos: [] } },
   }
 
-  it('item conferido = todos os lotes conferidos (OK? e pelo menos 1 pallet); pallets = só os inteiros', () => {
+  it('item conferido = todos os lotes conferidos (OK? e pelo menos 1 pallet); sem parciais, pallets = só os inteiros', () => {
     expect(summarizeCargoConferenceItem(items[0], conference)).toEqual({
       total: 3,
       done: 3,
       full: true,
       percent: 100,
       pallets: 9,
+      whole: 9,
+      partial: 0,
+      units: { counted: 0, expected: null },
+      unitsDivergent: false,
       hasIssue: true,
     })
     // r4 tem OK? mas 0 pallet: não conta.
@@ -213,5 +217,84 @@ describe('summarizeCargoConferenceItem e locateCargoItem', () => {
   it('a posição do item é na lista sem filtro ("Item 2 de 4")', () => {
     expect(locateCargoItem(items, items[1].key)).toEqual({ index: 2, total: 4 })
     expect(locateCargoItem(items, 'nao-existe')).toEqual({ index: 0, total: 4 })
+  })
+})
+
+// ---------- Fatia B: pallets parciais e unidades no item ----------
+
+describe('Fatia B: summarizeCargoConferenceItem com parciais e unidades', () => {
+  const model = buildCargoConferenceItems(ROWS, [])
+  const [poliol, catalisador] = model.items
+  const base = { okByRowId: {}, countOkByRowId: {}, palletsByRowId: { r1: 4, r2: 3 }, unitsByRowId: {}, partialPallets: [] }
+
+  it('pallets = inteiros + parciais; um parcial dividido entre dois lotes do MESMO item conta 1', () => {
+    const conference = { ...base, partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r1', units: 30 }, { rowId: 'r2', units: 20 }] }] }
+    expect(summarizeCargoConferenceItem(poliol, conference)).toMatchObject({ pallets: 8, whole: 7, partial: 1 })
+  })
+
+  it('o parcial dividido com OUTRO item conta 1 em cada um (e 1 só na carga)', () => {
+    const conference = { ...base, partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r2', units: 30 }, { rowId: 'r4', units: 20 }] }] }
+    expect(summarizeCargoConferenceItem(poliol, conference)).toMatchObject({ pallets: 8, whole: 7, partial: 1 })
+    expect(summarizeCargoConferenceItem(catalisador, conference)).toMatchObject({ pallets: 1, whole: 0, partial: 1 })
+  })
+
+  it('unidades do item: contadas x esperadas (só lotes com Nº de emb. inteiro entram no esperado)', () => {
+    const conference = { ...base, unitsByRowId: { r1: 100, r2: 100 } }
+    const expected = { r1: 100, r2: 100, r3: 50, r4: 160 }
+    expect(summarizeCargoConferenceItem(poliol, conference, expected).units).toEqual({ counted: 200, expected: 250 })
+    expect(summarizeCargoConferenceItem(poliol, conference, { r1: 100, r2: 100, r3: null }).units).toEqual({ counted: 200, expected: 200 })
+    expect(summarizeCargoConferenceItem(poliol, conference, null).units).toEqual({ counted: 200, expected: null })
+  })
+
+  it('contados e esperados somam sobre o MESMO conjunto de lotes (nunca "150 de 100" sem selo)', () => {
+    // r3 não tem Nº de emb. inteiro e contou 50; r1 tem 100 esperadas e contou 100: só r1 entra nos dois lados.
+    const conference = { ...base, unitsByRowId: { r1: 100, r3: 50 } }
+    const summary = summarizeCargoConferenceItem(poliol, conference, { r1: 100, r2: 100, r3: null })
+    expect(summary.units).toEqual({ counted: 100, expected: 200 })
+    expect(summary.unitsDivergent).toBe(false)
+    // Sem nenhum lote com esperado: só o contado de todos os lotes.
+    expect(summarizeCargoConferenceItem(poliol, conference, { r1: null, r2: null, r3: null }).units).toEqual({ counted: 150, expected: null })
+  })
+
+  it('o item conta só os parciais que têm parte em lote DELE: o terceiro item não ganha o pallet dos outros', () => {
+    const [, , resina] = model.items
+    const conference = { ...base, palletsByRowId: { r1: 4, r5: 2 }, partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r2', units: 30 }, { rowId: 'r4', units: 20 }] }] }
+    expect(summarizeCargoConferenceItem(poliol, conference)).toMatchObject({ partial: 1, whole: 4, pallets: 5 })
+    expect(summarizeCargoConferenceItem(catalisador, conference)).toMatchObject({ partial: 1, whole: 0, pallets: 1 })
+    expect(summarizeCargoConferenceItem(resina, conference)).toMatchObject({ partial: 0, whole: 2, pallets: 2 })
+  })
+
+  it('o parcial com as duas partes dentro do mesmo item conta 1 nele e 0 nos outros', () => {
+    const [, , resina] = model.items
+    const conference = { ...base, palletsByRowId: {}, partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r1', units: 30 }, { rowId: 'r3', units: 20 }] }] }
+    expect(summarizeCargoConferenceItem(poliol, conference)).toMatchObject({ partial: 1, pallets: 1 })
+    expect(summarizeCargoConferenceItem(catalisador, conference)).toMatchObject({ partial: 0, pallets: 0 })
+    expect(summarizeCargoConferenceItem(resina, conference)).toMatchObject({ partial: 0, pallets: 0 })
+  })
+
+  it('unitsDivergent: algum lote contou e difere do esperado; 0, sem contagem e sem esperado não divergem', () => {
+    const expected = { r1: 100, r2: 100, r3: 50 }
+    expect(summarizeCargoConferenceItem(poliol, { ...base, unitsByRowId: { r1: 90 } }, expected).unitsDivergent).toBe(true)
+    expect(summarizeCargoConferenceItem(poliol, { ...base, unitsByRowId: { r1: 100, r2: 100, r3: 50 } }, expected).unitsDivergent).toBe(false)
+    expect(summarizeCargoConferenceItem(poliol, { ...base, unitsByRowId: { r1: 0 } }, expected).unitsDivergent).toBe(false)
+    expect(summarizeCargoConferenceItem(poliol, base, expected).unitsDivergent).toBe(false)
+    expect(summarizeCargoConferenceItem(poliol, { ...base, unitsByRowId: { r1: 90 } }, { r1: null }).unitsDivergent).toBe(false)
+    expect(summarizeCargoConferenceItem(poliol, { ...base, unitsByRowId: { r1: 90 } }).unitsDivergent).toBe(false)
+  })
+
+  it('o item fica conferido com o parcial contando como pallet (OK? em todos os lotes)', () => {
+    const conference = {
+      ...base,
+      okByRowId: { r1: true, r2: true, r3: true },
+      palletsByRowId: {},
+      partialPallets: [{ id: 'pp1', parts: [{ rowId: 'r1', units: 1 }] }, { id: 'pp2', parts: [{ rowId: 'r2', units: 1 }, { rowId: 'r3', units: 1 }] }],
+    }
+    expect(summarizeCargoConferenceItem(poliol, conference)).toMatchObject({ done: 3, full: true, pallets: 2, partial: 2 })
+  })
+
+  it('infoByRowId guarda o nome do item e o lote de cada linha (o outro lote do parcial)', () => {
+    expect(model.infoByRowId.get('r2')).toEqual({ name: 'Poliol Flex 3000', lot: 'L-2232' })
+    expect(model.infoByRowId.get('r6')).toEqual({ name: 'Aditivo AX-7', lot: '' })
+    expect(model.infoByRowId.get('nao-existe')).toBeUndefined()
   })
 })

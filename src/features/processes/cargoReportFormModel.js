@@ -7,6 +7,7 @@
 // fecha o `conference` (`status: 'fechada'`). Etiqueta WMS/SQ sempre em MAIÚSCULAS.
 import { digitsOnly, foldText } from '../erp/erpText'
 import { readDamageMap, readExpectedPallets, readPalletsMap } from './cargoConferenceIssues'
+import { readPartialPallets, readUnitsMap } from './cargoConferenceUnits'
 import { CARGO_NF_LIST_MAX_CHARS, canonicalCargoNfText } from './cargoNfList'
 import { normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
 import { cargoPackagingContext, resolveCargoPackaging } from './cargoSupplierPackaging'
@@ -621,7 +622,7 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-// Conferência da logística (20 chaves; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
+// Conferência da logística (22 chaves, com `unitsByRowId` e `partialPallets`; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
 // linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
 // recebimento normalizado (S9-E: `nfNumber` é a lista de NFs "NF1; NF2", até 1.000 caracteres). S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
 // do dia do início (sem início, o valor carregado/legado). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
@@ -631,6 +632,8 @@ export function buildConferencePayload(
     okByRowId,
     countOkByRowId,
     palletsByRowId,
+    unitsByRowId,
+    partialPallets,
     damageByRowId,
     labelsByRowId,
     receiptStatus,
@@ -654,6 +657,10 @@ export function buildConferencePayload(
   // quando a linha ainda não tem número e só como `true`: nunca se cria legado novo.
   const pallets = readPalletsMap(palletsByRowId, rowIds)
   const damage = readDamageMap(damageByRowId, rowIds)
+  // Fatia B: unidades por lote e pallets parciais (sempre gravados, vazios quando não usados: as chaves são pegajosas nas
+  // rules); a linha removida/dividida pelo COMEX sai e o parcial fica com as partes que restam (D-6).
+  const units = readUnitsMap(unitsByRowId, rowIds)
+  const partials = readPartialPallets(partialPallets, rowIds)
 
   for (const id of rowIds) {
     for (const name of CONFERENCE_FLAG_MAPS) {
@@ -675,6 +682,8 @@ export function buildConferencePayload(
     okByRowId: maps.okByRowId,
     countOkByRowId: maps.countOkByRowId,
     palletsByRowId: pallets,
+    unitsByRowId: units,
+    partialPallets: partials,
     damageByRowId: damage,
     labelsByRowId: labels,
     checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
@@ -759,6 +768,8 @@ export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
     countOkByRowId: readFlagMap(doc.countOkByRowId),
     // S10-I: doc antigo (sem as chaves) lê como sem contagem e sem observação.
     palletsByRowId: readPalletsMap(doc.palletsByRowId),
+    unitsByRowId: readUnitsMap(doc.unitsByRowId),
+    partialPallets: readPartialPallets(doc.partialPallets),
     damageByRowId: readDamageMap(doc.damageByRowId),
     labelsByRowId: hasOwn(doc, 'labelsByRowId') ? readLabelsMap(doc.labelsByRowId) : labelsFromLegacyRows(legacyRows),
     checkedByName: readText(doc.checkedByName, CARGO_REPORT_LIMITS.text),

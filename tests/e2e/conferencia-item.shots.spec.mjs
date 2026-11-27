@@ -22,7 +22,8 @@ import { pathToFileURL } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { E2E_USERS } from './global-setup.mjs'
 
-test.skip(!process.env.CONF_SHOTS, 'defina CONF_SHOTS=1 para gerar as capturas da conferência por item')
+// A Fatia B tem o harness irmão conferencia-item-b.shots.spec.mjs; este só roda com CONF_FATIA=a (ou sem a variável).
+test.skip(!process.env.CONF_SHOTS || String(process.env.CONF_FATIA ?? 'a').toLowerCase() !== 'a', 'defina CONF_SHOTS=1 (e CONF_FATIA=a) para gerar as capturas da conferência por item')
 
 const FATIA = String(process.env.CONF_FATIA ?? 'a').toLowerCase()
 const MOCK_HTML = process.env.CONF_MOCK_HTML ?? ''
@@ -684,8 +685,8 @@ test.describe('asserções (390 px, claro)', () => {
         const nodes = roots.flatMap((root) => [...root.querySelectorAll(selector)])
         return nodes
           .filter(visible)
-          // O contador mede a célula; a caixa de marcar mede o rótulo (alvo de toque de 44 px).
-          .filter((node) => !node.closest('.ccf-pal__num'))
+          // O contador mede a célula; a caixa de marcar mede o rótulo (alvo de toque de 44 px). Fatia B: idem o contador de unidades.
+          .filter((node) => !node.closest('.ccf-pal__num') && !node.closest('.ccf-cnum'))
           .map((node) => {
             const target = node.matches('input[type="checkbox"], input[type="radio"]') ? (node.closest('label') ?? node) : node
             const rect = target.getBoundingClientRect()

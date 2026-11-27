@@ -8,6 +8,8 @@ import useCargoStickyStuck from './useCargoStickyStuck'
 // fina e selos), com a busca no topo (sticky opaco, R-STICKY), "Marcar todos OK" e "Só pendentes" (a busca e o filtro
 // valem juntos). Tocar no item abre a tela do item. Apresentação: o estado da busca e do filtro vive na tela.
 //   model = buildCargoConferenceItems(...); `pinnedKeys` = itens tocados nesta sessão (o filtro não os esconde).
+// Fatia B: os pallets do item incluem os parciais e o item com unidades contadas diferentes do esperado ganha o selo
+// "Unidades divergentes" (`expectedUnits` = { [rowId]: Nº de emb. inteiro | null }).
 
 function pluralWord(count, singular, pluralForm) {
   return count === 1 ? singular : pluralForm
@@ -41,6 +43,7 @@ function ItemRow({ item, summary, by, onOpen }) {
           <span className="ccf-badge">
             {summary.pallets} {pluralWord(summary.pallets, 'pallet', 'pallets')}
           </span>
+          {summary.unitsDivergent ? <span className="ccf-badge ccf-badge--warn">Unidades divergentes</span> : null}
           {summary.hasIssue ? <span className="ccf-badge ccf-badge--danger">Avaria registrada</span> : null}
         </span>
       </span>
@@ -54,6 +57,7 @@ function ItemRow({ item, summary, by, onOpen }) {
 export default function CargoConferenceItemList({
   model,
   conference,
+  expectedUnits,
   query,
   onQueryChange,
   canSave,
@@ -69,7 +73,7 @@ export default function CargoConferenceItemList({
   const pending = canSave && onlyPending
   const rows = model.items.map((item) => ({
     item,
-    summary: summarizeCargoConferenceItem(item, conference),
+    summary: summarizeCargoConferenceItem(item, conference, expectedUnits),
     match: matchCargoConferenceItem(item, query),
   }))
   const isVisible = ({ item, summary, match }) =>

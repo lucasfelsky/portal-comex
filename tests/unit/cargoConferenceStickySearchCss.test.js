@@ -117,3 +117,43 @@ describe('busca, teclado e tela por item', () => {
     expect(styles).toMatch(/\.ccf-pal__btn \{[^}]*min-height: 56px;/)
   })
 })
+
+// ---------- Fatia B: unidades por lote e pallet parcial (bloco append-only abaixo do da Fatia A) ----------
+
+describe('Fatia B: contador de unidades, pallet parcial e folha', () => {
+  const MARKER_B = 'CONFERENCIA POR ITEM (FATIA B)'
+  const startB = styles.indexOf(MARKER_B)
+  const blockB = styles.slice(startB).replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('vem depois do bloco da Fatia A e é o último do arquivo, sem @media, sem fixed e sem cor literal', () => {
+    expect(startB).toBeGreaterThan(start)
+    expect(blockB).not.toMatch(/@media/)
+    expect(blockB).not.toMatch(/position:\s*fixed/)
+    expect(blockB).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    expect(blockB).not.toMatch(/\brgba?\(/)
+    expect(blockB).not.toMatch(/ghost-button/)
+  })
+
+  it('o número do contador de unidades tem 20 px (--fs-title) e só vai a 17 px no número longo, por clamp()', () => {
+    expect(rule(blockB, '.ccf-cnum input')).not.toMatch(/font-size/)
+    expect(blockB).toMatch(/\.ccf-cnum b,\s*\.ccf-cnum input \{[^}]*font-size: var\(--fs-title\);/)
+    expect(blockB).toMatch(/\.ccf-cnum--long b,\s*\.ccf-cnum--long input \{[^}]*font-size: clamp\(17px, calc\(\(100vw - 360px\) \* 1000\), var\(--fs-title\)\);/)
+  })
+
+  it('botões de 56 px e caixa âmbar quando divergente', () => {
+    expect(rule(blockB, '.ccf-cbtn')).toContain('min-height: 56px')
+    expect(rule(blockB, '.ccf-cnum')).toContain('min-height: 56px')
+    expect(rule(blockB, '.ccf-cnum--div')).toContain('border-color: var(--warning)')
+    expect(rule(blockB, '.ccf-cnum--div')).toContain('background: var(--warning-50)')
+  })
+
+  it('cartão do parcial: azul tracejado (info) e lixeira de 44x44; botão "Pallet parcial" em largura total', () => {
+    const parc = rule(blockB, '.ccf-parc')
+    expect(parc).toContain('border: 1.5px dashed var(--info)')
+    expect(parc).toContain('background: var(--info-50)')
+    const trash = rule(blockB, '.ccf-parc button')
+    expect(trash).toContain('width: 44px')
+    expect(trash).toContain('height: 44px')
+    expect(rule(blockB, '.ccf-partialbtn')).toContain('width: 100%')
+  })
+})

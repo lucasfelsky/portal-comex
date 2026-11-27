@@ -20,6 +20,15 @@ import {
 } from './cargoConferenceIssues'
 import { addCargoPhoto, listUnsavedCargoPhotos, removeCargoPhoto } from './cargoConferencePhotos'
 import {
+  CARGO_PARTIAL_PALLETS_MAX,
+  addCargoPartialPallet,
+  expectedUnitsFromDerived,
+  listCargoPartialPallets,
+  removeCargoPartialPallet,
+  setCargoRowUnits,
+  stepCargoRowUnits,
+} from './cargoConferenceUnits'
+import {
   EMPTY_CARGO_CONFERENCE,
   cargoConferenceKey,
   evaluateCargoConferenceClose,
@@ -143,6 +152,8 @@ export default function useCargoConferenceScreen({ process, profile }) {
   const stage = getCargoReportStage(form?.status, saved.status)
   const canSave = canSaveCargoConference(role, stage)
   const canReopen = canReopenCargoConference(role, stage)
+  // Fatia B: Nº de emb. inteiro de cada lote (o esperado das unidades contadas); sem inteiro, sem esperado (D-11).
+  const expectedUnits = useMemo(() => expectedUnitsFromDerived(rows, derived), [rows, derived])
   const dirty = form ? cargoConferenceKey(conference, rows) !== cargoConferenceKey(saved, rows) : false
   const unloadErrors = canSave ? validateCargoUnload(conference) : { start: '', end: '' }
   const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
@@ -175,6 +186,8 @@ export default function useCargoConferenceScreen({ process, profile }) {
 
   const toggleOk = (rowId) => edit((current) => toggleCargoConferenceFlag(current, 'okByRowId', rowId))
   const stepPallets = (rowId, delta) => edit((current) => stepCargoRowPallets(current, rowId, delta))
+  const stepUnits = (rowId, delta) => edit((current) => stepCargoRowUnits(current, rowId, delta))
+  const setUnits = (rowId, value) => edit((current) => setCargoRowUnits(current, rowId, value))
   const setIssue = (rowId, changes) => edit((current) => patchCargoRowIssue(current, rowId, changes))
   const setLabel = (rowId, field, value) => edit((current) => setCargoConferenceLabel(current, rowId, field, value))
 
@@ -189,6 +202,25 @@ export default function useCargoConferenceScreen({ process, profile }) {
   }
   const patch = (changes) => edit((current) => ({ ...current, ...changes }))
   const applySuggestedStatus = () => patch({ receiptStatus: 'com_ressalva' })
+
+  // Pallet parcial: 1 pallet físico que aparece nos dois lotes; remover de um lado remove o pallet inteiro. `parts` =
+  // [{ rowId, units }]. Devolve se adicionou (a folha só fecha quando adicionou).
+  function addPartialPallet(parts) {
+    if (!canSave) return false
+    if (listCargoPartialPallets(conference).length >= CARGO_PARTIAL_PALLETS_MAX) {
+      toast.error(`Limite de ${CARGO_PARTIAL_PALLETS_MAX} pallets parciais por conferência.`)
+      return false
+    }
+    edit((current) => addCargoPartialPallet(current, parts))
+    toast.success('Pallet parcial adicionado. Conta 1 pallet na carga.')
+    return true
+  }
+
+  function removePartialPallet(partialId) {
+    if (!canSave) return
+    edit((current) => removeCargoPartialPallet(current, partialId))
+    toast.success('Pallet parcial removido dos dois lotes')
+  }
 
   function markAllOk() {
     if (!canSave) return
@@ -244,7 +276,7 @@ export default function useCargoConferenceScreen({ process, profile }) {
         applyPersisted({ ...payload, updatedAt: new Date(), updatedByName: actorName })
         invalidateCargoConference(processId)
         // O que o fechamento do computador vai cobrar (nada disso trava o Salvar).
-        const { hints } = evaluateCargoConferenceClose(rows, payload, { expectedPallets })
+        const { hints } = evaluateCargoConferenceClose(rows, payload, { expectedPallets, expectedUnitsByRowId: expectedUnits })
         setFeedback({
           kind: 'success',
           text: `Conferência salva às ${formatClock(new Date())}.`,
@@ -300,6 +332,11 @@ export default function useCargoConferenceScreen({ process, profile }) {
     actorName,
     toggleOk,
     stepPallets,
+    stepUnits,
+    setUnits,
+    addPartialPallet,
+    removePartialPallet,
+    expectedUnits,
     setIssue,
     setLabel,
     patch,

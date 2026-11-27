@@ -600,8 +600,9 @@ describe('logistica: conferencia (estado 1: COMEX em rascunho)', () => {
     expect(payload.checkedByName).toBe('Operador Logística')
     expect(payload.okByRowId).toEqual({ 'r-1': false, 'r-2': true, 'r-3': true, 'r-4': true })
     expect(payload.okByRowId).not.toHaveProperty('orfa')
-    // S10-I: + `palletsByRowId` e `damageByRowId` (sempre gravados, mesmo vazios): 20 chaves + 3 carimbos = 23 nas rules.
-    expect(Object.keys(payload)).toHaveLength(20)
+    // S10-I: + `palletsByRowId` e `damageByRowId` (sempre gravados, mesmo vazios); Fatia B: + `unitsByRowId` e `partialPallets`
+    // (idem): 22 chaves + 3 carimbos = 25 nas rules.
+    expect(Object.keys(payload)).toHaveLength(22)
     expect(payload.palletsByRowId).toEqual({})
     expect(payload.damageByRowId).toEqual({})
     expect(mockSaveDraft).not.toHaveBeenCalled()
@@ -2148,7 +2149,7 @@ describe('S7: logística fecha a conferência (estado 2)', () => {
       nfNumber: '000.123.456',
       notes: '',
     })
-    expect(Object.keys(args.payload)).toHaveLength(20)
+    expect(Object.keys(args.payload)).toHaveLength(22)
     expect(args.payload.okByRowId).not.toHaveProperty('orfa')
 
     // O arquivo anexado leva a conferência fechada: nome, rodapé e DATA CONCLUSÃO = dia do fechamento.
@@ -3373,6 +3374,21 @@ describe('S10-I: fechar a conferência no computador (divergência, bloqueio e s
     await waitDialogClosed(CLOSE_DIALOG)
   })
 
+  it('Fatia B: unidades contadas diferentes do Nº de emb. viram a pendência "N lote(s) com unidades divergentes" (não bloqueia) e o fechamento leva as chaves novas', async () => {
+    withPallets({ unitsByRowId: { 'r-1': 490, 'r-2': 500 }, partialPallets: [] }, { expectedPallets: 6 })
+    const { user } = await renderForm({ profile: LOGISTICA })
+    const dialog = await open(user)
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+    expect(closedButton(dialog)).toBeEnabled()
+    expect(within(dialog).getByRole('note')).toHaveTextContent('1 lote com unidades divergentes')
+    await user.click(closedButton(dialog))
+    await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(1))
+    const payload = mockClose.mock.calls[0][1].payload
+    expect(payload.unitsByRowId).toEqual({ 'r-1': 490, 'r-2': 500 })
+    expect(payload.partialPallets).toEqual([])
+    await waitDialogClosed(CLOSE_DIALOG)
+  })
+
   it('observação escrita em QUALQUER item libera; a divergência vira pendência "(com observação)" e fecha com o conteúdo', async () => {
     withPallets()
     const { user } = await renderForm({ profile: LOGISTICA })
@@ -3392,7 +3408,7 @@ describe('S10-I: fechar a conferência no computador (divergência, bloqueio e s
     expect(payload.status).toBe('fechada')
     expect(payload.palletsByRowId).toEqual({ 'r-1': 2, 'r-2': 3, 'r-3': 1 })
     expect(payload.damageByRowId).toEqual({ 'r-3': { flagged: true, note: 'Faltaram 2 pallets na carga', photos: [] } })
-    expect(Object.keys(payload)).toHaveLength(20)
+    expect(Object.keys(payload)).toHaveLength(22)
     expect(mockGenerate.mock.calls[0][0].rows.map((item) => item.countText).slice(0, 3)).toEqual(['2', '3', '1'])
     await waitDialogClosed(CLOSE_DIALOG)
   })

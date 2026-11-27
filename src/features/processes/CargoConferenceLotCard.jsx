@@ -2,15 +2,19 @@ import Icon from '../../components/Icon'
 import { describeCargoRow } from './cargoConferenceModel'
 import CargoConferenceIssueFields from './CargoConferenceIssueFields'
 import CargoPalletCounter from './CargoPalletCounter'
+import CargoUnitsCounter from './CargoUnitsCounter'
 import { CARGO_REPORT_LIMITS, formatCargoNumber } from './cargoReportFormModel'
 import { handleUpperChange } from './CargoReportItems'
 
-// Conferência por item (Fatia A): cartão de UM lote na tela do item (mock v5). Título "Lote <lote>" ou "Sem lote
+// Conferência por item (Fatia A, e B): cartão de UM lote na tela do item (mock v5). Título "Lote <lote>" ou "Sem lote
 // informado", selo "Conferido" (OK? marcado e pelo menos 1 pallet), selos "Sem contagem"/"A contar", "Nome diferente do
 // fornecedor" e "Avaria registrada", dados do lote (Qtd, Nº de emb. e o tipo da embalagem, Peso líq. por emb. e Peso da
 // emb. com a dica "tara (embalagem vazia)", D-1), botão OK?, contador de pallets INTEIROS e, recolhido, "Etiquetas, fotos e
-// avaria" (abre sozinho quando há avaria). Tocar ou focar o cartão avisa `onPin` (o filtro "Só pendentes" não esconde o
-// item sob o dedo). Apresentação pura: quem guarda o estado é `useCargoConferenceScreen`. Somente leitura (`editable`
+// avaria" (abre sozinho quando há avaria). Fatia B: os pallets PARCIAIS do lote (cartão azul tracejado com a lixeira e o
+// botão "Pallet parcial"), o contador de UNIDADES (total do lote x Nº de emb. do relatório), "N das unidades contadas estão
+// em pallet parcial." e o selo "Unidades divergentes". Os campos de B são opcionais (sem eles o cartão é o da Fatia A).
+//   partials: [{ id, mineUnits, other: { units, name, lot } | null }] | units / expectedUnits: int | null
+// Tocar ou focar o cartão avisa `onPin` (o filtro "Só pendentes" não esconde o item sob o dedo). Apresentação pura: quem guarda o estado é `useCargoConferenceScreen`. Somente leitura (`editable`
 // falso): botões desabilitados, contador só com o número e etiquetas em texto.
 
 export const CARGO_TARE_HINT = 'tara (embalagem vazia)'
@@ -60,6 +64,10 @@ export default function CargoConferenceLotCard({
   issue,
   hasIssue,
   labels,
+  partials = [],
+  units = null,
+  expectedUnits = null,
+  unitsDivergent = false,
   awaitingCount = false,
   editable,
   photoTools = null,
@@ -68,14 +76,21 @@ export default function CargoConferenceLotCard({
   onToggleDetails,
   onToggleOk,
   onStepPallets,
+  onSetUnits,
+  onStepUnits,
+  onOpenPartial,
+  onRemovePartial,
   onIssueChange,
   onLabelChange,
   onPin,
 }) {
   // "Sem contagem": nunca contado ou zerado (0 pallet); o registro antigo (Contagem OK) conta como contado.
-  const uncounted = !(pallets.count >= 1) && !pallets.legacyOk
+  // O pallet parcial vale como pallet contado.
+  const hasPartial = partials.length > 0
+  const uncounted = !(pallets.count >= 1) && !pallets.legacyOk && !hasPartial
   // "A contar" (neutro): nunca contado, sem registro antigo, e o COMEX informou o total da carga (#306).
   const toCount = awaitingCount && pallets.count === null && !pallets.legacyOk
+  const unitsInPartials = partials.reduce((sum, partial) => sum + partial.mineUnits, 0)
   const quantity = typeof row.quantityKg === 'number' ? kg(row.quantityKg) : '—'
   const packages =
     derived?.packages === null || derived?.packages === undefined ? '—' : formatCargoNumber(derived.packages, { maxDecimals: 2 })
@@ -100,9 +115,10 @@ export default function CargoConferenceLotCard({
         ) : null}
       </div>
 
-      {uncounted || differentName || hasIssue ? (
+      {uncounted || unitsDivergent || differentName || hasIssue ? (
         <div className="ccf-item__flags">
           {uncounted ? <span className="ccf-badge">{toCount ? 'A contar' : 'Sem contagem'}</span> : null}
+          {unitsDivergent ? <span className="ccf-badge ccf-badge--warn">Unidades divergentes</span> : null}
           {differentName ? <span className="ccf-badge ccf-badge--info">Nome diferente do fornecedor</span> : null}
           {hasIssue ? <span className="ccf-badge ccf-badge--danger">Avaria registrada</span> : null}
         </div>
@@ -147,6 +163,41 @@ export default function CargoConferenceLotCard({
         itemLabel={`item ${number}`}
         onStep={(delta) => onStepPallets(row.id, delta)}
       />
+
+      {partials.map((partial) => (
+        <div className="ccf-parc" key={partial.id}>
+          <Icon name="pallet" size={20} strokeWidth={2} />
+          <span>
+            <b>Pallet parcial</b> · {partial.mineUnits} un. deste lote
+            {partial.other
+              ? ` + ${partial.other.units} un. de ${partial.other.name}${partial.other.lot ? ` · ${partial.other.lot}` : ''}`
+              : ' · pallet incompleto'}
+          </span>
+          {editable ? (
+            <button type="button" aria-label="Remover este pallet parcial" onClick={() => onRemovePartial(partial.id)}>
+              <Icon name="trash" size={18} strokeWidth={2} />
+            </button>
+          ) : null}
+        </div>
+      ))}
+      {editable ? (
+        <button type="button" className="secondary-button ccf-partialbtn" onClick={() => onOpenPartial(row.id)}>
+          <Icon name="plus" size={16} strokeWidth={2} />
+          Pallet parcial
+        </button>
+      ) : null}
+
+      <CargoUnitsCounter
+        value={units}
+        expected={expectedUnits}
+        divergent={unitsDivergent}
+        editable={editable}
+        itemLabel={`item ${number}`}
+        title={title}
+        onSet={(value) => onSetUnits(row.id, value)}
+        onStep={(delta) => onStepUnits(row.id, delta)}
+      />
+      {unitsInPartials > 0 ? <p className="ccf-cnt__sum">{unitsInPartials} das unidades contadas estão em pallet parcial.</p> : null}
 
       <details
         className="ccf-more"

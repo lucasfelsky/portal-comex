@@ -1,5 +1,6 @@
 import { cargoRowPallets, hasCargoRowIssue } from './cargoConferenceIssues'
 import { describeCargoRow, isCargoRowConferred } from './cargoConferenceModel'
+import { getCargoRowUnits, isCargoRowUnitsDivergent, listCargoPartialPallets } from './cargoConferenceUnits'
 import { normalizeItemCode } from './cargoReportCatalog'
 import { CARGO_ORPHAN_GROUP_LABEL, groupCargoRowsByPurchaseOrder } from './cargoReportGroups'
 import { purchaseOrderLabel } from './cargoReportRowOps'
@@ -77,7 +78,9 @@ function buildGroupItems(group) {
   return order.map((identity) => buildItem(group, identity, byIdentity.get(identity)))
 }
 
-// -> { grouped, groups: [{ id, label, supplier, purchaseOrder, items }], items (ordem da tela), itemByKey, keyByRowId }.
+// -> { grouped, groups: [{ id, label, supplier, purchaseOrder, items }], items (ordem da tela), itemByKey, keyByRowId,
+// infoByRowId }. `infoByRowId` (Fatia B) = { name (nome SQ do item), lot (lote ou '') } de cada linha: os pallets parciais
+// e a folha mostram "<nome> · <lote>" do outro lote.
 // Com POs (consolidado) a ordem é a do processo e as linhas sem PO reconhecida vão no grupo final; sem POs, um grupo só.
 export function buildCargoConferenceItems(rows, purchaseOrders) {
   const list = Array.isArray(rows) ? rows : []
@@ -99,22 +102,42 @@ export function buildCargoConferenceItems(rows, purchaseOrders) {
   const items = groups.flatMap((group) => group.items)
   const itemByKey = new Map(items.map((item) => [item.key, item]))
   const keyByRowId = new Map()
-  for (const item of items) for (const rowId of item.rowIds) keyByRowId.set(rowId, item.key)
-  return { grouped, groups, items, itemByKey, keyByRowId }
+  const infoByRowId = new Map()
+  for (const item of items) {
+    for (const rowId of item.rowIds) keyByRowId.set(rowId, item.key)
+    for (const lot of item.lots) infoByRowId.set(lot.row.id, { name: item.name, lot: String(lot.row.supplierLot ?? '').trim() })
+  }
+  return { grouped, groups, items, itemByKey, keyByRowId, infoByRowId }
 }
 
-// Progresso e selos de um item (lê a conferência): item conferido = todos os lotes conferidos. Na Fatia A os pallets
-// do item são só os INTEIROS (`palletsByRowId`).
-export function summarizeCargoConferenceItem(item, conference) {
+// Progresso e selos de um item (lê a conferência): item conferido = todos os lotes conferidos. Fatia B: `pallets` =
+// INTEIROS (`whole`, de `palletsByRowId`) + PARCIAIS (`partial`: um parcial dividido entre dois lotes do mesmo item conta
+// 1) e `units` = unidades contadas x esperadas do item. `expectedUnits` = { [rowId]: Nº de emb. inteiro | null } (sem ele,
+// nada é esperado); o lote sem esperado fica fora da soma do esperado e nunca é divergente (D-11).
+export function summarizeCargoConferenceItem(item, conference, expectedUnits = null) {
   const total = item.lots.length
   const done = item.lots.filter((lot) => isCargoRowConferred(conference, lot.row.id)).length
-  const pallets = item.lots.reduce((sum, lot) => sum + (cargoRowPallets(conference, lot.row.id).count ?? 0), 0)
+  const whole = item.lots.reduce((sum, lot) => sum + (cargoRowPallets(conference, lot.row.id).count ?? 0), 0)
+  const itemRowIds = new Set(item.rowIds)
+  const partial = listCargoPartialPallets(conference).filter((entry) => entry.parts.some((part) => itemRowIds.has(part.rowId))).length
+  const known = item.lots.filter((lot) => Number.isInteger(expectedUnits?.[lot.row.id]))
   return {
     total,
     done,
     full: total > 0 && done === total,
     percent: total > 0 ? Math.round((done * 100) / total) : 0,
-    pallets,
+    pallets: whole + partial,
+    whole,
+    partial,
+    // Contados e esperados somam sobre o MESMO conjunto de lotes (os com Nº de emb. inteiro): nunca "150 de 100 unidades" sem
+    // selo. Sem nenhum lote com esperado, só o contado de todos os lotes.
+    units: {
+      counted: (known.length > 0 ? known : item.lots).reduce((sum, lot) => sum + (getCargoRowUnits(conference, lot.row.id) ?? 0), 0),
+      expected: known.length > 0 ? known.reduce((sum, lot) => sum + expectedUnits[lot.row.id], 0) : null,
+    },
+    unitsDivergent: item.lots.some((lot) =>
+      isCargoRowUnitsDivergent(getCargoRowUnits(conference, lot.row.id), expectedUnits?.[lot.row.id])
+    ),
     hasIssue: item.lots.some((lot) => hasCargoRowIssue(conference, lot.row.id)),
   }
 }

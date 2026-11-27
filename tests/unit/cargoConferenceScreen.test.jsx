@@ -172,7 +172,7 @@ const okButton = (n) => screen.getByRole('button', { name: `OK? do ${LOT_TITLE[n
 const plusButton = (n) => screen.getByRole('button', { name: `Adicionar um pallet à contagem do item ${n}` })
 const minusButton = (n) => screen.getByRole('button', { name: `Tirar um pallet da contagem do item ${n}` })
 const progressText = () => screen.getByText(/de \d+ itens conferidos/)
-const palletsStrip = () => screen.getByText(/^Pallets da carga:/).closest('p')
+const palletsStrip = () => screen.getByText(/^[0-9]+ pallets? contados?/).closest('p')
 const openReceipt = (user) => user.click(screen.getByRole('tab', { name: 'Recebimento' }))
 const lotCard = (n) => screen.getByRole('article', { name: LOT_TITLE[n] })
 const openItem = (user, n) => user.click(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[n]}` }))
@@ -226,7 +226,8 @@ describe('logística, COMEX fechado: conferir itens', () => {
     expect(screen.getByText('Item 1 de 3')).toBeInTheDocument()
     const first = lotCard(1)
     expect(within(first).getByText('12.500 kg')).toBeInTheDocument()
-    expect(within(first).getByText('500')).toBeInTheDocument()
+    // "Esperadas: 500" (unidades, Fatia B) repete o número: o Nº de emb. é o <dd>.
+    expect(within(first).getByText('500', { selector: 'dd' })).toBeInTheDocument()
     expect(within(first).getByText('BOMBONA')).toBeInTheDocument()
     expect(within(first).getByText('25 kg')).toBeInTheDocument()
     expect(within(first).getByText('1,2 kg')).toBeInTheDocument()
@@ -717,11 +718,11 @@ describe('pallets da carga: faixa e selo', () => {
   it('divergente: "3 contados de 5 informados pelo COMEX" com o selo Divergente', async () => {
     const { user } = await renderScreen({ current: withTotal(5) })
     // Nada contado ainda: 0 de 5 já é divergência.
-    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 0 contados de 5 informados pelo COMEX.')
+    expect(palletsStrip()).toHaveTextContent('0 pallets contados de 5 informados pelo COMEX')
     expect(within(palletsStrip()).getByText('Divergente')).toHaveClass('ccf-badge--warn')
     await countIn(user, 1, 2)
     await countIn(user, 2)
-    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 3 contados de 5 informados pelo COMEX.')
+    expect(palletsStrip()).toHaveTextContent('3 pallets contados de 5 informados pelo COMEX')
     expect(within(palletsStrip()).getByText('Divergente')).toBeInTheDocument()
   })
 
@@ -729,7 +730,7 @@ describe('pallets da carga: faixa e selo', () => {
     const { user } = await renderScreen({ current: withTotal(2) })
     await countIn(user, 1)
     await countIn(user, 3)
-    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 2 contados de 2 informados pelo COMEX.')
+    expect(palletsStrip()).toHaveTextContent('2 pallets contados de 2 informados pelo COMEX')
     expect(within(palletsStrip()).getByText('Confere')).toHaveClass('ccf-badge--ok')
     expect(within(palletsStrip()).queryByText('Divergente')).not.toBeInTheDocument()
   })
@@ -737,7 +738,7 @@ describe('pallets da carga: faixa e selo', () => {
   it('sem total do COMEX (relatório antigo): sem comparação, selo "Sem total"', async () => {
     const { user } = await renderScreen()
     await countIn(user, 1)
-    expect(palletsStrip()).toHaveTextContent('Pallets da carga: 1 contado. Total não informado pelo COMEX.')
+    expect(palletsStrip()).toHaveTextContent('1 pallet contado. Total não informado pelo COMEX.')
     expect(within(palletsStrip()).getByText('Sem total')).toBeInTheDocument()
   })
 
@@ -919,7 +920,7 @@ describe('relatório antigo (Contagem OK sem número) no celular', () => {
     })
     expect(progressText().querySelector('b')).toHaveTextContent('1')
     // Sem número falso: a soma não conta o legado.
-    expect(screen.getByText(/^Pallets da carga: 0 contados/)).toBeInTheDocument()
+    expect(screen.getByText(/^0 pallets contados/)).toBeInTheDocument()
     await openItem(user, 1)
     const first = lotCard(1)
     expect(within(first).getByRole('status')).toHaveTextContent('Contagem OK (registro antigo) no item 1')
