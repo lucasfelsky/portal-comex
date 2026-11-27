@@ -1,5 +1,6 @@
-import { useId, useMemo, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import Skeleton from '../../components/Skeleton'
 import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext'
@@ -7,28 +8,31 @@ import useMediaQuery from '../../hooks/useMediaQuery'
 import { describeCargoConferenceCategory, describeCargoConferenceSupplier } from './cargoConferenceList'
 import {
   CARGO_PHOTOS_PER_CONFERENCE,
-  cargoRowPallets,
   formatCargoPalletsSummary,
-  hasCargoRowIssue,
   listCargoIssueRows,
   readCargoRowIssue,
 } from './cargoConferenceIssues'
+import { describeCargoLot, buildCargoConferenceItems, listCargoSearchItems, locateCargoItem, summarizeCargoConferenceItem } from './cargoConferenceItems'
 import { countCargoPhotos } from './cargoConferencePhotos'
-import { describeCargoRow, isCargoRowConferred } from './cargoConferenceModel'
-import CargoConferenceItemCard from './CargoConferenceItemCard'
+import { describeCargoRow } from './cargoConferenceModel'
+import CargoConferenceItemList from './CargoConferenceItemList'
+import CargoConferenceItemView from './CargoConferenceItemView'
 import CargoConferenceReceiptPanel from './CargoConferenceReceiptPanel'
 import { CARGO_STAGE } from './cargoReportFormModel'
-import { CARGO_ORPHAN_GROUP_LABEL, getCargoReportPurchaseOrders, groupCargoRowsByPurchaseOrder } from './cargoReportGroups'
-import { purchaseOrderLabel } from './cargoReportRowOps'
+import { getCargoReportPurchaseOrders } from './cargoReportGroups'
 import { getDerivedStatusToneClass, getProcessDerivedStatus } from './processDerivedStatus'
 import { getProcessTitle } from './processLabels'
 import useCargoConferenceScreen from './useCargoConferenceScreen'
+import { readCargoScrollTop, writeCargoScrollTop } from './useCargoStickyStuck'
 
 // S9-F do Relatório de Carga: tela de conferência de um processo no celular (mock aprovado). Faixa com voltar, nome,
 // fase, progresso e (S10-I) os pallets contados x o total do COMEX; abas Itens | Recebimento; barra inferior (por portal
 // no body, fora do `.page-fade`) com Salvar, Voltar à lista ou Reabrir conferência. S9-H: o celular só salva; fechar a
 // conferência é do computador. A logística confere; o admin só acompanha e reabre. Estados somente leitura:
 // conferência fechada e papel admin.
+// Conferência por item (Fatia A): a aba Itens lista só os ITENS (com busca); a tela do item (parâmetro de URL `item`,
+// D-14) mostra todos os lotes dele. A busca e o "Só pendentes" vivem aqui e sobrevivem a abrir e voltar do item; a
+// rolagem da lista é restaurada ao voltar. "Próximo item" anda pelos itens da busca. Nenhum dado novo.
 
 const TABS = [
   { value: 'itens', label: 'Itens' },
@@ -61,8 +65,8 @@ const PALLETS_BADGES = {
   semTotal: { className: 'ccf-badge', label: 'Sem total' },
 }
 
-function ProgressLine({ done, total, process, pallets, photoCount }) {
-  const percent = total > 0 ? Math.round((done * 100) / total) : 0
+function ProgressLine({ itemsDone, itemsTotal, lotsDone, lotsTotal, process, pallets, photoCount }) {
+  const percent = itemsTotal > 0 ? Math.round((itemsDone * 100) / itemsTotal) : 0
   const badge = PALLETS_BADGES[pallets.state]
   return (
     <>
@@ -70,8 +74,8 @@ function ProgressLine({ done, total, process, pallets, photoCount }) {
         <i style={{ width: `${percent}%` }} />
       </span>
       <p className="ccf-sub">
-        <b>{done}</b> de {total} itens conferidos · {describeCargoConferenceCategory(process?.category)} ·{' '}
-        {describeCargoConferenceSupplier(process)}
+        <b>{itemsDone}</b> de {itemsTotal} itens conferidos · {lotsDone} de {lotsTotal} lotes ·{' '}
+        {describeCargoConferenceCategory(process?.category)} · {describeCargoConferenceSupplier(process)}
       </p>
       <p className="ccf-pallets">
         <span>{formatCargoPalletsSummary(pallets, { withState: false })}</span>
@@ -85,12 +89,21 @@ function ProgressLine({ done, total, process, pallets, photoCount }) {
 export default function CargoConferenceScreen({ process, profile, canSeeName, onBack }) {
   const screen = useCargoConferenceScreen({ process, profile })
   const { requestLeave } = useUnsavedChanges()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const aboveNav = useMediaQuery('(max-width: 720px)')
   const [tab, setTab] = useState('itens')
   const [onlyPending, setOnlyPending] = useState(false)
+  const [query, setQuery] = useState('')
   // Itens "fixados" no filtro "Só pendentes": o que a pessoa tocou/editou nesta sessão de tela fica visível mesmo depois
-  // de deixar de ser pendente (o cartão não some sob o dedo). Zera ao trocar o filtro e ao sair da tela; só afeta a lista.
-  const [pinnedIds, setPinnedIds] = useState(() => new Set())
+  // de deixar de ser pendente (o item não some sob o dedo). Zera ao trocar o filtro e ao sair da tela; só afeta a lista.
+  const [pinnedKeys, setPinnedKeys] = useState(() => new Set())
+  // Etiquetas, fotos e avaria: aberto/fechado por lote (sem valor = abre sozinho quando há avaria).
+  const [detailsOpen, setDetailsOpen] = useState({})
+  const rootRef = useRef(null)
+  const listScroll = useRef(0)
+  const shownKey = useRef('')
   const tabRefs = useRef({})
   const baseId = useId()
   const noteId = `${baseId}-note`
@@ -99,16 +112,56 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const purchaseOrders = useMemo(() => getCargoReportPurchaseOrders(process), [process])
   const { rows, conference, stage } = screen
   const isClosed = stage === CARGO_STAGE.done
-  const pinRow = (rowId) => setPinnedIds((current) => (current.has(rowId) ? current : new Set(current).add(rowId)))
+  const isReady = screen.loadState === 'ready'
+  const model = useMemo(() => buildCargoConferenceItems(rows, purchaseOrders), [rows, purchaseOrders])
+  const itemKey = searchParams.get('item') ?? ''
+  const activeItem = isReady && itemKey ? (model.itemByKey.get(itemKey) ?? null) : null
+  const activeKey = activeItem?.key ?? ''
+
+  const pinRow = (rowId) => {
+    const key = model.keyByRowId.get(rowId)
+    if (!key) return
+    setPinnedKeys((current) => (current.has(key) ? current : new Set(current).add(key)))
+  }
   const withPin = (action) => (rowId, ...args) => {
     pinRow(rowId)
     return action(rowId, ...args)
   }
 
-  const groups = useMemo(
-    () => (purchaseOrders.length > 0 ? groupCargoRowsByPurchaseOrder(rows, purchaseOrders) : []),
-    [purchaseOrders, rows]
-  )
+  // Abrir o item sobe ao topo; voltar à lista devolve a rolagem de antes (D-14). A área que rola é a página no celular.
+  useLayoutEffect(() => {
+    if (!isReady || shownKey.current === activeKey) return
+    shownKey.current = activeKey
+    if (rootRef.current) writeCargoScrollTop(rootRef.current, activeKey ? 0 : listScroll.current)
+  }, [isReady, activeKey])
+
+  function withItemParam(mutate) {
+    const next = new URLSearchParams(searchParams)
+    mutate(next)
+    const search = next.toString()
+    return { search: search ? `?${search}` : '' }
+  }
+
+  function openItem(item) {
+    if (rootRef.current) listScroll.current = readCargoScrollTop(rootRef.current)
+    navigate(withItemParam((params) => params.set('item', item.key)), { state: { ...(location.state ?? {}), ccfItem: true } })
+  }
+
+  // Voltar do item: veio da lista, volta no histórico (o voltar do aparelho fica coerente); senão troca a URL.
+  function backToItems() {
+    if (location.state?.ccfItem) navigate(-1)
+    else navigate(withItemParam((params) => params.delete('item')), { replace: true })
+  }
+
+  const searchItems = listCargoSearchItems(model.items, query)
+  const activeIndex = searchItems.findIndex((item) => item.key === activeKey)
+  const isLastItem = activeIndex >= searchItems.length - 1
+
+  function nextItem() {
+    const next = searchItems[Math.min(searchItems.length - 1, activeIndex + 1)]
+    if (!next || next.key === activeKey) return
+    navigate(withItemParam((params) => params.set('item', next.key)), { replace: true, state: location.state })
+  }
 
   const header = (
     <div className="ccf-strip">
@@ -124,10 +177,12 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
         <h2 className="ccf-strip__title">{getProcessTitle(process, canSeeName)}</h2>
         <span className={getDerivedStatusToneClass(phase)}>{phase.label}</span>
       </div>
-      {screen.loadState === 'ready' ? (
+      {isReady ? (
         <ProgressLine
-          done={screen.progress.done}
-          total={screen.progress.total}
+          itemsDone={model.items.filter((item) => summarizeCargoConferenceItem(item, conference).full).length}
+          itemsTotal={model.items.length}
+          lotsDone={screen.progress.done}
+          lotsTotal={screen.progress.total}
           process={process}
           pallets={screen.pallets}
           photoCount={countCargoPhotos(conference)}
@@ -138,7 +193,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
 
   if (screen.loadState === 'loading') {
     return (
-      <div className="ccf-screen">
+      <div className="ccf-screen" ref={rootRef}>
         {header}
         <div className="ccf-skeletons" role="status" aria-label="Carregando conferência">
           <Skeleton variant="card" />
@@ -150,7 +205,7 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
 
   if (screen.loadState === 'error' || screen.loadState === 'missing') {
     return (
-      <div className="ccf-screen">
+      <div className="ccf-screen" ref={rootRef}>
         {header}
         {screen.loadState === 'error' ? (
           <div className="error-banner error-banner--retry" role="alert">
@@ -174,9 +229,9 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
     )
   }
 
-  function handleOnlyPendingChange(event) {
-    setOnlyPending(event.target.checked)
-    setPinnedIds(new Set())
+  function handleOnlyPendingChange(checked) {
+    setOnlyPending(checked)
+    setPinnedKeys(new Set())
   }
 
   function handleTabKeyDown(event) {
@@ -202,140 +257,8 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
   const feedbackAction =
     feedback?.action ?? (feedback?.kind === 'conflict' ? { label: 'Recarregar', run: screen.reload } : null)
 
-  // Selo neutro "A contar": só quando o COMEX informou o total da carga (sem total não há contra o quê contar) e dá
-  // para contar (conferência editável); fechada ou só leitura, o item nunca contado segue "Sem contagem".
-  const awaitingCount = screen.canSave && screen.pallets?.expected !== null && screen.pallets?.expected !== undefined
-
-  function renderCard(row, rowIndex) {
-    return (
-      <CargoConferenceItemCard
-        key={row.id}
-        row={row}
-        number={rowIndex + 1}
-        derived={screen.derived[rowIndex]}
-        ok={conference.okByRowId?.[row.id]}
-        conferred={isCargoRowConferred(conference, row.id)}
-        pallets={cargoRowPallets(conference, row.id)}
-        issue={readCargoRowIssue(conference, row.id)}
-        hasIssue={hasCargoRowIssue(conference, row.id)}
-        labels={conference.labelsByRowId?.[row.id]}
-        awaitingCount={awaitingCount}
-        editable={screen.canSave}
-        photoTools={screen.photoTools}
-        idPrefix={`${baseId}-r${rowIndex}`}
-        onToggleOk={withPin(screen.toggleOk)}
-        onStepPallets={withPin(screen.stepPallets)}
-        onIssueChange={withPin(screen.setIssue)}
-        onLabelChange={withPin(screen.setLabel)}
-        onPin={pinRow}
-      />
-    )
-  }
-
-  const issueItems = listCargoIssueRows(rows, conference).map((row) => {
-    const rowIndex = rows.indexOf(row)
-    return {
-      id: row.id,
-      number: rowIndex + 1,
-      title: describeCargoRow(row, rowIndex + 1),
-      note: readCargoRowIssue(conference, row.id).note.trim(),
-      photoCount: readCargoRowIssue(conference, row.id).photos.length,
-    }
-  })
-  const isPending = (row) => !isCargoRowConferred(conference, row.id)
-  const showOnlyPending = screen.canSave && onlyPending
-  // Com o filtro ativo, o item fixado (tocado nesta sessão) continua na lista; os contadores seguem o dado real.
-  const isVisible = (row) => !showOnlyPending || isPending(row) || pinnedIds.has(row.id)
-  const allConferred = showOnlyPending && rows.length > 0 && !rows.some(isPending)
-  let itemsContent
-  if (rows.length === 0) {
-    itemsContent = <div className="ccf-note">Este relatório não tem itens.</div>
-  } else if (allConferred && !rows.some(isVisible)) {
-    itemsContent = (
-      <div className="ccf-note ccf-note--ok" role="status">
-        Todos os itens estão conferidos.
-      </div>
-    )
-  } else if (groups.length > 0) {
-    itemsContent = groups
-      .filter((group) => group.rows.length > 0)
-      .map((group) => {
-        const done = group.rows.filter(({ row }) => !isPending(row)).length
-        const label = group.purchaseOrder ? purchaseOrderLabel(group.purchaseOrder) : CARGO_ORPHAN_GROUP_LABEL
-        const supplier = group.purchaseOrder?.supplierName
-        return (
-          <section className="ccf-groupblock" key={group.purchaseOrder?.po ?? 'orphans'} aria-label={label}>
-            <div className="ccf-group">
-              {label}
-              <small>
-                {supplier ? `${supplier} · ` : ''}
-                {done} de {group.rows.length} conferidos
-              </small>
-            </div>
-            {group.rows
-              .filter(({ row }) => isVisible(row))
-              .map(({ row, rowIndex }) => renderCard(row, rowIndex))}
-          </section>
-        )
-      })
-  } else {
-    itemsContent = rows.map((row, rowIndex) => (isVisible(row) ? renderCard(row, rowIndex) : null))
-  }
-
-  const saveDisabled = screen.isBusy || !screen.dirty || screen.isUploading
-  let actions
-  if (screen.canSave) {
-    actions = (
-      <>
-        {screen.isUploading ? (
-          <p className="ccf-actionbar__hint" role="status">
-            Aguarde o envio das fotos.
-          </p>
-        ) : null}
-        <button type="button" className="primary-button" disabled={saveDisabled} onClick={screen.save}>
-          Salvar
-        </button>
-      </>
-    )
-  } else if (screen.canReopen) {
-    actions = (
-      <button type="button" className="secondary-button ccf-danger" disabled={screen.isBusy} onClick={screen.reopen}>
-        Reabrir conferência
-      </button>
-    )
-  } else {
-    actions = (
-      <button type="button" className="secondary-button" onClick={() => requestLeave(onBack)}>
-        Voltar à lista
-      </button>
-    )
-  }
-
-  return (
-    <div className="ccf-screen">
-      {header}
-
-      <div className="ccf-tabs" role="tablist" aria-label="Seções da conferência" onKeyDown={handleTabKeyDown}>
-        {TABS.map((item) => (
-          <button
-            key={item.value}
-            ref={(element) => {
-              tabRefs.current[item.value] = element
-            }}
-            type="button"
-            role="tab"
-            id={`${baseId}-tab-${item.value}`}
-            aria-selected={tab === item.value}
-            aria-controls={tab === item.value ? `${baseId}-panel` : undefined}
-            tabIndex={tab === item.value ? 0 : -1}
-            className="ccf-tab"
-            onClick={() => setTab(item.value)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
+  const noteAndFeedback = (
+    <>
       {note ? (
         <div className={noteClass} id={noteId} role="note">
           {note}
@@ -365,29 +288,160 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
           </div>
         )
       ) : null}
+    </>
+  )
+
+  // Selo neutro "A contar": só quando o COMEX informou o total da carga (sem total não há contra o quê contar) e dá
+  // para contar (conferência editável); fechada ou só leitura, o lote nunca contado segue "Sem contagem".
+  const awaitingCount = screen.canSave && screen.pallets?.expected !== null && screen.pallets?.expected !== undefined
+
+  const issueItems = listCargoIssueRows(rows, conference).map((row) => {
+    const rowIndex = rows.indexOf(row)
+    return {
+      id: row.id,
+      title: `${describeCargoRow(row, rowIndex + 1)} · ${describeCargoLot(row)}`,
+      note: readCargoRowIssue(conference, row.id).note.trim(),
+      photoCount: readCargoRowIssue(conference, row.id).photos.length,
+    }
+  })
+
+  const saveDisabled = screen.isBusy || !screen.dirty || screen.isUploading
+  const saveButton = (
+    <button type="button" className="primary-button" disabled={saveDisabled} onClick={screen.save}>
+      Salvar
+    </button>
+  )
+  const uploadHint = screen.isUploading ? (
+    <p className="ccf-actionbar__hint" role="status">
+      Aguarde o envio das fotos.
+    </p>
+  ) : null
+  const backButton = (
+    <button type="button" className="secondary-button" onClick={backToItems}>
+      Voltar aos itens
+    </button>
+  )
+  const nextButton = (
+    <button type="button" className="secondary-button" onClick={nextItem}>
+      Próximo item
+      <Icon name="chevron-right" size={16} strokeWidth={2} />
+    </button>
+  )
+
+  let actions
+  if (activeItem) {
+    // No item: Próximo item (no último, Voltar aos itens) + Salvar; só leitura: Voltar aos itens + Próximo item.
+    actions = screen.canSave ? (
+      <>
+        {uploadHint}
+        {isLastItem ? backButton : nextButton}
+        {saveButton}
+      </>
+    ) : (
+      <>
+        {backButton}
+        {isLastItem ? null : nextButton}
+      </>
+    )
+  } else if (screen.canSave) {
+    actions = (
+      <>
+        {uploadHint}
+        {saveButton}
+      </>
+    )
+  } else if (screen.canReopen) {
+    actions = (
+      <button type="button" className="secondary-button ccf-danger" disabled={screen.isBusy} onClick={screen.reopen}>
+        Reabrir conferência
+      </button>
+    )
+  } else {
+    actions = (
+      <button type="button" className="secondary-button" onClick={() => requestLeave(onBack)}>
+        Voltar à lista
+      </button>
+    )
+  }
+
+  if (activeItem) {
+    const cards = {
+      conference,
+      derived: screen.derived,
+      awaitingCount,
+      editable: screen.canSave,
+      photoTools: screen.photoTools,
+      idPrefix: baseId,
+      detailsOpen,
+      actions: {
+        toggleDetails: (rowId, open) =>
+          setDetailsOpen((current) => (current[rowId] === open ? current : { ...current, [rowId]: open })),
+        toggleOk: withPin(screen.toggleOk),
+        stepPallets: withPin(screen.stepPallets),
+        setIssue: withPin(screen.setIssue),
+        setLabel: withPin(screen.setLabel),
+        pin: pinRow,
+      },
+    }
+    return (
+      <div className="ccf-screen" ref={rootRef}>
+        <CargoConferenceItemView
+          item={activeItem}
+          position={locateCargoItem(model.items, activeKey)}
+          cards={cards}
+          notice={noteAndFeedback}
+          onBack={backToItems}
+        />
+        {renderActionBar(actions, aboveNav)}
+      </div>
+    )
+  }
+
+  return (
+    <div className="ccf-screen" ref={rootRef}>
+      {header}
+
+      <div className="ccf-tabs" role="tablist" aria-label="Seções da conferência" onKeyDown={handleTabKeyDown}>
+        {TABS.map((item) => (
+          <button
+            key={item.value}
+            ref={(element) => {
+              tabRefs.current[item.value] = element
+            }}
+            type="button"
+            role="tab"
+            id={`${baseId}-tab-${item.value}`}
+            aria-selected={tab === item.value}
+            aria-controls={tab === item.value ? `${baseId}-panel` : undefined}
+            tabIndex={tab === item.value ? 0 : -1}
+            className="ccf-tab"
+            onClick={() => setTab(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {noteAndFeedback}
 
       <div role="tabpanel" id={`${baseId}-panel`} aria-labelledby={`${baseId}-tab-${tab}`} className="ccf-body">
         {tab === 'itens' ? (
-          <>
-            {screen.canSave ? (
-              <div className="ccf-tools">
-                <button type="button" className="secondary-button ccf-markall" onClick={screen.markAllOk}>
-                  <Icon name="check" size={16} strokeWidth={2.2} />
-                  Marcar todos OK
-                </button>
-                <label className="ccf-check">
-                  <input type="checkbox" checked={onlyPending} onChange={handleOnlyPendingChange} />
-                  Só pendentes
-                </label>
-              </div>
-            ) : null}
-            {allConferred && rows.some(isVisible) ? (
-              <div className="ccf-note ccf-note--ok" role="status">
-                Todos os itens estão conferidos.
-              </div>
-            ) : null}
-            {itemsContent}
-          </>
+          rows.length === 0 ? (
+            <div className="ccf-note">Este relatório não tem itens.</div>
+          ) : (
+            <CargoConferenceItemList
+              model={model}
+              conference={conference}
+              query={query}
+              onQueryChange={setQuery}
+              canSave={screen.canSave}
+              onlyPending={onlyPending}
+              onOnlyPendingChange={handleOnlyPendingChange}
+              onMarkAllOk={screen.markAllOk}
+              pinnedKeys={pinnedKeys}
+              onOpen={openItem}
+            />
+          )
         ) : (
           <CargoConferenceReceiptPanel
             conference={conference}

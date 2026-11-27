@@ -194,7 +194,7 @@ export default function useCargoConferenceScreen({ process, profile }) {
     if (!canSave) return
     setConference((current) => markAllCargoRowsOk(current, rows))
     setFeedback(null)
-    toast.success('Todos os itens marcados com OK. Os pallets continuam por contar.')
+    toast.success('Todos os lotes marcados com OK. Pallets continuam por contar.')
   }
 
   // Estado gravado (salvar, fechar ou reabrir): tela e base de comparação ficam iguais.

@@ -132,14 +132,17 @@ describe('JS: a classe --above-nav só existe quando a navegação existe (<= 72
     }))
     const { ToastProvider } = await import('../../src/components/Toast')
     const { default: CargoConferenceScreen } = await import('../../src/features/processes/CargoConferenceScreen')
+    // A tela lê o item pela URL: dentro de um roteador.
     render(
       <ToastProvider>
-        <CargoConferenceScreen
-          process={{ id: 'p1', name: 'P', category: 'FCL' }}
-          profile={{ role: 'logistica', name: 'Op' }}
-          canSeeName
-          onBack={() => {}}
-        />
+        <MemoryRouter>
+          <CargoConferenceScreen
+            process={{ id: 'p1', name: 'P', category: 'FCL' }}
+            profile={{ role: 'logistica', name: 'Op' }}
+            canSeeName
+            onBack={() => {}}
+          />
+        </MemoryRouter>
       </ToastProvider>
     )
     return screen.findByRole('group', { name: 'Ações da conferência' })

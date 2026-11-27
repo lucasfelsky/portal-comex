@@ -147,7 +147,9 @@ const conferenceDoc = (overrides = {}) => ({
   ...overrides,
 })
 
-const render = (ui, options) => rtlRender(ui, { wrapper: ToastProvider, ...options })
+// A tela lê o item pela URL (`?item=`): sempre dentro de um roteador.
+const inRouter = (ui) => <MemoryRouter initialEntries={['/conferencia?processo=p1']}>{ui}</MemoryRouter>
+const render = (ui, options) => rtlRender(inRouter(ui), { wrapper: ToastProvider, ...options })
 
 async function renderScreen({ profile = LOGISTICA, process = PROCESS, current, conference, onBack, onClosed, wrapper } = {}) {
   mockGetCargoReport.mockResolvedValue({
@@ -162,12 +164,25 @@ async function renderScreen({ profile = LOGISTICA, process = PROCESS, current, c
   return { user, ...props, ...utils }
 }
 
-const okButton = (n) => screen.getByRole('button', { name: `OK? da linha ${n}` })
+// Conferência por item: a lista mostra só os itens; os lotes (cartões) ficam na tela do item. Cada linha de ROWS é um item
+// de 1 lote (códigos diferentes); o título do lote é "Lote <lote>" ou "Sem lote informado".
+const ITEM_NAME = { 1: 'DEA FOAM14339 - BB 25KG', 2: 'DEGALAN 64/12 N - CX 25KG', 3: 'ADITIVO NOVO XR' }
+const LOT_TITLE = { 1: 'Lote DF2406A', 2: 'Lote RE1', 3: 'Sem lote informado' }
+const okButton = (n) => screen.getByRole('button', { name: `OK? do ${LOT_TITLE[n]}` })
 const plusButton = (n) => screen.getByRole('button', { name: `Adicionar um pallet à contagem do item ${n}` })
 const minusButton = (n) => screen.getByRole('button', { name: `Tirar um pallet da contagem do item ${n}` })
 const progressText = () => screen.getByText(/de \d+ itens conferidos/)
 const palletsStrip = () => screen.getByText(/^Pallets da carga:/).closest('p')
 const openReceipt = (user) => user.click(screen.getByRole('tab', { name: 'Recebimento' }))
+const lotCard = (n) => screen.getByRole('article', { name: LOT_TITLE[n] })
+const openItem = (user, n) => user.click(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[n]}` }))
+const backToItems = (user) => user.click(screen.getAllByRole('button', { name: 'Voltar aos itens' })[0])
+// Abre o item `n`, conta `times` pallets e volta à lista (para olhar a faixa do topo).
+async function countIn(user, n, times = 1) {
+  await openItem(user, n)
+  for (let index = 0; index < times; index += 1) await user.click(plusButton(n))
+  await backToItems(user)
+}
 
 function setOnline(value) {
   Object.defineProperty(window.navigator, 'onLine', { value, configurable: true })
@@ -197,28 +212,39 @@ afterEach(() => {
 })
 
 describe('logística, COMEX fechado: conferir itens', () => {
-  it('mostra a faixa, os cartões com Cód. DBCorp, lote, Qtd e Nº de emb. e o progresso', async () => {
-    await renderScreen()
+  it('lista só os itens com a faixa; a tela do item mostra o lote com Qtd, Nº de emb., pesos e a dica de tara', async () => {
+    const { user } = await renderScreen()
     expect(screen.getByRole('heading', { level: 2, name: 'ACME SEA 021-26' })).toBeInTheDocument()
     expect(progressText().querySelector('b')).toHaveTextContent('0')
-    expect(screen.getByText(/de 3 itens conferidos · FCL · ACME CHEMICALS/)).toBeInTheDocument()
-    const first = screen.getByRole('article', { name: 'Item 1' })
-    expect(within(first).getByText('DEA FOAM14339 - BB 25KG')).toBeInTheDocument()
-    expect(within(first).getByText('AD5240')).toBeInTheDocument()
-    expect(within(first).getByText('DF2406A')).toBeInTheDocument()
+    expect(screen.getByText(/de 3 itens conferidos · 0 de 3 lotes · FCL · ACME CHEMICALS/)).toBeInTheDocument()
+    // A lista não tem cartões de lote: só uma linha por item.
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    for (const n of [1, 2, 3]) expect(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[n]}` })).toBeInTheDocument()
+
+    await openItem(user, 1)
+    expect(screen.getByRole('heading', { level: 2, name: ITEM_NAME[1] })).toBeInTheDocument()
+    expect(screen.getByText('Item 1 de 3')).toBeInTheDocument()
+    const first = lotCard(1)
     expect(within(first).getByText('12.500 kg')).toBeInTheDocument()
     expect(within(first).getByText('500')).toBeInTheDocument()
-    // Sem Descrição SQ: cai na do fornecedor; sem peso líquido na tabela: Nº de emb. com traço.
-    const third = screen.getByRole('article', { name: 'Item 3' })
-    expect(within(third).getByText('ADITIVO NOVO XR')).toBeInTheDocument()
-    // Lote fornecedor e Nº de emb. sem valor: traço nos dois.
-    expect(within(third).getAllByText('—', { selector: 'dd' })).toHaveLength(2)
+    expect(within(first).getByText('BOMBONA')).toBeInTheDocument()
+    expect(within(first).getByText('25 kg')).toBeInTheDocument()
+    expect(within(first).getByText('1,2 kg')).toBeInTheDocument()
+    expect(within(first).getByText('tara (embalagem vazia)')).toBeInTheDocument()
+    expect(screen.getByText(/Cód\. AD5240/)).toBeInTheDocument()
+
+    // Sem Descrição SQ: o nome cai na do fornecedor; sem lote: "Sem lote informado"; sem peso líquido na tabela: traços.
+    await backToItems(user)
+    await openItem(user, 3)
+    expect(screen.getByRole('heading', { level: 2, name: 'ADITIVO NOVO XR' })).toBeInTheDocument()
+    expect(within(lotCard(3)).getAllByText('—', { selector: 'dd' })).toHaveLength(2)
   })
 
   it('contador: "+ Pallet" 3 vezes = 3 (anunciado), "−" volta e fica desabilitado em 0', async () => {
     const { user } = await renderScreen()
-    const first = screen.getByRole('article', { name: 'Item 1' })
-    expect(within(first).getByText('Pallets contados')).toBeInTheDocument()
+    await openItem(user, 1)
+    const first = lotCard(1)
+    expect(within(first).getByText('Pallets contados (inteiros)')).toBeInTheDocument()
     expect(minusButton(1)).toBeDisabled()
     expect(plusButton(1)).toHaveTextContent('+ Pallet')
     for (let index = 0; index < 3; index += 1) await user.click(plusButton(1))
@@ -232,18 +258,21 @@ describe('logística, COMEX fechado: conferir itens', () => {
     expect(within(first).getByRole('status')).toHaveTextContent('0 pallets contados no item 1')
     expect(minusButton(1)).toBeDisabled()
     // Os outros itens não mexem.
-    expect(within(screen.getByRole('article', { name: 'Item 2' })).getByRole('status')).toHaveTextContent('0 pallets contados no item 2')
+    await user.click(screen.getByRole('button', { name: /Próximo item/ }))
+    expect(within(lotCard(2)).getByRole('status')).toHaveTextContent('0 pallets contados no item 2')
   })
 
   it('o contador alvos de toque de 56 px: botões grandes com classe própria', async () => {
-    await renderScreen()
+    const { user } = await renderScreen()
+    await openItem(user, 1)
     expect(plusButton(1)).toHaveClass('ccf-pal__btn', 'ccf-pal__btn--plus')
     expect(minusButton(1)).toHaveClass('ccf-pal__btn')
   })
 
-  it('item "Sem contagem" até contar; só vira "Conferido" com OK? e pelo menos 1 pallet', async () => {
+  it('lote "Sem contagem" até contar; só vira "Conferido" com OK? e pelo menos 1 pallet', async () => {
     const { user } = await renderScreen()
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(within(first).getByText('Sem contagem')).toBeInTheDocument()
     await user.click(okButton(1))
     expect(okButton(1)).toHaveAttribute('aria-pressed', 'true')
@@ -252,7 +281,7 @@ describe('logística, COMEX fechado: conferir itens', () => {
     await user.click(plusButton(1))
     expect(screen.getByText('Conferido')).toBeInTheDocument()
     expect(within(first).queryByText('Sem contagem')).not.toBeInTheDocument()
-    expect(progressText().querySelector('b')).toHaveTextContent('1')
+    expect(screen.getByText(/de 1 lote conferido · Cód\. AD5240/).querySelector('b')).toHaveTextContent('1')
     await user.click(minusButton(1))
     expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
     expect(within(first).getByText('Sem contagem')).toBeInTheDocument()
@@ -260,46 +289,55 @@ describe('logística, COMEX fechado: conferir itens', () => {
     await user.click(okButton(1))
     expect(okButton(1)).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
+    await backToItems(user)
+    expect(progressText().querySelector('b')).toHaveTextContent('0')
   })
 
   it('"Marcar todos OK" marca SÓ o OK? (os pallets continuam por contar) e avisa por toast', async () => {
     const { user } = await renderScreen()
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
-    expect(await screen.findByText('Todos os itens marcados com OK. Os pallets continuam por contar.')).toBeInTheDocument()
-    for (const n of [1, 2, 3]) {
-      expect(okButton(n)).toHaveAttribute('aria-pressed', 'true')
-      expect(screen.getByRole('article', { name: `Item ${n}` })).toHaveTextContent('Sem contagem')
-    }
+    expect(await screen.findByText('Todos os lotes marcados com OK. Pallets continuam por contar.')).toBeInTheDocument()
     expect(screen.queryByText('Conferido')).not.toBeInTheDocument()
     expect(progressText().textContent).toMatch(/^0 de 3/)
-    await user.click(plusButton(2))
+    for (const n of [1, 2, 3]) {
+      await openItem(user, n)
+      expect(okButton(n)).toHaveAttribute('aria-pressed', 'true')
+      expect(lotCard(n)).toHaveTextContent('Sem contagem')
+      await backToItems(user)
+    }
+    await countIn(user, 2)
     expect(progressText().textContent).toMatch(/^1 de 3/)
   })
 
-  it('"Só pendentes" esconde os conferidos e avisa quando não sobra nenhum', async () => {
+  it('"Só pendentes" esconde os itens conferidos e avisa quando não sobra nenhum', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     await user.click(okButton(1))
     await user.click(plusButton(1))
+    await backToItems(user)
     await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
-    expect(screen.queryByRole('article', { name: 'Item 1' })).not.toBeInTheDocument()
-    expect(screen.getByRole('article', { name: 'Item 2' })).toBeInTheDocument()
+    // Ligar o filtro zera os fixados: o item 1, já conferido, sai da lista; sobram os pendentes.
+    expect(screen.queryByRole('button', { name: `Abrir ${ITEM_NAME[1]}` })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[2]}` })).toBeInTheDocument()
+    expect(screen.getByText(/^de 3 itens$/).querySelector('b')).toHaveTextContent('2')
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
-    await user.click(plusButton(2))
-    await user.click(plusButton(3))
-    // Polimento: os itens tocados nesta sessão ficam na lista (não somem sob o dedo); o aviso confirma o fim.
+    await countIn(user, 2)
+    await countIn(user, 3)
+    // Os itens tocados ficam na lista; o aviso confirma o fim.
     expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
-    expect(screen.queryByRole('article', { name: 'Item 1' })).not.toBeInTheDocument()
-    expect(screen.getByRole('article', { name: 'Item 2' })).toBeInTheDocument()
-    expect(screen.getByRole('article', { name: 'Item 3' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: `Abrir ${ITEM_NAME[1]}` })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[2]}` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[3]}` })).toBeInTheDocument()
     // Trocar o filtro zera os fixados: sem pendentes, sobra só o aviso.
     await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
     await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
     expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
-    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Abrir / })).not.toBeInTheDocument()
   })
 
   it('etiqueta digitada em minúsculas fica em MAIÚSCULAS e vai assim no payload', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     const wms = screen.getByLabelText('Etiqueta WMS da linha 1')
     expect(wms).toHaveAttribute('autocapitalize', 'characters')
     await user.type(wms, 'wms-ç1')
@@ -381,6 +419,7 @@ describe('salvar e falhas', () => {
   it('Salvar fica desabilitado sem alteração, grava e mostra a hora; o cache da lista é invalidado', async () => {
     const { user } = await renderScreen()
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    await openItem(user, 2)
     await user.click(okButton(2))
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -397,6 +436,7 @@ describe('salvar e falhas', () => {
   ])('%s: avisa "Sem conexão…" e mantém o que foi digitado', async (_name, arrange) => {
     arrange()
     const { user } = await renderScreen()
+    await openItem(user, 1)
     await user.type(screen.getByLabelText('Etiqueta WMS da linha 1'), 'abc')
     await user.click(okButton(1))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -410,6 +450,7 @@ describe('salvar e falhas', () => {
 
   it('aparelho offline: nada é enviado; banner e aviso que não some sozinho', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     await user.click(okButton(1))
     setOnline(false)
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -426,6 +467,7 @@ describe('salvar e falhas', () => {
   it('conflito de revisão: aviso com "Recarregar", que lê o relatório de novo', async () => {
     mockSaveConference.mockRejectedValue(Object.assign(new Error('x'), { code: 'cargoReport/revision-conflict' }))
     const { user } = await renderScreen()
+    await openItem(user, 1)
     await user.click(okButton(1))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     const alert = await screen.findByRole('alert')
@@ -462,6 +504,7 @@ describe('só salvar no celular (fechar fica no computador)', () => {
   it('"Salvar" começa desabilitado, habilita ao conferir e grava (sem fechar nada)', async () => {
     const { user } = await renderScreen({ current: currentDoc({ status: 'rascunho' }) })
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    await openItem(user, 1)
     await user.click(okButton(1))
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -500,18 +543,24 @@ describe('conferência já fechada (logística)', () => {
   it('tudo somente leitura, nota "Conferência fechada…" e barra só com "Voltar à lista"', async () => {
     const { user, onBack } = await renderScreen({ conference: closed() })
     expect(screen.getByText('Conferência fechada. Para corrigir, peça ao COMEX para reabrir.')).toBeInTheDocument()
-    expect(okButton(1)).toBeDisabled()
-    // Conferência fechada: contador e observação só leitura; o registro antigo (Contagem OK) aparece como "OK".
-    expect(screen.queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: /Observação da avaria/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('article', { name: 'Item 1' })).toHaveTextContent('OK')
-    expect(screen.queryByLabelText('Etiqueta WMS da linha 1')).not.toBeInTheDocument()
-    expect(screen.getByText('W1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Marcar todos OK' })).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'Só pendentes' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Salvar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Salvar e fechar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reabrir conferência' })).not.toBeInTheDocument()
+
+    // Tela do item: OK? desabilitado, contador só leitura (o registro antigo, Contagem OK, aparece como "OK"), etiquetas em texto.
+    await openItem(user, 1)
+    expect(okButton(1)).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Observação da avaria/ })).not.toBeInTheDocument()
+    expect(lotCard(1)).toHaveTextContent('OK')
+    expect(screen.queryByLabelText('Etiqueta WMS da linha 1')).not.toBeInTheDocument()
+    expect(screen.getByText('W1')).toBeInTheDocument()
+    // Só leitura: "Voltar aos itens" e "Próximo item" (o item 1 não é o último).
+    const bar = screen.getByRole('group', { name: 'Ações da conferência' })
+    expect(within(bar).getAllByRole('button').map((button) => button.textContent)).toEqual(['Voltar aos itens', 'Próximo item'])
+    await backToItems(user)
 
     await openReceipt(user)
     expect(screen.getByRole('button', { name: 'Sem ressalva' })).toBeDisabled()
@@ -534,11 +583,13 @@ describe('admin: só acompanha e reabre', () => {
     expect(
       screen.getByText('Admin só acompanha no celular. Quem preenche e fecha a conferência é a logística.')
     ).toBeInTheDocument()
-    expect(okButton(1)).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Marcar todos OK' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Salvar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Salvar e fechar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reabrir conferência' })).not.toBeInTheDocument()
+    await openItem(user, 1)
+    expect(okButton(1)).toBeDisabled()
+    await backToItems(user)
     await openReceipt(user)
     expect(screen.getByText('(logística)')).toBeInTheDocument()
     expect(screen.queryByLabelText('Nº da NF')).not.toBeInTheDocument()
@@ -561,6 +612,7 @@ describe('admin: só acompanha e reabre', () => {
       screen.getByText('Admin só acompanha no celular. Quem preenche e fecha a conferência é a logística.')
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reabrir conferência' })).not.toBeInTheDocument()
+    await openItem(user, 1)
     expect(okButton(1)).toBeDisabled()
     expect(okButton(1)).toHaveAttribute('aria-pressed', 'true')
     expect(mockInvalidate).toHaveBeenCalledWith('p1')
@@ -595,29 +647,33 @@ describe('consolidado com grupos por PO', () => {
     row({ id: 'g-4', po: 'SEM RECONHECER', sqDescription: 'ITEM SOLTO' }),
   ]
 
-  it('cabeçalho por PO com "X de Y conferidos" que muda ao marcar; linha sem PO no grupo final', async () => {
+  it('cabeçalho por PO com "X de Y conferidos" (itens) que muda ao marcar; item sem PO no grupo final', async () => {
     const { user } = await renderScreen({
       process: consolidated,
       current: currentDoc({ cargoType: 'CONSOLIDADO', rows: groupedRows }),
     })
     const acme = screen.getByRole('region', { name: 'ACME SEA 011-26' })
     expect(within(acme).getByText(/ACME RESINS CO · 0 de 2 conferidos/)).toBeInTheDocument()
-    expect(within(acme).getAllByRole('article')).toHaveLength(2)
+    expect(within(acme).getAllByRole('button')).toHaveLength(2)
     const nova = screen.getByRole('region', { name: 'NOVA SEA 034-26' })
     expect(within(nova).getByText(/NOVA POLYMERS · 0 de 1 conferidos/)).toBeInTheDocument()
     const orphans = screen.getByRole('region', { name: 'Linhas sem PO desta consolidada' })
     expect(within(orphans).getByText('ITEM SOLTO')).toBeInTheDocument()
     expect(within(orphans).getByText(/0 de 1 conferidos/)).toBeInTheDocument()
-    expect(screen.getByText(/de 4 itens conferidos · CONSOLIDADO · 2 POs/)).toBeInTheDocument()
+    expect(screen.getByText(/de 4 itens conferidos · 0 de 4 lotes · CONSOLIDADO · 2 POs/)).toBeInTheDocument()
 
-    // A numeração dos itens é a da lista inteira (a linha 3 está no 2º grupo).
-    await user.click(within(nova).getByRole('button', { name: 'OK? da linha 3' }))
-    await user.click(within(nova).getByRole('button', { name: 'Adicionar um pallet à contagem do item 3' }))
-    expect(within(nova).getByText(/NOVA POLYMERS · 1 de 1 conferidos/)).toBeInTheDocument()
-    expect(within(acme).getByText(/0 de 2 conferidos/)).toBeInTheDocument()
+    // O mesmo código em POs diferentes (AD5240 em 3 grupos) são itens diferentes, cada um no seu grupo. A numeração dos
+    // lotes é a da lista inteira (a linha 3 está no 2º grupo).
+    await user.click(within(nova).getByRole('button', { name: 'Abrir PLASTIFICANTE DOP' }))
+    expect(screen.getByText('Item 3 de 4')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'OK? do Lote DF2406A' }))
+    await user.click(screen.getByRole('button', { name: 'Adicionar um pallet à contagem do item 3' }))
+    await backToItems(user)
+    expect(within(screen.getByRole('region', { name: 'NOVA SEA 034-26' })).getByText(/NOVA POLYMERS · 1 de 1 conferidos/)).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'ACME SEA 011-26' })).getByText(/0 de 2 conferidos/)).toBeInTheDocument()
   })
 
-  it('só pendentes tira os cartões conferidos dentro do grupo, mantendo o cabeçalho', async () => {
+  it('só pendentes tira os itens conferidos dentro do grupo, mantendo o cabeçalho', async () => {
     const { user } = await renderScreen({
       process: consolidated,
       current: currentDoc({ cargoType: 'CONSOLIDADO', rows: groupedRows }),
@@ -625,7 +681,7 @@ describe('consolidado com grupos por PO', () => {
     })
     await user.click(screen.getByRole('checkbox', { name: 'Só pendentes' }))
     const acme = screen.getByRole('region', { name: 'ACME SEA 011-26' })
-    expect(within(acme).getAllByRole('article')).toHaveLength(1)
+    expect(within(acme).getAllByRole('button')).toHaveLength(1)
     expect(within(acme).getByText(/1 de 2 conferidos/)).toBeInTheDocument()
   })
 })
@@ -663,16 +719,16 @@ describe('pallets da carga: faixa e selo', () => {
     // Nada contado ainda: 0 de 5 já é divergência.
     expect(palletsStrip()).toHaveTextContent('Pallets da carga: 0 contados de 5 informados pelo COMEX.')
     expect(within(palletsStrip()).getByText('Divergente')).toHaveClass('ccf-badge--warn')
-    for (let index = 0; index < 2; index += 1) await user.click(plusButton(1))
-    await user.click(plusButton(2))
+    await countIn(user, 1, 2)
+    await countIn(user, 2)
     expect(palletsStrip()).toHaveTextContent('Pallets da carga: 3 contados de 5 informados pelo COMEX.')
     expect(within(palletsStrip()).getByText('Divergente')).toBeInTheDocument()
   })
 
   it('confere: selo "Confere" quando a soma bate com o total', async () => {
     const { user } = await renderScreen({ current: withTotal(2) })
-    await user.click(plusButton(1))
-    await user.click(plusButton(3))
+    await countIn(user, 1)
+    await countIn(user, 3)
     expect(palletsStrip()).toHaveTextContent('Pallets da carga: 2 contados de 2 informados pelo COMEX.')
     expect(within(palletsStrip()).getByText('Confere')).toHaveClass('ccf-badge--ok')
     expect(within(palletsStrip()).queryByText('Divergente')).not.toBeInTheDocument()
@@ -680,7 +736,7 @@ describe('pallets da carga: faixa e selo', () => {
 
   it('sem total do COMEX (relatório antigo): sem comparação, selo "Sem total"', async () => {
     const { user } = await renderScreen()
-    await user.click(plusButton(1))
+    await countIn(user, 1)
     expect(palletsStrip()).toHaveTextContent('Pallets da carga: 1 contado. Total não informado pelo COMEX.')
     expect(within(palletsStrip()).getByText('Sem total')).toBeInTheDocument()
   })
@@ -696,10 +752,13 @@ describe('pallets da carga: faixa e selo', () => {
 
 describe('observação (avaria / ressalva) por item e status sugerido', () => {
   const noteBox = (n) => screen.getByRole('textbox', { name: `Observação da avaria ou ressalva do item ${n}` })
+  const openMore = (user, n) => user.click(within(lotCard(n)).getByText('Etiquetas, fotos e avaria'))
 
-  it('não há botão para registrar avaria: item sem nada não tem avaria, e escrever a observação marca o item', async () => {
+  it('não há botão para registrar avaria: lote sem nada não tem avaria, e escrever a observação marca o lote', async () => {
     const { user } = await renderScreen()
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    await openMore(user, 1)
+    const first = lotCard(1)
     expect(screen.queryByRole('button', { name: /Registrar avaria/ })).not.toBeInTheDocument()
     expect(within(first).getByText('Observação da avaria ou ressalva (opcional)')).toBeInTheDocument()
     expect(within(first).getByText('0 de 1.000')).toBeInTheDocument()
@@ -707,6 +766,7 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
     await user.type(noteBox(1), 'Caixa amassada')
     expect(within(first).getByText('Avaria registrada')).toHaveClass('ccf-badge--danger')
 
+    await backToItems(user)
     await openReceipt(user)
     const group = screen.getByRole('group', { name: 'Status do recebimento' })
     // O celular NÃO troca sozinho.
@@ -720,7 +780,10 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
 
   it('com "Sem ressalva" escolhido a sugestão aparece e nada muda sozinho', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'sem_ressalva' }) })
+    await openItem(user, 2)
+    await openMore(user, 2)
     await user.type(noteBox(2), 'Caixa amassada')
+    await backToItems(user)
     await openReceipt(user)
     const group = screen.getByRole('group', { name: 'Status do recebimento' })
     expect(within(group).getByRole('button', { name: 'Sem ressalva' })).toHaveAttribute('aria-pressed', 'true')
@@ -730,22 +793,31 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
 
   it('"Com ressalva" já escolhido: sem sugestão', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ receiptStatus: 'com_ressalva' }) })
+    await openItem(user, 1)
+    await openMore(user, 1)
     await user.type(noteBox(1), 'Caixa amassada')
+    await backToItems(user)
     await openReceipt(user)
     expect(screen.queryByText(/Status sugerido/)).not.toBeInTheDocument()
   })
 
   it('a observação escrita conta como avaria, aparece em "Ressalvas e avarias" e vai no payload', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 2)
+    await openMore(user, 2)
     await user.type(noteBox(2), '  Caixas molhadas no pallet 2  ')
-    const second = screen.getByRole('article', { name: 'Item 2' })
+    const second = lotCard(2)
     expect(within(second).getByText('31 de 1.000')).toBeInTheDocument()
     expect(within(second).getByText('Avaria registrada')).toBeInTheDocument()
+    await backToItems(user)
+    expect(
+      within(screen.getByRole('button', { name: `Abrir ${ITEM_NAME[2]}` })).getByText('Avaria registrada')
+    ).toBeInTheDocument()
     await openReceipt(user)
     const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
-    expect(within(card).getByText('Item 2 · DEGALAN 64/12 N - CX 25KG')).toBeInTheDocument()
+    expect(within(card).getByText('DEGALAN 64/12 N - CX 25KG · Lote RE1')).toBeInTheDocument()
     expect(within(card).getByText(/Caixas molhadas no pallet 2/)).toBeInTheDocument()
-    expect(within(card).getByText('As observações ficam no item.')).toBeInTheDocument()
+    expect(within(card).getByText('As observações ficam no lote.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
     const payload = mockSaveConference.mock.calls[0][1]
@@ -757,13 +829,17 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
     const { user } = await renderScreen()
     await openReceipt(user)
     const card = screen.getByRole('region', { name: 'Ressalvas e avarias' })
-    expect(card).toHaveTextContent('Nenhuma avaria registrada. Para registrar, volte à aba Itens')
+    expect(card).toHaveTextContent(
+      'Nenhuma avaria registrada. Para registrar, volte à aba Itens, abra o item e use Etiquetas, fotos e avaria no lote.'
+    )
     expect(screen.queryByRole('button', { name: 'Usar Com ressalva' })).not.toBeInTheDocument()
   })
 
   it('o legado `notes` aparece só para leitura e é repassado no payload', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ notes: 'Palete 3 avariado (registro antigo)' }) })
+    await openItem(user, 1)
     await user.click(okButton(1))
+    await backToItems(user)
     await openReceipt(user)
     expect(screen.getByText('Observações (registro antigo)')).toBeInTheDocument()
     expect(screen.getByText('Palete 3 avariado (registro antigo)')).toBeInTheDocument()
@@ -777,6 +853,7 @@ describe('observação (avaria / ressalva) por item e status sugerido', () => {
 describe('salvar com divergência: só avisa, nunca bloqueia', () => {
   it('divergência SEM observação grava normalmente e o banner traz "No fechamento pelo computador: ..."', async () => {
     const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    await openItem(user, 1)
     await user.click(okButton(1))
     await user.click(plusButton(1))
     await user.click(plusButton(1))
@@ -796,7 +873,9 @@ describe('salvar com divergência: só avisa, nunca bloqueia', () => {
 
   it('com observação em algum item o aviso vira a pendência informativa (e o status sugerido entra)', async () => {
     const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
+    await openItem(user, 1)
     await user.click(plusButton(1))
+    await user.click(within(lotCard(1)).getByText('Etiquetas, fotos e avaria'))
     await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Faltou 1 pallet')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     const notice = await screen.findByText(/^No fechamento pelo computador:/)
@@ -817,6 +896,7 @@ describe('salvar com divergência: só avisa, nunca bloqueia', () => {
       receivedDate: '2026-11-24',
     })
     const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 3 }), conference: complete })
+    await openItem(user, 1)
     await user.type(screen.getByLabelText('Etiqueta WMS da linha 1'), 'w1')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     expect(await screen.findByText(/^Conferência salva às \d{2}:\d{2}\.$/)).toBeInTheDocument()
@@ -825,6 +905,7 @@ describe('salvar com divergência: só avisa, nunca bloqueia', () => {
 
   it('"Salvar" nunca fica bloqueado pela divergência; a única trava é a descarga inválida', async () => {
     const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 50 }) })
+    await openItem(user, 1)
     await user.click(plusButton(1))
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument()
@@ -836,13 +917,14 @@ describe('relatório antigo (Contagem OK sem número) no celular', () => {
     const { user } = await renderScreen({
       conference: conferenceDoc({ okByRowId: { 'r-1': true, 'r-2': true }, countOkByRowId: { 'r-1': true } }),
     })
-    const first = screen.getByRole('article', { name: 'Item 1' })
-    expect(within(first).getByRole('status')).toHaveTextContent('Contagem OK (registro antigo) no item 1')
-    expect(within(first).getByText('Conferido')).toBeInTheDocument()
-    expect(within(first).queryByText('Sem contagem')).not.toBeInTheDocument()
     expect(progressText().querySelector('b')).toHaveTextContent('1')
     // Sem número falso: a soma não conta o legado.
     expect(screen.getByText(/^Pallets da carga: 0 contados/)).toBeInTheDocument()
+    await openItem(user, 1)
+    const first = lotCard(1)
+    expect(within(first).getByRole('status')).toHaveTextContent('Contagem OK (registro antigo) no item 1')
+    expect(within(first).getByText('Conferido')).toBeInTheDocument()
+    expect(within(first).queryByText('Sem contagem')).not.toBeInTheDocument()
     await user.click(plusButton(1))
     expect(within(first).getByRole('status')).toHaveTextContent('1 pallet contado no item 1')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -856,6 +938,7 @@ describe('relatório antigo (Contagem OK sem número) no celular', () => {
     const { user } = await renderScreen({
       conference: conferenceDoc({ okByRowId: { 'r-1': true }, countOkByRowId: { 'r-1': true, 'r-2': true } }),
     })
+    await openItem(user, 1)
     await user.click(plusButton(1))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await waitFor(() => expect(mockSaveConference).toHaveBeenCalledTimes(1))
@@ -872,19 +955,23 @@ describe('somente leitura (admin e conferência fechada) com pallets e avaria', 
 
   it('conferência fechada: contador e observação só texto; admin só lê', async () => {
     for (const profile of [LOGISTICA, ADMIN]) {
-      const { unmount } = await renderScreen({
+      const { user, unmount } = await renderScreen({
         profile,
         conference: conferenceDoc({ ...filled, status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' }),
       })
-      const first = screen.getByRole('article', { name: 'Item 1' })
+      await openItem(user, 1)
+      const first = lotCard(1)
       expect(within(first).queryByRole('button', { name: /pallet/i })).not.toBeInTheDocument()
       expect(within(first).queryByRole('textbox')).not.toBeInTheDocument()
       expect(within(first).getByText('4')).toBeInTheDocument()
+      expect(within(first).getByText('Pallets contados (inteiros)')).toBeInTheDocument()
       expect(within(first).getByText('Tambor amassado na lateral')).toBeInTheDocument()
       expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
-      expect(within(screen.getByRole('article', { name: 'Item 2' })).getByText('0')).toBeInTheDocument()
-      // Item nunca contado: traço no lugar do número.
-      expect(screen.getByRole('article', { name: 'Item 3' }).querySelector('.ccf-pal--ro')).toHaveTextContent('—')
+      await user.click(screen.getByRole('button', { name: /Próximo item/ }))
+      expect(within(lotCard(2)).getByText('0')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Próximo item/ }))
+      // Lote nunca contado: traço no lugar do número.
+      expect(lotCard(3).querySelector('.ccf-pal--ro')).toHaveTextContent('—')
       unmount()
     }
   })
@@ -896,7 +983,9 @@ describe('somente leitura (admin e conferência fechada) com pallets e avaria', 
     })
     await user.click(screen.getByRole('button', { name: 'Reabrir conferência' }))
     await waitFor(() => expect(mockReopen).toHaveBeenCalledWith('p1', ADMIN))
-    const first = await screen.findByRole('article', { name: 'Item 1' })
+    await screen.findByText('Conferência reaberta. A logística pode corrigir e fechar de novo.')
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(within(first).getByText('4')).toBeInTheDocument()
     expect(within(first).getByText('Tambor amassado na lateral')).toBeInTheDocument()
   })
@@ -950,7 +1039,9 @@ describe('abas, barra inferior e saída', () => {
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
     expect(onBack).toHaveBeenCalledTimes(1)
 
+    await openItem(user, 1)
     await user.click(okButton(1))
+    await backToItems(user)
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
     expect(onBack).toHaveBeenCalledTimes(1)
     const confirm = await screen.findByRole('alertdialog', { name: 'Descartar alterações?' })
@@ -982,7 +1073,7 @@ describe('abas, barra inferior e saída', () => {
   })
 })
 
-describe('fotos de avaria por item (S10-J1b)', () => {
+describe('fotos de avaria por lote (S10-J1b)', () => {
   const saved = (id, rowId = 'r-1') => ({
     id,
     path: `processes/p1/cargo-conference/${rowId}/1-log-1-${id}.jpg`,
@@ -1028,20 +1119,24 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     URL.revokeObjectURL = originalRevoke
   })
 
-  it('cada cartão tem "Tirar foto" e "Anexar" (logística com a conferência aberta)', async () => {
-    await renderScreen()
+  it('cada lote tem "Tirar foto" e "Anexar" (logística com a conferência aberta)', async () => {
+    const { user } = await renderScreen()
     for (const n of [1, 2, 3]) {
-      const card = screen.getByRole('article', { name: `Item ${n}` })
+      await openItem(user, n)
+      const card = lotCard(n)
+      await user.click(within(card).getByText('Etiquetas, fotos e avaria'))
       expect(within(card).getByRole('button', { name: `Tirar foto do item ${n}` })).toBeEnabled()
       expect(within(card).getByRole('button', { name: `Anexar fotos ao item ${n}` })).toBeEnabled()
+      await backToItems(user)
     }
   })
 
-  it('a foto enviada entra no item como NÃO salva: o item vira "Avaria registrada" e nada é gravado até o Salvar', async () => {
+  it('a foto enviada entra no lote como NÃO salva: o lote vira "Avaria registrada" e nada é gravado até o Salvar', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    const first = lotCard(1)
     expect(await within(first).findByRole('img', { name: 'Foto 1 do item 1' })).toBeInTheDocument()
     expect(within(first).getByText('Avaria registrada')).toBeInTheDocument()
     expect(within(first).queryByRole('button', { name: /Registrar avaria/ })).not.toBeInTheDocument()
@@ -1049,8 +1144,9 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
   })
 
-  it('Salvar grava o metadado da foto (id, caminhos, tamanho, quem enviou) na observação do item', async () => {
+  it('Salvar grava o metadado da foto (id, caminhos, tamanho, quem enviou) na observação do lote', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
     await screen.findByRole('img', { name: 'Foto 1 do item 1' })
@@ -1075,6 +1171,7 @@ describe('fotos de avaria por item (S10-J1b)', () => {
         })
     )
     const { user } = await renderScreen()
+    await openItem(user, 1)
     await user.click(okButton(1))
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeEnabled()
     await chooseCamera(user, 1, jpeg())
@@ -1087,12 +1184,13 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     expect(screen.queryByText('Aguarde o envio das fotos.')).not.toBeInTheDocument()
   })
 
-  it('falha de rede no envio: mensagem no item, "Tentar de novo" e a foto entra; Salvar segue a liberar', async () => {
+  it('falha de rede no envio: mensagem no lote, "Tentar de novo" e a foto entra; Salvar segue a liberar', async () => {
     mockUploadPhoto.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     mockUploadPhoto.mockResolvedValueOnce(saved('pnovo'))
     const { user } = await renderScreen()
+    await openItem(user, 2)
     await chooseCamera(user, 2, jpeg())
-    const second = screen.getByRole('article', { name: 'Item 2' })
+    const second = lotCard(2)
     expect(await within(second).findByRole('alert')).toHaveTextContent('Sem conexão. A foto não foi enviada')
     await user.click(within(second).getByRole('button', { name: 'Tentar de novo' }))
     expect(await within(second).findByRole('img', { name: 'Foto 1 do item 2' })).toBeInTheDocument()
@@ -1101,6 +1199,7 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('foto SEM observação: o banner do Salvar avisa "1 item com foto sem observação"; com observação some', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
     await screen.findByRole('img', { name: 'Foto 1 do item 1' })
@@ -1119,13 +1218,15 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('avaria sem foto continua válida (nada a avisar sobre foto)', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
+    await user.click(within(lotCard(1)).getByText('Etiquetas, fotos e avaria'))
     await user.type(screen.getByRole('textbox', { name: 'Observação da avaria ou ressalva do item 1' }), 'Pallet torto')
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     const notice = await screen.findByText(/^No fechamento pelo computador:/)
     expect(notice).not.toHaveTextContent('foto')
   })
 
-  it('a faixa conta as fotos da conferência e a aba Recebimento mostra "N foto(s)" por item', async () => {
+  it('a faixa conta as fotos da conferência e a aba Recebimento mostra "N foto(s)" por lote', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc(withPhotos(2, 'Molhadas')) })
     expect(screen.getByText('2 de 30 fotos de avaria')).toBeInTheDocument()
     await openReceipt(user)
@@ -1133,8 +1234,9 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     expect(within(card).getByText('2 fotos')).toBeInTheDocument()
   })
 
-  it('remover foto já salva: some do item e o Salvar grava sem ela (o arquivo sai pelo servidor, não pelo cliente)', async () => {
+  it('remover foto já salva: some do lote e o Salvar grava sem ela (o arquivo sai pelo servidor, não pelo cliente)', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc(withPhotos(2, 'Molhadas')) })
+    await openItem(user, 1)
     await screen.findByRole('img', { name: 'Foto 2 do item 1' })
     await user.click(screen.getByRole('button', { name: 'Remover foto 1 do item 1' }))
     expect(screen.queryByRole('img', { name: 'Foto 2 do item 1' })).not.toBeInTheDocument()
@@ -1146,6 +1248,7 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('remover foto enviada agora e ainda não salva apaga o arquivo do próprio uid (sem órfão)', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
     await screen.findByRole('img', { name: 'Foto 1 do item 1' })
@@ -1155,7 +1258,8 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('avaria automática: foto liga, remover a última foto sem observação desliga e a entrada sai do payload', async () => {
     const { user } = await renderScreen()
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
@@ -1171,7 +1275,8 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('avaria automática: com observação, remover a última foto mantém a avaria; apagar a observação (sem foto) a derruba', async () => {
     const { user } = await renderScreen()
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
     await within(first).findByRole('img', { name: 'Foto 1 do item 1' })
@@ -1182,20 +1287,23 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
   })
 
-  it('item com avaria só por foto (sem texto) aparece como "(sem observação)"', async () => {
+  it('lote com avaria só por foto (sem texto) aparece como "(sem observação)"', async () => {
     const { user } = await renderScreen()
+    await openItem(user, 1)
     mockUploadPhoto.mockResolvedValue(saved('pnovo'))
     await chooseCamera(user, 1, jpeg())
     await screen.findByRole('img', { name: 'Foto 1 do item 1' })
+    await backToItems(user)
     await openReceipt(user)
     expect(screen.getByText('(sem observação)')).toBeInTheDocument()
   })
 
-  it('legado: item com flagged verdadeiro, sem observação e sem foto, é SEM avaria e a gravação o tira do mapa', async () => {
+  it('legado: lote com flagged verdadeiro, sem observação e sem foto, é SEM avaria e a gravação o tira do mapa', async () => {
     const { user } = await renderScreen({
       conference: conferenceDoc({ damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }),
     })
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(within(first).queryByText('Avaria registrada')).not.toBeInTheDocument()
     await user.click(okButton(1))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -1204,25 +1312,30 @@ describe('fotos de avaria por item (S10-J1b)', () => {
   })
 
   it('legado só com flagged verdadeiro: a conferência abre limpa (Salvar desabilitado, sem aviso de alteração pendente)', async () => {
-    await renderScreen({
+    const { user } = await renderScreen({
       conference: conferenceDoc({ damageByRowId: { 'r-1': { flagged: true, note: '', photos: [] } } }),
     })
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled()
-    expect(within(screen.getByRole('article', { name: 'Item 1' })).queryByText('Avaria registrada')).not.toBeInTheDocument()
+    await openItem(user, 1)
+    expect(within(lotCard(1)).queryByText('Avaria registrada')).not.toBeInTheDocument()
     expect(mockSaveConference).not.toHaveBeenCalled()
   })
 
-  it('5 fotos no item: os dois botões ficam desabilitados com o motivo; os outros itens seguem liberados', async () => {
-    await renderScreen({ conference: conferenceDoc(withPhotos(5, 'Muitas')) })
+  it('5 fotos no lote: os dois botões ficam desabilitados com o motivo; os outros lotes seguem liberados', async () => {
+    const { user } = await renderScreen({ conference: conferenceDoc(withPhotos(5, 'Muitas')) })
+    await openItem(user, 1)
     expect(screen.getByRole('button', { name: 'Tirar foto do item 1' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Anexar fotos ao item 1' })).toBeDisabled()
     expect(screen.getByText('Limite de 5 fotos por item atingido.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Próximo item/ }))
+    await user.click(within(lotCard(2)).getByText('Etiquetas, fotos e avaria'))
     expect(screen.getByRole('button', { name: 'Tirar foto do item 2' })).toBeEnabled()
   })
 
   it('conferência fechada: miniaturas e ampliar, sem "×", sem Tirar foto e sem Anexar', async () => {
     const { user } = await renderScreen({ conference: closedConference(withPhotos(2, 'Molhadas')) })
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(await within(first).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
     expect(within(first).queryByRole('button', { name: /Remover foto|Tirar foto|Anexar/ })).not.toBeInTheDocument()
     expect(within(first).queryByLabelText(/Foto da câmera|Arquivos de foto/)).not.toBeInTheDocument()
@@ -1232,7 +1345,8 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 
   it('admin vê as fotos (só leitura) e abre o visualizador', async () => {
     const { user } = await renderScreen({ profile: ADMIN, conference: conferenceDoc(withPhotos(3, 'Molhadas')) })
-    const first = screen.getByRole('article', { name: 'Item 1' })
+    await openItem(user, 1)
+    const first = lotCard(1)
     expect(await within(first).findByRole('img', { name: 'Foto 3 do item 1' })).toBeInTheDocument()
     expect(within(first).queryByRole('button', { name: /Remover foto|Tirar foto|Anexar/ })).not.toBeInTheDocument()
     await user.click(within(first).getByRole('button', { name: 'Foto 2 do item 1' }))
@@ -1245,8 +1359,9 @@ describe('fotos de avaria por item (S10-J1b)', () => {
     const { user } = await renderScreen({ profile: ADMIN, conference: closedConference(withPhotos(2, 'Molhadas')) })
     await user.click(screen.getByRole('button', { name: 'Reabrir conferência' }))
     await waitFor(() => expect(mockReopen).toHaveBeenCalledWith('p1', ADMIN))
-    const first = await screen.findByRole('article', { name: 'Item 1' })
-    expect(await within(first).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
+    await screen.findByText('Conferência reaberta. A logística pode corrigir e fechar de novo.')
+    await openItem(user, 1)
+    expect(await within(lotCard(1)).findByRole('img', { name: 'Foto 2 do item 1' })).toBeInTheDocument()
   })
 
   it('sair com foto ainda subindo pede confirmação, como alteração não salva', async () => {
@@ -1260,8 +1375,11 @@ describe('fotos de avaria por item (S10-J1b)', () => {
       </MemoryRouter>
     )
     const { user } = await renderScreen({ onBack, wrapper })
+    await openItem(user, 1)
     await chooseCamera(user, 1, jpeg())
     await waitFor(() => expect(mockUploadPhoto).toHaveBeenCalled())
+    // Voltar aos itens não perde nada; sair da conferência (Voltar para a lista) pede a confirmação.
+    await backToItems(user)
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
     expect(onBack).not.toHaveBeenCalled()
     expect(await screen.findByRole('alertdialog', { name: 'Descartar alterações?' })).toBeInTheDocument()
@@ -1271,16 +1389,16 @@ describe('fotos de avaria por item (S10-J1b)', () => {
 // Polimento do contador (pós S10-I): "Só pendentes" não esconde o item em contagem; selo neutro "A contar".
 describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
   const onlyPendingBox = () => screen.getByRole('checkbox', { name: 'Só pendentes' })
-  const item = (n) => screen.queryByRole('article', { name: `Item ${n}` })
+  const item = (n) => screen.queryByRole('button', { name: `Abrir ${ITEM_NAME[n]}` })
 
-  it('contar pallets de um item pendente: ao virar conferido o cartão permanece sob o dedo', async () => {
+  it('contar pallets de um item pendente: ao virar conferido o item permanece sob o dedo', async () => {
     const { user } = await renderScreen({ conference: conferenceDoc({ okByRowId: { 'r-1': true } }) })
     await user.click(onlyPendingBox())
     expect(item(1)).toBeInTheDocument()
-    await user.click(plusButton(1))
+    await countIn(user, 1)
     expect(within(item(1)).getByText('Conferido')).toBeInTheDocument()
     expect(item(1)).toBeInTheDocument()
-    // Os contadores seguem o dado real (1 conferido), com ou sem o cartão fixado.
+    // Os contadores seguem o dado real (1 conferido), com ou sem o item fixado.
     expect(progressText().querySelector('b')).toHaveTextContent('1')
     expect(item(2)).toBeInTheDocument()
   })
@@ -1300,10 +1418,12 @@ describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
     })
     await user.click(onlyPendingBox())
     expect(item(2)).not.toBeInTheDocument()
-    // Item 1 pendente: foco na etiqueta fixa; depois de marcar OK? e contar, o cartão fica.
+    // Item 1 pendente: foco na etiqueta fixa; depois de marcar OK? e contar, o item fica.
+    await openItem(user, 1)
     await user.type(screen.getByLabelText('Etiqueta WMS da linha 1'), 'x')
     await user.click(okButton(1))
     await user.click(plusButton(1))
+    await backToItems(user)
     expect(item(1)).toBeInTheDocument()
     // Trocar o filtro (desligar e ligar) zera o fixado: o item 1, já conferido, sai da lista.
     await user.click(onlyPendingBox())
@@ -1316,8 +1436,10 @@ describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
   it('o fixado vale só dentro da sessão da tela: ao remontar, nada fixado', async () => {
     const { user, unmount } = await renderScreen()
     await user.click(onlyPendingBox())
+    await openItem(user, 1)
     await user.click(okButton(1))
     await user.click(plusButton(1))
+    await backToItems(user)
     expect(item(1)).toBeInTheDocument()
     unmount()
     cleanup()
@@ -1333,8 +1455,10 @@ describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
       conference: conferenceDoc({ okByRowId: { 'r-2': true, 'r-3': true }, palletsByRowId: { 'r-2': 1, 'r-3': 1 } }),
     })
     await user.click(onlyPendingBox())
+    await openItem(user, 1)
     await user.click(okButton(1))
     await user.click(plusButton(1))
+    await backToItems(user)
     expect(screen.getByText('Todos os itens estão conferidos.')).toBeInTheDocument()
     expect(item(1)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
@@ -1346,59 +1470,43 @@ describe('"Só pendentes" mantém o item em contagem (fixados)', () => {
 })
 
 describe('selo neutro "A contar"', () => {
-  const card = (n) => screen.getByRole('article', { name: `Item ${n}` })
-
-  it('com o total do COMEX informado, o item nunca contado mostra "A contar" (neutro) e não "Sem contagem"', async () => {
-    await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
-    for (const n of [1, 2, 3]) {
-      expect(within(card(n)).getByText('A contar')).toHaveClass('ccf-badge')
-      expect(within(card(n)).queryByText('Sem contagem')).not.toBeInTheDocument()
-    }
-    // Neutro de verdade: só a classe base, sem nenhuma variante de cor (uma asserção por classe, não vácua).
-    const neutral = within(card(1)).getByText('A contar')
-    expect(neutral.className).toBe('ccf-badge')
-    for (const variant of ['ccf-badge--ok', 'ccf-badge--warn', 'ccf-badge--danger', 'ccf-badge--info']) {
-      expect(neutral).not.toHaveClass(variant)
-    }
-  })
-
-  it('conferência fechada (logística) ou só leitura (admin): item nunca contado segue "Sem contagem", sem "A contar"', async () => {
-    const closed = conferenceDoc({ status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' })
-    const { unmount } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }), conference: closed })
-    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
-    unmount()
-    cleanup()
-    await renderScreen({ profile: ADMIN, current: currentDoc({ expectedPallets: 5 }), conference: conferenceDoc() })
-    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
-  })
-
-  it('some ao contar o primeiro pallet; depois de zerar volta o neutro "Sem contagem" (não "A contar")', async () => {
+  it('com o total do COMEX informado, o lote nunca contado mostra "A contar" (neutro) e não "Sem contagem"', async () => {
     const { user } = await renderScreen({ current: currentDoc({ expectedPallets: 5 }) })
-    await user.click(plusButton(1))
-    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(1)).queryByText('Sem contagem')).not.toBeInTheDocument()
-    expect(within(card(2)).getByText('A contar')).toBeInTheDocument()
-    await user.click(minusButton(1))
-    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
+    for (const n of [1, 2, 3]) {
+      await openItem(user, n)
+      expect(within(lotCard(n)).getByText('A contar')).toHaveClass('ccf-badge')
+      expect(within(lotCard(n)).queryByText('Sem contagem')).not.toBeInTheDocument()
+      if (n === 1) {
+        // Neutro de verdade: só a classe base, sem nenhuma variante de cor (uma asserção por classe, não vácua).
+        const neutral = within(lotCard(1)).getByText('A contar')
+        expect(neutral.className).toBe('ccf-badge')
+        for (const variant of ['ccf-badge--ok', 'ccf-badge--warn', 'ccf-badge--danger', 'ccf-badge--info']) {
+          expect(neutral).not.toHaveClass(variant)
+        }
+      }
+      await backToItems(user)
+    }
+  })
+
+  it('conferência fechada (logística) ou só leitura (admin): lote nunca contado segue "Sem contagem", sem "A contar"', async () => {
+    const closed = conferenceDoc({ status: 'fechada', closedDate: '2026-11-24', closedByName: 'Op', closedDocumentId: 'd' })
+    const first = await renderScreen({ current: currentDoc({ expectedPallets: 5 }), conference: closed })
+    await openItem(first.user, 1)
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(lotCard(1)).getByText('Sem contagem')).toBeInTheDocument()
+    first.unmount()
+    cleanup()
+    const second = await renderScreen({ profile: ADMIN, current: currentDoc({ expectedPallets: 5 }), conference: conferenceDoc() })
+    await openItem(second.user, 1)
+    expect(screen.queryByText('A contar')).not.toBeInTheDocument()
+    expect(within(lotCard(1)).getByText('Sem contagem')).toBeInTheDocument()
   })
 
   it('sem o total do COMEX não há "A contar" (segue "Sem contagem")', async () => {
-    await renderScreen()
+    const { user } = await renderScreen()
+    await openItem(user, 1)
     expect(screen.queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(1)).getByText('Sem contagem')).toBeInTheDocument()
-  })
-
-  it('registro antigo (Contagem OK) não é "A contar"; o selo Divergente da faixa segue', async () => {
-    await renderScreen({
-      current: currentDoc({ expectedPallets: 1 }),
-      conference: conferenceDoc({ okByRowId: { 'r-1': true }, countOkByRowId: { 'r-1': true } }),
-    })
-    expect(within(card(1)).queryByText('A contar')).not.toBeInTheDocument()
-    expect(within(card(2)).getByText('A contar')).toBeInTheDocument()
-    expect(within(palletsStrip()).getByText('Divergente')).toBeInTheDocument()
+    expect(within(lotCard(1)).getByText('Sem contagem')).toBeInTheDocument()
   })
 
   it('tudo contado e conferindo: nenhum "A contar" e a faixa mostra "Confere"', async () => {
