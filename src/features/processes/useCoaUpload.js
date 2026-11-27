@@ -85,11 +85,15 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     setErrors([])
     setResultMessage('')
     const failures = []
-    const uploaded = []
     let sent = 0
+    // S11-H (L157): bilhete da leitura automática pedido AGORA (componente montado e admin no início do envio); cada
+    // PDF entra na fila assim que sobe, sem esperar o lote nem o componente seguir montado. Nulo = nada é enfileirado.
+    const send = autoRead.beginSend()
 
     try {
       for (let index = 0; index < files.length; index += 1) {
+        // Desmontou no meio: o laço para (comportamento anterior; os ainda não enviados NÃO sobem). O arquivo que já
+        // subiu (ou que está subindo agora) já foi/será enfileirado pelo bilhete acima.
         if (!mountedRef.current) return
         const file = files[index]
         setProgress({ current: index + 1, total: files.length })
@@ -102,7 +106,8 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
             actor: { uid: profile?.uid, name: profile?.name, role },
           })
           sent += 1
-          uploaded.push(created)
+          // Só recém-enviado com sucesso (a fila ignora o que não é PDF e o que já foi tentado).
+          if (send) autoRead.enqueue([created], send)
         } catch (error) {
           console.error(COA_UPLOAD_ERROR_TITLE, error)
           failures.push({ name: file?.name ?? '', detail: getFriendlyErrorDetail(error) })
@@ -113,8 +118,6 @@ export default function useCoaUpload({ processId, profile, category, po = '', ro
     }
 
     if (!mountedRef.current) return
-    // Só os recém-enviados com sucesso entram na fila de leitura (PDF; o resto a fila ignora).
-    autoRead.enqueue(uploaded)
     setProgress(null)
     setErrors(failures)
     if (sent > 0) {

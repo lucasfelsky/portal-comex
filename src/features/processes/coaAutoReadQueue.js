@@ -21,7 +21,10 @@
 // - S11-F: sair da conta (logout) ou trocar de usuário/perfil PARA e LIMPA a fila (`coaAutoReadSession`: a leitura é só
 //   admin e gasta créditos). O arquivo em andamento termina (a callable já está no servidor) e o resultado dele é
 //   ignorado pela fila (época antiga), sem mexer na fila do usuário novo.
-// - Quem pode ENFILEIRAR continua sendo um componente montado e habilitado (admin) no momento do envio (`mounts`).
+// - Quem pode ENFILEIRAR continua sendo um componente montado e habilitado (admin) no INÍCIO do envio (`mounts`).
+// - S11-H (L157): cada arquivo é enfileirado assim que sobe com sucesso (não no fim do lote). O envio leva um bilhete
+//   (`beginCoaAutoReadSend`) com a época da sessão: se o componente desmontar no meio, o arquivo que ainda termina de
+//   subir entra na fila; se a conta mudar no meio, nenhum arquivo do envio antigo entra (época).
 // - Nenhum timer: nada para vazar.
 
 import { describeCoaReadError, readProcessCoa } from '../../services/coaReadsRepository'
@@ -46,6 +49,10 @@ let generation = 0
 // Época da sessão: sobe quando a conta sai ou muda; o arquivo em andamento de uma época antiga não mexe na fila nova.
 let epoch = 0
 let watchingSession = false
+// S11-H: marcadores para os envios em andamento (bilhete): erro de serviço (esvazia tudo) e report-closed (descarta o
+// processo) valem também para os arquivos do mesmo lote que ainda estão subindo e entrarão depois.
+let faultSeq = 0
+const closedSeq = new Map()
 let attempted = new Set()
 const mounts = new Map()
 const listeners = new Set()
@@ -105,6 +112,7 @@ function dropQueued(predicate) {
 }
 
 function interrupt(failedItem, code) {
+  faultSeq += 1
   const message = describeCoaReadError(code).replace(/[.\s]+$/, '')
   const text = `Leitura automática interrompida: ${message}. Use Ler COAs no formulário.`
   const keys = new Set([itemKey(failedItem), ...dropQueued(() => true)])
@@ -170,6 +178,7 @@ async function pump() {
       }
       let progress = markDone(item)
       if (kind === 'closed') {
+        closedSeq.set(item.processId, (closedSeq.get(item.processId) ?? 0) + 1)
         const keys = dropQueued((queued) => queued.processId === item.processId)
         progress = withoutKeys(progress, keys)
       }
@@ -198,9 +207,29 @@ export function registerCoaAutoReadMount(processId) {
   }
 }
 
+// S11-H (L157): "bilhete" do envio. Quem vai subir arquivos o pede NO INÍCIO do envio: só existe com componente de COA
+// habilitado (admin) montado para o processo, e guarda a época da sessão e a geração da fila daquele instante. Cada
+// arquivo é enfileirado assim que sobe (`enqueueCoaAutoRead(..., send)`), mesmo que o componente desmonte no meio do
+// envio; o bilhete vale enquanto a sessão for a mesma (logout/troca de usuário/perda do admin o invalida). Assina a
+// sessão aqui (e não só no 1º enfileiramento) para que um logout ANTES do 1º arquivo subir também invalide o bilhete.
+export function beginCoaAutoReadSend(processId) {
+  if (!processId || (mounts.get(processId) ?? 0) <= 0) return null
+  watchSession()
+  return { processId, epoch, generation, fault: faultSeq, closed: closedSeq.get(processId) ?? 0 }
+}
+
 // `documents`: o que `uploadProcessDocument` devolveu (precisa de `id` e `mimeType` PDF). Qualquer outro entra mudo.
-export function enqueueCoaAutoRead(processId, documents, scope = '') {
-  if (!processId || (mounts.get(processId) ?? 0) <= 0) return 0
+// `send` (opcional): bilhete de `beginCoaAutoReadSend`; com ele o componente não precisa estar montado agora, mas o
+// bilhete precisa ser do mesmo processo, da mesma sessão e da mesma geração. Sem ele vale a regra antiga (montado agora).
+export function enqueueCoaAutoRead(processId, documents, scope = '', send = null) {
+  if (!processId) return 0
+  if (send) {
+    if (send.processId !== processId || send.epoch !== epoch || send.generation !== generation) return 0
+    // Depois de erro de serviço ou de relatório fechado, o resto do lote que ainda sobe não entra (como na fila já montada).
+    if (send.fault !== faultSeq || send.closed !== (closedSeq.get(processId) ?? 0)) return 0
+  } else if ((mounts.get(processId) ?? 0) <= 0) {
+    return 0
+  }
   const fresh = []
   for (const document of Array.isArray(documents) ? documents : []) {
     const documentId = String(document?.id ?? '')
@@ -234,6 +263,8 @@ export function resetCoaAutoRead() {
   queue = []
   running = false
   attempted = new Set()
+  faultSeq = 0
+  closedSeq.clear()
   mounts.clear()
   listeners.clear()
 }

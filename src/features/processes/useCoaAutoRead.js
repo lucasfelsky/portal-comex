@@ -13,6 +13,7 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {
   COA_AUTO_READ_HINT,
   COA_AUTO_READ_WAITING,
+  beginCoaAutoReadSend,
   buildCoaAutoReadKey,
   enqueueCoaAutoRead,
   getCoaAutoReadState,
@@ -52,8 +53,11 @@ export default function useCoaAutoRead({ processId, enabled, scope = '' }) {
     return registerCoaAutoReadMount(processId)
   }, [enabled, processId])
 
+  // S11-H: `beginSend()` no início de cada envio (nulo se não for admin ou sem componente montado); `enqueue(docs, send)`
+  // a cada arquivo que sobe, com o bilhete devolvido. Sem bilhete, vale a regra antiga (componente montado agora).
+  const beginSend = useCallback(() => (enabled ? beginCoaAutoReadSend(processId) : null), [enabled, processId])
   const enqueue = useCallback(
-    (documents) => (enabled ? enqueueCoaAutoRead(processId, documents, scope) : 0),
+    (documents, send) => (enabled ? enqueueCoaAutoRead(processId, documents, scope, send) : 0),
     [enabled, processId, scope]
   )
 
@@ -62,5 +66,5 @@ export default function useCoaAutoRead({ processId, enabled, scope = '' }) {
   if (enabled && progress) {
     status = isReading ? `Lendo os COAs: ${progress.done + 1} de ${progress.total}. ${COA_AUTO_READ_HINT}` : COA_AUTO_READ_WAITING
   }
-  return { status, notice: enabled ? notice : '', enqueue }
+  return { status, notice: enabled ? notice : '', enqueue, beginSend }
 }

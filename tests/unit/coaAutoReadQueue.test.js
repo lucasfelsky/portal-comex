@@ -10,6 +10,7 @@ vi.mock('../../src/services/coaReadsRepository', async (importOriginal) => {
 })
 
 import {
+  beginCoaAutoReadSend,
   buildCoaAutoReadKey,
   enqueueCoaAutoRead,
   getCoaAutoReadState,
@@ -510,5 +511,127 @@ describe('coaAutoReadQueue - logout e troca de usuário', () => {
     expect(calledIds()).toEqual(['a', 'n1', 'n2'])
     expect(getCoaAutoReadState().notices).toEqual({})
     expect(getCoaAutoReadState().progress).toEqual({})
+  })
+})
+describe('coaAutoReadQueue - bilhete do envio (S11-H, L157)', () => {
+  const SELLER = { uid: 'admin-s', role: 'admin' }
+
+  it('sem componente montado no início do envio não há bilhete e nada entra (nem sem bilhete)', async () => {
+    unmount()
+    unmount = undefined
+    expect(beginCoaAutoReadSend('p1')).toBeNull()
+    expect(beginCoaAutoReadSend('')).toBeNull()
+    expect(enqueueCoaAutoRead('p1', [doc('a')])).toBe(0)
+    await flush()
+    expect(mockReadProcessCoa).not.toHaveBeenCalled()
+  })
+
+  it('com bilhete, o arquivo que sobe DEPOIS de o componente desmontar ainda entra e é lido', async () => {
+    mockReadProcessCoa.mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    expect(send).not.toBeNull()
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(1)
+    unmount()
+    unmount = undefined
+    expect(enqueueCoaAutoRead('p1', [doc('b')], '', send)).toBe(1)
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a', 'b'])
+  })
+
+  it('cada arquivo entra na hora: o contador do lote cresce a cada enfileiramento e X nunca passa de Y', async () => {
+    const first = deferred()
+    mockReadProcessCoa.mockReturnValueOnce(first.promise).mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    enqueueCoaAutoRead('p1', [doc('a')], '', send)
+    await flush()
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 1 })
+    enqueueCoaAutoRead('p1', [doc('b')], '', send)
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 2 })
+    enqueueCoaAutoRead('p1', [doc('c')], '', send)
+    expect(getCoaAutoReadState().progress[KEY]).toEqual({ done: 0, total: 3 })
+    first.resolve(done('a'))
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a', 'b', 'c'])
+    expect(getCoaAutoReadState().progress).toEqual({})
+  })
+
+  it('logout/troca de usuário depois do bilhete (mesmo antes do 1º enfileiramento) o invalida', async () => {
+    setCoaAutoReadActor(SELLER)
+    const send = beginCoaAutoReadSend('p1')
+    setCoaAutoReadActor(null)
+    setCoaAutoReadActor({ uid: 'admin-t', role: 'admin' })
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(0)
+    // Quem entrou depois enfileira normalmente com um bilhete novo.
+    mockReadProcessCoa.mockResolvedValue(done('x'))
+    expect(enqueueCoaAutoRead('p1', [doc('n')], '', beginCoaAutoReadSend('p1'))).toBe(1)
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['n'])
+  })
+
+  it('bilhete de outro processo ou de antes do reset não vale', async () => {
+    mockReadProcessCoa.mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p2', [doc('a')], '', send)).toBe(0)
+    resetCoaAutoRead()
+    unmount = registerCoaAutoReadMount('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(0)
+    await flush()
+    expect(mockReadProcessCoa).not.toHaveBeenCalled()
+  })
+
+  it('uma tentativa por documento também com bilhete: o mesmo id duas vezes (ou em outro envio) lê uma vez', async () => {
+    mockReadProcessCoa.mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(1)
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(0)
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', beginCoaAutoReadSend('p1'))).toBe(0)
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a'])
+  })
+
+  it('com bilhete, não-PDF segue mudo', async () => {
+    const send = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('w', { mimeType: 'application/msword' }), doc('')], '', send)).toBe(0)
+    await flush()
+    expect(mockReadProcessCoa).not.toHaveBeenCalled()
+  })
+
+  it('erro de serviço na leitura: o resto do lote que ainda sobe NÃO entra; um envio novo depois entra e limpa o aviso', async () => {
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('busy')).mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    expect(enqueueCoaAutoRead('p1', [doc('a')], '', send)).toBe(1)
+    await flush()
+    await flush()
+    expect(getCoaAutoReadState().notices[KEY]).toBeTruthy()
+    expect(enqueueCoaAutoRead('p1', [doc('b')], '', send)).toBe(0)
+    expect(calledIds()).toEqual(['a'])
+    expect(getCoaAutoReadState().notices[KEY]).toBeTruthy()
+
+    expect(enqueueCoaAutoRead('p1', [doc('c')], '', beginCoaAutoReadSend('p1'))).toBe(1)
+    expect(getCoaAutoReadState().notices[KEY]).toBeUndefined()
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a', 'c'])
+  })
+
+  it('report-closed: o resto do lote do MESMO processo não entra; outro processo e um envio novo seguem normais', async () => {
+    const other = registerCoaAutoReadMount('p2')
+    mockReadProcessCoa.mockRejectedValueOnce(rejectWith('report-closed')).mockResolvedValue(done('x'))
+    const send = beginCoaAutoReadSend('p1')
+    const sendOther = beginCoaAutoReadSend('p2')
+    enqueueCoaAutoRead('p1', [doc('a')], '', send)
+    await flush()
+    await flush()
+    expect(enqueueCoaAutoRead('p1', [doc('b')], '', send)).toBe(0)
+    expect(enqueueCoaAutoRead('p2', [doc('x1')], '', sendOther)).toBe(1)
+    await flush()
+    await flush()
+    expect(calledIds()).toEqual(['a', 'x1'])
+    other()
   })
 })
