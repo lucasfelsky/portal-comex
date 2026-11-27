@@ -36,6 +36,7 @@ import { readCargoScrollTop, writeCargoScrollTop } from './useCargoStickyStuck'
 // rolagem da lista é restaurada ao voltar. "Próximo item" anda pelos itens da busca.
 // Fatia B: a folha "Pallet parcial" (aberta pelo botão de um lote) é montada aqui; a faixa da lista conta os pallets com os
 // parciais ("N pallets contados de M informados pelo COMEX (inclui K parciais)").
+// Fatia C: a aba Recebimento ganha o cartão "Descarga por unidade" (um início e um fim por contêiner do `process`).
 
 const TABS = [
   { value: 'itens', label: 'Itens' },
@@ -485,7 +486,14 @@ export default function CargoConferenceScreen({ process, profile, canSeeName, on
             canEdit={screen.canSave}
             checkedBy={screen.canSave ? screen.actorName : ''}
             isAdmin={isAdmin}
-            unloadErrors={screen.unloadErrors}
+            process={process}
+            isClosed={isClosed}
+            unload={{
+              onChange: screen.setUnloadUnit,
+              onStart: screen.startUnloadNow,
+              onFinish: screen.finishUnloadNow,
+              onRemove: screen.removeUnloadUnit,
+            }}
             issueItems={issueItems}
             statusSuggestion={
               screen.suggestStatus

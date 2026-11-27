@@ -8,6 +8,12 @@
 import { digitsOnly, foldText } from '../erp/erpText'
 import { readDamageMap, readExpectedPallets, readPalletsMap } from './cargoConferenceIssues'
 import { readPartialPallets, readUnitsMap } from './cargoConferenceUnits'
+import {
+  deriveCargoUnloadBounds,
+  readUnloadByUnit,
+  validateCargoUnloadByUnit,
+  validateCargoUnloadUnit,
+} from './cargoConferenceUnload'
 import { CARGO_NF_LIST_MAX_CHARS, canonicalCargoNfText } from './cargoNfList'
 import { normalizeItemCode, parseCatalogWeight } from './cargoReportCatalog'
 import { cargoPackagingContext, resolveCargoPackaging } from './cargoSupplierPackaging'
@@ -220,20 +226,11 @@ export const CARGO_UNLOAD_MESSAGES = {
 }
 
 // -> { start, end } com a mensagem de cada campo ('' = sem erro). Fim sem início: erro no Início; fim antes do
-// início e mais de 24 h: erro no Fim. Só início, só fim vazio ou os dois vazios não são erro.
-export function validateCargoUnload({ unloadStartAt, unloadEndAt } = {}) {
-  const result = { start: '', end: '' }
-  const start = readDateTimeKey(unloadStartAt)
-  const end = readDateTimeKey(unloadEndAt)
-  if (!end) return result
-  if (!start) {
-    result.start = CARGO_UNLOAD_MESSAGES.missingStart
-    return result
-  }
-  const minutes = computeCargoUnloadMinutes(start, end)
-  if (minutes === null) result.end = CARGO_UNLOAD_MESSAGES.endBeforeStart
-  else if (minutes > CARGO_UNLOAD_MAX_MINUTES) result.end = CARGO_UNLOAD_MESSAGES.tooLong
-  return result
+// início e mais de 24 h: erro no Fim. Só início, só fim vazio ou os dois vazios não são erro. Fatia C: com `unloadByUnit`
+// preenchido a regra vale POR UNIDADE (as unidades podem estar em dias diferentes) e devolve também `byUnit`; `start`/`end`
+// = a 1ª mensagem de cada campo, para o computador e o fechamento barrarem como sempre (`cargoConferenceUnload.js`).
+export function validateCargoUnload({ unloadStartAt, unloadEndAt, unloadByUnit } = {}) {
+  return validateCargoUnloadByUnit(unloadByUnit) ?? validateCargoUnloadUnit({ startAt: unloadStartAt, endAt: unloadEndAt })
 }
 
 function readRowId(value) {
@@ -622,10 +619,11 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-// Conferência da logística (22 chaves, com `unitsByRowId` e `partialPallets`; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
+// Conferência da logística (22 chaves, com `unitsByRowId` e `partialPallets`, mais `unloadByUnit` quando usada; o repositório acrescenta `updatedAt/ById/ByName`): poda chaves de
 // linhas que não existem mais, força booleanos, grava as etiquetas em MAIÚSCULAS (até 120) e o rodapé do
 // recebimento normalizado (S9-E: `nfNumber` é a lista de NFs "NF1; NF2", até 1.000 caracteres). S8: início/fim da descarga (texto sem fuso), etiquetagem OK e `receivedDate` derivado
-// do dia do início (sem início, o valor carregado/legado). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
+// do dia do início (sem início, o valor carregado/legado). Fatia C: com `unloadByUnit` preenchido, início = menor início e fim = maior fim
+// das unidades finalizadas (o rodapé do FR.CMX.001 não muda). O tempo total NÃO é gravado. `checkedByName` é SEMPRE `actorName` (quem salva): a tela não deixa digitar e
 // a rule exige `checkedByName == myName()`. `labelsByRowId` só guarda linha com alguma etiqueta preenchida.
 export function buildConferencePayload(
   {
@@ -640,6 +638,7 @@ export function buildConferencePayload(
     receivedDate,
     unloadStartAt,
     unloadEndAt,
+    unloadByUnit,
     labelingOk,
     nfNumber,
     notes,
@@ -661,6 +660,10 @@ export function buildConferencePayload(
   // rules); a linha removida/dividida pelo COMEX sai e o parcial fica com as partes que restam (D-6).
   const units = readUnitsMap(unitsByRowId, rowIds)
   const partials = readPartialPallets(partialPallets, rowIds)
+  // `unloadByUnit` ausente = a conferência nunca usou a descarga por unidade: a chave não é gravada (as rules a tornam
+  // "pegajosa" quando existe) e o início/fim seguem como vieram; presente (mesmo `{}`), é gravada e o início/fim vêm dela.
+  const unloadUnits = unloadByUnit == null ? null : readUnloadByUnit(unloadByUnit)
+  const unload = unloadUnits && Object.keys(unloadUnits).length > 0 ? deriveCargoUnloadBounds(unloadUnits) : { unloadStartAt, unloadEndAt }
 
   for (const id of rowIds) {
     for (const name of CONFERENCE_FLAG_MAPS) {
@@ -688,11 +691,12 @@ export function buildConferencePayload(
     labelsByRowId: labels,
     checkedByName: clip(actorName, CARGO_REPORT_LIMITS.text),
     receiptStatus: sanitizeEnum(receiptStatus, RECEIPT_STATUS_VALUES),
-    receivedDate: resolveCargoReceivedDate({ unloadStartAt, receivedDate }),
+    receivedDate: resolveCargoReceivedDate({ unloadStartAt: unload.unloadStartAt, receivedDate }),
     nfNumber: canonicalCargoNfText(nfNumber),
     notes: clip(notes, CARGO_REPORT_LIMITS.notes),
-    unloadStartAt: readDateTimeKey(unloadStartAt),
-    unloadEndAt: readDateTimeKey(unloadEndAt),
+    unloadStartAt: readDateTimeKey(unload.unloadStartAt),
+    unloadEndAt: readDateTimeKey(unload.unloadEndAt),
+    ...(unloadUnits ? { unloadByUnit: unloadUnits } : {}),
     labelingOk: labelingOk === true,
     closedDate: '',
     closedById: '',
@@ -780,6 +784,7 @@ export function fromConferenceDoc(data, legacyRows = [], legacyCurrent = null) {
     // S8: doc anterior (sem as chaves) lê como vazio / sem OK.
     unloadStartAt: readDateTimeKey(doc.unloadStartAt),
     unloadEndAt: readDateTimeKey(doc.unloadEndAt),
+    ...(hasOwn(doc, 'unloadByUnit') ? { unloadByUnit: readUnloadByUnit(doc.unloadByUnit) } : {}),
     labelingOk: doc.labelingOk === true,
     closedDate: isClosed ? readDateKey(doc.closedDate) : '',
     closedById: isClosed ? readText(doc.closedById, CARGO_REPORT_LIMITS.text) : '',

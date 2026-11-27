@@ -465,3 +465,81 @@ describe('Fatia B: pendência "N lote(s) com unidades divergentes" (D-16: não b
     expect(evaluateCargoConferenceClose(rows, conference, { expectedPallets: 5 })).toEqual({ blocking: [], pendings: [], hints: [] })
   })
 })
+
+describe('Fatia C: pendências da descarga por unidade e chave de "sujo"', () => {
+  const D = '2026-11-27T'
+  const base = {
+    ...EMPTY_CARGO_CONFERENCE,
+    receiptStatus: 'sem_ressalva',
+    labelingOk: true,
+    nfNumber: '48213',
+  }
+  const withUnits = (unloadByUnit, extra = {}) => ({
+    ...base,
+    unloadByUnit,
+    unloadStartAt: `${D}08:10`,
+    unloadEndAt: `${D}09:35`,
+    ...extra,
+  })
+  // Só as pendências da descarga (o resto da conferência de teste não importa aqui).
+  const pendings = (conference) =>
+    listCargoConferencePendings([], conference, { expectedPallets: null }).filter((text) => /descarga/i.test(text))
+
+  it('todas finalizadas: nenhuma pendência de descarga', () => {
+    const conference = withUnits({
+      'CNT-1': { startAt: `${D}08:10`, endAt: `${D}09:35` },
+      'CNT-2': { startAt: `${D}09:20`, endAt: `${D}10:30` },
+    })
+    expect(pendings(conference)).toEqual([])
+  })
+
+  it('em andamento ou sem fim: UMA pendência com o número, no singular e no plural, que não bloqueia', () => {
+    const one = withUnits({
+      'CNT-1': { startAt: `${D}08:10`, endAt: `${D}09:35` },
+      'CNT-2': { startAt: `${D}10:50`, endAt: '' },
+    })
+    expect(pendings(one)).toEqual(['1 unidade da descarga em andamento ou sem fim (fora do tempo total)'])
+    expect(evaluateCargoConferenceClose([], one, { expectedPallets: null }).blocking).toEqual([])
+    const two = withUnits({
+      'CNT-1': { startAt: `${D}08:10`, endAt: '' },
+      'CNT-2': { startAt: `${D}10:50`, endAt: '' },
+      'CNT-3': { startAt: `${D}09:00`, endAt: `${D}09:30` },
+    })
+    expect(pendings(two)).toEqual(['2 unidades da descarga em andamento ou sem fim (fora do tempo total)'])
+    expect(evaluateCargoConferenceClose([], two, { expectedPallets: null }).hints).toContain(
+      '2 unidades da descarga em andamento ou sem fim (fora do tempo total)'
+    )
+  })
+
+  it('todas as unidades em andamento (início preenchido, fim calculado vazio): só a pendência das unidades, NUNCA o "Fim da descarga não informado" (D-C6: no lugar de)', () => {
+    const conference = withUnits({ 'CNT-1': { startAt: `${D}08:10`, endAt: '' } }, { unloadEndAt: '' })
+    expect(pendings(conference)).toEqual(['1 unidade da descarga em andamento ou sem fim (fora do tempo total)'])
+    expect(evaluateCargoConferenceClose([], conference, { expectedPallets: null }).hints).not.toContain('fim da descarga não informado')
+    expect(pendings(conference)).not.toContain('Fim da descarga não informado')
+    const two = withUnits(
+      { 'CNT-1': { startAt: `${D}08:10`, endAt: '' }, 'CNT-2': { startAt: `${D}09:00`, endAt: '' } },
+      { unloadEndAt: '' }
+    )
+    expect(pendings(two)).toEqual(['2 unidades da descarga em andamento ou sem fim (fora do tempo total)'])
+  })
+
+  it('nenhuma unidade começou: "Início da descarga não informado" (sem "Fim")', () => {
+    expect(pendings({ ...base, unloadByUnit: {} })).toEqual(['Início da descarga não informado'])
+  })
+
+  it('contêiner sem nenhum horário não vira pendência (D-C7); sem unidades, o "Fim" de sempre', () => {
+    expect(pendings(withUnits({ 'CNT-1': { startAt: `${D}08:10`, endAt: `${D}09:35` } }))).toEqual([])
+    expect(pendings({ ...base, unloadStartAt: `${D}08:10` })).toEqual(['Fim da descarga não informado'])
+  })
+
+  it('a chave de sujo muda com as unidades, não com a ordem das chaves, e ignora entrada vazia', () => {
+    const a = { 'CNT-1': { startAt: `${D}08:10`, endAt: '' }, 'CNT-2': { startAt: `${D}09:00`, endAt: '' } }
+    const b = { 'CNT-2': { startAt: `${D}09:00`, endAt: '' }, 'CNT-1': { startAt: `${D}08:10`, endAt: '' } }
+    const key = (map) => cargoConferenceKey({ ...EMPTY_CARGO_CONFERENCE, unloadByUnit: map }, rows)
+    expect(key(a)).toBe(key(b))
+    expect(key(a)).not.toBe(key({}))
+    expect(key({ ...a, 'CNT-3': { startAt: '', endAt: '' } })).toBe(key(a))
+    expect(key(a)).not.toBe(key({ ...a, 'CNT-1': { startAt: `${D}08:10`, endAt: `${D}09:00` } }))
+    expect(key(undefined)).toBe(key({}))
+  })
+})

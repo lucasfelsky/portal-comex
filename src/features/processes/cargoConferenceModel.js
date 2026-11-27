@@ -11,6 +11,7 @@ import {
   listCargoPartialPallets,
   partialPalletsOfRow,
 } from './cargoConferenceUnits'
+import { readUnloadByUnit } from './cargoConferenceUnload'
 import { CARGO_CONFERENCE_STATUS, isCargoReportRowEmpty } from './cargoReportFormModel'
 
 // S9-F do Relatório de Carga: regras da conferência da logística compartilhadas entre o formulário do computador
@@ -62,6 +63,8 @@ export function cargoConferenceKey(conference, rows) {
     String(conference.labelsByRowId?.[row.id]?.sq ?? '').trim(),
     getCargoRowUnits(conference, row.id),
   ])
+  // Fatia C: as unidades de descarga (ordenadas pelo id) entram só quando existem: sem elas a chave é a de sempre.
+  const units = Object.entries(readUnloadByUnit(conference.unloadByUnit)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   // "Conferido por" é automático (não digitado): fora da chave. O rodapé do recebimento entra.
   return JSON.stringify({
     marks,
@@ -70,6 +73,7 @@ export function cargoConferenceKey(conference, rows) {
     receivedDate: conference.receivedDate ?? '',
     unloadStartAt: conference.unloadStartAt ?? '',
     unloadEndAt: conference.unloadEndAt ?? '',
+    ...(units.length > 0 ? { unloadByUnit: units } : {}),
     labelingOk: conference.labelingOk === true,
     nfNumber: String(conference.nfNumber ?? '').trim(),
     notes: String(conference.notes ?? '').trim(),
@@ -139,6 +143,9 @@ export function evaluateCargoConferenceClose(rows, conference, { expectedPallets
   const hasNote = filled.some((row) => hasCargoRowIssueNote(conference, row.id))
   const photoWithoutNote = countCargoRowsWithPhotoWithoutNote(filled, conference)
   const palletsText = `${summary.counted} contados de ${summary.expected} informados pelo COMEX`
+  const unloadUnits = Object.values(readUnloadByUnit(conference.unloadByUnit))
+  const hasUnloadUnits = unloadUnits.length > 0
+  const unitsOpen = unloadUnits.filter((unit) => unit.startAt && !unit.endAt).length
 
   const blocking = []
   const pendings = []
@@ -182,8 +189,10 @@ export function evaluateCargoConferenceClose(rows, conference, { expectedPallets
       : null,
     conference.receiptStatus ? null : ['Status do recebimento não informado'],
     // S8: pendências (não bloqueiam). Não existe pendência separada de "Data de recebimento": ela é o dia do início.
+    // Fatia C: com unidades, "em andamento ou sem fim" (fora do tempo total) no lugar de "Fim da descarga não informado".
     conference.unloadStartAt ? null : ['Início da descarga não informado'],
-    conference.unloadStartAt && !conference.unloadEndAt ? ['Fim da descarga não informado'] : null,
+    !hasUnloadUnits && conference.unloadStartAt && !conference.unloadEndAt ? ['Fim da descarga não informado'] : null,
+    unitsOpen > 0 ? [`${plural(unitsOpen, 'unidade', 'unidades')} da descarga em andamento ou sem fim (fora do tempo total)`] : null,
     conference.labelingOk ? null : ['Etiquetagem sem OK'],
     String(conference.nfNumber ?? '').trim() ? null : ['Nº da NF não informado'],
   ]

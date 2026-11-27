@@ -419,6 +419,9 @@ const ICONS = {
   paperclip: <path d="M20 11l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />,
   // Conferência por item (Fatia B): pallet parcial (traço do mock v5).
   pallet: <path d="M3 17h18v3H3zM5 17v-4h14v4M8 13V8h8v5" />,
+  // Conferência por item (Fatia C): "Iniciar agora" e "Finalizar agora" da descarga por unidade (traço do mock v5).
+  play: <path d="M8 5v14l11-7z" />,
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
   print: (
     <>
       <path d="M7 9V4h10v5" />

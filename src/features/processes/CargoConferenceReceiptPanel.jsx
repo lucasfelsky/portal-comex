@@ -1,18 +1,13 @@
 import { useId } from 'react'
 import Icon from '../../components/Icon'
-import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import CargoNfListField from './CargoNfListField'
-import {
-  RECEIPT_STATUS_OPTIONS,
-  cargoDatePart,
-  computeCargoUnloadMinutes,
-  resolveCargoReceivedDate,
-} from './cargoReportFormModel'
-import { formatCargoDateBr } from './cargoReportSheet'
+import CargoUnloadCard from './CargoUnloadCard'
+import { RECEIPT_STATUS_OPTIONS } from './cargoReportFormModel'
 
 // S9-F do Relatório de Carga: aba "Recebimento" da conferência no celular (mock aprovado). Os mesmos campos do card
 // "Responsáveis e recebimento" do computador, em cartões de uma coluna: Conferido por (fixo), Status do recebimento em
-// 3 botões, início e fim da descarga, Tempo total e Data de recebimento (fixos), Etiquetagem OK, Notas fiscais
+// 3 botões e Etiquetagem OK; Fatia C: o cartão "Descarga por unidade" (`CargoUnloadCard`: início e fim de cada contêiner,
+// tempo total, primeiro início e Data de recebimento) no lugar dos dois campos únicos; Notas fiscais
 // (`CargoNfListField`, a lista em chips da S9-E) e, desde a S10-I, "Ressalvas e avarias" no lugar do campo geral
 // "Observações" (as observações ficam em cada item; `conference.notes` antigo aparece só para leitura). Avaria com status
 // diferente de "Com ressalva": nota "Status sugerido" e botão "Usar Com ressalva" (o celular nunca troca sozinho).
@@ -30,47 +25,20 @@ function FixedValue({ label, children, locked = true }) {
   )
 }
 
-function DateTimeField({ label, value, onChange, disabled, error, min }) {
-  const id = useId()
-  return (
-    <div className="ccf-field">
-      <label className="ccf-label" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        {...getFieldA11yProps(id, error)}
-        type="datetime-local"
-        step={60}
-        min={min || undefined}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      {error ? (
-        <small className="field-error" id={getFieldErrorId(id)}>
-          {error}
-        </small>
-      ) : null}
-    </div>
-  )
-}
-
 export default function CargoConferenceReceiptPanel({
   conference,
   onChange,
   canEdit,
   checkedBy = '',
   isAdmin = false,
-  unloadErrors = { start: '', end: '' },
+  process = null,
+  isClosed = false,
+  unload,
   issueItems = [],
   statusSuggestion = null,
 }) {
   const statusLabelId = useId()
   const legacyNotes = String(conference.notes ?? '').trim()
-  const hasUnloadError = Boolean(unloadErrors.start || unloadErrors.end)
-  // Com erro (fim sem início, fim antes do início, mais de 24 h) o tempo total fica vazio.
-  const totalMinutes = hasUnloadError ? null : computeCargoUnloadMinutes(conference.unloadStartAt, conference.unloadEndAt)
-  const receivedDate = formatCargoDateBr(resolveCargoReceivedDate(conference))
   const checkedByText = checkedBy || conference.checkedByName || (isAdmin ? '(logística)' : '—')
 
   return (
@@ -112,29 +80,6 @@ export default function CargoConferenceReceiptPanel({
           ) : null}
         </div>
 
-        <DateTimeField
-          label="Início da descarga"
-          value={conference.unloadStartAt}
-          disabled={!canEdit}
-          error={unloadErrors.start}
-          onChange={(value) => onChange({ unloadStartAt: value, receivedDate: cargoDatePart(value) })}
-        />
-        <DateTimeField
-          label="Fim da descarga"
-          value={conference.unloadEndAt}
-          min={conference.unloadStartAt}
-          disabled={!canEdit}
-          error={unloadErrors.end}
-          onChange={(value) => onChange({ unloadEndAt: value })}
-        />
-
-        <div className="ccf-pair">
-          <FixedValue label="Tempo total" locked={false}>
-            {totalMinutes === null ? '—' : `${totalMinutes} min`}
-          </FixedValue>
-          <FixedValue label="Data de recebimento">{receivedDate || '—'}</FixedValue>
-        </div>
-
         <div className="ccf-field">
           <span className="ccf-label">Etiquetagem</span>
           <button
@@ -149,6 +94,17 @@ export default function CargoConferenceReceiptPanel({
           </button>
         </div>
       </section>
+
+      <CargoUnloadCard
+        process={process}
+        conference={conference}
+        editable={canEdit}
+        closed={isClosed}
+        onChange={unload.onChange}
+        onStart={unload.onStart}
+        onFinish={unload.onFinish}
+        onRemove={unload.onRemove}
+      />
 
       <section className="ccf-card" aria-label="Notas fiscais">
         <h3>Notas fiscais</h3>

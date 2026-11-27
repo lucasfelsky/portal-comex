@@ -2,6 +2,7 @@ import { useId } from 'react'
 import Icon from '../../components/Icon'
 import { getFieldA11yProps, getFieldErrorId } from '../../utils/fieldErrors'
 import CargoNfListField from './CargoNfListField'
+import { readUnloadByUnit } from './cargoConferenceUnload'
 import { CargoOkBadge } from './CargoReportItems'
 import {
   RECEIPT_STATUS_OPTIONS,
@@ -19,6 +20,8 @@ import { formatCargoDateBr } from './cargoReportSheet'
 // automático e travado (nome de quem salva ou fecha a conferência); para a logística com a conferência aberta
 // mostra o próprio nome (prévia), para os demais o nome gravado. S8: "Data de recebimento" é fixa (o dia do
 // início da descarga) e "Tempo total da descarga" é calculado; os dois são somente leitura.
+// Fatia C: quando o celular registrou a descarga por unidade (`unloadByUnit`), Início e Fim ficam somente leitura (são o primeiro
+// início e o último fim, calculados) e o tempo total segue sendo fim menos início, igual ao Excel (a soma fica só no celular).
 // `canEdit`: só a logística com a conferência aberta. Fica fora do CargoReportForm para ele não passar de 900 linhas.
 
 // Rótulo e dica ficam fora um do outro: o nome acessível do campo é só o rótulo.
@@ -69,6 +72,8 @@ export default function CargoReportReceiptSection({
   // Com erro (fim sem início, fim antes do início, mais de 24 h) o tempo total fica vazio.
   const totalMinutes = hasUnloadError ? null : computeCargoUnloadMinutes(conference.unloadStartAt, conference.unloadEndAt)
   const legacyNotes = String(conference.notes ?? '').trim()
+  const unitCount = Object.keys(readUnloadByUnit(conference.unloadByUnit)).length
+  const byUnit = unitCount > 0
 
   return (
     <section className="crf-card" aria-label="Responsáveis e recebimento">
@@ -130,7 +135,7 @@ export default function CargoReportReceiptSection({
           type="datetime-local"
           step={60}
           value={conference.unloadStartAt}
-          disabled={!canEdit}
+          disabled={!canEdit || byUnit}
           error={unloadErrors.start}
           hint="Data e hora (horário de Brasília)."
           onChange={(value) => onChange({ unloadStartAt: value, receivedDate: cargoDatePart(value) })}
@@ -141,7 +146,7 @@ export default function CargoReportReceiptSection({
           step={60}
           min={conference.unloadStartAt || undefined}
           value={conference.unloadEndAt}
-          disabled={!canEdit}
+          disabled={!canEdit || byUnit}
           error={unloadErrors.end}
           onChange={(value) => onChange({ unloadEndAt: value })}
         />
@@ -152,7 +157,10 @@ export default function CargoReportReceiptSection({
           placeholder="—"
           hint={
             <>
-              <Icon name="lock" size={12} /> Calculado: fim menos início.
+              <Icon name="lock" size={12} />{' '}
+              {byUnit
+                ? `Registrada por unidade no celular (${unitCount} ${unitCount === 1 ? 'unidade' : 'unidades'}). Calculado: primeiro início ao último fim.`
+                : 'Calculado: fim menos início.'}
             </>
           }
         />
