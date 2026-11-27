@@ -179,7 +179,44 @@ describe('texto de "quando" (relógio local, 23:30 de 25/11)', () => {
     expect(when(received(iso(2026, 10, 25, 0, 5)), 'pos_recebimento')).toBe('Recebida hoje')
     expect(when(received(iso(2026, 10, 24, 22, 0)), 'pos_recebimento')).toBe('Recebida ontem')
     expect(when(received(iso(2026, 10, 21, 9, 0)), 'concluido')).toBe('Recebida 21/11')
-    expect(when(RECEIVED, 'pos_recebimento')).toBe('Recebida no CD')
+    // Recebida de fato (sem data gravada): o fixture RECEIVED está em descarga, então usa-se "Carga recebida".
+    expect(when(base({ collectionStatus: 'Carga recebida' }), 'pos_recebimento')).toBe('Recebida no CD')
+  })
+
+  it('recebida de fato (conferência/etiquetagem, recebida) continua "Recebida hoje/ontem/dd/mm"', () => {
+    for (const collectionStatus of ['Carga recebida', 'Carga recebida, em conferência', 'Carga em conferência/etiquetagem']) {
+      const received = (at) => base({ collectionStatus, cargoReceivedAt: at })
+      expect(when(received(iso(2026, 10, 25, 0, 5)), 'pos_recebimento'), collectionStatus).toBe('Recebida hoje')
+      expect(when(received(iso(2026, 10, 24, 22, 0)), 'pos_recebimento'), collectionStatus).toBe('Recebida ontem')
+      expect(when(received(iso(2026, 10, 21, 9, 0)), 'pos_recebimento'), collectionStatus).toBe('Recebida 21/11')
+    }
+  })
+
+  it('em descarga (L174): "Descarga em andamento", sem data, com `cargoReceivedAt` hoje, ontem ou outro dia', () => {
+    const unloading = (at) => base({ collectionStatus: 'Veículo no CD para descarga', cargoReceivedAt: at })
+    expect(when(unloading(iso(2026, 10, 25, 0, 5)), 'pos_recebimento')).toBe('Descarga em andamento')
+    expect(when(unloading(iso(2026, 10, 24, 22, 0)), 'pos_recebimento')).toBe('Descarga em andamento')
+    expect(when(unloading(iso(2026, 10, 21, 9, 0)), 'pos_recebimento')).toBe('Descarga em andamento')
+  })
+
+  it('em descarga com o alias "Carga sendo descarregada no CD" (e sem acento/caixa) também diz "Descarga em andamento"', () => {
+    const at = iso(2026, 10, 24, 22, 0)
+    expect(when(base({ collectionStatus: 'Carga sendo descarregada no CD', cargoReceivedAt: at }), 'pos_recebimento')).toBe(
+      'Descarga em andamento',
+    )
+    expect(when(base({ collectionStatus: 'VEICULO NO CD PARA DESCARGA', cargoReceivedAt: at }), 'pos_recebimento')).toBe(
+      'Descarga em andamento',
+    )
+  })
+
+  it('em descarga sem `cargoReceivedAt` também diz "Descarga em andamento" (não "Recebida no CD")', () => {
+    expect(when(RECEIVED, 'pos_recebimento')).toBe('Descarga em andamento')
+    expect(when(base({ collectionStatus: 'Carga sendo descarregada no CD' }), 'pos_recebimento')).toBe('Descarga em andamento')
+  })
+
+  it('o texto de descarga só vale na fase pós-recebimento (Concluído com status de descarga não muda)', () => {
+    const at = iso(2026, 10, 24, 22, 0)
+    expect(when(base({ collectionStatus: 'Veículo no CD para descarga', cargoReceivedAt: at }), 'concluido')).toBe('Recebida ontem')
   })
 
   it('outras fases: vazio', () => {

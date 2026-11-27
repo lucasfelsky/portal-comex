@@ -177,7 +177,9 @@ describe('lista da aba Conferência', () => {
     const cons = cards()[2]
     expect(cons).toHaveTextContent('CONSOLIDADO · 3 POs · Coleta feita 24/11')
     expect(cons).toHaveTextContent('1 de 5 itens conferidos')
-    expect(cards()[3]).toHaveTextContent('LCL · NOVA POLYMERS · Recebida ontem')
+    // NOVA está em descarga ("Veículo no CD para descarga"): o texto não diz "Recebida", como o selo (L174).
+    expect(cards()[3]).toHaveTextContent('LCL · NOVA POLYMERS · Descarga em andamento')
+    expect(cards()[3]).not.toHaveTextContent('Recebida')
   })
 
   it('selo "Conferência fechada" no filtro Fechadas', async () => {
