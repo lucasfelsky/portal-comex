@@ -28336,3 +28336,276 @@ body:has(.ccf-actionbar--above-nav) .toast-container {
 .coa-card--mobile > .coa-auto-read-notice {
   margin-inline: var(--m-inset, 16px);
 }
+
+/* ============================================================
+   CONFERENCIA POR ITEM (FATIA A) - LISTA DE ITENS, BUSCA, TELA DO ITEM E CARTAO DO LOTE
+   Mock v5 aprovado: lista so de itens com busca, tela do item com um cartao por lote, pesos, nome do fornecedor e
+   contadores de pallets (numero em 20 px). So tokens do tema, sem media query e sem fixed (a barra de acoes continua
+   por portal no body). Bloco APPEND-ONLY, no fim do arquivo.
+   R-STICKY (barra "Buscar item"): fundo OPACO com o token da area que rola (--bg, claro e escuro), encostada no topo
+   visivel SEM folga, com o fundo cobrindo de borda a borda (margem negativa e padding laterais iguais) e z-index acima dos cartoes e abaixo da barra compacta
+   (26), da barra de acoes (27) e da navegacao (28). No celular a area que rola e a PAGINA (o .main-content fica com
+   overflow visivel) e quem cobre o topo e a barra compacta .mobile-nav-compact (mobile-redesign.css:2494, altura
+   50px + safe-area), entao o topo da barra e a borda de baixo dela. O valor mora na variavel --ccf-sticky-top.
+   ============================================================ */
+.ccf-screen {
+  --ccf-sticky-top: calc(50px + env(safe-area-inset-top, 0px));
+  --ccf-gutter: 16px;
+}
+
+.ccf-searchwrap {
+  position: sticky;
+  top: var(--ccf-sticky-top);
+  z-index: 3;
+  margin: 0 calc(-1 * var(--ccf-gutter));
+  padding: 2px var(--ccf-gutter) 8px;
+  background: var(--bg);
+}
+
+.ccf-searchwrap--stuck {
+  box-shadow:
+    0 1px 0 var(--border),
+    var(--shadow-md);
+}
+
+.ccf-sbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ccf-sbar__ic {
+  position: absolute;
+  left: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.ccf-sbar input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 52px 0 42px;
+  appearance: none;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-headline);
+  font-weight: 500;
+}
+
+.ccf-sbar__x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ccf-sbar__x[hidden] {
+  display: none;
+}
+
+/* Teclado aberto (campo de busca em foco): a barra de acoes e a navegacao de baixo saem de cena. */
+body.ccf-kbd .ccf-actionbar,
+body.ccf-kbd .mobile-bottom-nav {
+  display: none;
+}
+
+.ccf-bar--sm {
+  height: 6px;
+}
+
+.ccf-irow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ccf-irow--done {
+  border-color: var(--primary);
+  background: var(--primary-50);
+}
+
+.ccf-irow__main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ccf-irow__title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ccf-irow__hint {
+  color: var(--info-700);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+}
+
+.ccf-irow__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ccf-irow__go {
+  display: inline-grid;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.ccf-supname {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ccf-supname b {
+  font-weight: 700;
+}
+
+.ccf-strip__title.ccf-strip__title--wrap {
+  overflow: visible;
+  line-height: 1.25;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ccf-lot {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.ccf-lot--done {
+  border-color: var(--primary);
+  background: var(--primary-50);
+}
+
+.ccf-lot__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ccf-lot__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ccf-lot .ccf-meta {
+  gap: 8px 12px;
+}
+
+.ccf-lot .ccf-meta__item dd {
+  font-weight: 600;
+}
+
+.ccf-meta small {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+
+.ccf-meta__miss {
+  color: var(--warning-700);
+  font-weight: 700;
+}
+
+.ccf-lot .ccf-pal__btn {
+  font-size: 22px;
+}
+
+.ccf-lot .ccf-pal__btn--plus {
+  font-size: var(--fs-subhead);
+}
+
+.ccf-lot .ccf-pal__num,
+.ccf-lot .ccf-pal--ro {
+  gap: 2px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.ccf-lot .ccf-pal__num b {
+  line-height: 1.1;
+}
+
+.ccf-more {
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.ccf-more summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  font-size: var(--fs-subhead);
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ccf-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.ccf-more__chev {
+  display: inline-grid;
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+
+.ccf-more[open] .ccf-more__chev {
+  transform: rotate(90deg);
+}
+
+.ccf-more__body {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 4px;
+}

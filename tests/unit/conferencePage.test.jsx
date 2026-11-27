@@ -282,14 +282,15 @@ describe('detalhe por ?processo= e largura travada', () => {
     const user = userEvent.setup()
     renderPage({ path: '/conferencia?processo=p1' })
     await screen.findByRole('tablist')
-    await user.click(screen.getByRole('button', { name: 'OK? da linha 1' }))
-    expect(screen.getByRole('button', { name: 'OK? da linha 1' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Abrir POLIOL PE-3000' }))
+    await user.click(screen.getByRole('button', { name: 'OK? do Lote L1' }))
+    expect(screen.getByRole('button', { name: 'OK? do Lote L1' })).toHaveAttribute('aria-pressed', 'true')
 
     viewport.resize(900)
 
     expect(screen.queryByText(/só para o celular/)).not.toBeInTheDocument()
-    expect(screen.getByRole('tablist')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'OK? da linha 1' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { level: 2, name: 'POLIOL PE-3000' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'OK? do Lote L1' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('a lista também segue montada depois de girar', async () => {
@@ -375,10 +376,13 @@ describe('lista atualizada depois de salvar e reabrir', () => {
     await screen.findByRole('tablist')
     await user.click(screen.getByRole('button', { name: 'Marcar todos OK' }))
     // S10-I: "Marcar todos OK" marca só o OK?; o item só conta como conferido com pelo menos 1 pallet.
+    await user.click(screen.getByRole('button', { name: 'Abrir POLIOL PE-3000' }))
     await user.click(screen.getByRole('button', { name: 'Adicionar um pallet à contagem do item 1' }))
+    await user.click(screen.getByRole('button', { name: /Próximo item/ }))
     await user.click(screen.getByRole('button', { name: 'Adicionar um pallet à contagem do item 2' }))
     await user.click(screen.getByRole('button', { name: 'Salvar' }))
     await screen.findByText(/^Conferência salva às/)
+    await user.click(screen.getAllByRole('button', { name: 'Voltar aos itens' })[0])
     await user.click(screen.getByRole('button', { name: 'Voltar para a lista' }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /GOOYER SEA 001-26/ })).toHaveTextContent('2 de 2 itens conferidos')

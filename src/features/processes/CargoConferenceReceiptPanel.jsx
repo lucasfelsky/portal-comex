@@ -167,7 +167,7 @@ export default function CargoConferenceReceiptPanel({
           <>
             {issueItems.map((item) => (
               <div className="ccf-note ccf-note--warn" key={item.id}>
-                <b>{`Item ${item.number} · ${item.title}`}</b>
+                <b>{item.title}</b>
                 <br />
                 {item.note || '(sem observação)'}
                 {item.photoCount > 0 ? (
@@ -178,12 +178,11 @@ export default function CargoConferenceReceiptPanel({
                 ) : null}
               </div>
             ))}
-            <p className="ccf-sub">As observações ficam no item.</p>
+            <p className="ccf-sub">As observações ficam no lote.</p>
           </>
         ) : (
           <p className="ccf-sub">
-            Nenhuma avaria registrada. Para registrar, volte à aba Itens e, no item, escreva uma observação ou anexe uma
-            foto.
+            Nenhuma avaria registrada. Para registrar, volte à aba Itens, abra o item e use Etiquetas, fotos e avaria no lote.
           </p>
         )}
         {legacyNotes ? (

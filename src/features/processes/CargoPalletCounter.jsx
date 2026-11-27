@@ -3,7 +3,9 @@ import { CARGO_PALLETS_ROW_MAX, cargoRowPallets } from './cargoConferenceIssues'
 // S10-I do Relatório de Carga: contador de pallets de UM item (substitui o botão "Contagem"). `large` = celular
 // (botões de 56 px, número grande); `compact` = célula CONTAGEM do computador (alvos de 44 px por pseudo-elemento).
 // `onStep(delta)`: -1 ou +1 (o chamador soma sobre o estado mais recente, então toques seguidos não se perdem).
-// Somente leitura (`editable` falso): só o número ("—" sem contagem; "OK" no relatório antigo, sem número).
+// Somente leitura (`editable` falso): `compact` só o número ("—" sem contagem; "OK" no relatório antigo, sem número);
+// `large` o rótulo e a caixa com o número ("—" sem contagem) e a legenda, como o contador editável.
+// `label` (opcional, só `large`): rótulo do contador ("Pallets contados (inteiros)" na tela do lote).
 
 const LEGACY_TITLE = 'Contagem OK (registro antigo)'
 
@@ -13,13 +15,35 @@ function describeCount(count, legacyOk, itemLabel) {
   return `${value} ${value === 1 ? 'pallet contado' : 'pallets contados'} no ${itemLabel}`
 }
 
-export default function CargoPalletCounter({ count, legacyOk = false, editable, variant = 'large', itemLabel, onStep }) {
+export default function CargoPalletCounter({
+  count,
+  legacyOk = false,
+  editable,
+  variant = 'large',
+  itemLabel,
+  label = 'Pallets contados',
+  onStep,
+}) {
   const value = count ?? 0
   const isLarge = variant === 'large'
   const prefix = isLarge ? 'ccf-pal' : 'crf-pal'
   const isLegacy = count === null && legacyOk
 
   if (!editable) {
+    if (isLarge) {
+      return (
+        <div className="ccf-pal">
+          <span className="ccf-label">{label}</span>
+          <span
+            className={`ccf-pal__num ccf-pal--ro${value > 0 || legacyOk ? ' ccf-pal__num--on' : ''}`}
+            title={isLegacy ? LEGACY_TITLE : undefined}
+          >
+            <b>{isLegacy ? 'OK' : (count ?? '—')}</b>
+            <small>{isLegacy ? 'registro antigo' : 'pallets'}</small>
+          </span>
+        </div>
+      )
+    }
     return (
       <span className={`${prefix} ${prefix}--ro`} title={isLegacy ? LEGACY_TITLE : undefined}>
         {isLegacy ? 'OK' : (count ?? '—')}
@@ -70,7 +94,7 @@ export default function CargoPalletCounter({ count, legacyOk = false, editable, 
   }
   return (
     <div className="ccf-pal">
-      <span className="ccf-label">Pallets contados</span>
+      <span className="ccf-label">{label}</span>
       <div className="ccf-pal__row">
         {minus}
         {number}
