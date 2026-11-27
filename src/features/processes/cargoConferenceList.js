@@ -2,7 +2,7 @@ import { getCollectionWindows } from '../../utils/collectionWindows'
 import { getEstimatedDeliveryDate } from '../../utils/deliveryForecast'
 import { summarizeCargoConferenceProgress } from './cargoConferenceModel'
 import { fromCargoReportDoc, fromConferenceDoc, CARGO_CONFERENCE_STATUS } from './cargoReportFormModel'
-import { DERIVED_STATUS_PHASES, getProcessDerivedStatus } from './processDerivedStatus'
+import { DERIVED_STATUS_PHASES, getProcessDerivedStatus, isCdUnloadingOnlyStatus } from './processDerivedStatus'
 import { getProcessTitle } from './processLabels'
 import { normalizeComparableText } from './processStatus'
 import { getProcessPurchaseOrders } from './purchaseOrders'
@@ -198,7 +198,9 @@ function describeCollectionDay(date, now) {
 }
 
 // "Coleta hoje 14:00" / "Coleta amanhã 09:30" / "Coleta 28/11 10:00"; em rota "Coleta feita 24/11" ou "A caminho do CD";
-// recebida "Recebida hoje" / "Recebida ontem" / "Recebida 21/11" ou "Recebida no CD".
+// recebida "Recebida hoje" / "Recebida ontem" / "Recebida 21/11" ou "Recebida no CD"; em descarga (mesma detecção do selo
+// "Carga sendo descarregada", `isCdUnloadingOnlyStatus`) "Descarga em andamento", sem data: `cargoReceivedAt` já é gravado
+// ao entrar em descarga e diria "Recebida" ao lado de um selo que diz o contrário (L174).
 export function describeCargoConferenceWhen(process, phase, now = new Date()) {
   if (phase === DERIVED_STATUS_PHASES.COLETA_AGENDADA) {
     const next = nextCollectionDate(process, now)
@@ -207,6 +209,9 @@ export function describeCargoConferenceWhen(process, phase, now = new Date()) {
   if (phase === DERIVED_STATUS_PHASES.EM_ROTA) {
     const last = lastCollectionDate(process, now)
     return last ? `Coleta feita ${formatDayMonth(last)}` : 'A caminho do CD'
+  }
+  if (phase === DERIVED_STATUS_PHASES.POS_RECEBIMENTO && isCdUnloadingOnlyStatus(process?.collectionStatus)) {
+    return 'Descarga em andamento'
   }
   if (phase === DERIVED_STATUS_PHASES.POS_RECEBIMENTO || phase === DERIVED_STATUS_PHASES.CONCLUIDO) {
     const received = toValidDate(process?.cargoReceivedAt)

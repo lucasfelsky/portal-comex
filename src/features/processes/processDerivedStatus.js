@@ -83,7 +83,7 @@ function buildDerived(phase, process) {
 }
 
 // descarga fica na fase pós-recebimento (Conferência), mas o selo não diz "Recebida"
-function isCdUnloadingOnlyStatus(status) {
+export function isCdUnloadingOnlyStatus(status) {
   const normalized = normalizeComparableText(canonicalizeCollectionStatus(status)).trim()
   return normalized === 'veiculo no cd para descarga' || normalized === 'carga sendo descarregada no cd'
 }
